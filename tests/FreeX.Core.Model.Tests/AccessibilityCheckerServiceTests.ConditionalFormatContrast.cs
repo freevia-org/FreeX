@@ -520,6 +520,24 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatCountBlankAggregate()
+    {
+        AssertFormulaAggregateContrastLocations("COUNTBLANK($D1)=1", "B3");
+        AssertFormulaAggregateContrastLocations("COUNTBLANK($D1:$D3)=1", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("COUNTBLANK($D1:$D3)>=2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatCountBlankWrappersPredicatesAndNestedAggregates()
+    {
+        AssertFormulaAggregateContrastLocations("AND(COUNTBLANK($D1:$D3)>=2,$C1=\"Open\")", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("IF(COUNTBLANK($D1:$D3)>=2,TRUE,FALSE)", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISNUMBER(COUNTBLANK($D1:$D3))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("COUNTBLANK($D1:$D3)+1=2", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("SUM(COUNTBLANK($D1:$D3),1)>=3", "B3", "B4");
+    }
+
+    [Fact]
     public void FindIssues_DoesNotMatchFormulaConditionalFormatAggregateForOversizedRangeOrInvalidDirectText()
     {
         AssertFormulaAggregateContrastLocations("SUM($A1:$A20000)>0");
@@ -545,6 +563,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         AssertFormulaAggregateContrastLocations("COUNT($A1+1,$D1)>1", "B2");
         AssertFormulaAggregateContrastLocations("COUNTA($D1,$A1+1)>1", "B1", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("COUNTBLANK($D1,$A1+1)=1", "B3");
     }
 
     [Fact]
@@ -563,6 +582,12 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaAggregateContrastLocations("SUM(MEDIAN($A1)+1)>0");
         AssertFormulaAggregateContrastLocations("SUM(\"n/a\"+$A1)>0");
         AssertFormulaAggregateContrastLocations("SUM(SUM($A1:$A20000))>0");
+        AssertFormulaAggregateContrastLocations("COUNTBLANK()>0");
+        AssertFormulaAggregateContrastLocations("COUNTBLANK($D1:$D20000)>0");
+        AssertFormulaAggregateContrastLocations("COUNTBLANK($D1&\"x\")>0");
+        AssertFormulaAggregateContrastLocations("COUNTBLANK($A1/0)>0");
+        AssertFormulaAggregateContrastLocations("COUNTBLANK(MEDIAN($A1))>0");
+        AssertFormulaAggregateContrastLocations("COUNTBLANK(A0)>0");
     }
 
     [Fact]

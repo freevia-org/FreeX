@@ -1058,6 +1058,9 @@ public static partial class AccessibilityCheckerService
             case "COUNTA":
                 kind = ConditionalFormulaAggregateKind.CountA;
                 return true;
+            case "COUNTBLANK":
+                kind = ConditionalFormulaAggregateKind.CountBlank;
+                return true;
             default:
                 kind = default;
                 return false;
@@ -1506,7 +1509,8 @@ public static partial class AccessibilityCheckerService
         Min,
         Max,
         Count,
-        CountA
+        CountA,
+        CountBlank
     }
 
     private readonly record struct ConditionalFormulaAggregateArgument(
@@ -2491,6 +2495,7 @@ public static partial class AccessibilityCheckerService
 
             var numericValues = new List<double>();
             var nonBlankCount = 0;
+            var blankCount = 0;
             for (var i = 0; i < arguments.Count; i++)
             {
                 if (!AppendFormulaAggregateValues(
@@ -2499,7 +2504,8 @@ public static partial class AccessibilityCheckerService
                         rowOffset,
                         colOffset,
                         numericValues,
-                        ref nonBlankCount))
+                        ref nonBlankCount,
+                        ref blankCount))
                 {
                     return false;
                 }
@@ -2513,6 +2519,7 @@ public static partial class AccessibilityCheckerService
                 ConditionalFormulaAggregateKind.Max when numericValues.Count > 0 => new NumberValue(numericValues.Max()),
                 ConditionalFormulaAggregateKind.Count => new NumberValue(numericValues.Count),
                 ConditionalFormulaAggregateKind.CountA => new NumberValue(nonBlankCount),
+                ConditionalFormulaAggregateKind.CountBlank => new NumberValue(blankCount),
                 _ => ErrorValue.Value
             };
 
@@ -2525,7 +2532,8 @@ public static partial class AccessibilityCheckerService
             int rowOffset,
             int colOffset,
             List<double> numericValues,
-            ref int nonBlankCount)
+            ref int nonBlankCount,
+            ref int blankCount)
         {
             switch (argument.Kind)
             {
@@ -2535,7 +2543,8 @@ public static partial class AccessibilityCheckerService
                         aggregateKind,
                         isDirectArgument: true,
                         numericValues,
-                        ref nonBlankCount);
+                        ref nonBlankCount,
+                        ref blankCount);
                 case ConditionalFormulaAggregateArgumentKind.Reference:
                     if (!TryResolveFormulaAggregateReference(argument, rowOffset, colOffset, out var targetSheet, out var row, out var col))
                         return false;
@@ -2545,7 +2554,8 @@ public static partial class AccessibilityCheckerService
                         aggregateKind,
                         isDirectArgument: false,
                         numericValues,
-                        ref nonBlankCount);
+                        ref nonBlankCount,
+                        ref blankCount);
                 case ConditionalFormulaAggregateArgumentKind.Range:
                     if (!TryResolveFormulaAggregateRange(
                             argument,
@@ -2569,7 +2579,8 @@ public static partial class AccessibilityCheckerService
                                     aggregateKind,
                                     isDirectArgument: false,
                                     numericValues,
-                                    ref nonBlankCount))
+                                    ref nonBlankCount,
+                                    ref blankCount))
                             {
                                 return false;
                             }
@@ -2589,7 +2600,8 @@ public static partial class AccessibilityCheckerService
                         aggregateKind,
                         isDirectArgument: true,
                         numericValues,
-                        ref nonBlankCount);
+                        ref nonBlankCount,
+                        ref blankCount);
                 default:
                     return false;
             }
@@ -2600,12 +2612,15 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaAggregateKind aggregateKind,
             bool isDirectArgument,
             List<double> numericValues,
-            ref int nonBlankCount)
+            ref int nonBlankCount,
+            ref int blankCount)
         {
             if (value is ErrorValue)
                 return false;
 
-            if (value is not BlankValue)
+            if (value is BlankValue)
+                blankCount++;
+            else
                 nonBlankCount++;
 
             if (isDirectArgument &&
