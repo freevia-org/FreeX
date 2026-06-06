@@ -1,4 +1,3 @@
-using System.IO;
 using System.Text.RegularExpressions;
 using FluentAssertions;
 
@@ -9,7 +8,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
     [Fact]
     public void MainWindowScreenshotTour_UsesPlannerForEnvironmentFilters()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ScreenshotTour.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
 
         source.Should().Contain("RibbonScreenshotTourPlanner.CreatePlan");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_SS_TOUR_BURST\")");
@@ -33,7 +32,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
     [Fact]
     public void MainWindowScreenshotTour_StaleCleanupDeletesOnlyRequestedPlanCaptures()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ScreenshotTour.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
         var method = Regex.Match(
             source,
             @"private static void DeleteStaleRibbonScreenshotTourCaptures\([^)]*\)\s*\{(?<body>.*?)\n    \}",
