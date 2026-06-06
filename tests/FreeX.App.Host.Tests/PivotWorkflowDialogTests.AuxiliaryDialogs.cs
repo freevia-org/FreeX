@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Automation;
@@ -217,7 +216,7 @@ public sealed partial class PivotWorkflowDialogTests
     [Fact]
     public void PivotChartInsert_UsesTypeDialogInsteadOfHardCodedColumn()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PivotChartCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotChartCommands.cs");
         var methodStart = source.IndexOf("private void PivotChartBtn_Click", StringComparison.Ordinal);
         var methodEnd = source.IndexOf("private void PivotChartChangeTypeBtn_Click", StringComparison.Ordinal);
         methodStart.Should().BeGreaterThanOrEqualTo(0);
