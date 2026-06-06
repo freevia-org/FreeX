@@ -154,7 +154,7 @@ public sealed partial class EuLocalizationResourceTests
     }
 
     private static string ResourceDirectory =>
-        Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "Resources", "Strings.resx"))!;
+        Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("Resources", "Strings.resx"))!;
 
     private static Dictionary<string, string> ReadResxValues(string fileName)
     {

@@ -120,7 +120,7 @@ public sealed class BulgarianLocalizationTests
 
     private static Dictionary<string, string> ReadResxValues(string fileName)
     {
-        var path = WorkspaceFileLocator.Find("src", "FreeX.App.Host", "Resources", fileName);
+        var path = DialogSourceTestSupport.FindHostSourceFile("Resources", fileName);
         return XDocument.Load(path)
             .Descendants("data")
             .ToDictionary(
