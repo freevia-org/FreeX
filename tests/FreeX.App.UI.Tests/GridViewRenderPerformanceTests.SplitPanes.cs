@@ -1,5 +1,4 @@
 ﻿using System;
-using System.IO;
 using System.Reflection;
 using FreeX.App.UI;
 using FreeX.Core.Model;
@@ -13,7 +12,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderSplitPaneCells_ReusesDoubleUnderlinePensWithinRenderPass()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var renderSplitPaneCells = source[
             source.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
@@ -29,7 +28,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void CalculateSplitDividerLayout_AvoidsLinqMetricScans()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.SplitPanes.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.SplitPanes.cs");
         var calculateLayout = source[
             source.IndexOf("public static SplitDividerLayout CalculateSplitDividerLayout", StringComparison.Ordinal)..
             source.IndexOf("public static SplitPaneScrollbarChrome CalculateSplitPaneScrollbarChrome", StringComparison.Ordinal)];
@@ -46,7 +45,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void CalculateSplitDividerDragTarget_StopsSortedMetricScansAfterPointer()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.SplitPanes.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.SplitPanes.cs");
         var findSplitRow = source[
             source.IndexOf("private static uint? FindSplitRow", StringComparison.Ordinal)..
             source.IndexOf("private static uint? FindSplitColumn", StringComparison.Ordinal)];
@@ -70,8 +69,8 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void SplitPaneDividerHandles_ReuseFrozenStaticPen()
     {
-        var gridViewSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.cs"));
-        var splitPanesSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.SplitPanes.cs"));
+        var gridViewSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.cs");
+        var splitPanesSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.SplitPanes.cs");
         var renderHandles = splitPanesSource[
             splitPanesSource.IndexOf("private void RenderSplitDividerHandles", StringComparison.Ordinal)..
             splitPanesSource.IndexOf("private void RenderSplitPaneScrollbarChrome", StringComparison.Ordinal)];
@@ -86,7 +85,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void SplitPaneViewportChrome_ReusesNormalizedScrollbarSpans()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "SplitPaneViewportChrome.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("SplitPaneViewportChrome.cs");
         var calculateChrome = source[
             source.IndexOf("public static SplitPaneScrollbarChrome CalculateScrollbarChrome", StringComparison.Ordinal)..
             source.IndexOf("public static SplitPaneScrollbarHit? HitTestScrollbar", StringComparison.Ordinal)];
@@ -143,8 +142,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void SplitPaneCellLayoutPlanner_BuildsMetricLookupsAndLazyOccupiedCellsWithoutLinqPipelines()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "SplitPaneCellLayoutPlanner.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("SplitPaneCellLayoutPlanner.cs");
         var calculateLayouts = source[
             source.IndexOf("public static IReadOnlyList<SplitPaneCellLayout> CalculateLayouts", StringComparison.Ordinal)..
             source.IndexOf("private static bool CanOverflowSplitPaneText", StringComparison.Ordinal)];
@@ -216,8 +214,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void SplitPaneCellLayoutPlanner_NumericCellsSkipOverflowOccupancyAllocation()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "SplitPaneCellLayoutPlanner.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("SplitPaneCellLayoutPlanner.cs");
 
         source.Should().Contain("SplitPaneOccupiedCellMap? occupied = null;");
         source.Should().Contain("occupied ??= BuildOccupiedCells(cells, editingCell);");
@@ -301,8 +298,8 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderSplitPaneCells_UsesPrecomputedLayoutRegionForClipping()
     {
-        var rendering = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
-        var splitPanes = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.SplitPanes.cs"));
+        var rendering = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
+        var splitPanes = AppUiSourceTestSupport.ReadAppUiSources("GridView.SplitPanes.cs");
         var renderSplitPaneCells = rendering[
             rendering.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
             rendering.IndexOf("private GridRange? FindMerge", StringComparison.Ordinal)];
@@ -330,7 +327,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderSplitPaneCells_RespectsHiddenGridLinesForDefaultCellBorders()
     {
-        var rendering = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var rendering = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var renderSplitPaneCells = rendering[
             rendering.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
             rendering.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
@@ -344,7 +341,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderSplitPaneCells_SkipsZeroSizedCellsBeforeDrawingWork()
     {
-        var rendering = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var rendering = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var renderSplitPaneCells = rendering[
             rendering.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
             rendering.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
@@ -361,7 +358,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderSplitPaneCells_SkipsNoOpDefaultBackgroundDraw()
     {
-        var rendering = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var rendering = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var renderSplitPaneCells = rendering[
             rendering.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
             rendering.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
@@ -379,7 +376,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderSplitPaneCells_ClipsConditionalIconTextToAdjustedTextRect()
     {
-        var rendering = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var rendering = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var renderSplitPaneCells = rendering[
             rendering.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
             rendering.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
@@ -399,7 +396,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderSplitPaneCells_OnlyPushesTextClipWhenTextNeedsClipping()
     {
-        var rendering = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var rendering = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var renderSplitPaneCells = rendering[
             rendering.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
             rendering.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
@@ -417,7 +414,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderSplitPaneCells_UsesWrappedTextLayoutCacheForDefaultWrappedCells()
     {
-        var rendering = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var rendering = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var renderSplitPaneCells = rendering[
             rendering.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
             rendering.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
