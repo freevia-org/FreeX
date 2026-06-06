@@ -562,6 +562,26 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDevSqAggregate()
+    {
+        AssertFormulaAggregateContrastLocations("DEVSQ($A1:$A3)>400", "B1", "B2", "B3");
+        AssertFormulaAggregateContrastLocations("DEVSQ($A1:$A2)=312.5", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("DEVSQ($D1:$D3)=0", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("DEVSQ(25,$A1,125)=5000", "B1", "B3");
+        AssertFormulaAggregateContrastLocations("DEVSQ(\"25\",$A1,125)=5000", "B1", "B3");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDevSqWrappersPredicatesAndNestedAggregates()
+    {
+        AssertFormulaAggregateContrastLocations("AND(DEVSQ($A1:$A2)>300,$C1=\"Closed\")", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("IF(DEVSQ($A1:$A3)>1000,TRUE,FALSE)", "B2", "B3");
+        AssertFormulaAggregateContrastLocations("ISNUMBER(DEVSQ($A1:$A3))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(DEVSQ($A1:$A2),12.5)=325", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("DEVSQ(SUM($A1:$A2),$A1^2)>45000000", "B2", "B4");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatProductAggregate()
     {
         AssertFormulaAggregateContrastLocations("PRODUCT($A1)>100", "B4");
@@ -610,6 +630,13 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaAggregateContrastLocations("MEDIAN($A1/0)>0");
         AssertFormulaAggregateContrastLocations("MEDIAN(1E308,1E308)>0");
         AssertFormulaAggregateContrastLocations("MEDIAN(A0)>0");
+        AssertFormulaAggregateContrastLocations("DEVSQ()>0");
+        AssertFormulaAggregateContrastLocations("DEVSQ($A1:$A20000)>0");
+        AssertFormulaAggregateContrastLocations("DEVSQ(\"n/a\",$A1)>0");
+        AssertFormulaAggregateContrastLocations("DEVSQ($D3:$D5)>0");
+        AssertFormulaAggregateContrastLocations("DEVSQ($A1/0)>0");
+        AssertFormulaAggregateContrastLocations("DEVSQ(1E308,0)>0");
+        AssertFormulaAggregateContrastLocations("DEVSQ(A0)>0");
     }
 
     [Fact]
@@ -655,6 +682,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaAggregateContrastLocations("SUMSQ(1E308)>0");
         AssertFormulaAggregateContrastLocations("SUMSQ(STDEV($A1))>0");
         AssertFormulaAggregateContrastLocations("SUMSQ($A1/0)>0");
+        AssertFormulaAggregateContrastLocations("DEVSQ(STDEV($A1))>0");
         AssertFormulaAggregateContrastLocations("PRODUCT($A1:$A20000)>0");
         AssertFormulaAggregateContrastLocations("PRODUCT(\"n/a\",$A1)>0");
         AssertFormulaAggregateContrastLocations("PRODUCT(1E308,1E308)>0");
