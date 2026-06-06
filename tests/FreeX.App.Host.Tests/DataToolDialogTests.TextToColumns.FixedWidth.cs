@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -88,7 +87,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void TextToColumnsDialogHelpers_ForwardFixedWidthBreakWorkToPlanner()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "TextToColumnsDialog.Helpers.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("TextToColumnsDialog.Helpers.cs");
 
         source.Should().Contain("TextToColumnsDialogPlanner.BuildPreviewRows");
         source.Should().Contain("TextToColumnsDialogPlanner.TryParseDestination");
@@ -116,8 +115,8 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void TextToColumnsFixedWidthRulerDrag_CancelsOnReleasedButtonOrLostCapture()
     {
-        var dialogSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "TextToColumnsDialog.cs"));
-        var rulerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "TextToColumnsDialog.FixedWidth.cs"));
+        var dialogSource = DialogSourceTestSupport.ReadHostSources("TextToColumnsDialog.cs");
+        var rulerSource = DialogSourceTestSupport.ReadHostSources("TextToColumnsDialog.FixedWidth.cs");
 
         var mouseMove = rulerSource[
             rulerSource.IndexOf("private void FixedWidthRuler_MouseMove", StringComparison.Ordinal)..
@@ -154,7 +153,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void TextToColumnsFixedWidthRulerRightClick_RemovesNearestBreakAndHandlesMouseEvent()
     {
-        var rulerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "TextToColumnsDialog.FixedWidth.cs"));
+        var rulerSource = DialogSourceTestSupport.ReadHostSources("TextToColumnsDialog.FixedWidth.cs");
 
         var rightClick = rulerSource[
             rulerSource.IndexOf("private void FixedWidthRuler_MouseRightButtonDown", StringComparison.Ordinal)..
@@ -177,7 +176,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void TextToColumnsModeSwitch_CancelsFixedWidthRulerDragWhenLeavingFixedWidth()
     {
-        var wizardSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "TextToColumnsDialog.Wizard.cs"));
+        var wizardSource = DialogSourceTestSupport.ReadHostSources("TextToColumnsDialog.Wizard.cs");
 
         var refreshMode = wizardSource[
             wizardSource.IndexOf("private void RefreshMode", StringComparison.Ordinal)..
