@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
@@ -492,8 +491,8 @@ public sealed class NamedRangeDialogXamlTests
     [Fact]
     public void MainWindow_WiresNamedRangePickersToCurrentSelection()
     {
-        var formulaSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.FormulaCommands.cs"));
-        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataFilterCommands.cs"));
+        var formulaSource = DialogSourceTestSupport.ReadHostSources("MainWindow.FormulaCommands.cs");
+        var dataSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataFilterCommands.cs");
         var source = formulaSource + Environment.NewLine + dataSource;
 
         formulaSource.Should().Contain("request => ApplyNamedRangeSelection(dialog, request)");
