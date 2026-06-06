@@ -1,4 +1,3 @@
-using System.IO;
 using System.Xml.Linq;
 using FluentAssertions;
 
@@ -34,10 +33,9 @@ public sealed class TestLaneSolutionTests
     [Fact]
     public void DefaultAgentVerification_DocumentsNonUiTestLane()
     {
-        var agents = File.ReadAllText(WorkspaceFileLocator.FindFromWorkspaceRoot("AGENTS.md"));
-        var readme = File.ReadAllText(WorkspaceFileLocator.FindFromWorkspaceRoot("README.md"));
-        var plan = File.ReadAllText(WorkspaceFileLocator.FindFromWorkspaceRoot(
-            "docs", "release/test-distribution.md"));
+        var agents = WorkspaceFileLocator.ReadAllTextFromWorkspaceRoot("AGENTS.md");
+        var readme = WorkspaceFileLocator.ReadAllTextFromWorkspaceRoot("README.md");
+        var plan = WorkspaceFileLocator.ReadAllTextFromWorkspaceRoot("docs", "release/test-distribution.md");
 
         agents.Should().Contain("default agent verification path");
         agents.Should().Contain("dotnet test FreeX.DefaultTests.slnx");

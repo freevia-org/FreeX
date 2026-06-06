@@ -1,5 +1,3 @@
-using System.IO;
-
 namespace FreeX.App.Host.Tests;
 
 internal static class WorkspaceFileLocator
@@ -11,8 +9,8 @@ internal static class WorkspaceFileLocator
         TestWorkspaceFileLocator.FindWithFailureMessage(message, relativeParts);
 
     public static string ReadAllText(params string[] relativeParts) =>
-        File.ReadAllText(Find(relativeParts));
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
 
     public static string[] ReadAllLines(params string[] relativeParts) =>
-        File.ReadAllLines(Find(relativeParts));
+        TestWorkspaceFileLocator.ReadAllLines(relativeParts);
 }

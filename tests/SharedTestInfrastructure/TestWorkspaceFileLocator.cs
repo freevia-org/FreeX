@@ -25,6 +25,18 @@ internal static class TestWorkspaceFileLocator
             ?? Path.Combine([currentDirectory, .. relativeParts]);
     }
 
+    public static string ReadAllText(params string[] relativeParts) =>
+        File.ReadAllText(Find(relativeParts));
+
+    public static string ReadAllTextWithFailureMessage(string message, params string[] relativeParts) =>
+        File.ReadAllText(FindWithFailureMessage(message, relativeParts));
+
+    public static string[] ReadAllLines(params string[] relativeParts) =>
+        File.ReadAllLines(Find(relativeParts));
+
+    public static string ReadAllTextFromCurrentDirectoryOrFallback(params string[] relativeParts) =>
+        File.ReadAllText(FindFromCurrentDirectoryOrFallback(relativeParts));
+
     public static string FindFromCurrentDirectoryOrSourceFile(
         string[] relativeParts,
         [CallerFilePath] string sourceFilePath = "")
@@ -63,6 +75,9 @@ internal static class TestWorkspaceFileLocator
         throw new FileNotFoundException(
             $"Could not locate {Path.Combine(relativeParts)} from {AppContext.BaseDirectory}.");
     }
+
+    public static string ReadAllTextFromWorkspaceRoot(params string[] relativeParts) =>
+        File.ReadAllText(FindFromWorkspaceRoot(relativeParts));
 
     private static IEnumerable<string> CandidateRoots()
     {

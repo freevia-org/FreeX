@@ -5,10 +5,10 @@ namespace FreeX.Core.Model.Tests;
 internal static class ModelSourceTestSupport
 {
     public static string ReadCommandsSource(string fileName) =>
-        File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Commands", fileName));
+        WorkspaceFileLocator.ReadAllText("src", "FreeX.Core.Commands", fileName);
 
     public static string ReadCommandsSourceFromCurrentDirectoryOrFallback(string fileName) =>
-        File.ReadAllText(WorkspaceFileLocator.FindFromCurrentDirectoryOrFallback("src", "FreeX.Core.Commands", fileName));
+        WorkspaceFileLocator.ReadAllTextFromCurrentDirectoryOrFallback("src", "FreeX.Core.Commands", fileName);
 
     public static string ReadCommandsSourcesMatching(string primaryFileName, string searchPattern)
     {
@@ -21,5 +21,5 @@ internal static class ModelSourceTestSupport
     }
 
     public static string ReadModelSource(string fileName) =>
-        File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Model", fileName));
+        WorkspaceFileLocator.ReadAllText("src", "FreeX.Core.Model", fileName);
 }
