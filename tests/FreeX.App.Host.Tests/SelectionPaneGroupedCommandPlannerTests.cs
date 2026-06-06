@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -132,7 +131,7 @@ public sealed class SelectionPaneGroupedCommandPlannerTests
     [Fact]
     public void MainWindowDrawing_RoutesSelectionPaneChangesThroughGroupedPlanner()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Drawing.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
         var method = SourceMethod(source, "private void ApplySelectionPaneChanges(", "private DrawingShapeModel? GetTargetDrawingShape(");
 
         method.Should().Contain("SelectionPaneGroupedCommandPlanner.HasChanges(result)");
