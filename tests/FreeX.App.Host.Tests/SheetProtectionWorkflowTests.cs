@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -85,7 +84,7 @@ public sealed class SheetProtectionWorkflowTests
     [Fact]
     public void ProtectSheetDialogPrompt_UsesPasswordAccessKey()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ReviewCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
         UiText.Get("MainWindowMessage_OptionalPasswordLabel")
             .Should().Contain("_", "the password prompt should expose an access key");
