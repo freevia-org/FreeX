@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -48,7 +47,7 @@ public sealed partial class SortDialogTests
     [Fact]
     public void PlannerHotPaths_AvoidLinqIteratorChains()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SortDialog.Planning.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("SortDialog.Planning.cs");
 
         source.Should().NotContain(".Append(");
         source.Should().NotContain(".Select(");
@@ -96,7 +95,7 @@ public sealed partial class SortDialogTests
     [Fact]
     public void SortDialogPlanningFacade_ForwardsPureWorkToPlanner()
     {
-        var planningSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SortDialog.Planning.cs"));
+        var planningSource = DialogSourceTestSupport.ReadHostSources("SortDialog.Planning.cs");
 
         planningSource.Should().Contain("internal static class SortDialogPlanner");
         planningSource.Should().Contain("SortDialogPlanner.BuildSortKeys(levels)");
