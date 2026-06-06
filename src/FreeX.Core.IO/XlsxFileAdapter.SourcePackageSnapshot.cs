@@ -838,6 +838,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchCustomViews(archive, workbook, SourceHasCustomViews);
                 NormalizePatchSharedStrings(archive);
                 NormalizePatchInlineStringFonts(archive);
+                NormalizePatchThemeTypefaces(archive);
                 if (SourceOfficeRevisionAttributes is { HasAny: true } officeRevisionAttributes)
                     NormalizePatchOfficeRevisionAttributes(archive, officeRevisionAttributes);
 
@@ -1108,6 +1109,19 @@ public sealed partial class XlsxFileAdapter
 
                 if (changed)
                     XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+            }
+        }
+
+        private static void NormalizePatchThemeTypefaces(ZipArchive archive)
+        {
+            foreach (var themeEntry in archive.Entries.Where(IsThemeXmlEntry).ToList())
+            {
+                var themeXml = XlsxPackageXmlEditor.LoadXml(themeEntry);
+                if (themeXml.Root is null)
+                    continue;
+
+                if (XlsxThemeTypefaceNormalizer.SanitizeNonEmptyTypefaceAttributes(themeXml.Root))
+                    XlsxPackageXmlEditor.ReplaceXml(archive, themeEntry.FullName, themeXml);
             }
         }
 
@@ -3019,6 +3033,14 @@ public sealed partial class XlsxFileAdapter
         {
             var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
             return path.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                   path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+                   !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsThemeXmlEntry(ZipArchiveEntry entry)
+        {
+            var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+            return path.StartsWith("xl/theme/", StringComparison.OrdinalIgnoreCase) &&
                    path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
                    !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
         }
