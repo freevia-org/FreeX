@@ -14,6 +14,9 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("Avalonia app RuntimeIdentifiers");
         script.Should().Contain("ApplicationTitle");
         script.Should().Contain("CFBundleName");
+        script.Should().Contain("CFBundleIconFile");
+        script.Should().Contain("FreeX.icns");
+        script.Should().Contain("Test-MacOsIcon");
         script.Should().Contain("NSHighResolutionCapable");
         script.Should().Contain("dotnet-version: 10.0.x");
         script.Should().Contain("--framework net10.0");
@@ -90,6 +93,22 @@ public sealed class MacOsAppReadinessPreflightTests
         combinedOutput.Should().Contain("src/FreeX.App.Avalonia/WindowsOnlyLeak.cs");
     }
 
+    [Fact]
+    public void MacOsAppReadinessPreflight_FailsForMalformedMacOsIcon()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateMinimalMacOsReadinessRepo(temp.Path);
+        File.WriteAllText(
+            Path.Combine(temp.Path, "src", "FreeX.App.Avalonia", "Packaging", "macos", "FreeX.icns"),
+            "not-an-icns");
+
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("macOS app icon must start with the icns magic header");
+    }
+
     private static PowerShellResult RunScriptFromTemporaryWorkingDirectory(string scriptPath, string arguments)
     {
         using var workingDirectory = new TestTemporaryDirectory();
@@ -119,6 +138,9 @@ public sealed class MacOsAppReadinessPreflightTests
                 <PackageReference Include="Avalonia.Desktop" Version="12.0.4" />
                 <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.4" />
                 <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.4" />
+              </ItemGroup>
+              <ItemGroup>
+                <Content Include="Packaging\macos\FreeX.icns" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
               </ItemGroup>
               <PropertyGroup>
                 <AssemblyName>FreeX</AssemblyName>
@@ -179,6 +201,8 @@ public sealed class MacOsAppReadinessPreflightTests
               <string>FreeX</string>
               <key>CFBundleIdentifier</key>
               <string>io.github.tony-xmelon.freex</string>
+              <key>CFBundleIconFile</key>
+              <string>FreeX.icns</string>
               <key>CFBundleName</key>
               <string>FreeX</string>
               <key>CFBundlePackageType</key>
@@ -228,11 +252,14 @@ public sealed class MacOsAppReadinessPreflightTests
                         -p:PublishSingleFile=false \
                         --output "$app/Contents/MacOS"
                       cp src/FreeX.App.Avalonia/Packaging/macos/Info.plist "$app/Contents/Info.plist"
+                      cp src/FreeX.App.Avalonia/Packaging/macos/FreeX.icns "$app/Contents/Resources/FreeX.icns"
                       plutil -lint "$app/Contents/Info.plist"
                       test -f "$app/Contents/MacOS/FreeX"
                       test -x "$app/Contents/MacOS/FreeX"
                       test -f "$app/Contents/MacOS/FreeX.dll"
+                      test -f "$app/Contents/Resources/FreeX.icns"
                       /usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist"
+                      /usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app/Contents/Info.plist"
                       /usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeExtensions:0' "$app/Contents/Info.plist"
                       /usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeExtensions:0' "$app/Contents/Info.plist"
                       lipo -archs "$app/Contents/MacOS/FreeX"
@@ -253,10 +280,13 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_edit_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_copy_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_paste_menu_item=true" "$artifact_root/launch.txt"
+                      echo "bundle_icon=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app/Contents/Info.plist")"
                   - uses: actions/upload-artifact@v7
                     with:
                       if-no-files-found: error
             """);
+
+        WriteMinimalIcns(root, "src/FreeX.App.Avalonia/Packaging/macos/FreeX.icns");
 
         WriteFile(
             root,
@@ -387,5 +417,23 @@ public sealed class MacOsAppReadinessPreflightTests
         var path = Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, content);
+    }
+
+    private static void WriteMinimalIcns(string root, string relativePath)
+    {
+        var path = Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllBytes(
+            path,
+            [
+                (byte)'i', (byte)'c', (byte)'n', (byte)'s',
+                0, 0, 0, 32,
+                (byte)'i', (byte)'c', (byte)'p', (byte)'4',
+                0, 0, 0, 8,
+                (byte)'i', (byte)'c', (byte)'p', (byte)'5',
+                0, 0, 0, 8,
+                (byte)'i', (byte)'c', (byte)'0', (byte)'8',
+                0, 0, 0, 8
+            ]);
     }
 }

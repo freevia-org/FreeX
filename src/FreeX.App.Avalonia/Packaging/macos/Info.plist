@@ -46,6 +46,8 @@
   <string>FreeX</string>
   <key>CFBundleIdentifier</key>
   <string>io.github.tony-xmelon.freex</string>
+  <key>CFBundleIconFile</key>
+  <string>FreeX.icns</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>

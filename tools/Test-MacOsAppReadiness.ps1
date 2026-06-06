@@ -2,6 +2,7 @@ param(
     [string]$ProjectRoot = "",
     [string]$AvaloniaProjectPath = "src\FreeX.App.Avalonia\FreeX.App.Avalonia.csproj",
     [string]$InfoPlistPath = "src\FreeX.App.Avalonia\Packaging\macos\Info.plist",
+    [string]$IconPath = "src\FreeX.App.Avalonia\Packaging\macos\FreeX.icns",
     [string]$WorkflowPath = ".github\workflows\macos-app.yml",
     [string[]]$PortableSourceRoots = @("src\FreeX.App.Avalonia", "src\FreeX.App.Services")
 )
@@ -144,6 +145,18 @@ function Get-ProjectItems {
     return $items
 }
 
+function Get-BigEndianUInt32 {
+    param(
+        [Parameter(Mandatory = $true)][byte[]]$Bytes,
+        [Parameter(Mandatory = $true)][int]$Offset
+    )
+
+    return ([uint32]$Bytes[$Offset] -shl 24) -bor
+        ([uint32]$Bytes[$Offset + 1] -shl 16) -bor
+        ([uint32]$Bytes[$Offset + 2] -shl 8) -bor
+        [uint32]$Bytes[$Offset + 3]
+}
+
 function Get-PlistValue {
     param(
         [Parameter(Mandatory = $true)][System.Xml.XmlElement]$Dict,
@@ -208,6 +221,40 @@ function Test-IsIgnoredSourcePath {
         $segments -contains ".claude"
 }
 
+function Test-MacOsIcon {
+    param([Parameter(Mandatory = $true)][string]$IconFilePath)
+
+    $bytes = [System.IO.File]::ReadAllBytes($IconFilePath)
+    Assert-True -Condition ($bytes.Length -ge 8) -Message "macOS app icon must be a non-empty .icns file."
+
+    $magic = [System.Text.Encoding]::ASCII.GetString($bytes, 0, 4)
+    Assert-True -Condition ($magic -eq "icns") -Message "macOS app icon must start with the icns magic header."
+
+    $declaredLength = Get-BigEndianUInt32 -Bytes $bytes -Offset 4
+    Assert-True -Condition ($declaredLength -eq $bytes.Length) -Message "macOS app icon declared length must match the file length."
+
+    $entryTypes = @()
+    $offset = 8
+    while ($offset -lt $bytes.Length) {
+        Assert-True -Condition ($offset + 8 -le $bytes.Length) -Message "macOS app icon contains a truncated entry header."
+
+        $entryType = [System.Text.Encoding]::ASCII.GetString($bytes, $offset, 4)
+        $entryLength = Get-BigEndianUInt32 -Bytes $bytes -Offset ($offset + 4)
+        Assert-True -Condition ($entryLength -ge 8) -Message "macOS app icon entry '$entryType' must include an entry header."
+        Assert-True -Condition ($offset + $entryLength -le $bytes.Length) -Message "macOS app icon entry '$entryType' extends past the file length."
+
+        $entryTypes += $entryType
+        $offset += $entryLength
+    }
+
+    Assert-True -Condition ($offset -eq $bytes.Length) -Message "macOS app icon entries must end at the file length."
+    foreach ($entryType in @("icp4", "icp5", "ic08")) {
+        Assert-True -Condition ($entryTypes -contains $entryType) -Message "macOS app icon must include '$entryType'."
+    }
+
+    Write-Host "Validated macOS app icon $(Get-RepoRelativePath $IconFilePath) with entries: $($entryTypes -join ', ')."
+}
+
 function Test-AvaloniaProject {
     param([Parameter(Mandatory = $true)][string]$ProjectPath)
 
@@ -237,6 +284,9 @@ function Test-AvaloniaProject {
     foreach ($package in @("Avalonia", "Avalonia.Desktop", "Avalonia.Fonts.Inter", "Avalonia.Themes.Fluent")) {
         Assert-True -Condition ($packageReferences -contains $package) -Message "Avalonia app project must reference package '$package'."
     }
+
+    $contentItems = @(Get-ProjectItems -Project $project -Name "Content" | ForEach-Object { [string]$_.Include })
+    Assert-True -Condition ($contentItems -contains "Packaging\macos\FreeX.icns") -Message "Avalonia app project must include the macOS app icon as content."
 
     $allowedProjectReferences = @(
         "FreeX.App.Services",
@@ -278,6 +328,7 @@ function Test-InfoPlist {
     Assert-True -Condition ((Get-PlistString -Dict $rootDict -Key "CFBundleDisplayName") -eq "FreeX") -Message "Info.plist CFBundleDisplayName must be FreeX."
     Assert-True -Condition ((Get-PlistString -Dict $rootDict -Key "CFBundleExecutable") -eq $ExpectedExecutable) -Message "Info.plist CFBundleExecutable must match the Avalonia AssemblyName."
     Assert-True -Condition ((Get-PlistString -Dict $rootDict -Key "CFBundleIdentifier") -eq "io.github.tony-xmelon.freex") -Message "Info.plist CFBundleIdentifier must be io.github.tony-xmelon.freex."
+    Assert-True -Condition ((Get-PlistString -Dict $rootDict -Key "CFBundleIconFile") -eq "FreeX.icns") -Message "Info.plist CFBundleIconFile must be FreeX.icns."
     Assert-True -Condition ((Get-PlistString -Dict $rootDict -Key "CFBundleName") -eq "FreeX") -Message "Info.plist CFBundleName must be FreeX."
     Assert-True -Condition ((Get-PlistString -Dict $rootDict -Key "CFBundlePackageType") -eq "APPL") -Message "Info.plist CFBundlePackageType must be APPL."
     Assert-True -Condition ((Get-PlistString -Dict $rootDict -Key "LSMinimumSystemVersion") -eq "12.0") -Message "Info.plist LSMinimumSystemVersion must be 12.0."
@@ -332,11 +383,14 @@ function Test-MacOsWorkflow {
         "-p:PublishSingleFile=false",
         '--output "$app/Contents/MacOS"',
         "cp src/FreeX.App.Avalonia/Packaging/macos/Info.plist",
+        'cp src/FreeX.App.Avalonia/Packaging/macos/FreeX.icns "$app/Contents/Resources/FreeX.icns"',
         "plutil -lint",
         'test -f "$app/Contents/MacOS/FreeX"',
         'test -x "$app/Contents/MacOS/FreeX"',
         'test -f "$app/Contents/MacOS/FreeX.dll"',
+        'test -f "$app/Contents/Resources/FreeX.icns"',
         "PlistBuddy -c 'Print :CFBundleExecutable'",
+        "PlistBuddy -c 'Print :CFBundleIconFile'",
         "PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeExtensions:0'",
         "PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeExtensions:0'",
         "lipo -archs",
@@ -360,7 +414,8 @@ function Test-MacOsWorkflow {
         "native_file_menu=true",
         "native_edit_menu=true",
         "native_copy_menu_item=true",
-        "native_paste_menu_item=true"
+        "native_paste_menu_item=true",
+        'bundle_icon=$('
     )
 
     foreach ($marker in $requiredWorkflowMarkers) {
@@ -505,13 +560,16 @@ function Test-PortableSourceHygiene {
 
 $resolvedAvaloniaProjectPath = Resolve-RepoPath $AvaloniaProjectPath
 $resolvedInfoPlistPath = Resolve-RepoPath $InfoPlistPath
+$resolvedIconPath = Resolve-RepoPath $IconPath
 $resolvedWorkflowPath = Resolve-RepoPath $WorkflowPath
 
 Assert-FileExists -Path $resolvedAvaloniaProjectPath -Label "Avalonia macOS app project"
 Assert-FileExists -Path $resolvedInfoPlistPath -Label "macOS Info.plist"
+Assert-FileExists -Path $resolvedIconPath -Label "macOS app icon"
 Assert-FileExists -Path $resolvedWorkflowPath -Label "macOS app workflow"
 
 $projectReadiness = Test-AvaloniaProject -ProjectPath $resolvedAvaloniaProjectPath
+Test-MacOsIcon -IconFilePath $resolvedIconPath
 Test-InfoPlist -PlistPath $resolvedInfoPlistPath -ExpectedExecutable $projectReadiness.AssemblyName
 Test-MacOsWorkflow -WorkflowPath $resolvedWorkflowPath -ProjectPathForWorkflow $projectReadiness.ProjectPathForWorkflow -RuntimeIdentifiers $projectReadiness.RuntimeIdentifiers
 Test-SourceWiring

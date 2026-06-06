@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using System.Text;
 using FluentAssertions;
 
 namespace FreeX.App.Services.Tests;
@@ -18,7 +19,8 @@ public sealed class MacOsBundleMetadataTests
         PlistString(plist, "CFBundleIdentifier").Should().Be("io.github.tony-xmelon.freex");
         PlistString(plist, "CFBundlePackageType").Should().Be("APPL");
         PlistString(plist, "LSMinimumSystemVersion").Should().Be("12.0");
-        PlistString(plist, "CFBundleIconFile").Should().BeNull("the preview artifact does not ship a macOS .icns yet");
+        PlistString(plist, "CFBundleIconFile").Should().Be("FreeX.icns");
+        AssertIcnsFile(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Packaging", "macos", "FreeX.icns"));
 
         var documentTypesElement = PlistArray(plist, "CFBundleDocumentTypes");
         documentTypesElement.Should().NotBeNull("the preview app should advertise Finder-openable workbook formats");
@@ -64,7 +66,10 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}");
         workflow.Should().Contain("MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}");
         workflow.Should().Contain("plutil -lint");
+        workflow.Should().Contain("cp src/FreeX.App.Avalonia/Packaging/macos/FreeX.icns \"$app/Contents/Resources/FreeX.icns\"");
+        workflow.Should().Contain("test -f \"$app/Contents/Resources/FreeX.icns\"");
         workflow.Should().Contain("PlistBuddy -c 'Print :CFBundleExecutable'");
+        workflow.Should().Contain("PlistBuddy -c 'Print :CFBundleIconFile'");
         workflow.Should().Contain("PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeExtensions:0'");
         workflow.Should().Contain("PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeExtensions:0'");
         workflow.Should().Contain("lipo -archs");
@@ -93,6 +98,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("notarization_status=\"accepted\"");
         workflow.Should().Contain("notarization_status=\"skipped_missing_credentials\"");
         workflow.Should().Contain("echo \"binary_archs=$binary_archs\"");
+        workflow.Should().Contain("echo \"bundle_icon=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' \"$app/Contents/Info.plist\")\"");
         workflow.Should().Contain("echo \"codesign_verified=true\"");
         workflow.Should().Contain("echo \"codesign_mode=$signing_mode\"");
         workflow.Should().Contain("echo \"notarization_status=$notarization_status\"");
@@ -193,4 +199,34 @@ public sealed class MacOsBundleMetadataTests
             .Elements(name)
             .Select(element => element.Value)
             .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+    private static void AssertIcnsFile(string path)
+    {
+        var bytes = File.ReadAllBytes(path);
+        bytes.Length.Should().BeGreaterThan(8);
+        Encoding.ASCII.GetString(bytes, 0, 4).Should().Be("icns");
+        ReadBigEndianUInt32(bytes, 4).Should().Be((uint)bytes.Length);
+
+        var entryTypes = new List<string>();
+        var offset = 8;
+        while (offset < bytes.Length)
+        {
+            var entryType = Encoding.ASCII.GetString(bytes, offset, 4);
+            var entryLength = ReadBigEndianUInt32(bytes, offset + 4);
+            entryLength.Should().BeGreaterThanOrEqualTo(8);
+            ((long)offset + entryLength).Should().BeLessThanOrEqualTo(bytes.Length);
+            entryTypes.Add(entryType);
+            offset = checked(offset + (int)entryLength);
+        }
+
+        entryTypes.Should().Contain("icp4");
+        entryTypes.Should().Contain("icp5");
+        entryTypes.Should().Contain("ic08");
+    }
+
+    private static uint ReadBigEndianUInt32(byte[] bytes, int offset) =>
+        ((uint)bytes[offset] << 24) |
+        ((uint)bytes[offset + 1] << 16) |
+        ((uint)bytes[offset + 2] << 8) |
+        bytes[offset + 3];
 }
