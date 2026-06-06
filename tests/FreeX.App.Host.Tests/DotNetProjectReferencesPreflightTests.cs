@@ -26,7 +26,7 @@ public sealed class DotNetProjectReferencesPreflightTests
     [Fact]
     public void DotNetProjectReferencesPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetProjectReferences.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-DotNetProjectReferences.ps1");
         using var temp = new TestTemporaryDirectory();
         var tempDirectory = temp.Path;
 
@@ -64,7 +64,7 @@ public sealed class DotNetProjectReferencesPreflightTests
         File.WriteAllText(Path.Combine(tempDirectory, "src", "FreeX.App.Host", "FreeX.App.Host_abc123_wpftmp.csproj"), "<Project><ItemGroup><ProjectReference Include=\"Missing.csproj\" /></ItemGroup></Project>");
         File.WriteAllText(Path.Combine(tempDirectory, ".worktrees", "agent", "src", "Scratch", "Scratch.csproj"), "<Project><ItemGroup><ProjectReference Include=\"Missing.csproj\" /></ItemGroup></Project>");
         File.WriteAllText(Path.Combine(tempDirectory, ".claude", "worktrees", "agent", "src", "Scratch", "Scratch.csproj"), "<Project><ItemGroup><ProjectReference Include=\"Missing.csproj\" /></ItemGroup></Project>");
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetProjectReferences.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-DotNetProjectReferences.ps1");
 
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{tempDirectory}\"");
 
@@ -92,7 +92,7 @@ public sealed class DotNetProjectReferencesPreflightTests
             </Project>
             """);
         File.WriteAllText(Path.Combine(tempDirectory, "src", "B", "B.csproj"), "<Project />");
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetProjectReferences.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-DotNetProjectReferences.ps1");
 
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{tempDirectory}\"");
 
@@ -121,7 +121,7 @@ public sealed class DotNetProjectReferencesPreflightTests
             </Project>
             """);
         File.WriteAllText(Path.Combine(temp.Path, "external", "Outside.csproj"), "<Project />");
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetProjectReferences.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-DotNetProjectReferences.ps1");
 
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{projectRoot}\"");
 
@@ -145,7 +145,7 @@ public sealed class DotNetProjectReferencesPreflightTests
               </ItemGroup>
             </Project>
             """);
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetProjectReferences.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-DotNetProjectReferences.ps1");
 
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
 

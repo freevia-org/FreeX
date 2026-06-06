@@ -73,7 +73,7 @@ public sealed class GitHubWorkflowPreflightTests
     [Fact]
     public void GitHubWorkflowPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-GitHubWorkflows.ps1");
 
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, "");
 
@@ -106,7 +106,7 @@ public sealed class GitHubWorkflowPreflightTests
                     shell: pwsh
                     run: dotnet restore FreeX.slnx
             """);
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-GitHubWorkflows.ps1");
 
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
 
@@ -142,7 +142,7 @@ public sealed class GitHubWorkflowPreflightTests
                       name: freex-release
                       path: artifacts/upload/*.exe
             """);
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-GitHubWorkflows.ps1");
 
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
 
@@ -179,7 +179,7 @@ public sealed class GitHubWorkflowPreflightTests
                     shell: pwsh
                     run: dotnet restore FreeX.slnx
             """);
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-GitHubWorkflows.ps1");
 
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
 
@@ -212,7 +212,7 @@ public sealed class GitHubWorkflowPreflightTests
                     shell: pwsh
                     run: dotnet restore FreeX.slnx
             """);
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-GitHubWorkflows.ps1");
 
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
 
@@ -245,7 +245,7 @@ public sealed class GitHubWorkflowPreflightTests
                     shell: pwsh
                     run: dotnet restore FreeX.slnx
             """);
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-GitHubWorkflows.ps1");
 
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
 
@@ -277,7 +277,7 @@ public sealed class GitHubWorkflowPreflightTests
                     shell: pwsh
                     run: dotnet restore FreeX.slnx
             """);
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-GitHubWorkflows.ps1");
 
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
 
@@ -309,7 +309,7 @@ public sealed class GitHubWorkflowPreflightTests
                   - name: Missing shell
                     run: dotnet restore FreeX.slnx
             """);
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-GitHubWorkflows.ps1");
 
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
 
@@ -340,7 +340,7 @@ public sealed class GitHubWorkflowPreflightTests
                 steps:
                   - uses: ./../outside-action
             """);
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-GitHubWorkflows.ps1");
 
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
 
@@ -371,7 +371,7 @@ public sealed class GitHubWorkflowPreflightTests
                 steps:
                   - uses: actions/checkout@main
             """);
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-GitHubWorkflows.ps1");
 
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
 

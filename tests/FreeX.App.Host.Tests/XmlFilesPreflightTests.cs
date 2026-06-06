@@ -20,7 +20,7 @@ public sealed class XmlFilesPreflightTests
     [Fact]
     public void XmlFilesPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-XmlFiles.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-XmlFiles.ps1");
         using var workingDirectory = new TestTemporaryDirectory();
 
         var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, "");
@@ -36,7 +36,7 @@ public sealed class XmlFilesPreflightTests
         using var temp = new TestTemporaryDirectory();
 
         File.WriteAllText(Path.Combine(temp.Path, "broken.slnx"), "<Solution><Folder></Solution>");
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-XmlFiles.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-XmlFiles.ps1");
         using var workingDirectory = new TestTemporaryDirectory();
 
         var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-XmlRoots \"{temp.Path}\"");
@@ -52,7 +52,7 @@ public sealed class XmlFilesPreflightTests
         using var temp = new TestTemporaryDirectory();
 
         File.WriteAllText(Path.Combine(temp.Path, "broken.xaml"), "<Window><Grid></Window>");
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-XmlFiles.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-XmlFiles.ps1");
         using var workingDirectory = new TestTemporaryDirectory();
 
         var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-XmlRoots \"{temp.Path}\"");
