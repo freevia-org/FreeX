@@ -1,5 +1,4 @@
 using FluentAssertions;
-using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
@@ -8,8 +7,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void MouseContextMenuHidesValidationDropdownAfterSelectionAdjustment()
     {
-        var contextMenuSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+        var contextMenuSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
 
         var contextMenuHandler = contextMenuSource[
             contextMenuSource.IndexOf("private void OnGridContextMenuRequested", StringComparison.Ordinal)..
@@ -29,8 +27,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void MouseUpSelectionIgnoresNonLeftButtonsBeforeCompletingDrag()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var mouseUp = selectionSource[
             selectionSource.IndexOf("private void SheetGrid_MouseUp", StringComparison.Ordinal)..];
@@ -48,8 +45,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void MouseUpSelectionHandlesCompletedDragBeforeReturningToWpf()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var mouseUp = selectionSource[
             selectionSource.IndexOf("private void SheetGrid_MouseUp", StringComparison.Ordinal)..];
@@ -79,8 +75,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void FormatPainterMouseUpRefreshesCommentPreviewAfterApplyingSelection()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var mouseUp = selectionSource[
             selectionSource.IndexOf("private void SheetGrid_MouseUp", StringComparison.Ordinal)..];
@@ -100,8 +95,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void FormatPainterMouseDownImmediateApplyRefreshesCommentPreviewBeforeReturning()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var mouseDown = selectionSource[
             selectionSource.IndexOf("private void SheetGrid_MouseDown", StringComparison.Ordinal)..

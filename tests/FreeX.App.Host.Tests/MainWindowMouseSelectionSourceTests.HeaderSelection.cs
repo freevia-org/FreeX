@@ -1,5 +1,4 @@
 using FluentAssertions;
-using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
@@ -8,8 +7,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void ShiftHeaderMouseSelectionClearsAdditionalRangesAndRefreshesUi()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var mouseDown = selectionSource[
             selectionSource.IndexOf("private void SheetGrid_MouseDown", StringComparison.Ordinal)..
@@ -46,8 +44,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void HeaderMouseSelectionClearsStaleCommentPreview()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var selectRow = selectionSource[
             selectionSource.IndexOf("private void SelectRow", StringComparison.Ordinal)..
@@ -86,10 +83,8 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void HeaderMouseSelectionBeginsDragAndExtendsAcrossHeaders()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
-        var windowSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.xaml.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
+        var windowSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
 
         var mouseDown = selectionSource[
             selectionSource.IndexOf("private void SheetGrid_MouseDown", StringComparison.Ordinal)..
@@ -123,8 +118,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void HeaderMouseSelectionClearsDragStateOnCancelAndMouseUp()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var mouseMove = selectionSource[
             selectionSource.IndexOf("private void SheetGrid_MouseMove", StringComparison.Ordinal)..
