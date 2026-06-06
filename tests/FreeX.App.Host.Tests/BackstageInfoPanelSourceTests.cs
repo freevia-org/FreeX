@@ -1,4 +1,3 @@
-using System.IO;
 using System.Xml.Linq;
 using FluentAssertions;
 
@@ -60,7 +59,7 @@ public sealed class BackstageInfoPanelSourceTests
     [Fact]
     public void BackstageCodeBehind_PopulatesInfoPanelFromActiveSheetAwarePlan()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
         source.Should().Contain("var activeSheet = _workbook.GetSheet(_currentSheetId);");
         source.Should().Contain("BackstageInfoPlanner.Build(");
@@ -75,8 +74,8 @@ public sealed class BackstageInfoPanelSourceTests
     [Fact]
     public void BackstageCodeBehind_WiresInfoPanelActionsWithAutomationMetadata()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
-        var constructorSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
+        var constructorSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
 
         constructorSource.Should().Contain("ConfigureBackstageInfoActionButtons();");
         source.Should().Contain("InfoProtectWorkbookButton.Click += InfoProtectWorkbookBtn_Click;");
