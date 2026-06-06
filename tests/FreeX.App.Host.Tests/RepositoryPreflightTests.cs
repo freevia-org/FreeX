@@ -26,7 +26,7 @@ public sealed class RepositoryPreflightTests
     [Fact]
     public void RepositoryPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-RepositoryPreflight.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-RepositoryPreflight.ps1");
         using var temp = new TestTemporaryDirectory();
 
         var jsonScript = CreatePassingPreflightScript(temp.Path, "Test-JsonFiles.ps1");
@@ -67,7 +67,7 @@ public sealed class RepositoryPreflightTests
     [Fact]
     public void RepositoryPreflight_FailsWhenChildPreflightScriptIsMissing()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-RepositoryPreflight.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-RepositoryPreflight.ps1");
         using var temp = new TestTemporaryDirectory();
         var missingScriptPath = Path.Combine(temp.Path, "missing.ps1");
 
@@ -88,7 +88,7 @@ public sealed class RepositoryPreflightTests
         var workflowPath = Path.Combine(tempDirectory, ".github", "workflows", "tester-release.yml");
         File.WriteAllText(workflowPath, "name: Tester Release");
 
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetSdkReadiness.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-DotNetSdkReadiness.ps1");
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{tempDirectory}\" -WorkflowPath \"{workflowPath}\"");
 
         result.ExitCode.Should().NotBe(0);
@@ -136,7 +136,7 @@ public sealed class RepositoryPreflightTests
             </Project>
             """);
 
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetSdkReadiness.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-DotNetSdkReadiness.ps1");
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{tempDirectory}\" -WorkflowPath \"{workflowPath}\"");
 
         result.ExitCode.Should().Be(0, result.Error);
@@ -174,7 +174,7 @@ public sealed class RepositoryPreflightTests
             </Project>
             """);
 
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetSdkReadiness.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-DotNetSdkReadiness.ps1");
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{tempDirectory}\" -WorkflowPath \"{workflowPath}\"");
 
         var combinedOutput = NormalizeWhitespace(result.Output + result.Error);

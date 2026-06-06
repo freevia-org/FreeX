@@ -13,6 +13,9 @@ internal static class WorkspaceFileLocator
     public static string FindDocsDirectory() =>
         Path.GetDirectoryName(Find("docs", "README.md"))!;
 
+    public static string FindToolScript(string fileName) =>
+        Find("tools", fileName);
+
     public static string FindWithFailureMessage(string message, params string[] relativeParts) =>
         TestWorkspaceFileLocator.FindWithFailureMessage(message, relativeParts);
 

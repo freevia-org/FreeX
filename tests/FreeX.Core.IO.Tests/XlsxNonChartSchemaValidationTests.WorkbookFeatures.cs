@@ -78,6 +78,33 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorkbookFileSharingForSchemaValidity()
+    {
+        using var source = Save(CreateWorkbookFileSharingSourceWorkbook());
+        SetWorkbookFileSharingInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorkbookChildElement(saved, "fileSharing")
+            .Attribute("readOnlyRecommended")
+            .Should()
+            .BeNull();
+    }
+
+    [Fact]
     public void WorkbookFileRecoveryProperties_ProducesSchemaValidWorkbook()
     {
         SchemaErrors(CreateWorkbookFileRecoveryPropertiesSourceWorkbook()).Should().BeEmpty();
@@ -109,6 +136,34 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceFileRecoveryProperties.ToString(SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorkbookFileRecoveryPropertiesForSchemaValidity()
+    {
+        using var source = Save(CreateWorkbookFileRecoveryPropertiesSourceWorkbook());
+        SetWorkbookFileRecoveryInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var fileRecoveryPr = ReadWorkbookChildElement(saved, "fileRecoveryPr");
+        fileRecoveryPr.Attribute("autoRecover").Should().BeNull();
+        fileRecoveryPr.Attribute("crashSave").Should().BeNull();
+        fileRecoveryPr.Attribute("dataExtractLoad").Should().BeNull();
+        fileRecoveryPr.Attribute("repairLoad").Should().BeNull();
     }
 
     [Fact]
@@ -245,6 +300,36 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceCalculationProperties.ToString(SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorkbookCalculationPropertiesForSchemaValidity()
+    {
+        using var source = Save(CreateWorkbookCalculationPropertiesSourceWorkbook());
+        SetWorkbookCalculationPropertiesInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var calcPr = ReadWorkbookChildElement(saved, "calcPr");
+        calcPr.Attribute("calcId").Should().BeNull();
+        calcPr.Attribute("refMode").Should().BeNull();
+        calcPr.Attribute("fullPrecision").Should().BeNull();
+        calcPr.Attribute("iterateCount").Should().BeNull();
+        calcPr.Attribute("iterateDelta").Should().BeNull();
+        calcPr.Attribute("concurrentManualCount").Should().BeNull();
     }
 
     [Fact]
@@ -392,6 +477,17 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         return workbook;
     }
 
+    private static void SetWorkbookFileSharingInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var fileSharing = workbookXml.Root!.Element(workbookNs + "fileSharing")!;
+        fileSharing.SetAttributeValue("readOnlyRecommended", "maybe");
+        ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+    }
+
     private static Workbook CreateWorkbookFileRecoveryPropertiesSourceWorkbook()
     {
         var workbook = new Workbook("WorkbookFileRecoveryPatchSave");
@@ -406,6 +502,20 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("recovery"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
         return workbook;
+    }
+
+    private static void SetWorkbookFileRecoveryInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var fileRecoveryPr = workbookXml.Root!.Element(workbookNs + "fileRecoveryPr")!;
+        fileRecoveryPr.SetAttributeValue("autoRecover", "maybe");
+        fileRecoveryPr.SetAttributeValue("crashSave", "maybe");
+        fileRecoveryPr.SetAttributeValue("dataExtractLoad", "maybe");
+        fileRecoveryPr.SetAttributeValue("repairLoad", "maybe");
+        ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
     }
 
     private static Workbook CreateWorkbookFunctionGroupsSourceWorkbook()
@@ -495,6 +605,22 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         firstSheet.SetCell(new CellAddress(firstSheet.Id, 2, 2), new NumberValue(24));
         secondSheet.SetCell(new CellAddress(secondSheet.Id, 1, 1), new TextValue("active"));
         return workbook;
+    }
+
+    private static void SetWorkbookCalculationPropertiesInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var calcPr = workbookXml.Root!.Element(workbookNs + "calcPr")!;
+        calcPr.SetAttributeValue("calcId", "not-a-number");
+        calcPr.SetAttributeValue("refMode", "invalid");
+        calcPr.SetAttributeValue("fullPrecision", "maybe");
+        calcPr.SetAttributeValue("iterateCount", "not-a-number");
+        calcPr.SetAttributeValue("iterateDelta", "not-a-number");
+        calcPr.SetAttributeValue("concurrentManualCount", "not-a-number");
+        ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
     }
 
     private static Workbook CreateWorkbookAdditionalViewsSourceWorkbook()

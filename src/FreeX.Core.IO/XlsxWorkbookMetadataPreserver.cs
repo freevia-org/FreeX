@@ -66,7 +66,7 @@ internal static class XlsxWorkbookMetadataPreserver
             changed = true;
         if (MergeFileSharing(sourceFileSharing, targetRoot, workbookNs, workbook.FileSharing is not null))
             changed = true;
-        if (MergeChildBlocks(sourceFileRecoveryProperties, targetRoot, workbookNs + "fileRecoveryPr"))
+        if (MergeFileRecoveryProperties(sourceFileRecoveryProperties, targetRoot, workbookNs + "fileRecoveryPr"))
             changed = true;
         if (MergeChildBlock(sourceSmartTagProperties, targetRoot, workbookNs + "smartTagPr"))
             changed = true;
@@ -118,6 +118,21 @@ internal static class XlsxWorkbookMetadataPreserver
         return true;
     }
 
+    private static bool MergeFileRecoveryProperties(IReadOnlyCollection<XElement> sourceBlocks, XElement targetRoot, XName blockName)
+    {
+        if (sourceBlocks.Count == 0 || targetRoot.Element(blockName) is not null)
+            return false;
+
+        foreach (var sourceBlock in sourceBlocks)
+        {
+            var clone = new XElement(sourceBlock);
+            XlsxWorkbookFileRecoveryPropertyNormalizer.NormalizeElement(clone);
+            targetRoot.Add(clone);
+        }
+
+        return true;
+    }
+
     private static bool MergeFileSharing(
         XElement? sourceFileSharing,
         XElement targetRoot,
@@ -132,12 +147,15 @@ internal static class XlsxWorkbookMetadataPreserver
         {
             if (!hasModeledFileSharing)
             {
-                targetRoot.Add(new XElement(sourceFileSharing));
+                var clone = new XElement(sourceFileSharing);
+                XlsxWorkbookFileSharingNormalizer.NormalizeElement(clone);
+                targetRoot.Add(clone);
                 return true;
             }
 
             var cloned = new XElement(sourceFileSharing);
             RemoveModeledFileSharingAttributes(cloned);
+            XlsxWorkbookFileSharingNormalizer.NormalizeElement(cloned);
             if (!cloned.HasAttributes && !cloned.HasElements)
                 return false;
 
@@ -145,10 +163,14 @@ internal static class XlsxWorkbookMetadataPreserver
             return true;
         }
 
-        return XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(
+        var changed = XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(
             sourceFileSharing,
             targetFileSharing,
             [XName.Get("readOnlyRecommended"), XName.Get("userName"), XName.Get("reservationPassword")]);
+        if (XlsxWorkbookFileSharingNormalizer.NormalizeElement(targetFileSharing))
+            changed = true;
+
+        return changed;
     }
 
     private static void RemoveModeledFileSharingAttributes(XElement fileSharing)
@@ -271,7 +293,9 @@ internal static class XlsxWorkbookMetadataPreserver
         var targetCalculationProperties = targetRoot.Element(workbookNs + "calcPr");
         if (targetCalculationProperties is null)
         {
-            targetRoot.Add(new XElement(sourceCalculationProperties));
+            var cloned = new XElement(sourceCalculationProperties);
+            XlsxWorkbookCalculationPropertyNormalizer.NormalizeElement(cloned);
+            targetRoot.Add(cloned);
             return true;
         }
 
@@ -300,6 +324,9 @@ internal static class XlsxWorkbookMetadataPreserver
             targetCalculationProperties.SetAttributeValue(attribute.Name, attribute.Value);
             changed = true;
         }
+
+        if (XlsxWorkbookCalculationPropertyNormalizer.NormalizeElement(targetCalculationProperties))
+            changed = true;
 
         return changed;
     }

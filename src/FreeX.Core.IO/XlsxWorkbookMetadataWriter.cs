@@ -180,6 +180,7 @@ internal static class XlsxWorkbookMetadataWriter
         fileSharing.SetAttributeValue(
             "reservationPassword",
             string.IsNullOrWhiteSpace(workbook.FileSharing.ReservationPassword) ? null : workbook.FileSharing.ReservationPassword);
+        XlsxWorkbookFileSharingNormalizer.NormalizeElement(fileSharing);
 
         InsertFileSharingInOrder(root, fileSharing);
 
@@ -215,6 +216,7 @@ internal static class XlsxWorkbookMetadataWriter
             SetBooleanAttribute(element, "crashSave", item.CrashSave);
             SetBooleanAttribute(element, "dataExtractLoad", item.DataExtractLoad);
             SetBooleanAttribute(element, "repairLoad", item.RepairLoad);
+            XlsxWorkbookFileRecoveryPropertyNormalizer.NormalizeElement(element);
             return element;
         }).ToArray();
 
@@ -462,6 +464,7 @@ internal static class XlsxWorkbookMetadataWriter
         calcPr.SetAttributeValue(
             "iterateDelta",
             workbook.MaxCalculationChange is { } maxChange ? maxChange.ToString(CultureInfo.InvariantCulture) : null);
+        XlsxWorkbookCalculationPropertyNormalizer.NormalizeElement(calcPr);
 
         return true;
 
