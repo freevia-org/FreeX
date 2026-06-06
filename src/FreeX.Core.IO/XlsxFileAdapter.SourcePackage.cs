@@ -70,6 +70,7 @@ public sealed partial class XlsxFileAdapter
         XlsxWorksheetDimensionNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxWorksheetCalculationPropertyNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxWorksheetPhoneticPropertyNormalizer.NormalizeWorksheets(generatedArchive);
+        XlsxWorksheetCellWatchesNormalizer.NormalizeWorksheets(generatedArchive);
         return sourceParts;
     }
 

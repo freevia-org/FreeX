@@ -16765,7 +16765,7 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetCellWatches()
+    public void XlsxAdapter_LoadedWorkbookSave_DropsUnsupportedWorksheetCellWatchMetadata()
     {
         var workbook = new Workbook("CellWatchesRetentionTest");
         var sheet = workbook.AddSheet("Data");
@@ -16796,8 +16796,8 @@ public partial class FileAdapterSmokeTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var cellWatches = worksheetXml.Root!.Element(worksheetNs + "cellWatches");
         cellWatches.Should().NotBeNull();
-        cellWatches!.Attribute("nativeContainer")!.Value.Should().Be("kept");
-        cellWatches.Element(worksheetNs + "cellWatch")!.Attribute("nativeWatch")!.Value.Should().Be("kept");
+        cellWatches!.Attribute("nativeContainer").Should().BeNull();
+        cellWatches.Element(worksheetNs + "cellWatch")!.Attribute("nativeWatch").Should().BeNull();
         cellWatches!.ToString().Should().Contain("r=\"A1\"");
         cellWatches.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
@@ -16833,8 +16833,8 @@ public partial class FileAdapterSmokeTests
         var cellWatches = worksheetXml.Root!.Element(worksheetNs + "cellWatches");
 
         cellWatches.Should().NotBeNull();
-        cellWatches!.Attribute("nativeContainer")!.Value.Should().Be("kept");
-        cellWatches.Element(worksheetNs + "cellWatch")!.Attribute("nativeWatch")!.Value.Should().Be("kept");
+        cellWatches!.Attribute("nativeContainer").Should().BeNull();
+        cellWatches.Element(worksheetNs + "cellWatch")!.Attribute("nativeWatch").Should().BeNull();
         cellWatches.ToString().Should().Contain("r=\"A1\"");
     }
 
@@ -16948,10 +16948,9 @@ public partial class FileAdapterSmokeTests
         entries.Select(entry => entry.Attribute("r")?.Value).Should().BeEquivalentTo(["A1", "B2", "C3"]);
         entries.Select(entry => entry.Attribute("r")?.Value).Should().OnlyHaveUniqueItems();
         entries.Single(entry => entry.Attribute("r")?.Value == "A1")
-            .Attribute("unsupportedAttr")!
-            .Value
+            .Attribute("unsupportedAttr")
             .Should()
-            .Be("kept");
+            .BeNull();
     }
 
     [Fact]
@@ -16992,13 +16991,9 @@ public partial class FileAdapterSmokeTests
             .ToList();
 
         var references = entries.Select(entry => entry.Attribute("r")?.Value).ToList();
-        references.Should().BeEquivalentTo(["B2", "NotARef"]);
+        references.Should().BeEquivalentTo(["B2"]);
         references.Should().NotContain("A1");
-        entries.Single(entry => entry.Attribute("r")?.Value == "NotARef")
-            .Attribute("unsupportedAttr")!
-            .Value
-            .Should()
-            .Be("kept");
+        references.Should().NotContain("NotARef");
     }
 
     [Fact]

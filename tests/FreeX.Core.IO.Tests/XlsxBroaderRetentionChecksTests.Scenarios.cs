@@ -99,8 +99,8 @@ public sealed partial class XlsxBroaderRetentionChecksTests
         worksheetText.Should().Contain("nativeIgnoredErrorsAttr=\"kept\"");
         worksheetText.Should().Contain("twoDigitTextYear=\"1\"");
         worksheetText.Should().Contain("cellWatches");
-        worksheetText.Should().Contain("nativeCellWatchesAttr=\"kept\"");
-        worksheetText.Should().Contain("nativeWatchAttr=\"kept\"");
+        worksheetText.Should().NotContain("nativeCellWatchesAttr=\"kept\"");
+        worksheetText.Should().NotContain("nativeWatchAttr=\"kept\"");
         worksheetText.Should().Contain("{FREEX-WORKSHEET-EXT}");
 
         var worksheetRels = LoadXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
