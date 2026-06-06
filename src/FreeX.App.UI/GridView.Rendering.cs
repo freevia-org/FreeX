@@ -256,6 +256,8 @@ public partial class GridView
         var hAlign = style?.HorizontalAlignment ?? CellHAlign.General;
         var isNumeric = cell.RawValue is NumberValue or DateTimeValue;
         var wrapText = style?.WrapText == true;
+        var textRotation = style?.TextRotation ?? 0;
+        var renderText = PrepareCellDisplayTextForRender(cell.DisplayText, textRotation);
         var fontSize = ToDisplayFontSize((style?.FontSize > 0) ? style!.FontSize : DefaultCellFontSizePoints);
         Brush textBrush = TextBrush;
 
@@ -266,7 +268,7 @@ public partial class GridView
             var typeface = CreateCellTypeface(typefaceKey, _typefaceCache);
             var availableWidth = Math.Max(1, rect.Width - 4 - indentPx);
             fontSize = ResolveCachedShrinkFontSize(
-                cell.DisplayText,
+                renderText,
                 typefaceKey,
                 typeface,
                 fontSize,
@@ -292,11 +294,11 @@ public partial class GridView
         FormattedText text;
         if (useDefaultTextLayout)
         {
-            text = GetDefaultFormattedText(cell.DisplayText, fontSize, pixelsPerDip);
+            text = GetDefaultFormattedText(renderText, fontSize, pixelsPerDip);
         }
         else if (useDefaultWrappedTextLayout)
         {
-            text = GetDefaultWrappedFormattedText(cell.DisplayText, fontSize, wrapMaxTextWidth, wrapTextAlignment, pixelsPerDip);
+            text = GetDefaultWrappedFormattedText(renderText, fontSize, wrapMaxTextWidth, wrapTextAlignment, pixelsPerDip);
         }
         else
         {
@@ -305,7 +307,7 @@ public partial class GridView
             if (style?.FontColor is { } fontColor && !fontColor.IsBlack)
                 textBrush = BrushForCellColor(fontColor, _brushCache);
             text = new FormattedText(
-                    cell.DisplayText,
+                    renderText,
                     CultureInfo.CurrentCulture,
                     FlowDirection.LeftToRight,
                     typeface,
@@ -323,37 +325,20 @@ public partial class GridView
             text.TextAlignment = wrapTextAlignment;
         }
 
-        var textX = hAlign switch
-        {
-            CellHAlign.Right => rect.Right - Math.Min(text.Width, rect.Width - 2) - 2,
-            CellHAlign.Justify or CellHAlign.Distributed => rect.Left + (rect.Width - text.Width) / 2,
-            CellHAlign.Center => rect.Left + (rect.Width - text.Width) / 2,
-            CellHAlign.General when isNumeric => rect.Right - Math.Min(text.Width, rect.Width - 2) - 2,
-            _ => rect.Left + 2 + indentPx
-        };
-        var textY = style?.VerticalAlignment switch
-        {
-            CellVAlign.Top => rect.Top + 1,
-            CellVAlign.Center => rect.Top + (rect.Height - text.Height) / 2,
-            CellVAlign.Bottom => rect.Bottom - text.Height - 1,
-            _ => rect.Top + (rect.Height - text.Height) / 2
-        };
-        textY = Math.Max(rect.Top, textY);
-
-        var textPoint = new Point(Math.Round(textX), Math.Round(textY));
-        var shouldClipText = ShouldClipText(wrapText, textClipRect, text, textPoint);
+        var textLayout = CalculateCellTextRenderLayout(
+            rect,
+            text.Width,
+            text.Height,
+            hAlign,
+            style?.VerticalAlignment,
+            isNumeric,
+            indentPx,
+            textRotation);
+        var shouldClipText = ShouldClipText(wrapText, textClipRect, text, textLayout);
         if (shouldClipText)
             dc.PushClip(GetCellClipGeometry(textClipRect));
 
-        dc.DrawText(text, textPoint);
-
-        if (style?.DoubleUnderline == true)
-        {
-            double uY = textY + text.Height + 1;
-            var underlinePen = UnderlinePenForTextBrush(textBrush, _underlinePenCache);
-            dc.DrawLine(underlinePen, new Point(textX, uY), new Point(textX + text.Width, uY));
-            dc.DrawLine(underlinePen, new Point(textX, uY + 2), new Point(textX + text.Width, uY + 2));
-        }
+        DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache);
 
         if (shouldClipText)
             dc.Pop();
@@ -560,6 +545,8 @@ public partial class GridView
             var hAlign   = style?.HorizontalAlignment ?? CellHAlign.General;
             bool isNumeric = cell.RawValue is NumberValue or DateTimeValue;
             bool wrapText  = style?.WrapText == true;
+            var textRotation = style?.TextRotation ?? 0;
+            var renderText = PrepareCellDisplayTextForRender(cell.DisplayText, textRotation);
 
             bool canOverflow = CanOverflowCellText(style, cell.RawValue, cell.DisplayText, cellMerge);
 
@@ -573,7 +560,7 @@ public partial class GridView
                 var typeface = CreateCellTypeface(typefaceKey, _typefaceCache);
                 var availableWidth = Math.Max(1, rect.Width - 4 - indentPx);
                 fontSize = ResolveCachedShrinkFontSize(
-                    cell.DisplayText,
+                    renderText,
                     typefaceKey,
                     typeface,
                     fontSize,
@@ -600,11 +587,11 @@ public partial class GridView
             FormattedText text;
             if (useDefaultTextLayout)
             {
-                text = GetDefaultFormattedText(cell.DisplayText, fontSize, pixelsPerDip);
+                text = GetDefaultFormattedText(renderText, fontSize, pixelsPerDip);
             }
             else if (useDefaultWrappedTextLayout)
             {
-                text = GetDefaultWrappedFormattedText(cell.DisplayText, fontSize, wrapMaxTextWidth, wrapTextAlignment, pixelsPerDip);
+                text = GetDefaultWrappedFormattedText(renderText, fontSize, wrapMaxTextWidth, wrapTextAlignment, pixelsPerDip);
             }
             else
             {
@@ -614,7 +601,7 @@ public partial class GridView
                     textBrush = BrushForCellColor(fc, _brushCache);
 
                 text = new FormattedText(
-                        cell.DisplayText,
+                        renderText,
                         CultureInfo.CurrentCulture,
                         FlowDirection.LeftToRight,
                         typeface, fontSize, textBrush,
@@ -630,27 +617,18 @@ public partial class GridView
                 text.TextAlignment = wrapTextAlignment;
             }
 
-            double textX = hAlign switch
-            {
-                CellHAlign.Right  => rect.Right - Math.Min(text.Width, rect.Width - 2) - 2,
-                CellHAlign.Justify or CellHAlign.Distributed => rect.Left + (rect.Width - text.Width) / 2,
-                CellHAlign.Center => rect.Left  + (rect.Width - text.Width) / 2,
-                CellHAlign.General when isNumeric
-                                  => rect.Right - Math.Min(text.Width, rect.Width - 2) - 2,
-                _                 => rect.Left + 2 + indentPx
-            };
-
-            double textY = style?.VerticalAlignment switch
-            {
-                CellVAlign.Top    => rect.Top + 1,
-                CellVAlign.Center => rect.Top + (rect.Height - text.Height) / 2,
-                CellVAlign.Bottom => rect.Bottom - text.Height - 1,
-                _                 => rect.Top  + (rect.Height - text.Height) / 2
-            };
-            textY = Math.Max(rect.Top, textY);
+            var textLayout = CalculateCellTextRenderLayout(
+                rect,
+                text.Width,
+                text.Height,
+                hAlign,
+                style?.VerticalAlignment,
+                isNumeric,
+                indentPx,
+                textRotation);
 
             var clipRect = new Rect(rect.Left, rect.Top, renderWidth, rect.Height);
-            if (canOverflow && textX + text.Width > rect.Right)
+            if (canOverflow && textLayout.Bounds.Right > rect.Right)
             {
                 occupied ??= GetOccupiedCellLookup(viewport, EditingCell);
                 uint nextCol = colMetric.Col + 1;
@@ -667,20 +645,11 @@ public partial class GridView
             if (!IntersectsVisibleGrid(clipRect, visibleLeft, visibleTop, visibleRight, visibleBottom))
                 continue;
 
-            var textPoint = new Point(Math.Round(textX), Math.Round(textY));
-            var shouldClipText = ShouldClipText(wrapText, clipRect, text, textPoint);
+            var shouldClipText = ShouldClipText(wrapText, clipRect, text, textLayout);
             if (shouldClipText)
                 dc.PushClip(GetCellClipGeometry(clipRect));
 
-            dc.DrawText(text, textPoint);
-
-            if (style?.DoubleUnderline == true)
-            {
-                double uY = textY + text.Height + 1;
-                var underlinePen = UnderlinePenForTextBrush(textBrush, _underlinePenCache);
-                dc.DrawLine(underlinePen, new Point(textX, uY), new Point(textX + text.Width, uY));
-                dc.DrawLine(underlinePen, new Point(textX, uY + 2), new Point(textX + text.Width, uY + 2));
-            }
+            DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache);
 
             if (shouldClipText)
                 dc.Pop();
@@ -975,20 +944,141 @@ public partial class GridView
         return geometry;
     }
 
+    internal readonly record struct CellTextRenderLayout(Point TextPoint, Rect Bounds, double TransformAngle)
+    {
+        public bool IsRotated => Math.Abs(TransformAngle) > 0.001;
+    }
+
+    internal static bool HasCellTextOrientation(int textRotation) =>
+        IsStackedCellTextRotation(textRotation) || NormalizeCellTextRotationForDisplay(textRotation) != 0;
+
+    internal static bool IsStackedCellTextRotation(int textRotation) => textRotation == 255;
+
+    internal static int NormalizeCellTextRotationForDisplay(int textRotation) =>
+        textRotation is >= -90 and <= 90 ? textRotation : 0;
+
+    internal static string PrepareCellDisplayTextForRender(string text, int textRotation)
+    {
+        if (!IsStackedCellTextRotation(textRotation) || text.Length <= 1)
+            return text;
+
+        var stacked = new System.Text.StringBuilder(text.Length * 2 - 1);
+        foreach (var character in text)
+        {
+            if (stacked.Length > 0)
+                stacked.Append('\n');
+
+            stacked.Append(character);
+        }
+
+        return stacked.ToString();
+    }
+
+    internal static CellTextRenderLayout CalculateCellTextRenderLayout(
+        Rect rect,
+        double textWidth,
+        double textHeight,
+        CellHAlign hAlign,
+        CellVAlign? vAlign,
+        bool isNumeric,
+        double indentPx,
+        int textRotation)
+    {
+        var displayRotation = NormalizeCellTextRotationForDisplay(textRotation);
+        var transformAngle = -displayRotation;
+        var boundsSize = new Size(textWidth, textHeight);
+        var minX = 0.0;
+        var minY = 0.0;
+
+        if (displayRotation != 0)
+        {
+            var radians = transformAngle * Math.PI / 180.0;
+            var cos = Math.Cos(radians);
+            var sin = Math.Sin(radians);
+            var x1 = textWidth * cos;
+            var y1 = textWidth * sin;
+            var x2 = -textHeight * sin;
+            var y2 = textHeight * cos;
+            var x3 = x1 + x2;
+            var y3 = y1 + y2;
+
+            minX = Math.Min(0, Math.Min(x1, Math.Min(x2, x3)));
+            minY = Math.Min(0, Math.Min(y1, Math.Min(y2, y3)));
+            var maxX = Math.Max(0, Math.Max(x1, Math.Max(x2, x3)));
+            var maxY = Math.Max(0, Math.Max(y1, Math.Max(y2, y3)));
+            boundsSize = new Size(
+                maxX - minX,
+                maxY - minY);
+        }
+
+        var boundsX = hAlign switch
+        {
+            CellHAlign.Right => rect.Right - Math.Min(boundsSize.Width, rect.Width - 2) - 2,
+            CellHAlign.Justify or CellHAlign.Distributed => rect.Left + (rect.Width - boundsSize.Width) / 2,
+            CellHAlign.Center => rect.Left + (rect.Width - boundsSize.Width) / 2,
+            CellHAlign.General when isNumeric => rect.Right - Math.Min(boundsSize.Width, rect.Width - 2) - 2,
+            _ => rect.Left + 2 + indentPx
+        };
+        var boundsY = vAlign switch
+        {
+            CellVAlign.Top => rect.Top + 1,
+            CellVAlign.Center => rect.Top + (rect.Height - boundsSize.Height) / 2,
+            CellVAlign.Bottom => rect.Bottom - boundsSize.Height - 1,
+            _ => rect.Top + (rect.Height - boundsSize.Height) / 2
+        };
+        boundsY = Math.Max(rect.Top, boundsY);
+
+        var textPoint = new Point(
+            Math.Round(boundsX - minX),
+            Math.Round(boundsY - minY));
+        var bounds = new Rect(
+            textPoint.X + minX,
+            textPoint.Y + minY,
+            boundsSize.Width,
+            boundsSize.Height);
+
+        return new CellTextRenderLayout(textPoint, bounds, transformAngle);
+    }
+
+    private static void DrawCellText(
+        DrawingContext dc,
+        FormattedText text,
+        CellTextRenderLayout textLayout,
+        CellStyle? style,
+        Brush textBrush,
+        Dictionary<Brush, Pen> underlinePenCache)
+    {
+        if (textLayout.IsRotated)
+            dc.PushTransform(new RotateTransform(textLayout.TransformAngle, textLayout.TextPoint.X, textLayout.TextPoint.Y));
+
+        dc.DrawText(text, textLayout.TextPoint);
+
+        if (style?.DoubleUnderline == true)
+        {
+            double uY = textLayout.TextPoint.Y + text.Height + 1;
+            var underlinePen = UnderlinePenForTextBrush(textBrush, underlinePenCache);
+            dc.DrawLine(underlinePen, new Point(textLayout.TextPoint.X, uY), new Point(textLayout.TextPoint.X + text.Width, uY));
+            dc.DrawLine(underlinePen, new Point(textLayout.TextPoint.X, uY + 2), new Point(textLayout.TextPoint.X + text.Width, uY + 2));
+        }
+
+        if (textLayout.IsRotated)
+            dc.Pop();
+    }
+
     private static bool ShouldClipText(
         bool wrapText,
         Rect clipRect,
         FormattedText text,
-        Point textPoint)
+        CellTextRenderLayout textLayout)
     {
         const double tolerance = 0.5;
         if (wrapText && text.Height > clipRect.Height + tolerance)
             return true;
 
-        return textPoint.X < clipRect.Left - tolerance ||
-            textPoint.Y < clipRect.Top - tolerance ||
-            textPoint.X + text.Width > clipRect.Right + tolerance ||
-            textPoint.Y + text.Height > clipRect.Bottom + tolerance;
+        return textLayout.Bounds.Left < clipRect.Left - tolerance ||
+            textLayout.Bounds.Top < clipRect.Top - tolerance ||
+            textLayout.Bounds.Right > clipRect.Right + tolerance ||
+            textLayout.Bounds.Bottom > clipRect.Bottom + tolerance;
     }
 
     private static Pen UnderlinePenForTextBrush(Brush textBrush, Dictionary<Brush, Pen> underlinePenCache)

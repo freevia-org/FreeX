@@ -106,8 +106,8 @@ public sealed partial class GridViewRenderPerformanceTests
             source.IndexOf("private static Pen UnderlinePenForTextBrush", StringComparison.Ordinal)];
 
         shouldClipText.Should().Contain("if (wrapText && text.Height > clipRect.Height + tolerance)");
-        shouldClipText.Should().Contain("textPoint.X + text.Width > clipRect.Right + tolerance");
-        shouldClipText.Should().Contain("textPoint.Y + text.Height > clipRect.Bottom + tolerance");
+        shouldClipText.Should().Contain("textLayout.Bounds.Right > clipRect.Right + tolerance");
+        shouldClipText.Should().Contain("textLayout.Bounds.Bottom > clipRect.Bottom + tolerance");
         shouldClipText.Should().NotContain("style is not null || wrapText");
     }
 
@@ -136,7 +136,7 @@ public sealed partial class GridViewRenderPerformanceTests
         renderCells.IndexOf("rect.Left >= visibleRight", StringComparison.Ordinal)
             .Should().BeLessThan(renderCells.IndexOf("var typefaceKey = CreateCellTypefaceKey(style);", StringComparison.Ordinal));
         renderCells.IndexOf("if (!IntersectsVisibleGrid(clipRect, visibleLeft, visibleTop, visibleRight, visibleBottom))", StringComparison.Ordinal)
-            .Should().BeLessThan(renderCells.IndexOf("dc.DrawText(text, textPoint);", StringComparison.Ordinal));
+            .Should().BeLessThan(renderCells.IndexOf("DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache);", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -479,8 +479,8 @@ public sealed partial class GridViewRenderPerformanceTests
         rendering.Should().Contain("_defaultTextLayoutStyleCache.Clear();");
         rendering.Should().Contain("CanUseDefaultFormattedText(style, wrapText)");
         rendering.Should().Contain("CanUseDefaultWrappedFormattedText(style)");
-        rendering.Should().Contain("GetDefaultFormattedText(cell.DisplayText, fontSize, pixelsPerDip)");
-        rendering.Should().Contain("GetDefaultWrappedFormattedText(cell.DisplayText, fontSize, wrapMaxTextWidth, wrapTextAlignment, pixelsPerDip)");
+        rendering.Should().Contain("GetDefaultFormattedText(renderText, fontSize, pixelsPerDip)");
+        rendering.Should().Contain("GetDefaultWrappedFormattedText(renderText, fontSize, wrapMaxTextWidth, wrapTextAlignment, pixelsPerDip)");
         headers.Should().Contain("GetDefaultFormattedText(");
     }
 
@@ -584,12 +584,12 @@ public sealed partial class GridViewRenderPerformanceTests
             textPass.IndexOf("FormattedText text;", StringComparison.Ordinal)];
         var overflowBlock = textPass[
             textPass.IndexOf("var clipRect = new Rect(rect.Left, rect.Top, renderWidth, rect.Height);", StringComparison.Ordinal)..
-            textPass.IndexOf("var textPoint = new Point", StringComparison.Ordinal)];
+            textPass.IndexOf("var shouldClipText = ShouldClipText", StringComparison.Ordinal)];
 
         setup.Should().Contain("HashSet<(uint Row, uint Col)>? occupied = null;");
         setup.Should().NotContain("GetOccupiedCellLookup(viewport, EditingCell)");
         beforeTextLayout.Should().NotContain("GetOccupiedCellLookup(viewport, EditingCell)");
-        overflowBlock.Should().Contain("if (canOverflow && textX + text.Width > rect.Right)");
+        overflowBlock.Should().Contain("if (canOverflow && textLayout.Bounds.Right > rect.Right)");
         overflowBlock.Should().Contain("occupied ??= GetOccupiedCellLookup(viewport, EditingCell);");
         overflowBlock.Should().Contain("!occupied.Contains((cell.Row, nextCol))");
         overflowBlock.Should().Contain("clipRect = new Rect(rect.Left, rect.Top, renderWidth, rect.Height);");
@@ -743,7 +743,8 @@ public sealed partial class GridViewRenderPerformanceTests
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private void DrawCommentIndicator", StringComparison.Ordinal)];
 
-        renderCells.Should().Contain("UnderlinePenForTextBrush(textBrush, _underlinePenCache)");
+        renderCells.Should().Contain("DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache);");
+        source.Should().Contain("UnderlinePenForTextBrush(textBrush, underlinePenCache)");
         source.Should().Contain("private static Pen UnderlinePenForTextBrush");
         source.Should().Contain("pen.Freeze();");
         renderCells.Should().NotContain("new Pen(textBrush");
