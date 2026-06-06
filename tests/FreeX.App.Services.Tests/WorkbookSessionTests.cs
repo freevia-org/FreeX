@@ -1877,6 +1877,92 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SetSelectedRangeCellStylePreset_AppliesStylePreservesSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(a1, new TextValue("value"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b1));
+
+        var result = session.SetSelectedRangeCellStylePreset(CellStylePreset.Input);
+
+        result.Success.Should().BeTrue();
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveCell.Should().Be(a1);
+        session.SelectedRange.Should().Be(new GridRange(a1, b1));
+        var a1Style = workbook.GetStyle(sheet.GetCell(a1)!.StyleId);
+        a1Style.FillColor.Should().Be(new CellColor(255, 255, 204));
+        a1Style.NumberFormat.Should().Be("#,##0.00");
+        a1Style.BorderBottom.Style.Should().Be(BorderStyle.Thin);
+        var b1StyleOnly = sheet.GetStyleOnly(b1.Row, b1.Col);
+        b1StyleOnly.Should().NotBeNull();
+        workbook.GetStyle(b1StyleOnly!.Value).FillColor.Should().Be(new CellColor(255, 255, 204));
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).FillColor.Should().BeNull();
+        sheet.GetStyleOnly(b1.Row, b1.Col).Should().BeNull();
+    }
+
+    [Fact]
+    public void SetSelectedRangeCellStylePreset_UsesWorkbookThemeForAccentPresets()
+    {
+        var workbook = CreateWorkbook();
+        workbook.Theme = WorkbookTheme.Office.WithColor(WorkbookThemeColorSlot.Accent2, new CellColor(40, 80, 120));
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("themed"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.SetSelectedRangeCellStylePreset(CellStylePreset.Accent2_40);
+
+        result.Success.Should().BeTrue();
+        var style = workbook.GetStyle(sheet.GetCell(a1)!.StyleId);
+        style.FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent2, 0.6));
+        style.BorderBottom.Should().Be(new CellBorder(BorderStyle.Thin, workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent2)));
+        style.FontColor.Should().Be(CellColor.Black);
+    }
+
+    [Fact]
+    public void SetSelectedRangeCellStylePreset_RejectsProtectedSheetWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("locked"));
+        sheet.GetCell(a1)!.StyleId = workbook.RegisterStyle(new CellStyle { FillColor = new CellColor(1, 2, 3) });
+        sheet.IsProtected = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.SetSelectedRangeCellStylePreset(CellStylePreset.Good);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("protected");
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).FillColor.Should().Be(new CellColor(1, 2, 3));
+    }
+
+    [Fact]
     public void PasteClipboardTextAtActiveCell_FallsBackToExternalTextWhenClipboardTextChanges()
     {
         var workbook = CreateWorkbook();

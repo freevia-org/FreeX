@@ -501,6 +501,20 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public WorkbookCellEditResult SetSelectedRangeCellStylePreset(CellStylePreset preset)
+    {
+        var range = SelectedRange;
+        var diff = CellStyleDiffPlanner.GetCellStylePresetDiff(preset, Workbook.Theme);
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new ApplyStyleCommand(ActiveSheet.Id, range, diff));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
     public WorkbookCellEditResult IncreaseSelectedRangeDecimalPlaces() =>
         SetSelectedRangeNumberFormat(NumberFormatDecimalAdjuster.AddDecimalPlace(SelectedRangeStartNumberFormat));
 

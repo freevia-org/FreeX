@@ -79,6 +79,7 @@ public sealed class MainWindow : Window
     private readonly Button _decreaseFontSizeButton = new();
     private readonly Button _fillColorButton = new();
     private readonly Button _fontColorButton = new();
+    private readonly DropDownButton _cellStylesButton = new();
     private readonly DropDownButton _orientationButton = new();
     private readonly Button _currencyFormatButton = new();
     private readonly Button _percentFormatButton = new();
@@ -113,6 +114,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _fillColorMenuItem = new();
     private readonly NativeMenuItem _clearFillMenuItem = new();
     private readonly NativeMenuItem _fontColorMenuItem = new();
+    private readonly NativeMenuItem _cellStylesMenuItem = new();
     private readonly NativeMenuItem _horizontalTextMenuItem = new();
     private readonly NativeMenuItem _angleCounterclockwiseMenuItem = new();
     private readonly NativeMenuItem _angleClockwiseMenuItem = new();
@@ -319,6 +321,9 @@ public sealed class MainWindow : Window
         _fontColorMenuItem.Header = "Font Color";
         _fontColorMenuItem.Click += (_, _) => ApplyDefaultSelectedRangeFontColor();
 
+        _cellStylesMenuItem.Header = "Cell Styles";
+        _cellStylesMenuItem.Menu = CreateNativeCellStylesMenu();
+
         _horizontalTextMenuItem.Header = "Horizontal";
         _horizontalTextMenuItem.Click += (_, _) =>
             ApplySelectedRangeTextRotation(0, "Set horizontal text for", "Horizontal Text failed.");
@@ -417,6 +422,7 @@ public sealed class MainWindow : Window
         formatMenu.Items.Add(_fillColorMenuItem);
         formatMenu.Items.Add(_clearFillMenuItem);
         formatMenu.Items.Add(_fontColorMenuItem);
+        formatMenu.Items.Add(_cellStylesMenuItem);
         formatMenu.Items.Add(new NativeMenuItemSeparator());
         formatMenu.Items.Add(_horizontalTextMenuItem);
         formatMenu.Items.Add(_angleCounterclockwiseMenuItem);
@@ -618,6 +624,11 @@ public sealed class MainWindow : Window
         _fontColorButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _fontColorButton.Click += FontColorButton_Click;
 
+        _cellStylesButton.Content = "Styles";
+        _cellStylesButton.Padding = new Thickness(10, 4);
+        _cellStylesButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _cellStylesButton.Flyout = CreateCellStylesFlyout();
+
         _orientationButton.Content = "Orient";
         _orientationButton.Padding = new Thickness(10, 4);
         _orientationButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -739,6 +750,7 @@ public sealed class MainWindow : Window
                     _decreaseFontSizeButton,
                     _fillColorButton,
                     _fontColorButton,
+                    _cellStylesButton,
                     _orientationButton,
                     _currencyFormatButton,
                     _percentFormatButton,
@@ -856,6 +868,7 @@ public sealed class MainWindow : Window
         _decreaseFontSizeButton.IsEnabled = isIdle;
         _fillColorButton.IsEnabled = isIdle;
         _fontColorButton.IsEnabled = isIdle;
+        _cellStylesButton.IsEnabled = isIdle;
         _orientationButton.IsEnabled = isIdle;
         _currencyFormatButton.IsEnabled = isIdle;
         _percentFormatButton.IsEnabled = isIdle;
@@ -891,6 +904,7 @@ public sealed class MainWindow : Window
         _fillColorMenuItem.IsEnabled = _fillColorButton.IsEnabled;
         _clearFillMenuItem.IsEnabled = _fillColorButton.IsEnabled;
         _fontColorMenuItem.IsEnabled = _fontColorButton.IsEnabled;
+        _cellStylesMenuItem.IsEnabled = _cellStylesButton.IsEnabled;
         _horizontalTextMenuItem.IsEnabled = isIdle;
         _angleCounterclockwiseMenuItem.IsEnabled = isIdle;
         _angleClockwiseMenuItem.IsEnabled = isIdle;
@@ -1347,6 +1361,41 @@ public sealed class MainWindow : Window
     {
         var displayRotation = NormalizeTextRotationForDisplay(textRotation);
         return displayRotation == 0 ? null : new RotateTransform(-displayRotation);
+    }
+
+    private MenuFlyout CreateCellStylesFlyout() =>
+        new()
+        {
+            ItemsSource = Enum
+                .GetValues<CellStylePreset>()
+                .Select(CreateCellStyleMenuItem)
+                .ToArray(),
+        };
+
+    private MenuItem CreateCellStyleMenuItem(CellStylePreset preset)
+    {
+        var menuItem = new MenuItem { Header = CellStyleDiffPlanner.GetCellStylePresetDisplayName(preset) };
+        menuItem.Click += (_, _) => ApplySelectedRangeCellStylePreset(preset);
+        return menuItem;
+    }
+
+    private NativeMenu CreateNativeCellStylesMenu()
+    {
+        var menu = new NativeMenu();
+        foreach (var preset in Enum.GetValues<CellStylePreset>())
+            menu.Items.Add(CreateNativeCellStyleMenuItem(preset));
+
+        return menu;
+    }
+
+    private NativeMenuItem CreateNativeCellStyleMenuItem(CellStylePreset preset)
+    {
+        var menuItem = new NativeMenuItem
+        {
+            Header = CellStyleDiffPlanner.GetCellStylePresetDisplayName(preset),
+        };
+        menuItem.Click += (_, _) => ApplySelectedRangeCellStylePreset(preset);
+        return menuItem;
     }
 
     private MenuFlyout CreateTextRotationFlyout() =>
@@ -2110,6 +2159,27 @@ public sealed class MainWindow : Window
         RefreshShell($"Applied font color to {rangeReference}");
     }
 
+    private void ApplySelectedRangeCellStylePreset(CellStylePreset preset)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var presetName = CellStyleDiffPlanner.GetCellStylePresetDisplayName(preset);
+        var result = _session.SetSelectedRangeCellStylePreset(preset);
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "Cell Style failed.");
+            return;
+        }
+
+        RefreshShell($"Applied {presetName} style to {rangeReference}");
+    }
+
     private void ApplySelectedRangeCurrencyFormat()
     {
         ApplySelectedRangeNumberFormat(CurrencyNumberFormat, "Applied currency format to", "Currency format failed.");
@@ -2309,6 +2379,10 @@ public sealed class MainWindow : Window
         var hasNativeFormatMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
             string.Equals(item.Header?.ToString(), "Format", StringComparison.Ordinal) &&
             item.Menu is not null) == true;
+        var nativeCellStylesPresetCount = _cellStylesMenuItem.Menu?
+            .Items
+            .OfType<NativeMenuItem>()
+            .Count(item => item.Header is not null) ?? 0;
 
         return new MacOsLaunchSmokeSnapshot(
             WindowShown: IsVisible,
@@ -2341,6 +2415,8 @@ public sealed class MainWindow : Window
             HasNativeFillColorMenuItem: HasNativeMenuItem(_fillColorMenuItem, "Fill Color", requireGesture: false),
             HasNativeClearFillMenuItem: HasNativeMenuItem(_clearFillMenuItem, "No Fill", requireGesture: false),
             HasNativeFontColorMenuItem: HasNativeMenuItem(_fontColorMenuItem, "Font Color", requireGesture: false),
+            HasNativeCellStylesMenuItem: HasNativeMenuItem(_cellStylesMenuItem, "Cell Styles", requireGesture: false),
+            NativeCellStylesPresetCount: nativeCellStylesPresetCount,
             HasNativeHorizontalTextMenuItem: HasNativeMenuItem(_horizontalTextMenuItem, "Horizontal", requireGesture: false),
             HasNativeAngleCounterclockwiseMenuItem: HasNativeMenuItem(_angleCounterclockwiseMenuItem, "Angle Counterclockwise", requireGesture: false),
             HasNativeAngleClockwiseMenuItem: HasNativeMenuItem(_angleClockwiseMenuItem, "Angle Clockwise", requireGesture: false),

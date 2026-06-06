@@ -280,6 +280,8 @@ jobs:
             grep -q "native_fill_color_menu_item=true" "$launch_smoke_report"
             grep -q "native_clear_fill_menu_item=true" "$launch_smoke_report"
             grep -q "native_font_color_menu_item=true" "$launch_smoke_report"
+            grep -q "native_cell_styles_menu_item=true" "$launch_smoke_report"
+            grep -q "native_cell_styles_preset_count=33" "$launch_smoke_report"
             grep -q "native_horizontal_text_menu_item=true" "$launch_smoke_report"
             grep -q "native_angle_counterclockwise_menu_item=true" "$launch_smoke_report"
             grep -q "native_angle_clockwise_menu_item=true" "$launch_smoke_report"

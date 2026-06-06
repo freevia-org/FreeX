@@ -2,7 +2,7 @@ using FreeX.Core.Model;
 using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
 using CellVAlign = FreeX.Core.Model.VerticalAlignment;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Services;
 
 public enum CellStylePreset
 {
@@ -67,7 +67,8 @@ public static class CellStyleDiffPlanner
             BorderBottom: new CellBorder(BorderStyle.None),
             BorderLeft: new CellBorder(BorderStyle.None),
             BorderRight: new CellBorder(BorderStyle.None),
-            Locked: true);
+            Locked: true,
+            Hidden: false);
 
     public static StyleDiff UnderlineDiff(bool enabled) =>
         new(Underline: enabled, Strikethrough: enabled ? false : null);
@@ -80,6 +81,36 @@ public static class CellStyleDiffPlanner
 
     public static StyleDiff GetCellStylePresetDiff(CellStylePreset preset) =>
         GetCellStylePresetDiff(preset, WorkbookTheme.Office);
+
+    public static string GetCellStylePresetDisplayName(CellStylePreset preset) =>
+        preset switch
+        {
+            CellStylePreset.CheckCell => "Check Cell",
+            CellStylePreset.LinkedCell => "Linked Cell",
+            CellStylePreset.ExplanatoryText => "Explanatory Text",
+            CellStylePreset.Heading1 => "Heading 1",
+            CellStylePreset.Heading2 => "Heading 2",
+            CellStylePreset.WarningText => "Warning Text",
+            CellStylePreset.Accent1_20 => "20% - Accent 1",
+            CellStylePreset.Accent2_20 => "20% - Accent 2",
+            CellStylePreset.Accent3_20 => "20% - Accent 3",
+            CellStylePreset.Accent4_20 => "20% - Accent 4",
+            CellStylePreset.Accent5_20 => "20% - Accent 5",
+            CellStylePreset.Accent6_20 => "20% - Accent 6",
+            CellStylePreset.Accent1_40 => "40% - Accent 1",
+            CellStylePreset.Accent2_40 => "40% - Accent 2",
+            CellStylePreset.Accent3_40 => "40% - Accent 3",
+            CellStylePreset.Accent4_40 => "40% - Accent 4",
+            CellStylePreset.Accent5_40 => "40% - Accent 5",
+            CellStylePreset.Accent6_40 => "40% - Accent 6",
+            CellStylePreset.Accent1_60 => "60% - Accent 1",
+            CellStylePreset.Accent2_60 => "60% - Accent 2",
+            CellStylePreset.Accent3_60 => "60% - Accent 3",
+            CellStylePreset.Accent4_60 => "60% - Accent 4",
+            CellStylePreset.Accent5_60 => "60% - Accent 5",
+            CellStylePreset.Accent6_60 => "60% - Accent 6",
+            _ => preset.ToString()
+        };
 
     public static StyleDiff GetCellStylePresetDiff(CellStylePreset preset, WorkbookTheme theme) =>
         preset switch

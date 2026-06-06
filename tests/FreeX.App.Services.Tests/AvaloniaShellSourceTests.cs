@@ -320,6 +320,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_fill_color_menu_item={FormatBool(snapshot.HasNativeFillColorMenuItem)}");
         smokeSource.Should().Contain("native_clear_fill_menu_item={FormatBool(snapshot.HasNativeClearFillMenuItem)}");
         smokeSource.Should().Contain("native_font_color_menu_item={FormatBool(snapshot.HasNativeFontColorMenuItem)}");
+        smokeSource.Should().Contain("native_cell_styles_menu_item={FormatBool(snapshot.HasNativeCellStylesMenuItem)}");
+        smokeSource.Should().Contain("native_cell_styles_preset_count={snapshot.NativeCellStylesPresetCount}");
         smokeSource.Should().Contain("native_horizontal_text_menu_item={FormatBool(snapshot.HasNativeHorizontalTextMenuItem)}");
         smokeSource.Should().Contain("native_angle_counterclockwise_menu_item={FormatBool(snapshot.HasNativeAngleCounterclockwiseMenuItem)}");
         smokeSource.Should().Contain("native_angle_clockwise_menu_item={FormatBool(snapshot.HasNativeAngleClockwiseMenuItem)}");
@@ -366,6 +368,8 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeFillColorMenuItem: HasNativeMenuItem(_fillColorMenuItem, \"Fill Color\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeClearFillMenuItem: HasNativeMenuItem(_clearFillMenuItem, \"No Fill\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeFontColorMenuItem: HasNativeMenuItem(_fontColorMenuItem, \"Font Color\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeCellStylesMenuItem: HasNativeMenuItem(_cellStylesMenuItem, \"Cell Styles\", requireGesture: false)");
+        windowSource.Should().Contain("NativeCellStylesPresetCount: nativeCellStylesPresetCount");
         windowSource.Should().Contain("HasNativeHorizontalTextMenuItem: HasNativeMenuItem(_horizontalTextMenuItem, \"Horizontal\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAngleCounterclockwiseMenuItem: HasNativeMenuItem(_angleCounterclockwiseMenuItem, \"Angle Counterclockwise\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAngleClockwiseMenuItem: HasNativeMenuItem(_angleClockwiseMenuItem, \"Angle Clockwise\", requireGesture: false)");
@@ -748,6 +752,45 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("RefreshShell($\"Applied font color to {rangeReference}\");");
         source.Should().Contain("var background = style?.ResolveFillColor(_session.Workbook.Theme) is { } fillColor");
         source.Should().Contain(": Brush(style.ResolveFontColor(_session.Workbook.Theme));");
+    }
+
+    [Fact]
+    public void MainWindow_WiresCellStylesThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+
+        source.Should().Contain("private readonly DropDownButton _cellStylesButton = new();");
+        source.Should().Contain("private readonly NativeMenuItem _cellStylesMenuItem = new();");
+        source.Should().Contain("_cellStylesButton.Content = \"Styles\";");
+        source.Should().Contain("_cellStylesButton.Flyout = CreateCellStylesFlyout();");
+        source.Should().Contain("_cellStylesMenuItem.Header = \"Cell Styles\";");
+        source.Should().Contain("_cellStylesMenuItem.Menu = CreateNativeCellStylesMenu();");
+        source.Should().Contain("formatMenu.Items.Add(_cellStylesMenuItem);");
+        source.Should().Contain("_cellStylesButton.IsEnabled = isIdle;");
+        source.Should().Contain("_cellStylesMenuItem.IsEnabled = _cellStylesButton.IsEnabled;");
+        source.Should().Contain("private MenuFlyout CreateCellStylesFlyout()");
+        source.Should().Contain("Enum");
+        source.Should().Contain(".GetValues<CellStylePreset>()");
+        source.Should().Contain(".Select(CreateCellStyleMenuItem)");
+        source.Should().Contain("private NativeMenu CreateNativeCellStylesMenu()");
+        source.Should().Contain("menu.Items.Add(CreateNativeCellStyleMenuItem(preset));");
+        source.Should().Contain("CellStyleDiffPlanner.GetCellStylePresetDisplayName(preset)");
+        source.Should().Contain("ApplySelectedRangeCellStylePreset(preset);");
+        source.Should().Contain("private void ApplySelectedRangeCellStylePreset(CellStylePreset preset)");
+        source.Should().Contain("var result = _session.SetSelectedRangeCellStylePreset(preset);");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Cell Style failed.\");");
+        source.Should().Contain("RefreshShell($\"Applied {presetName} style to {rangeReference}\");");
+        source.Should().Contain("var nativeCellStylesPresetCount = _cellStylesMenuItem.Menu?");
+        source.Should().Contain("HasNativeCellStylesMenuItem: HasNativeMenuItem(_cellStylesMenuItem, \"Cell Styles\", requireGesture: false)");
+        source.Should().Contain("NativeCellStylesPresetCount: nativeCellStylesPresetCount");
+
+        smokeSource.Should().Contain("bool HasNativeCellStylesMenuItem,");
+        smokeSource.Should().Contain("int NativeCellStylesPresetCount,");
+        smokeSource.Should().Contain("HasNativeCellStylesMenuItem &&");
+        smokeSource.Should().Contain("NativeCellStylesPresetCount == Enum.GetValues<CellStylePreset>().Length");
+        smokeSource.Should().Contain("native_cell_styles_menu_item={FormatBool(snapshot.HasNativeCellStylesMenuItem)}");
+        smokeSource.Should().Contain("native_cell_styles_preset_count={snapshot.NativeCellStylesPresetCount}");
     }
 
     [Fact]

@@ -21,6 +21,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("dotnet-version: 10.0.x");
         script.Should().Contain("--framework net10.0");
         script.Should().Contain("--output \"$app/Contents/MacOS\"");
+        script.Should().Contain("native_cell_styles_menu_item=true");
+        script.Should().Contain("native_cell_styles_preset_count=33");
         script.Should().Contain("native_horizontal_text_menu_item=true");
         script.Should().Contain("native_rotate_text_down_menu_item=");
         script.Should().Contain("PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode)");
@@ -280,8 +282,20 @@ public sealed class MacOsAppReadinessPreflightTests
                       osascript -e 'tell application id "io.github.tony-xmelon.freex" to quit' || true
                       grep -q "native_file_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_edit_menu=true" "$artifact_root/launch.txt"
+                      grep -q "native_format_menu=true" "$artifact_root/launch.txt"
+                      grep -q "native_cut_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_copy_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_paste_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_clear_contents_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_bold_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_cell_styles_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_cell_styles_preset_count=33" "$artifact_root/launch.txt"
+                      grep -q "native_horizontal_text_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_angle_counterclockwise_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_angle_clockwise_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_vertical_text_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_rotate_text_up_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_rotate_text_down_menu_item=true" "$artifact_root/launch.txt"
                       echo "bundle_icon=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app/Contents/Info.plist")"
                   - uses: actions/upload-artifact@v7
                     with:
@@ -362,11 +376,14 @@ public sealed class MacOsAppReadinessPreflightTests
 
             internal sealed class MacOsLaunchSmokeSnapshot
             {
-                public bool IsPassed => HasNativeFileMenu && HasNativeEditMenu && HasNativeCopyMenuItem;
+                public bool IsPassed => HasNativeFileMenu && HasNativeEditMenu && HasNativeFormatMenu && HasNativeCellStylesMenuItem && HasNativeCopyMenuItem;
                 private bool HasNativeFileMenu { get; }
                 private bool HasNativeEditMenu { get; }
+                private bool HasNativeFormatMenu { get; }
+                private bool HasNativeCellStylesMenuItem { get; }
                 private bool HasNativeCopyMenuItem { get; }
-                public string Report => "native_copy_menu_item=true";
+                public int NativeCellStylesPresetCount { get; }
+                public string Report => "native_cut_menu_item= native_copy_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item=";
             }
             """);
 
