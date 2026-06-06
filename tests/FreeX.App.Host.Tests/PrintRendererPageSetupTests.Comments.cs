@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -321,7 +320,7 @@ public sealed partial class PrintRendererPageSetupTests
     [Fact]
     public void BuildCommentSummaryPages_AvoidsLinqPagingAndSortingScaffolding()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PrintRenderer.Comments.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("PrintRenderer.Comments.cs");
 
         source.Should().NotContain(".Chunk(");
         source.Should().NotContain(".Concat(threadedComments");
