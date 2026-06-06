@@ -928,6 +928,9 @@ public static partial class AccessibilityCheckerService
             case "MOD":
                 kind = ConditionalFormulaScalarFunctionKind.Mod;
                 return true;
+            case "QUOTIENT":
+                kind = ConditionalFormulaScalarFunctionKind.Quotient;
+                return true;
             case "SQRT":
                 kind = ConditionalFormulaScalarFunctionKind.Sqrt;
                 return true;
@@ -1099,6 +1102,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.RoundDown or
             ConditionalFormulaScalarFunctionKind.MRound or
             ConditionalFormulaScalarFunctionKind.Mod or
+            ConditionalFormulaScalarFunctionKind.Quotient or
             ConditionalFormulaScalarFunctionKind.Power or
             ConditionalFormulaScalarFunctionKind.Atan2 or
             ConditionalFormulaScalarFunctionKind.Left or
@@ -1643,6 +1647,7 @@ public static partial class AccessibilityCheckerService
         Fact,
         FactDouble,
         Mod,
+        Quotient,
         Sqrt,
         SqrtPi,
         Sign,
@@ -2174,6 +2179,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Fact:
                 case ConditionalFormulaScalarFunctionKind.FactDouble:
                 case ConditionalFormulaScalarFunctionKind.Mod:
+                case ConditionalFormulaScalarFunctionKind.Quotient:
                 case ConditionalFormulaScalarFunctionKind.Sqrt:
                 case ConditionalFormulaScalarFunctionKind.SqrtPi:
                 case ConditionalFormulaScalarFunctionKind.Sign:
@@ -2394,6 +2400,15 @@ public static partial class AccessibilityCheckerService
                     }
 
                     result = first - divisor * Math.Floor(first / divisor);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Quotient:
+                    if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var denominator) ||
+                        denominator == 0)
+                    {
+                        return false;
+                    }
+
+                    result = Math.Truncate(first / denominator);
                     break;
                 case ConditionalFormulaScalarFunctionKind.Sqrt:
                     if (first < 0)

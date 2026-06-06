@@ -931,6 +931,49 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatQuotientScalarFunctionComparisons()
+    {
+        AssertFormulaArithmeticContrastLocations("QUOTIENT($A1,25)>=4", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT(5,2)=2", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT(-5,2)=-2", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT(5,-2)=-2", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT(-5,-2)=2", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatQuotientScalarFunctionWrappersAndPredicates()
+    {
+        AssertFormulaArithmeticContrastLocations("IF(QUOTIENT($A1,25)>=4,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(QUOTIENT($A1,25)>=4,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(QUOTIENT($A1,25))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ISEVEN(QUOTIENT($A1,25))", "B2");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatQuotientScalarFunctionAggregateArguments()
+    {
+        AssertFormulaAggregateContrastLocations("SUM(QUOTIENT($A1,25),1)>=5", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("AVERAGE(QUOTIENT($A1,25),$A1)>50", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatQuotientScalarFunctionUnsupportedOperands()
+    {
+        AssertFormulaArithmeticContrastLocations("QUOTIENT($A1)>0");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT($A1,2,1)>0");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT(\"5\",2)>0");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT($A1,\"2\")>0");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT($A1&\"x\",2)>0");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT(KURT($A1),2)>0");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT($A1,KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT($A1,0)>0");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT(1E308*1E308,2)>0");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT($A1,1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT(1E308,1E-308)>0");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT(EXP(1000),2)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatOddScalarFunctionComparisons()
     {
         AssertFormulaArithmeticContrastLocations("ODD($A1/40)>3", "B4");
