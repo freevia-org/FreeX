@@ -153,6 +153,45 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
 
     [Fact]
+    public void WorksheetSingleXmlCells_ProducesSchemaValidWorkbook()
+    {
+        SchemaErrors(CreateWorksheetSingleXmlCellsSourceWorkbook()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithWorksheetSingleXmlCells_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateWorksheetSingleXmlCellsSourceWorkbook());
+        var sourceSingleXmlCells = ReadWorksheetSingleCellTableRootElement(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadPackageRootElement(saved, "xl/worksheets/sheet1.xml")
+            .Element(XName.Get("singleXmlCells", "http://schemas.openxmlformats.org/spreadsheetml/2006/main"))
+            .Should()
+            .BeNull();
+        ReadWorksheetSingleCellTableRootElement(saved)
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceSingleXmlCells.ToString(SaveOptions.DisableFormatting));
+    }
+
+
+    [Fact]
     public void NamedRanges_ProducesSchemaValidWorkbook()
     {
         var workbook = new Workbook("NamedRanges");
@@ -748,6 +787,34 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         return workbook;
     }
 
+    private static Workbook CreateWorksheetSingleXmlCellsSourceWorkbook()
+    {
+        var workbook = new Workbook("SingleXmlCellsPatchSave");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Mapped text"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(12));
+        sheet.SingleXmlCells = new WorksheetSingleXmlCellsModel
+        {
+            Cells =
+            [
+                new WorksheetSingleXmlCellModel
+                {
+                    Id = 1,
+                    Reference = "A1",
+                    XmlCellPropertyId = 1
+                },
+                new WorksheetSingleXmlCellModel
+                {
+                    Id = 2,
+                    Reference = "B2",
+                    XmlCellPropertyId = 2
+                }
+            ]
+        };
+        return workbook;
+    }
+
     private static Workbook CreateSheetProtectionSourceWorkbook()
     {
         var workbook = new Workbook("SheetProtectionPatchSave");
@@ -1021,6 +1088,22 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
         return new XElement(LoadPackageXml(archive.GetEntry(entryName)!).Root!);
+    }
+
+    private static XElement ReadWorksheetSingleCellTableRootElement(Stream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        const string relationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableSingleCells";
+        const string worksheetPath = "xl/worksheets/sheet1.xml";
+
+        var relsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var relationship = relsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Single(element => element.Attribute("Type")?.Value == relationshipType);
+        var partPath = XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, relationship.Attribute("Target")!.Value);
+        return new XElement(LoadPackageXml(archive.GetEntry(partPath)!).Root!);
     }
 
     private static XElement ReadWorksheetRowElement(Stream stream, uint row)

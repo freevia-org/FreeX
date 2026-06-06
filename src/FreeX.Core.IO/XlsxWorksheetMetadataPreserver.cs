@@ -658,7 +658,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
             return sheet.DataConsolidation is null;
 
         if (sourceBlockName == workbookNs + "singleXmlCells")
-            return sheet.SingleXmlCells is null || IsEmpty(sheet.SingleXmlCells);
+            return true;
 
         if (sourceBlockName == workbookNs + "smartTags")
             return sheet.SmartTags is null;

@@ -1783,12 +1783,27 @@ public partial class XlsxCorpusRunnerTests
     private static void AssertWorksheetSingleXmlCells(Stream package, string because)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        const string worksheetPath = "xl/worksheets/sheet1.xml";
+        const string relationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableSingleCells";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
-        var singleXmlCells = worksheetXml.Root!.Element(worksheetNs + "singleXmlCells");
+        worksheetXml.Root!.Element(worksheetNs + "singleXmlCells").Should().BeNull(because);
+
+        var relsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var relationship = relsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Should()
+            .ContainSingle(
+                element => element.Attribute("Type") != null &&
+                           element.Attribute("Type")!.Value == relationshipType,
+                because)
+            .Subject;
+        var partPath = XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, relationship.Attribute("Target")!.Value);
+        var singleXmlCells = LoadPackageXml(archive.GetEntry(partPath)!).Root;
         singleXmlCells.Should().NotBeNull(because);
-        singleXmlCells!.Attribute("nativeSingleXmlCellsAttr")!.Value.Should().Be("kept", because);
+        singleXmlCells!.Attribute("nativeSingleXmlCellsAttr").Should().BeNull(because);
 
         var singleXmlCell = singleXmlCells.Elements(worksheetNs + "singleXmlCell")
             .Should()
@@ -1796,8 +1811,12 @@ public partial class XlsxCorpusRunnerTests
             .Subject;
         singleXmlCell.Attribute("id")!.Value.Should().Be("1", because);
         singleXmlCell.Attribute("r")!.Value.Should().Be("A1", because);
-        singleXmlCell.Attribute("xmlCellPrId")!.Value.Should().Be("1", because);
-        singleXmlCell.Attribute("nativeSingleXmlCellAttr")!.Value.Should().Be("cell-kept", because);
+        singleXmlCell.Attribute("connectionId")!.Value.Should().Be("1", because);
+        singleXmlCell.Attribute("nativeSingleXmlCellAttr").Should().BeNull(because);
+        var xmlCellPr = singleXmlCell.Element(worksheetNs + "xmlCellPr");
+        xmlCellPr.Should().NotBeNull(because);
+        xmlCellPr!.Attribute("id")!.Value.Should().Be("1", because);
+        xmlCellPr.Element(worksheetNs + "xmlPr")!.Attribute("mapId")!.Value.Should().Be("1", because);
     }
 
     private static void AssertWorksheetCalculationProperties(Stream package, string because)

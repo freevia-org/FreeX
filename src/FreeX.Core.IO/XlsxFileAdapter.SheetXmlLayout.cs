@@ -303,7 +303,10 @@ public sealed partial class XlsxFileAdapter
         var smartTags = XlsxWorksheetSmartTagMapper.Read(worksheetXml.Root?.Element(worksheetNs + "smartTags"));
         var dataConsolidation = XlsxWorksheetDataConsolidationMapper.Read(worksheetXml.Root?.Element(worksheetNs + "dataConsolidate"));
         var sortState = XlsxWorksheetSortStateMapper.Read(worksheetXml.Root?.Element(worksheetNs + "sortState"));
-        var singleXmlCells = XlsxWorksheetSingleXmlCellMapper.Read(worksheetXml.Root?.Element(worksheetNs + "singleXmlCells"));
+        var singleXmlCells = XlsxWorksheetSingleXmlCellMapper.Read(
+            archive,
+            worksheetPath,
+            worksheetXml.Root?.Element(worksheetNs + "singleXmlCells"));
         var additionalViews = XlsxWorksheetAdditionalViewMapper.Read(worksheetXml.Root?.Element(worksheetNs + "sheetViews"));
         var autoFilter = ReadWorksheetAutoFilter(worksheetXml.Root?.Element(worksheetNs + "autoFilter"));
         var hasWorksheetDynamicFilters = HasDynamicFilter(autoFilter);
