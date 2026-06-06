@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -34,7 +33,7 @@ public sealed class NumberFormatDecimalAdjusterTests
     [Fact]
     public void DecimalAdjustmentRegexes_AreGeneratedAndCached()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "NumberFormatDecimalAdjuster.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("NumberFormatDecimalAdjuster.cs");
 
         source.Should().Contain("[GeneratedRegex");
         source.Should().NotMatchRegex(@"\bRegex\.Match\s*\(");
