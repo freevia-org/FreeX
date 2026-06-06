@@ -682,14 +682,22 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("DAY($A1)>=16", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("DATE(2023,3,15)=$A1", "B1");
         AssertFormulaDateFunctionContrastLocations("YEAR(DATE(2023,3,15))=2023", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("TODAY()<=NOW()", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("NOW()-TODAY()>=0", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("YEAR(TODAY())>=1900", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("MONTH(NOW())>=1", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("DAY(TODAY())>=1", "B1", "B2", "B3", "B4");
     }
 
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDateFunctionWrappers()
     {
         AssertFormulaDateFunctionContrastLocations("IF(DAY($A1)>=16,TRUE,FALSE)", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("IF(TODAY()<=NOW(),TRUE,FALSE)", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("AND(YEAR($A1)=2023,$C1=\"Open\")", "B4");
+        AssertFormulaDateFunctionContrastLocations("AND(ISNUMBER(TODAY()),NOW()>=TODAY())", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("ISNUMBER(YEAR($A1))", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("ISNUMBER(TODAY())", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("YEAR($A1)-2023", "B3");
     }
 
@@ -697,6 +705,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAggregateDateFunctionArguments()
     {
         AssertFormulaDateFunctionContrastLocations("SUM(DAY($A1),MONTH($A1))>=19", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("SUM(DAY(TODAY()),MONTH(TODAY()))>=2", "B1", "B2", "B3", "B4");
     }
 
     [Fact]
@@ -709,7 +718,8 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("YEAR(\"2023-03-15\")=2023");
         AssertFormulaDateFunctionContrastLocations("YEAR($A1,1)=2023");
         AssertFormulaDateFunctionContrastLocations("YEAR(1E308)>0");
-        AssertFormulaDateFunctionContrastLocations("TODAY()=$A1");
+        AssertFormulaDateFunctionContrastLocations("TODAY(1)>0");
+        AssertFormulaDateFunctionContrastLocations("NOW(1)>0");
         AssertFormulaDateFunctionContrastLocations("YEAR(A0)>0");
     }
 

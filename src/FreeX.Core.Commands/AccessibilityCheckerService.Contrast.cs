@@ -941,6 +941,12 @@ public static partial class AccessibilityCheckerService
             case "DAY":
                 kind = ConditionalFormulaScalarFunctionKind.Day;
                 return true;
+            case "TODAY":
+                kind = ConditionalFormulaScalarFunctionKind.Today;
+                return true;
+            case "NOW":
+                kind = ConditionalFormulaScalarFunctionKind.Now;
+                return true;
             default:
                 kind = default;
                 return false;
@@ -969,6 +975,8 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Find or
             ConditionalFormulaScalarFunctionKind.Search => argumentCount is 2 or 3,
             ConditionalFormulaScalarFunctionKind.Date => argumentCount == 3,
+            ConditionalFormulaScalarFunctionKind.Today or
+            ConditionalFormulaScalarFunctionKind.Now => argumentCount == 0,
             _ => false
         };
 
@@ -1461,7 +1469,9 @@ public static partial class AccessibilityCheckerService
         Date,
         Year,
         Month,
-        Day
+        Day,
+        Today,
+        Now
     }
 
     private enum ConditionalFormulaAggregateKind
@@ -1980,6 +1990,8 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Year:
                 case ConditionalFormulaScalarFunctionKind.Month:
                 case ConditionalFormulaScalarFunctionKind.Day:
+                case ConditionalFormulaScalarFunctionKind.Today:
+                case ConditionalFormulaScalarFunctionKind.Now:
                     return TryEvaluateFormulaDateScalarFunction(function, rowOffset, colOffset, out value);
                 default:
                     return false;
@@ -2043,6 +2055,12 @@ public static partial class AccessibilityCheckerService
             value = ErrorValue.Value;
             switch (function.Kind)
             {
+                case ConditionalFormulaScalarFunctionKind.Today:
+                    value = DateTimeValue.FromDateTime(DateTime.Today);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Now:
+                    value = DateTimeValue.FromDateTime(DateTime.Now);
+                    return true;
                 case ConditionalFormulaScalarFunctionKind.Date:
                     if (!TryResolveFormulaDatePart(function.Arguments[0], rowOffset, colOffset, out var year) ||
                         !TryResolveFormulaDatePart(function.Arguments[1], rowOffset, colOffset, out var month) ||
