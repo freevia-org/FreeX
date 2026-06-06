@@ -345,9 +345,10 @@ public partial class MainWindow
     private void ExecuteClearSelection()
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteRepeatableGroupedSheetCommand(
+        if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
                 "Clear Contents",
-                sheetId => new ClearContentsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId)),
+                range,
+                (sheetId, currentRange) => new ClearContentsCommand(sheetId, currentRange),
                 out var outcome))
             return;
 

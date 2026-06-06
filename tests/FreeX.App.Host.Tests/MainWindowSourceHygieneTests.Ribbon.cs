@@ -487,6 +487,7 @@ public sealed partial class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("private IReadOnlyList<SheetId> CurrentGroupedEditSheetIds(");
         mainSource.Should().NotContain("private bool TryExecuteEditCells(");
         mainSource.Should().NotContain("private bool TryExecuteRepeatableGroupedSheetCommand(");
+        mainSource.Should().NotContain("private bool TryExecuteRepeatableCurrentSelectionRangesCommand(");
         mainSource.Should().NotContain("private bool TryExecuteRepeatableCurrentRangeCommand(");
         mainSource.Should().NotContain("private bool TryExecuteRepeatableChartLayout(");
         mainSource.Should().NotContain("private void ExecuteUndo(");
@@ -498,6 +499,7 @@ public sealed partial class MainWindowSourceHygieneTests
         commandSource.Should().Contain("private IReadOnlyList<SheetId> CurrentGroupedEditSheetIds(");
         commandSource.Should().Contain("private bool TryExecuteEditCells(");
         commandSource.Should().Contain("private bool TryExecuteRepeatableGroupedSheetCommand(");
+        commandSource.Should().Contain("private bool TryExecuteRepeatableCurrentSelectionRangesCommand(");
         commandSource.Should().Contain("private bool TryExecuteRepeatableCurrentRangeCommand(");
         commandSource.Should().Contain("private bool TryExecuteRepeatableChartLayout(");
         commandSource.Should().Contain("private void ExecuteUndo(");
@@ -941,9 +943,9 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("private bool _formatPainterTargetSelectionActive;");
         source.Should().Contain("TryApplyFormatPainter(GridRange targetRange)");
         source.Should().Contain("_formatPainterSourceRange = range;");
-        source.Should().Contain("var targetSheetIds = CurrentGroupedEditSheetIds();");
-        source.Should().Contain("FormatPainterCommandFactory.Create(_workbook, sourceSheet, sourceRange, targetRange)");
-        source.Should().Contain("new CompositeWorkbookCommand(\"Format Painter\", targetSheetIds.Select(CreateCommand).ToList())");
+        source.Should().Contain("var targetRanges = GetCurrentSelectionRanges(targetRange);");
+        source.Should().Contain("SelectionStyleCommandPlanner.CreateRangeCommand(");
+        source.Should().Contain("FormatPainterCommandFactory.Create(");
         selectionSource.Should().Contain("SheetGrid.SelectedRange is { } selectedRange");
         selectionSource.Should().Contain("selectedRange.Contains(newAddr)");
         selectionSource.Should().Contain("TryApplyFormatPainter(selectedRange)");
@@ -1260,7 +1262,10 @@ public sealed partial class MainWindowSourceHygieneTests
         }
 
         source.Should().Contain("ApplyRangeBorderPreset");
-        source.Should().Contain("new CompositeWorkbookCommand(title, commands)");
+        source.Should().Contain("SelectionStyleCommandPlanner.CreatePerCellStyleCommand");
+        var plannerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SelectionStyleCommandPlanner.cs"));
+        plannerSource.Should().Contain("new CompositeWorkbookCommand(title, commands)");
+        plannerSource.Should().Contain("MergeCompleteRectangularBands");
         source.Should().Contain("OpenFormatCellsDialog(FormatCellsDialogTab.Border)");
         source.Should().Contain("_borderPickerColor");
         source.Should().Contain("_borderPickerStyle");
