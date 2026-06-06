@@ -699,6 +699,7 @@ public static partial class AccessibilityCheckerService
     }
 
     private const ulong MaxFormulaAggregateRangeCells = 10_000;
+    private const int MaxFormulaRoundDigits = 15;
 
     private static bool IsFormulaPredicateOperand(FormulaNode ast) =>
         ast is (BooleanNode
@@ -706,7 +707,9 @@ public static partial class AccessibilityCheckerService
             or NumberNode)
             || ast is UnaryOpNode unary && IsFormulaUnaryArithmeticOperator(unary.Operator)
             || ast is BinaryOpNode binary && IsFormulaArithmeticOperator(binary.Operator)
-            || ast is FunctionCallNode function && IsFormulaAggregateFunction(function.FunctionName);
+            || ast is FunctionCallNode function &&
+                (IsFormulaAggregateFunction(function.FunctionName) ||
+                 IsFormulaScalarFunction(function.FunctionName));
 
     private static bool TryCreateFormulaComparison(FormulaNode ast, out ConditionalFormulaComparison comparison)
     {
@@ -768,6 +771,8 @@ public static partial class AccessibilityCheckerService
             case UnaryOpNode unary when TryCreateFormulaUnaryOperand(unary, out operand):
                 return true;
             case BinaryOpNode binary when TryCreateFormulaArithmeticOperand(binary, out operand):
+                return true;
+            case FunctionCallNode function when TryCreateFormulaScalarFunctionOperand(function, out operand):
                 return true;
             case FunctionCallNode function when TryCreateFormulaAggregateOperand(function, out operand):
                 return true;
@@ -840,6 +845,79 @@ public static partial class AccessibilityCheckerService
             or BinaryOperator.Multiply
             or BinaryOperator.Divide
             or BinaryOperator.Power;
+
+    private static bool TryCreateFormulaScalarFunctionOperand(
+        FunctionCallNode function,
+        out ConditionalFormulaOperand operand)
+    {
+        operand = default;
+        if (!TryGetFormulaScalarFunctionKind(function.FunctionName, out var kind) ||
+            !FormulaScalarFunctionArityMatches(kind, function.Arguments.Count))
+        {
+            return false;
+        }
+
+        var arguments = new ConditionalFormulaOperand[function.Arguments.Count];
+        for (var i = 0; i < function.Arguments.Count; i++)
+        {
+            if (!TryCreateFormulaOperand(function.Arguments[i], out arguments[i]))
+                return false;
+        }
+
+        operand = new ConditionalFormulaOperand(
+            ConditionalFormulaOperandKind.ScalarFunction,
+            null,
+            0,
+            0,
+            true,
+            true,
+            null,
+            default,
+            null,
+            null,
+            null,
+            new ConditionalFormulaScalarFunction(kind, arguments));
+        return true;
+    }
+
+    private static bool IsFormulaScalarFunction(string functionName) =>
+        TryGetFormulaScalarFunctionKind(functionName, out _);
+
+    private static bool TryGetFormulaScalarFunctionKind(
+        string functionName,
+        out ConditionalFormulaScalarFunctionKind kind)
+    {
+        switch (functionName.ToUpperInvariant())
+        {
+            case "ABS":
+                kind = ConditionalFormulaScalarFunctionKind.Abs;
+                return true;
+            case "INT":
+                kind = ConditionalFormulaScalarFunctionKind.Int;
+                return true;
+            case "ROUND":
+                kind = ConditionalFormulaScalarFunctionKind.Round;
+                return true;
+            case "MOD":
+                kind = ConditionalFormulaScalarFunctionKind.Mod;
+                return true;
+            default:
+                kind = default;
+                return false;
+        }
+    }
+
+    private static bool FormulaScalarFunctionArityMatches(
+        ConditionalFormulaScalarFunctionKind kind,
+        int argumentCount) =>
+        kind switch
+        {
+            ConditionalFormulaScalarFunctionKind.Abs or
+            ConditionalFormulaScalarFunctionKind.Int => argumentCount == 1,
+            ConditionalFormulaScalarFunctionKind.Round or
+            ConditionalFormulaScalarFunctionKind.Mod => argumentCount == 2,
+            _ => false
+        };
 
     private static bool TryCreateFormulaAggregateOperand(
         FunctionCallNode function,
@@ -1286,7 +1364,8 @@ public static partial class AccessibilityCheckerService
         ConditionalFormulaAggregateKind AggregateKind = default,
         IReadOnlyList<ConditionalFormulaAggregateArgument>? AggregateArguments = null,
         ConditionalFormulaArithmetic? Arithmetic = null,
-        ConditionalFormulaUnary? Unary = null);
+        ConditionalFormulaUnary? Unary = null,
+        ConditionalFormulaScalarFunction? ScalarFunction = null);
 
     private enum ConditionalFormulaOperandKind
     {
@@ -1294,7 +1373,8 @@ public static partial class AccessibilityCheckerService
         Reference,
         Unary,
         Arithmetic,
-        Aggregate
+        Aggregate,
+        ScalarFunction
     }
 
     private sealed record ConditionalFormulaUnary(
@@ -1305,6 +1385,18 @@ public static partial class AccessibilityCheckerService
         BinaryOperator Operator,
         ConditionalFormulaOperand Left,
         ConditionalFormulaOperand Right);
+
+    private sealed record ConditionalFormulaScalarFunction(
+        ConditionalFormulaScalarFunctionKind Kind,
+        IReadOnlyList<ConditionalFormulaOperand> Arguments);
+
+    private enum ConditionalFormulaScalarFunctionKind
+    {
+        Abs,
+        Int,
+        Round,
+        Mod
+    }
 
     private enum ConditionalFormulaAggregateKind
     {
@@ -1656,6 +1748,9 @@ public static partial class AccessibilityCheckerService
             if (operand.Kind == ConditionalFormulaOperandKind.Arithmetic)
                 return TryEvaluateFormulaArithmetic(operand, rowOffset, colOffset, out value);
 
+            if (operand.Kind == ConditionalFormulaOperandKind.ScalarFunction)
+                return TryEvaluateFormulaScalarFunction(operand, rowOffset, colOffset, out value);
+
             if (!TryResolveFormulaReference(operand, rowOffset, colOffset, out var targetSheet, out var row, out var col))
             {
                 value = ErrorValue.Ref;
@@ -1746,6 +1841,94 @@ public static partial class AccessibilityCheckerService
             }
 
             return double.IsFinite(number);
+        }
+
+        private bool TryEvaluateFormulaScalarFunction(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (operand.ScalarFunction is not { } function ||
+                !FormulaScalarFunctionArityMatches(function.Kind, function.Arguments.Count) ||
+                !TryResolveFormulaFunctionNumber(function.Arguments[0], rowOffset, colOffset, out var first))
+            {
+                return false;
+            }
+
+            double result;
+            switch (function.Kind)
+            {
+                case ConditionalFormulaScalarFunctionKind.Abs:
+                    result = Math.Abs(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Int:
+                    result = Math.Floor(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Round:
+                    if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var digitsNumber) ||
+                        !TryGetFormulaRoundDigits(digitsNumber, out var digits))
+                    {
+                        return false;
+                    }
+
+                    result = RoundFormulaNumber(first, digits);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Mod:
+                    if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var divisor) ||
+                        divisor == 0)
+                    {
+                        return false;
+                    }
+
+                    result = first - divisor * Math.Floor(first / divisor);
+                    break;
+                default:
+                    return false;
+            }
+
+            if (!double.IsFinite(result))
+                return false;
+
+            value = new NumberValue(result);
+            return true;
+        }
+
+        private bool TryResolveFormulaFunctionNumber(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out double number)
+        {
+            number = 0;
+            return TryResolveFormulaOperand(operand, rowOffset, colOffset, out var value) &&
+                TryGetFormulaArithmeticNumber(value, out number);
+        }
+
+        private static bool TryGetFormulaRoundDigits(double value, out int digits)
+        {
+            digits = 0;
+            var rounded = Math.Round(value);
+            if (!double.IsFinite(rounded) ||
+                Math.Abs(value - rounded) > 1e-9 ||
+                rounded < -MaxFormulaRoundDigits ||
+                rounded > MaxFormulaRoundDigits)
+            {
+                return false;
+            }
+
+            digits = (int)rounded;
+            return true;
+        }
+
+        private static double RoundFormulaNumber(double value, int digits)
+        {
+            if (digits >= 0)
+                return Math.Round(value, digits, MidpointRounding.AwayFromZero);
+
+            var factor = Math.Pow(10d, -digits);
+            return Math.Round(value / factor, 0, MidpointRounding.AwayFromZero) * factor;
         }
 
         private bool TryEvaluateFormulaAggregate(
