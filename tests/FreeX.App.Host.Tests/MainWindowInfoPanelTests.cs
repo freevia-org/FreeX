@@ -1,4 +1,3 @@
-using System.IO;
 using System.Xml.Linq;
 using FluentAssertions;
 
@@ -39,7 +38,7 @@ public sealed class MainWindowInfoPanelTests
     [Fact]
     public void UpdateInfoView_RefreshesModelBackedStatisticsProtectionAndAccessibility()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
         source.Should().Contain("var activeSheet = _workbook.GetSheet(_currentSheetId);");
         source.Should().Contain("BackstageInfoPlanner.Build(");
