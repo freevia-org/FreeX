@@ -935,6 +935,9 @@ public static partial class AccessibilityCheckerService
             case "SIN":
                 kind = ConditionalFormulaScalarFunctionKind.Sin;
                 return true;
+            case "ASIN":
+                kind = ConditionalFormulaScalarFunctionKind.Asin;
+                return true;
             case "COS":
                 kind = ConditionalFormulaScalarFunctionKind.Cos;
                 return true;
@@ -1026,6 +1029,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Degrees or
             ConditionalFormulaScalarFunctionKind.Radians or
             ConditionalFormulaScalarFunctionKind.Sin or
+            ConditionalFormulaScalarFunctionKind.Asin or
             ConditionalFormulaScalarFunctionKind.Cos or
             ConditionalFormulaScalarFunctionKind.Tan or
             ConditionalFormulaScalarFunctionKind.Value or
@@ -1584,6 +1588,7 @@ public static partial class AccessibilityCheckerService
         Degrees,
         Radians,
         Sin,
+        Asin,
         Cos,
         Tan,
         Pi,
@@ -2100,6 +2105,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Degrees:
                 case ConditionalFormulaScalarFunctionKind.Radians:
                 case ConditionalFormulaScalarFunctionKind.Sin:
+                case ConditionalFormulaScalarFunctionKind.Asin:
                 case ConditionalFormulaScalarFunctionKind.Cos:
                 case ConditionalFormulaScalarFunctionKind.Tan:
                     return TryEvaluateFormulaNumericScalarFunction(function, rowOffset, colOffset, out value);
@@ -2303,6 +2309,12 @@ public static partial class AccessibilityCheckerService
                     break;
                 case ConditionalFormulaScalarFunctionKind.Sin:
                     result = Math.Sin(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Asin:
+                    if (first < -1d || first > 1d)
+                        return false;
+
+                    result = Math.Asin(first);
                     break;
                 case ConditionalFormulaScalarFunctionKind.Cos:
                     result = Math.Cos(first);
