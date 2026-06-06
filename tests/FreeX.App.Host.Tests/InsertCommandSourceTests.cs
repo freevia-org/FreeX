@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -87,9 +86,9 @@ public sealed class InsertCommandSourceTests
     [Fact]
     public void InsertTablesIllustrationsSparklineAndFilterHandlers_RouteThroughExpectedCommandsAndDialogs()
     {
-        var insertSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.InsertCommands.cs"));
-        var drawingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Drawing.cs"));
-        var pivotSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PivotCommands.cs"));
+        var insertSource = DialogSourceTestSupport.ReadHostSources("MainWindow.InsertCommands.cs");
+        var drawingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
+        var pivotSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotCommands.cs");
 
         insertSource.Should().Contain("private void TableBtn_Click(object sender, RoutedEventArgs e) => ApplyTableFormat(0);");
         insertSource.Should().Contain("private void RecommendedPivotTablesMenuItem_Click(object sender, RoutedEventArgs e) => PivotTableBtn_Click(sender, e);");
@@ -123,8 +122,8 @@ public sealed class InsertCommandSourceTests
     [Fact]
     public void InsertHandlers_RouteThroughExpectedDialogsCommandsAndReviewDelegate()
     {
-        var insertSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.InsertCommands.cs"));
-        var drawingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Drawing.cs"));
+        var insertSource = DialogSourceTestSupport.ReadHostSources("MainWindow.InsertCommands.cs");
+        var drawingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
 
         insertSource.Should().Contain("HyperlinkDialogPrefill.FromCell(");
         insertSource.Should().Contain("new HyperlinkDialog(prefill.Target, prefill.DisplayText)");
