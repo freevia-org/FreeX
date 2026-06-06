@@ -941,6 +941,9 @@ public static partial class AccessibilityCheckerService
             case "COSH":
                 kind = ConditionalFormulaScalarFunctionKind.Cosh;
                 return true;
+            case "TANH":
+                kind = ConditionalFormulaScalarFunctionKind.Tanh;
+                return true;
             case "ASIN":
                 kind = ConditionalFormulaScalarFunctionKind.Asin;
                 return true;
@@ -1046,6 +1049,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Sin or
             ConditionalFormulaScalarFunctionKind.Sinh or
             ConditionalFormulaScalarFunctionKind.Cosh or
+            ConditionalFormulaScalarFunctionKind.Tanh or
             ConditionalFormulaScalarFunctionKind.Asin or
             ConditionalFormulaScalarFunctionKind.Acos or
             ConditionalFormulaScalarFunctionKind.Atan or
@@ -1610,6 +1614,7 @@ public static partial class AccessibilityCheckerService
         Sin,
         Sinh,
         Cosh,
+        Tanh,
         Asin,
         Acos,
         Atan,
@@ -2132,6 +2137,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Sin:
                 case ConditionalFormulaScalarFunctionKind.Sinh:
                 case ConditionalFormulaScalarFunctionKind.Cosh:
+                case ConditionalFormulaScalarFunctionKind.Tanh:
                 case ConditionalFormulaScalarFunctionKind.Asin:
                 case ConditionalFormulaScalarFunctionKind.Acos:
                 case ConditionalFormulaScalarFunctionKind.Atan:
@@ -2345,6 +2351,9 @@ public static partial class AccessibilityCheckerService
                     break;
                 case ConditionalFormulaScalarFunctionKind.Cosh:
                     result = Math.Cosh(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Tanh:
+                    result = Math.Tanh(first);
                     break;
                 case ConditionalFormulaScalarFunctionKind.Asin:
                     if (first < -1d || first > 1d)
