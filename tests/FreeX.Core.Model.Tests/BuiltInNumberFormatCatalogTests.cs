@@ -32,7 +32,7 @@ public sealed class BuiltInNumberFormatCatalogTests
     [Fact]
     public void CatalogLookups_UseStaticDictionariesInsteadOfLinearScans()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Model", "BuiltInNumberFormatCatalog.cs"));
+        var source = ModelSourceTestSupport.ReadModelSource("BuiltInNumberFormatCatalog.cs");
 
         source.Should().Contain("FormatCodesById.TryGetValue");
         source.Should().Contain("NumberFormatIdsByCode.TryGetValue");

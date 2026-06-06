@@ -148,7 +148,7 @@ public sealed class PrintLayoutPlannerTests
     [Fact]
     public void BuildPagePlans_AvoidLinqPageSlicing()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Model", "PrintLayoutPlanner.cs"));
+        var source = ModelSourceTestSupport.ReadModelSource("PrintLayoutPlanner.cs");
 
         source.Should().Contain("CopyPageValues(");
         source.Should().NotContain(".Skip(");
