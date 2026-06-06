@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -73,7 +72,7 @@ public sealed class FormulaCommandSourceTests
     [Fact]
     public void FormulaCommandHandlers_RouteThroughExpectedDialogsMenusAndServices()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.FormulaCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.FormulaCommands.cs");
 
         source.Should().Contain("var dlg = new InsertFunctionDialog();");
         source.Should().Contain("BeginFormulaBarFormulaEdit(\"=\" + dlg.SelectedFormula);");
