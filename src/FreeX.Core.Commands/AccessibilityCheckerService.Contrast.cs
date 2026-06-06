@@ -1254,6 +1254,24 @@ public static partial class AccessibilityCheckerService
             case "AREAS":
                 kind = ConditionalFormulaScalarFunctionKind.Areas;
                 return true;
+            case "BIN2DEC":
+                kind = ConditionalFormulaScalarFunctionKind.Bin2Dec;
+                return true;
+            case "HEX2DEC":
+                kind = ConditionalFormulaScalarFunctionKind.Hex2Dec;
+                return true;
+            case "OCT2DEC":
+                kind = ConditionalFormulaScalarFunctionKind.Oct2Dec;
+                return true;
+            case "DEC2BIN":
+                kind = ConditionalFormulaScalarFunctionKind.Dec2Bin;
+                return true;
+            case "DEC2HEX":
+                kind = ConditionalFormulaScalarFunctionKind.Dec2Hex;
+                return true;
+            case "DEC2OCT":
+                kind = ConditionalFormulaScalarFunctionKind.Dec2Oct;
+                return true;
             case "DELTA":
                 kind = ConditionalFormulaScalarFunctionKind.Delta;
                 return true;
@@ -1347,7 +1365,10 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Hour or
             ConditionalFormulaScalarFunctionKind.Minute or
             ConditionalFormulaScalarFunctionKind.Second or
-            ConditionalFormulaScalarFunctionKind.IsoWeeknum => argumentCount == 1,
+            ConditionalFormulaScalarFunctionKind.IsoWeeknum or
+            ConditionalFormulaScalarFunctionKind.Bin2Dec or
+            ConditionalFormulaScalarFunctionKind.Hex2Dec or
+            ConditionalFormulaScalarFunctionKind.Oct2Dec => argumentCount == 1,
             ConditionalFormulaScalarFunctionKind.Log or
             ConditionalFormulaScalarFunctionKind.Roman or
             ConditionalFormulaScalarFunctionKind.IsoCeiling or
@@ -1357,6 +1378,9 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Delta or
             ConditionalFormulaScalarFunctionKind.GeStep or
             ConditionalFormulaScalarFunctionKind.Weekday or
+            ConditionalFormulaScalarFunctionKind.Dec2Bin or
+            ConditionalFormulaScalarFunctionKind.Dec2Hex or
+            ConditionalFormulaScalarFunctionKind.Dec2Oct or
             ConditionalFormulaScalarFunctionKind.Weeknum => argumentCount is 1 or 2,
             ConditionalFormulaScalarFunctionKind.CeilingMath or
             ConditionalFormulaScalarFunctionKind.FloorMath => argumentCount is >= 1 and <= 3,
@@ -2062,6 +2086,12 @@ public static partial class AccessibilityCheckerService
         Rows,
         Columns,
         Areas,
+        Bin2Dec,
+        Hex2Dec,
+        Oct2Dec,
+        Dec2Bin,
+        Dec2Hex,
+        Dec2Oct,
         Delta,
         Erf,
         ErfPrecise,
@@ -2727,7 +2757,241 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Columns:
                 case ConditionalFormulaScalarFunctionKind.Areas:
                     return TryEvaluateFormulaReferenceDimensionFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Bin2Dec:
+                case ConditionalFormulaScalarFunctionKind.Hex2Dec:
+                case ConditionalFormulaScalarFunctionKind.Oct2Dec:
+                    return TryEvaluateFormulaBaseToDecimalFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Dec2Bin:
+                case ConditionalFormulaScalarFunctionKind.Dec2Hex:
+                case ConditionalFormulaScalarFunctionKind.Dec2Oct:
+                    return TryEvaluateFormulaDecimalToBaseFunction(function, rowOffset, colOffset, out value);
                 default:
+                    return false;
+            }
+        }
+
+        private bool TryEvaluateFormulaBaseToDecimalFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaOperand(function.Arguments[0], rowOffset, colOffset, out var source))
+                return false;
+
+            if (source is ErrorValue sourceError)
+            {
+                value = sourceError;
+                return true;
+            }
+
+            var (fromBase, maxDigits, signThreshold, modulus) = function.Kind switch
+            {
+                ConditionalFormulaScalarFunctionKind.Bin2Dec => (2, 10, 512L, 1024L),
+                ConditionalFormulaScalarFunctionKind.Hex2Dec => (16, 10, 549755813888L, 1099511627776L),
+                ConditionalFormulaScalarFunctionKind.Oct2Dec => (8, 10, 536870912L, 1073741824L),
+                _ => (0, 0, 0L, 0L)
+            };
+
+            if (!TryParseFormulaBaseNumber(source, fromBase, maxDigits, signThreshold, modulus, out var result))
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            value = new NumberValue(result);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaDecimalToBaseFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaOperand(function.Arguments[0], rowOffset, colOffset, out var source))
+                return false;
+
+            if (source is ErrorValue sourceError)
+            {
+                value = sourceError;
+                return true;
+            }
+
+            if (!TryGetFormulaEngineeringTruncatedInteger(source, out var number))
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            ScalarValue? places = null;
+            if (function.Arguments.Count == 2)
+            {
+                if (!TryResolveFormulaOperand(function.Arguments[1], rowOffset, colOffset, out places))
+                    return false;
+
+                if (places is ErrorValue placesError)
+                {
+                    value = placesError;
+                    return true;
+                }
+            }
+
+            var (toBase, min, max, modulus, negativeWidth, upper) = function.Kind switch
+            {
+                ConditionalFormulaScalarFunctionKind.Dec2Bin => (2, -512L, 511L, 1024L, 10, false),
+                ConditionalFormulaScalarFunctionKind.Dec2Hex => (16, -549755813888L, 549755813887L, 1099511627776L, 10, true),
+                ConditionalFormulaScalarFunctionKind.Dec2Oct => (8, -536870912L, 536870911L, 1073741824L, 10, false),
+                _ => (0, 0L, 0L, 0L, 0, false)
+            };
+
+            if (number < min || number > max)
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            if (number < 0)
+            {
+                value = new TextValue(DecimalToFormulaBaseText(number, toBase, modulus, negativeWidth, upper));
+                return true;
+            }
+
+            if (places is not null)
+            {
+                if (!TryFormatFormulaBaseText(number, toBase, places, upper, out var padded))
+                {
+                    value = ErrorValue.Num;
+                    return true;
+                }
+
+                value = new TextValue(padded);
+                return true;
+            }
+
+            value = new TextValue(FormulaBaseText(number, toBase, upper));
+            return true;
+        }
+
+        private static bool TryParseFormulaBaseNumber(
+            ScalarValue source,
+            int fromBase,
+            int maxDigits,
+            long signThreshold,
+            long modulus,
+            out long value)
+        {
+            value = 0;
+            var text = FormulaBaseConversionText(source).Trim();
+            if (text.Length == 0 || text.Length > maxDigits)
+                return false;
+
+            foreach (var ch in text)
+            {
+                var digit = ch switch
+                {
+                    >= '0' and <= '9' => ch - '0',
+                    >= 'A' and <= 'F' => ch - 'A' + 10,
+                    >= 'a' and <= 'f' => ch - 'a' + 10,
+                    _ => -1
+                };
+                if (digit < 0 || digit >= fromBase)
+                    return false;
+
+                value = value * fromBase + digit;
+            }
+
+            if (text.Length == maxDigits && value >= signThreshold)
+                value -= modulus;
+
+            return true;
+        }
+
+        private static bool TryFormatFormulaBaseText(
+            long number,
+            int toBase,
+            ScalarValue placesValue,
+            bool upper,
+            out string text)
+        {
+            text = FormulaBaseText(number, toBase, upper);
+            if (!TryGetFormulaEngineeringTruncatedInteger(placesValue, out var places) ||
+                places < 0 ||
+                places > 255 ||
+                places < text.Length)
+            {
+                return false;
+            }
+
+            text = text.PadLeft((int)places, '0');
+            return true;
+        }
+
+        private static string DecimalToFormulaBaseText(
+            long number,
+            int toBase,
+            long modulus,
+            int width,
+            bool upper) =>
+            FormulaBaseText(number < 0 ? modulus + number : number, toBase, upper).PadLeft(width, '0');
+
+        private static string FormulaBaseText(long number, int toBase, bool upper)
+        {
+            var text = System.Convert.ToString(number, toBase);
+            return upper ? text.ToUpperInvariant() : text;
+        }
+
+        private static string FormulaBaseConversionText(ScalarValue value) =>
+            value switch
+            {
+                TextValue text => text.Value,
+                NumberValue number => number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                DateTimeValue dateTime => dateTime.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+                BlankValue => string.Empty,
+                ErrorValue error => error.Code,
+                _ => value.ToString() ?? string.Empty
+            };
+
+        private static bool TryGetFormulaEngineeringTruncatedInteger(ScalarValue value, out long integer)
+        {
+            integer = 0;
+            if (!TryGetFormulaBaseConversionNumber(value, out var number) ||
+                !double.IsFinite(number))
+            {
+                return false;
+            }
+
+            var truncated = Math.Truncate(number);
+            if (truncated < long.MinValue || truncated > long.MaxValue)
+                return false;
+
+            integer = (long)truncated;
+            return true;
+        }
+
+        private static bool TryGetFormulaBaseConversionNumber(ScalarValue value, out double number)
+        {
+            switch (value)
+            {
+                case NumberValue numeric:
+                    number = numeric.Value;
+                    return true;
+                case DateTimeValue dateTime:
+                    number = dateTime.Value;
+                    return true;
+                case BoolValue boolean:
+                    number = boolean.Value ? 1d : 0d;
+                    return true;
+                case BlankValue:
+                    number = 0d;
+                    return true;
+                case TextValue text:
+                    return TryParseFormulaValueText(text.Value, out number);
+                default:
+                    number = 0d;
                     return false;
             }
         }

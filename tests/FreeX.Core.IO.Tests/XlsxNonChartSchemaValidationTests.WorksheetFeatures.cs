@@ -706,6 +706,51 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         AssertWorksheetCellWatchesSanitized(saved);
     }
 
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidWorksheetIgnoredErrorsForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetDiagnosticsSourceWorkbook());
+        SetWorksheetIgnoredErrorsInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.GetCell(2, 2)!.IgnoreFormulaError = true;
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetIgnoredErrorsSanitized(saved);
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorksheetIgnoredErrorsForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetDiagnosticsSourceWorkbook());
+        SetWorksheetIgnoredErrorsInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetIgnoredErrorsSanitized(saved);
+    }
+
 
     [Fact]
     public void WorksheetScenarios_ProducesSchemaValidWorkbook()
@@ -2485,6 +2530,62 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         cellWatch.Attribute("r")!.Value.Should().Be("B2");
         cellWatch.Attribute("nativeWatch").Should().BeNull();
         cellWatch.Element(worksheetNs + "nativeCellWatchChild").Should().BeNull();
+    }
+
+    private static void SetWorksheetIgnoredErrorsInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var ignoredErrors = worksheetXml.Root!.Element(worksheetNs + "ignoredErrors")!;
+        ignoredErrors.SetAttributeValue("nativeContainer", "kept");
+        ignoredErrors.Add(
+            new XElement(worksheetNs + "nativeIgnoredErrorsChild"),
+            new XElement(
+                worksheetNs + "ignoredError",
+                new XAttribute("sqref", "NotARef"),
+                new XAttribute("numberStoredAsText", "1"),
+                new XAttribute("nativeIgnoredError", "removed")));
+
+        var ignoredError = ignoredErrors.Element(worksheetNs + "ignoredError")!;
+        ignoredError.SetAttributeValue("twoDigitTextYear", "true");
+        ignoredError.SetAttributeValue("formulaRange", "maybe");
+        ignoredError.SetAttributeValue("nativeIgnoredError", "kept");
+        ignoredError.Add(new XElement(worksheetNs + "nativeIgnoredErrorChild"));
+        worksheetXml.Root!.Add(new XElement(
+            worksheetNs + "ignoredErrors",
+            new XAttribute("nativeDuplicateContainer", "removed")));
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void AssertWorksheetIgnoredErrorsSanitized(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var ignoredErrors = worksheetXml.Root!
+            .Elements(worksheetNs + "ignoredErrors")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        ignoredErrors.Attribute("nativeContainer").Should().BeNull();
+        ignoredErrors.Element(worksheetNs + "nativeIgnoredErrorsChild").Should().BeNull();
+
+        var entries = ignoredErrors.Elements(worksheetNs + "ignoredError").ToList();
+        entries.Should().NotBeEmpty();
+        entries.Select(entry => entry.Attribute("sqref")?.Value).Should().NotContain("NotARef");
+        foreach (var entry in entries)
+        {
+            entry.Attribute("nativeIgnoredError").Should().BeNull();
+            entry.Attribute("formulaRange").Should().BeNull();
+            entry.Elements().Should().BeEmpty();
+        }
+
+        var a1 = entries.Single(entry => entry.Attribute("sqref")?.Value == "A1");
+        a1.Attribute("numberStoredAsText")!.Value.Should().Be("1");
+        a1.Attribute("twoDigitTextYear")!.Value.Should().Be("1");
     }
 
     private static Workbook CreateWorksheetScenariosSourceWorkbook()

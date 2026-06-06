@@ -16517,10 +16517,10 @@ public partial class FileAdapterSmokeTests
         var ignoredErrors = worksheetXml.Root!.Element(worksheetNs + "ignoredErrors");
         var ignoredError = ignoredErrors!.Element(worksheetNs + "ignoredError")!;
 
-        ignoredErrors.Attribute("nativeContainer")!.Value.Should().Be("kept");
+        ignoredErrors.Attribute("nativeContainer").Should().BeNull();
         ignoredError.Attribute("sqref")!.Value.Should().Be("A1");
         ignoredError.Attribute("twoDigitTextYear")!.Value.Should().Be("1");
-        ignoredError.Attribute("nativeIgnoredError")!.Value.Should().Be("kept");
+        ignoredError.Attribute("nativeIgnoredError").Should().BeNull();
     }
 
     [Fact]
