@@ -147,12 +147,15 @@ internal static class XlsxWorkbookMetadataPreserver
         {
             if (!hasModeledFileSharing)
             {
-                targetRoot.Add(new XElement(sourceFileSharing));
+                var clone = new XElement(sourceFileSharing);
+                XlsxWorkbookFileSharingNormalizer.NormalizeElement(clone);
+                targetRoot.Add(clone);
                 return true;
             }
 
             var cloned = new XElement(sourceFileSharing);
             RemoveModeledFileSharingAttributes(cloned);
+            XlsxWorkbookFileSharingNormalizer.NormalizeElement(cloned);
             if (!cloned.HasAttributes && !cloned.HasElements)
                 return false;
 
@@ -160,10 +163,14 @@ internal static class XlsxWorkbookMetadataPreserver
             return true;
         }
 
-        return XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(
+        var changed = XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(
             sourceFileSharing,
             targetFileSharing,
             [XName.Get("readOnlyRecommended"), XName.Get("userName"), XName.Get("reservationPassword")]);
+        if (XlsxWorkbookFileSharingNormalizer.NormalizeElement(targetFileSharing))
+            changed = true;
+
+        return changed;
     }
 
     private static void RemoveModeledFileSharingAttributes(XElement fileSharing)

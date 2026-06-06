@@ -180,6 +180,7 @@ internal static class XlsxWorkbookMetadataWriter
         fileSharing.SetAttributeValue(
             "reservationPassword",
             string.IsNullOrWhiteSpace(workbook.FileSharing.ReservationPassword) ? null : workbook.FileSharing.ReservationPassword);
+        XlsxWorkbookFileSharingNormalizer.NormalizeElement(fileSharing);
 
         InsertFileSharingInOrder(root, fileSharing);
 
