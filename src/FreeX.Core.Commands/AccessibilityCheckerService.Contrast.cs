@@ -935,6 +935,9 @@ public static partial class AccessibilityCheckerService
             case "FLOOR":
                 kind = ConditionalFormulaScalarFunctionKind.Floor;
                 return true;
+            case "FLOOR.PRECISE":
+                kind = ConditionalFormulaScalarFunctionKind.FloorPrecise;
+                return true;
             case "TRUNC":
                 kind = ConditionalFormulaScalarFunctionKind.Trunc;
                 return true;
@@ -1179,6 +1182,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Day => argumentCount == 1,
             ConditionalFormulaScalarFunctionKind.Log or
             ConditionalFormulaScalarFunctionKind.IsoCeiling or
+            ConditionalFormulaScalarFunctionKind.FloorPrecise or
             ConditionalFormulaScalarFunctionKind.Trunc => argumentCount is 1 or 2,
             ConditionalFormulaScalarFunctionKind.Round or
             ConditionalFormulaScalarFunctionKind.RoundUp or
@@ -1736,6 +1740,7 @@ public static partial class AccessibilityCheckerService
         Ceiling,
         IsoCeiling,
         Floor,
+        FloorPrecise,
         Trunc,
         Fact,
         FactDouble,
@@ -2288,6 +2293,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Ceiling:
                 case ConditionalFormulaScalarFunctionKind.IsoCeiling:
                 case ConditionalFormulaScalarFunctionKind.Floor:
+                case ConditionalFormulaScalarFunctionKind.FloorPrecise:
                 case ConditionalFormulaScalarFunctionKind.Trunc:
                 case ConditionalFormulaScalarFunctionKind.Fact:
                 case ConditionalFormulaScalarFunctionKind.FactDouble:
@@ -2513,6 +2519,20 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Floor:
                     if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var floorSignificance) ||
                         !TryFloorFormulaNumber(first, floorSignificance, out result))
+                    {
+                        return false;
+                    }
+
+                    break;
+                case ConditionalFormulaScalarFunctionKind.FloorPrecise:
+                    var floorPreciseSignificance = 1d;
+                    if (function.Arguments.Count == 2 &&
+                        !TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out floorPreciseSignificance))
+                    {
+                        return false;
+                    }
+
+                    if (!TryFloorPreciseFormulaNumber(first, floorPreciseSignificance, out result))
                     {
                         return false;
                     }
@@ -3325,6 +3345,20 @@ public static partial class AccessibilityCheckerService
                 return false;
 
             result = Math.Floor(number / significance) * significance;
+            return double.IsFinite(result);
+        }
+
+        private static bool TryFloorPreciseFormulaNumber(double number, double significance, out double result)
+        {
+            result = 0d;
+            if (!double.IsFinite(number) || !double.IsFinite(significance))
+                return false;
+
+            if (number == 0d || significance == 0d)
+                return true;
+
+            var multiple = Math.Abs(significance);
+            result = Math.Floor(number / multiple) * multiple;
             return double.IsFinite(result);
         }
 
