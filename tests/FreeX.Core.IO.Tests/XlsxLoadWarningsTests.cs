@@ -96,8 +96,7 @@ public sealed class XlsxLoadWarningsTests
     public void XlsxFileAdapterSource_DoesNotContainDebugWriteLineInCatchBlocks()
     {
         // This is a source-code guard that prevents re-introducing silent swallowing.
-        var adapterSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
-            "src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+        var adapterSource = TestWorkspaceFiles.ReadCoreIoSource("XlsxFileAdapter.cs");
 
         adapterSource.Should().NotContain(
             "System.Diagnostics.Debug.WriteLine",
@@ -112,10 +111,8 @@ public sealed class XlsxLoadWarningsTests
     public void XlsxFileAdapterSource_ContainsExpectedWarningCategories()
     {
         var adapterSource =
-            File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
-                "src", "FreeX.Core.IO", "XlsxFileAdapter.cs")) +
-            File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
-                "src", "FreeX.Core.IO", "XlsxFileAdapter.SheetXmlLayout.cs"));
+            TestWorkspaceFiles.ReadCoreIoSource("XlsxFileAdapter.cs") +
+            TestWorkspaceFiles.ReadCoreIoSource("XlsxFileAdapter.SheetXmlLayout.cs");
 
         foreach (var prefix in ExpectedLoadWarningPrefixes)
             adapterSource.Should().Contain($"\"{prefix}");

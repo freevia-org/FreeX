@@ -7,8 +7,7 @@ public sealed class XlsxWorksheetProtectionMetadataWriterPerformanceTests
     [Fact]
     public void Save_SkipsSheetsWithoutProtectionMetadataWithoutLinqFiltering()
     {
-        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
-            "src", "FreeX.Core.IO", "XlsxWorksheetProtectionMetadataWriter.cs"));
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxWorksheetProtectionMetadataWriter.cs");
 
         source.Should().Contain("foreach (var sheet in workbook.Sheets)");
         source.Should().Contain("var metadata = sheet.ProtectionMetadata;");
