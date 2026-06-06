@@ -163,6 +163,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorksheetSheetViewSchemaIssues: false,
             HasWorkbookViewSchemaIssues: false,
             HasWorkbookCalculationPropertySchemaIssues: false,
+            HasWorkbookFileSharingSchemaIssues: false,
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
@@ -227,6 +228,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorksheetSheetViewSchemaIssues: false,
             HasWorkbookViewSchemaIssues: false,
             HasWorkbookCalculationPropertySchemaIssues: false,
+            HasWorkbookFileSharingSchemaIssues: false,
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
@@ -263,6 +265,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorksheetSheetViewSchemaIssues: false,
             HasWorkbookViewSchemaIssues: false,
             HasWorkbookCalculationPropertySchemaIssues: false,
+            HasWorkbookFileSharingSchemaIssues: false,
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
@@ -295,6 +298,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorksheetSheetViewSchemaIssues: false,
             HasWorkbookViewSchemaIssues: false,
             HasWorkbookCalculationPropertySchemaIssues: false,
+            HasWorkbookFileSharingSchemaIssues: false,
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
@@ -356,6 +360,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorksheetSheetViewSchemaIssues: false,
             HasWorkbookViewSchemaIssues: false,
             HasWorkbookCalculationPropertySchemaIssues: false,
+            HasWorkbookFileSharingSchemaIssues: false,
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
@@ -433,6 +438,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorksheetSheetViewSchemaIssues: false,
             HasWorkbookViewSchemaIssues: false,
             HasWorkbookCalculationPropertySchemaIssues: false,
+            HasWorkbookFileSharingSchemaIssues: false,
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
             MergeCellWorksheetPathsToStrip: new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
