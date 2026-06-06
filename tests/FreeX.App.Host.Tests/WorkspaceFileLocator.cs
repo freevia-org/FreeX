@@ -1,34 +1,10 @@
-using System.IO;
-
 namespace FreeX.App.Host.Tests;
 
 internal static class WorkspaceFileLocator
 {
-    public static string Find(params string[] relativeParts)
-    {
-        foreach (var root in CandidateRoots())
-        {
-            var directory = new DirectoryInfo(root);
-            while (directory is not null)
-            {
-                var candidate = Path.Combine(new[] { directory.FullName }.Concat(relativeParts).ToArray());
-                if (File.Exists(candidate))
-                    return candidate;
+    public static string Find(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.Find(relativeParts);
 
-                directory = directory.Parent;
-            }
-        }
-
-        throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
-    }
-
-    private static IEnumerable<string> CandidateRoots()
-    {
-        var envRoot = Environment.GetEnvironmentVariable("FREEX_REPO_ROOT");
-        if (!string.IsNullOrWhiteSpace(envRoot))
-            yield return envRoot;
-
-        yield return Environment.CurrentDirectory;
-        yield return AppContext.BaseDirectory;
-    }
+    public static string FindWithFailureMessage(string message, params string[] relativeParts) =>
+        TestWorkspaceFileLocator.FindWithFailureMessage(message, relativeParts);
 }
