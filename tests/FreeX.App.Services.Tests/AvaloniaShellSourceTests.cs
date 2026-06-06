@@ -72,6 +72,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _boldMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _italicMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _underlineMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _strikethroughMenuItem = new();");
         source.Should().Contain("_openMenuItem.Header = \"Open...\";");
         source.Should().Contain("_openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);");
         source.Should().Contain("_openMenuItem.Click += async (_, _) => await OpenWorkbookAsync();");
@@ -108,6 +109,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_underlineMenuItem.Header = \"Underline\";");
         source.Should().Contain("_underlineMenuItem.Gesture = new KeyGesture(Key.U, KeyModifiers.Meta);");
         source.Should().Contain("_underlineMenuItem.Click += (_, _) => ToggleSelectedRangeUnderline();");
+        source.Should().Contain("_strikethroughMenuItem.Header = \"Strikethrough\";");
+        source.Should().Contain("_strikethroughMenuItem.Gesture = new KeyGesture(Key.D5, KeyModifiers.Control);");
+        source.Should().Contain("_strikethroughMenuItem.Click += (_, _) => ToggleSelectedRangeStrikethrough();");
         source.Should().Contain("_quitMenuItem.Header = \"Quit FreeX\";");
         source.Should().Contain("_quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);");
         source.Should().Contain("_quitMenuItem.Click += (_, _) => TryQuitApplication();");
@@ -120,6 +124,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("formatMenu.Items.Add(_boldMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_italicMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_underlineMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_strikethroughMenuItem);");
         source.Should().Contain("Header = \"Edit\"");
         source.Should().Contain("Header = \"Format\"");
         source.Should().Contain("NativeMenu.SetMenu(this, _nativeMenu);");
@@ -136,6 +141,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_boldMenuItem.IsEnabled = _boldButton.IsEnabled;");
         source.Should().Contain("_italicMenuItem.IsEnabled = _italicButton.IsEnabled;");
         source.Should().Contain("_underlineMenuItem.IsEnabled = _underlineButton.IsEnabled;");
+        source.Should().Contain("_strikethroughMenuItem.IsEnabled = _strikethroughButton.IsEnabled;");
         source.Should().Contain("e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Shift)");
         source.Should().Contain("await SaveWorkbookAsAsync();");
         source.Should().Contain("TryQuitApplication()");
@@ -177,6 +183,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_bold_menu_item={FormatBool(snapshot.HasNativeBoldMenuItem)}");
         smokeSource.Should().Contain("native_italic_menu_item={FormatBool(snapshot.HasNativeItalicMenuItem)}");
         smokeSource.Should().Contain("native_underline_menu_item={FormatBool(snapshot.HasNativeUnderlineMenuItem)}");
+        smokeSource.Should().Contain("native_strikethrough_menu_item={FormatBool(snapshot.HasNativeStrikethroughMenuItem)}");
         smokeSource.Should().Contain("desktop.TryShutdown(exitCode);");
         windowSource.Should().Contain("private readonly NativeMenuItem _quitMenuItem = new();");
         windowSource.Should().Contain("private NativeMenu? _nativeMenu;");
@@ -196,6 +203,7 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeBoldMenuItem: HasNativeMenuItem(_boldMenuItem, \"Bold\")");
         windowSource.Should().Contain("HasNativeItalicMenuItem: HasNativeMenuItem(_italicMenuItem, \"Italic\")");
         windowSource.Should().Contain("HasNativeUnderlineMenuItem: HasNativeMenuItem(_underlineMenuItem, \"Underline\")");
+        windowSource.Should().Contain("HasNativeStrikethroughMenuItem: HasNativeMenuItem(_strikethroughMenuItem, \"Strikethrough\")");
         windowSource.Should().Contain("HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, \"Quit FreeX\")");
     }
 
@@ -335,7 +343,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_session.SelectRange(new GridRange(_session.ActiveCell, address));");
         source.Should().Contain("private static string FormatRangeReference(GridRange range)");
         source.Should().Contain("if (_formulaBox.IsFocused &&");
-        source.Should().Contain("e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.B or Key.I or Key.U or Key.D4 or Key.NumPad4)");
+        source.Should().Contain("e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.B or Key.I or Key.U or Key.D4 or Key.NumPad4 or Key.D5 or Key.NumPad5)");
         source.Should().Contain("else if (e.Key == Key.X)");
         source.Should().Contain("await CutSelectedRangeToClipboardAsync();");
         source.Should().Contain("else if (e.Key == Key.C)");
@@ -432,11 +440,38 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_underlineButton.IsChecked = _session.IsSelectedRangeStartUnderline;");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Underline failed.\");");
         source.Should().Contain("RefreshShell($\"{(enabled ? \"Underlined\" : \"Removed underline from\")} {rangeReference}\");");
-        source.Should().Contain("var textDecorations = style?.Underline == true ? TextDecorations.Underline : null;");
+        source.Should().Contain("var textDecorations = BuildTextDecorations(style);");
+        source.Should().Contain("if (style.Underline || style.DoubleUnderline)");
         source.Should().Contain("TextDecorations = textDecorations,");
         source.Should().Contain("else if (e.Key == Key.U && HasOnlyCommandModifier(e.KeyModifiers))");
         source.Should().Contain("else if (e.Key is Key.D4 or Key.NumPad4 && HasOnlyControlModifier(e.KeyModifiers))");
         source.Should().Contain("ToggleSelectedRangeUnderline();");
+    }
+
+    [Fact]
+    public void MainWindow_WiresStrikethroughThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("private readonly ToggleButton _strikethroughButton = new();");
+        source.Should().Contain("_strikethroughButton.Content = new TextBlock");
+        source.Should().Contain("TextDecorations = TextDecorations.Strikethrough,");
+        source.Should().Contain("_strikethroughButton.Click += StrikethroughButton_Click;");
+        source.Should().Contain("_strikethroughButton.IsChecked = _session.IsSelectedRangeStartStrikethrough;");
+        source.Should().Contain("_strikethroughButton.IsEnabled = isIdle;");
+        source.Should().Contain("private void StrikethroughButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("ApplySelectedRangeStrikethrough(_strikethroughButton.IsChecked == true);");
+        source.Should().Contain("private void ToggleSelectedRangeStrikethrough()");
+        source.Should().Contain("private void ApplySelectedRangeStrikethrough(bool enabled)");
+        source.Should().Contain("var result = _session.SetSelectedRangeStrikethrough(enabled);");
+        source.Should().Contain("_strikethroughButton.IsChecked = _session.IsSelectedRangeStartStrikethrough;");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Strikethrough failed.\");");
+        source.Should().Contain("RefreshShell($\"{(enabled ? \"Struck through\" : \"Removed strikethrough from\")} {rangeReference}\");");
+        source.Should().Contain("private static TextDecorationCollection? BuildTextDecorations(CellStyle? style)");
+        source.Should().Contain("if (style.Strikethrough)");
+        source.Should().Contain("foreach (var decoration in TextDecorations.Strikethrough)");
+        source.Should().Contain("else if (e.Key is Key.D5 or Key.NumPad5 && HasOnlyControlModifier(e.KeyModifiers))");
+        source.Should().Contain("ToggleSelectedRangeStrikethrough();");
     }
 
     [Fact]

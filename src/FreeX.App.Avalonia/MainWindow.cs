@@ -64,6 +64,7 @@ public sealed class MainWindow : Window
     private readonly ToggleButton _boldButton = new();
     private readonly ToggleButton _italicButton = new();
     private readonly ToggleButton _underlineButton = new();
+    private readonly ToggleButton _strikethroughButton = new();
     private readonly NativeMenuItem _openMenuItem = new();
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
@@ -76,6 +77,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _boldMenuItem = new();
     private readonly NativeMenuItem _italicMenuItem = new();
     private readonly NativeMenuItem _underlineMenuItem = new();
+    private readonly NativeMenuItem _strikethroughMenuItem = new();
     private readonly NativeMenuItem _quitMenuItem = new();
     private NativeMenu? _nativeMenu;
     private WorkbookSession _session;
@@ -240,6 +242,10 @@ public sealed class MainWindow : Window
         _underlineMenuItem.Gesture = new KeyGesture(Key.U, KeyModifiers.Meta);
         _underlineMenuItem.Click += (_, _) => ToggleSelectedRangeUnderline();
 
+        _strikethroughMenuItem.Header = "Strikethrough";
+        _strikethroughMenuItem.Gesture = new KeyGesture(Key.D5, KeyModifiers.Control);
+        _strikethroughMenuItem.Click += (_, _) => ToggleSelectedRangeStrikethrough();
+
         _quitMenuItem.Header = "Quit FreeX";
         _quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);
         _quitMenuItem.Click += (_, _) => TryQuitApplication();
@@ -265,6 +271,7 @@ public sealed class MainWindow : Window
         formatMenu.Items.Add(_boldMenuItem);
         formatMenu.Items.Add(_italicMenuItem);
         formatMenu.Items.Add(_underlineMenuItem);
+        formatMenu.Items.Add(_strikethroughMenuItem);
 
         _nativeMenu = new NativeMenu();
         _nativeMenu.Items.Add(new NativeMenuItem
@@ -386,6 +393,15 @@ public sealed class MainWindow : Window
         _underlineButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _underlineButton.Click += UnderlineButton_Click;
 
+        _strikethroughButton.Content = new TextBlock
+        {
+            Text = "S",
+            TextDecorations = TextDecorations.Strikethrough,
+        };
+        _strikethroughButton.Padding = new Thickness(10, 4);
+        _strikethroughButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _strikethroughButton.Click += StrikethroughButton_Click;
+
         _cellAddressText.Width = 72;
         _cellAddressText.FontSize = 12;
         _cellAddressText.FontWeight = FontWeight.SemiBold;
@@ -426,6 +442,7 @@ public sealed class MainWindow : Window
                     _boldButton,
                     _italicButton,
                     _underlineButton,
+                    _strikethroughButton,
                     _cellAddressText,
                     _formulaBox,
                     _statusText,
@@ -454,6 +471,7 @@ public sealed class MainWindow : Window
         _boldButton.IsChecked = _session.IsSelectedRangeStartBold;
         _italicButton.IsChecked = _session.IsSelectedRangeStartItalic;
         _underlineButton.IsChecked = _session.IsSelectedRangeStartUnderline;
+        _strikethroughButton.IsChecked = _session.IsSelectedRangeStartStrikethrough;
         if (preserveFormulaEdit)
         {
             _formulaBox.CaretIndex = Math.Min(formulaCaretIndex, _formulaBox.Text?.Length ?? 0);
@@ -513,6 +531,7 @@ public sealed class MainWindow : Window
         _boldButton.IsEnabled = isIdle;
         _italicButton.IsEnabled = isIdle;
         _underlineButton.IsEnabled = isIdle;
+        _strikethroughButton.IsEnabled = isIdle;
 
         _openMenuItem.IsEnabled = _openButton.IsEnabled;
         _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
@@ -526,6 +545,7 @@ public sealed class MainWindow : Window
         _boldMenuItem.IsEnabled = _boldButton.IsEnabled;
         _italicMenuItem.IsEnabled = _italicButton.IsEnabled;
         _underlineMenuItem.IsEnabled = _underlineButton.IsEnabled;
+        _strikethroughMenuItem.IsEnabled = _strikethroughButton.IsEnabled;
     }
 
     private Control BuildSheetTabs()
@@ -824,7 +844,7 @@ public sealed class MainWindow : Window
             : TextAlignment.Left;
         var weight = style?.Bold == true ? FontWeight.SemiBold : FontWeight.Normal;
         var fontStyle = style?.Italic == true ? FontStyle.Italic : FontStyle.Normal;
-        var textDecorations = style?.Underline == true ? TextDecorations.Underline : null;
+        var textDecorations = BuildTextDecorations(style);
 
         return CreateInteractiveCellBorder(
             cell.DisplayText,
@@ -896,6 +916,27 @@ public sealed class MainWindow : Window
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
             },
         };
+    }
+
+    private static TextDecorationCollection? BuildTextDecorations(CellStyle? style)
+    {
+        if (style is null || (!style.Underline && !style.DoubleUnderline && !style.Strikethrough))
+            return null;
+
+        var decorations = new TextDecorationCollection();
+        if (style.Underline || style.DoubleUnderline)
+        {
+            foreach (var decoration in TextDecorations.Underline)
+                decorations.Add(decoration);
+        }
+
+        if (style.Strikethrough)
+        {
+            foreach (var decoration in TextDecorations.Strikethrough)
+                decorations.Add(decoration);
+        }
+
+        return decorations;
     }
 
     private void SelectCell(CellAddress address)
@@ -1081,6 +1122,11 @@ public sealed class MainWindow : Window
         ApplySelectedRangeUnderline(_underlineButton.IsChecked == true);
     }
 
+    private void StrikethroughButton_Click(object? sender, RoutedEventArgs e)
+    {
+        ApplySelectedRangeStrikethrough(_strikethroughButton.IsChecked == true);
+    }
+
     private void UndoLastEdit()
     {
         if (_isOpening || _isSaving)
@@ -1215,6 +1261,11 @@ public sealed class MainWindow : Window
         ApplySelectedRangeUnderline(!_session.IsSelectedRangeStartUnderline);
     }
 
+    private void ToggleSelectedRangeStrikethrough()
+    {
+        ApplySelectedRangeStrikethrough(!_session.IsSelectedRangeStartStrikethrough);
+    }
+
     private void ApplySelectedRangeBold(bool enabled)
     {
         if (_isOpening || _isSaving)
@@ -1273,6 +1324,26 @@ public sealed class MainWindow : Window
         }
 
         RefreshShell($"{(enabled ? "Underlined" : "Removed underline from")} {rangeReference}");
+    }
+
+    private void ApplySelectedRangeStrikethrough(bool enabled)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.SetSelectedRangeStrikethrough(enabled);
+        if (!result.Success)
+        {
+            _strikethroughButton.IsChecked = _session.IsSelectedRangeStartStrikethrough;
+            ShowEditIssue(result.ErrorMessage ?? "Strikethrough failed.");
+            return;
+        }
+
+        RefreshShell($"{(enabled ? "Struck through" : "Removed strikethrough from")} {rangeReference}");
     }
 
     private void MainWindow_DragOver(object? sender, DragEventArgs e)
@@ -1343,6 +1414,7 @@ public sealed class MainWindow : Window
             HasNativeBoldMenuItem: HasNativeMenuItem(_boldMenuItem, "Bold"),
             HasNativeItalicMenuItem: HasNativeMenuItem(_italicMenuItem, "Italic"),
             HasNativeUnderlineMenuItem: HasNativeMenuItem(_underlineMenuItem, "Underline"),
+            HasNativeStrikethroughMenuItem: HasNativeMenuItem(_strikethroughMenuItem, "Strikethrough"),
             HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, "Quit FreeX"));
     }
 
@@ -1380,7 +1452,7 @@ public sealed class MainWindow : Window
         }
 
         if (_formulaBox.IsFocused &&
-            e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.B or Key.I or Key.U or Key.D4 or Key.NumPad4)
+            e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.B or Key.I or Key.U or Key.D4 or Key.NumPad4 or Key.D5 or Key.NumPad5)
         {
             return;
         }
@@ -1434,6 +1506,11 @@ public sealed class MainWindow : Window
         {
             e.Handled = true;
             ToggleSelectedRangeUnderline();
+        }
+        else if (e.Key is Key.D5 or Key.NumPad5 && HasOnlyControlModifier(e.KeyModifiers))
+        {
+            e.Handled = true;
+            ToggleSelectedRangeStrikethrough();
         }
         else if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {

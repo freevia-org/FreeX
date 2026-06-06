@@ -117,6 +117,8 @@ public sealed class WorkbookSession
         }
     }
 
+    public bool IsSelectedRangeStartStrikethrough => GetCellStyle(SelectedRange.Start).Strikethrough;
+
     public WorkbookSelectionStats SelectionStats =>
         _selectionStatsCache.GetOrCalculate(ActiveSheet, SelectedRange, _selectionStatsRevision);
 
@@ -354,6 +356,19 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public WorkbookCellEditResult SetSelectedRangeStrikethrough(bool enabled)
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new ApplyStyleCommand(ActiveSheet.Id, range, CreateStrikethroughStyleDiff(enabled)));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
     public WorkbookCellEditResult UndoLastEdit()
     {
         var result = _cellEditService.UndoLastEdit(Workbook);
@@ -524,6 +539,9 @@ public sealed class WorkbookSession
 
     private static StyleDiff CreateUnderlineStyleDiff(bool enabled) =>
         new(Underline: enabled, Strikethrough: enabled ? false : null);
+
+    private static StyleDiff CreateStrikethroughStyleDiff(bool enabled) =>
+        new(Strikethrough: enabled, Underline: enabled ? false : null, DoubleUnderline: enabled ? false : null);
 
     private WorkbookCellEditResult PasteInternalClipboardAtActiveCell(InternalClipboard clipboard)
     {
