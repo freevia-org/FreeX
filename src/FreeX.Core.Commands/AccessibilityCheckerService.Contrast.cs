@@ -702,6 +702,8 @@ public static partial class AccessibilityCheckerService
     private const int MaxFormulaRoundDigits = 15;
     private const int MaxFormulaFactorialInput = 170;
     private const int MaxFormulaDoubleFactorialInput = 300;
+    private const int MaxFormulaCombinInput = 1_000_000;
+    private const int MaxFormulaCombinIterations = 10_000;
     private const int MaxFormulaTextSliceLength = 32_767;
 
     private static bool IsFormulaPredicateOperand(FormulaNode ast) =>
@@ -931,6 +933,9 @@ public static partial class AccessibilityCheckerService
             case "QUOTIENT":
                 kind = ConditionalFormulaScalarFunctionKind.Quotient;
                 return true;
+            case "COMBIN":
+                kind = ConditionalFormulaScalarFunctionKind.Combin;
+                return true;
             case "SQRT":
                 kind = ConditionalFormulaScalarFunctionKind.Sqrt;
                 return true;
@@ -1103,6 +1108,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.MRound or
             ConditionalFormulaScalarFunctionKind.Mod or
             ConditionalFormulaScalarFunctionKind.Quotient or
+            ConditionalFormulaScalarFunctionKind.Combin or
             ConditionalFormulaScalarFunctionKind.Power or
             ConditionalFormulaScalarFunctionKind.Atan2 or
             ConditionalFormulaScalarFunctionKind.Left or
@@ -1648,6 +1654,7 @@ public static partial class AccessibilityCheckerService
         FactDouble,
         Mod,
         Quotient,
+        Combin,
         Sqrt,
         SqrtPi,
         Sign,
@@ -2180,6 +2187,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.FactDouble:
                 case ConditionalFormulaScalarFunctionKind.Mod:
                 case ConditionalFormulaScalarFunctionKind.Quotient:
+                case ConditionalFormulaScalarFunctionKind.Combin:
                 case ConditionalFormulaScalarFunctionKind.Sqrt:
                 case ConditionalFormulaScalarFunctionKind.SqrtPi:
                 case ConditionalFormulaScalarFunctionKind.Sign:
@@ -2409,6 +2417,14 @@ public static partial class AccessibilityCheckerService
                     }
 
                     result = Math.Truncate(first / denominator);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Combin:
+                    if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var numberChosen) ||
+                        !TryCombinFormulaNumber(first, numberChosen, out result))
+                    {
+                        return false;
+                    }
+
                     break;
                 case ConditionalFormulaScalarFunctionKind.Sqrt:
                     if (first < 0)
@@ -3019,6 +3035,57 @@ public static partial class AccessibilityCheckerService
             }
 
             return double.IsFinite(result);
+        }
+
+        private static bool TryCombinFormulaNumber(double number, double numberChosen, out double result)
+        {
+            result = 0d;
+            if (!TryGetFormulaCombinInteger(number, out var n) ||
+                !TryGetFormulaCombinInteger(numberChosen, out var k) ||
+                k > n)
+            {
+                return false;
+            }
+
+            k = Math.Min(k, n - k);
+            if (k > MaxFormulaCombinIterations)
+                return false;
+
+            result = 1d;
+            for (var i = 1; i <= k; i++)
+            {
+                var factor = (double)(n - k + i) / i;
+                if (!double.IsFinite(factor) ||
+                    factor <= 0d ||
+                    result > double.MaxValue / factor)
+                {
+                    return false;
+                }
+
+                result *= factor;
+                if (!double.IsFinite(result))
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryGetFormulaCombinInteger(double value, out int integer)
+        {
+            integer = 0;
+            if (!double.IsFinite(value) ||
+                value < 0d)
+                return false;
+
+            var truncated = Math.Truncate(value);
+            if (!double.IsFinite(truncated) ||
+                truncated > MaxFormulaCombinInput)
+            {
+                return false;
+            }
+
+            integer = (int)truncated;
+            return true;
         }
 
         private bool TryEvaluateFormulaAggregate(
