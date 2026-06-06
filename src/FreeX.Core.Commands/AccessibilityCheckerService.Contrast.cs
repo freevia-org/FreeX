@@ -707,6 +707,7 @@ public static partial class AccessibilityCheckerService
     private const int MaxFormulaCombinaCombinationInput = 1_029;
     private const int MaxFormulaPermutInput = 1_000_000;
     private const int MaxFormulaPermutIterations = 10_000;
+    private const int MaxFormulaPermutationAInput = int.MaxValue;
     private const int MaxFormulaTextSliceLength = 32_767;
 
     private static bool IsFormulaPredicateOperand(FormulaNode ast) =>
@@ -945,6 +946,9 @@ public static partial class AccessibilityCheckerService
             case "PERMUT":
                 kind = ConditionalFormulaScalarFunctionKind.Permut;
                 return true;
+            case "PERMUTATIONA":
+                kind = ConditionalFormulaScalarFunctionKind.PermutationA;
+                return true;
             case "SQRT":
                 kind = ConditionalFormulaScalarFunctionKind.Sqrt;
                 return true;
@@ -1140,6 +1144,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Combin or
             ConditionalFormulaScalarFunctionKind.Combina or
             ConditionalFormulaScalarFunctionKind.Permut or
+            ConditionalFormulaScalarFunctionKind.PermutationA or
             ConditionalFormulaScalarFunctionKind.Power or
             ConditionalFormulaScalarFunctionKind.Atan2 or
             ConditionalFormulaScalarFunctionKind.Left or
@@ -1688,6 +1693,7 @@ public static partial class AccessibilityCheckerService
         Combin,
         Combina,
         Permut,
+        PermutationA,
         Sqrt,
         SqrtPi,
         Sign,
@@ -2228,6 +2234,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Combin:
                 case ConditionalFormulaScalarFunctionKind.Combina:
                 case ConditionalFormulaScalarFunctionKind.Permut:
+                case ConditionalFormulaScalarFunctionKind.PermutationA:
                 case ConditionalFormulaScalarFunctionKind.Sqrt:
                 case ConditionalFormulaScalarFunctionKind.SqrtPi:
                 case ConditionalFormulaScalarFunctionKind.Sign:
@@ -2482,6 +2489,14 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Permut:
                     if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var permutNumberChosen) ||
                         !TryPermutFormulaNumber(first, permutNumberChosen, out result))
+                    {
+                        return false;
+                    }
+
+                    break;
+                case ConditionalFormulaScalarFunctionKind.PermutationA:
+                    if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var permutationANumberChosen) ||
+                        !TryPermutationAFormulaNumber(first, permutationANumberChosen, out result))
                     {
                         return false;
                     }
@@ -3281,6 +3296,40 @@ public static partial class AccessibilityCheckerService
             {
                 return false;
             }
+
+            integer = (int)truncated;
+            return true;
+        }
+
+        private static bool TryPermutationAFormulaNumber(double number, double numberChosen, out double result)
+        {
+            result = 0d;
+            if (!TryGetFormulaPermutationAInteger(number, out var n) ||
+                !TryGetFormulaPermutationAInteger(numberChosen, out var k))
+            {
+                return false;
+            }
+
+            if (n == 0 && k > 0)
+                return false;
+
+            result = Math.Pow(n, k);
+            return double.IsFinite(result);
+        }
+
+        private static bool TryGetFormulaPermutationAInteger(double value, out int integer)
+        {
+            integer = 0;
+            if (!double.IsFinite(value) ||
+                value < 0d ||
+                value > MaxFormulaPermutationAInput)
+            {
+                return false;
+            }
+
+            var truncated = Math.Truncate(value);
+            if (!double.IsFinite(truncated))
+                return false;
 
             integer = (int)truncated;
             return true;
