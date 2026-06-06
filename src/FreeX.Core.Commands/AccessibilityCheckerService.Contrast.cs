@@ -907,6 +907,9 @@ public static partial class AccessibilityCheckerService
             case "ROUNDDOWN":
                 kind = ConditionalFormulaScalarFunctionKind.RoundDown;
                 return true;
+            case "MROUND":
+                kind = ConditionalFormulaScalarFunctionKind.MRound;
+                return true;
             case "TRUNC":
                 kind = ConditionalFormulaScalarFunctionKind.Trunc;
                 return true;
@@ -1086,6 +1089,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Round or
             ConditionalFormulaScalarFunctionKind.RoundUp or
             ConditionalFormulaScalarFunctionKind.RoundDown or
+            ConditionalFormulaScalarFunctionKind.MRound or
             ConditionalFormulaScalarFunctionKind.Mod or
             ConditionalFormulaScalarFunctionKind.Power or
             ConditionalFormulaScalarFunctionKind.Atan2 or
@@ -1624,6 +1628,7 @@ public static partial class AccessibilityCheckerService
         Round,
         RoundUp,
         RoundDown,
+        MRound,
         Trunc,
         Fact,
         FactDouble,
@@ -2152,6 +2157,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Round:
                 case ConditionalFormulaScalarFunctionKind.RoundUp:
                 case ConditionalFormulaScalarFunctionKind.RoundDown:
+                case ConditionalFormulaScalarFunctionKind.MRound:
                 case ConditionalFormulaScalarFunctionKind.Trunc:
                 case ConditionalFormulaScalarFunctionKind.Fact:
                 case ConditionalFormulaScalarFunctionKind.FactDouble:
@@ -2320,6 +2326,14 @@ public static partial class AccessibilityCheckerService
                     }
 
                     result = RoundDownFormulaNumber(first, roundDownDigits);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.MRound:
+                    if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var multiple) ||
+                        !TryMRoundFormulaNumber(first, multiple, out result))
+                    {
+                        return false;
+                    }
+
                     break;
                 case ConditionalFormulaScalarFunctionKind.Trunc:
                     var truncDigits = 0;
@@ -2905,6 +2919,23 @@ public static partial class AccessibilityCheckerService
             }
 
             return Math.Floor(value);
+        }
+
+        private static bool TryMRoundFormulaNumber(double number, double multiple, out double result)
+        {
+            result = 0d;
+            if (multiple == 0d || number == 0d)
+                return true;
+
+            if (number > 0d && multiple < 0d ||
+                number < 0d && multiple > 0d)
+            {
+                return false;
+            }
+
+            var roundedMultiple = Math.Round(number / multiple, 0, MidpointRounding.AwayFromZero);
+            result = roundedMultiple * multiple;
+            return double.IsFinite(result);
         }
 
         private static double FactorialFormulaNumber(int value)
