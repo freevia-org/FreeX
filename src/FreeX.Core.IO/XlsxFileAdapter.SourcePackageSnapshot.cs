@@ -854,6 +854,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchWorksheetPhoneticProperties(archive);
                 NormalizePatchWorksheetCellWatches(archive);
                 NormalizePatchWorksheetCustomProperties(archive);
+                NormalizePatchWorksheetIgnoredErrors(archive);
                 NormalizePatchWorksheetPageLayout(archive);
                 NormalizePatchWorksheetPageBreaks(archive);
                 NormalizePatchWorksheetSingleXmlCells(archive);
@@ -1251,6 +1252,9 @@ public sealed partial class XlsxFileAdapter
 
         private static void NormalizePatchWorksheetCustomProperties(ZipArchive archive)
             => XlsxWorksheetCustomPropertiesNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetIgnoredErrors(ZipArchive archive)
+            => XlsxWorksheetIgnoredErrorsNormalizer.NormalizeWorksheets(archive);
 
         private static void NormalizePatchWorksheetSingleXmlCells(ZipArchive archive)
         {
