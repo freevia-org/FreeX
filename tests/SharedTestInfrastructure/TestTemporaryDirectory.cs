@@ -1,7 +1,5 @@
 using System.IO;
 
-namespace FreeX.App.Host.Tests;
-
 internal sealed class TestTemporaryDirectory : IDisposable
 {
     public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.IO.Path.GetRandomFileName());
