@@ -19,7 +19,7 @@ public partial class MainWindow
     private const double RibbonSplitButtonDropdownColumnWidth = 14;
     private const double RibbonSplitButtonLabeledDropdownColumnWidth = 20;
     private const double RibbonSplitButtonLargeDropdownZoneHeight = 20;
-    private const double RibbonSplitButtonLargeChevronTopMargin = 8;
+    private const double RibbonSplitButtonLargeChevronTopMargin = 7;
     private const double RibbonSplitButtonFallbackDropdownZoneWidth = RibbonSplitButtonLabeledDropdownColumnWidth;
     private const double RibbonSplitButtonIconOnlyContentWidth =
         RibbonSplitButtonIconColumnWidth + RibbonSplitButtonDropdownColumnWidth;
