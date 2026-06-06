@@ -212,6 +212,40 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Be(sourceWorkbookProtection.ToString(SaveOptions.DisableFormatting));
     }
 
+    [Fact]
+    public void WorkbookCalculationProperties_ProducesSchemaValidWorkbook()
+    {
+        SchemaErrors(CreateWorkbookCalculationPropertiesSourceWorkbook()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithWorkbookCalculationProperties_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateWorkbookCalculationPropertiesSourceWorkbook());
+        var sourceCalculationProperties = ReadWorkbookChildElement(source, "calcPr");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorkbookChildElement(saved, "calcPr")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceCalculationProperties.ToString(SaveOptions.DisableFormatting));
+    }
+
     private static Workbook CreateWorkbookFileVersionSourceWorkbook()
     {
         var workbook = new Workbook("WorkbookFileVersionPatchSave")
@@ -314,6 +348,23 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         };
         var sheet = workbook.AddSheet("Data");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("protection"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
+        return workbook;
+    }
+
+    private static Workbook CreateWorkbookCalculationPropertiesSourceWorkbook()
+    {
+        var workbook = new Workbook("WorkbookCalculationPropertiesPatchSave")
+        {
+            CalculationMode = WorkbookCalculationMode.Manual,
+            FullCalculationOnLoad = true,
+            ForceFullCalculation = true,
+            IterativeCalculation = true,
+            MaxCalculationIterations = 123,
+            MaxCalculationChange = 0.001
+        };
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("calculation"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
         return workbook;
     }
