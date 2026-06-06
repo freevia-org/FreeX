@@ -541,6 +541,27 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatSumSqAggregate()
+    {
+        AssertFormulaAggregateContrastLocations("SUMSQ($A1)>=10000", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("SUMSQ($A1:$A3)>30000", "B2");
+        AssertFormulaAggregateContrastLocations("SUMSQ(2,$A1)>10000", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("SUMSQ(\"2\",$A1)>10000", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("SUMSQ($D1:$D3)=144", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("SUMSQ($D3:$D5)=0", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatSumSqWrappersPredicatesAndNestedAggregates()
+    {
+        AssertFormulaAggregateContrastLocations("AND(SUMSQ($A1:$A2)>15000,$C1=\"Closed\")", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("IF(SUMSQ($A1)>10000,TRUE,FALSE)", "B4");
+        AssertFormulaAggregateContrastLocations("ISNUMBER(SUMSQ($A1:$A3))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(SUMSQ($A1),1)>10000", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("SUMSQ(SUM($A1:$A2),$A1^2)>100000000", "B2", "B4");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatProductAggregate()
     {
         AssertFormulaAggregateContrastLocations("PRODUCT($A1)>100", "B4");
@@ -629,6 +650,11 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaAggregateContrastLocations("SUM(STDEV($A1)+1)>0");
         AssertFormulaAggregateContrastLocations("SUM(\"n/a\"+$A1)>0");
         AssertFormulaAggregateContrastLocations("SUM(SUM($A1:$A20000))>0");
+        AssertFormulaAggregateContrastLocations("SUMSQ($A1:$A20000)>0");
+        AssertFormulaAggregateContrastLocations("SUMSQ(\"n/a\",$A1)>0");
+        AssertFormulaAggregateContrastLocations("SUMSQ(1E308)>0");
+        AssertFormulaAggregateContrastLocations("SUMSQ(STDEV($A1))>0");
+        AssertFormulaAggregateContrastLocations("SUMSQ($A1/0)>0");
         AssertFormulaAggregateContrastLocations("PRODUCT($A1:$A20000)>0");
         AssertFormulaAggregateContrastLocations("PRODUCT(\"n/a\",$A1)>0");
         AssertFormulaAggregateContrastLocations("PRODUCT(1E308,1E308)>0");
