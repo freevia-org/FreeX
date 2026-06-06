@@ -2361,6 +2361,61 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatBaseConversionToDecimalFunctions()
+    {
+        AssertFormulaBaseConversionFunctionContrastLocations("BIN2DEC($A1)=10", "B1", "B4");
+        AssertFormulaBaseConversionFunctionContrastLocations("HEX2DEC($C1)=255", "B4");
+        AssertFormulaBaseConversionFunctionContrastLocations("OCT2DEC($D1)=15", "B2");
+        AssertFormulaBaseConversionFunctionContrastLocations("BIN2DEC($A1)=-1", "B3");
+        AssertFormulaBaseConversionFunctionContrastLocations("HEX2DEC($C1)=-1", "B3");
+        AssertFormulaBaseConversionFunctionContrastLocations("OCT2DEC($D1)=-1", "B3");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDecimalToBaseFunctions()
+    {
+        AssertFormulaBaseConversionFunctionContrastLocations("DEC2BIN($E1)=\"1010\"", "B1");
+        AssertFormulaBaseConversionFunctionContrastLocations("DEC2BIN($E1,$F1)=\"00001010\"", "B1");
+        AssertFormulaBaseConversionFunctionContrastLocations("DEC2BIN($E1)=\"1111111111\"", "B3");
+        AssertFormulaBaseConversionFunctionContrastLocations("DEC2BIN($E1,$F1)=\"0000\"", "B5");
+        AssertFormulaBaseConversionFunctionContrastLocations("DEC2HEX($E1,$F1)=\"001F\"", "B4");
+        AssertFormulaBaseConversionFunctionContrastLocations("DEC2HEX($E1)=\"FFFFFFFFFF\"", "B3");
+        AssertFormulaBaseConversionFunctionContrastLocations("DEC2OCT($E1,$F1)=\"0017\"", "B2");
+        AssertFormulaBaseConversionFunctionContrastLocations("DEC2OCT($E1)=\"7777777777\"", "B3");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatBaseConversionWrappersPredicatesAndTextComparisons()
+    {
+        AssertFormulaBaseConversionFunctionContrastLocations("IF(BIN2DEC($A1)=10,TRUE,FALSE)", "B1", "B4");
+        AssertFormulaBaseConversionFunctionContrastLocations("AND(HEX2DEC($C1)>10,$G1=\"Closed\")", "B2", "B4");
+        AssertFormulaBaseConversionFunctionContrastLocations("ISNUMBER(OCT2DEC($D1))", "B1", "B2", "B3", "B4", "B5");
+        AssertFormulaBaseConversionFunctionContrastLocations("ISTEXT(DEC2BIN($E1))", "B1", "B2", "B3", "B4", "B5");
+        AssertFormulaBaseConversionFunctionContrastLocations("EXACT(DEC2HEX($E1,$F1),\"001F\")", "B4");
+        AssertFormulaBaseConversionFunctionContrastLocations("AND(EXACT(DEC2BIN($E1,$F1),\"00001010\"),$G1=\"Open\")", "B1");
+        AssertFormulaBaseConversionFunctionContrastLocations("IF(EXACT(DEC2OCT($E1,$F1),\"0017\"),TRUE,FALSE)", "B2");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatBaseConversionUnsupportedAndErrorDomainCases()
+    {
+        AssertFormulaBaseConversionFunctionContrastLocations("BIN2DEC()>0");
+        AssertFormulaBaseConversionFunctionContrastLocations("DEC2BIN($E1,$F1,1)=\"0\"");
+        AssertFormulaBaseConversionFunctionContrastLocations("BIN2DEC(\"102\")>0");
+        AssertFormulaBaseConversionFunctionContrastLocations("HEX2DEC(\"10000000000\")>0");
+        AssertFormulaBaseConversionFunctionContrastLocations("OCT2DEC(\"8\")>0");
+        AssertFormulaBaseConversionFunctionContrastLocations("DEC2BIN(512)=\"1000000000\"");
+        AssertFormulaBaseConversionFunctionContrastLocations("DEC2BIN(10,2)=\"10\"");
+        AssertFormulaBaseConversionFunctionContrastLocations("DEC2HEX(255,-1)=\"FF\"");
+        AssertFormulaBaseConversionFunctionContrastLocations("DEC2OCT(64,1)=\"100\"");
+        AssertFormulaBaseConversionFunctionContrastLocations("DEC2HEX(549755813888)=\"80000000000\"");
+        AssertFormulaBaseConversionFunctionContrastLocations("DEC2OCT(536870912)=\"4000000000\"");
+        AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(BIN2DEC(\"102\"))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISNA(DEC2BIN(NA()))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISNA(DEC2BIN(-1,NA()))", FormulaBaseConversionAllLocations);
+    }
+
+    [Fact]
     public void FindIssues_DoesNotMatchFormulaConditionalFormatScalarFunctionUnsupportedOperands()
     {
         AssertFormulaArithmeticContrastLocations("ABS($A1,1)>0");
@@ -3654,6 +3709,110 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 3), source);
     }
 
+    private static Workbook CreateFormulaBaseConversionFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 7, 2);
+
+        SetFormulaBaseConversionFunctionContrastRow(
+            sheet,
+            1,
+            new TextValue("1010"),
+            new TextValue("A"),
+            new TextValue("12"),
+            new NumberValue(10),
+            new NumberValue(8),
+            "Open",
+            "Decimal ten");
+        SetFormulaBaseConversionFunctionContrastRow(
+            sheet,
+            2,
+            new TextValue("1111"),
+            new TextValue("F"),
+            new TextValue("17"),
+            new NumberValue(15),
+            new NumberValue(4),
+            "Closed",
+            "Decimal fifteen");
+        SetFormulaBaseConversionFunctionContrastRow(
+            sheet,
+            3,
+            new TextValue("1111111111"),
+            new TextValue("FFFFFFFFFF"),
+            new TextValue("7777777777"),
+            new NumberValue(-1),
+            new NumberValue(4),
+            "Open",
+            "Negative one");
+        SetFormulaBaseConversionFunctionContrastRow(
+            sheet,
+            4,
+            new NumberValue(1010),
+            new TextValue("ff"),
+            new TextValue("377"),
+            new NumberValue(31.9),
+            new NumberValue(4.9),
+            "Closed",
+            "Truncated decimal");
+        SetFormulaBaseConversionFunctionContrastRow(
+            sheet,
+            5,
+            new TextValue("0"),
+            new TextValue("0"),
+            new TextValue("0"),
+            new NumberValue(0),
+            new NumberValue(4),
+            "Open",
+            "Zero");
+        SetFormulaBaseConversionFunctionContrastRow(
+            sheet,
+            6,
+            new TextValue("102"),
+            new TextValue("10000000000"),
+            new TextValue("8"),
+            new NumberValue(512),
+            new NumberValue(2),
+            "Open",
+            "Invalid domains");
+        SetFormulaBaseConversionFunctionContrastRow(
+            sheet,
+            7,
+            ErrorValue.NA,
+            ErrorValue.Value,
+            ErrorValue.NA,
+            ErrorValue.NA,
+            new NumberValue(4),
+            "Closed",
+            "Error source");
+
+        return workbook;
+    }
+
+    private static void SetFormulaBaseConversionFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        ScalarValue binarySource,
+        ScalarValue hexSource,
+        ScalarValue octalSource,
+        ScalarValue decimalSource,
+        ScalarValue places,
+        string status,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), binarySource);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), hexSource);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 4), octalSource);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 5), decimalSource);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 6), places);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 7), new TextValue(status));
+    }
+
     private static Workbook CreateFormulaArabicRomanFunctionContrastWorkbook(
         out Sheet sheet,
         out CellAddress firstLabel,
@@ -3929,6 +4088,19 @@ public sealed partial class AccessibilityCheckerServiceTests
             .Equal(expectedLocations);
     }
 
+    private static void AssertFormulaBaseConversionFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaBaseConversionFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
     private static void AssertFormulaDateFunctionContrastLocations(
         string formulaText,
         params string[] expectedLocations)
@@ -4008,6 +4180,9 @@ public sealed partial class AccessibilityCheckerServiceTests
         ["B1", "B2", "B3", "B4", "B5", "B6", "B7"];
 
     private static string[] FormulaArabicRomanAllLocations =>
+        ["B1", "B2", "B3", "B4", "B5", "B6", "B7"];
+
+    private static string[] FormulaBaseConversionAllLocations =>
         ["B1", "B2", "B3", "B4", "B5", "B6", "B7"];
 
     private static void AddFormulaContrastRule(
