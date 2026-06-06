@@ -1298,6 +1298,15 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void PageLayout_SanitizesInvalidNativeMetadataForSchemaValidity()
+    {
+        using var saved = Save(CreateInvalidPageLayoutSourceWorkbook());
+
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertPageLayoutSanitized(saved);
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithPageLayout_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreatePageLayoutSourceWorkbook());
@@ -1343,6 +1352,30 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceHeaderFooter.ToString(SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidPageLayoutForSchemaValidity()
+    {
+        using var source = Save(CreatePageLayoutSourceWorkbook());
+        SetPageLayoutInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertPageLayoutSanitized(saved);
     }
 
 
@@ -2307,6 +2340,129 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.HeaderFooterScaleWithDocument = false;
         sheet.HeaderFooterAlignWithMargins = false;
         return workbook;
+    }
+
+    private static Workbook CreateInvalidPageLayoutSourceWorkbook()
+    {
+        var workbook = CreatePageLayoutSourceWorkbook();
+        workbook.Name = "PageLayoutInvalidSchema";
+        var sheet = workbook.GetSheetAt(0);
+        sheet.PrintOptionsMetadata = new NativeXmlPreserveBag();
+        sheet.PrintOptionsMetadata.Set(
+            "printOptions",
+            """<e gridLinesSet="maybe" customAttr="print-native"><nativePrintOptionsChild /></e>""");
+        sheet.PageMarginsMetadata = new NativeXmlPreserveBag();
+        sheet.PageMarginsMetadata.Set(
+            "pageMargins",
+            """<e customAttr="page-margins-native"><nativePageMarginsChild /></e>""");
+        sheet.PageSetupMetadata = new NativeXmlPreserveBag();
+        sheet.PageSetupMetadata.Set(
+            "pageSetup",
+            """<e customAttr="page-setup-native"><nativePageSetupChild /></e>""");
+        sheet.HeaderFooterMetadata = new NativeXmlPreserveBag();
+        sheet.HeaderFooterMetadata.Set(
+            "headerFooter",
+            """<e nativeHeaderFooterAttr="kept"><nativeHeaderFooterChild /></e>""");
+        return workbook;
+    }
+
+    private static void SetPageLayoutInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var root = worksheetXml.Root!;
+
+        var printOptions = root.Element(worksheetNs + "printOptions")!;
+        printOptions.SetAttributeValue("gridLines", "maybe");
+        printOptions.SetAttributeValue("gridLinesSet", "maybe");
+        printOptions.SetAttributeValue("customAttr", "print-native");
+        printOptions.Add(new XElement(worksheetNs + "nativePrintOptionsChild"));
+
+        var pageMargins = root.Element(worksheetNs + "pageMargins")!;
+        pageMargins.SetAttributeValue("left", "not-a-number");
+        pageMargins.SetAttributeValue("customAttr", "page-margins-native");
+        pageMargins.Add(new XElement(worksheetNs + "nativePageMarginsChild"));
+
+        var pageSetup = root.Element(worksheetNs + "pageSetup")!;
+        pageSetup.SetAttributeValue("orientation", "sideways");
+        pageSetup.SetAttributeValue("copies", "not-a-number");
+        pageSetup.SetAttributeValue("customAttr", "page-setup-native");
+        pageSetup.Add(new XElement(worksheetNs + "nativePageSetupChild"));
+
+        var headerFooter = root.Element(worksheetNs + "headerFooter")!;
+        headerFooter.SetAttributeValue("differentFirst", "maybe");
+        headerFooter.SetAttributeValue("nativeHeaderFooterAttr", "kept");
+        headerFooter.Add(new XElement(worksheetNs + "nativeHeaderFooterChild"));
+
+        var sheetProperties = root.Element(worksheetNs + "sheetPr");
+        if (sheetProperties is null)
+        {
+            sheetProperties = new XElement(worksheetNs + "sheetPr");
+            root.AddFirst(sheetProperties);
+        }
+
+        var pageSetupProperties = sheetProperties.Element(worksheetNs + "pageSetUpPr");
+        if (pageSetupProperties is null)
+        {
+            pageSetupProperties = new XElement(worksheetNs + "pageSetUpPr");
+            sheetProperties.Add(pageSetupProperties);
+        }
+
+        pageSetupProperties.SetAttributeValue("fitToPage", "maybe");
+        pageSetupProperties.SetAttributeValue("customAttr", "page-setup-properties-native");
+        pageSetupProperties.Add(new XElement(worksheetNs + "nativePageSetupPropertiesChild"));
+
+        var outlineProperties = sheetProperties.Element(worksheetNs + "outlinePr");
+        if (outlineProperties is null)
+        {
+            outlineProperties = new XElement(worksheetNs + "outlinePr");
+            sheetProperties.Add(outlineProperties);
+        }
+
+        outlineProperties.SetAttributeValue("summaryBelow", "maybe");
+        outlineProperties.SetAttributeValue("customAttr", "outline-native");
+        outlineProperties.Add(new XElement(worksheetNs + "nativeOutlineChild"));
+
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void AssertPageLayoutSanitized(MemoryStream stream)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var printOptions = ReadWorksheetChildElement(stream, "printOptions");
+        printOptions.Attribute("gridLines")?.Value.Should().NotBe("maybe");
+        printOptions.Attribute("gridLinesSet").Should().BeNull();
+        printOptions.Attribute("customAttr").Should().BeNull();
+        printOptions.HasElements.Should().BeFalse();
+
+        var pageMargins = ReadWorksheetChildElement(stream, "pageMargins");
+        pageMargins.Attribute("left")!.Value.Should().NotBe("not-a-number");
+        pageMargins.Attribute("customAttr").Should().BeNull();
+        pageMargins.HasElements.Should().BeFalse();
+
+        var pageSetup = ReadWorksheetChildElement(stream, "pageSetup");
+        pageSetup.Attribute("orientation")?.Value.Should().NotBe("sideways");
+        pageSetup.Attribute("copies")?.Value.Should().NotBe("not-a-number");
+        pageSetup.Attribute("customAttr").Should().BeNull();
+        pageSetup.HasElements.Should().BeFalse();
+
+        var headerFooter = ReadWorksheetChildElement(stream, "headerFooter");
+        headerFooter.Attribute("differentFirst")?.Value.Should().NotBe("maybe");
+        headerFooter.Attribute("nativeHeaderFooterAttr").Should().BeNull();
+        headerFooter.Element(worksheetNs + "nativeHeaderFooterChild").Should().BeNull();
+
+        var sheetProperties = ReadWorksheetChildElement(stream, "sheetPr");
+        var pageSetupProperties = sheetProperties.Element(worksheetNs + "pageSetUpPr")!;
+        pageSetupProperties.Attribute("fitToPage")?.Value.Should().NotBe("maybe");
+        pageSetupProperties.Attribute("customAttr").Should().BeNull();
+        pageSetupProperties.HasElements.Should().BeFalse();
+
+        var outlineProperties = sheetProperties.Element(worksheetNs + "outlinePr")!;
+        outlineProperties.Attribute("summaryBelow")?.Value.Should().NotBe("maybe");
+        outlineProperties.Attribute("customAttr").Should().BeNull();
+        outlineProperties.HasElements.Should().BeFalse();
     }
 
     private static Workbook CreateManualPageBreakSourceWorkbook()

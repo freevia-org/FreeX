@@ -63,6 +63,7 @@ internal static class XlsxWorksheetPrintOptionsMetadataWriter
                 }
             }
 
+            XlsxWorksheetPageLayoutNormalizer.NormalizePrintOptions(printOptions);
             session.MarkDirty(worksheetEdit);
         }
     }
