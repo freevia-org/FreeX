@@ -512,7 +512,7 @@ public sealed partial class DataToolDialogTests
                 var picker = WpfTestTree.FindVisualDescendants<Button>(dialog)
                     .Single(button => AutomationProperties.GetName(button) == automationName);
 
-                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                DialogSourceTestSupport.ClickButton(picker);
 
                 requests.Should().Equal(new AdvancedFilterRangeSelectionRequest(
                     expectedTarget,

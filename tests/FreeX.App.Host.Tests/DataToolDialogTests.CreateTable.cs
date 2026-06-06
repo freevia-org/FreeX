@@ -117,7 +117,7 @@ public sealed partial class DataToolDialogTests
                     .Where(button => Equals(button.Content, "..."))
                     .Single();
 
-                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                DialogSourceTestSupport.ClickButton(picker);
 
                 requests.Should().Equal(new CreateTableRangeSelectionRequest("A1:C12", CollapseDialog: true));
                 dialog.RangeSelectionRequest.Should().Be(requests[0]);

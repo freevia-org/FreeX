@@ -31,8 +31,8 @@ public sealed partial class RemainingDialogTests
             var requests = new List<SparklineRangeSelectionRequest>();
             var dialog = new SparklineDialog("A1:E1", "F1", SparklineKindChoice.Line, requests.Add);
 
-            GetField<Button>(dialog, "_dataRangePickerButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            GetField<Button>(dialog, "_locationPickerButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            DialogSourceTestSupport.ClickButton(GetField<Button>(dialog, "_dataRangePickerButton"));
+            DialogSourceTestSupport.ClickButton(GetField<Button>(dialog, "_locationPickerButton"));
 
             requests.Should().Equal(
                 new SparklineRangeSelectionRequest(SparklineRangeSelectionTarget.DataRange, "A1:E1", CollapseDialog: true),

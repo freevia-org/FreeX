@@ -41,7 +41,7 @@ public sealed partial class ColorPickerDialogTests
                 var newBackgroundPreview = (Border)dialog.FindName("NewBackgroundPreview");
                 var swatchButton = FindSwatchButton((Panel)dialog.FindName("ThemeColorsPanel"), newColor);
 
-                swatchButton.RaiseEvent(new System.Windows.RoutedEventArgs(Button.ClickEvent));
+                DialogSourceTestSupport.ClickButton(swatchButton);
 
                 GetForegroundPreviewColor(currentForegroundPreview).Should().Be(initialColor);
                 GetBackgroundPreviewColor(currentBackgroundPreview).Should().Be(initialColor);
@@ -71,7 +71,7 @@ public sealed partial class ColorPickerDialogTests
 
                 initialButton.BorderThickness.Should().Be(new System.Windows.Thickness(2));
 
-                newButton.RaiseEvent(new System.Windows.RoutedEventArgs(Button.ClickEvent));
+                DialogSourceTestSupport.ClickButton(newButton);
 
                 initialButton.BorderThickness.Should().Be(new System.Windows.Thickness(1));
                 newButton.BorderThickness.Should().Be(new System.Windows.Thickness(2));
@@ -161,7 +161,7 @@ public sealed partial class ColorPickerDialogTests
                 var hex = (TextBox)dialog.FindName("CustomColorTextBox");
                 var spectrumButton = FindSwatchButton((Panel)dialog.FindName("CustomSpectrumPanel"), new CellColor(0x00, 0xFF, 0x00));
 
-                spectrumButton.RaiseEvent(new System.Windows.RoutedEventArgs(Button.ClickEvent));
+                DialogSourceTestSupport.ClickButton(spectrumButton);
 
                 GetForegroundPreviewColor(currentForegroundPreview).Should().Be(initialColor);
                 GetBackgroundPreviewColor(currentBackgroundPreview).Should().Be(initialColor);

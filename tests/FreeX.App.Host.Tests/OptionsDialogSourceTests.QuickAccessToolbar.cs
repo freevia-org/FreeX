@@ -244,7 +244,7 @@ public sealed partial class OptionsDialogSourceTests
 
 
 
-                addButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                DialogSourceTestSupport.ClickButton(addButton);
 
 
 

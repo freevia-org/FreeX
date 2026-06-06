@@ -39,7 +39,7 @@ public sealed class DialogButtonRowFactoryTests
             AutomationProperties.GetName(cancel).Should().Be(UiText.CreateAutomationName(UiText.Cancel));
             AutomationProperties.GetAcceleratorKey(cancel).Should().Be("Alt+C");
 
-            ok.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            DialogSourceTestSupport.ClickButton(ok);
             accepted.Should().Be(1);
         });
     }
@@ -69,7 +69,7 @@ public sealed class DialogButtonRowFactoryTests
             AutomationProperties.GetName(ok).Should().Be(UiText.CreateAutomationName(UiText.Ok));
             AutomationProperties.GetAcceleratorKey(ok).Should().Be("Alt+O");
 
-            ok.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            DialogSourceTestSupport.ClickButton(ok);
             accepted.Should().Be(1);
         });
     }

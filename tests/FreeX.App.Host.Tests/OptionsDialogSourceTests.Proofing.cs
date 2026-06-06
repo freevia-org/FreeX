@@ -1,5 +1,4 @@
 using System.IO;
-using System.Windows;
 using System.Windows.Controls;
 using FreeX.App.Host;
 using FluentAssertions;
@@ -67,22 +66,22 @@ public sealed partial class OptionsDialogSourceTests
                 GetWords(wordsList).Should().Equal("adn", "TeH");
 
                 wordBox.Text = "  Recieve  ";
-                Click(addButton);
+                DialogSourceTestSupport.ClickButton(addButton);
                 GetWords(wordsList).Should().Equal("adn", "Recieve", "TeH");
 
                 wordBox.Text = "recieve";
-                Click(addButton);
+                DialogSourceTestSupport.ClickButton(addButton);
                 GetWords(wordsList).Should().Equal("adn", "Recieve", "TeH");
 
                 wordsList.SelectedItem = "adn";
-                Click(removeButton);
+                DialogSourceTestSupport.ClickButton(removeButton);
                 GetWords(wordsList).Should().Equal("Recieve", "TeH");
 
-                Click(clearButton);
+                DialogSourceTestSupport.ClickButton(clearButton);
                 GetWords(wordsList).Should().BeEmpty();
 
                 wordBox.Text = "  Final  ";
-                Click(addButton);
+                DialogSourceTestSupport.ClickButton(addButton);
                 GetWords(wordsList).Should().Equal("Final");
 
                 ClickOkAllowingNonModalDialogResult(dialog);
@@ -120,10 +119,10 @@ public sealed partial class OptionsDialogSourceTests
                 var clearButton = GetControl<Button>(dialog, "ProofingCustomDictionaryClearWordsButton");
                 var cancelButton = GetControl<Button>(dialog, "CancelBtn");
 
-                Click(clearButton);
+                DialogSourceTestSupport.ClickButton(clearButton);
                 wordBox.Text = "cancelled";
-                Click(addButton);
-                ClickAllowingNonModalDialogResult(cancelButton);
+                DialogSourceTestSupport.ClickButton(addButton);
+                DialogSourceTestSupport.ClickButtonAllowingNonModalDialogResult(cancelButton);
             }
             finally
             {
@@ -137,18 +136,4 @@ public sealed partial class OptionsDialogSourceTests
     private static IReadOnlyList<string> GetWords(ListBox listBox) =>
         listBox.Items.Cast<string>().ToArray();
 
-    private static void Click(Button button) =>
-        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-
-    private static void ClickAllowingNonModalDialogResult(Button button)
-    {
-        try
-        {
-            Click(button);
-        }
-        catch (InvalidOperationException invalidOperation)
-            when (invalidOperation.Message.Contains("DialogResult", StringComparison.Ordinal))
-        {
-        }
-    }
 }

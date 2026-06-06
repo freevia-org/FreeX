@@ -107,13 +107,13 @@ public sealed partial class DataToolDialogTests
                 var next = WpfTestTree.FindVisualDescendants<Button>(dialog)
                     .Single(button => Equals(button.Content, "_Next >"));
 
-                next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                DialogSourceTestSupport.ClickButton(next);
 
                 var tabDelimiter = WpfTestTree.FindVisualDescendants<CheckBox>(dialog)
                     .Single(checkBox => Equals(checkBox.Content, "_Tab"));
                 Keyboard.FocusedElement.Should().BeSameAs(tabDelimiter);
 
-                next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                DialogSourceTestSupport.ClickButton(next);
 
                 var columnSelector = WpfTestTree.FindVisualDescendants<ComboBox>(dialog)
                     .Single(comboBox => comboBox.Items.OfType<string>().Contains("Column 1"));
