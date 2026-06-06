@@ -905,6 +905,9 @@ public static partial class AccessibilityCheckerService
             case "SQRT":
                 kind = ConditionalFormulaScalarFunctionKind.Sqrt;
                 return true;
+            case "SQRTPI":
+                kind = ConditionalFormulaScalarFunctionKind.SqrtPi;
+                return true;
             case "SIGN":
                 kind = ConditionalFormulaScalarFunctionKind.Sign;
                 return true;
@@ -1000,6 +1003,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Abs or
             ConditionalFormulaScalarFunctionKind.Int or
             ConditionalFormulaScalarFunctionKind.Sqrt or
+            ConditionalFormulaScalarFunctionKind.SqrtPi or
             ConditionalFormulaScalarFunctionKind.Sign or
             ConditionalFormulaScalarFunctionKind.Exp or
             ConditionalFormulaScalarFunctionKind.Ln or
@@ -1550,6 +1554,7 @@ public static partial class AccessibilityCheckerService
         Round,
         Mod,
         Sqrt,
+        SqrtPi,
         Sign,
         Power,
         Exp,
@@ -2060,6 +2065,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Round:
                 case ConditionalFormulaScalarFunctionKind.Mod:
                 case ConditionalFormulaScalarFunctionKind.Sqrt:
+                case ConditionalFormulaScalarFunctionKind.SqrtPi:
                 case ConditionalFormulaScalarFunctionKind.Sign:
                 case ConditionalFormulaScalarFunctionKind.Power:
                 case ConditionalFormulaScalarFunctionKind.Exp:
@@ -2207,6 +2213,12 @@ public static partial class AccessibilityCheckerService
                         return false;
 
                     result = Math.Sqrt(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.SqrtPi:
+                    if (first < 0)
+                        return false;
+
+                    result = Math.Sqrt(first * Math.PI);
                     break;
                 case ConditionalFormulaScalarFunctionKind.Sign:
                     result = first > 0
