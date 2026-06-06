@@ -67,6 +67,7 @@ public sealed partial class XlsxFileAdapter
 
         XlsxWorksheetGridXmlNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxWorksheetMergeCellsNormalizer.NormalizeWorksheets(generatedArchive);
+        XlsxWorksheetDimensionNormalizer.NormalizeWorksheets(generatedArchive);
         return sourceParts;
     }
 

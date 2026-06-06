@@ -1380,6 +1380,60 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         AssertWorksheetGridXmlSanitized(saved);
     }
 
+    [Fact]
+    public void WorksheetDimension_SanitizesInvalidNativeMetadataForSchemaValidity()
+    {
+        using var saved = Save(CreateInvalidWorksheetDimensionSourceWorkbook());
+
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetDimensionSanitized(saved);
+    }
+
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidWorksheetDimensionForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetDimensionSourceWorkbook());
+        SetWorksheetDimensionInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new TextValue("full-save edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetDimensionSanitized(saved);
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorksheetDimensionForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetDimensionSourceWorkbook());
+        SetWorksheetDimensionInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(77));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetDimensionSanitized(saved);
+    }
+
 
     [Fact]
     public void PageLayout_ProducesSchemaValidWorkbook()
@@ -2507,6 +2561,50 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         formula.Attribute("ref")!.Value.Should().Be("A2:A2");
         formula.Attribute("ca")!.Value.Should().Be("1");
         formula.Attribute("customAttr").Should().BeNull();
+    }
+
+    private static Workbook CreateWorksheetDimensionSourceWorkbook()
+    {
+        var workbook = new Workbook("WorksheetDimensionSchema");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Name"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(42));
+        return workbook;
+    }
+
+    private static Workbook CreateInvalidWorksheetDimensionSourceWorkbook()
+    {
+        var workbook = CreateWorksheetDimensionSourceWorkbook();
+        workbook.Name = "WorksheetDimensionInvalidSchema";
+        workbook.GetSheetAt(0).DimensionMetadata = CreateWorksheetDimensionMetadata();
+        return workbook;
+    }
+
+    private static NativeXmlPreserveBag CreateWorksheetDimensionMetadata()
+    {
+        var bag = new NativeXmlPreserveBag();
+        bag.Set("dimension", """<e nativeDimensionAttr="kept" />""");
+        return bag;
+    }
+
+    private static void SetWorksheetDimensionInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var dimension = worksheetXml.Root!.Element(worksheetNs + "dimension")!;
+        dimension.SetAttributeValue("nativeDimensionAttr", "kept");
+        dimension.Add(new XElement(worksheetNs + "nativeDimensionChild"));
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void AssertWorksheetDimensionSanitized(MemoryStream stream)
+    {
+        var dimension = ReadWorksheetChildElement(stream, "dimension");
+        dimension.Attribute("ref").Should().NotBeNull();
+        dimension.Attribute("nativeDimensionAttr").Should().BeNull();
+        dimension.Elements().Should().BeEmpty();
     }
 
     private static Workbook CreatePageLayoutSourceWorkbook()

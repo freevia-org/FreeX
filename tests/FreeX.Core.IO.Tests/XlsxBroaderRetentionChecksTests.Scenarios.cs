@@ -49,7 +49,7 @@ public sealed partial class XlsxBroaderRetentionChecksTests
         var savedDimensionRef = worksheetXml.Root!.Element(MainNs + "dimension")!.Attribute("ref")!.Value;
         savedDimensionRef.Should().NotBe("A1:C2");
         savedDimensionRef.Should().EndWith("5");
-        worksheetXml.Root!.Element(MainNs + "dimension")!.Attribute("nativeDimensionAttr")!.Value.Should().Be("kept");
+        worksheetXml.Root!.Element(MainNs + "dimension")!.Attribute("nativeDimensionAttr").Should().BeNull();
 
         var sheetPr = worksheetXml.Root.Element(MainNs + "sheetPr");
         sheetPr.Should().NotBeNull();
