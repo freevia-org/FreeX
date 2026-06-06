@@ -622,6 +622,31 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTextSearchFunctionOperands()
+    {
+        AssertFormulaTextFunctionContrastLocations("FIND(\"los\",$C1)>1", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("FIND(\"e\",$C1,4)>0", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("SEARCH(\"open\",$C1)=1", "B3", "B4");
+        AssertFormulaTextFunctionContrastLocations("SEARCH(\"E\",LOWER($C1))>0", "B1", "B2", "B3", "B4");
+        AssertFormulaTextFunctionContrastLocations("EXACT($C1,\"Open\")", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTextSearchFunctionsInWrappers()
+    {
+        AssertFormulaTextFunctionContrastLocations("AND(SEARCH(\"open\",$C1),$A1>=100)", "B4");
+        AssertFormulaTextFunctionContrastLocations("IF(SEARCH(\"open\",$C1),TRUE,FALSE)", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTextSearchFunctionPredicatesArithmeticAndAggregateArguments()
+    {
+        AssertFormulaTextFunctionContrastLocations("ISNUMBER(SEARCH(\"open\",$C1))", "B3", "B4");
+        AssertFormulaTextFunctionContrastLocations("SEARCH(\"e\",$C1)+1>4", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("SUM(SEARCH(\"o\",LOWER($C1)))>0", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
     public void FindIssues_DoesNotMatchFormulaConditionalFormatTextFunctionUnsupportedOperands()
     {
         AssertFormulaTextFunctionContrastLocations("LEN($C1,1)>0");
@@ -633,6 +658,20 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaTextFunctionContrastLocations("CONCAT($C1,\"x\")=\"Openx\"");
         AssertFormulaTextFunctionContrastLocations("LEFT($C1&\"x\",1)=\"O\"");
         AssertFormulaTextFunctionContrastLocations("LEN(A0)>0");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatTextSearchFunctionUnsupportedOperands()
+    {
+        AssertFormulaTextFunctionContrastLocations("FIND(\"x\",$C1)>0");
+        AssertFormulaTextFunctionContrastLocations("SEARCH(\"o\",$C1,0)>0");
+        AssertFormulaTextFunctionContrastLocations("SEARCH(\"o\",$C1,1.5)>0");
+        AssertFormulaTextFunctionContrastLocations("SEARCH(\"o\",$C1,999999)>0");
+        AssertFormulaTextFunctionContrastLocations("SEARCH(\"\",$C1)>0");
+        AssertFormulaTextFunctionContrastLocations("FIND(\"o\")>0");
+        AssertFormulaTextFunctionContrastLocations("EXACT($C1)>0");
+        AssertFormulaTextFunctionContrastLocations("SEARCH(\"o\",$A1)>0");
+        AssertFormulaTextFunctionContrastLocations("SEARCH(\"o\",$C1&\"x\")>0");
     }
 
     [Fact]
