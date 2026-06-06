@@ -1,7 +1,5 @@
 using System.Globalization;
 
-namespace FreeX.App.Host.Tests;
-
 internal sealed class TestCultureScope : IDisposable
 {
     private readonly CultureInfo _previousCulture = CultureInfo.CurrentCulture;
@@ -9,6 +7,11 @@ internal sealed class TestCultureScope : IDisposable
     private readonly CultureInfo? _previousDefaultCulture = CultureInfo.DefaultThreadCurrentCulture;
     private readonly CultureInfo? _previousDefaultUICulture = CultureInfo.DefaultThreadCurrentUICulture;
     private bool _disposed;
+
+    public TestCultureScope(string cultureName)
+        : this(currentCulture: CultureInfo.GetCultureInfo(cultureName), currentUICulture: CultureInfo.GetCultureInfo(cultureName))
+    {
+    }
 
     private TestCultureScope(
         CultureInfo? currentCulture = null,
@@ -45,6 +48,12 @@ internal sealed class TestCultureScope : IDisposable
 
     public static TestCultureScope InvariantCurrentCulture() =>
         CurrentCulture(CultureInfo.InvariantCulture);
+
+    public static TestCultureScope CurrentCultureAndUICulture(string cultureName)
+    {
+        var culture = CultureInfo.GetCultureInfo(cultureName);
+        return new(currentCulture: culture, currentUICulture: culture);
+    }
 
     public static TestCultureScope CurrentCultureAndUICulture(string currentCulture, string currentUICulture) =>
         new(
