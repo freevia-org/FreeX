@@ -852,6 +852,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("INT($A1/10)>=10", "B2", "B4");
         AssertFormulaArithmeticContrastLocations("ROUND($A1/3,0)>=33", "B2", "B4");
         AssertFormulaArithmeticContrastLocations("MOD($A1,2)=0", "B2");
+        AssertFormulaArithmeticContrastLocations("SQRT($A1)>=10", "B2", "B4");
     }
 
     [Fact]
@@ -860,6 +861,9 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("IF(ABS($A1-100)>=25,TRUE,FALSE)", "B1", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("AND(ROUND($A1/3,0)>=33,$C1=\"Open\")", "B4");
         AssertFormulaArithmeticContrastLocations("ISNUMBER(ROUND($A1/3,0))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(SQRT($A1)>=10,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(SQRT($A1)>=10,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(SQRT($A1))", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("MOD($A1,2)", "B1", "B3", "B4");
     }
 
@@ -867,6 +871,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAggregateScalarFunctionArguments()
     {
         AssertFormulaAggregateContrastLocations("SUM(ABS($A1-100),MOD($A1,2))>=25", "B1", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(SQRT($A1),1)>10", "B2", "B4");
     }
 
     [Fact]
@@ -879,7 +884,12 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("ROUND($A1,999999)>0");
         AssertFormulaArithmeticContrastLocations("ABS(\"5\")>0");
         AssertFormulaArithmeticContrastLocations("ABS($A1&\"x\")>0");
-        AssertFormulaArithmeticContrastLocations("SQRT($A1)>0");
+        AssertFormulaArithmeticContrastLocations("SQRT()>0");
+        AssertFormulaArithmeticContrastLocations("SQRT($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("SQRT(-$A1)>0");
+        AssertFormulaArithmeticContrastLocations("SQRT(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("SQRT($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("EXP($A1)>0");
     }
 
     [Fact]

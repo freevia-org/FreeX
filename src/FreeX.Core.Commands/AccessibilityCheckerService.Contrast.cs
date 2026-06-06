@@ -902,6 +902,9 @@ public static partial class AccessibilityCheckerService
             case "MOD":
                 kind = ConditionalFormulaScalarFunctionKind.Mod;
                 return true;
+            case "SQRT":
+                kind = ConditionalFormulaScalarFunctionKind.Sqrt;
+                return true;
             case "VALUE":
                 kind = ConditionalFormulaScalarFunctionKind.Value;
                 return true;
@@ -975,6 +978,7 @@ public static partial class AccessibilityCheckerService
         {
             ConditionalFormulaScalarFunctionKind.Abs or
             ConditionalFormulaScalarFunctionKind.Int or
+            ConditionalFormulaScalarFunctionKind.Sqrt or
             ConditionalFormulaScalarFunctionKind.Value or
             ConditionalFormulaScalarFunctionKind.Len or
             ConditionalFormulaScalarFunctionKind.Upper or
@@ -1517,6 +1521,7 @@ public static partial class AccessibilityCheckerService
         Int,
         Round,
         Mod,
+        Sqrt,
         Value,
         Len,
         Upper,
@@ -2019,6 +2024,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Int:
                 case ConditionalFormulaScalarFunctionKind.Round:
                 case ConditionalFormulaScalarFunctionKind.Mod:
+                case ConditionalFormulaScalarFunctionKind.Sqrt:
                     return TryEvaluateFormulaNumericScalarFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Value:
                     return TryEvaluateFormulaValueFunction(function, rowOffset, colOffset, out value);
@@ -2151,6 +2157,12 @@ public static partial class AccessibilityCheckerService
                     }
 
                     result = first - divisor * Math.Floor(first / divisor);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Sqrt:
+                    if (first < 0)
+                        return false;
+
+                    result = Math.Sqrt(first);
                     break;
                 default:
                     return false;
