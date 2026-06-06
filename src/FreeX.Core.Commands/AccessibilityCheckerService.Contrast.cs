@@ -935,6 +935,9 @@ public static partial class AccessibilityCheckerService
             case "SIN":
                 kind = ConditionalFormulaScalarFunctionKind.Sin;
                 return true;
+            case "COS":
+                kind = ConditionalFormulaScalarFunctionKind.Cos;
+                return true;
             case "PI":
                 kind = ConditionalFormulaScalarFunctionKind.Pi;
                 return true;
@@ -1020,6 +1023,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Degrees or
             ConditionalFormulaScalarFunctionKind.Radians or
             ConditionalFormulaScalarFunctionKind.Sin or
+            ConditionalFormulaScalarFunctionKind.Cos or
             ConditionalFormulaScalarFunctionKind.Value or
             ConditionalFormulaScalarFunctionKind.Len or
             ConditionalFormulaScalarFunctionKind.Upper or
@@ -1576,6 +1580,7 @@ public static partial class AccessibilityCheckerService
         Degrees,
         Radians,
         Sin,
+        Cos,
         Pi,
         Value,
         Len,
@@ -2090,6 +2095,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Degrees:
                 case ConditionalFormulaScalarFunctionKind.Radians:
                 case ConditionalFormulaScalarFunctionKind.Sin:
+                case ConditionalFormulaScalarFunctionKind.Cos:
                     return TryEvaluateFormulaNumericScalarFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Pi:
                     value = new NumberValue(Math.PI);
@@ -2291,6 +2297,9 @@ public static partial class AccessibilityCheckerService
                     break;
                 case ConditionalFormulaScalarFunctionKind.Sin:
                     result = Math.Sin(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Cos:
+                    result = Math.Cos(first);
                     break;
                 default:
                     return false;
