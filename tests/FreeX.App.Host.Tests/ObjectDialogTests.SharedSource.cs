@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
@@ -21,11 +20,11 @@ public sealed partial class ObjectDialogTests
     public void ObjectDialogs_UseSharedButtonRowsOutsideChartDialogs()
     {
         var objectSource = ReadObjectDialogSources();
-        var formatPictureSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatPictureDialog.cs"));
+        var formatPictureSource = DialogSourceTestSupport.ReadHostSources("FormatPictureDialog.cs");
         var namedRangeSource =
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "NamedRangeDialog.xaml.cs")) +
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "NameDefinitionDialog.cs"));
-        var shapeGradientSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ShapeGradientDialog.cs"));
+            DialogSourceTestSupport.ReadHostSources("NamedRangeDialog.xaml.cs") +
+            DialogSourceTestSupport.ReadHostSources("NameDefinitionDialog.cs");
+        var shapeGradientSource = DialogSourceTestSupport.ReadHostSources("ShapeGradientDialog.cs");
 
         foreach (var source in new[] { objectSource, formatPictureSource, namedRangeSource, shapeGradientSource })
         {
