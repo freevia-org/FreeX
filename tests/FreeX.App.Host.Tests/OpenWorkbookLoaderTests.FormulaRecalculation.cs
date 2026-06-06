@@ -140,8 +140,7 @@ public sealed partial class OpenWorkbookLoaderTests
     [Fact]
     public void WorkbookFormulaScanner_UsesSheetFormulaCountsInsteadOfScanningCells()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "WorkbookFormulaScanner.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("WorkbookFormulaScanner.cs");
 
         source.Should().Contain("sheet.HasFormulas");
         source.Should().NotContain("EnumerateCells");

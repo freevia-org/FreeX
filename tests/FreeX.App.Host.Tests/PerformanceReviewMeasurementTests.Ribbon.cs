@@ -111,10 +111,7 @@ public sealed partial class PerformanceReviewMeasurementTests
     [Fact]
     public void RibbonMeasuredCorrections_ApplySingleGroupWithoutStateSnapshots()
     {
-        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find(
-            "src",
-            "FreeX.App.Host",
-            "MainWindow.RibbonAdaptive.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.RibbonAdaptive.cs");
 
         source.Should().Contain("ApplyRibbonAdaptiveStateAt(");
         source.Should().Contain("out var changedIndex");

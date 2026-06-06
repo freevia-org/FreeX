@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -79,10 +78,7 @@ public sealed partial class SpellCheckWorkflowPlannerTests
     [Fact]
     public void SpellCheckWorkflow_RoutesAddToDictionaryThroughPersistedCustomDictionaryScan()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src",
-            "FreeX.App.Host",
-            "MainWindow.ReviewCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
         source.Should().Contain("var customDictionary = SpellCheckWorkflowPlanner.CreateCustomDictionary(_options);");
         source.Should().Contain("SpellCheckService.FindIssues(_workbook, _currentSheetId, customDictionary)");

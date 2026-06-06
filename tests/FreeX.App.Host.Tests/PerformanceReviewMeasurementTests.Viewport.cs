@@ -41,10 +41,7 @@ public sealed partial class PerformanceReviewMeasurementTests
     [Fact]
     public void ViewportScrollableMetricCounts_AvoidCapturedLinqPredicates()
     {
-        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find(
-            "src",
-            "FreeX.App.Host",
-            "MainWindow.Viewport.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
 
         source.Should().Contain("foreach (var row in viewport.RowMetrics)");
         source.Should().Contain("foreach (var column in viewport.ColMetrics)");
