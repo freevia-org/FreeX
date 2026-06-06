@@ -13,7 +13,7 @@ public sealed class RibbonDisabledCommandGuardrailTests
     [Fact]
     public void VisibleRibbonCommands_DoNotShipAsStaticDisabledOrDeferredPlaceholdersWithoutReason()
     {
-        var path = WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml");
+        var path = DialogSourceTestSupport.FindHostSourceFile("MainWindow.xaml");
         var document = XDocument.Load(path, LoadOptions.SetLineInfo);
         var ribbonTabs = document
             .Descendants(Presentation + "TabControl")
