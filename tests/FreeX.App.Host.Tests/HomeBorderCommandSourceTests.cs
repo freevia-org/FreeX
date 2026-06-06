@@ -89,7 +89,7 @@ public sealed class HomeBorderCommandSourceTests
         source.Should().Contain("BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, _borderPickerStyle, _borderPickerColor)");
         source.Should().Contain("BorderShortcutService.GetOutlineBorderDiff(range, address, _borderPickerStyle, _borderPickerColor)");
         source.Should().Contain("BorderShortcutService.GetInsideBorderDiff(range, address, _borderPickerStyle, _borderPickerColor)");
-        source.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");
+        source.Should().Contain("SelectionStyleCommandPlanner.CreatePerCellStyleCommand(");
         source.Should().Contain("BeginBorderDrawMode(BorderDrawMode.Draw)");
         source.Should().Contain("BorderDrawPlanner.CommandTitle(mode)");
         source.Should().Contain("BorderDrawPlanner.CreateCommand(");

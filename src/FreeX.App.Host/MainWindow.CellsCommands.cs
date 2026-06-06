@@ -597,9 +597,8 @@ public partial class MainWindow
             BorderLeft = null
         };
 
-        IWorkbookCommand CreateSheetCommand(SheetId sheetId)
+        IWorkbookCommand CreateRangeCommand(SheetId sheetId, GridRange sheetRange)
         {
-            var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId);
             var sheet = _workbook.GetSheet(sheetId);
             var commands = new List<IWorkbookCommand>
             {
@@ -646,7 +645,7 @@ public partial class MainWindow
                 : new CompositeWorkbookCommand("Format Cells", commands);
         }
 
-        if (!TryExecuteRepeatableGroupedSheetCommand("Format Cells", CreateSheetCommand))
+        if (!TryExecuteRepeatableCurrentSelectionRangesCommand("Format Cells", range, CreateRangeCommand))
             return;
 
         UpdateViewport();
