@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -57,7 +56,7 @@ public sealed class HomeCellStyleCommandSourceTests
         string preset)
     {
         var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
         var menuItem = xaml.ExtractMenuItemElementByClickHandler(handler);
 
         menuItem.ShouldContainLocalizedAttribute("Header", header);
@@ -69,8 +68,8 @@ public sealed class HomeCellStyleCommandSourceTests
     [Fact]
     public void CellStylePresetApplication_UsesWorkbookThemeAndRepeatableStyleDiff()
     {
-        var formattingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
-        var workbookUiStateSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorkbookUiState.cs"));
+        var formattingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
+        var workbookUiStateSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorkbookUiState.cs");
 
         formattingSource.Should().Contain("CellStyleDiffPlanner.GetCellStylePresetDiff(preset, _workbook.Theme)");
         formattingSource.Should().Contain("ApplyStyleDiff(CellStyleDiffPlanner.GetCellStylePresetDiff(preset, _workbook.Theme))");
