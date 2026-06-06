@@ -720,6 +720,51 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Be(sourceCalculationProperties.ToString(SaveOptions.DisableFormatting));
     }
 
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidWorksheetCalculationPropertiesForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetCalculationPropertiesSourceWorkbook());
+        SetWorksheetCalculationPropertiesInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetCalculationPropertiesSanitized(saved);
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorksheetCalculationPropertiesForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetCalculationPropertiesSourceWorkbook());
+        SetWorksheetCalculationPropertiesInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(77));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetCalculationPropertiesSanitized(saved);
+    }
+
 
     [Fact]
     public void CustomSheetViews_ProducesSchemaValidWorkbook()
@@ -2261,6 +2306,26 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
         sheet.FullCalculationOnLoad = true;
         return workbook;
+    }
+
+    private static void SetWorksheetCalculationPropertiesInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var sheetCalcPr = worksheetXml.Root!.Element(worksheetNs + "sheetCalcPr")!;
+        sheetCalcPr.SetAttributeValue("calcId", "999");
+        sheetCalcPr.Add(new XElement(worksheetNs + "nativeSheetCalcPrChild"));
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void AssertWorksheetCalculationPropertiesSanitized(MemoryStream stream)
+    {
+        var sheetCalcPr = ReadWorksheetChildElement(stream, "sheetCalcPr");
+        sheetCalcPr.Attribute("fullCalcOnLoad")!.Value.Should().Be("1");
+        sheetCalcPr.Attribute("calcId").Should().BeNull();
+        sheetCalcPr.Elements().Should().BeEmpty();
     }
 
     private static Workbook CreateCustomSheetViewsSourceWorkbook()
