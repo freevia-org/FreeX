@@ -8,7 +8,7 @@ public sealed class CommandParityStatusTests
     [Fact]
     public void NamedCloseoutRows_AreTrackedInCommandSurfaceParityDocument()
     {
-        var doc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "parity/command-surface.md"));
+        var doc = WorkspaceFileLocator.ReadAllText("docs", "parity/command-surface.md");
 
         (string Command, string Status)[] expectedRows =
         [
@@ -45,7 +45,7 @@ public sealed class CommandParityStatusTests
     [Fact]
     public void ScenarioManagerRepeatability_DistinguishesShowFromDialogManagementActions()
     {
-        var doc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "parity/command-surface.md"));
+        var doc = WorkspaceFileLocator.ReadAllText("docs", "parity/command-surface.md");
 
         doc.Should().Contain("Scenario Manager Show applies the selected scenario through the repeatable command path");
         doc.Should().Contain("Scenario Manager add/edit/delete/report/list actions");
@@ -56,7 +56,7 @@ public sealed class CommandParityStatusTests
     [Fact]
     public void HelpTabRows_TrackCurrentRibbonSurface()
     {
-        var doc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "parity/command-surface.md"));
+        var doc = WorkspaceFileLocator.ReadAllText("docs", "parity/command-surface.md");
         var tableRows = ParseMarkdownTableRows(doc);
 
         (string Command, string Status)[] expectedRows =
