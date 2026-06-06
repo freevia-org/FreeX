@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -69,7 +68,7 @@ public sealed class DrawCommandSourceTests
     [Fact]
     public void DrawHandlers_RouteThroughExpectedDrawingCommandsDialogsAndTargetResolution()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Drawing.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
 
         source.Should().Contain("private void BringForwardBtn_Click(object sender, RoutedEventArgs e) => ReorderSelectedDrawingObject(forward: true);");
         source.Should().Contain("private void SendBackwardBtn_Click(object sender, RoutedEventArgs e) => ReorderSelectedDrawingObject(forward: false);");
@@ -101,8 +100,8 @@ public sealed class DrawCommandSourceTests
     [Fact]
     public void InteractivePictureCropEvent_RoutesThroughUndoableCropCommand()
     {
-        var windowSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml.cs"));
-        var drawingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Drawing.cs"));
+        var windowSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var drawingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
 
         windowSource.Should().Contain("SheetGrid.PictureCropped += OnPictureCropped;");
         drawingSource.Should().Contain("private void OnPictureCropped(Guid id, double left, double top, double right, double bottom)");
