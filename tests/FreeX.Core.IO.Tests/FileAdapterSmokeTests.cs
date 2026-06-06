@@ -17061,7 +17061,7 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetCalculationProperties()
+    public void XlsxAdapter_LoadedWorkbookSave_DropsUnsupportedWorksheetCalculationProperties()
     {
         var workbook = new Workbook("WorksheetCalculationPropertiesRetentionTest");
         var sheet = workbook.AddSheet("Data");
@@ -17087,7 +17087,7 @@ public partial class FileAdapterSmokeTests
         var sheetCalcPr = worksheetXml.Root!.Element(worksheetNs + "sheetCalcPr");
         sheetCalcPr.Should().NotBeNull();
         sheetCalcPr!.Attribute("fullCalcOnLoad")!.Value.Should().Be("1");
-        sheetCalcPr.Attribute("calcId")!.Value.Should().Be("999");
+        sheetCalcPr.Attribute("calcId").Should().BeNull();
     }
 
     [Fact]
@@ -17181,9 +17181,7 @@ public partial class FileAdapterSmokeTests
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var sheetCalcPr = worksheetXml.Root!.Element(worksheetNs + "sheetCalcPr");
-        sheetCalcPr.Should().NotBeNull();
-        sheetCalcPr!.Attribute("fullCalcOnLoad").Should().BeNull();
-        sheetCalcPr.Attribute("calcId")!.Value.Should().Be("999");
+        sheetCalcPr.Should().BeNull();
     }
 
     [Fact]
