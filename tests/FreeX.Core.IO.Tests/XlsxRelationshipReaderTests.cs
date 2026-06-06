@@ -150,8 +150,7 @@ public sealed class XlsxRelationshipReaderTests
     [Fact]
     public void ReadTargets_UsesSingleDictionarySlotProbeWhenAddingRelationshipIds()
     {
-        var source = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
-            "src", "FreeX.Core.IO", "XlsxRelationshipReader.cs"));
+        var source = TestWorkspaceFiles.ReadCoreIoSource("XlsxRelationshipReader.cs");
         var readTargets = source[
             source.IndexOf("public static Dictionary<string, string> ReadTargets", StringComparison.Ordinal)..
             source.IndexOf("private static bool IsExternalRelationship", StringComparison.Ordinal)];
