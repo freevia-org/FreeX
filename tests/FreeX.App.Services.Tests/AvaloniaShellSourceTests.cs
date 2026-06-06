@@ -129,4 +129,38 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_session.SetViewportOrigin(topRow, leftCol)");
         source.Should().Contain("UpdateViewportScrollBars();");
     }
+
+    [Fact]
+    public void MainWindow_WiresCellEditingThroughFormulaBoxAndKeyboardEntry()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("private readonly TextBox _formulaBox = new();");
+        source.Should().Contain("private string? _formulaBoxEditOriginalText;");
+        source.Should().Contain("_formulaBox.GotFocus += FormulaBox_GotFocus;");
+        source.Should().Contain("_formulaBox.KeyDown += FormulaBox_KeyDown;");
+        source.Should().Contain("TextInput += MainWindow_TextInput;");
+        source.Should().Contain("border.DoubleTapped += (_, args) =>");
+        source.Should().Contain("BeginFormulaEdit(address);");
+        source.Should().Contain("private void FormulaBox_GotFocus(object? sender, FocusChangedEventArgs e)");
+        source.Should().Contain("_session.BeginFormulaEdit(_session.ActiveCell);");
+        source.Should().Contain("_formulaBoxEditOriginalText = _formulaBox.Text ?? \"\";");
+        source.Should().Contain("if (e.Key == Key.F2)");
+        source.Should().Contain("BeginFormulaEdit(_session.ActiveCell);");
+        source.Should().Contain("private void MainWindow_TextInput(object? sender, TextInputEventArgs e)");
+        source.Should().Contain("string.IsNullOrEmpty(e.Text)");
+        source.Should().Contain("char.IsControl(character)");
+        source.Should().Contain("BeginFormulaEdit(_session.ActiveCell, e.Text);");
+        source.Should().Contain("else if (e.Key == Key.Tab)");
+        source.Should().Contain("e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1");
+        source.Should().Contain("_session.MoveActiveCell(0, colDelta);");
+        source.Should().Contain("var result = _session.CommitCellText(_formulaBox.Text ?? \"\");");
+        source.Should().Contain("RefreshShell($\"Edited {FormatCellReference(address)}\");");
+        source.Should().Contain("private bool TryCommitPendingFormulaEdit()");
+        source.Should().Contain("private bool HasPendingFormulaEditText() =>");
+        source.Should().Contain("_session.CancelFormulaEdit();");
+        source.Should().Contain("StringComparison.Ordinal");
+        source.Should().Contain("if (!TryCommitPendingFormulaEdit())");
+        source.Should().Contain("Finish the current cell edit before opening another workbook.");
+    }
 }

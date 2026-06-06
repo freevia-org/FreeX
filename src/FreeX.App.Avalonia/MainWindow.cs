@@ -57,6 +57,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
     private WorkbookSession _session;
+    private string? _formulaBoxEditOriginalText;
     private bool _isOpening;
     private bool _isSaving;
     private bool _isUpdatingWorksheetScrollBars;
@@ -76,6 +77,7 @@ public sealed class MainWindow : Window
         ConfigureNativeMenu();
         ConfigureWorkbookDropTarget();
         KeyDown += MainWindow_KeyDown;
+        TextInput += MainWindow_TextInput;
         RefreshShell(_session.StartupStatus);
     }
 
@@ -256,7 +258,7 @@ public sealed class MainWindow : Window
         _formulaBox.FontSize = 12;
         _formulaBox.Padding = new Thickness(8, 4);
         _formulaBox.VerticalAlignment = AvaloniaVerticalAlignment.Center;
-        _formulaBox.GotFocus += (_, _) => _session.BeginFormulaEdit(_session.ActiveCell);
+        _formulaBox.GotFocus += FormulaBox_GotFocus;
         _formulaBox.KeyDown += FormulaBox_KeyDown;
 
         return new Border
@@ -703,26 +705,44 @@ public sealed class MainWindow : Window
 
     private void SelectCell(CellAddress address)
     {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
         _session.SelectCell(address);
         RefreshShell("Ready");
     }
 
     private void SelectSheet(SheetId sheetId)
     {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
         if (!_session.SelectSheet(sheetId))
             return;
 
         RefreshShell($"Selected {_session.ActiveSheet.Name}");
     }
 
-    private void BeginFormulaEdit(CellAddress address)
+    private void BeginFormulaEdit(CellAddress address, string? initialText = null)
     {
         _session.BeginFormulaEdit(address);
         RefreshShell("Ready");
+        var originalText = _formulaBox.Text ?? "";
+        if (initialText is not null)
+            _formulaBox.Text = initialText;
+
         _formulaBox.Focus();
-        _formulaBox.CaretIndex = _formulaBox.Text?.Length ?? 0;
-        _formulaBox.SelectionStart = _formulaBox.CaretIndex;
-        _formulaBox.SelectionEnd = _formulaBox.CaretIndex;
+        _formulaBoxEditOriginalText = originalText;
+        MoveFormulaBoxCaretToEnd();
+    }
+
+    private void FormulaBox_GotFocus(object? sender, FocusChangedEventArgs e)
+    {
+        if (_session.FormulaEditAddress is not null)
+            return;
+
+        _session.BeginFormulaEdit(_session.ActiveCell);
+        _formulaBoxEditOriginalText = _formulaBox.Text ?? "";
     }
 
     private void FormulaBox_KeyDown(object? sender, KeyEventArgs e)
@@ -732,15 +752,27 @@ public sealed class MainWindow : Window
             CommitFormulaBox();
             e.Handled = true;
         }
+        else if (e.Key == Key.Tab)
+        {
+            var colDelta = e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1;
+            if (CommitFormulaBox())
+            {
+                _session.MoveActiveCell(0, colDelta);
+                RefreshShell("Ready");
+            }
+
+            e.Handled = true;
+        }
         else if (e.Key == Key.Escape)
         {
             _session.CancelFormulaEdit();
+            _formulaBoxEditOriginalText = null;
             RefreshShell("Ready");
             e.Handled = true;
         }
     }
 
-    private void CommitFormulaBox()
+    private bool CommitFormulaBox()
     {
         var address = _session.FormulaEditAddress ?? _session.ActiveCell;
         var result = _session.CommitCellText(_formulaBox.Text ?? "");
@@ -749,10 +781,40 @@ public sealed class MainWindow : Window
         {
             _statusText.Text = result.ErrorMessage ?? "Edit failed";
             _statusText.Foreground = Brush(143, 74, 18);
-            return;
+            return false;
         }
 
+        _formulaBoxEditOriginalText = null;
         RefreshShell($"Edited {FormatCellReference(address)}");
+        return true;
+    }
+
+    private bool TryCommitPendingFormulaEdit()
+    {
+        if (_session.FormulaEditAddress is null)
+            return true;
+
+        if (!HasPendingFormulaEditText())
+        {
+            _session.CancelFormulaEdit();
+            _formulaBoxEditOriginalText = null;
+            return true;
+        }
+
+        return CommitFormulaBox();
+    }
+
+    private bool HasPendingFormulaEditText() =>
+        !string.Equals(
+            _formulaBox.Text ?? "",
+            _formulaBoxEditOriginalText ?? "",
+            StringComparison.Ordinal);
+
+    private void MoveFormulaBoxCaretToEnd()
+    {
+        _formulaBox.CaretIndex = _formulaBox.Text?.Length ?? 0;
+        _formulaBox.SelectionStart = _formulaBox.CaretIndex;
+        _formulaBox.SelectionEnd = _formulaBox.CaretIndex;
     }
 
     private async void SaveButton_Click(object? sender, RoutedEventArgs e)
@@ -844,6 +906,13 @@ public sealed class MainWindow : Window
 
     private void NavigateActiveCell(KeyEventArgs e)
     {
+        if (e.Key == Key.F2)
+        {
+            e.Handled = true;
+            BeginFormulaEdit(_session.ActiveCell);
+            return;
+        }
+
         var pageRows = Math.Max(1, _session.Viewport.RowMetrics.Count - 1);
         var pageCols = Math.Max(1, _session.Viewport.ColMetrics.Count - 1);
         var handled = true;
@@ -883,6 +952,21 @@ public sealed class MainWindow : Window
 
         e.Handled = true;
         RefreshShell("Ready");
+    }
+
+    private void MainWindow_TextInput(object? sender, TextInputEventArgs e)
+    {
+        if (_formulaBox.IsFocused || string.IsNullOrEmpty(e.Text))
+            return;
+
+        foreach (var character in e.Text)
+        {
+            if (char.IsControl(character))
+                return;
+        }
+
+        BeginFormulaEdit(_session.ActiveCell, e.Text);
+        e.Handled = true;
     }
 
     private void SheetScrollViewer_PointerWheelChanged(object? sender, PointerWheelEventArgs e)
@@ -941,6 +1025,9 @@ public sealed class MainWindow : Window
         if (_isOpening || _isSaving)
             return;
 
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
         if (_session.IsDirty)
         {
             ShowOpenIssue("Save changes before opening another workbook.");
@@ -989,6 +1076,9 @@ public sealed class MainWindow : Window
         if (_isOpening || _isSaving)
             return;
 
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
         if (_session.IsDirty)
         {
             ShowOpenIssue("Save changes before opening another workbook.");
@@ -1023,6 +1113,12 @@ public sealed class MainWindow : Window
         if (_isOpening || _isSaving)
         {
             message = "Open is busy.";
+            return false;
+        }
+
+        if (!TryCommitPendingFormulaEdit())
+        {
+            message = "Finish the current cell edit before opening another workbook.";
             return false;
         }
 
@@ -1105,6 +1201,9 @@ public sealed class MainWindow : Window
         if (_isSaving)
             return;
 
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
         if (_session.CanSaveCurrentSource(out var target))
         {
             await SaveWorkbookToTargetAsync(target!);
@@ -1117,6 +1216,9 @@ public sealed class MainWindow : Window
     private async Task SaveWorkbookAsAsync()
     {
         if (_isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
             return;
 
         if (!StorageProvider.CanSave)
