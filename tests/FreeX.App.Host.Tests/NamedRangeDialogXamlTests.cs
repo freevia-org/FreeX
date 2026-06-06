@@ -517,11 +517,7 @@ public sealed class NamedRangeDialogXamlTests
             "NamedRangeDialogPlanner.cs");
 
     private static void InvokePrivate(NamedRangeDialog dialog, string methodName)
-    {
-        var method = typeof(NamedRangeDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
-    }
+        => DialogSourceTestSupport.InvokePrivateHandler(dialog, methodName);
 
     private static ICommandBus CreateCommandBus(Workbook workbook) =>
         new CommandBus(_ => new TestCommandContext(workbook));

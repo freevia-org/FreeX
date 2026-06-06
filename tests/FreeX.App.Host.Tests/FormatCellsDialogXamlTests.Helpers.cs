@@ -49,28 +49,11 @@ public sealed partial class FormatCellsDialogXamlTests
     }
 
     private static void ClickOkForTest(FormatCellsDialog dialog)
-    {
-        var method = typeof(FormatCellsDialog).GetMethod("OkButton_Click", BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        try
-        {
-            method!.Invoke(dialog, [dialog, new System.Windows.RoutedEventArgs()]);
-        }
-        catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException invalidOperation
-            && invalidOperation.Message.Contains("DialogResult"))
-        {
-            // The handler creates ResultDiff before setting DialogResult. Direct invocation on a modeless
-            // test window reaches that WPF-only modal postcondition after the behavior under test runs.
-        }
-    }
+        => DialogSourceTestSupport.InvokePrivateHandlerAllowingNonModalDialogResult(dialog, "OkButton_Click");
 
     private static void InvokeDialogHandler(FormatCellsDialog dialog, string methodName)
         => InvokeDialogHandler(dialog, methodName, dialog);
 
     private static void InvokeDialogHandler(FormatCellsDialog dialog, string methodName, object sender)
-    {
-        var method = typeof(FormatCellsDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        method!.Invoke(dialog, [sender, new System.Windows.RoutedEventArgs()]);
-    }
+        => DialogSourceTestSupport.InvokePrivateHandler(dialog, methodName, sender);
 }

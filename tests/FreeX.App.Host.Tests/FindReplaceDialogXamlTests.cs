@@ -1,5 +1,3 @@
-using System.Reflection;
-using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Xml.Linq;
@@ -446,11 +444,7 @@ public sealed class FindReplaceDialogXamlTests
         XamlLocalizationTestHelper.LoadLocalizedXaml("FindReplaceDialog.xaml");
 
     private static void InvokePrivate(FindReplaceDialog dialog, string methodName)
-    {
-        var method = typeof(FindReplaceDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
-    }
+        => DialogSourceTestSupport.InvokePrivateHandler(dialog, methodName);
 
     private static string ReadFindReplaceDialogSource() =>
         DialogSourceTestSupport.ReadHostSources("FindReplaceDialog.xaml.cs");

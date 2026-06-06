@@ -1,5 +1,3 @@
-using System.Reflection;
-using System.Windows;
 using System.Windows.Controls;
 using FreeX.App.Host;
 using FluentAssertions;
@@ -13,25 +11,10 @@ public sealed partial class DataValidationDialogTests
         => DialogSourceTestSupport.GetPrivateField<T>(dialog, name);
 
     private static void InvokePrivate(DataValidationDialog dialog, string methodName)
-    {
-        var method = typeof(DataValidationDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
-    }
+        => DialogSourceTestSupport.InvokePrivateHandler(dialog, methodName);
 
     private static void InvokePrivateAllowingNonModalDialogResult(DataValidationDialog dialog, string methodName)
-    {
-        var method = typeof(DataValidationDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        try
-        {
-            method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
-        }
-        catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException invalidOperation &&
-                                                   invalidOperation.Message.Contains("DialogResult", StringComparison.Ordinal))
-        {
-        }
-    }
+        => DialogSourceTestSupport.InvokePrivateHandlerAllowingNonModalDialogResult(dialog, methodName);
 
     private static void SelectComboItemByTag(ComboBox comboBox, string tag)
     {

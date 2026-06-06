@@ -395,16 +395,5 @@ public sealed class HeaderFooterDialogXamlTests
             "HeaderFooterPictureFormatDialog.cs");
 
     private static void InvokePrivateAllowingNonModalDialogResult(HeaderFooterDialog dialog, string methodName)
-    {
-        var method = typeof(HeaderFooterDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        try
-        {
-            method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
-        }
-        catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException invalidOperation &&
-                                                   invalidOperation.Message.Contains("DialogResult", StringComparison.Ordinal))
-        {
-        }
-    }
+        => DialogSourceTestSupport.InvokePrivateHandlerAllowingNonModalDialogResult(dialog, methodName);
 }

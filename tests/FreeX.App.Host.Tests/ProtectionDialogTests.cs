@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -12,11 +11,7 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class ProtectionDialogTests
 {
     private static void InvokePrivate(AllowEditRangeDialog dialog, string methodName)
-    {
-        var method = typeof(AllowEditRangeDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
-    }
+        => DialogSourceTestSupport.InvokePrivateHandler(dialog, methodName);
 
     private static string ReadProtectionDialogSources() =>
         DialogSourceTestSupport.ReadHostSources(

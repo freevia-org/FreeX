@@ -510,17 +510,6 @@ public sealed class PageSetupDialogXamlTests
     }
 
     private static void InvokePrivateAllowingNonModalDialogResult(PageSetupDialog dialog, string methodName)
-    {
-        var method = typeof(PageSetupDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        try
-        {
-            method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
-        }
-        catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException invalidOperation &&
-                                                   invalidOperation.Message.Contains("DialogResult", StringComparison.Ordinal))
-        {
-        }
-    }
+        => DialogSourceTestSupport.InvokePrivateHandlerAllowingNonModalDialogResult(dialog, methodName);
 
 }

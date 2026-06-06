@@ -61,20 +61,7 @@ public sealed partial class ConditionalFormatDialogTests
             : null;
 
     private static void ClickOkForTest(ConditionalFormatDialog dialog)
-    {
-        var method = typeof(ConditionalFormatDialog).GetMethod("Ok_Click", BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        try
-        {
-            method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
-        }
-        catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException invalidOperation
-            && invalidOperation.Message.Contains("DialogResult"))
-        {
-            // The handler creates ResultRule before setting DialogResult. Direct modeless invocation in
-            // tests reaches WPF's modal-only postcondition after the behavior under test runs.
-        }
-    }
+        => DialogSourceTestSupport.InvokePrivateHandlerAllowingNonModalDialogResult(dialog, "Ok_Click");
 
     private static void RefreshRuleDescriptionForTest(ConditionalFormatDialog dialog, string ruleType)
     {

@@ -1,5 +1,6 @@
 using System.IO;
 using System.Reflection;
+using System.Windows;
 using System.Xml.Linq;
 using FluentAssertions;
 
@@ -56,6 +57,28 @@ internal static class DialogSourceTestSupport
         var field = instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
         field.Should().NotBeNull();
         return field!.GetValue(instance).Should().BeOfType<T>().Subject;
+    }
+
+    public static void InvokePrivateHandler(object instance, string methodName) =>
+        InvokePrivateHandler(instance, methodName, instance);
+
+    public static void InvokePrivateHandler(object instance, string methodName, object sender)
+    {
+        var method = instance.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        method.Should().NotBeNull();
+        method!.Invoke(instance, [sender, new RoutedEventArgs()]);
+    }
+
+    public static void InvokePrivateHandlerAllowingNonModalDialogResult(object instance, string methodName)
+    {
+        try
+        {
+            InvokePrivateHandler(instance, methodName);
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException invalidOperation &&
+                                                   invalidOperation.Message.Contains("DialogResult", StringComparison.Ordinal))
+        {
+        }
     }
 
     private static string ReadHostSource(string fileName) =>
