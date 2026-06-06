@@ -96,7 +96,7 @@ public sealed partial class XlsxBroaderRetentionChecksTests
         worksheetText.Should().Contain("nativeUnsupportedRange=\"kept\"");
 
         worksheetText.Should().Contain("ignoredErrors");
-        worksheetText.Should().Contain("nativeIgnoredErrorsAttr=\"kept\"");
+        worksheetText.Should().NotContain("nativeIgnoredErrorsAttr=\"kept\"");
         worksheetText.Should().Contain("twoDigitTextYear=\"1\"");
         worksheetText.Should().Contain("cellWatches");
         worksheetText.Should().NotContain("nativeCellWatchesAttr=\"kept\"");
