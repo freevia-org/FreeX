@@ -1,4 +1,3 @@
-﻿using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -17,7 +16,7 @@ public sealed partial class OptionsDialogSourceTests
 
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("OptionsDialog.xaml");
 
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
 
 
