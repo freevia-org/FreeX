@@ -11,7 +11,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void StatusBarZoomCommandButtons_HaveAltKeyTips()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -28,7 +28,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void StatusBarZoomSlider_HasAccessibleRangeMetadata()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -52,7 +52,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void StatusBarAggregates_AreConstrainedAwayFromZoomControls()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -100,7 +100,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [InlineData("StatusZoomInButton")]
     public void StatusBarZoomGlyphButtons_AreReadableAtExcelScale(string buttonName)
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 

@@ -85,6 +85,33 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         formula.Attribute(expectedMetadataAttribute)!.Value.Should().Be(expectedMetadataValue);
     }
 
+    [Fact]
+    public void PatchedFormulaCachedValueTypes_ProducesSchemaValidWorkbook()
+    {
+        using var source = CreateFormulaCachedValueTypesWorkbook();
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should().BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.GetCell(1, 1)!.Value = new NumberValue(3.5);
+        sheet.GetCell(1, 2)!.Value = new TextValue("fresh text");
+        sheet.GetCell(1, 3)!.Value = new BoolValue(false);
+        sheet.GetCell(1, 4)!.Value = ErrorValue.Value;
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertFormulaCachedCell(saved, "A1", null, "3.5", "1+1");
+        AssertFormulaCachedCell(saved, "B1", "str", "fresh text", "CONCAT(\"o\",\"ld\")");
+        AssertFormulaCachedCell(saved, "C1", "b", "0", "1=1");
+        AssertFormulaCachedCell(saved, "D1", "e", "#VALUE!", "1/0");
+    }
+
     private static Workbook CreateDynamicSpillWorkbook(string name)
     {
         var workbook = new Workbook(name);
@@ -201,6 +228,84 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         return package;
     }
 
+    private static MemoryStream CreateFormulaCachedValueTypesWorkbook()
+    {
+        var package = XlsxPackageTestFixtures.CreatePackage(
+            (
+                "[Content_Types].xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+                  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+                  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+                </Types>
+                """),
+            (
+                "_rels/.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+                </Relationships>
+                """),
+            (
+                "xl/workbook.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheets>
+                    <sheet name="Data" sheetId="1" r:id="rId1"/>
+                  </sheets>
+                </workbook>
+                """),
+            (
+                "xl/_rels/workbook.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+                  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+                </Relationships>
+                """),
+            (
+                "xl/styles.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <fonts count="1"><font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/><scheme val="minor"/></font></fonts>
+                  <fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>
+                  <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+                  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+                  <cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>
+                  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+                  <dxfs count="0"/>
+                  <tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/>
+                </styleSheet>
+                """),
+            (
+                "xl/worksheets/sheet1.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <dimension ref="A1:D1"/>
+                  <sheetData>
+                    <row r="1">
+                      <c r="A1"><f>1+1</f><v>2</v></c>
+                      <c r="B1" t="str"><f>CONCAT("o","ld")</f><v>old</v></c>
+                      <c r="C1" t="b"><f>1=1</f><v>1</v></c>
+                      <c r="D1" t="e"><f>1/0</f><v>#DIV/0!</v></c>
+                    </row>
+                  </sheetData>
+                </worksheet>
+                """));
+
+        package.Position = 0;
+        return package;
+    }
+
     private static void SetDynamicSpill(Sheet sheet, CellAddress anchor, params double[] values)
     {
         values.Should().NotBeEmpty();
@@ -239,5 +344,35 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         formula.Should().NotBeNull();
         return formula!;
+    }
+
+    private static void AssertFormulaCachedCell(
+        MemoryStream saved,
+        string reference,
+        string? expectedType,
+        string expectedCachedValue,
+        string expectedFormulaText)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var cell = ReadCellElement(saved, reference);
+
+        if (expectedType is null)
+            cell.Attribute("t").Should().BeNull();
+        else
+            cell.Attribute("t")!.Value.Should().Be(expectedType);
+
+        cell.Element(worksheetNs + "f")!.Value.Should().Be(expectedFormulaText);
+        cell.Element(worksheetNs + "v")!.Value.Should().Be(expectedCachedValue);
+        cell.Element(worksheetNs + "is").Should().BeNull();
+    }
+
+    private static XElement ReadCellElement(MemoryStream saved, string reference)
+    {
+        saved.Position = 0;
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        return new XElement(LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!)
+            .Descendants(worksheetNs + "c")
+            .Single(element => element.Attribute("r")?.Value == reference));
     }
 }

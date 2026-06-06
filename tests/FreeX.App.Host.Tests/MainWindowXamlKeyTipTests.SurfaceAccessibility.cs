@@ -10,7 +10,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void NonRibbonTooltipClickButtons_HaveAccessibleNames()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
@@ -37,7 +37,7 @@ public sealed partial class MainWindowXamlKeyTipTests
         string expectedNameKey,
         string expectedHelpTextKey)
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -57,7 +57,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void NameBox_CommitsTypedReferenceWithEnter()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Editing.cs");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
@@ -90,7 +90,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void FormulaBarTextFields_UseReadableExcelScaleSizing()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -120,7 +120,7 @@ public sealed partial class MainWindowXamlKeyTipTests
         string expectedNameKey,
         string expectedHelpTextKey)
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
