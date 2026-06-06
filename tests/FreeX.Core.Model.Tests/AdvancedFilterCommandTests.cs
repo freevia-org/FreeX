@@ -434,7 +434,7 @@ public sealed class AdvancedFilterCommandTests
     [Fact]
     public void CommandGuards_CanEditCell_AvoidsCapturedAllowEditRangePredicate()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Commands", "CommandGuards.cs"));
+        var source = ModelSourceTestSupport.ReadCommandsSource("CommandGuards.cs");
 
         source.Should().NotContain("AllowEditRanges.Any(");
         source.Should().Contain("foreach (var range in sheet.AllowEditRanges)");

@@ -306,7 +306,7 @@ public class AutofillCommandTests
     [Fact]
     public void Apply_ScansFillTargetsWithoutMaterializingAddressList()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Commands", "AutofillCommand.cs"));
+        var source = ModelSourceTestSupport.ReadCommandsSource("AutofillCommand.cs");
         var apply = source[
             source.IndexOf("public CommandOutcome Apply", StringComparison.Ordinal)..
             source.IndexOf("public void Revert", StringComparison.Ordinal)];
