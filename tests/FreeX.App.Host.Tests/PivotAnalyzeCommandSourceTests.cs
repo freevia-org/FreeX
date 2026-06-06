@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -63,7 +62,7 @@ public sealed class PivotAnalyzeCommandSourceTests
         string descriptionKey)
     {
         var button = ReadPivotAnalyzeTabXaml().ExtractButtonElementByInvariantCommandName(title);
-        var resources = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "Resources", "Strings.resx"));
+        var resources = DialogSourceTestSupport.ReadHostSources("Resources\\Strings.resx");
 
         button.Should().Contain($"local:RibbonTooltip.Description=\"{{local:Loc Key={descriptionKey}}}\"");
         descriptionKey.Should().NotContain("Deferred");
@@ -73,9 +72,9 @@ public sealed class PivotAnalyzeCommandSourceTests
     [Fact]
     public void PivotAnalyzeHandlers_RouteThroughExpectedPivotCommandsDialogsAndPanes()
     {
-        var pivotSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PivotCommands.cs"));
-        var advancedSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PivotAdvancedCommands.cs"));
-        var chartSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PivotChartCommands.cs"));
+        var pivotSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotCommands.cs");
+        var advancedSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotAdvancedCommands.cs");
+        var chartSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotChartCommands.cs");
 
         pivotSource.Should().Contain("new RefreshPivotTableCommand(_currentSheetId, pivotTable.Name)");
         pivotSource.Should().Contain("new DrillDownPivotTableCommand(_currentSheetId, target.PivotTableName, target.PivotCell)");
