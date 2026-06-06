@@ -15,6 +15,7 @@ using FreeX.Core.Model;
 using AvaloniaGrid = Avalonia.Controls.Grid;
 using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
+using CellVAlign = FreeX.Core.Model.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -71,6 +72,9 @@ public sealed class MainWindow : Window
     private readonly ToggleButton _alignLeftButton = new();
     private readonly ToggleButton _alignCenterButton = new();
     private readonly ToggleButton _alignRightButton = new();
+    private readonly ToggleButton _alignTopButton = new();
+    private readonly ToggleButton _alignMiddleButton = new();
+    private readonly ToggleButton _alignBottomButton = new();
     private readonly NativeMenuItem _openMenuItem = new();
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
@@ -88,6 +92,9 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _alignLeftMenuItem = new();
     private readonly NativeMenuItem _alignCenterMenuItem = new();
     private readonly NativeMenuItem _alignRightMenuItem = new();
+    private readonly NativeMenuItem _alignTopMenuItem = new();
+    private readonly NativeMenuItem _alignMiddleMenuItem = new();
+    private readonly NativeMenuItem _alignBottomMenuItem = new();
     private readonly NativeMenuItem _quitMenuItem = new();
     private NativeMenu? _nativeMenu;
     private WorkbookSession _session;
@@ -259,6 +266,15 @@ public sealed class MainWindow : Window
         _strikethroughMenuItem.Gesture = new KeyGesture(Key.D5, KeyModifiers.Control);
         _strikethroughMenuItem.Click += (_, _) => ToggleSelectedRangeStrikethrough();
 
+        _alignTopMenuItem.Header = "Align Top";
+        _alignTopMenuItem.Click += (_, _) => ApplySelectedRangeVerticalAlignment(CellVAlign.Top);
+
+        _alignMiddleMenuItem.Header = "Align Middle";
+        _alignMiddleMenuItem.Click += (_, _) => ApplySelectedRangeVerticalAlignment(CellVAlign.Center);
+
+        _alignBottomMenuItem.Header = "Align Bottom";
+        _alignBottomMenuItem.Click += (_, _) => ApplySelectedRangeVerticalAlignment(CellVAlign.Bottom);
+
         _alignLeftMenuItem.Header = "Align Left";
         _alignLeftMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Left);
 
@@ -296,6 +312,9 @@ public sealed class MainWindow : Window
         formatMenu.Items.Add(_doubleUnderlineMenuItem);
         formatMenu.Items.Add(_strikethroughMenuItem);
         formatMenu.Items.Add(new NativeMenuItemSeparator());
+        formatMenu.Items.Add(_alignTopMenuItem);
+        formatMenu.Items.Add(_alignMiddleMenuItem);
+        formatMenu.Items.Add(_alignBottomMenuItem);
         formatMenu.Items.Add(_alignLeftMenuItem);
         formatMenu.Items.Add(_alignCenterMenuItem);
         formatMenu.Items.Add(_alignRightMenuItem);
@@ -457,6 +476,21 @@ public sealed class MainWindow : Window
         _strikethroughButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _strikethroughButton.Click += StrikethroughButton_Click;
 
+        _alignTopButton.Content = "Top";
+        _alignTopButton.Padding = new Thickness(10, 4);
+        _alignTopButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _alignTopButton.Click += AlignTopButton_Click;
+
+        _alignMiddleButton.Content = "Mid";
+        _alignMiddleButton.Padding = new Thickness(10, 4);
+        _alignMiddleButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _alignMiddleButton.Click += AlignMiddleButton_Click;
+
+        _alignBottomButton.Content = "Bot";
+        _alignBottomButton.Padding = new Thickness(10, 4);
+        _alignBottomButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _alignBottomButton.Click += AlignBottomButton_Click;
+
         _alignLeftButton.Content = "L";
         _alignLeftButton.Padding = new Thickness(10, 4);
         _alignLeftButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -514,6 +548,9 @@ public sealed class MainWindow : Window
                     _underlineButton,
                     _doubleUnderlineButton,
                     _strikethroughButton,
+                    _alignTopButton,
+                    _alignMiddleButton,
+                    _alignBottomButton,
                     _alignLeftButton,
                     _alignCenterButton,
                     _alignRightButton,
@@ -550,6 +587,9 @@ public sealed class MainWindow : Window
         _alignLeftButton.IsChecked = _session.SelectedRangeStartHorizontalAlignment == CellHAlign.Left;
         _alignCenterButton.IsChecked = _session.SelectedRangeStartHorizontalAlignment == CellHAlign.Center;
         _alignRightButton.IsChecked = _session.SelectedRangeStartHorizontalAlignment == CellHAlign.Right;
+        _alignTopButton.IsChecked = _session.SelectedRangeStartVerticalAlignment == CellVAlign.Top;
+        _alignMiddleButton.IsChecked = _session.SelectedRangeStartVerticalAlignment == CellVAlign.Center;
+        _alignBottomButton.IsChecked = _session.SelectedRangeStartVerticalAlignment == CellVAlign.Bottom;
         if (preserveFormulaEdit)
         {
             _formulaBox.CaretIndex = Math.Min(formulaCaretIndex, _formulaBox.Text?.Length ?? 0);
@@ -614,6 +654,9 @@ public sealed class MainWindow : Window
         _alignLeftButton.IsEnabled = isIdle;
         _alignCenterButton.IsEnabled = isIdle;
         _alignRightButton.IsEnabled = isIdle;
+        _alignTopButton.IsEnabled = isIdle;
+        _alignMiddleButton.IsEnabled = isIdle;
+        _alignBottomButton.IsEnabled = isIdle;
 
         _openMenuItem.IsEnabled = _openButton.IsEnabled;
         _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
@@ -632,6 +675,9 @@ public sealed class MainWindow : Window
         _alignLeftMenuItem.IsEnabled = _alignLeftButton.IsEnabled;
         _alignCenterMenuItem.IsEnabled = _alignCenterButton.IsEnabled;
         _alignRightMenuItem.IsEnabled = _alignRightButton.IsEnabled;
+        _alignTopMenuItem.IsEnabled = _alignTopButton.IsEnabled;
+        _alignMiddleMenuItem.IsEnabled = _alignMiddleButton.IsEnabled;
+        _alignBottomMenuItem.IsEnabled = _alignBottomButton.IsEnabled;
     }
 
     private Control BuildSheetTabs()
@@ -895,6 +941,7 @@ public sealed class MainWindow : Window
             selected ? SelectionHeaderBackground : HeaderBackground,
             selected ? SelectionHeaderForeground : HeaderForeground,
             TextAlignment.Center,
+            AvaloniaVerticalAlignment.Center,
             FontWeight.SemiBold,
             FontStyle.Normal,
             textDecorations: null,
@@ -912,6 +959,7 @@ public sealed class MainWindow : Window
                 Brushes.White,
                 Brushes.Black,
                 TextAlignment.Left,
+                AvaloniaVerticalAlignment.Center,
                 FontWeight.Normal,
                 FontStyle.Normal,
                 textDecorations: null,
@@ -928,6 +976,7 @@ public sealed class MainWindow : Window
         var alignment = MapCellTextAlignment(
             style?.HorizontalAlignment ?? CellHAlign.General,
             cell.RawValue is NumberValue or DateTimeValue);
+        var verticalAlignment = MapCellVerticalAlignment(style?.VerticalAlignment ?? CellVAlign.Bottom);
         var weight = style?.Bold == true ? FontWeight.SemiBold : FontWeight.Normal;
         var fontStyle = style?.Italic == true ? FontStyle.Italic : FontStyle.Normal;
         var textDecorations = BuildTextDecorations(style);
@@ -937,6 +986,7 @@ public sealed class MainWindow : Window
             background,
             foreground,
             alignment,
+            verticalAlignment,
             weight,
             fontStyle,
             textDecorations,
@@ -949,13 +999,14 @@ public sealed class MainWindow : Window
         IBrush background,
         IBrush foreground,
         TextAlignment textAlignment,
+        AvaloniaVerticalAlignment verticalAlignment,
         FontWeight fontWeight,
         FontStyle fontStyle,
         TextDecorationCollection? textDecorations,
         bool selected,
         CellAddress address)
     {
-        var border = CreateCellBorder(text, background, foreground, textAlignment, fontWeight, fontStyle, textDecorations, selected);
+        var border = CreateCellBorder(text, background, foreground, textAlignment, verticalAlignment, fontWeight, fontStyle, textDecorations, selected);
         border.Cursor = new Cursor(StandardCursorType.Hand);
         border.PointerPressed += (_, args) =>
         {
@@ -978,6 +1029,7 @@ public sealed class MainWindow : Window
         IBrush background,
         IBrush foreground,
         TextAlignment textAlignment,
+        AvaloniaVerticalAlignment verticalAlignment,
         FontWeight fontWeight,
         FontStyle fontStyle,
         TextDecorationCollection? textDecorations,
@@ -999,7 +1051,7 @@ public sealed class MainWindow : Window
                 Foreground = foreground,
                 TextAlignment = textAlignment,
                 TextTrimming = TextTrimming.CharacterEllipsis,
-                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                VerticalAlignment = verticalAlignment,
             },
         };
     }
@@ -1045,6 +1097,14 @@ public sealed class MainWindow : Window
             CellHAlign.Right => TextAlignment.Right,
             CellHAlign.General when isNumericOrDate => TextAlignment.Right,
             _ => TextAlignment.Left
+        };
+
+    private static AvaloniaVerticalAlignment MapCellVerticalAlignment(CellVAlign verticalAlignment) =>
+        verticalAlignment switch
+        {
+            CellVAlign.Top => AvaloniaVerticalAlignment.Top,
+            CellVAlign.Bottom => AvaloniaVerticalAlignment.Bottom,
+            _ => AvaloniaVerticalAlignment.Center
         };
 
     private void SelectCell(CellAddress address)
@@ -1238,6 +1298,21 @@ public sealed class MainWindow : Window
     private void StrikethroughButton_Click(object? sender, RoutedEventArgs e)
     {
         ApplySelectedRangeStrikethrough(_strikethroughButton.IsChecked == true);
+    }
+
+    private void AlignTopButton_Click(object? sender, RoutedEventArgs e)
+    {
+        ApplySelectedRangeVerticalAlignment(CellVAlign.Top);
+    }
+
+    private void AlignMiddleButton_Click(object? sender, RoutedEventArgs e)
+    {
+        ApplySelectedRangeVerticalAlignment(CellVAlign.Center);
+    }
+
+    private void AlignBottomButton_Click(object? sender, RoutedEventArgs e)
+    {
+        ApplySelectedRangeVerticalAlignment(CellVAlign.Bottom);
     }
 
     private void AlignLeftButton_Click(object? sender, RoutedEventArgs e)
@@ -1519,6 +1594,26 @@ public sealed class MainWindow : Window
         RefreshShell($"Aligned {rangeReference} {FormatHorizontalAlignmentStatus(alignment)}");
     }
 
+    private void ApplySelectedRangeVerticalAlignment(CellVAlign alignment)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.SetSelectedRangeVerticalAlignment(alignment);
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "Vertical alignment failed.");
+            return;
+        }
+
+        RefreshShell($"Aligned {rangeReference} {FormatVerticalAlignmentStatus(alignment)}");
+    }
+
     private void MainWindow_DragOver(object? sender, DragEventArgs e)
     {
         e.DragEffects = TrySelectDroppedWorkbookPath(e, out _, out _)
@@ -1589,6 +1684,9 @@ public sealed class MainWindow : Window
             HasNativeUnderlineMenuItem: HasNativeMenuItem(_underlineMenuItem, "Underline"),
             HasNativeDoubleUnderlineMenuItem: HasNativeMenuItem(_doubleUnderlineMenuItem, "Double Underline", requireGesture: false),
             HasNativeStrikethroughMenuItem: HasNativeMenuItem(_strikethroughMenuItem, "Strikethrough"),
+            HasNativeAlignTopMenuItem: HasNativeMenuItem(_alignTopMenuItem, "Align Top", requireGesture: false),
+            HasNativeAlignMiddleMenuItem: HasNativeMenuItem(_alignMiddleMenuItem, "Align Middle", requireGesture: false),
+            HasNativeAlignBottomMenuItem: HasNativeMenuItem(_alignBottomMenuItem, "Align Bottom", requireGesture: false),
             HasNativeAlignLeftMenuItem: HasNativeMenuItem(_alignLeftMenuItem, "Align Left", requireGesture: false),
             HasNativeAlignCenterMenuItem: HasNativeMenuItem(_alignCenterMenuItem, "Align Center", requireGesture: false),
             HasNativeAlignRightMenuItem: HasNativeMenuItem(_alignRightMenuItem, "Align Right", requireGesture: false),
@@ -2253,6 +2351,15 @@ public sealed class MainWindow : Window
             CellHAlign.Center => "center",
             CellHAlign.Right => "right",
             _ => "general"
+        };
+
+    private static string FormatVerticalAlignmentStatus(CellVAlign alignment) =>
+        alignment switch
+        {
+            CellVAlign.Top => "top",
+            CellVAlign.Center => "middle",
+            CellVAlign.Bottom => "bottom",
+            _ => "middle"
         };
 
     private static string FormatEditText(Cell? cell, CellAddress address)

@@ -77,6 +77,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _alignLeftMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _alignCenterMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _alignRightMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _alignTopMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _alignMiddleMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _alignBottomMenuItem = new();");
         source.Should().Contain("_openMenuItem.Header = \"Open...\";");
         source.Should().Contain("_openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);");
         source.Should().Contain("_openMenuItem.Click += async (_, _) => await OpenWorkbookAsync();");
@@ -118,6 +121,12 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_strikethroughMenuItem.Header = \"Strikethrough\";");
         source.Should().Contain("_strikethroughMenuItem.Gesture = new KeyGesture(Key.D5, KeyModifiers.Control);");
         source.Should().Contain("_strikethroughMenuItem.Click += (_, _) => ToggleSelectedRangeStrikethrough();");
+        source.Should().Contain("_alignTopMenuItem.Header = \"Align Top\";");
+        source.Should().Contain("_alignTopMenuItem.Click += (_, _) => ApplySelectedRangeVerticalAlignment(CellVAlign.Top);");
+        source.Should().Contain("_alignMiddleMenuItem.Header = \"Align Middle\";");
+        source.Should().Contain("_alignMiddleMenuItem.Click += (_, _) => ApplySelectedRangeVerticalAlignment(CellVAlign.Center);");
+        source.Should().Contain("_alignBottomMenuItem.Header = \"Align Bottom\";");
+        source.Should().Contain("_alignBottomMenuItem.Click += (_, _) => ApplySelectedRangeVerticalAlignment(CellVAlign.Bottom);");
         source.Should().Contain("_alignLeftMenuItem.Header = \"Align Left\";");
         source.Should().Contain("_alignLeftMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Left);");
         source.Should().Contain("_alignCenterMenuItem.Header = \"Align Center\";");
@@ -138,6 +147,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("formatMenu.Items.Add(_underlineMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_doubleUnderlineMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_strikethroughMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_alignTopMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_alignMiddleMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_alignBottomMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_alignLeftMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_alignCenterMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_alignRightMenuItem);");
@@ -159,6 +171,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_underlineMenuItem.IsEnabled = _underlineButton.IsEnabled;");
         source.Should().Contain("_doubleUnderlineMenuItem.IsEnabled = _doubleUnderlineButton.IsEnabled;");
         source.Should().Contain("_strikethroughMenuItem.IsEnabled = _strikethroughButton.IsEnabled;");
+        source.Should().Contain("_alignTopMenuItem.IsEnabled = _alignTopButton.IsEnabled;");
+        source.Should().Contain("_alignMiddleMenuItem.IsEnabled = _alignMiddleButton.IsEnabled;");
+        source.Should().Contain("_alignBottomMenuItem.IsEnabled = _alignBottomButton.IsEnabled;");
         source.Should().Contain("_alignLeftMenuItem.IsEnabled = _alignLeftButton.IsEnabled;");
         source.Should().Contain("_alignCenterMenuItem.IsEnabled = _alignCenterButton.IsEnabled;");
         source.Should().Contain("_alignRightMenuItem.IsEnabled = _alignRightButton.IsEnabled;");
@@ -205,6 +220,9 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_underline_menu_item={FormatBool(snapshot.HasNativeUnderlineMenuItem)}");
         smokeSource.Should().Contain("native_double_underline_menu_item={FormatBool(snapshot.HasNativeDoubleUnderlineMenuItem)}");
         smokeSource.Should().Contain("native_strikethrough_menu_item={FormatBool(snapshot.HasNativeStrikethroughMenuItem)}");
+        smokeSource.Should().Contain("native_align_top_menu_item={FormatBool(snapshot.HasNativeAlignTopMenuItem)}");
+        smokeSource.Should().Contain("native_align_middle_menu_item={FormatBool(snapshot.HasNativeAlignMiddleMenuItem)}");
+        smokeSource.Should().Contain("native_align_bottom_menu_item={FormatBool(snapshot.HasNativeAlignBottomMenuItem)}");
         smokeSource.Should().Contain("native_align_left_menu_item={FormatBool(snapshot.HasNativeAlignLeftMenuItem)}");
         smokeSource.Should().Contain("native_align_center_menu_item={FormatBool(snapshot.HasNativeAlignCenterMenuItem)}");
         smokeSource.Should().Contain("native_align_right_menu_item={FormatBool(snapshot.HasNativeAlignRightMenuItem)}");
@@ -229,6 +247,9 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeUnderlineMenuItem: HasNativeMenuItem(_underlineMenuItem, \"Underline\")");
         windowSource.Should().Contain("HasNativeDoubleUnderlineMenuItem: HasNativeMenuItem(_doubleUnderlineMenuItem, \"Double Underline\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeStrikethroughMenuItem: HasNativeMenuItem(_strikethroughMenuItem, \"Strikethrough\")");
+        windowSource.Should().Contain("HasNativeAlignTopMenuItem: HasNativeMenuItem(_alignTopMenuItem, \"Align Top\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeAlignMiddleMenuItem: HasNativeMenuItem(_alignMiddleMenuItem, \"Align Middle\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeAlignBottomMenuItem: HasNativeMenuItem(_alignBottomMenuItem, \"Align Bottom\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAlignLeftMenuItem: HasNativeMenuItem(_alignLeftMenuItem, \"Align Left\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAlignCenterMenuItem: HasNativeMenuItem(_alignCenterMenuItem, \"Align Center\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAlignRightMenuItem: HasNativeMenuItem(_alignRightMenuItem, \"Align Right\", requireGesture: false)");
@@ -532,6 +553,46 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("foreach (var decoration in TextDecorations.Strikethrough)");
         source.Should().Contain("else if (e.Key is Key.D5 or Key.NumPad5 && HasOnlyControlModifier(e.KeyModifiers))");
         source.Should().Contain("ToggleSelectedRangeStrikethrough();");
+    }
+
+    [Fact]
+    public void MainWindow_WiresVerticalAlignmentThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("using CellVAlign = FreeX.Core.Model.VerticalAlignment;");
+        source.Should().Contain("private readonly ToggleButton _alignTopButton = new();");
+        source.Should().Contain("private readonly ToggleButton _alignMiddleButton = new();");
+        source.Should().Contain("private readonly ToggleButton _alignBottomButton = new();");
+        source.Should().Contain("_alignTopButton.Content = \"Top\";");
+        source.Should().Contain("_alignMiddleButton.Content = \"Mid\";");
+        source.Should().Contain("_alignBottomButton.Content = \"Bot\";");
+        source.Should().Contain("_alignTopButton.Click += AlignTopButton_Click;");
+        source.Should().Contain("_alignMiddleButton.Click += AlignMiddleButton_Click;");
+        source.Should().Contain("_alignBottomButton.Click += AlignBottomButton_Click;");
+        source.Should().Contain("_alignTopButton.IsChecked = _session.SelectedRangeStartVerticalAlignment == CellVAlign.Top;");
+        source.Should().Contain("_alignMiddleButton.IsChecked = _session.SelectedRangeStartVerticalAlignment == CellVAlign.Center;");
+        source.Should().Contain("_alignBottomButton.IsChecked = _session.SelectedRangeStartVerticalAlignment == CellVAlign.Bottom;");
+        source.Should().Contain("_alignTopButton.IsEnabled = isIdle;");
+        source.Should().Contain("_alignMiddleButton.IsEnabled = isIdle;");
+        source.Should().Contain("_alignBottomButton.IsEnabled = isIdle;");
+        source.Should().Contain("private void AlignTopButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("ApplySelectedRangeVerticalAlignment(CellVAlign.Top);");
+        source.Should().Contain("private void AlignMiddleButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("ApplySelectedRangeVerticalAlignment(CellVAlign.Center);");
+        source.Should().Contain("private void AlignBottomButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("ApplySelectedRangeVerticalAlignment(CellVAlign.Bottom);");
+        source.Should().Contain("private void ApplySelectedRangeVerticalAlignment(CellVAlign alignment)");
+        source.Should().Contain("var result = _session.SetSelectedRangeVerticalAlignment(alignment);");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Vertical alignment failed.\");");
+        source.Should().Contain("RefreshShell($\"Aligned {rangeReference} {FormatVerticalAlignmentStatus(alignment)}\");");
+        source.Should().Contain("var verticalAlignment = MapCellVerticalAlignment(style?.VerticalAlignment ?? CellVAlign.Bottom);");
+        source.Should().Contain("private static AvaloniaVerticalAlignment MapCellVerticalAlignment(CellVAlign verticalAlignment)");
+        source.Should().Contain("CellVAlign.Top => AvaloniaVerticalAlignment.Top,");
+        source.Should().Contain("CellVAlign.Bottom => AvaloniaVerticalAlignment.Bottom,");
+        source.Should().Contain("_ => AvaloniaVerticalAlignment.Center");
+        source.Should().Contain("VerticalAlignment = verticalAlignment,");
+        source.Should().Contain("private static string FormatVerticalAlignmentStatus(CellVAlign alignment)");
     }
 
     [Fact]
