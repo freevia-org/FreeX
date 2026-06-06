@@ -63,6 +63,7 @@ public sealed class MainWindow : Window
     private readonly Button _clearContentsButton = new();
     private readonly ToggleButton _boldButton = new();
     private readonly ToggleButton _italicButton = new();
+    private readonly ToggleButton _underlineButton = new();
     private readonly NativeMenuItem _openMenuItem = new();
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
@@ -74,6 +75,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _clearContentsMenuItem = new();
     private readonly NativeMenuItem _boldMenuItem = new();
     private readonly NativeMenuItem _italicMenuItem = new();
+    private readonly NativeMenuItem _underlineMenuItem = new();
     private readonly NativeMenuItem _quitMenuItem = new();
     private NativeMenu? _nativeMenu;
     private WorkbookSession _session;
@@ -234,6 +236,10 @@ public sealed class MainWindow : Window
         _italicMenuItem.Gesture = new KeyGesture(Key.I, KeyModifiers.Meta);
         _italicMenuItem.Click += (_, _) => ToggleSelectedRangeItalic();
 
+        _underlineMenuItem.Header = "Underline";
+        _underlineMenuItem.Gesture = new KeyGesture(Key.U, KeyModifiers.Meta);
+        _underlineMenuItem.Click += (_, _) => ToggleSelectedRangeUnderline();
+
         _quitMenuItem.Header = "Quit FreeX";
         _quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);
         _quitMenuItem.Click += (_, _) => TryQuitApplication();
@@ -258,6 +264,7 @@ public sealed class MainWindow : Window
         var formatMenu = new NativeMenu();
         formatMenu.Items.Add(_boldMenuItem);
         formatMenu.Items.Add(_italicMenuItem);
+        formatMenu.Items.Add(_underlineMenuItem);
 
         _nativeMenu = new NativeMenu();
         _nativeMenu.Items.Add(new NativeMenuItem
@@ -370,6 +377,15 @@ public sealed class MainWindow : Window
         _italicButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _italicButton.Click += ItalicButton_Click;
 
+        _underlineButton.Content = new TextBlock
+        {
+            Text = "U",
+            TextDecorations = TextDecorations.Underline,
+        };
+        _underlineButton.Padding = new Thickness(10, 4);
+        _underlineButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _underlineButton.Click += UnderlineButton_Click;
+
         _cellAddressText.Width = 72;
         _cellAddressText.FontSize = 12;
         _cellAddressText.FontWeight = FontWeight.SemiBold;
@@ -409,6 +425,7 @@ public sealed class MainWindow : Window
                     _clearContentsButton,
                     _boldButton,
                     _italicButton,
+                    _underlineButton,
                     _cellAddressText,
                     _formulaBox,
                     _statusText,
@@ -436,6 +453,7 @@ public sealed class MainWindow : Window
             : FormatEditText(_session.ActiveSheet.GetCell(_session.ActiveCell), _session.ActiveCell);
         _boldButton.IsChecked = _session.IsSelectedRangeStartBold;
         _italicButton.IsChecked = _session.IsSelectedRangeStartItalic;
+        _underlineButton.IsChecked = _session.IsSelectedRangeStartUnderline;
         if (preserveFormulaEdit)
         {
             _formulaBox.CaretIndex = Math.Min(formulaCaretIndex, _formulaBox.Text?.Length ?? 0);
@@ -494,6 +512,7 @@ public sealed class MainWindow : Window
         _clearContentsButton.IsEnabled = isIdle;
         _boldButton.IsEnabled = isIdle;
         _italicButton.IsEnabled = isIdle;
+        _underlineButton.IsEnabled = isIdle;
 
         _openMenuItem.IsEnabled = _openButton.IsEnabled;
         _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
@@ -506,6 +525,7 @@ public sealed class MainWindow : Window
         _clearContentsMenuItem.IsEnabled = _clearContentsButton.IsEnabled;
         _boldMenuItem.IsEnabled = _boldButton.IsEnabled;
         _italicMenuItem.IsEnabled = _italicButton.IsEnabled;
+        _underlineMenuItem.IsEnabled = _underlineButton.IsEnabled;
     }
 
     private Control BuildSheetTabs()
@@ -771,6 +791,7 @@ public sealed class MainWindow : Window
             TextAlignment.Center,
             FontWeight.SemiBold,
             FontStyle.Normal,
+            textDecorations: null,
             selected: false);
 
     private Border CreateCell(DisplayCell cell, uint row, uint col)
@@ -787,6 +808,7 @@ public sealed class MainWindow : Window
                 TextAlignment.Left,
                 FontWeight.Normal,
                 FontStyle.Normal,
+                textDecorations: null,
                 selected,
                 address);
 
@@ -802,6 +824,7 @@ public sealed class MainWindow : Window
             : TextAlignment.Left;
         var weight = style?.Bold == true ? FontWeight.SemiBold : FontWeight.Normal;
         var fontStyle = style?.Italic == true ? FontStyle.Italic : FontStyle.Normal;
+        var textDecorations = style?.Underline == true ? TextDecorations.Underline : null;
 
         return CreateInteractiveCellBorder(
             cell.DisplayText,
@@ -810,6 +833,7 @@ public sealed class MainWindow : Window
             alignment,
             weight,
             fontStyle,
+            textDecorations,
             selected,
             address);
     }
@@ -821,10 +845,11 @@ public sealed class MainWindow : Window
         TextAlignment textAlignment,
         FontWeight fontWeight,
         FontStyle fontStyle,
+        TextDecorationCollection? textDecorations,
         bool selected,
         CellAddress address)
     {
-        var border = CreateCellBorder(text, background, foreground, textAlignment, fontWeight, fontStyle, selected);
+        var border = CreateCellBorder(text, background, foreground, textAlignment, fontWeight, fontStyle, textDecorations, selected);
         border.Cursor = new Cursor(StandardCursorType.Hand);
         border.PointerPressed += (_, args) =>
         {
@@ -849,6 +874,7 @@ public sealed class MainWindow : Window
         TextAlignment textAlignment,
         FontWeight fontWeight,
         FontStyle fontStyle,
+        TextDecorationCollection? textDecorations,
         bool selected)
     {
         return new Border
@@ -863,6 +889,7 @@ public sealed class MainWindow : Window
                 FontSize = 12,
                 FontWeight = fontWeight,
                 FontStyle = fontStyle,
+                TextDecorations = textDecorations,
                 Foreground = foreground,
                 TextAlignment = textAlignment,
                 TextTrimming = TextTrimming.CharacterEllipsis,
@@ -1049,6 +1076,11 @@ public sealed class MainWindow : Window
         ApplySelectedRangeItalic(_italicButton.IsChecked == true);
     }
 
+    private void UnderlineButton_Click(object? sender, RoutedEventArgs e)
+    {
+        ApplySelectedRangeUnderline(_underlineButton.IsChecked == true);
+    }
+
     private void UndoLastEdit()
     {
         if (_isOpening || _isSaving)
@@ -1178,6 +1210,11 @@ public sealed class MainWindow : Window
         ApplySelectedRangeItalic(!_session.IsSelectedRangeStartItalic);
     }
 
+    private void ToggleSelectedRangeUnderline()
+    {
+        ApplySelectedRangeUnderline(!_session.IsSelectedRangeStartUnderline);
+    }
+
     private void ApplySelectedRangeBold(bool enabled)
     {
         if (_isOpening || _isSaving)
@@ -1216,6 +1253,26 @@ public sealed class MainWindow : Window
         }
 
         RefreshShell($"{(enabled ? "Italicized" : "Unitalicized")} {rangeReference}");
+    }
+
+    private void ApplySelectedRangeUnderline(bool enabled)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.SetSelectedRangeUnderline(enabled);
+        if (!result.Success)
+        {
+            _underlineButton.IsChecked = _session.IsSelectedRangeStartUnderline;
+            ShowEditIssue(result.ErrorMessage ?? "Underline failed.");
+            return;
+        }
+
+        RefreshShell($"{(enabled ? "Underlined" : "Removed underline from")} {rangeReference}");
     }
 
     private void MainWindow_DragOver(object? sender, DragEventArgs e)
@@ -1285,6 +1342,7 @@ public sealed class MainWindow : Window
             HasNativeClearContentsMenuItem: HasNativeMenuItem(_clearContentsMenuItem, "Clear Contents"),
             HasNativeBoldMenuItem: HasNativeMenuItem(_boldMenuItem, "Bold"),
             HasNativeItalicMenuItem: HasNativeMenuItem(_italicMenuItem, "Italic"),
+            HasNativeUnderlineMenuItem: HasNativeMenuItem(_underlineMenuItem, "Underline"),
             HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, "Quit FreeX"));
     }
 
@@ -1298,6 +1356,9 @@ public sealed class MainWindow : Window
         return (modifiers & commandModifiers) != 0 &&
             (modifiers & ~commandModifiers) == 0;
     }
+
+    private static bool HasOnlyControlModifier(KeyModifiers modifiers) =>
+        modifiers == KeyModifiers.Control;
 
     private async void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {
@@ -1318,8 +1379,11 @@ public sealed class MainWindow : Window
             return;
         }
 
-        if (_formulaBox.IsFocused && e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.B or Key.I)
+        if (_formulaBox.IsFocused &&
+            e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.B or Key.I or Key.U or Key.D4 or Key.NumPad4)
+        {
             return;
+        }
 
         if (e.Key == Key.Z && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {
@@ -1360,6 +1424,16 @@ public sealed class MainWindow : Window
         {
             e.Handled = true;
             ToggleSelectedRangeItalic();
+        }
+        else if (e.Key == Key.U && HasOnlyCommandModifier(e.KeyModifiers))
+        {
+            e.Handled = true;
+            ToggleSelectedRangeUnderline();
+        }
+        else if (e.Key is Key.D4 or Key.NumPad4 && HasOnlyControlModifier(e.KeyModifiers))
+        {
+            e.Handled = true;
+            ToggleSelectedRangeUnderline();
         }
         else if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {

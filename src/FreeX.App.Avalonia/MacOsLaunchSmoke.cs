@@ -79,6 +79,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeClearContentsMenuItem,
     bool HasNativeBoldMenuItem,
     bool HasNativeItalicMenuItem,
+    bool HasNativeUnderlineMenuItem,
     bool HasNativeQuitMenuItem)
 {
     public bool IsPassed =>
@@ -101,6 +102,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeClearContentsMenuItem &&
         HasNativeBoldMenuItem &&
         HasNativeItalicMenuItem &&
+        HasNativeUnderlineMenuItem &&
         HasNativeQuitMenuItem;
 }
 
@@ -171,6 +173,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_clear_contents_menu_item={FormatBool(snapshot.HasNativeClearContentsMenuItem)}",
                 $"native_bold_menu_item={FormatBool(snapshot.HasNativeBoldMenuItem)}",
                 $"native_italic_menu_item={FormatBool(snapshot.HasNativeItalicMenuItem)}",
+                $"native_underline_menu_item={FormatBool(snapshot.HasNativeUnderlineMenuItem)}",
                 $"native_quit_menu_item={FormatBool(snapshot.HasNativeQuitMenuItem)}",
             ]);
     }

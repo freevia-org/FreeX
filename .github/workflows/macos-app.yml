@@ -272,6 +272,7 @@ jobs:
             grep -q "native_clear_contents_menu_item=true" "$launch_smoke_report"
             grep -q "native_bold_menu_item=true" "$launch_smoke_report"
             grep -q "native_italic_menu_item=true" "$launch_smoke_report"
+            grep -q "native_underline_menu_item=true" "$launch_smoke_report"
             grep -q "native_quit_menu_item=true" "$launch_smoke_report"
           else
             echo "Skipping launch smoke for $runtime on $host_arch host." | tee "$smoke_log"
