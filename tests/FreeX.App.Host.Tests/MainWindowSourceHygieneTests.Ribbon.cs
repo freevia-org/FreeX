@@ -8,9 +8,9 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void RibbonSplitButtonHover_UsesRibbonButtonHoverBrushInsteadOfMenuHoverBrush()
     {
-        var ribbonDropdownSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.RibbonDropdown.cs"));
-        var resources = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "Resources", "MainWindowResources.xaml"));
-        var theme = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "Resources", "ThemeResources.xaml"));
+        var ribbonDropdownSource = DialogSourceTestSupport.ReadHostSources("MainWindow.RibbonDropdown.cs");
+        var resources = DialogSourceTestSupport.ReadHostSources("Resources\\MainWindowResources.xaml");
+        var theme = DialogSourceTestSupport.ReadHostSources("Resources\\ThemeResources.xaml");
         var hoverMethod = ExtractMethodSource(ribbonDropdownSource, "private static Brush GetRibbonDropdownHoverBrush(");
 
         resources.Should().Contain("FreeXRibbonButtonHoverBrush");
@@ -23,8 +23,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void RibbonSplitButtons_CanRouteDropdownZoneToADirectAction()
     {
-        var ribbonDropdownSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.RibbonDropdown.cs"));
-        var metadataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonMetadata.cs"));
+        var ribbonDropdownSource = DialogSourceTestSupport.ReadHostSources("MainWindow.RibbonDropdown.cs");
+        var metadataSource = DialogSourceTestSupport.ReadHostSources("RibbonMetadata.cs");
 
         metadataSource.Should().Contain("public static readonly RoutedEvent DropdownClickEvent");
         metadataSource.Should().Contain("public static void AddDropdownClickHandler(DependencyObject element, RoutedEventHandler handler)");
@@ -37,8 +37,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void StandaloneAltKeyTips_DoNotRouteAltKeyChords()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Selection.cs"));
-        var altKeyTipSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.AltKeyTips.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
+        var altKeyTipSource = DialogSourceTestSupport.ReadHostSources("MainWindow.AltKeyTips.cs");
 
         selectionSource.Should().NotContain("TryHandleTopLevelRibbonKeyTip(keyTip)");
         selectionSource.Should().NotContain("TryInvokeTopLevelQatKeyTip(qatKeyTip)");
@@ -50,12 +50,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void ViewWindowAndZoomController_LivesOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var viewSourcePath = Path.Combine(appHostDirectory, "MainWindow.ViewCommands.cs");
-
-        File.Exists(viewSourcePath).Should().BeTrue();
-        var viewSource = File.ReadAllText(viewSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var viewSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ViewCommands.cs");
 
         mainSource.Should().NotContain("private void ViewGridlinesChk_Changed(");
         mainSource.Should().NotContain("private void SetWorksheetViewMode(");
@@ -75,16 +71,11 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void RibbonSurfaceController_LivesOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var ribbonSourcePath = Path.Combine(appHostDirectory, "MainWindow.Ribbon.cs");
-        var ribbonAdaptiveSourcePath = Path.Combine(appHostDirectory, "MainWindow.RibbonAdaptive.cs");
-
-        File.Exists(ribbonSourcePath).Should().BeTrue();
-        File.Exists(ribbonAdaptiveSourcePath).Should().BeTrue();
-        var ribbonSource =
-            File.ReadAllText(ribbonSourcePath) +
-            File.ReadAllText(ribbonAdaptiveSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var ribbonSource = DialogSourceTestSupport.ReadHostSourcesWithSeparator(
+            "",
+            "MainWindow.Ribbon.cs",
+            "MainWindow.RibbonAdaptive.cs");
 
         mainSource.Should().NotContain("private void UpdateRibbonCompactMode(");
         mainSource.Should().NotContain("private void NormalizeRibbonSurface(");
@@ -102,12 +93,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void QuickAnalysisController_LivesOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var quickAnalysisSourcePath = Path.Combine(appHostDirectory, "MainWindow.QuickAnalysis.cs");
-
-        File.Exists(quickAnalysisSourcePath).Should().BeTrue();
-        var quickAnalysisSource = File.ReadAllText(quickAnalysisSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var quickAnalysisSource = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
 
         mainSource.Should().NotContain("private void ShowQuickAnalysisMenu(");
         mainSource.Should().NotContain("private void QuickAnalysisMenuItem_Click(");
@@ -123,12 +110,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void FormatPainterController_LivesOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var formatPainterSourcePath = Path.Combine(appHostDirectory, "MainWindow.FormatPainter.cs");
-
-        File.Exists(formatPainterSourcePath).Should().BeTrue();
-        var formatPainterSource = File.ReadAllText(formatPainterSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var formatPainterSource = DialogSourceTestSupport.ReadHostSources("MainWindow.FormatPainter.cs");
 
         mainSource.Should().NotContain("private void FormatPainterBtn_Click(");
         mainSource.Should().NotContain("private void FormatPainterBtn_PreviewMouseLeftButtonDown(");
@@ -146,15 +129,9 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void DataCommandsController_LivesOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var dataSourcePath = Path.Combine(appHostDirectory, "MainWindow.DataCommands.cs");
-        var scenarioSourcePath = Path.Combine(appHostDirectory, "MainWindow.ScenarioCommands.cs");
-
-        File.Exists(dataSourcePath).Should().BeTrue();
-        File.Exists(scenarioSourcePath).Should().BeTrue();
-        var dataSource = File.ReadAllText(dataSourcePath);
-        var scenarioSource = File.ReadAllText(scenarioSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var dataSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
+        var scenarioSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ScenarioCommands.cs");
 
         mainSource.Should().NotContain("private void GetDataBtn_Click(");
         mainSource.Should().NotContain("private void TextToColumnsBtn_Click(");
@@ -173,12 +150,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void ReviewProtectionShareCommands_LiveOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var reviewSourcePath = Path.Combine(appHostDirectory, "MainWindow.ReviewCommands.cs");
-
-        File.Exists(reviewSourcePath).Should().BeTrue();
-        var reviewSource = File.ReadAllText(reviewSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var reviewSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
         mainSource.Should().NotContain("private void SpellCheckBtn_Click(");
         mainSource.Should().NotContain("private void ReviewNewThreadedCommentBtn_Click(");
@@ -196,12 +169,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void FormulaCommands_LiveOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var formulaSourcePath = Path.Combine(appHostDirectory, "MainWindow.FormulaCommands.cs");
-
-        File.Exists(formulaSourcePath).Should().BeTrue();
-        var formulaSource = File.ReadAllText(formulaSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var formulaSource = DialogSourceTestSupport.ReadHostSources("MainWindow.FormulaCommands.cs");
 
         mainSource.Should().NotContain("private void SelectFormulaAuditCells(");
         mainSource.Should().NotContain("private void InsertFunctionBtn_Click(");
@@ -219,12 +188,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void ClipboardCommands_LiveOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var clipboardSourcePath = Path.Combine(appHostDirectory, "MainWindow.ClipboardCommands.cs");
-
-        File.Exists(clipboardSourcePath).Should().BeTrue();
-        var clipboardSource = File.ReadAllText(clipboardSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var clipboardSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ClipboardCommands.cs");
 
         mainSource.Should().NotContain("private record InternalClipboard(");
         mainSource.Should().NotContain("private void CutBtn_Click(");
@@ -246,7 +211,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void PasteSpecialExternalText_RoutesToLiteralTextPaste()
     {
-        var clipboardSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ClipboardCommands.cs"));
+        var clipboardSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ClipboardCommands.cs");
 
         clipboardSource.Should().Contain("case PasteSpecialAction.ExternalText:");
         clipboardSource.Should().Contain("externalTextAsText: true");
@@ -256,12 +221,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void HomeFormattingCommands_LiveOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var formattingSourcePath = Path.Combine(appHostDirectory, "MainWindow.HomeFormatting.cs");
-
-        File.Exists(formattingSourcePath).Should().BeTrue();
-        var formattingSource = File.ReadAllText(formattingSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var formattingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
 
         mainSource.Should().NotContain("private void BoldButton_Click(");
         mainSource.Should().NotContain("private IWorkbookCommand CreateMergeAndCenterCommand(");
@@ -281,12 +242,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void HomeCellsCommands_LiveOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var cellsSourcePath = Path.Combine(appHostDirectory, "MainWindow.CellsCommands.cs");
-
-        File.Exists(cellsSourcePath).Should().BeTrue();
-        var cellsSource = File.ReadAllText(cellsSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var cellsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.CellsCommands.cs");
 
         mainSource.Should().NotContain("private void InsertPickerBtn_Click(");
         mainSource.Should().NotContain("private void InsertCellsMenuItem_Click(");
@@ -318,12 +275,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void HomeEditingCommands_LiveOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var editingSourcePath = Path.Combine(appHostDirectory, "MainWindow.HomeEditing.cs");
-
-        File.Exists(editingSourcePath).Should().BeTrue();
-        var editingSource = File.ReadAllText(editingSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var editingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeEditing.cs");
 
         mainSource.Should().NotContain("private void AutoSumPickerBtn_Click(");
         mainSource.Should().NotContain("private void ExecuteFillCells(");
@@ -343,12 +296,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void OutlineGroupingCommands_LiveOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var outlineSourcePath = Path.Combine(appHostDirectory, "MainWindow.OutlineCommands.cs");
-
-        File.Exists(outlineSourcePath).Should().BeTrue();
-        var outlineSource = File.ReadAllText(outlineSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var outlineSource = DialogSourceTestSupport.ReadHostSources("MainWindow.OutlineCommands.cs");
 
         mainSource.Should().NotContain("private void GroupRowsBtn_Click(");
         mainSource.Should().NotContain("private void UngroupRowsBtn_Click(");
@@ -367,11 +316,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void ChartCommands_LiveOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var chartSourcePath = Path.Combine(appHostDirectory, "MainWindow.ChartCommands.cs");
-
-        File.Exists(chartSourcePath).Should().BeTrue();
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var chartSource = ReadChartCommandSource();
 
         mainSource.Should().NotContain("private void InsertChartButton_Click(");
@@ -397,11 +342,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void PivotCommands_LiveOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var pivotSourcePath = Path.Combine(appHostDirectory, "MainWindow.PivotCommands.cs");
-
-        File.Exists(pivotSourcePath).Should().BeTrue();
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var pivotSource = ReadPivotCommandSource();
 
         mainSource.Should().NotContain("private void PivotTableBtn_Click(");
@@ -445,12 +386,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void RibbonKeyTipController_LivesOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var keyTipSourcePath = Path.Combine(appHostDirectory, "MainWindow.KeyTips.cs");
-
-        File.Exists(keyTipSourcePath).Should().BeTrue();
-        var keyTipSource = File.ReadAllText(keyTipSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var keyTipSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyTips.cs");
 
         mainSource.Should().NotContain("private void EnterRibbonKeyTipMode(");
         mainSource.Should().NotContain("private void HandleActiveRibbonKeyTip(");
@@ -475,12 +412,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void CommandExecutionController_LivesOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var commandSourcePath = Path.Combine(appHostDirectory, "MainWindow.CommandExecution.cs");
-
-        File.Exists(commandSourcePath).Should().BeTrue();
-        var commandSource = File.ReadAllText(commandSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var commandSource = DialogSourceTestSupport.ReadHostSources("MainWindow.CommandExecution.cs");
 
         mainSource.Should().NotContain("void ShowCommandError(");
         mainSource.Should().NotContain("private bool TryExecuteCommand(");
@@ -511,12 +444,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void DataFilterCommands_LiveOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var dataFilterSourcePath = Path.Combine(appHostDirectory, "MainWindow.DataFilterCommands.cs");
-
-        File.Exists(dataFilterSourcePath).Should().BeTrue();
-        var dataFilterSource = File.ReadAllText(dataFilterSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var dataFilterSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataFilterCommands.cs");
 
         mainSource.Should().NotContain("private void SortAscButton_Click(");
         mainSource.Should().NotContain("private void SortCustomButton_Click(");
@@ -541,12 +470,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void InsertCommands_LiveOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var insertSourcePath = Path.Combine(appHostDirectory, "MainWindow.InsertCommands.cs");
-
-        File.Exists(insertSourcePath).Should().BeTrue();
-        var insertSource = File.ReadAllText(insertSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var insertSource = DialogSourceTestSupport.ReadHostSources("MainWindow.InsertCommands.cs");
 
         mainSource.Should().NotContain("private void InsertCurrentDateOrTime(");
         mainSource.Should().NotContain("private void TableBtn_Click(");
@@ -567,12 +492,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void ShellChromeController_LivesOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var shellSourcePath = Path.Combine(appHostDirectory, "MainWindow.Shell.cs");
-
-        File.Exists(shellSourcePath).Should().BeTrue();
-        var shellSource = File.ReadAllText(shellSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var shellSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Shell.cs");
 
         mainSource.Should().NotContain("private void UpdateMaximizedContentInset(");
         mainSource.Should().NotContain("private static Thickness GetMaximizedSafeInset(");
@@ -588,11 +509,11 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void QuickAccessUndoRedoButtons_ReflectCommandStackState()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorkbookUiState.cs"));
-        var qatSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAccessToolbar.cs"));
-        var qatStateSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "QuickAccessCommandState.cs"));
-        var toolbarSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ToolbarVisualState.cs"));
-        var cacheSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ToolbarVisualStateCache.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorkbookUiState.cs");
+        var qatSource = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAccessToolbar.cs");
+        var qatStateSource = DialogSourceTestSupport.ReadHostSources("QuickAccessCommandState.cs");
+        var toolbarSource = DialogSourceTestSupport.ReadHostSources("ToolbarVisualState.cs");
+        var cacheSource = DialogSourceTestSupport.ReadHostSources("ToolbarVisualStateCache.cs");
 
         source.Should().Contain("RefreshQuickAccessToolbarCommandStates();");
         source.Should().Contain("RefreshQuickAccessToolbarCommandStatesAfterSelectionChange();");
@@ -617,7 +538,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void RefreshToolbar_AvoidsRepeatedDependencyPropertyWrites()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorkbookUiState.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorkbookUiState.cs");
         var refreshToolbar = ExtractMethodSource(source, "private void RefreshToolbarVisualState()");
 
         source.Should().Contain("private static void SetToggleCheckedIfChanged(");
@@ -632,10 +553,10 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void SetActiveCellCallers_AvoidDuplicateToolbarAndStatusRefresh()
     {
-        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
-        var multiWindowSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.MultiWindow.cs"));
-        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
-        var scenarioSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ScenarioCommands.cs"));
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
+        var multiWindowSource = DialogSourceTestSupport.ReadHostSources("MainWindow.MultiWindow.cs");
+        var dataSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
+        var scenarioSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ScenarioCommands.cs");
 
         var createNewWorkbook = ExtractMethodSource(backstageSource, "private void CreateNewWorkbook()");
         createNewWorkbook.Should().Contain("SetActiveCell(new CellAddress(_currentSheetId, 1, 1));");
@@ -663,9 +584,9 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void TitleBar_UsesSharedFormatterForDirtyGroupedAndSavedFileState()
     {
-        var editingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Editing.cs"));
-        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
-        var lifecycleSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorkbookLifecycle.cs"));
+        var editingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Editing.cs");
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
+        var lifecycleSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorkbookLifecycle.cs");
 
         // Multi-window slice 1 adds an Excel-style per-window number suffix to the shared formatter.
         editingSource.Should().Contain("WorkbookTitleFormatter.Format(");
@@ -680,7 +601,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void KeyboardShortcuts_RegisterExcelNameManagerCommands()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs");
 
         source.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NameManager, NamedRangesButton_Click);");
         source.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.CreateNamesFromSelection, CreateNamesFromSelectionBtn_Click);");
@@ -689,7 +610,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void FormulaBarTextChanged_SkipsFormulaHighlightWorkForSelectionDisplayUpdates()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
 
         source.Should().Contain("var formulaBarHasFocus = ReferenceEquals(System.Windows.Input.Keyboard.FocusedElement, FormulaBar);");
         source.Should().Contain("if (!formulaBarHasFocus && _inlineEditor?.IsVisible != true)");
@@ -699,12 +620,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void WorkbookUiStateController_LivesOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var uiStateSourcePath = Path.Combine(appHostDirectory, "MainWindow.WorkbookUiState.cs");
-
-        File.Exists(uiStateSourcePath).Should().BeTrue();
-        var uiStateSource = File.ReadAllText(uiStateSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var uiStateSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorkbookUiState.cs");
 
         mainSource.Should().NotContain("private void ApplyOptionsToView(");
         mainSource.Should().NotContain("private void RecalculateWorkbook(");
@@ -727,14 +644,11 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
-        var mainWindowPath = WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml");
-        var appHostDirectory = Directory.GetParent(mainWindowPath)!.FullName;
-        var xaml = File.ReadAllText(mainWindowPath);
-        var resourcesPath = Path.Combine(appHostDirectory, "Resources", "MainWindowResources.xaml");
-        var resourcesXaml = File.ReadAllText(resourcesPath);
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+        var resourcesXaml = DialogSourceTestSupport.ReadHostSources("Resources\\MainWindowResources.xaml");
 
-        File.Exists(Path.Combine(appHostDirectory, "Resources", "ThemeResources.xaml")).Should().BeTrue();
-        File.Exists(Path.Combine(appHostDirectory, "Resources", "IconResources.xaml")).Should().BeTrue();
+        DialogSourceTestSupport.ReadHostSources("Resources\\ThemeResources.xaml").Should().NotBeNull();
+        DialogSourceTestSupport.ReadHostSources("Resources\\IconResources.xaml").Should().NotBeNull();
         xaml.Should().Contain("Source=\"Resources/MainWindowResources.xaml\"");
         resourcesXaml.Should().Contain("Source=\"ThemeResources.xaml\"");
         resourcesXaml.Should().Contain("Source=\"IconResources.xaml\"");
@@ -743,16 +657,14 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void RibbonIconSet_UsesSharedIconSlotsAndDecorator()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var iconResources = File.ReadAllText(Path.Combine(appHostDirectory, "Resources", "IconResources.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Ribbon.cs"));
-        var planner = string.Join(
-            Environment.NewLine,
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonCommandPresentationPlanner.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonCommandPresentationPlanner.Icons.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonCommandPresentationTypes.cs")));
+        var iconResources = DialogSourceTestSupport.ReadHostSources("Resources\\IconResources.xaml");
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Ribbon.cs");
+        var planner = DialogSourceTestSupport.ReadHostSources(
+            "RibbonCommandPresentationPlanner.cs",
+            "RibbonCommandPresentationPlanner.Icons.cs",
+            "RibbonCommandPresentationTypes.cs");
 
-        File.Exists(Path.Combine(appHostDirectory, "RibbonIconFactory.cs")).Should().BeTrue();
+        DialogSourceTestSupport.ReadHostSources("RibbonIconFactory.cs").Should().NotBeNull();
         iconResources.Should().Contain("FreeXRibbonLargeIconSlot");
         iconResources.Should().Contain("FreeXRibbonSmallIconSlot");
         iconResources.Should().Contain("FreeXRibbonLargeLabel");
@@ -779,11 +691,12 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void HomeNumberFormatDropdown_ExposesExcelFormatFamiliesFromOneCatalog()
     {
-        var source =
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Startup.cs")) +
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs")) +
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "HomeNumberFormatDropdownPlanner.cs")) +
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsNumberFormatPlanner.cs"));
+        var source = DialogSourceTestSupport.ReadHostSourcesWithSeparator(
+            "",
+            "MainWindow.Startup.cs",
+            "MainWindow.HomeFormatting.cs",
+            "HomeNumberFormatDropdownPlanner.cs",
+            "FormatCellsNumberFormatPlanner.cs");
 
         source.Should().Contain("HomeNumberFormatDropdownPlanner.Options.Select(option => option.Label)");
         source.Should().Contain("HomeNumberFormatDropdownPlanner.Options[selectedIndex]");
@@ -797,8 +710,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void ArrangeAllMenu_ReflectsStoredWorkbookArrangementAndAppliesLiveLayout()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ViewCommands.cs"));
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ViewCommands.cs");
 
         xaml.Should().Contain("Opened=\"ArrangeAllContextMenu_Opened\"");
         xaml.Should().Contain("IsCheckable=\"True\"");
@@ -811,8 +724,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void SplitRibbonCommand_ReflectsActiveSplitState()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Viewport.cs"));
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
 
         xaml.Should().Contain("<ToggleButton x:Name=\"SplitViewBtn\"");
         xaml.Should().Contain("Style=\"{StaticResource RibbonToggleBtn}\"");
@@ -822,10 +735,9 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void QuickAccessToolbar_UsesVectorIcons()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAccessToolbar.cs"));
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var iconResources = File.ReadAllText(Path.Combine(appHostDirectory, "Resources", "IconResources.xaml"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAccessToolbar.cs");
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+        var iconResources = DialogSourceTestSupport.ReadHostSources("Resources\\IconResources.xaml");
 
         source.Should().Contain("Content = new RibbonIcon");
         source.Should().Contain("Kind = command.IconKind");
@@ -840,7 +752,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void TitleBarIcons_UseExplicitWhiteForeground()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
         var titleBarStart = xaml.IndexOf("<!-- Title / quick-access bar", StringComparison.Ordinal);
         var titleBarEnd = xaml.IndexOf("<!-- Workbook name centred -->", StringComparison.Ordinal);
 
@@ -855,7 +767,7 @@ public sealed partial class MainWindowSourceHygieneTests
 
         titleBarCommands.Should().NotContain("Foreground=\"{Binding Foreground");
         titleBarCommands.Split("Foreground=\"{StaticResource FreeXWhiteBrush}\"").Length.Should().BeGreaterThanOrEqualTo(4);
-        var qatSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAccessToolbar.cs"));
+        var qatSource = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAccessToolbar.cs");
         qatSource.Should().Contain("? \"FreeXTextBrush\"");
         qatSource.Should().Contain(": \"FreeXWhiteBrush\"");
     }
@@ -863,10 +775,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void ToolbarIcons_DoNotUseFontGlyphAssets()
     {
-        var mainWindowPath = WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml");
-        var appHostDirectory = Path.GetDirectoryName(mainWindowPath)!;
-        var xaml = File.ReadAllText(mainWindowPath);
-        var iconResources = File.ReadAllText(Path.Combine(appHostDirectory, "Resources", "IconResources.xaml"));
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+        var iconResources = DialogSourceTestSupport.ReadHostSources("Resources\\IconResources.xaml");
 
         xaml.Should().NotContain("Segoe MDL2 Assets");
         xaml.Should().NotContain("RibbonIconGlyph");
@@ -878,14 +788,12 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void MainWindow_UsesVisibleFreeXBrandingAndWindowIcon()
     {
-        var mainWindowPath = WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml");
-        var projectPath = WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FreeX.App.Host.csproj");
-        var appHostDirectory = Directory.GetParent(mainWindowPath)!.FullName;
-        var theme = File.ReadAllText(Path.Combine(appHostDirectory, "Resources", "ThemeResources.xaml"));
-        var xaml = File.ReadAllText(mainWindowPath);
-        var project = File.ReadAllText(projectPath);
+        var iconPath = WorkspaceFileLocator.Find("src", "FreeX.App.Host", "Resources", "FreeX.ico");
+        var theme = DialogSourceTestSupport.ReadHostSources("Resources\\ThemeResources.xaml");
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+        var project = DialogSourceTestSupport.ReadHostSources("FreeX.App.Host.csproj");
 
-        File.Exists(Path.Combine(appHostDirectory, "Resources", "FreeX.ico")).Should().BeTrue();
+        File.Exists(iconPath).Should().BeTrue();
         xaml.Should().Contain("Icon=\"Resources/FreeX.ico\"");
         xaml.Should().Contain("x:Name=\"TitleBarAppIcon\"");
         xaml.Should().Contain("x:Name=\"TitleBarAppFreeBand\"");
@@ -919,8 +827,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void PersistentFormatPainter_UsesPreviewMouseDownSoButtonDoubleClickCannotBeOverwrittenByClick()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.FormatPainter.cs"));
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.FormatPainter.cs");
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
 
         source.Should().Contain("private bool _formatPainterPersistent;");
         source.Should().Contain("FormatPainterBtn_PreviewMouseLeftButtonDown");
@@ -935,8 +843,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void FormatPainterApplication_UsesTargetSelectionRangeWhenAvailable()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.FormatPainter.cs"));
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.FormatPainter.cs");
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         source.Should().Contain("private SheetId? _formatPainterSourceSheetId;");
         source.Should().Contain("private GridRange? _formatPainterSourceRange;");
@@ -955,9 +863,9 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void AutoFitMenuHandlers_UsePlannerAndPerTargetExplicitSizes()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.CellsCommands.cs"));
-        var planner = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AutoFitPlanner.cs"));
-        var dimensionPlanner = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RowColumnDimensionPlanner.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.CellsCommands.cs");
+        var planner = DialogSourceTestSupport.ReadHostSources("AutoFitPlanner.cs");
+        var dimensionPlanner = DialogSourceTestSupport.ReadHostSources("RowColumnDimensionPlanner.cs");
 
         source.Should().Contain("AutoFitPlanner.PlanRowHeights");
         source.Should().Contain("AutoFitPlanner.PlanColumnWidths");
@@ -979,7 +887,7 @@ public sealed partial class MainWindowSourceHygieneTests
     public void AdvancedChartFamilies_RouteRenderableFamiliesToAuthoringAndHideDeferredMap()
     {
         var source = ReadChartCommandSource();
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
 
         source.Should().Contain("ShowDeferredChartFamilyMessage");
         source.Should().Contain("UiText.Get(\"MainWindowMessage_ChartFamilyDeferred\")");
@@ -1040,7 +948,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void ChartKeyboardShortcuts_UseSeparateEmbeddedAndChartSheetPaths()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs");
 
         source.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.InsertEmbeddedChart, (_, _) => InsertEmbeddedChart())");
         source.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.InsertChartSheet, (_, _) => InsertChartSheet())");
@@ -1049,7 +957,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void RibbonChartButtons_RouteThroughRenderableChartInsertionCommandPath()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
         var source = ReadChartCommandSource();
 
         xaml.Should().Contain("Click=\"InsertChartPickerBtn_Click\"");
@@ -1065,9 +973,9 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void FontDropdownSelection_SyncsThroughStyleDiffToolbarStateAndGridTypeface()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var formattingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
-        var uiStateSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorkbookUiState.cs"));
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+        var formattingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
+        var uiStateSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorkbookUiState.cs");
         var renderSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.CellStyles.cs"));
 
         xaml.Should().Contain("x:Name=\"FontNameBox\"");
@@ -1092,7 +1000,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void FontSizeDropdown_UsesSharedFontSizeApplyPath()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
 
         source.Should().Contain("GetSelectedFontSizeText()");
         source.Should().Contain("ApplyFontSizeAndFitRows(size)");
@@ -1103,8 +1011,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void QuickAnalysisMenu_UsesPlannerPreviewMetadataForHoverTooltips()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAnalysis.cs"));
-        var planner = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "QuickAnalysisPlanner.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
+        var planner = DialogSourceTestSupport.ReadHostSources("QuickAnalysisPlanner.cs");
 
         source.Should().Contain("ToolTip = option.PreviewText");
         planner.Should().Contain("QuickAnalysisPreviewKind");
@@ -1113,7 +1021,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void QuickAnalysisPreviewAssignments_AvoidNoOpRenderInvalidations()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAnalysis.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
         var showPreview = ExtractMethodSource(source, "private void ShowQuickAnalysisPreview(");
         var clearPreview = ExtractMethodSource(source, "private void ClearQuickAnalysisPreview(");
         var applyPreview = ExtractMethodSource(source, "private void ApplyQuickAnalysisPreview(");
@@ -1129,8 +1037,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void QuickAnalysisMenu_RendersPlannerVisualPreviewIcons()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAnalysis.cs"));
-        var planner = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "QuickAnalysisPlanner.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
+        var planner = DialogSourceTestSupport.ReadHostSources("QuickAnalysisPlanner.cs");
 
         planner.Should().Contain("QuickAnalysisPreviewVisual");
         source.Should().Contain("QuickAnalysisPreviewIconFactory.Create(option.PreviewVisual)");
@@ -1139,7 +1047,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void QuickAnalysisMenu_UsesKeyboardSelectionAnchorAndInitialMenuFocus()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAnalysis.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
 
         source.Should().NotContain("PlacementMode.MousePoint");
         source.Should().Contain("Placement = PlacementMode.RelativePoint");
@@ -1154,7 +1062,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void QuickAnalysisMenu_UpdatesLiveHoverPreviewStatus()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAnalysis.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
 
         source.Should().Contain("QuickAnalysisMenuItem_MouseEnter");
         source.Should().Contain("QuickAnalysisMenuItem_MouseLeave");
@@ -1166,7 +1074,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void QuickAnalysisMenu_RoutesExpandedConditionalFormattingGallery()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAnalysis.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
 
         source.Should().Contain("case QuickAnalysisCommand.LessThan:");
         source.Should().Contain("ShowCfDialog(\"Less Than\")");
@@ -1195,7 +1103,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void QuickAnalysisMenu_MoreChartsReusesInsertChartDialogPath()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAnalysis.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
 
         source.Should().Contain("case QuickAnalysisCommand.MoreCharts:");
         source.Should().Contain("InsertChartPickerBtn_Click(sender, e);");
@@ -1204,7 +1112,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void QuickAnalysisMenu_RoutesExpandedTotalsGallery()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAnalysis.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
 
         source.Should().Contain("case QuickAnalysisCommand.PercentTotal:");
         source.Should().Contain("case QuickAnalysisCommand.RunningTotal:");
@@ -1215,8 +1123,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void BorderGallery_ExposesExpandedPresetsAndUsesReusablePlanners()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
 
         foreach (var label in new[]
         {
@@ -1263,7 +1171,7 @@ public sealed partial class MainWindowSourceHygieneTests
 
         source.Should().Contain("ApplyRangeBorderPreset");
         source.Should().Contain("SelectionStyleCommandPlanner.CreatePerCellStyleCommand");
-        var plannerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SelectionStyleCommandPlanner.cs"));
+        var plannerSource = DialogSourceTestSupport.ReadHostSources("SelectionStyleCommandPlanner.cs");
         plannerSource.Should().Contain("new CompositeWorkbookCommand(title, commands)");
         plannerSource.Should().Contain("MergeCompleteRectangularBands");
         source.Should().Contain("OpenFormatCellsDialog(FormatCellsDialogTab.Border)");
@@ -1283,7 +1191,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void FormatAsTable_CreatesStructuredTableMetadataAndBandingAsOneCommand()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
 
         source.Should().Contain("new CreateTableDialog");
         source.Should().Contain("new CreateStyledStructuredTableCommand(");
@@ -1296,7 +1204,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void CellStyleMenu_UsesActiveWorkbookThemeForPresetPlanning()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
 
         source.Should().Contain("CellStyleDiffPlanner.GetCellStylePresetDiff(preset, _workbook.Theme)");
     }
@@ -1304,7 +1212,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void DrawGradientAndEffectsButtons_ExposeStableAutomationMetadata()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
 
         xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawShapeGradientButton\"");
         xaml.ShouldContainLocalizedAttribute("AutomationProperties.HelpText", "Open gradient fill controls for the selected shape.");
@@ -1317,7 +1225,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void CollapsedRibbonOverflowCommands_ReturnFocusToVisibleGroupButton()
     {
-        var adaptiveSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.RibbonAdaptive.cs"));
+        var adaptiveSource = DialogSourceTestSupport.ReadHostSources("MainWindow.RibbonAdaptive.cs");
 
         adaptiveSource.Should().Contain("FocusCollapsedRibbonMenuPlacementTarget(item)");
         adaptiveSource.Should().Contain("private static void FocusCollapsedRibbonMenuPlacementTarget(MenuItem item)");
