@@ -57,7 +57,7 @@ Run these commands from the repository root when validating routine agent work o
 1. `dotnet build FreeX.slnx --configuration Release`
 2. `dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build --logger "trx;LogFileName=default-tests.trx"`
 
-Default agent verification does not run the UI lane and does not use `dotnet test FreeX.slnx`. Success means the repository preflight validates tracked JSON/XML-backed files, tool scripts, workflows, local .NET SDK readiness against the tester-release SDK band, .NET project references, solution membership, and generated docs; the Release solution build reports zero errors; and the default Release test lane reports zero failed tests. If output files are locked by a stale `dotnet`, `MSBuild`, `VBCSCompiler`, or `testhost` process from another local run, clear the stale process and rerun the same command before treating the build as failed.
+Default agent verification does not run the UI lane and does not use `dotnet test FreeX.slnx`. Success means the repository preflight validates tracked JSON/XML-backed files, tool scripts, workflows, local .NET SDK readiness against the tester-release SDK band, .NET project references, solution membership, macOS app readiness, and generated docs; the Release solution build reports zero errors; and the default Release test lane reports zero failed tests. If output files are locked by a stale `dotnet`, `MSBuild`, `VBCSCompiler`, or `testhost` process from another local run, clear the stale process and rerun the same command before treating the build as failed.
 
 ## UI Lane Verification
 
@@ -72,6 +72,8 @@ Success means the UI Release test lane reports zero failed tests. The `Tester Re
 The CI workflow also runs a macOS portable lane on GitHub-hosted macOS runners. This lane builds and tests `FreeX.DefaultTests.slnx` only, proving that the `Core.*` projects and non-UI tests remain portable while the app is still WPF-first.
 
 Success means the macOS Release build and non-UI test lane report zero failed tests. This lane does not build `FreeX.slnx`, `FreeX.UiTests.slnx`, `App.Host`, `App.UI`, WPF UI tests, Excel COM tools, tester-release artifacts, or macOS app packages. See [planning/multiplatform-macos-port.md](../planning/multiplatform-macos-port.md) for the macOS-first port plan.
+
+A separate `macOS App Preview` workflow builds and publishes `src/FreeX.App.Avalonia` on hosted macOS runners for `osx-arm64` and `osx-x64`, wraps the output in `FreeX.app`, verifies bundle metadata, ad-hoc signs by default, optionally Developer ID signs/notarizes when secrets are configured, and uploads zipped app artifacts plus smoke evidence. The Windows-runnable `tools/Test-MacOsAppReadiness.ps1` preflight statically checks the app project, `Info.plist`, workflow markers, source wiring, and portable-source hygiene; hosted macOS runner evidence remains required for runtime launch, LaunchServices activation, signing, notarization, and architecture checks.
 
 ## Conservative Rerun Fallback
 
