@@ -26,4 +26,37 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("DragDropEffects.Copy");
         source.Should().Contain("DragDropEffects.None");
     }
+
+    [Fact]
+    public void MainWindow_WiresNativeFileMenuToSharedOpenSavePipeline()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("ConfigureNativeMenu();");
+        source.Should().Contain("private readonly NativeMenuItem _openMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _saveMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _saveAsMenuItem = new();");
+        source.Should().Contain("_openMenuItem.Header = \"Open...\";");
+        source.Should().Contain("_openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);");
+        source.Should().Contain("_openMenuItem.Click += async (_, _) => await OpenWorkbookAsync();");
+        source.Should().Contain("_saveMenuItem.Header = \"Save\";");
+        source.Should().Contain("_saveMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta);");
+        source.Should().Contain("_saveMenuItem.Click += async (_, _) => await SaveCurrentWorkbookAsync();");
+        source.Should().Contain("_saveAsMenuItem.Header = \"Save As...\";");
+        source.Should().Contain("_saveAsMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Shift);");
+        source.Should().Contain("_saveAsMenuItem.Click += async (_, _) => await SaveWorkbookAsAsync();");
+        source.Should().Contain("Header = \"Quit FreeX\"");
+        source.Should().Contain("Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta)");
+        source.Should().Contain("quitMenuItem.Click += (_, _) => TryQuitApplication();");
+        source.Should().Contain("NativeMenu.SetMenu(this, menu);");
+        source.Should().Contain("menu.NeedsUpdate += (_, _) => UpdateSaveButton();");
+        source.Should().Contain("_openMenuItem.IsEnabled = _openButton.IsEnabled;");
+        source.Should().Contain("_saveMenuItem.IsEnabled = _saveButton.IsEnabled;");
+        source.Should().Contain("_saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;");
+        source.Should().Contain("e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Shift)");
+        source.Should().Contain("await SaveWorkbookAsAsync();");
+        source.Should().Contain("TryQuitApplication()");
+        source.Should().Contain("Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop");
+        source.Should().Contain("desktop.TryShutdown(0);");
+    }
 }

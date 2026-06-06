@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -45,6 +46,9 @@ public sealed class MainWindow : Window
     private readonly Button _openButton = new();
     private readonly Button _saveButton = new();
     private readonly Button _saveAsButton = new();
+    private readonly NativeMenuItem _openMenuItem = new();
+    private readonly NativeMenuItem _saveMenuItem = new();
+    private readonly NativeMenuItem _saveAsMenuItem = new();
     private WorkbookSession _session;
     private bool _isOpening;
     private bool _isSaving;
@@ -61,6 +65,7 @@ public sealed class MainWindow : Window
         MinHeight = 520;
         Background = WindowBackground;
         Content = BuildContent();
+        ConfigureNativeMenu();
         ConfigureWorkbookDropTarget();
         KeyDown += MainWindow_KeyDown;
         RefreshShell(_session.StartupStatus);
@@ -104,6 +109,45 @@ public sealed class MainWindow : Window
                 Content = _sheetTabsHost,
             },
         };
+    }
+
+    private void ConfigureNativeMenu()
+    {
+        _openMenuItem.Header = "Open...";
+        _openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);
+        _openMenuItem.Click += async (_, _) => await OpenWorkbookAsync();
+
+        _saveMenuItem.Header = "Save";
+        _saveMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta);
+        _saveMenuItem.Click += async (_, _) => await SaveCurrentWorkbookAsync();
+
+        _saveAsMenuItem.Header = "Save As...";
+        _saveAsMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Shift);
+        _saveAsMenuItem.Click += async (_, _) => await SaveWorkbookAsAsync();
+
+        var quitMenuItem = new NativeMenuItem
+        {
+            Header = "Quit FreeX",
+            Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta),
+        };
+        quitMenuItem.Click += (_, _) => TryQuitApplication();
+
+        var fileMenu = new NativeMenu();
+        fileMenu.Items.Add(_openMenuItem);
+        fileMenu.Items.Add(_saveMenuItem);
+        fileMenu.Items.Add(_saveAsMenuItem);
+        fileMenu.Items.Add(new NativeMenuItemSeparator());
+        fileMenu.Items.Add(quitMenuItem);
+
+        var menu = new NativeMenu();
+        menu.Items.Add(new NativeMenuItem
+        {
+            Header = "File",
+            Menu = fileMenu,
+        });
+        menu.NeedsUpdate += (_, _) => UpdateSaveButton();
+
+        NativeMenu.SetMenu(this, menu);
     }
 
     private void ConfigureWorkbookDropTarget()
@@ -222,6 +266,10 @@ public sealed class MainWindow : Window
         _saveButton.IsEnabled = !_isOpening && !_isSaving && _session.CanSaveCurrentSource(out _);
         _saveButton.Content = _session.IsDirty ? "Save*" : "Save";
         _saveAsButton.IsEnabled = !_isOpening && !_isSaving && StorageProvider.CanSave;
+
+        _openMenuItem.IsEnabled = _openButton.IsEnabled;
+        _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
+        _saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;
     }
 
     private Control BuildSheetTabs()
@@ -502,7 +550,12 @@ public sealed class MainWindow : Window
             return;
         }
 
-        if (e.Key == Key.S)
+        if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+        {
+            e.Handled = true;
+            await SaveWorkbookAsAsync();
+        }
+        else if (e.Key == Key.S)
         {
             e.Handled = true;
             await SaveCurrentWorkbookAsync();
@@ -512,6 +565,17 @@ public sealed class MainWindow : Window
             e.Handled = true;
             await OpenWorkbookAsync();
         }
+    }
+
+    private void TryQuitApplication()
+    {
+        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            desktop.TryShutdown(0);
+            return;
+        }
+
+        Close();
     }
 
     private void NavigateActiveCell(KeyEventArgs e)
