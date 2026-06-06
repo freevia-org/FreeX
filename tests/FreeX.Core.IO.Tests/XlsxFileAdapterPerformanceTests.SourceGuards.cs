@@ -192,7 +192,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     {
         var adapterSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxFileAdapter.cs");
         var layoutSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxFileAdapter.SheetXmlLayout.cs");
-        var sheetStyleOnlySource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.Model", "Sheet.StyleOnly.cs"));
+        var sheetStyleOnlySource = TestWorkspaceFiles.ReadCoreModelRepoSource("Sheet.StyleOnly.cs");
         var sanitizerSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxClosedXmlLoadPackageSanitizer.cs");
         var stripperSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxClosedXmlStyleOnlyCellStripper.cs");
 
