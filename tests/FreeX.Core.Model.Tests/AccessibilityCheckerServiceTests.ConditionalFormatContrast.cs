@@ -1013,7 +1013,9 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("COMBIN(KURT($A1),2)>0");
         AssertFormulaArithmeticContrastLocations("COMBIN($A1,KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("COMBIN(-1,0)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(-0.2,0)>0");
         AssertFormulaArithmeticContrastLocations("COMBIN(5,-1)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(5,-0.2)>0");
         AssertFormulaArithmeticContrastLocations("COMBIN(2,3)>0");
         AssertFormulaArithmeticContrastLocations("COMBIN($A1/0,2)>0");
         AssertFormulaArithmeticContrastLocations("COMBIN(1E308*1E308,2)>0");

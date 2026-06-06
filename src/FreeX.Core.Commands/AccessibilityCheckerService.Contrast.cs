@@ -3073,12 +3073,12 @@ public static partial class AccessibilityCheckerService
         private static bool TryGetFormulaCombinInteger(double value, out int integer)
         {
             integer = 0;
-            if (!double.IsFinite(value))
+            if (!double.IsFinite(value) ||
+                value < 0d)
                 return false;
 
             var truncated = Math.Truncate(value);
             if (!double.IsFinite(truncated) ||
-                truncated < 0d ||
                 truncated > MaxFormulaCombinInput)
             {
                 return false;
