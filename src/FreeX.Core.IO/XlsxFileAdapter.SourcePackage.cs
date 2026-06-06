@@ -65,6 +65,7 @@ public sealed partial class XlsxFileAdapter
         if (sourcePackage.HasUnsupportedConditionalFormatting ?? HasUnsupportedConditionalFormatting(sourceArchive))
             XlsxUnsupportedConditionalFormattingPreserver.Preserve(sourceArchive, generatedArchive);
 
+        XlsxWorksheetGridXmlNormalizer.NormalizeWorksheets(generatedArchive);
         return sourceParts;
     }
 

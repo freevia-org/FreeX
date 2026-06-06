@@ -846,6 +846,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchInlineStringFonts(archive);
                 NormalizePatchThemeTypefaces(archive);
                 NormalizePatchLegacyCommentFonts(archive);
+                NormalizePatchWorksheetGridXml(archive);
                 NormalizePatchWorksheetSheetViews(archive);
                 NormalizePatchWorksheetPhoneticProperties(archive);
                 NormalizePatchWorksheetPageLayout(archive);
@@ -1292,6 +1293,9 @@ public sealed partial class XlsxFileAdapter
                     XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
             }
         }
+
+        private static void NormalizePatchWorksheetGridXml(ZipArchive archive) =>
+            XlsxWorksheetGridXmlNormalizer.NormalizeWorksheets(archive);
 
         private static void NormalizePatchWorksheetPageBreaks(ZipArchive archive)
         {
