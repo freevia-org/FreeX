@@ -585,6 +585,57 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTextFunctionOperands()
+    {
+        AssertFormulaTextFunctionContrastLocations("LEN($C1)>4", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("UPPER($C1)=\"OPEN\"", "B3", "B4");
+        AssertFormulaTextFunctionContrastLocations("LOWER($C1)=\"closed\"", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("LEFT($C1,1)=\"C\"", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("RIGHT(LOWER($C1),4)=\"open\"", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTrimTextFunctionOperand()
+    {
+        AssertFormulaPaddedTextFunctionContrastLocations("TRIM($C1)=\"Open\"", "B1", "B3");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTextFunctionsInWrappers()
+    {
+        AssertFormulaTextFunctionContrastLocations("AND(UPPER($C1)=\"OPEN\",$A1>=100)", "B4");
+        AssertFormulaTextFunctionContrastLocations("IF($A1>=100,LEN($C1),FALSE)", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTextFunctionPredicates()
+    {
+        AssertFormulaTextFunctionContrastLocations("ISTEXT(LEFT($C1,1))", "B1", "B2", "B3", "B4");
+        AssertFormulaTextFunctionContrastLocations("ISNUMBER(LEN($C1))", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTextFunctionArithmeticAndAggregateArguments()
+    {
+        AssertFormulaTextFunctionContrastLocations("LEN($C1)+1>5", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("COUNTA(LEFT($C1,1))>0", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatTextFunctionUnsupportedOperands()
+    {
+        AssertFormulaTextFunctionContrastLocations("LEN($C1,1)>0");
+        AssertFormulaTextFunctionContrastLocations("UPPER()=\"OPEN\"");
+        AssertFormulaTextFunctionContrastLocations("LEFT($C1,-1)=\"\"");
+        AssertFormulaTextFunctionContrastLocations("LEFT($C1,999999)=\"Closed\"");
+        AssertFormulaTextFunctionContrastLocations("LEFT($C1,1.5)=\"C\"");
+        AssertFormulaTextFunctionContrastLocations("LEN($A1)>0");
+        AssertFormulaTextFunctionContrastLocations("CONCAT($C1,\"x\")=\"Openx\"");
+        AssertFormulaTextFunctionContrastLocations("LEFT($C1&\"x\",1)=\"O\"");
+        AssertFormulaTextFunctionContrastLocations("LEN(A0)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatArithmeticComparison()
     {
         AssertFormulaArithmeticContrastLocations("($A1+25-50)*2/5>=40", "B4");
@@ -1046,6 +1097,33 @@ public sealed partial class AccessibilityCheckerServiceTests
             sheet.SetCell(new CellAddress(sheet.Id, row, 4), optionalValue);
     }
 
+    private static Workbook CreateFormulaPaddedTextFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 3, 2);
+
+        SetFormulaPaddedTextFunctionContrastRow(sheet, 1, " Open ", "Open padded");
+        SetFormulaPaddedTextFunctionContrastRow(sheet, 2, "Closed ", "Closed padded");
+        SetFormulaPaddedTextFunctionContrastRow(sheet, 3, "Open", "Open plain");
+
+        return workbook;
+    }
+
+    private static void SetFormulaPaddedTextFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        string status,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), new TextValue(status));
+    }
+
     private static Workbook CreateFormulaDateBooleanArithmeticContrastWorkbook(
         out Sheet sheet,
         out CellAddress firstLabel,
@@ -1166,6 +1244,30 @@ public sealed partial class AccessibilityCheckerServiceTests
     private static void AssertFormulaArithmeticContrastLocations(string formulaText, params string[] expectedLocations)
     {
         var workbook = CreateFormulaAggregateContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaTextFunctionContrastLocations(string formulaText, params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaAggregateContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaPaddedTextFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaPaddedTextFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
 
         FindLowContrastCellTextIssues(workbook)
