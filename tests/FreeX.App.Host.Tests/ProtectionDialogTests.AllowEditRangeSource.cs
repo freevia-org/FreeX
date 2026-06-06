@@ -6,7 +6,6 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using FluentAssertions;
 using FreeX.Core.Model;
-using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
@@ -33,7 +32,7 @@ public sealed partial class ProtectionDialogTests
     [Fact]
     public void AllowEditRangeDialog_ExistingRangesListExposesAutomationName()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AllowEditRangeDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("AllowEditRangeDialog.cs");
 
         source.Should().Contain("AutomationProperties.SetName(_existingRangesBox, UiText.Get(\"AllowEditRange_ExistingRangesAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_existingRangesBox, \"AllowEditRangeExistingRangesList\");");
@@ -44,7 +43,7 @@ public sealed partial class ProtectionDialogTests
     [Fact]
     public void AllowEditRangeDialog_RangeEditorExposesAutomationName()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AllowEditRangeDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("AllowEditRangeDialog.cs");
 
         source.Should().Contain("AutomationProperties.SetName(_rangeBox, UiText.Get(\"AllowEditRange_RangeAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_rangeBox, \"AllowEditRangeBox\");");
@@ -55,7 +54,7 @@ public sealed partial class ProtectionDialogTests
     [Fact]
     public void AllowEditRangeDialog_ActionButtonsExposeAutomationMetadata()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AllowEditRangeDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("AllowEditRangeDialog.cs");
 
         source.Should().Contain("AutomationProperties.SetName(_deleteRangeButton, UiText.Get(\"AllowEditRange_DeleteAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_deleteRangeButton, \"AllowEditRangeDeleteButton\");");
@@ -72,7 +71,7 @@ public sealed partial class ProtectionDialogTests
     [Fact]
     public void AllowEditRangesWorkflow_ExecutesAddRemoveAndClearCommands()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ReviewCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
         source.Should().Contain("new AllowEditRangeDialog(");
         source.Should().Contain("AllowEditRangeDialogAction.Add");
@@ -86,7 +85,7 @@ public sealed partial class ProtectionDialogTests
     [Fact]
     public void AllowEditRangesWorkflow_WiresRangePickerToCurrentSelection()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ReviewCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
         source.Should().Contain("request => ApplyAllowEditRangeSelection(dialog, request)");
         source.Should().Contain("private void ApplyAllowEditRangeSelection(");
