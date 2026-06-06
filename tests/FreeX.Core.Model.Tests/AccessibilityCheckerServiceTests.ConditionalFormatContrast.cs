@@ -1028,6 +1028,60 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatPermutScalarFunctionComparisons()
+    {
+        AssertFormulaArithmeticContrastLocations("PERMUT($A1/25,2)>=12", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("PERMUT(5,2)=20", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("PERMUT(6,4)=360", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("PERMUT(0,0)=1", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("PERMUT(5.9,2.9)=20", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("PERMUT(5.9,0.9)=1", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("PERMUT(5.9,5.9)=120", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatPermutScalarFunctionWrappersAndPredicates()
+    {
+        AssertFormulaArithmeticContrastLocations("IF(PERMUT($A1/25,2)>=12,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(PERMUT($A1/25,2)>=12,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(PERMUT($A1/25,2))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ISODD(PERMUT($A1/25,1))", "B1", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatPermutScalarFunctionAggregateArguments()
+    {
+        AssertFormulaAggregateContrastLocations("SUM(PERMUT($A1/25,2),1)>=13", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("AVERAGE(PERMUT($A1/25,2),$A1)>50", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatPermutScalarFunctionUnsupportedOperands()
+    {
+        AssertFormulaArithmeticContrastLocations("PERMUT()>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT($A1)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT($A1,2,1)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(\"5\",2)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT($A1,\"2\")>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT($A1&\"x\",2)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(KURT($A1),2)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT($A1,KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(-1,0)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(-0.2,0)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(5,-1)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(5,-0.2)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(2,3)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT($A1/0,2)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(1E308*1E308,2)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT($A1,1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(EXP(1000),2)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT($A1,EXP(1000))>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(1E308,2)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(2000,1000)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(100000,50000)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatOddScalarFunctionComparisons()
     {
         AssertFormulaArithmeticContrastLocations("ODD($A1/40)>3", "B4");
