@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -8,7 +7,7 @@ public sealed partial class AutoFilterDialogTests
     [Fact]
     public void DataFilterCommands_RouteColorFiltersAndCompositeCriteriaToRealCommands()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataFilterCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.DataFilterCommands.cs");
 
         source.Should().Contain("result.Action == AutoFilterDialogAction.ClearFilter");
         source.Should().Contain("\"Clear Filter\"");
@@ -23,8 +22,8 @@ public sealed partial class AutoFilterDialogTests
     [Fact]
     public void DataFilterCommands_ReapplyUsesRememberedFilterCommandWithoutOpeningDialog()
     {
-        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataFilterCommands.cs"));
-        var homeEditingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeEditing.cs"));
+        var dataSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataFilterCommands.cs");
+        var homeEditingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeEditing.cs");
 
         dataSource.Should().Contain("private GridRange? _lastAutoFilterRange;");
         dataSource.Should().Contain("private Func<GridRange, IWorkbookCommand>? _lastAutoFilterCommandFactory;");
