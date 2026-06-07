@@ -164,6 +164,8 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         fileRecoveryPr.Attribute("crashSave").Should().BeNull();
         fileRecoveryPr.Attribute("dataExtractLoad").Should().BeNull();
         fileRecoveryPr.Attribute("repairLoad").Should().BeNull();
+        fileRecoveryPr.Attribute("customRecoveryFlag").Should().BeNull();
+        fileRecoveryPr.Element(fileRecoveryPr.Name.Namespace + "nativeRecoveryChild").Should().BeNull();
     }
 
     [Fact]
@@ -544,6 +546,8 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         fileRecoveryPr.SetAttributeValue("crashSave", "maybe");
         fileRecoveryPr.SetAttributeValue("dataExtractLoad", "maybe");
         fileRecoveryPr.SetAttributeValue("repairLoad", "maybe");
+        fileRecoveryPr.SetAttributeValue("customRecoveryFlag", "removed");
+        fileRecoveryPr.Add(new XElement(workbookNs + "nativeRecoveryChild"));
         ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
     }
 
