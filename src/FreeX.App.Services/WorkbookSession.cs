@@ -35,7 +35,8 @@ public sealed class WorkbookSession
     private FindOptions? _lastFindOptions;
     private bool _lastFindMatchCase;
     private bool _lastFindMatchEntireCell;
-    private CellAddress? _lastFindAddress;
+    private FindResult? _lastFindResult;
+    private FindResult? _lastReplaceResult;
 
     internal WorkbookSession(
         StartupWorkbookLoadResult source,
@@ -332,7 +333,7 @@ public sealed class WorkbookSession
 
         if (results.Count == 0)
         {
-            _lastFindAddress = null;
+            ClearLastFindTargets();
             return WorkbookNavigationResult.Failed($"No matches found for \"{text}\".");
         }
 
@@ -342,7 +343,8 @@ public sealed class WorkbookSession
         if (!navigation.Success)
             return navigation;
 
-        _lastFindAddress = result.Address;
+        _lastFindResult = result;
+        _lastReplaceResult = null;
         return WorkbookNavigationResult.Found(
             navigation.SelectedRange!.Value,
             result.MatchedText,
@@ -365,7 +367,7 @@ public sealed class WorkbookSession
 
         var results = FindReplaceService.Find(Workbook, searchText, effectiveOptions, matchCase, matchEntireCell);
         RememberFindSearch(searchText, effectiveOptions, matchCase, matchEntireCell);
-        _lastFindAddress = null;
+        ClearLastFindTargets();
 
         return WorkbookFindAllResult.Found(results.Select(CreateFindAllMatch).ToList());
     }
@@ -392,7 +394,7 @@ public sealed class WorkbookSession
 
         var effectiveOptions = ResolveFindOptions(options, FindLookIn.Values);
         RememberFindSearch(searchText, effectiveOptions, matchCase, matchEntireCell);
-        _lastFindAddress = null;
+        ClearLastFindTargets();
 
         var matches = FindReplaceService.Find(Workbook, searchText, effectiveOptions, matchCase, matchEntireCell);
         if (matches.Count == 0)
@@ -429,7 +431,7 @@ public sealed class WorkbookSession
 
             if (TryCreateReplacementCommentCommand(
                     sheet,
-                    match.Address,
+                    match,
                     searchText,
                     replaceText,
                     comparison,
@@ -489,14 +491,14 @@ public sealed class WorkbookSession
         var sameSearch =
             sameSearchText &&
             (_lastFindOptions == effectiveOptions ||
-                (_lastFindAddress is { } lastAddress && ActiveCell.Equals(lastAddress)));
+                HasLastFindTargetAtActiveCell());
 
         var matches = FindReplaceService.Find(Workbook, searchText, effectiveOptions, matchCase, matchEntireCell);
         RememberFindSearch(searchText, effectiveOptions, matchCase, matchEntireCell);
 
         if (matches.Count == 0)
         {
-            _lastFindAddress = null;
+            ClearLastFindTargets();
             return WorkbookReplaceResult.Replaced(0);
         }
 
@@ -506,13 +508,12 @@ public sealed class WorkbookSession
         if (!navigation.Success)
             return WorkbookReplaceResult.Failed(navigation.ErrorMessage ?? "Replace failed.");
 
-        _lastFindAddress = null;
         var sheet = Workbook.GetSheet(match.Address.Sheet);
         var comparison = matchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
         if (sheet is null ||
             !TryCreateReplacementCommand(
                 sheet,
-                match.Address,
+                match,
                 searchText,
                 replaceText,
                 comparison,
@@ -520,6 +521,7 @@ public sealed class WorkbookSession
                 effectiveOptions.LookIn,
                 out var command))
         {
+            ClearLastFindTargets();
             return WorkbookReplaceResult.Replaced(
                 0,
                 navigation.SelectedRange,
@@ -531,8 +533,13 @@ public sealed class WorkbookSession
             Workbook,
             command);
         if (!result.Success)
+        {
+            ClearLastFindTargets();
             return WorkbookReplaceResult.Failed(result.ErrorMessage ?? "Replace failed.");
+        }
 
+        _lastFindResult = null;
+        _lastReplaceResult = match;
         ApplySuccessfulEditResult(result, match.Address);
         var replacedRange = new GridRange(match.Address, match.Address);
         return WorkbookReplaceResult.Replaced(1, replacedRange, index + 1, matches.Count);
@@ -2243,9 +2250,9 @@ public sealed class WorkbookSession
         FindSearchOrder searchOrder,
         bool sameSearch)
     {
-        if (sameSearch && _lastFindAddress is { } lastAddress)
+        if (sameSearch && _lastFindResult is { } lastResult)
         {
-            var lastIndex = FindResultIndex(results, lastAddress);
+            var lastIndex = FindResultIndex(results, lastResult);
             if (lastIndex >= 0)
                 return (lastIndex + 1) % results.Count;
         }
@@ -2259,16 +2266,29 @@ public sealed class WorkbookSession
         bool sameSearch)
     {
         if (sameSearch &&
-            _lastFindAddress is { } lastAddress &&
-            ActiveCell.Equals(lastAddress))
+            _lastFindResult is { } lastFindResult &&
+            ActiveCell.Equals(lastFindResult.Address))
         {
-            var lastIndex = FindResultIndex(results, lastAddress);
+            var lastIndex = FindResultIndex(results, lastFindResult);
             if (lastIndex >= 0)
                 return lastIndex;
         }
 
+        if (sameSearch &&
+            _lastReplaceResult is { } lastReplaceResult &&
+            ActiveCell.Equals(lastReplaceResult.Address))
+        {
+            var nextSameCellIndex = FindNextResultIndexAtSameAddress(results, lastReplaceResult);
+            if (nextSameCellIndex >= 0)
+                return nextSameCellIndex;
+        }
+
         return FindFirstResultAfterActiveCell(results, searchOrder);
     }
+
+    private bool HasLastFindTargetAtActiveCell() =>
+        (_lastFindResult is { } lastFindResult && ActiveCell.Equals(lastFindResult.Address)) ||
+        (_lastReplaceResult is { } lastReplaceResult && ActiveCell.Equals(lastReplaceResult.Address));
 
     private FindOptions CreateActiveSheetFindOptions(FindLookIn lookIn) =>
         new(
@@ -2333,15 +2353,60 @@ public sealed class WorkbookSession
         return 0;
     }
 
-    private static int FindResultIndex(IReadOnlyList<FindResult> results, CellAddress address)
+    private static int FindResultIndex(IReadOnlyList<FindResult> results, FindResult result)
     {
         for (var index = 0; index < results.Count; index++)
         {
-            if (results[index].Address.Equals(address))
+            if (IsSameFindTarget(results[index], result))
                 return index;
         }
 
         return -1;
+    }
+
+    private static int FindNextResultIndexAtSameAddress(IReadOnlyList<FindResult> results, FindResult previous)
+    {
+        var previousIndex = FindResultIndex(results, previous);
+        if (previousIndex >= 0)
+            return (previousIndex + 1) % results.Count;
+
+        for (var index = 0; index < results.Count; index++)
+        {
+            if (results[index].Address.Equals(previous.Address) &&
+                CompareFindTargetOrder(results[index], previous) > 0)
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private static bool IsSameFindTarget(FindResult left, FindResult right) =>
+        left.Address.Equals(right.Address) &&
+        left.Target == right.Target &&
+        left.ReplyIndex == right.ReplyIndex;
+
+    private static int CompareFindTargetOrder(FindResult left, FindResult right)
+    {
+        var targetComparison = GetFindTargetOrder(left).CompareTo(GetFindTargetOrder(right));
+        return targetComparison != 0
+            ? targetComparison
+            : Nullable.Compare(left.ReplyIndex, right.ReplyIndex);
+    }
+
+    private static int GetFindTargetOrder(FindResult result) =>
+        result.Target switch
+        {
+            FindResultTarget.ThreadedComment => 0,
+            FindResultTarget.ThreadedCommentReply => 1 + Math.Max(0, result.ReplyIndex ?? 0),
+            _ => 0
+        };
+
+    private void ClearLastFindTargets()
+    {
+        _lastFindResult = null;
+        _lastReplaceResult = null;
     }
 
     private int CompareFindOrder(CellAddress left, CellAddress right, FindSearchOrder searchOrder)
@@ -2375,7 +2440,7 @@ public sealed class WorkbookSession
 
     private static bool TryCreateReplacementCommand(
         Sheet sheet,
-        CellAddress address,
+        FindResult match,
         string searchText,
         string replaceText,
         StringComparison comparison,
@@ -2386,7 +2451,7 @@ public sealed class WorkbookSession
         command = null!;
         if (TryCreateReplacementCellCommand(
                 sheet,
-                address,
+                match.Address,
                 searchText,
                 replaceText,
                 comparison,
@@ -2394,13 +2459,13 @@ public sealed class WorkbookSession
                 lookIn,
                 out var newCell))
         {
-            command = new EditCellsCommand(sheet.Id, [(address, newCell)]);
+            command = new EditCellsCommand(sheet.Id, [(match.Address, newCell)]);
             return true;
         }
 
         return TryCreateReplacementCommentCommand(
             sheet,
-            address,
+            match,
             searchText,
             replaceText,
             comparison,
@@ -2451,7 +2516,7 @@ public sealed class WorkbookSession
 
     private static bool TryCreateReplacementCommentCommand(
         Sheet sheet,
-        CellAddress address,
+        FindResult match,
         string searchText,
         string replaceText,
         StringComparison comparison,
@@ -2462,8 +2527,17 @@ public sealed class WorkbookSession
         command = null!;
         var currentText = lookIn switch
         {
-            FindLookIn.Notes when sheet.Comments.TryGetValue(address, out var note) => note,
-            FindLookIn.Comments when sheet.ThreadedComments.TryGetValue(address, out var threadedComment) => threadedComment.Text,
+            FindLookIn.Notes when
+                match.Target == FindResultTarget.Note &&
+                sheet.Comments.TryGetValue(match.Address, out var note) => note,
+            FindLookIn.Comments when
+                match.Target == FindResultTarget.ThreadedComment &&
+                sheet.ThreadedComments.TryGetValue(match.Address, out var threadedComment) => threadedComment.Text,
+            FindLookIn.Comments when
+                match.Target == FindResultTarget.ThreadedCommentReply &&
+                match.ReplyIndex is { } replyIndex &&
+                sheet.ThreadedComments.TryGetValue(match.Address, out var threadedComment) &&
+                IsValidThreadedCommentReplyIndex(threadedComment, replyIndex) => threadedComment.Replies[replyIndex].Text,
             _ => null
         };
         if (currentText is null ||
@@ -2472,13 +2546,22 @@ public sealed class WorkbookSession
 
         command = lookIn switch
         {
-            FindLookIn.Notes => new SetCommentCommand(sheet.Id, address, newText),
-            FindLookIn.Comments => new UpdateThreadedCommentTextCommand(sheet.Id, address, newText),
+            FindLookIn.Notes when match.Target == FindResultTarget.Note =>
+                new SetCommentCommand(sheet.Id, match.Address, newText),
+            FindLookIn.Comments when match.Target == FindResultTarget.ThreadedComment =>
+                new UpdateThreadedCommentTextCommand(sheet.Id, match.Address, newText),
+            FindLookIn.Comments when
+                match.Target == FindResultTarget.ThreadedCommentReply &&
+                match.ReplyIndex is { } replyIndex =>
+                new UpdateThreadedCommentReplyCommand(sheet.Id, match.Address, replyIndex, newText),
             _ => null!
         };
 
         return command is not null;
     }
+
+    private static bool IsValidThreadedCommentReplyIndex(ThreadedComment comment, int replyIndex) =>
+        replyIndex >= 0 && replyIndex < comment.Replies.Count;
 
     private static bool TryCreateReplacementText(
         string currentText,

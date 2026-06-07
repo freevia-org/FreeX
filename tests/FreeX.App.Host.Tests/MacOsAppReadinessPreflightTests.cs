@@ -236,6 +236,17 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("FindLookIn.Formulas => cell.FormulaText");
         script.Should().Contain("new SetCommentCommand(");
         script.Should().Contain("new UpdateThreadedCommentTextCommand(");
+        script.Should().Contain("public enum FindResultTarget");
+        script.Should().Contain("ThreadedCommentReply");
+        script.Should().Contain("FindResultTarget Target = FindResultTarget.Cell,");
+        script.Should().Contain("int? ReplyIndex = null);");
+        script.Should().Contain("public readonly record struct SearchText(");
+        script.Should().Contain("comment.Replies[replyIndex].Text");
+        script.Should().Contain("FindResultTarget.ThreadedCommentReply,");
+        script.Should().Contain("match.Target == FindResultTarget.ThreadedCommentReply");
+        script.Should().Contain("match.ReplyIndex is { } replyIndex");
+        script.Should().Contain("new UpdateThreadedCommentReplyCommand(");
+        script.Should().Contain("private static bool IsValidThreadedCommentReplyIndex(ThreadedComment comment, int replyIndex)");
         script.Should().Contain("_bordersButton.Flyout = CreateBorderPresetFlyout();");
         script.Should().Contain("_bordersMenuItem.Menu = CreateNativeBorderPresetMenu();");
         script.Should().Contain("PasteSpecialClipboardAtActiveCell(text, mode, options)");
@@ -1961,6 +1972,33 @@ public sealed class MacOsAppReadinessPreflightTests
 
         WriteFile(
             root,
+            "src/FreeX.Core.Commands/FindReplaceService.cs",
+            """
+            namespace FreeX.Core.Commands;
+
+            /*
+            public enum FindResultTarget
+            ThreadedCommentReply
+            FindResultTarget Target = FindResultTarget.Cell,
+            int? ReplyIndex = null);
+            */
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.Core.Commands/FindReplaceSearchPlanner.cs",
+            """
+            namespace FreeX.Core.Commands;
+
+            /*
+            public readonly record struct SearchText(
+            comment.Replies[replyIndex].Text
+            FindResultTarget.ThreadedCommentReply,
+            */
+            """);
+
+        WriteFile(
+            root,
             "src/FreeX.App.Services/WorkbookSession.cs",
             """
             namespace FreeX.App.Services;
@@ -2080,10 +2118,15 @@ public sealed class MacOsAppReadinessPreflightTests
                 FindLookIn.Formulas => cell.FormulaText
                 FindLookIn.Values => cell.HasFormula ? null : GetReplaceableDisplayText(cell.Value)
                 newCell = cell.Clone();
-                FindLookIn.Notes when sheet.Comments.TryGetValue(address, out var note) => note
-                FindLookIn.Comments when sheet.ThreadedComments.TryGetValue(address, out var threadedComment) => threadedComment.Text
+                FindLookIn.Notes when
+                match.Target == FindResultTarget.Note
+                sheet.Comments.TryGetValue(match.Address, out var note) => note
                 new SetCommentCommand(
                 new UpdateThreadedCommentTextCommand(
+                match.Target == FindResultTarget.ThreadedCommentReply
+                match.ReplyIndex is { } replyIndex
+                new UpdateThreadedCommentReplyCommand(
+                private static bool IsValidThreadedCommentReplyIndex(ThreadedComment comment, int replyIndex)
                 return WorkbookReplaceResult.Replaced(1, replacedRange, index + 1, matches.Count);
                 public WorkbookNavigationResult GoToReference(string reference)
                 public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)

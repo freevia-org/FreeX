@@ -1637,10 +1637,15 @@ function Test-SourceWiring {
                 "FindLookIn.Formulas => cell.FormulaText",
                 "FindLookIn.Values => cell.HasFormula ? null : GetReplaceableDisplayText(cell.Value)",
                 "newCell = cell.Clone();",
-                "FindLookIn.Notes when sheet.Comments.TryGetValue(address, out var note) => note",
-                "FindLookIn.Comments when sheet.ThreadedComments.TryGetValue(address, out var threadedComment) => threadedComment.Text",
+                "FindLookIn.Notes when",
+                "match.Target == FindResultTarget.Note",
+                "sheet.Comments.TryGetValue(match.Address, out var note) => note",
                 "new SetCommentCommand(",
                 "new UpdateThreadedCommentTextCommand(",
+                "match.Target == FindResultTarget.ThreadedCommentReply",
+                "match.ReplyIndex is { } replyIndex",
+                "new UpdateThreadedCommentReplyCommand(",
+                "private static bool IsValidThreadedCommentReplyIndex(ThreadedComment comment, int replyIndex)",
                 "return WorkbookReplaceResult.Replaced(1, replacedRange, index + 1, matches.Count);",
                 "public WorkbookNavigationResult GoToReference(string reference)",
                 "public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)",
@@ -1659,6 +1664,25 @@ function Test-SourceWiring {
                 "ApplySuccessfulWorkbookStructureResult(Workbook.Sheets[^1].Id)",
                 "ApplySuccessfulHistoryResult(result, sheetIdsBefore)",
                 "private void ApplySuccessfulWorkbookStructureResult(SheetId preferredSheetId)"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "src\FreeX.Core.Commands\FindReplaceService.cs"
+            Markers = @(
+                "public enum FindResultTarget",
+                "ThreadedCommentReply",
+                "FindResultTarget Target = FindResultTarget.Cell,",
+                "int? ReplyIndex = null);"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "src\FreeX.Core.Commands\FindReplaceSearchPlanner.cs"
+            Markers = @(
+                "public readonly record struct SearchText(",
+                "comment.Replies[replyIndex].Text",
+                "FindResultTarget.ThreadedCommentReply,"
             )
             OrderedPairs = @()
         },

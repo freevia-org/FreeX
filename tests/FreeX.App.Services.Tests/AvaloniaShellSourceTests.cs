@@ -2338,6 +2338,8 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
+        var findReplaceServiceSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.Core.Commands", "FindReplaceService.cs"));
+        var findReplaceSearchPlannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.Core.Commands", "FindReplaceSearchPlanner.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
 
         source.Should().Contain("private readonly NativeMenuItem _findMenuItem = new();");
@@ -2462,15 +2464,27 @@ public sealed class AvaloniaShellSourceTests
         sessionSource.Should().Contain("FindLookIn.Formulas => cell.FormulaText");
         sessionSource.Should().Contain("FindLookIn.Values => cell.HasFormula ? null : GetReplaceableDisplayText(cell.Value)");
         sessionSource.Should().Contain("newCell = cell.Clone();");
-        sessionSource.Should().Contain("FindLookIn.Notes when sheet.Comments.TryGetValue(address, out var note) => note");
-        sessionSource.Should().Contain("FindLookIn.Comments when sheet.ThreadedComments.TryGetValue(address, out var threadedComment) => threadedComment.Text");
+        sessionSource.Should().Contain("FindLookIn.Notes when");
+        sessionSource.Should().Contain("match.Target == FindResultTarget.Note");
+        sessionSource.Should().Contain("sheet.Comments.TryGetValue(match.Address, out var note) => note");
         sessionSource.Should().Contain("new SetCommentCommand(");
         sessionSource.Should().Contain("new UpdateThreadedCommentTextCommand(");
+        sessionSource.Should().Contain("match.Target == FindResultTarget.ThreadedCommentReply");
+        sessionSource.Should().Contain("match.ReplyIndex is { } replyIndex");
+        sessionSource.Should().Contain("new UpdateThreadedCommentReplyCommand(");
+        sessionSource.Should().Contain("private static bool IsValidThreadedCommentReplyIndex(ThreadedComment comment, int replyIndex)");
         sessionSource.Should().Contain("return WorkbookReplaceResult.Replaced(1, replacedRange, index + 1, matches.Count);");
         sessionSource.Should().Contain("public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)");
         sessionSource.Should().Contain("GoToSpecialService.Find(Workbook, ActiveSheet, SelectedRange, kind, ActiveCell, options)");
         sessionSource.Should().Contain("SelectionRangeService.CompressAddresses(matches)");
         sessionSource.Should().Contain("SelectRanges(selectedRange, ranges);");
+        findReplaceServiceSource.Should().Contain("public enum FindResultTarget");
+        findReplaceServiceSource.Should().Contain("ThreadedCommentReply");
+        findReplaceServiceSource.Should().Contain("FindResultTarget Target = FindResultTarget.Cell,");
+        findReplaceServiceSource.Should().Contain("int? ReplyIndex = null);");
+        findReplaceSearchPlannerSource.Should().Contain("public readonly record struct SearchText(");
+        findReplaceSearchPlannerSource.Should().Contain("comment.Replies[replyIndex].Text");
+        findReplaceSearchPlannerSource.Should().Contain("FindResultTarget.ThreadedCommentReply,");
         smokeSource.Should().Contain("bool HasNativeGoToSpecialMenuItem,");
         smokeSource.Should().Contain("HasNativeGoToSpecialMenuItem &&");
         smokeSource.Should().Contain("native_go_to_special_menu_item={FormatBool(snapshot.HasNativeGoToSpecialMenuItem)}");

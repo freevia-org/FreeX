@@ -435,6 +435,45 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void FindAll_WithCommentsLookInReportsThreadedRootAndReplyMatchesAtSameCell()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var c3 = new CellAddress(sheet.Id, 3, 3);
+        sheet.SetCell(a1, new TextValue("foo value"));
+        sheet.ThreadedComments[a1] = new ThreadedComment("foo root", "Quinn")
+        {
+            Replies =
+            [
+                new CommentReply("foo reply", "Codex"),
+                new CommentReply("other reply", "FreeX")
+            ]
+        };
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(c3);
+        var originalSelection = session.SelectedRange;
+
+        var result = session.FindAll(
+            "foo",
+            new FindOptions(Within: FindWithin.Sheet, LookIn: FindLookIn.Comments));
+
+        result.Success.Should().BeTrue();
+        result.MatchCount.Should().Be(2);
+        result.Matches.Should().Equal(
+            new WorkbookFindAllMatch("Book", "Sheet1", "", a1, "A1", "foo root", ""),
+            new WorkbookFindAllMatch("Book", "Sheet1", "", a1, "A1", "foo reply", ""));
+        session.SelectedRange.Should().Be(originalSelection);
+        session.ActiveCell.Should().Be(c3);
+        session.LastFindText.Should().Be("foo");
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
     public void FindAll_NoMatchesUpdatesLastFindTextWithoutChangingSelectionOrDirtyingWorkbook()
     {
         var workbook = CreateWorkbook();
@@ -677,7 +716,7 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
-    public void ReplaceAllValues_WithCommentsLookInReplacesThreadedRootTextAndPreservesRepliesAndCells()
+    public void ReplaceAllValues_WithCommentsLookInReplacesThreadedRootAndReplyTextPreservesMetadataAndCells()
     {
         var workbook = CreateWorkbook();
         var sheet = workbook.Sheets.Single();
@@ -703,15 +742,16 @@ public sealed class WorkbookSessionTests
             new FindOptions(Within: FindWithin.Sheet, LookIn: FindLookIn.Comments));
 
         result.Success.Should().BeTrue();
-        result.ReplacedCount.Should().Be(2);
-        result.MatchCount.Should().Be(2);
+        result.ReplacedCount.Should().Be(3);
+        result.MatchCount.Should().Be(3);
         session.IsDirty.Should().BeTrue();
         session.CanUndo.Should().BeTrue();
         sheet.GetCell(a1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("foo value");
         sheet.GetCell(b1)!.FormulaText.Should().Be("FOO(A1)");
         sheet.ThreadedComments[a1].Text.Should().Be("bar root");
         sheet.ThreadedComments[a1].Author.Should().Be("Quinn");
-        sheet.ThreadedComments[a1].Replies.Should().Equal(new CommentReply("foo reply", "Codex"));
+        sheet.ThreadedComments[a1].Replies.Should().ContainSingle().Which.Text.Should().Be("bar reply");
+        sheet.ThreadedComments[a1].Replies.Single().Author.Should().Be("Codex");
         sheet.ThreadedComments[a1].IsResolved.Should().BeTrue();
         sheet.ThreadedComments[b1].Text.Should().Be("bar formula root");
 
@@ -724,7 +764,86 @@ public sealed class WorkbookSessionTests
 
         session.RedoLastEdit().Success.Should().BeTrue();
         sheet.ThreadedComments[a1].Text.Should().Be("bar root");
+        sheet.ThreadedComments[a1].Replies.Should().ContainSingle().Which.Text.Should().Be("bar reply");
         sheet.ThreadedComments[b1].Text.Should().Be("bar formula root");
+    }
+
+    [Fact]
+    public void ReplaceAllValues_WithCommentsLookInReplacesThreadedRootAndRepliesAtSameCellPreservesMetadata()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var rootCreatedAt = new DateTimeOffset(2026, 6, 1, 10, 0, 0, TimeSpan.Zero);
+        var firstReplyCreatedAt = rootCreatedAt.AddMinutes(5);
+        var secondReplyCreatedAt = rootCreatedAt.AddMinutes(10);
+        var unchangedReplyCreatedAt = rootCreatedAt.AddMinutes(15);
+        sheet.SetCell(a1, new TextValue("foo value"));
+        sheet.ThreadedComments[a1] = new ThreadedComment("foo root", "Quinn")
+        {
+            Replies =
+            [
+                new CommentReply("foo first reply", "Codex") { CreatedAtUtc = firstReplyCreatedAt },
+                new CommentReply("foo second reply", "FreeX") { CreatedAtUtc = secondReplyCreatedAt },
+                new CommentReply("keep reply", "Reviewer") { CreatedAtUtc = unchangedReplyCreatedAt }
+            ],
+            IsResolved = true,
+            CreatedAtUtc = rootCreatedAt
+        };
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var result = session.ReplaceAllValues(
+            "foo",
+            "bar",
+            new FindOptions(Within: FindWithin.Sheet, LookIn: FindLookIn.Comments));
+
+        result.Success.Should().BeTrue();
+        result.ReplacedCount.Should().Be(3);
+        result.MatchCount.Should().Be(3);
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        sheet.GetCell(a1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("foo value");
+
+        var replacedComment = sheet.ThreadedComments[a1];
+        replacedComment.Text.Should().Be("bar root");
+        replacedComment.Author.Should().Be("Quinn");
+        replacedComment.IsResolved.Should().BeTrue();
+        replacedComment.CreatedAtUtc.Should().Be(rootCreatedAt);
+        replacedComment.Replies.Select(reply => reply.Text).Should().Equal(
+            "bar first reply",
+            "bar second reply",
+            "keep reply");
+        replacedComment.Replies.Select(reply => reply.Author).Should().Equal("Codex", "FreeX", "Reviewer");
+        replacedComment.Replies.Select(reply => reply.CreatedAtUtc).Should().Equal(
+            firstReplyCreatedAt,
+            secondReplyCreatedAt,
+            unchangedReplyCreatedAt);
+
+        session.UndoLastEdit().Success.Should().BeTrue();
+        var restoredComment = sheet.ThreadedComments[a1];
+        restoredComment.Text.Should().Be("foo root");
+        restoredComment.Author.Should().Be("Quinn");
+        restoredComment.IsResolved.Should().BeTrue();
+        restoredComment.Replies.Select(reply => reply.Text).Should().Equal(
+            "foo first reply",
+            "foo second reply",
+            "keep reply");
+        restoredComment.Replies.Select(reply => reply.Author).Should().Equal("Codex", "FreeX", "Reviewer");
+        session.CanRedo.Should().BeTrue();
+
+        session.RedoLastEdit().Success.Should().BeTrue();
+        var redoneComment = sheet.ThreadedComments[a1];
+        redoneComment.Text.Should().Be("bar root");
+        redoneComment.Replies.Select(reply => reply.Text).Should().Equal(
+            "bar first reply",
+            "bar second reply",
+            "keep reply");
+        redoneComment.Author.Should().Be("Quinn");
+        redoneComment.IsResolved.Should().BeTrue();
     }
 
     [Fact]
@@ -1009,7 +1128,7 @@ public sealed class WorkbookSessionTests
         result.ReplacedCount.Should().Be(1);
         result.ReplacedRange.Should().Be(new GridRange(c1, c1));
         result.MatchIndex.Should().Be(2);
-        result.MatchCount.Should().Be(2);
+        result.MatchCount.Should().Be(3);
         session.SelectedRange.Should().Be(new GridRange(c1, c1));
         session.ActiveCell.Should().Be(c1);
         session.IsDirty.Should().BeTrue();
@@ -1029,6 +1148,60 @@ public sealed class WorkbookSessionTests
 
         session.RedoLastEdit().Success.Should().BeTrue();
         sheet.ThreadedComments[c1].Text.Should().Be("bar next root");
+    }
+
+    [Fact]
+    public void ReplaceNextValue_WithCommentsLookInTargetsThreadedRootThenReplyAtSameCell()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("foo value"));
+        sheet.ThreadedComments[a1] = new ThreadedComment("foo root", "Quinn")
+        {
+            Replies = [new CommentReply("foo reply", "Codex")],
+            IsResolved = true
+        };
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+        var options = new FindOptions(Within: FindWithin.Sheet, LookIn: FindLookIn.Comments);
+
+        var rootReplace = session.ReplaceNextValue("foo", "bar", options);
+
+        rootReplace.Success.Should().BeTrue();
+        rootReplace.ReplacedCount.Should().Be(1);
+        rootReplace.ReplacedRange.Should().Be(new GridRange(a1, a1));
+        rootReplace.MatchIndex.Should().Be(1);
+        rootReplace.MatchCount.Should().Be(2);
+        sheet.GetCell(a1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("foo value");
+        sheet.ThreadedComments[a1].Text.Should().Be("bar root");
+        sheet.ThreadedComments[a1].Author.Should().Be("Quinn");
+        sheet.ThreadedComments[a1].Replies.Should().ContainSingle()
+            .Which.Should().Be(new CommentReply("foo reply", "Codex"));
+        sheet.ThreadedComments[a1].IsResolved.Should().BeTrue();
+
+        var replyReplace = session.ReplaceNextValue("foo", "bar", options);
+
+        replyReplace.Success.Should().BeTrue();
+        replyReplace.ReplacedCount.Should().Be(1);
+        replyReplace.ReplacedRange.Should().Be(new GridRange(a1, a1));
+        replyReplace.MatchIndex.Should().Be(1);
+        replyReplace.MatchCount.Should().Be(1);
+        session.SelectedRange.Should().Be(new GridRange(a1, a1));
+        session.ActiveCell.Should().Be(a1);
+        sheet.ThreadedComments[a1].Text.Should().Be("bar root");
+        sheet.ThreadedComments[a1].Author.Should().Be("Quinn");
+        sheet.ThreadedComments[a1].Replies.Should().ContainSingle()
+            .Which.Text.Should().Be("bar reply");
+        sheet.ThreadedComments[a1].Replies.Single().Author.Should().Be("Codex");
+        sheet.ThreadedComments[a1].Replies.Single().ModifiedAtUtc.Should().NotBeNull();
+        sheet.ThreadedComments[a1].IsResolved.Should().BeTrue();
+        session.LastFindText.Should().Be("foo");
+        session.IsDirty.Should().BeTrue();
     }
 
     [Fact]
