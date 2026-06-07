@@ -1321,6 +1321,21 @@ public static partial class AccessibilityCheckerService
             case "CONVERT":
                 kind = ConditionalFormulaScalarFunctionKind.Convert;
                 return true;
+            case "COMPLEX":
+                kind = ConditionalFormulaScalarFunctionKind.Complex;
+                return true;
+            case "IMREAL":
+                kind = ConditionalFormulaScalarFunctionKind.ImReal;
+                return true;
+            case "IMAGINARY":
+                kind = ConditionalFormulaScalarFunctionKind.Imaginary;
+                return true;
+            case "IMABS":
+                kind = ConditionalFormulaScalarFunctionKind.ImAbs;
+                return true;
+            case "IMCONJUGATE":
+                kind = ConditionalFormulaScalarFunctionKind.ImConjugate;
+                return true;
             case "DELTA":
                 kind = ConditionalFormulaScalarFunctionKind.Delta;
                 return true;
@@ -1421,7 +1436,11 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.IsoWeeknum or
             ConditionalFormulaScalarFunctionKind.Bin2Dec or
             ConditionalFormulaScalarFunctionKind.Hex2Dec or
-            ConditionalFormulaScalarFunctionKind.Oct2Dec => argumentCount == 1,
+            ConditionalFormulaScalarFunctionKind.Oct2Dec or
+            ConditionalFormulaScalarFunctionKind.ImReal or
+            ConditionalFormulaScalarFunctionKind.Imaginary or
+            ConditionalFormulaScalarFunctionKind.ImAbs or
+            ConditionalFormulaScalarFunctionKind.ImConjugate => argumentCount == 1,
             ConditionalFormulaScalarFunctionKind.NumberValue => argumentCount is >= 1 and <= 3,
             ConditionalFormulaScalarFunctionKind.Log or
             ConditionalFormulaScalarFunctionKind.Roman or
@@ -1468,6 +1487,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Days360 or
             ConditionalFormulaScalarFunctionKind.Workday or
             ConditionalFormulaScalarFunctionKind.Networkdays or
+            ConditionalFormulaScalarFunctionKind.Complex or
             ConditionalFormulaScalarFunctionKind.Yearfrac => argumentCount is 2 or 3,
             ConditionalFormulaScalarFunctionKind.WorkdayIntl or
             ConditionalFormulaScalarFunctionKind.NetworkdaysIntl => argumentCount is >= 2 and <= 4,
@@ -2165,6 +2185,11 @@ public static partial class AccessibilityCheckerService
         Base,
         Decimal,
         Convert,
+        Complex,
+        ImReal,
+        Imaginary,
+        ImAbs,
+        ImConjugate,
         Delta,
         Erf,
         ErfPrecise,
@@ -2856,6 +2881,12 @@ public static partial class AccessibilityCheckerService
                     return TryEvaluateFormulaDecimalFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Convert:
                     return TryEvaluateFormulaConvertFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Complex:
+                case ConditionalFormulaScalarFunctionKind.ImReal:
+                case ConditionalFormulaScalarFunctionKind.Imaginary:
+                case ConditionalFormulaScalarFunctionKind.ImAbs:
+                case ConditionalFormulaScalarFunctionKind.ImConjugate:
+                    return TryEvaluateFormulaComplexFunction(function, rowOffset, colOffset, out value);
                 default:
                     return false;
             }
@@ -3349,6 +3380,266 @@ public static partial class AccessibilityCheckerService
             value = EvaluateFormulaConvert(number, FormulaConvertText(fromValue), FormulaConvertText(toValue));
             return true;
         }
+
+        private bool TryEvaluateFormulaComplexFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (function.Kind == ConditionalFormulaScalarFunctionKind.Complex)
+                return TryEvaluateFormulaComplexConstructor(function, rowOffset, colOffset, out value);
+
+            if (!TryResolveFormulaOperand(function.Arguments[0], rowOffset, colOffset, out var source))
+                return false;
+
+            var parsed = ParseFormulaComplexArgument(source);
+            if (parsed.Error is not null)
+            {
+                value = parsed.Error;
+                return true;
+            }
+
+            value = function.Kind switch
+            {
+                ConditionalFormulaScalarFunctionKind.ImReal => new NumberValue(parsed.Real),
+                ConditionalFormulaScalarFunctionKind.Imaginary => new NumberValue(parsed.Imaginary),
+                ConditionalFormulaScalarFunctionKind.ImAbs => FormulaComplexNumberResult(
+                    Math.Sqrt(parsed.Real * parsed.Real + parsed.Imaginary * parsed.Imaginary)),
+                ConditionalFormulaScalarFunctionKind.ImConjugate =>
+                    FormulaComplexTextResult(parsed.Real, -parsed.Imaginary, parsed.Suffix),
+                _ => ErrorValue.Value
+            };
+            return true;
+        }
+
+        private bool TryEvaluateFormulaComplexConstructor(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaOperand(function.Arguments[0], rowOffset, colOffset, out var realValue))
+                return false;
+
+            if (realValue is ErrorValue realError)
+            {
+                value = realError;
+                return true;
+            }
+
+            if (!TryResolveFormulaOperand(function.Arguments[1], rowOffset, colOffset, out var imaginaryValue))
+                return false;
+
+            if (imaginaryValue is ErrorValue imaginaryError)
+            {
+                value = imaginaryError;
+                return true;
+            }
+
+            ScalarValue suffixValue = BlankValue.Instance;
+            if (function.Arguments.Count > 2)
+            {
+                if (!TryResolveFormulaOperand(function.Arguments[2], rowOffset, colOffset, out suffixValue))
+                    return false;
+
+                if (suffixValue is ErrorValue suffixError)
+                {
+                    value = suffixError;
+                    return true;
+                }
+            }
+
+            var suffix = suffixValue is not BlankValue
+                ? FormulaComplexText(suffixValue).ToLowerInvariant()
+                : "i";
+            if (suffix is not ("i" or "j"))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            if (!TryGetFormulaComplexNumber(realValue, out var real) ||
+                !TryGetFormulaComplexNumber(imaginaryValue, out var imaginary))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            value = FormulaComplexTextResult(real, imaginary, suffix);
+            return true;
+        }
+
+        private static ScalarValue FormulaComplexTextResult(double real, double imaginary, string suffix) =>
+            double.IsFinite(real) && double.IsFinite(imaginary)
+                ? new TextValue(FormatFormulaComplex(real, imaginary, suffix))
+                : ErrorValue.Num;
+
+        private static ScalarValue FormulaComplexNumberResult(double value) =>
+            double.IsFinite(value) ? new NumberValue(value) : ErrorValue.Num;
+
+        private static (double Real, double Imaginary, string Suffix, ErrorValue? Error) ParseFormulaComplexArgument(
+            ScalarValue value)
+        {
+            if (value is ErrorValue error)
+                return (0, 0, "i", error);
+
+            if (value is BoolValue)
+                return (0, 0, "i", ErrorValue.Value);
+
+            if (TryGetFormulaComplexCellNumber(value, out var number))
+            {
+                return double.IsFinite(number)
+                    ? (number, 0, "i", null)
+                    : (0, 0, "i", ErrorValue.Num);
+            }
+
+            var text = FormulaComplexText(value).Trim();
+            if (text.Length == 0)
+                return (0, 0, "i", ErrorValue.Num);
+
+            var suffix = text[^1].ToString().ToLowerInvariant();
+            if (suffix is not ("i" or "j"))
+            {
+                return TryParseFormulaComplexNumber(text, out var realOnly)
+                    ? (realOnly, 0, "i", null)
+                    : (0, 0, "i", ErrorValue.Num);
+            }
+
+            var body = text[..^1];
+            TrySplitFormulaComplexBody(body, out var realPart, out var imaginaryPart);
+            if (!TryParseFormulaComplexNumber(realPart, out var real) ||
+                !TryParseFormulaImaginaryCoefficient(imaginaryPart, out var imaginary))
+            {
+                return (0, 0, suffix, ErrorValue.Num);
+            }
+
+            return (real, imaginary, suffix, null);
+        }
+
+        private static void TrySplitFormulaComplexBody(
+            string body,
+            out string realPart,
+            out string imaginaryPart)
+        {
+            realPart = "0";
+            imaginaryPart = body;
+            if (body.Length == 0 || body is "+" or "-")
+                return;
+
+            for (var i = body.Length - 1; i > 0; i--)
+            {
+                if ((body[i] == '+' || body[i] == '-') && body[i - 1] is not ('e' or 'E'))
+                {
+                    realPart = body[..i];
+                    imaginaryPart = body[i..];
+                    return;
+                }
+            }
+        }
+
+        private static bool TryParseFormulaComplexNumber(string text, out double value) =>
+            double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value) &&
+            double.IsFinite(value);
+
+        private static bool TryParseFormulaImaginaryCoefficient(string text, out double value)
+        {
+            if (text.Length == 0 || text == "+")
+            {
+                value = 1;
+                return true;
+            }
+
+            if (text == "-")
+            {
+                value = -1;
+                return true;
+            }
+
+            return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value) &&
+                double.IsFinite(value);
+        }
+
+        private static string FormatFormulaComplex(double real, double imaginary, string suffix)
+        {
+            if (Math.Abs(real) < 1e-14)
+                real = 0;
+
+            if (Math.Abs(imaginary) < 1e-14)
+                imaginary = 0;
+
+            if (real == 0 && imaginary == 0)
+                return "0";
+
+            if (imaginary == 0)
+                return FormatFormulaComplexNumber(real);
+
+            var coefficient = Math.Abs(imaginary) == 1
+                ? string.Empty
+                : FormatFormulaComplexNumber(Math.Abs(imaginary));
+            var imaginaryText = coefficient + suffix;
+            if (real == 0)
+                return imaginary < 0 ? "-" + imaginaryText : imaginaryText;
+
+            return FormatFormulaComplexNumber(real) + (imaginary < 0 ? "-" : "+") + imaginaryText;
+        }
+
+        private static string FormatFormulaComplexNumber(double value) =>
+            value.ToString("G15", CultureInfo.InvariantCulture);
+
+        private static bool TryGetFormulaComplexNumber(ScalarValue value, out double number)
+        {
+            switch (value)
+            {
+                case NumberValue numeric:
+                    number = numeric.Value;
+                    return true;
+                case DateTimeValue dateTime:
+                    number = dateTime.Value;
+                    return true;
+                case BoolValue boolean:
+                    number = boolean.Value ? 1d : 0d;
+                    return true;
+                case BlankValue:
+                    number = 0d;
+                    return true;
+                case TextValue text:
+                    return TryParseFormulaConvertNumberText(text.Value, out number);
+                default:
+                    number = 0;
+                    return false;
+            }
+        }
+
+        private static bool TryGetFormulaComplexCellNumber(ScalarValue value, out double number)
+        {
+            switch (value)
+            {
+                case NumberValue numeric:
+                    number = numeric.Value;
+                    return true;
+                case DateTimeValue dateTime:
+                    number = dateTime.Value;
+                    return true;
+                default:
+                    number = 0;
+                    return false;
+            }
+        }
+
+        private static string FormulaComplexText(ScalarValue value) =>
+            value switch
+            {
+                TextValue text => text.Value,
+                NumberValue number => number.Value.ToString(CultureInfo.InvariantCulture),
+                DateTimeValue dateTime => dateTime.Value.ToString(CultureInfo.InvariantCulture),
+                BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+                BlankValue => string.Empty,
+                ErrorValue error => error.Code,
+                _ => value.ToString() ?? string.Empty
+            };
 
         private static ScalarValue EvaluateFormulaConvert(double number, string from, string to)
         {

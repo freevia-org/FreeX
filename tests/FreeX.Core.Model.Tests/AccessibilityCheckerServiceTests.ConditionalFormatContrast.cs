@@ -2392,6 +2392,81 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatComplexScalarComparisons()
+    {
+        AssertFormulaComplexFunctionContrastLocations("IMREAL($A1)=3", "B1");
+        AssertFormulaComplexFunctionContrastLocations("IMREAL($A1)=5", "B2");
+        AssertFormulaComplexFunctionContrastLocations("IMREAL($A1)=7", "B5");
+        AssertFormulaComplexFunctionContrastLocations("IMAGINARY($A1)=1", "B3");
+        AssertFormulaComplexFunctionContrastLocations("IMAGINARY($A1)=-1", "B6");
+        AssertFormulaComplexFunctionContrastLocations("IMABS($A1)=5", "B1");
+        AssertFormulaComplexFunctionContrastLocations("IMABS($A1)=13", "B2");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatComplexTextComparisonsAndSuffixes()
+    {
+        AssertFormulaComplexFunctionContrastLocations("COMPLEX($C1,$D1,$E1)=$A1", "B1", "B2", "B3");
+        AssertFormulaComplexFunctionContrastLocations("COMPLEX($C1,$D1,$E1)=\"1234+0.5i\"", "B4");
+        AssertFormulaComplexFunctionContrastLocations("COMPLEX($C1,$D1,$E1)=\"-j\"", "B5");
+        AssertFormulaComplexFunctionContrastLocations("COMPLEX($C1,$D1,$E1)=\"3\"", "B6");
+        AssertFormulaComplexFunctionContrastLocations("IMCONJUGATE($A1)=\"3-4i\"", "B1");
+        AssertFormulaComplexFunctionContrastLocations("IMCONJUGATE($A1)=\"5+12j\"", "B2");
+        AssertFormulaComplexFunctionContrastLocations("IMCONJUGATE($A1)=\"j\"", "B6");
+        AssertFormulaComplexFunctionContrastLocations(
+            "EXACT(IMCONJUGATE(COMPLEX($C1,$D1,$E1)),\"5+12j\")",
+            "B2");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatComplexWrappersPredicatesAndAggregates()
+    {
+        AssertFormulaComplexFunctionContrastLocations("AND(IMABS($A1)>6,$F1)", "B2");
+        AssertFormulaComplexFunctionContrastLocations("IF(IMAGINARY($A1)<0,TRUE,FALSE)", "B2", "B6");
+        AssertFormulaComplexFunctionContrastLocations("ISNUMBER(IMREAL($A1))", "B1", "B2", "B3", "B4", "B5", "B6");
+        AssertFormulaComplexFunctionContrastLocations("ISTEXT(COMPLEX($C1,$D1,$E1))", "B1", "B2", "B3", "B4", "B5", "B6");
+        AssertFormulaComplexFunctionContrastLocations("COMPLEX(0,1,LOWER(\"J\"))=\"j\"", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("IMREAL($A1)+IMAGINARY($A1)=7", "B1", "B5");
+        AssertFormulaComplexFunctionContrastLocations("SUM(IMABS($A1),1)>13", "B2");
+        AssertFormulaComplexFunctionContrastLocations("ABS(IMABS($A1)-5)<0.000000000001", "B1");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatComplexErrors()
+    {
+        AssertFormulaComplexFunctionContrastLocations("ISERROR(IMREAL($A1))", "B7", "B8", "B9");
+        AssertFormulaComplexFunctionContrastLocations("ISNA(IMREAL($A1))", "B8");
+        AssertFormulaComplexFunctionContrastLocations("ISERR(IMREAL($A1))", "B7", "B9");
+        AssertFormulaComplexFunctionContrastLocations("ISERROR(COMPLEX($C1,$D1,$E1))", "B7", "B8", "B9");
+        AssertFormulaComplexFunctionContrastLocations("ISNA(COMPLEX($C1,$D1,$E1))", "B8");
+        AssertFormulaComplexFunctionContrastLocations("ISERR(COMPLEX($C1,$D1,$E1))", "B7", "B9");
+        AssertFormulaComplexFunctionContrastLocations("ISERROR(COMPLEX(1,2,\"x\"))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISERROR(COMPLEX(1E309,0))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISERROR(COMPLEX(\"Open\",2))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISERROR(IMREAL(\"not complex\"))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISERROR(IMREAL(\"1,234\"))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISERROR(IMAGINARY(\"1E309i\"))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISNA(COMPLEX(NA(),2))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISNA(COMPLEX(1,NA()))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISNA(COMPLEX(1,2,NA()))", FormulaComplexAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatComplexUnsupportedShapesOrErrorComparisons()
+    {
+        AssertFormulaComplexFunctionContrastLocations("COMPLEX($C1)>0");
+        AssertFormulaComplexFunctionContrastLocations("COMPLEX($C1,$D1,$E1,1)>0");
+        AssertFormulaComplexFunctionContrastLocations("IMREAL()>0");
+        AssertFormulaComplexFunctionContrastLocations("IMREAL($A1,1)>0");
+        AssertFormulaComplexFunctionContrastLocations("IMAGINARY()>0");
+        AssertFormulaComplexFunctionContrastLocations("IMABS($A1,1)>0");
+        AssertFormulaComplexFunctionContrastLocations("IMCONJUGATE()>\"\"");
+        AssertFormulaComplexFunctionContrastLocations("COMPLEX(1,2,\"x\")=\"1+2i\"");
+        AssertFormulaComplexFunctionContrastLocations("IMREAL(\"not complex\")>0");
+        AssertFormulaComplexFunctionContrastLocations("IMREAL(NA())>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatErrorFunctionComparisons()
     {
         AssertFormulaArithmeticContrastLocations("ERF($A1/100)", "B1", "B2", "B3", "B4");
@@ -4424,6 +4499,119 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 5), new BoolValue(flag));
     }
 
+    private static Workbook CreateFormulaComplexFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 9, 2);
+
+        SetFormulaComplexFunctionContrastRow(
+            sheet,
+            1,
+            new TextValue("3+4i"),
+            new NumberValue(3),
+            new NumberValue(4),
+            new TextValue("i"),
+            flag: true,
+            "Three four i");
+        SetFormulaComplexFunctionContrastRow(
+            sheet,
+            2,
+            new TextValue("5-12j"),
+            new NumberValue(5),
+            new NumberValue(-12),
+            new TextValue("j"),
+            flag: true,
+            "Five minus twelve j");
+        SetFormulaComplexFunctionContrastRow(
+            sheet,
+            3,
+            new TextValue("i"),
+            new NumberValue(0),
+            new NumberValue(1),
+            BlankValue.Instance,
+            flag: false,
+            "Default suffix");
+        SetFormulaComplexFunctionContrastRow(
+            sheet,
+            4,
+            new TextValue("4"),
+            new TextValue("1,234"),
+            new TextValue("50%"),
+            new TextValue("i"),
+            flag: true,
+            "Coerced constructor text");
+        SetFormulaComplexFunctionContrastRow(
+            sheet,
+            5,
+            new NumberValue(7),
+            new NumberValue(0),
+            new NumberValue(-1),
+            new TextValue("j"),
+            flag: false,
+            "Numeric source");
+        SetFormulaComplexFunctionContrastRow(
+            sheet,
+            6,
+            new TextValue("0-j"),
+            new NumberValue(3),
+            new NumberValue(0),
+            new TextValue("j"),
+            flag: true,
+            "Zero imaginary formatting");
+        SetFormulaComplexFunctionContrastRow(
+            sheet,
+            7,
+            new TextValue("not complex"),
+            new NumberValue(1),
+            new NumberValue(2),
+            new TextValue("x"),
+            flag: true,
+            "Invalid text and suffix");
+        SetFormulaComplexFunctionContrastRow(
+            sheet,
+            8,
+            ErrorValue.NA,
+            ErrorValue.NA,
+            new NumberValue(2),
+            new TextValue("i"),
+            flag: true,
+            "NA source");
+        SetFormulaComplexFunctionContrastRow(
+            sheet,
+            9,
+            new BoolValue(true),
+            new TextValue("Open"),
+            new NumberValue(2),
+            new TextValue("i"),
+            flag: true,
+            "Value error source");
+
+        return workbook;
+    }
+
+    private static void SetFormulaComplexFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        ScalarValue complexSource,
+        ScalarValue realSource,
+        ScalarValue imaginarySource,
+        ScalarValue suffixSource,
+        bool flag,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), complexSource);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), realSource);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 4), imaginarySource);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 5), suffixSource);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 6), new BoolValue(flag));
+    }
+
     private static Workbook CreateFormulaArabicRomanFunctionContrastWorkbook(
         out Sheet sheet,
         out CellAddress firstLabel,
@@ -4807,6 +4995,19 @@ public sealed partial class AccessibilityCheckerServiceTests
             .Equal(expectedLocations);
     }
 
+    private static void AssertFormulaComplexFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaComplexFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
     private static void AssertFormulaDateFunctionContrastLocations(
         string formulaText,
         params string[] expectedLocations)
@@ -4896,6 +5097,9 @@ public sealed partial class AccessibilityCheckerServiceTests
 
     private static string[] FormulaConvertNumericLocations =>
         ["B1", "B2", "B3", "B4", "B5", "B6"];
+
+    private static string[] FormulaComplexAllLocations =>
+        ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9"];
 
     private static string[] FormulaNumberValueAllLocations =>
         ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8"];
