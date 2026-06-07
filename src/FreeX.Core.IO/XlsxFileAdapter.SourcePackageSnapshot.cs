@@ -1635,6 +1635,8 @@ public sealed partial class XlsxFileAdapter
                     element.Remove();
                 XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
             }
+
+            XlsxWorksheetSingleXmlCellMapper.NormalizePackage(archive);
         }
 
         private static void NormalizePatchWorksheetPageLayout(ZipArchive archive)
@@ -1796,18 +1798,7 @@ public sealed partial class XlsxFileAdapter
         }
 
         private static void NormalizePatchStructuredTableMetadata(ZipArchive archive)
-        {
-            foreach (var tableEntry in archive.Entries.Where(IsStructuredTableXmlEntry).ToList())
-            {
-                var tableXml = XlsxPackageXmlEditor.LoadXml(tableEntry);
-                var root = tableXml.Root;
-                if (root is not null &&
-                    XlsxStructuredTableSchemaNormalizer.NormalizeElement(root, tableEntry.FullName))
-                {
-                    XlsxPackageXmlEditor.ReplaceXml(archive, tableEntry.FullName, tableXml);
-                }
-            }
-        }
+            => XlsxStructuredTableSchemaNormalizer.NormalizePackage(archive);
 
         private static void NormalizePatchWorksheetDataConsolidation(ZipArchive archive)
         {

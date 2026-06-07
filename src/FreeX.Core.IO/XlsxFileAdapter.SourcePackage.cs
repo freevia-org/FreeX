@@ -93,6 +93,8 @@ public sealed partial class XlsxFileAdapter
         XlsxWorksheetRelationshipMarkerNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxWorksheetPageLayoutNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxWorksheetPageBreakNormalizer.NormalizeWorksheets(generatedArchive);
+        XlsxStructuredTableSchemaNormalizer.NormalizePackage(generatedArchive);
+        XlsxWorksheetSingleXmlCellMapper.NormalizePackage(generatedArchive);
         return sourceParts;
     }
 

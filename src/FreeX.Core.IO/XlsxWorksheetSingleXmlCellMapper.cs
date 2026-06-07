@@ -88,6 +88,19 @@ internal static class XlsxWorksheetSingleXmlCellMapper
         }
     }
 
+    public static void NormalizePackage(ZipArchive archive)
+    {
+        foreach (var partEntry in archive.Entries.Where(IsSingleCellTablePartEntry).ToList())
+        {
+            var partXml = XlsxPackageXmlEditor.LoadXml(partEntry);
+            var root = partXml.Root;
+            if (root is null || !NormalizePartRoot(root))
+                continue;
+
+            XlsxPackageXmlEditor.ReplaceXml(archive, partEntry.FullName, partXml);
+        }
+    }
+
     private static WorksheetSingleXmlCellsModel? ReadPartBackedSingleXmlCells(
         ZipArchive archive,
         string worksheetPath)
@@ -187,6 +200,21 @@ internal static class XlsxWorksheetSingleXmlCellMapper
         }
 
         return element.HasElements ? new XDocument(element) : null;
+    }
+
+    private static bool NormalizePartRoot(XElement singleXmlCells)
+    {
+        var changed = false;
+        foreach (var attribute in singleXmlCells.Attributes().ToList())
+        {
+            if (attribute.IsNamespaceDeclaration)
+                continue;
+
+            attribute.Remove();
+            changed = true;
+        }
+
+        return changed;
     }
 
     private static XElement ToSingleXmlCellXml(WorksheetSingleXmlCellModel cell, int fallbackIndex)
@@ -312,4 +340,12 @@ internal static class XlsxWorksheetSingleXmlCellMapper
         int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result)
             ? result
             : null;
+
+    private static bool IsSingleCellTablePartEntry(ZipArchiveEntry entry)
+    {
+        var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+        return path.StartsWith("xl/tables/tableSingleCells", StringComparison.OrdinalIgnoreCase) &&
+               path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+               !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
+    }
 }

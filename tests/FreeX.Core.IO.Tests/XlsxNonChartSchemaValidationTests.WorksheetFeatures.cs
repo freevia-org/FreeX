@@ -204,6 +204,53 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidStructuredTableAutoFilterForSchemaValidity()
+    {
+        using var source = Save(CreateStructuredTableSourceWorkbook());
+        SetStructuredTableAutoFilterInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 5), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var autoFilter = ReadPackageRootElement(saved, "xl/tables/table1.xml")
+            .Element(XName.Get("autoFilter", "http://schemas.openxmlformats.org/spreadsheetml/2006/main"))!;
+        var workbookNs = autoFilter.Name.Namespace;
+        autoFilter.Attribute("customAttr").Should().BeNull();
+        autoFilter.Element(workbookNs + "nativeAutoFilterChild").Should().BeNull();
+        autoFilter.Element(workbookNs + "extLst").Should().NotBeNull();
+        var firstColumn = autoFilter.Elements(workbookNs + "filterColumn").First();
+        firstColumn.Attribute("hiddenButton").Should().BeNull();
+        firstColumn.Attribute("showButton").Should().BeNull();
+        firstColumn.Attribute("customFilterColumnFlag").Should().BeNull();
+        var filters = firstColumn.Element(workbookNs + "filters")!;
+        filters.Attribute("blank").Should().BeNull();
+        filters.Attribute("filtersFlag").Should().BeNull();
+        filters.Element(workbookNs + "filter")!.Attribute("filterFlag").Should().BeNull();
+        filters.Element(workbookNs + "filter")!.Elements().Should().BeEmpty();
+
+        var customFilters = autoFilter
+            .Elements(workbookNs + "filterColumn")
+            .Skip(1)
+            .First()
+            .Element(workbookNs + "customFilters")!;
+        customFilters.Attribute("and").Should().BeNull();
+        customFilters.Attribute("customFiltersFlag").Should().BeNull();
+        var customFilter = customFilters.Element(workbookNs + "customFilter")!;
+        customFilter.Attribute("operator").Should().BeNull();
+        customFilter.Attribute("customFilterFlag").Should().BeNull();
+        customFilter.Elements().Should().BeEmpty();
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_SanitizesInvalidStructuredTableSortStateForSchemaValidity()
     {
         using var source = Save(CreateStructuredTableSourceWorkbook());
@@ -223,6 +270,37 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.Save(workbook, saved);
 
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var sortState = ReadPackageRootElement(saved, "xl/tables/table1.xml")
+            .Element(XName.Get("sortState", "http://schemas.openxmlformats.org/spreadsheetml/2006/main"))!;
+        var workbookNs = sortState.Name.Namespace;
+        var condition = sortState.Element(workbookNs + "sortCondition")!;
+        sortState.Attribute("columnSort").Should().BeNull();
+        sortState.Attribute("caseSensitive").Should().BeNull();
+        sortState.Attribute("sortMethod").Should().BeNull();
+        condition.Attribute("descending").Should().BeNull();
+        condition.Attribute("sortBy").Should().BeNull();
+        condition.Attribute("dxfId").Should().BeNull();
+        condition.Attribute("iconId").Should().BeNull();
+    }
+
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidStructuredTableSortStateForSchemaValidity()
+    {
+        using var source = Save(CreateStructuredTableSourceWorkbook());
+        SetStructuredTableSortStateInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 5), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         var sortState = ReadPackageRootElement(saved, "xl/tables/table1.xml")
             .Element(XName.Get("sortState", "http://schemas.openxmlformats.org/spreadsheetml/2006/main"))!;
@@ -262,6 +340,30 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidStructuredTableMetadataForSchemaValidity()
+    {
+        using var source = Save(CreateStructuredTableSourceWorkbook());
+        SetStructuredTableMetadataInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 5), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var table = ReadPackageRootElement(saved, "xl/tables/table1.xml");
+        table.Attribute("tableType").Should().BeNull();
+        table.Attribute("headerRowDxfId").Should().BeNull();
+        table.Attribute("connectionId").Should().BeNull();
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_SanitizesInvalidStructuredTableExtensionListsForSchemaValidity()
     {
         using var source = Save(CreateStructuredTableSourceWorkbook());
@@ -281,6 +383,27 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.Save(workbook, saved);
 
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertStructuredTableExtensionListsSanitized(saved);
+    }
+
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidStructuredTableExtensionListsForSchemaValidity()
+    {
+        using var source = Save(CreateStructuredTableSourceWorkbook());
+        SetStructuredTableExtensionListsInvalidNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 5), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         AssertStructuredTableExtensionListsSanitized(saved);
     }

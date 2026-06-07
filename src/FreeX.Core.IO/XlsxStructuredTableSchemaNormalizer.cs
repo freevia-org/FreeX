@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO.Compression;
 using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
@@ -90,6 +91,20 @@ internal static class XlsxStructuredTableSchemaNormalizer
         changed |= NormalizeExtensionLists(table);
         changed |= NormalizeChildOrder(table, TableChildOrder);
         return changed;
+    }
+
+    public static void NormalizePackage(ZipArchive archive)
+    {
+        foreach (var tableEntry in archive.Entries.Where(IsStructuredTableXmlEntry).ToList())
+        {
+            var tableXml = XlsxPackageXmlEditor.LoadXml(tableEntry);
+            var root = tableXml.Root;
+            if (root is not null &&
+                NormalizeElement(root, tableEntry.FullName))
+            {
+                XlsxPackageXmlEditor.ReplaceXml(archive, tableEntry.FullName, tableXml);
+            }
+        }
     }
 
     private static bool NormalizeTableColumnsElement(XElement tableColumns)
@@ -326,5 +341,13 @@ internal static class XlsxStructuredTableSchemaNormalizer
         }
 
         return value > 0 ? value : 1;
+    }
+
+    private static bool IsStructuredTableXmlEntry(ZipArchiveEntry entry)
+    {
+        var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+        return path.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase) &&
+               path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+               !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
     }
 }
