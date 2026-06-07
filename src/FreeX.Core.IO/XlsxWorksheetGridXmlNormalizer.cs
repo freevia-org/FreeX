@@ -48,6 +48,8 @@ internal static class XlsxWorksheetGridXmlNormalizer
             "r",
             "s",
             "t",
+            "cm",
+            "vm",
             "ph"
         };
 
@@ -196,6 +198,8 @@ internal static class XlsxWorksheetGridXmlNormalizer
         changed |= NormalizeAttribute(cell, "r", NormalizeCellReference);
         changed |= NormalizeAttribute(cell, "s", NormalizeUnsignedIntOrNull);
         changed |= NormalizeAttribute(cell, "t", value => NormalizeToken(value, CellTypeValues));
+        changed |= NormalizeAttribute(cell, "cm", NormalizeUnsignedIntOrNull);
+        changed |= NormalizeAttribute(cell, "vm", NormalizeUnsignedIntOrNull);
         changed |= NormalizeAttribute(cell, "ph", NormalizeBoolean);
 
         changed |= NormalizeCellChildren(cell);
