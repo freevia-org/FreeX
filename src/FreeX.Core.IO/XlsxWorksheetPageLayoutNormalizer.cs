@@ -150,7 +150,7 @@ internal static class XlsxWorksheetPageLayoutNormalizer
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(printOptions, PrintOptionsBooleanAttributes);
         foreach (var attributeName in PrintOptionsBooleanAttributes)
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(printOptions, attributeName, NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(printOptions, attributeName, XlsxXmlNormalizationHelpers.NormalizeBoolean);
         changed |= XlsxXmlNormalizationHelpers.RemoveChildElements(printOptions);
         return changed;
     }
@@ -176,11 +176,11 @@ internal static class XlsxWorksheetPageLayoutNormalizer
         changed |= RemoveUnknownPageSetupAttributes(pageSetup);
 
         foreach (var attributeName in PageSetupUnsignedIntAttributes)
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pageSetup, attributeName, NormalizeUnsignedIntOrNull);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pageSetup, attributeName, XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         foreach (var attributeName in PageSetupBooleanAttributes)
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pageSetup, attributeName, NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pageSetup, attributeName, XlsxXmlNormalizationHelpers.NormalizeBoolean);
         foreach (var (attributeName, allowedValues) in PageSetupTokenAttributes)
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pageSetup, attributeName, value => NormalizeToken(value, allowedValues));
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pageSetup, attributeName, value => XlsxXmlNormalizationHelpers.NormalizeToken(value, allowedValues));
 
         changed |= NormalizeRelationshipIdAttribute(pageSetup);
         changed |= XlsxXmlNormalizationHelpers.RemoveChildElements(pageSetup);
@@ -192,7 +192,7 @@ internal static class XlsxWorksheetPageLayoutNormalizer
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(headerFooter, HeaderFooterBooleanAttributes);
         foreach (var attributeName in HeaderFooterBooleanAttributes)
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(headerFooter, attributeName, NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(headerFooter, attributeName, XlsxXmlNormalizationHelpers.NormalizeBoolean);
 
         foreach (var child in headerFooter.Elements().ToList())
         {
@@ -218,7 +218,7 @@ internal static class XlsxWorksheetPageLayoutNormalizer
         {
             changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(pageSetupProperties, PageSetupPropertiesBooleanAttributes);
             foreach (var attributeName in PageSetupPropertiesBooleanAttributes)
-                changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pageSetupProperties, attributeName, NormalizeBoolean);
+                changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pageSetupProperties, attributeName, XlsxXmlNormalizationHelpers.NormalizeBoolean);
             changed |= XlsxXmlNormalizationHelpers.RemoveChildElements(pageSetupProperties);
         }
 
@@ -226,7 +226,7 @@ internal static class XlsxWorksheetPageLayoutNormalizer
         {
             changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(outlineProperties, OutlinePropertiesBooleanAttributes);
             foreach (var attributeName in OutlinePropertiesBooleanAttributes)
-                changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(outlineProperties, attributeName, NormalizeBoolean);
+                changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(outlineProperties, attributeName, XlsxXmlNormalizationHelpers.NormalizeBoolean);
             changed |= XlsxXmlNormalizationHelpers.RemoveChildElements(outlineProperties);
         }
 
@@ -270,31 +270,6 @@ internal static class XlsxWorksheetPageLayoutNormalizer
 
         attribute.Value = normalized;
         return true;
-    }
-
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed switch
-        {
-            "0" or "1" => trimmed,
-            "true" or "false" => trimmed,
-            _ => null
-        };
-    }
-
-    private static string? NormalizeToken(string? value, IReadOnlySet<string> allowedValues)
-    {
-        var trimmed = value?.Trim();
-        return trimmed is not null && allowedValues.Contains(trimmed) ? trimmed : null;
-    }
-
-    private static string? NormalizeUnsignedIntOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed.ToString(CultureInfo.InvariantCulture)
-            : null;
     }
 
     private static string? NormalizeNonNegativeDouble(string? value)
