@@ -1131,6 +1131,69 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_WiresAutoSumMenuThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+
+        sessionSource.Should().Contain("public WorkbookCellEditResult InsertAutoSumFormula(string functionName)");
+        sessionSource.Should().Contain("AutoSumFormulaPlanner.BuildFormula(ActiveSheet, functionName, target)");
+        sessionSource.Should().Contain("CreateEditCellsCommand([(target, Cell.FromFormula(formula))])");
+        sessionSource.Should().Contain("SelectCell(GetNextAutoSumCell(target));");
+
+        source.Should().Contain("private readonly DropDownButton _autoSumButton = new();");
+        source.Should().Contain("private readonly MenuItem _autoSumSumFlyoutItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _autoSumMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _autoSumSumMenuItem = new();");
+        source.Should().Contain("_autoSumButton.Content = \"AutoSum\";");
+        source.Should().Contain("_autoSumButton.Click += AutoSumButton_Click;");
+        source.Should().Contain("_autoSumButton.Flyout = CreateAutoSumFlyout();");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_autoSumButton, \"HomeAutoSumButton\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_autoSumButton, \"Insert a formula using nearby numeric cells.\");");
+        source.Should().Contain("_autoSumSumFlyoutItem.Click += (_, _) => InsertAutoSumFormula(\"SUM\");");
+        source.Should().Contain("_autoSumAverageFlyoutItem.Click += (_, _) => InsertAutoSumFormula(\"AVERAGE\");");
+        source.Should().Contain("_autoSumCountNumbersFlyoutItem.Click += (_, _) => InsertAutoSumFormula(\"COUNT\");");
+        source.Should().Contain("_autoSumCountAllFlyoutItem.Click += (_, _) => InsertAutoSumFormula(\"COUNTA\");");
+        source.Should().Contain("_autoSumMaxFlyoutItem.Click += (_, _) => InsertAutoSumFormula(\"MAX\");");
+        source.Should().Contain("_autoSumMinFlyoutItem.Click += (_, _) => InsertAutoSumFormula(\"MIN\");");
+        source.Should().Contain("_autoSumMenuItem.Header = \"AutoSum\";");
+        source.Should().Contain("_autoSumMenuItem.Menu = CreateNativeAutoSumMenu();");
+        source.Should().Contain("_autoSumSumMenuItem.Gesture = new KeyGesture(Key.OemPlus, KeyModifiers.Alt);");
+        source.Should().Contain("editMenu.Items.Add(_autoSumMenuItem);");
+        source.Should().Contain("_autoSumButton.IsEnabled = isIdle;");
+        source.Should().Contain("_autoSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;");
+        source.Should().Contain("_autoSumButton,");
+        source.Should().Contain("private MenuFlyout CreateAutoSumFlyout()");
+        source.Should().Contain("private NativeMenu CreateNativeAutoSumMenu()");
+        source.Should().Contain("private void AutoSumButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("private void InsertAutoSumFormula(string functionName)");
+        source.Should().Contain("var result = _session.InsertAutoSumFormula(functionName);");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"AutoSum failed.\");");
+        source.Should().Contain("RefreshShell($\"Inserted {functionName.ToUpperInvariant()} at {targetReference}\");");
+        source.Should().Contain("private static bool IsAutoSumShortcut(KeyEventArgs args)");
+        source.Should().Contain("args.Key == Key.OemPlus && args.KeyModifiers == KeyModifiers.Alt;");
+        source.Should().Contain("InsertAutoSumFormula(\"SUM\");");
+        source.Should().Contain("HasAutoSumButton: _autoSumButton.Content?.ToString() == \"AutoSum\"");
+        source.Should().Contain("HasAutoSumSumMenuItem: HasToolbarMenuItem(_autoSumSumFlyoutItem, \"Sum\")");
+        source.Should().Contain("HasNativeAutoSumMenuItem: HasNativeMenuItem(_autoSumMenuItem, \"AutoSum\", requireGesture: false)");
+        source.Should().Contain("HasNativeAutoSumSumMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, \"Sum\")");
+
+        smokeSource.Should().Contain("bool HasAutoSumButton,");
+        smokeSource.Should().Contain("bool HasAutoSumSumMenuItem,");
+        smokeSource.Should().Contain("bool HasNativeAutoSumMenuItem,");
+        smokeSource.Should().Contain("bool HasNativeAutoSumSumMenuItem,");
+        smokeSource.Should().Contain("HasAutoSumButton &&");
+        smokeSource.Should().Contain("HasAutoSumSumMenuItem &&");
+        smokeSource.Should().Contain("HasNativeAutoSumMenuItem &&");
+        smokeSource.Should().Contain("HasNativeAutoSumSumMenuItem &&");
+        smokeSource.Should().Contain("toolbar_autosum_button={FormatBool(snapshot.HasAutoSumButton)}");
+        smokeSource.Should().Contain("toolbar_autosum_sum_menu_item={FormatBool(snapshot.HasAutoSumSumMenuItem)}");
+        smokeSource.Should().Contain("native_autosum_menu_item={FormatBool(snapshot.HasNativeAutoSumMenuItem)}");
+        smokeSource.Should().Contain("native_autosum_sum_menu_item={FormatBool(snapshot.HasNativeAutoSumSumMenuItem)}");
+    }
+
+    [Fact]
     public void MainWindow_WiresFillMenuThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));

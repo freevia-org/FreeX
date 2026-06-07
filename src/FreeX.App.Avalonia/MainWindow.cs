@@ -122,6 +122,13 @@ public sealed class MainWindow : Window
     private readonly Button _pasteButton = new();
     private readonly DropDownButton _pasteSpecialButton = new();
     private readonly Button _formatPainterButton = new();
+    private readonly DropDownButton _autoSumButton = new();
+    private readonly MenuItem _autoSumSumFlyoutItem = new();
+    private readonly MenuItem _autoSumAverageFlyoutItem = new();
+    private readonly MenuItem _autoSumCountNumbersFlyoutItem = new();
+    private readonly MenuItem _autoSumCountAllFlyoutItem = new();
+    private readonly MenuItem _autoSumMaxFlyoutItem = new();
+    private readonly MenuItem _autoSumMinFlyoutItem = new();
     private readonly DropDownButton _fillCellsButton = new();
     private readonly MenuItem _fillDownFlyoutItem = new();
     private readonly MenuItem _fillRightFlyoutItem = new();
@@ -185,6 +192,13 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _pasteSpecialMenuItem = new();
     private readonly NativeMenuItem _formatPainterMenuItem = new();
     private readonly NativeMenuItem _selectAllMenuItem = new();
+    private readonly NativeMenuItem _autoSumMenuItem = new();
+    private readonly NativeMenuItem _autoSumSumMenuItem = new();
+    private readonly NativeMenuItem _autoSumAverageMenuItem = new();
+    private readonly NativeMenuItem _autoSumCountNumbersMenuItem = new();
+    private readonly NativeMenuItem _autoSumCountAllMenuItem = new();
+    private readonly NativeMenuItem _autoSumMaxMenuItem = new();
+    private readonly NativeMenuItem _autoSumMinMenuItem = new();
     private readonly NativeMenuItem _fillCellsMenuItem = new();
     private readonly NativeMenuItem _fillDownMenuItem = new();
     private readonly NativeMenuItem _fillRightMenuItem = new();
@@ -479,6 +493,28 @@ public sealed class MainWindow : Window
         _selectAllMenuItem.Gesture = new KeyGesture(Key.A, KeyModifiers.Meta);
         _selectAllMenuItem.Click += (_, _) => SelectCurrentRegionOrAll();
 
+        _autoSumMenuItem.Header = "AutoSum";
+        _autoSumMenuItem.Menu = CreateNativeAutoSumMenu();
+
+        _autoSumSumMenuItem.Header = "Sum";
+        _autoSumSumMenuItem.Gesture = new KeyGesture(Key.OemPlus, KeyModifiers.Alt);
+        _autoSumSumMenuItem.Click += (_, _) => InsertAutoSumFormula("SUM");
+
+        _autoSumAverageMenuItem.Header = "Average";
+        _autoSumAverageMenuItem.Click += (_, _) => InsertAutoSumFormula("AVERAGE");
+
+        _autoSumCountNumbersMenuItem.Header = "Count Numbers";
+        _autoSumCountNumbersMenuItem.Click += (_, _) => InsertAutoSumFormula("COUNT");
+
+        _autoSumCountAllMenuItem.Header = "Count All";
+        _autoSumCountAllMenuItem.Click += (_, _) => InsertAutoSumFormula("COUNTA");
+
+        _autoSumMaxMenuItem.Header = "Max";
+        _autoSumMaxMenuItem.Click += (_, _) => InsertAutoSumFormula("MAX");
+
+        _autoSumMinMenuItem.Header = "Min";
+        _autoSumMinMenuItem.Click += (_, _) => InsertAutoSumFormula("MIN");
+
         _fillCellsMenuItem.Header = "Fill";
         _fillCellsMenuItem.Menu = CreateNativeFillCellsMenu();
 
@@ -709,6 +745,7 @@ public sealed class MainWindow : Window
         editMenu.Items.Add(_formatPainterMenuItem);
         editMenu.Items.Add(new NativeMenuItemSeparator());
         editMenu.Items.Add(_selectAllMenuItem);
+        editMenu.Items.Add(_autoSumMenuItem);
         editMenu.Items.Add(_fillCellsMenuItem);
         editMenu.Items.Add(_clearMenuItem);
 
@@ -926,6 +963,33 @@ public sealed class MainWindow : Window
         AutomationProperties.SetAutomationId(_formatPainterButton, "HomeFormatPainterButton");
         AutomationProperties.SetName(_formatPainterButton, "Format Painter");
         AutomationProperties.SetHelpText(_formatPainterButton, "Copy formatting from the selection and apply it to another range.");
+
+        _autoSumButton.Content = "AutoSum";
+        _autoSumButton.Padding = new Thickness(10, 4);
+        _autoSumButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _autoSumButton.Click += AutoSumButton_Click;
+        _autoSumButton.Flyout = CreateAutoSumFlyout();
+        AutomationProperties.SetAutomationId(_autoSumButton, "HomeAutoSumButton");
+        AutomationProperties.SetName(_autoSumButton, "AutoSum");
+        AutomationProperties.SetHelpText(_autoSumButton, "Insert a formula using nearby numeric cells.");
+
+        _autoSumSumFlyoutItem.Header = "Sum";
+        _autoSumSumFlyoutItem.Click += (_, _) => InsertAutoSumFormula("SUM");
+
+        _autoSumAverageFlyoutItem.Header = "Average";
+        _autoSumAverageFlyoutItem.Click += (_, _) => InsertAutoSumFormula("AVERAGE");
+
+        _autoSumCountNumbersFlyoutItem.Header = "Count Numbers";
+        _autoSumCountNumbersFlyoutItem.Click += (_, _) => InsertAutoSumFormula("COUNT");
+
+        _autoSumCountAllFlyoutItem.Header = "Count All";
+        _autoSumCountAllFlyoutItem.Click += (_, _) => InsertAutoSumFormula("COUNTA");
+
+        _autoSumMaxFlyoutItem.Header = "Max";
+        _autoSumMaxFlyoutItem.Click += (_, _) => InsertAutoSumFormula("MAX");
+
+        _autoSumMinFlyoutItem.Header = "Min";
+        _autoSumMinFlyoutItem.Click += (_, _) => InsertAutoSumFormula("MIN");
 
         _fillCellsButton.Content = "Fill Cells";
         _fillCellsButton.Padding = new Thickness(10, 4);
@@ -1183,6 +1247,7 @@ public sealed class MainWindow : Window
                     _pasteButton,
                     _pasteSpecialButton,
                     _formatPainterButton,
+                    _autoSumButton,
                     _fillCellsButton,
                     _clearButton,
                     _boldButton,
@@ -1314,6 +1379,13 @@ public sealed class MainWindow : Window
         _pasteButton.IsEnabled = isIdle;
         _pasteSpecialButton.IsEnabled = isIdle;
         _formatPainterButton.IsEnabled = isIdle;
+        _autoSumButton.IsEnabled = isIdle;
+        _autoSumSumFlyoutItem.IsEnabled = isIdle;
+        _autoSumAverageFlyoutItem.IsEnabled = isIdle;
+        _autoSumCountNumbersFlyoutItem.IsEnabled = isIdle;
+        _autoSumCountAllFlyoutItem.IsEnabled = isIdle;
+        _autoSumMaxFlyoutItem.IsEnabled = isIdle;
+        _autoSumMinFlyoutItem.IsEnabled = isIdle;
         _fillDownFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Down);
         _fillRightFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Right);
         _fillUpFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Up);
@@ -1381,6 +1453,13 @@ public sealed class MainWindow : Window
         _pasteSpecialMenuItem.IsEnabled = _pasteSpecialButton.IsEnabled;
         _formatPainterMenuItem.IsEnabled = _formatPainterButton.IsEnabled;
         _selectAllMenuItem.IsEnabled = isIdle;
+        _autoSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
+        _autoSumSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
+        _autoSumAverageMenuItem.IsEnabled = _autoSumButton.IsEnabled;
+        _autoSumCountNumbersMenuItem.IsEnabled = _autoSumButton.IsEnabled;
+        _autoSumCountAllMenuItem.IsEnabled = _autoSumButton.IsEnabled;
+        _autoSumMaxMenuItem.IsEnabled = _autoSumButton.IsEnabled;
+        _autoSumMinMenuItem.IsEnabled = _autoSumButton.IsEnabled;
         _fillCellsMenuItem.IsEnabled = _fillCellsButton.IsEnabled;
         _fillDownMenuItem.IsEnabled = _fillDownFlyoutItem.IsEnabled;
         _fillRightMenuItem.IsEnabled = _fillRightFlyoutItem.IsEnabled;
@@ -2433,6 +2512,20 @@ public sealed class MainWindow : Window
             ItemsSource = CreatePasteSpecialMenuItems().ToArray(),
         };
 
+    private MenuFlyout CreateAutoSumFlyout() =>
+        new()
+        {
+            ItemsSource = new[]
+            {
+                _autoSumSumFlyoutItem,
+                _autoSumAverageFlyoutItem,
+                _autoSumCountNumbersFlyoutItem,
+                _autoSumCountAllFlyoutItem,
+                _autoSumMaxFlyoutItem,
+                _autoSumMinFlyoutItem,
+            },
+        };
+
     private MenuFlyout CreateClearFlyout() =>
         new()
         {
@@ -2457,6 +2550,18 @@ public sealed class MainWindow : Window
                 _fillLeftFlyoutItem,
             },
         };
+
+    private NativeMenu CreateNativeAutoSumMenu()
+    {
+        var menu = new NativeMenu();
+        menu.Items.Add(_autoSumSumMenuItem);
+        menu.Items.Add(_autoSumAverageMenuItem);
+        menu.Items.Add(_autoSumCountNumbersMenuItem);
+        menu.Items.Add(_autoSumCountAllMenuItem);
+        menu.Items.Add(_autoSumMaxMenuItem);
+        menu.Items.Add(_autoSumMinMenuItem);
+        return menu;
+    }
 
     private NativeMenu CreateNativeClearMenu()
     {
@@ -3832,9 +3937,33 @@ public sealed class MainWindow : Window
         CaptureFormatPainterSource(persistent: false);
     }
 
+    private void AutoSumButton_Click(object? sender, RoutedEventArgs e)
+    {
+        InsertAutoSumFormula("SUM");
+    }
+
     private void ClearButton_Click(object? sender, RoutedEventArgs e)
     {
         ClearSelectedRangeContents();
+    }
+
+    private void InsertAutoSumFormula(string functionName)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var targetReference = FormatCellReference(_session.SelectedRange.Start);
+        var result = _session.InsertAutoSumFormula(functionName);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "AutoSum failed.");
+            return;
+        }
+
+        RefreshShell($"Inserted {functionName.ToUpperInvariant()} at {targetReference}");
     }
 
     private void FillSelectedRange(FillCellsDirection direction)
@@ -5107,6 +5236,16 @@ public sealed class MainWindow : Window
             HasFormatPainterButton: _formatPainterButton.Content?.ToString() == "Format Painter" &&
                 string.Equals(AutomationProperties.GetAutomationId(_formatPainterButton), "HomeFormatPainterButton", StringComparison.Ordinal) &&
                 string.Equals(AutomationProperties.GetHelpText(_formatPainterButton), "Copy formatting from the selection and apply it to another range.", StringComparison.Ordinal),
+            HasAutoSumButton: _autoSumButton.Content?.ToString() == "AutoSum" &&
+                _autoSumButton.Flyout is MenuFlyout &&
+                string.Equals(AutomationProperties.GetAutomationId(_autoSumButton), "HomeAutoSumButton", StringComparison.Ordinal) &&
+                string.Equals(AutomationProperties.GetHelpText(_autoSumButton), "Insert a formula using nearby numeric cells.", StringComparison.Ordinal),
+            HasAutoSumSumMenuItem: HasToolbarMenuItem(_autoSumSumFlyoutItem, "Sum"),
+            HasAutoSumAverageMenuItem: HasToolbarMenuItem(_autoSumAverageFlyoutItem, "Average"),
+            HasAutoSumCountNumbersMenuItem: HasToolbarMenuItem(_autoSumCountNumbersFlyoutItem, "Count Numbers"),
+            HasAutoSumCountAllMenuItem: HasToolbarMenuItem(_autoSumCountAllFlyoutItem, "Count All"),
+            HasAutoSumMaxMenuItem: HasToolbarMenuItem(_autoSumMaxFlyoutItem, "Max"),
+            HasAutoSumMinMenuItem: HasToolbarMenuItem(_autoSumMinFlyoutItem, "Min"),
             HasFillCellsButton: _fillCellsButton.Content?.ToString() == "Fill Cells" &&
                 _fillCellsButton.Flyout is MenuFlyout &&
                 string.Equals(AutomationProperties.GetAutomationId(_fillCellsButton), "HomeFillCellsButton", StringComparison.Ordinal) &&
@@ -5192,6 +5331,13 @@ public sealed class MainWindow : Window
             HasNativePasteSpecialPictureMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Picture"),
             HasNativePasteSpecialLinkedPictureMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Linked Picture"),
             HasNativeSelectAllMenuItem: HasNativeMenuItem(_selectAllMenuItem, "Select All"),
+            HasNativeAutoSumMenuItem: HasNativeMenuItem(_autoSumMenuItem, "AutoSum", requireGesture: false),
+            HasNativeAutoSumSumMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, "Sum"),
+            HasNativeAutoSumAverageMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, "Average"),
+            HasNativeAutoSumCountNumbersMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, "Count Numbers"),
+            HasNativeAutoSumCountAllMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, "Count All"),
+            HasNativeAutoSumMaxMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, "Max"),
+            HasNativeAutoSumMinMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, "Min"),
             HasNativeFillCellsMenuItem: HasNativeMenuItem(_fillCellsMenuItem, "Fill", requireGesture: false),
             HasNativeFillDownMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, "Down"),
             HasNativeFillRightMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, "Right"),
@@ -5432,12 +5578,22 @@ public sealed class MainWindow : Window
     private static bool HasOnlyControlModifier(KeyModifiers modifiers) =>
         modifiers == KeyModifiers.Control;
 
+    private static bool IsAutoSumShortcut(KeyEventArgs args) =>
+        args.Key == Key.OemPlus && args.KeyModifiers == KeyModifiers.Alt;
+
     private async void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {
         if (IsShellFocusCycleKey(e))
         {
             e.Handled = true;
             CycleShellFocus(reverse: e.KeyModifiers == KeyModifiers.Shift);
+            return;
+        }
+
+        if (IsAutoSumShortcut(e))
+        {
+            e.Handled = true;
+            InsertAutoSumFormula("SUM");
             return;
         }
 
@@ -5670,6 +5826,7 @@ public sealed class MainWindow : Window
         _pasteButton,
         _pasteSpecialButton,
         _formatPainterButton,
+        _autoSumButton,
         _fillCellsButton,
         _clearButton,
         _boldButton,

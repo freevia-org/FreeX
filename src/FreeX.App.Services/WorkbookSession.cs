@@ -661,6 +661,23 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public WorkbookCellEditResult InsertAutoSumFormula(string functionName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(functionName);
+
+        var target = SelectedRange.Start;
+        var formula = AutoSumFormulaPlanner.BuildFormula(ActiveSheet, functionName, target);
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            CreateEditCellsCommand([(target, Cell.FromFormula(formula))]));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulEditResult(result, target);
+        SelectCell(GetNextAutoSumCell(target));
+        return result;
+    }
+
     public string CopyActiveCellText()
     {
         var range = new GridRange(ActiveCell, ActiveCell);
@@ -1819,6 +1836,9 @@ public sealed class WorkbookSession
             FillCellsDirection.Left => "Fill Left",
             _ => "Fill"
         };
+
+    private static CellAddress GetNextAutoSumCell(CellAddress address) =>
+        new(address.Sheet, address.Row < CellAddress.MaxRow ? address.Row + 1 : address.Row, address.Col);
 
     private static GridRange RemapRangeToSheet(GridRange range, SheetId sheetId) =>
         new(

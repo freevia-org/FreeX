@@ -1,11 +1,13 @@
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Services;
 
 public static class AutoSumFormulaPlanner
 {
     public static string BuildFormula(Sheet? sheet, string functionName, CellAddress address)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(functionName);
+
         if (sheet is null)
             return BuildFallbackFormula(functionName, address);
 

@@ -2109,6 +2109,167 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void InsertAutoSumFormula_SumUsesNumbersAboveMovesActiveCellAndUndoRestores()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var c2 = new CellAddress(sheet.Id, 2, 3);
+        var c3 = new CellAddress(sheet.Id, 3, 3);
+        var c4 = new CellAddress(sheet.Id, 4, 3);
+        sheet.SetCell(c2, new NumberValue(10));
+        sheet.SetCell(c3, new NumberValue(20));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(c4);
+
+        var result = session.InsertAutoSumFormula("SUM");
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().ContainSingle().Which.Should().Be(c4);
+        sheet.GetCell(c4)!.FormulaText.Should().Be("SUM(C2:C3)");
+        session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 5, 3));
+        session.SelectedRange.Should().Be(new GridRange(session.ActiveCell, session.ActiveCell));
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.GetCell(c4).Should().BeNull();
+        session.CanRedo.Should().BeTrue();
+    }
+
+    [Fact]
+    public void InsertAutoSumFormula_AverageFallsBackToNumbersOnTheLeft()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a5 = new CellAddress(sheet.Id, 5, 1);
+        var b5 = new CellAddress(sheet.Id, 5, 2);
+        var c5 = new CellAddress(sheet.Id, 5, 3);
+        sheet.SetCell(a5, new NumberValue(10));
+        sheet.SetCell(b5, new NumberValue(20));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(c5);
+
+        var result = session.InsertAutoSumFormula("AVERAGE");
+
+        result.Success.Should().BeTrue();
+        sheet.GetCell(c5)!.FormulaText.Should().Be("AVERAGE(A5:B5)");
+        session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 6, 3));
+    }
+
+    [Fact]
+    public void InsertAutoSumFormula_CountAllUsesSameInferredRange()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        var a3 = new CellAddress(sheet.Id, 3, 1);
+        sheet.SetCell(a1, new NumberValue(10));
+        sheet.SetCell(a2, new NumberValue(20));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a3);
+
+        var result = session.InsertAutoSumFormula("COUNTA");
+
+        result.Success.Should().BeTrue();
+        sheet.GetCell(a3)!.FormulaText.Should().Be("COUNTA(A1:A2)");
+    }
+
+    [Fact]
+    public void InsertAutoSumFormula_PropagatesAcrossGroupedSheetsAndUndoRestores()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var hidden = workbook.AddSheet("Hidden");
+        hidden.IsHidden = true;
+        var summaryA1 = new CellAddress(summary.Id, 1, 1);
+        var summaryA2 = new CellAddress(summary.Id, 2, 1);
+        var detailsA1 = new CellAddress(details.Id, 1, 1);
+        var detailsA2 = new CellAddress(details.Id, 2, 1);
+        var hiddenA1 = new CellAddress(hidden.Id, 1, 1);
+        var hiddenA2 = new CellAddress(hidden.Id, 2, 1);
+        summary.SetCell(summaryA1, new NumberValue(10));
+        details.SetCell(detailsA1, new NumberValue(20));
+        hidden.SetCell(hiddenA1, new NumberValue(30));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectAllVisibleSheets();
+        session.SelectCell(summaryA2);
+
+        var result = session.InsertAutoSumFormula("MAX");
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().Contain([summaryA2, detailsA2]);
+        result.AffectedCells.Should().NotContain(hiddenA2);
+        summary.GetCell(summaryA2)!.FormulaText.Should().Be("MAX(A1:A1)");
+        details.GetCell(detailsA2)!.FormulaText.Should().Be("MAX(A1:A1)");
+        hidden.GetCell(hiddenA2).Should().BeNull();
+        session.ActiveCell.Should().Be(new CellAddress(summary.Id, 3, 1));
+        session.IsWorkbookGrouped.Should().BeTrue();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        summary.GetCell(summaryA2).Should().BeNull();
+        details.GetCell(detailsA2).Should().BeNull();
+        hidden.GetCell(hiddenA2).Should().BeNull();
+        session.IsWorkbookGrouped.Should().BeTrue();
+    }
+
+    [Fact]
+    public void InsertAutoSumFormula_RejectsProtectedGroupedTargetAndRollsBackActiveSheet()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var summaryA1 = new CellAddress(summary.Id, 1, 1);
+        var summaryA2 = new CellAddress(summary.Id, 2, 1);
+        var detailsA1 = new CellAddress(details.Id, 1, 1);
+        var detailsA2 = new CellAddress(details.Id, 2, 1);
+        summary.SetCell(summaryA1, new NumberValue(10));
+        details.SetCell(detailsA1, new NumberValue(20));
+        details.SetCell(detailsA2, new TextValue("locked"));
+        details.IsProtected = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectAllVisibleSheets();
+        session.SelectCell(summaryA2);
+
+        var result = session.InsertAutoSumFormula("MIN");
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("protected");
+        summary.GetCell(summaryA2).Should().BeNull();
+        details.GetValue(detailsA2).Should().Be(new TextValue("locked"));
+        session.ActiveSheet.Should().BeSameAs(summary);
+        session.ActiveCell.Should().Be(summaryA2);
+        session.IsWorkbookGrouped.Should().BeTrue();
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void CanFillSelectedRange_RequiresTargetCellsByDirection()
     {
         var workbook = CreateWorkbook();

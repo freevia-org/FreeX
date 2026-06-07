@@ -81,6 +81,13 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool IsOpening,
     bool HasNewSheetButton,
     bool HasFormatPainterButton,
+    bool HasAutoSumButton,
+    bool HasAutoSumSumMenuItem,
+    bool HasAutoSumAverageMenuItem,
+    bool HasAutoSumCountNumbersMenuItem,
+    bool HasAutoSumCountAllMenuItem,
+    bool HasAutoSumMaxMenuItem,
+    bool HasAutoSumMinMenuItem,
     bool HasFillCellsButton,
     bool HasFillDownMenuItem,
     bool HasFillRightMenuItem,
@@ -151,6 +158,13 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativePasteSpecialPictureMenuItem,
     bool HasNativePasteSpecialLinkedPictureMenuItem,
     bool HasNativeSelectAllMenuItem,
+    bool HasNativeAutoSumMenuItem,
+    bool HasNativeAutoSumSumMenuItem,
+    bool HasNativeAutoSumAverageMenuItem,
+    bool HasNativeAutoSumCountNumbersMenuItem,
+    bool HasNativeAutoSumCountAllMenuItem,
+    bool HasNativeAutoSumMaxMenuItem,
+    bool HasNativeAutoSumMinMenuItem,
     bool HasNativeFillCellsMenuItem,
     bool HasNativeFillDownMenuItem,
     bool HasNativeFillRightMenuItem,
@@ -227,6 +241,13 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         ViewportColumnCount > 0 &&
         HasNewSheetButton &&
         HasFormatPainterButton &&
+        HasAutoSumButton &&
+        HasAutoSumSumMenuItem &&
+        HasAutoSumAverageMenuItem &&
+        HasAutoSumCountNumbersMenuItem &&
+        HasAutoSumCountAllMenuItem &&
+        HasAutoSumMaxMenuItem &&
+        HasAutoSumMinMenuItem &&
         HasFillCellsButton &&
         HasFillDownMenuItem &&
         HasFillRightMenuItem &&
@@ -297,6 +318,13 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativePasteSpecialPictureMenuItem &&
         HasNativePasteSpecialLinkedPictureMenuItem &&
         HasNativeSelectAllMenuItem &&
+        HasNativeAutoSumMenuItem &&
+        HasNativeAutoSumSumMenuItem &&
+        HasNativeAutoSumAverageMenuItem &&
+        HasNativeAutoSumCountNumbersMenuItem &&
+        HasNativeAutoSumCountAllMenuItem &&
+        HasNativeAutoSumMaxMenuItem &&
+        HasNativeAutoSumMinMenuItem &&
         HasNativeFillCellsMenuItem &&
         HasNativeFillDownMenuItem &&
         HasNativeFillRightMenuItem &&
@@ -461,6 +489,13 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"is_opening={FormatBool(snapshot.IsOpening)}",
                 $"new_sheet_button={FormatBool(snapshot.HasNewSheetButton)}",
                 $"toolbar_format_painter_button={FormatBool(snapshot.HasFormatPainterButton)}",
+                $"toolbar_autosum_button={FormatBool(snapshot.HasAutoSumButton)}",
+                $"toolbar_autosum_sum_menu_item={FormatBool(snapshot.HasAutoSumSumMenuItem)}",
+                $"toolbar_autosum_average_menu_item={FormatBool(snapshot.HasAutoSumAverageMenuItem)}",
+                $"toolbar_autosum_count_numbers_menu_item={FormatBool(snapshot.HasAutoSumCountNumbersMenuItem)}",
+                $"toolbar_autosum_count_all_menu_item={FormatBool(snapshot.HasAutoSumCountAllMenuItem)}",
+                $"toolbar_autosum_max_menu_item={FormatBool(snapshot.HasAutoSumMaxMenuItem)}",
+                $"toolbar_autosum_min_menu_item={FormatBool(snapshot.HasAutoSumMinMenuItem)}",
                 $"toolbar_fill_cells_button={FormatBool(snapshot.HasFillCellsButton)}",
                 $"toolbar_fill_down_menu_item={FormatBool(snapshot.HasFillDownMenuItem)}",
                 $"toolbar_fill_right_menu_item={FormatBool(snapshot.HasFillRightMenuItem)}",
@@ -531,6 +566,13 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_paste_special_picture_menu_item={FormatBool(snapshot.HasNativePasteSpecialPictureMenuItem)}",
                 $"native_paste_special_linked_picture_menu_item={FormatBool(snapshot.HasNativePasteSpecialLinkedPictureMenuItem)}",
                 $"native_select_all_menu_item={FormatBool(snapshot.HasNativeSelectAllMenuItem)}",
+                $"native_autosum_menu_item={FormatBool(snapshot.HasNativeAutoSumMenuItem)}",
+                $"native_autosum_sum_menu_item={FormatBool(snapshot.HasNativeAutoSumSumMenuItem)}",
+                $"native_autosum_average_menu_item={FormatBool(snapshot.HasNativeAutoSumAverageMenuItem)}",
+                $"native_autosum_count_numbers_menu_item={FormatBool(snapshot.HasNativeAutoSumCountNumbersMenuItem)}",
+                $"native_autosum_count_all_menu_item={FormatBool(snapshot.HasNativeAutoSumCountAllMenuItem)}",
+                $"native_autosum_max_menu_item={FormatBool(snapshot.HasNativeAutoSumMaxMenuItem)}",
+                $"native_autosum_min_menu_item={FormatBool(snapshot.HasNativeAutoSumMinMenuItem)}",
                 $"native_fill_cells_menu_item={FormatBool(snapshot.HasNativeFillCellsMenuItem)}",
                 $"native_fill_down_menu_item={FormatBool(snapshot.HasNativeFillDownMenuItem)}",
                 $"native_fill_right_menu_item={FormatBool(snapshot.HasNativeFillRightMenuItem)}",
