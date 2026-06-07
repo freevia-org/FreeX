@@ -1336,6 +1336,47 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_WiresNativeDataValidationPreviewWithoutWorkbookMutation()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "DataValidationPreviewPlanner.cs"));
+        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        source.Should().Contain("private readonly NativeMenuItem _dataValidationMenuItem = new();");
+        source.Should().Contain("_dataValidationMenuItem.Header = \"Data Validation...\";");
+        source.Should().Contain("_dataValidationMenuItem.Click += async (_, _) => await ShowDataValidationPreviewDialogAsync();");
+        source.Should().Contain("dataMenu.Items.Add(_dataValidationMenuItem);");
+        source.Should().Contain("_dataValidationMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("private async Task ShowDataValidationPreviewDialogAsync()");
+        source.Should().Contain("DataValidationPreviewPlanner.Create(");
+        source.Should().Contain("_session.Workbook");
+        source.Should().Contain("_session.ActiveSheet");
+        source.Should().Contain("_session.ActiveCell");
+        source.Should().Contain("_session.SelectedRange");
+        source.Should().Contain("await ShowTextDialogAsync(\"Data Validation\", preview.Text, 520, 360);");
+
+        plannerSource.Should().Contain("DataValidationService.GetApplicable(sheet, activeCell)");
+        plannerSource.Should().Contain("DataValidationService.GetListItems(rule, sheet, workbook)");
+        plannerSource.Should().Contain("DataValidationService.FormatListSourceRange");
+
+        var handlerIndex = normalizedSource.IndexOf("private async Task ShowDataValidationPreviewDialogAsync()", StringComparison.Ordinal);
+        handlerIndex.Should().BeGreaterThanOrEqualTo(0);
+        var nextMethodIndex = normalizedSource.IndexOf("\n    private void BoldButton_Click", handlerIndex, StringComparison.Ordinal);
+        nextMethodIndex.Should().BeGreaterThan(handlerIndex);
+        var handlerSource = normalizedSource[handlerIndex..nextMethodIndex];
+
+        handlerSource.Should().NotContain("TryCommitPendingFormulaEdit");
+        handlerSource.Should().NotContain("SetDataValidationCommand");
+        handlerSource.Should().NotContain("ClearDataValidationCommand");
+        handlerSource.Should().NotContain("PasteDataValidationFromClipboardAtActiveCell");
+        handlerSource.Should().NotContain("Clipboard");
+        handlerSource.Should().NotContain("DataTransferManager");
+        handlerSource.Should().NotContain("WindowInteropHelper");
+        handlerSource.Should().NotContain("Microsoft.Win32");
+        handlerSource.Should().NotContain("System.Windows");
+    }
+
+    [Fact]
     public void MainWindow_WiresFillMenuThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
