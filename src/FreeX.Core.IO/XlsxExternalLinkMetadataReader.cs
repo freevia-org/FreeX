@@ -38,12 +38,14 @@ internal static class XlsxExternalLinkMetadataReader
                 "xl/workbook.xml",
                 packageRelNs);
             var result = new List<ExternalLinkModel>();
+            var seenRelationshipIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var externalReference in workbookXml.Root?
                          .Element(workbookNs + "externalReferences")?
                          .Elements(workbookNs + "externalReference") ?? [])
             {
-                var relId = externalReference.Attribute(relNs + "id")?.Value;
+                var relId = externalReference.Attribute(relNs + "id")?.Value.Trim();
                 if (string.IsNullOrWhiteSpace(relId) ||
+                    !seenRelationshipIds.Add(relId) ||
                     !workbookRels.TryGetValue(relId, out var externalLinkPath))
                 {
                     continue;
