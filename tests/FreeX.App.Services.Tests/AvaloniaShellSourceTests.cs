@@ -551,6 +551,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("external_image_clipboard_paste={FormatBool(imageClipboardPasteVerified)}");
         smokeSource.Should().Contain("external_image_clipboard_picture_count={snapshot.ExternalImageClipboardPictureCount}");
         smokeSource.Should().Contain("external_image_clipboard_picture_png_bytes={snapshot.ExternalImageClipboardPicturePngByteCount}");
+        smokeSource.Should().Contain("bool HasNativeWorkbookStatisticsMenuItem,");
+        smokeSource.Should().Contain("HasNativeWorkbookStatisticsMenuItem &&");
         smokeSource.Should().Contain("HasNativePasteSpecialCommentsMenuItem &&");
         smokeSource.Should().Contain("HasNativePasteSpecialValidationMenuItem &&");
         smokeSource.Should().Contain("HasNativePasteSpecialAllExceptBordersMenuItem &&");
@@ -603,6 +605,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_new_workbook_menu_item={FormatBool(snapshot.HasNativeNewWorkbookMenuItem)}");
         smokeSource.Should().Contain("native_open_recent_menu_item={FormatBool(snapshot.HasNativeOpenRecentMenuItem)}");
         smokeSource.Should().Contain("native_open_recent_item_count={snapshot.NativeOpenRecentItemCount}");
+        smokeSource.Should().Contain("native_workbook_statistics_menu_item={FormatBool(snapshot.HasNativeWorkbookStatisticsMenuItem)}");
         smokeSource.Should().Contain("native_close_workbook_menu_item={FormatBool(snapshot.HasNativeCloseWorkbookMenuItem)}");
         smokeSource.Should().Contain("native_edit_menu={FormatBool(snapshot.HasNativeEditMenu)}");
         smokeSource.Should().Contain("native_data_menu={FormatBool(snapshot.HasNativeDataMenu)}");
@@ -734,6 +737,7 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeNewWorkbookMenuItem: HasNativeMenuItem(_newWorkbookMenuItem, \"New Workbook\")");
         windowSource.Should().Contain("HasNativeOpenRecentMenuItem: HasNativeMenuItem(_openRecentMenuItem, \"Open Recent\", requireGesture: false)");
         windowSource.Should().Contain("NativeOpenRecentItemCount: nativeOpenRecentItemCount");
+        windowSource.Should().Contain("HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, \"Workbook Statistics...\")");
         windowSource.Should().Contain("NativeTabColorSwatchCount: nativeTabColorSwatchCount");
         windowSource.Should().Contain("HasFocusableSheetTab: HasSheetTabButton(button => button.Focusable)");
         windowSource.Should().Contain("HasFocusableActiveSheetTab: FindSheetTabButton(_session.ActiveSheet.Id)?.Focusable == true");
@@ -2769,6 +2773,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresWorkbookStatisticsToCompactNativeMenuDialog()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
 
         source.Should().Contain("private readonly NativeMenuItem _workbookStatisticsMenuItem = new();");
         source.Should().Contain("_workbookStatisticsMenuItem.Header = \"Workbook Statistics...\";");
@@ -2776,6 +2781,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();");
         source.Should().Contain("fileMenu.Items.Add(_workbookStatisticsMenuItem);");
         source.Should().Contain("_workbookStatisticsMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, \"Workbook Statistics...\")");
+        smokeSource.Should().Contain("bool HasNativeWorkbookStatisticsMenuItem,");
+        smokeSource.Should().Contain("HasNativeWorkbookStatisticsMenuItem &&");
+        smokeSource.Should().Contain("native_workbook_statistics_menu_item={FormatBool(snapshot.HasNativeWorkbookStatisticsMenuItem)}");
         source.Should().Contain("else if (e.Key == Key.G && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))");
         source.Should().Contain("await ShowWorkbookStatisticsDialogAsync();");
         source.Should().Contain("private async Task ShowWorkbookStatisticsDialogAsync()");

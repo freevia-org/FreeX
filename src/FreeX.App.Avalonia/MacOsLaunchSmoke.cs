@@ -222,6 +222,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     int NativeOpenRecentItemCount,
     bool HasNativeSaveMenuItem,
     bool HasNativeSaveAsMenuItem,
+    bool HasNativeWorkbookStatisticsMenuItem,
     bool HasNativeCloseWorkbookMenuItem,
     bool HasNativeNewSheetMenuItem,
     bool HasNativeRenameSheetMenuItem,
@@ -392,6 +393,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         NativeOpenRecentItemCount > 0 &&
         HasNativeSaveMenuItem &&
         HasNativeSaveAsMenuItem &&
+        HasNativeWorkbookStatisticsMenuItem &&
         HasNativeCloseWorkbookMenuItem &&
         HasNativeNewSheetMenuItem &&
         HasNativeRenameSheetMenuItem &&
@@ -711,6 +713,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_open_recent_item_count={snapshot.NativeOpenRecentItemCount}",
                 $"native_save_menu_item={FormatBool(snapshot.HasNativeSaveMenuItem)}",
                 $"native_save_as_menu_item={FormatBool(snapshot.HasNativeSaveAsMenuItem)}",
+                $"native_workbook_statistics_menu_item={FormatBool(snapshot.HasNativeWorkbookStatisticsMenuItem)}",
                 $"native_close_workbook_menu_item={FormatBool(snapshot.HasNativeCloseWorkbookMenuItem)}",
                 $"native_new_sheet_menu_item={FormatBool(snapshot.HasNativeNewSheetMenuItem)}",
                 $"native_rename_sheet_menu_item={FormatBool(snapshot.HasNativeRenameSheetMenuItem)}",
