@@ -2770,6 +2770,49 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatMatrixArrayFunctionComparisons()
+    {
+        AssertFormulaMatrixArrayFunctionContrastLocations("MDETERM($C$1:$D$2)=-2", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("MMULT($I$1:$J$1,$I$2:$I$3)=11", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("MINVERSE($K$1:$K$1)=0.5", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("TRANSPOSE($K$1:$K$1)=2", FormulaMatrixArrayAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatMatrixArrayLiteralsWrappersAndErrorPredicates()
+    {
+        AssertFormulaMatrixArrayFunctionContrastLocations("MMULT({1,2},{3;4})=11", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("MDETERM({1,2;3,4})=-2", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("AND(MDETERM($C$1:$D$2)<0,TRANSPOSE({2})=2)", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("IF(MMULT($I$1:$J$1,$I$2:$I$3)=11,TRUE,FALSE)", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("IFERROR(MMULT($C$1:$D$2,$I$1:$J$1),TRUE)", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("ISERROR(MMULT($C$1:$D$2,$I$1:$J$1))", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("ISNA(MMULT($C$1:$D$2,NA()))", FormulaMatrixArrayAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatMatrixArrayDimensionAndSingularErrors()
+    {
+        AssertFormulaMatrixArrayFunctionContrastLocations("ISERROR(MMULT($C$1:$D$2,$I$1:$J$1))", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("ISERROR(MDETERM($P$1:$R$2))", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("ISERROR(MINVERSE($M$1:$N$2))", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("ISERR(MINVERSE($M$1:$N$2))", FormulaMatrixArrayAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatMatrixArrayUnsupportedArityAndShapes()
+    {
+        AssertFormulaMatrixArrayFunctionContrastLocations("MMULT($I$1:$J$1)>0");
+        AssertFormulaMatrixArrayFunctionContrastLocations("MDETERM()>0");
+        AssertFormulaMatrixArrayFunctionContrastLocations("MINVERSE($C$1:$D$2,1)>0");
+        AssertFormulaMatrixArrayFunctionContrastLocations("TRANSPOSE()>0");
+        AssertFormulaMatrixArrayFunctionContrastLocations("MMULT($C$1:$D$2,$F$1:$G$2)>0");
+        AssertFormulaMatrixArrayFunctionContrastLocations("MINVERSE($C$1:$D$2)>0");
+        AssertFormulaMatrixArrayFunctionContrastLocations("TRANSPOSE($C$1:$D$2)>0");
+        AssertFormulaMatrixArrayFunctionContrastLocations("MDETERM({1,\"x\";3,4})>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatNormalDistributionScalarFunctions()
     {
         AssertFormulaNormalDistributionFunctionContrastLocations("AND($G1,NORMDIST($A1,$C1,$D1,TRUE)>0.8)", "B2", "B4");
@@ -5600,6 +5643,54 @@ public sealed partial class AccessibilityCheckerServiceTests
         return workbook;
     }
 
+    private static Workbook CreateFormulaMatrixArrayFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 4, 2);
+
+        for (uint row = 1; row <= 4; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue($"Matrix row {row}"));
+
+        SetMatrixArrayCell(sheet, 1, 3, 1);
+        SetMatrixArrayCell(sheet, 1, 4, 2);
+        SetMatrixArrayCell(sheet, 2, 3, 3);
+        SetMatrixArrayCell(sheet, 2, 4, 4);
+
+        SetMatrixArrayCell(sheet, 1, 6, 5);
+        SetMatrixArrayCell(sheet, 1, 7, 6);
+        SetMatrixArrayCell(sheet, 2, 6, 7);
+        SetMatrixArrayCell(sheet, 2, 7, 8);
+
+        SetMatrixArrayCell(sheet, 1, 9, 1);
+        SetMatrixArrayCell(sheet, 1, 10, 2);
+        SetMatrixArrayCell(sheet, 2, 9, 3);
+        SetMatrixArrayCell(sheet, 3, 9, 4);
+
+        SetMatrixArrayCell(sheet, 1, 11, 2);
+
+        SetMatrixArrayCell(sheet, 1, 13, 1);
+        SetMatrixArrayCell(sheet, 1, 14, 2);
+        SetMatrixArrayCell(sheet, 2, 13, 2);
+        SetMatrixArrayCell(sheet, 2, 14, 4);
+
+        SetMatrixArrayCell(sheet, 1, 16, 1);
+        SetMatrixArrayCell(sheet, 1, 17, 2);
+        SetMatrixArrayCell(sheet, 1, 18, 3);
+        SetMatrixArrayCell(sheet, 2, 16, 4);
+        SetMatrixArrayCell(sheet, 2, 17, 5);
+        SetMatrixArrayCell(sheet, 2, 18, 6);
+
+        return workbook;
+    }
+
+    private static void SetMatrixArrayCell(Sheet sheet, uint row, uint col, double value) =>
+        sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(value));
+
     private static Workbook CreateFormulaStatisticalSelectionContrastWorkbook(
         out Sheet sheet,
         out CellAddress firstLabel,
@@ -8081,6 +8172,17 @@ public sealed partial class AccessibilityCheckerServiceTests
             .Equal(expectedLocations);
     }
 
+    private static void AssertFormulaMatrixArrayFunctionContrastLocations(string formulaText, params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaMatrixArrayFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
     private static void AssertFormulaFinancialDepreciationFunctionContrastLocations(
         string formulaText,
         params string[] expectedLocations)
@@ -8479,6 +8581,9 @@ public sealed partial class AccessibilityCheckerServiceTests
 
     private static string[] FormulaLookupReferenceAllLocations =>
         ["B1", "B2", "B3", "B4", "B5"];
+
+    private static string[] FormulaMatrixArrayAllLocations =>
+        ["B1", "B2", "B3", "B4"];
 
     private static string[] FormulaStatisticalSelectionAllLocations =>
         ["B1", "B2", "B3", "B4"];
