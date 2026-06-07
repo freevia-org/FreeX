@@ -183,6 +183,7 @@ public sealed class MainWindow : Window
     private const double ZoomToSelectionDefaultColumnWidth = 80;
     private const double ZoomToSelectionDefaultRowHeight = 20;
     private const int ZoomStepPercent = 10;
+    private const string WorkbookShareSheetLabel = "macOS Share Sheet";
     private const string NativeWorkbookExtension = ".fxl";
     private const string PlatformAboutSummary = "Built with .NET 10, Avalonia, ClosedXML.";
     private const string SheetTabContextHelpText = "Selects this sheet. Press F6 repeatedly to reach sheet tabs, use arrow keys to switch sheets, or right-click/press Shift+F10 for sheet tab options.";
@@ -283,6 +284,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _openRecentMenuItem = new();
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
+    private readonly NativeMenuItem _shareWorkbookMenuItem = new();
     private readonly NativeMenuItem _workbookStatisticsMenuItem = new();
     private readonly NativeMenuItem _closeWorkbookMenuItem = new();
     private readonly NativeMenuItem _newSheetMenuItem = new();
@@ -544,6 +546,9 @@ public sealed class MainWindow : Window
         _saveAsMenuItem.Header = "Save As...";
         _saveAsMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Shift);
         _saveAsMenuItem.Click += async (_, _) => await SaveWorkbookAsAsync();
+
+        _shareWorkbookMenuItem.Header = "Share Workbook...";
+        _shareWorkbookMenuItem.Click += async (_, _) => await ShareWorkbookAsync();
 
         _workbookStatisticsMenuItem.Header = "Workbook Statistics...";
         _workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);
@@ -883,6 +888,7 @@ public sealed class MainWindow : Window
         fileMenu.Items.Add(_openRecentMenuItem);
         fileMenu.Items.Add(_saveMenuItem);
         fileMenu.Items.Add(_saveAsMenuItem);
+        fileMenu.Items.Add(_shareWorkbookMenuItem);
         fileMenu.Items.Add(_workbookStatisticsMenuItem);
         fileMenu.Items.Add(new NativeMenuItemSeparator());
         fileMenu.Items.Add(_closeWorkbookMenuItem);
@@ -1604,6 +1610,7 @@ public sealed class MainWindow : Window
         RefreshNativeOpenRecentMenu(isIdle);
         _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
         _saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;
+        _shareWorkbookMenuItem.IsEnabled = isIdle;
         _workbookStatisticsMenuItem.IsEnabled = isIdle;
         _closeWorkbookMenuItem.IsEnabled = isIdle;
         var activeSheetTabIndex = FindActiveSheetTabIndex();
@@ -8750,6 +8757,124 @@ public sealed class MainWindow : Window
         await SaveWorkbookAsAsync();
     }
 
+    private async Task ShareWorkbookAsync()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        await ExecuteWorkbookShareActionPlanAsync(CreateWorkbookShareActionPlan());
+    }
+
+    private WorkbookShareActionPlan CreateWorkbookShareActionPlan() =>
+        WorkbookShareActionPlanner.CreatePlan(
+            _session.CurrentFilePath,
+            CreateWorkbookShareActionSurface(),
+            File.Exists);
+
+    private WorkbookShareActionSurface CreateWorkbookShareActionSurface() =>
+        new(
+            WorkbookShareSheetLabel,
+            CanShowShareSheet: false,
+            CanOpenContainingFolder: TopLevel.GetTopLevel(this)?.Launcher is not null,
+            OpenContainingFolderLabel: GetWorkbookShareOpenContainingFolderLabel());
+
+    private static string GetWorkbookShareOpenContainingFolderLabel() =>
+        OperatingSystem.IsMacOS()
+            ? "Reveal in Finder"
+            : "Open Containing Folder";
+
+    private async Task ExecuteWorkbookShareActionPlanAsync(WorkbookShareActionPlan plan)
+    {
+        switch (plan.Kind)
+        {
+            case WorkbookShareActionPlanKind.SaveAsBeforeShare:
+                ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(plan), isWarning: true);
+                await SaveWorkbookAsAsync();
+                var nextPlan = CreateWorkbookShareActionPlan();
+                if (nextPlan.Kind == WorkbookShareActionPlanKind.SaveAsBeforeShare)
+                {
+                    ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(nextPlan), isWarning: true);
+                    return;
+                }
+
+                await ExecuteWorkbookShareActionPlanAsync(nextPlan);
+                break;
+
+            case WorkbookShareActionPlanKind.OpenContainingFolder:
+                if (!await TrySaveDirtyWorkbookForShareAsync())
+                    return;
+
+                var refreshedPlan = CreateWorkbookShareActionPlan();
+                if (refreshedPlan.Kind != WorkbookShareActionPlanKind.OpenContainingFolder)
+                {
+                    await ExecuteWorkbookShareActionPlanAsync(refreshedPlan);
+                    return;
+                }
+
+                await OpenWorkbookContainingFolderAsync(refreshedPlan);
+                break;
+
+            case WorkbookShareActionPlanKind.ShareSheet:
+            case WorkbookShareActionPlanKind.Deferred:
+            default:
+                ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(plan), isWarning: true);
+                break;
+        }
+    }
+
+    private async Task<bool> TrySaveDirtyWorkbookForShareAsync()
+    {
+        if (!_session.IsDirty)
+            return true;
+
+        await SaveCurrentWorkbookAsync();
+        return !_session.IsDirty;
+    }
+
+    private async Task OpenWorkbookContainingFolderAsync(WorkbookShareActionPlan plan)
+    {
+        var folderPath = plan.ContainingFolderPath;
+        if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath))
+        {
+            var unavailablePlan = new WorkbookShareActionPlan(
+                WorkbookShareActionPlanKind.Deferred,
+                plan.Path,
+                UnavailableReason: WorkbookShareActionUnavailableReason.ContainingFolderUnavailable,
+                Surface: plan.EffectiveSurface);
+            ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(unavailablePlan), isWarning: true);
+            return;
+        }
+
+        var launcher = TopLevel.GetTopLevel(this)?.Launcher;
+        if (launcher is null)
+        {
+            ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(CreateWorkbookShareActionPlan()), isWarning: true);
+            return;
+        }
+
+        ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(plan), isWarning: true);
+        try
+        {
+            if (!await launcher.LaunchDirectoryInfoAsync(new DirectoryInfo(folderPath)))
+            {
+                ShowShareStatus($"{plan.EffectiveSurface.OpenContainingFolderLabel} could not open for {plan.Path}.", isWarning: true);
+                return;
+            }
+
+            var workbookName = string.IsNullOrWhiteSpace(plan.Path)
+                ? "the saved workbook"
+                : Path.GetFileName(plan.Path);
+            ShowShareStatus($"{plan.EffectiveSurface.OpenContainingFolderLabel} opened for {workbookName}.", isWarning: false);
+        }
+        catch (Exception ex)
+        {
+            ShowShareStatus($"{plan.EffectiveSurface.OpenContainingFolderLabel} could not open: {ex.Message}", isWarning: true);
+        }
+    }
+
     private async Task SaveWorkbookAsAsync()
     {
         if (_isSaving)
@@ -8861,6 +8986,15 @@ public sealed class MainWindow : Window
     {
         _statusText.Text = message;
         _statusText.Foreground = Brush(143, 74, 18);
+    }
+
+    private void ShowShareStatus(string message, bool isWarning)
+    {
+        _statusText.Text = message;
+        _statusText.Foreground = isWarning
+            ? Brush(143, 74, 18)
+            : Brush(67, 113, 83);
+        UpdateSaveButton();
     }
 
     private void ShowOpenIssue(string message)
