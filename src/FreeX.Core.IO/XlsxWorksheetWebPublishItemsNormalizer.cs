@@ -129,9 +129,9 @@ internal static class XlsxWorksheetWebPublishItemsNormalizer
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(webPublishItem, WebPublishItemAttributes, RelNs + "id");
         changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(webPublishItem);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishItem, "id", NormalizeUnsignedIntOrNull);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishItem, "sourceType", NormalizeSourceType);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishItem, "autoRepublish", NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishItem, "id", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishItem, "sourceType", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, SourceTypeValues));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishItem, "autoRepublish", XlsxXmlNormalizationHelpers.NormalizeBoolean);
 
         foreach (var attributeName in TextAttributes)
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishItem, attributeName, NormalizeOptionalText);
@@ -162,35 +162,10 @@ internal static class XlsxWorksheetWebPublishItemsNormalizer
         return changed;
     }
 
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed switch
-        {
-            "0" or "1" => trimmed,
-            "true" or "false" => trimmed,
-            _ => null
-        };
-    }
-
     private static string? NormalizeOptionalText(string? value)
     {
         var trimmed = value?.Trim();
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
-    }
-
-    private static string? NormalizeSourceType(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed is not null && SourceTypeValues.Contains(trimmed) ? trimmed : null;
-    }
-
-    private static string? NormalizeUnsignedIntOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed.ToString(CultureInfo.InvariantCulture)
-            : null;
     }
 
     private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
