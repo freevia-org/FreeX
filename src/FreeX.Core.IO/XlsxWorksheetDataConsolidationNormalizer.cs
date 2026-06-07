@@ -33,11 +33,11 @@ internal static class XlsxWorksheetDataConsolidationNormalizer
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(dataConsolidate, DataConsolidateAttributes);
         changed |= RemoveUnexpectedChildren(dataConsolidate, WorksheetNs + "dataRefs");
         changed |= MergeDuplicateDataReferences(dataConsolidate);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(dataConsolidate, "function", value => NormalizeToken(value, ValidFunctions));
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(dataConsolidate, "leftLabels", NormalizeBoolean);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(dataConsolidate, "startLabels", NormalizeBoolean);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(dataConsolidate, "topLabels", NormalizeBoolean);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(dataConsolidate, "link", NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(dataConsolidate, "function", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, ValidFunctions));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(dataConsolidate, "leftLabels", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(dataConsolidate, "startLabels", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(dataConsolidate, "topLabels", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(dataConsolidate, "link", XlsxXmlNormalizationHelpers.NormalizeBoolean);
 
         foreach (var dataRefs in dataConsolidate.Elements(WorksheetNs + "dataRefs"))
         {
@@ -145,23 +145,6 @@ internal static class XlsxWorksheetDataConsolidationNormalizer
 
         relationshipId.Value = normalized;
         return true;
-    }
-
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed switch
-        {
-            "0" or "1" => trimmed,
-            "true" or "false" => trimmed,
-            _ => null
-        };
-    }
-
-    private static string? NormalizeToken(string? value, IReadOnlySet<string> allowedValues)
-    {
-        var trimmed = value?.Trim();
-        return trimmed is not null && allowedValues.Contains(trimmed) ? trimmed : null;
     }
 
     private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)

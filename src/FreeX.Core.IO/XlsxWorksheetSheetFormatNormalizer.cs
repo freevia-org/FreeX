@@ -53,7 +53,7 @@ internal static class XlsxWorksheetSheetFormatNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(sheetFormat, SheetFormatAttributes, X14AcNs + "dyDescent");
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetFormat, "baseColWidth", NormalizeUnsignedInt);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetFormat, "baseColWidth", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetFormat, "defaultColWidth", NormalizeNonNegativeDouble);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetFormat, "defaultRowHeight", NormalizeNonNegativeDouble);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetFormat, "outlineLevelRow", NormalizeOutlineLevel);
@@ -117,14 +117,6 @@ internal static class XlsxWorksheetSheetFormatNormalizer
         var trimmed = value?.Trim();
         return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) &&
                parsed <= 7
-            ? parsed.ToString(CultureInfo.InvariantCulture)
-            : null;
-    }
-
-    private static string? NormalizeUnsignedInt(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
             ? parsed.ToString(CultureInfo.InvariantCulture)
             : null;
     }

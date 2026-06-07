@@ -14,8 +14,11 @@ internal static class XlsxDigitalSignaturePackagePolicy
         foreach (var entry in sourceArchive.Entries)
         {
             var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
-            if (IsDigitalSignaturePackagePath(path))
+            if (IsDigitalSignaturePackagePath(path) ||
+                IsVbaProjectSignaturePackagePath(path))
+            {
                 exclusions.Add(path);
+            }
         }
 
         return exclusions;
@@ -23,6 +26,9 @@ internal static class XlsxDigitalSignaturePackagePolicy
 
     public static bool IsDigitalSignaturePackagePath(string path) =>
         path.StartsWith("_xmlsignatures/", StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsVbaProjectSignaturePackagePath(string path) =>
+        string.Equals(path, "xl/vbaProjectSignature.bin", StringComparison.OrdinalIgnoreCase);
 
     public static bool HasDigitalSignatureRelationship(ZipArchiveEntry relationshipEntry)
     {

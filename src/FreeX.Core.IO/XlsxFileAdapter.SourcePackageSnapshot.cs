@@ -871,6 +871,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchWorkbookSmartTags(archive);
                 NormalizePatchWorkbookProtection(archive);
                 NormalizePatchSharedStrings(archive);
+                NormalizePatchDocumentThumbnail(archive);
                 NormalizePatchInlineStringFonts(archive);
                 NormalizePatchThemeTypefaces(archive);
                 NormalizePatchLegacyCommentFonts(archive);
@@ -1010,6 +1011,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchWorksheetOleControls(archive);
                 NormalizePatchWorksheetRelationshipMarkers(archive);
                 NormalizePatchSingleCellTableParts(archive);
+                XlsxPackageMetadataMerger.NormalizeCustomXmlPackageGraph(archive);
 
                 if (invalidatesCalcChain)
                 {
@@ -1487,6 +1489,9 @@ public sealed partial class XlsxFileAdapter
             XlsxRichTextFontNormalizer.NormalizeSharedStrings(archive);
             XlsxSharedStringPackageGraphNormalizer.NormalizePackage(archive);
         }
+
+        private static void NormalizePatchDocumentThumbnail(ZipArchive archive)
+            => XlsxDocumentThumbnailPackageGraphNormalizer.NormalizePackage(archive);
 
         private static void NormalizePatchInlineStringFonts(ZipArchive archive)
         {
