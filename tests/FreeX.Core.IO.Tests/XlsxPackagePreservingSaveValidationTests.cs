@@ -242,6 +242,71 @@ public sealed class XlsxPackagePreservingSaveValidationTests
     }
 
     [Fact]
+    public void LoadEditSave_RebindsCopiedUnsupportedSheetSidecarRelationshipIdCollisions()
+    {
+        var sourceBytes = CreatePackageWithUnsupportedSheetSidecarRelationshipIdCollision();
+
+        var savedBytes = SaveAfterLoadingAndEditing(sourceBytes, workbook =>
+        {
+            var sheet = workbook.GetSheet("Data");
+            sheet.Should().NotBeNull();
+            sheet!.SetCell(new CellAddress(sheet.Id, 6, 2), new TextValue("sidecar rel id rebound"));
+        });
+
+        AssertRoundTripCellValue(savedBytes, "Data", 6, 2, new TextValue("sidecar rel id rebound"));
+
+        using var savedPackage = new MemoryStream(savedBytes);
+        using var savedArchive = new ZipArchive(savedPackage, ZipArchiveMode.Read);
+
+        savedArchive.GetEntry("xl/drawings/drawing1.xml").Should().NotBeNull();
+        savedArchive.GetEntry("xl/charts/chart1.xml").Should().NotBeNull();
+        AssertContentTypeOverride(
+            savedArchive,
+            "/xl/drawings/drawing1.xml",
+            "application/vnd.openxmlformats-officedocument.drawing+xml");
+        AssertContentTypeOverride(
+            savedArchive,
+            "/xl/charts/chart1.xml",
+            "application/vnd.openxmlformats-officedocument.drawingml.chart+xml");
+
+        var chartSheetRelsXml = XlsxPackageTestFixtures.LoadPackageXml(
+            savedArchive,
+            "xl/chartsheets/_rels/sheet1.xml.rels",
+            "xl/chartsheets/_rels/sheet1.xml.rels");
+        var chartSheetRelIds = chartSheetRelsXml.Root!
+            .Elements(PackageRelNs + "Relationship")
+            .Select(element => element.Attribute("Id")?.Value)
+            .OfType<string>()
+            .ToArray();
+        chartSheetRelIds.Should().OnlyHaveUniqueItems();
+
+        var drawingRelationship = chartSheetRelsXml.Root!
+            .Elements(PackageRelNs + "Relationship")
+            .Should()
+            .ContainSingle(element =>
+                string.Equals(
+                    (string?)element.Attribute("Type"),
+                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing",
+                    StringComparison.Ordinal) &&
+                string.Equals((string?)element.Attribute("Target"), "../drawings/drawing1.xml", StringComparison.Ordinal))
+            .Subject;
+        var reboundDrawingRelId = drawingRelationship.Attribute("Id")!.Value;
+        reboundDrawingRelId.Should().NotBe("rIdSidecarCollision");
+
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var chartSheetXml = XlsxPackageTestFixtures.LoadPackageXml(
+            savedArchive,
+            "xl/chartsheets/sheet1.xml",
+            "xl/chartsheets/sheet1.xml");
+        chartSheetXml.Root!
+            .Elements()
+            .Should()
+            .ContainSingle(element =>
+                element.Name.LocalName == "drawing" &&
+                string.Equals((string?)element.Attribute(relNs + "id"), reboundDrawingRelId, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void LoadEditSave_RebindsExternalLinkWorkbookRelationshipIdCollision()
     {
         var sourceBytes = CreatePackageWithExternalLinkWorkbookRelationshipIdCollision();
@@ -617,6 +682,99 @@ public sealed class XlsxPackagePreservingSaveValidationTests
                 "rIdChartDataWorksheet",
                 "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet",
                 "../worksheets/sourceData.xml");
+        }
+
+        return package.ToArray();
+    }
+
+    private static byte[] CreatePackageWithUnsupportedSheetSidecarRelationshipIdCollision()
+    {
+        var packageBytes = CreatePackageWithUnsupportedSheetSidecars();
+        using var package = CreateExpandablePackage(packageBytes);
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(
+                archive,
+                "[Content_Types].xml",
+                "[Content_Types].xml");
+            AddContentTypeOverride(
+                contentTypesXml,
+                "/xl/drawings/drawing1.xml",
+                "application/vnd.openxmlformats-officedocument.drawing+xml");
+            AddContentTypeOverride(
+                contentTypesXml,
+                "/xl/charts/chart1.xml",
+                "application/vnd.openxmlformats-officedocument.drawingml.chart+xml");
+            ReplaceXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            WriteTextEntry(
+                archive,
+                "xl/chartsheets/sheet1.xml",
+                """
+                <chartsheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheetViews>
+                    <sheetView workbookViewId="0"/>
+                  </sheetViews>
+                  <drawing r:id="rIdSidecarCollision"/>
+                </chartsheet>
+                """);
+            AppendRelationship(
+                archive,
+                "xl/chartsheets/_rels/sheet1.xml.rels",
+                "rIdSidecarCollision",
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+                "https://example.com/chart-sidecar-collision",
+                "External");
+            AppendRelationship(
+                archive,
+                "xl/chartsheets/_rels/sheet1.xml.rels",
+                "rIdSidecarCollision",
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing",
+                "../drawings/drawing1.xml");
+            WriteTextEntry(
+                archive,
+                "xl/drawings/drawing1.xml",
+                """
+                <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                          xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <xdr:absoluteAnchor>
+                    <xdr:pos x="0" y="0"/>
+                    <xdr:ext cx="1000000" cy="1000000"/>
+                    <xdr:graphicFrame macro="">
+                      <xdr:nvGraphicFramePr>
+                        <xdr:cNvPr id="2" name="Chart 1"/>
+                        <xdr:cNvGraphicFramePr/>
+                      </xdr:nvGraphicFramePr>
+                      <xdr:xfrm/>
+                      <a:graphic>
+                        <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">
+                          <c:chart r:id="rIdChart1"/>
+                        </a:graphicData>
+                      </a:graphic>
+                    </xdr:graphicFrame>
+                    <xdr:clientData/>
+                  </xdr:absoluteAnchor>
+                </xdr:wsDr>
+                """);
+            AppendRelationship(
+                archive,
+                "xl/drawings/_rels/drawing1.xml.rels",
+                "rIdChart1",
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart",
+                "../charts/chart1.xml");
+            WriteTextEntry(
+                archive,
+                "xl/charts/chart1.xml",
+                """
+                <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+                  <c:chart>
+                    <c:plotArea/>
+                  </c:chart>
+                </c:chartSpace>
+                """);
         }
 
         return package.ToArray();
