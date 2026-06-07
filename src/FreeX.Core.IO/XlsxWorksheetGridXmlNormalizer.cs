@@ -101,19 +101,26 @@ internal static class XlsxWorksheetGridXmlNormalizer
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     public static bool NormalizeWorksheetRoot(XElement worksheetRoot)
+        => NormalizeWorksheetRoot(worksheetRoot, cellMetadataCount: 0, valueMetadataCount: 0);
+
+    private static bool NormalizeWorksheetRoot(
+        XElement worksheetRoot,
+        uint cellMetadataCount,
+        uint valueMetadataCount)
     {
         var changed = false;
 
         if (worksheetRoot.Element(WorksheetNs + "cols") is { } columns)
             changed |= NormalizeColumnsElement(columns);
         if (worksheetRoot.Element(WorksheetNs + "sheetData") is { } sheetData)
-            changed |= NormalizeSheetDataElement(sheetData);
+            changed |= NormalizeSheetDataElement(sheetData, cellMetadataCount, valueMetadataCount);
 
         return changed;
     }
 
     public static void NormalizeWorksheets(ZipArchive archive)
     {
+        var (cellMetadataCount, valueMetadataCount) = ReadMetadataCounts(archive);
         foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
         {
             var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
@@ -121,7 +128,7 @@ internal static class XlsxWorksheetGridXmlNormalizer
             if (root is null)
                 continue;
 
-            if (NormalizeWorksheetRoot(root))
+            if (NormalizeWorksheetRoot(root, cellMetadataCount, valueMetadataCount))
                 XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
         }
     }
@@ -139,13 +146,19 @@ internal static class XlsxWorksheetGridXmlNormalizer
     }
 
     public static bool NormalizeSheetDataElement(XElement sheetData)
+        => NormalizeSheetDataElement(sheetData, cellMetadataCount: 0, valueMetadataCount: 0);
+
+    private static bool NormalizeSheetDataElement(
+        XElement sheetData,
+        uint cellMetadataCount,
+        uint valueMetadataCount)
     {
         var changed = false;
         changed |= RemoveUnknownAttributes(sheetData, EmptyAttributes);
         changed |= RemoveUnexpectedChildren(sheetData, WorksheetNs + "row");
 
         foreach (var row in sheetData.Elements(WorksheetNs + "row").ToList())
-            changed |= NormalizeRowElement(row);
+            changed |= NormalizeRowElement(row, cellMetadataCount, valueMetadataCount);
 
         return changed;
     }
@@ -173,7 +186,10 @@ internal static class XlsxWorksheetGridXmlNormalizer
         return changed;
     }
 
-    private static bool NormalizeRowElement(XElement row)
+    private static bool NormalizeRowElement(
+        XElement row,
+        uint cellMetadataCount,
+        uint valueMetadataCount)
     {
         var changed = false;
         changed |= RemoveUnknownAttributes(row, RowAttributes);
@@ -187,20 +203,23 @@ internal static class XlsxWorksheetGridXmlNormalizer
 
         changed |= NormalizeRowChildren(row);
         foreach (var cell in row.Elements(WorksheetNs + "c").ToList())
-            changed |= NormalizeCellElement(cell);
+            changed |= NormalizeCellElement(cell, cellMetadataCount, valueMetadataCount);
 
         return changed;
     }
 
-    private static bool NormalizeCellElement(XElement cell)
+    private static bool NormalizeCellElement(
+        XElement cell,
+        uint cellMetadataCount,
+        uint valueMetadataCount)
     {
         var changed = false;
         changed |= RemoveUnknownAttributes(cell, CellAttributes);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(cell, "r", NormalizeCellReference);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(cell, "s", NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(cell, "t", value => NormalizeToken(value, CellTypeValues));
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(cell, "cm", NormalizeUnsignedIntOrNull);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(cell, "vm", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(cell, "cm", value => NormalizeMetadataIndex(value, cellMetadataCount));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(cell, "vm", value => NormalizeMetadataIndex(value, valueMetadataCount));
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(cell, "ph", NormalizeBoolean);
 
         changed |= NormalizeCellChildren(cell);
@@ -368,6 +387,19 @@ internal static class XlsxWorksheetGridXmlNormalizer
             : null;
     }
 
+    private static string? NormalizeMetadataIndex(string? value, uint metadataCount)
+    {
+        var normalized = NormalizeUnsignedIntOrNull(value);
+        if (normalized is null)
+            return null;
+
+        return metadataCount > 0 &&
+            uint.TryParse(normalized, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) &&
+            parsed <= metadataCount
+            ? normalized
+            : null;
+    }
+
     private static string? NormalizeOutlineLevel(string? value)
     {
         var trimmed = value?.Trim();
@@ -428,5 +460,38 @@ internal static class XlsxWorksheetGridXmlNormalizer
         return path.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
                path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
                !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static (uint CellMetadataCount, uint ValueMetadataCount) ReadMetadataCounts(ZipArchive archive)
+    {
+        var metadataEntry = archive.GetEntry("xl/metadata.xml");
+        if (metadataEntry is null)
+            return (0, 0);
+
+        try
+        {
+            var metadataXml = XlsxPackageXmlEditor.LoadXml(metadataEntry);
+            var root = metadataXml.Root;
+            return (
+                ReadMetadataCount(root, WorksheetNs + "cellMetadata"),
+                ReadMetadataCount(root, WorksheetNs + "valueMetadata"));
+        }
+        catch
+        {
+            return (0, 0);
+        }
+    }
+
+    private static uint ReadMetadataCount(XElement? root, XName elementName)
+    {
+        var metadataElement = root?.Element(elementName);
+        if (metadataElement is null)
+            return 0;
+
+        var countText = metadataElement.Attribute("count")?.Value?.Trim();
+        if (uint.TryParse(countText, NumberStyles.None, CultureInfo.InvariantCulture, out var count))
+            return count;
+
+        return (uint)metadataElement.Elements(WorksheetNs + "bk").Count();
     }
 }

@@ -242,6 +242,25 @@ internal static class XlsxPackageMetadataMerger
         }
     }
 
+    public static void NormalizeCustomXmlPackageGraph(ZipArchive archive)
+    {
+        var targetIndex = ArchiveEntryIndex.Create(archive);
+        var invalidPropertiesParts = targetIndex.EntryNames()
+            .Where(IsCustomXmlPropertiesPart)
+            .Where(entryName =>
+                targetIndex.Get(entryName) is { } entry &&
+                IsInvalidCustomXmlSidecar(entryName, entry))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (invalidPropertiesParts.Count == 0)
+            return;
+
+        foreach (var entryName in invalidPropertiesParts)
+            targetIndex.Delete(entryName);
+
+        RemoveContentTypeOverrides(targetIndex, invalidPropertiesParts);
+        RemoveRelationshipsTargetingParts(targetIndex, invalidPropertiesParts);
+    }
+
     private static XDocument? CreateFilteredRelationshipPart(
         ZipArchiveEntry sourceEntry,
         ArchiveEntryIndex targetIndex,
@@ -349,8 +368,89 @@ internal static class XlsxPackageMetadataMerger
     {
         XNamespace customXmlNs = "http://schemas.openxmlformats.org/officeDocument/2006/customXml";
         var root = xml.Root;
+        var itemId = root?.Attribute(customXmlNs + "itemID")?.Value ??
+                     root?.Attribute("itemID")?.Value;
         return root?.Name == customXmlNs + "datastoreItem" &&
-               !string.IsNullOrWhiteSpace(root.Attribute(customXmlNs + "itemID")?.Value);
+               !string.IsNullOrWhiteSpace(itemId);
+    }
+
+    private static void RemoveContentTypeOverrides(
+        ArchiveEntryIndex targetIndex,
+        IReadOnlySet<string> removedPartNames)
+    {
+        var contentTypesEntry = targetIndex.Get("[Content_Types].xml");
+        if (contentTypesEntry is null)
+            return;
+
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        var contentTypesXml = XlsxPackageXmlEditor.LoadXml(contentTypesEntry);
+        var root = contentTypesXml.Root;
+        if (root is null)
+            return;
+
+        var changed = false;
+        foreach (var element in root.Elements(contentTypeNs + "Override").ToList())
+        {
+            if (!TryNormalizeContentTypePartName(element.Attribute("PartName")?.Value, out var partName) ||
+                !removedPartNames.Contains(partName))
+            {
+                continue;
+            }
+
+            element.Remove();
+            changed = true;
+        }
+
+        if (changed)
+            WriteXml(targetIndex, "[Content_Types].xml", contentTypesXml, contentTypesEntry.LastWriteTime, SaveOptions.DisableFormatting);
+    }
+
+    private static void RemoveRelationshipsTargetingParts(
+        ArchiveEntryIndex targetIndex,
+        IReadOnlySet<string> removedPartNames)
+    {
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        foreach (var relationshipPartPath in targetIndex.EntryNames()
+                     .Where(entryName => entryName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
+                     .ToList())
+        {
+            var relationshipEntry = targetIndex.Get(relationshipPartPath);
+            if (relationshipEntry is null)
+                continue;
+
+            var relationshipXml = XlsxPackageXmlEditor.LoadXml(relationshipEntry);
+            var root = relationshipXml.Root;
+            if (root is null)
+                continue;
+
+            var sourcePart = RelationshipPartToSourcePart(relationshipPartPath);
+            var changed = false;
+            foreach (var relationship in root.Elements(relationshipNs + "Relationship").ToList())
+            {
+                if (IsExternalRelationship(relationship))
+                    continue;
+
+                var target = NormalizeRelationshipTarget(relationship);
+                if (string.IsNullOrWhiteSpace(target))
+                    continue;
+
+                var targetPart = XlsxPackagePath.ResolveRelationshipTarget(sourcePart, target);
+                if (removedPartNames.Contains(targetPart))
+                {
+                    relationship.Remove();
+                    changed = true;
+                }
+            }
+
+            if (!changed)
+                continue;
+
+            if (root.Elements(relationshipNs + "Relationship").Any())
+                WriteXml(targetIndex, relationshipPartPath, relationshipXml, relationshipEntry.LastWriteTime, SaveOptions.DisableFormatting);
+            else
+                targetIndex.Delete(relationshipPartPath);
+        }
     }
 
     private static bool TryNormalizeCopyableEntryName(string entryName, out string normalized)

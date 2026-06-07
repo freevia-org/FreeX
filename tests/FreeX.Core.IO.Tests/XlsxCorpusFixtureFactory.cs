@@ -139,7 +139,9 @@ internal static partial class XlsxCorpusFixtureFactory
         _ => false
     };
 
-    public static bool CanCreateKnownGapRetentionPackage(string id) => CanCreateKnownGapPackage(id);
+    public static bool CanCreateKnownGapRetentionPackage(string id) =>
+        !string.Equals(id, "generated-digital-signatures-001", StringComparison.OrdinalIgnoreCase) &&
+        CanCreateKnownGapPackage(id);
 
     public static Workbook Create(string id) => id switch
     {

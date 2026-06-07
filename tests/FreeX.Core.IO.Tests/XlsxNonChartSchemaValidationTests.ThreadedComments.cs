@@ -119,6 +119,52 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void LoadedWorkbookFullSave_WithStaleThreadedCommentRelationships_DropsStaleRelationships()
+    {
+        using var source = Save(CreateThreadedCommentSourceWorkbook());
+        PatchPackageRootElement(source, "xl/_rels/workbook.xml.rels", root =>
+        {
+            XNamespace packageRelationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            root.Add(new XElement(
+                packageRelationshipNs + "Relationship",
+                new XAttribute("Id", "rIdStalePerson"),
+                new XAttribute("Type", "http://schemas.microsoft.com/office/2017/10/relationships/person"),
+                new XAttribute("Target", "https://example.invalid/person.xml"),
+                new XAttribute("TargetMode", "External")));
+        });
+        PatchPackageRootElement(source, "xl/worksheets/_rels/sheet1.xml.rels", root =>
+        {
+            XNamespace packageRelationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            root.Elements(packageRelationshipNs + "Relationship")
+                .Single(element => ThreadedAttributeValue(element, "Type") == "http://schemas.microsoft.com/office/2017/10/relationships/threadedComment")
+                .SetAttributeValue("Id", "rIdThreadedComment");
+            root.Add(new XElement(
+                packageRelationshipNs + "Relationship",
+                new XAttribute("Id", "rIdStaleThreadedComment"),
+                new XAttribute("Type", "http://schemas.microsoft.com/office/2017/10/relationships/threadedComment"),
+                new XAttribute("Target", "https://example.invalid/threadedComment.xml"),
+                new XAttribute("TargetMode", "External")));
+        });
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(42));
+        workbook.RegisterStyle(new CellStyle { Bold = true });
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertThreadedCommentPackageGraph(saved);
+    }
+
+    [Fact]
     public void LoadedWorkbookFullSave_WithModernCommentSidecar_PreservesPackageGraph()
     {
         using var source = Save(CreateThreadedCommentSourceWorkbook());
@@ -191,17 +237,19 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         ReadPackageRootElement(stream, "xl/_rels/workbook.xml.rels")
             .Elements(packageRelationshipNs + "Relationship")
+            .Where(element => ThreadedAttributeValue(element, "Type") == "http://schemas.microsoft.com/office/2017/10/relationships/person")
             .Should()
-            .Contain(element =>
-                ThreadedAttributeValue(element, "Type") == "http://schemas.microsoft.com/office/2017/10/relationships/person" &&
-                ThreadedAttributeValue(element, "Target") == "persons/person.xml");
+            .ContainSingle(element =>
+                ThreadedAttributeValue(element, "Target") == "persons/person.xml" &&
+                ThreadedAttributeValue(element, "TargetMode") == null);
 
         ReadPackageRootElement(stream, "xl/worksheets/_rels/sheet1.xml.rels")
             .Elements(packageRelationshipNs + "Relationship")
+            .Where(element => ThreadedAttributeValue(element, "Type") == "http://schemas.microsoft.com/office/2017/10/relationships/threadedComment")
             .Should()
-            .Contain(element =>
-                ThreadedAttributeValue(element, "Type") == "http://schemas.microsoft.com/office/2017/10/relationships/threadedComment" &&
-                ThreadedAttributeValue(element, "Target") == "../threadedComments/threadedComment1.xml");
+            .ContainSingle(element =>
+                ThreadedAttributeValue(element, "Target") == "../threadedComments/threadedComment1.xml" &&
+                ThreadedAttributeValue(element, "TargetMode") == null);
 
         var threadedComments = ReadPackageRootElement(stream, "xl/threadedComments/threadedComment1.xml");
         threadedComments.Name.Should().Be(threadedCommentNs + "ThreadedComments");
