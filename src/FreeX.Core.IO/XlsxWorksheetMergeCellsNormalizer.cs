@@ -25,7 +25,7 @@ internal static class XlsxWorksheetMergeCellsNormalizer
     public static bool NormalizeElement(XElement mergeCells)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(mergeCells, MergeCellsAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(mergeCells, MergeCellsAttributes);
         changed |= RemoveUnexpectedChildren(mergeCells, WorksheetNs + "mergeCell");
 
         foreach (var mergeCell in mergeCells.Elements(WorksheetNs + "mergeCell").ToList())
@@ -38,7 +38,10 @@ internal static class XlsxWorksheetMergeCellsNormalizer
             return true;
         }
 
-        changed |= SetAttributeIfChanged(mergeCells, "count", count.ToString(CultureInfo.InvariantCulture));
+        changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(
+            mergeCells,
+            "count",
+            count.ToString(CultureInfo.InvariantCulture));
         return changed;
     }
 
@@ -66,8 +69,8 @@ internal static class XlsxWorksheetMergeCellsNormalizer
         }
 
         var changed = false;
-        changed |= RemoveUnknownAttributes(mergeCell, MergeCellAttributes);
-        changed |= SetAttributeIfChanged(mergeCell, "ref", normalizedReference);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(mergeCell, MergeCellAttributes);
+        changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(mergeCell, "ref", normalizedReference);
         changed |= RemoveAllChildren(mergeCell);
         return changed;
     }
@@ -87,40 +90,12 @@ internal static class XlsxWorksheetMergeCellsNormalizer
         return changed;
     }
 
-    private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedNames)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                (attribute.Name.NamespaceName.Length == 0 && allowedNames.Contains(attribute.Name.LocalName)))
-            {
-                continue;
-            }
-
-            attribute.Remove();
-            changed = true;
-        }
-
-        return changed;
-    }
-
     private static bool RemoveAllChildren(XElement element)
     {
         if (!element.HasElements)
             return false;
 
         element.Elements().Remove();
-        return true;
-    }
-
-    private static bool SetAttributeIfChanged(XElement element, string attributeName, string value)
-    {
-        var attribute = element.Attribute(attributeName);
-        if (attribute is not null && string.Equals(attribute.Value, value, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(attributeName, value);
         return true;
     }
 
