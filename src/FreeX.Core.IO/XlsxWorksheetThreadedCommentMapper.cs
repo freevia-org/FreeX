@@ -94,6 +94,31 @@ internal static class XlsxWorksheetThreadedCommentMapper
         }
     }
 
+    public static void NormalizePackageGraph(
+        Stream xlsxStream,
+        Workbook workbook,
+        XlsxWorkbookWorksheetPathMap? worksheetPathMap)
+    {
+        if (worksheetPathMap is null || !workbook.Sheets.Any(HasThreadedComments))
+            return;
+
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        EnsureWorkbookPersonRelationship(archive);
+
+        for (var sheetIndex = 0; sheetIndex < workbook.Sheets.Count; sheetIndex++)
+        {
+            var sheet = workbook.Sheets[sheetIndex];
+            if (sheet.ThreadedComments.Count == 0)
+                continue;
+
+            if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
+                continue;
+
+            var threadedCommentPath = $"xl/threadedComments/threadedComment{sheetIndex + 1}.xml";
+            EnsureWorksheetThreadedCommentRelationship(archive, worksheetPath, threadedCommentPath);
+        }
+    }
+
     private static IReadOnlyDictionary<string, string> CreateAuthorIds(Workbook workbook)
     {
         var authors = workbook.Sheets
@@ -293,6 +318,11 @@ internal static class XlsxWorksheetThreadedCommentMapper
             ? new XDocument(new XElement(PackageRelNs + "Relationships"))
             : XlsxPackageXmlEditor.LoadXml(workbookRelsEntry);
 
+        RemoveRelationshipsForOtherPackageParts(
+            workbookRelsXml,
+            WorkbookPath,
+            PersonsPath,
+            PersonRelationshipType);
         XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
             workbookRelsXml,
             PackageRelNs,
@@ -396,6 +426,11 @@ internal static class XlsxWorksheetThreadedCommentMapper
             ? new XDocument(new XElement(PackageRelNs + "Relationships"))
             : XlsxPackageXmlEditor.LoadXml(worksheetRelsEntry);
 
+        RemoveRelationshipsForOtherPackageParts(
+            worksheetRelsXml,
+            worksheetPath,
+            threadedCommentPath,
+            ThreadedCommentsRelationshipType);
         XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
             worksheetRelsXml,
             PackageRelNs,
@@ -403,6 +438,23 @@ internal static class XlsxWorksheetThreadedCommentMapper
             threadedCommentPath,
             ThreadedCommentsRelationshipType);
         XlsxPackageXmlEditor.ReplaceXml(archive, worksheetRelsPath, worksheetRelsXml);
+    }
+
+    private static void RemoveRelationshipsForOtherPackageParts(
+        XDocument relationshipsXml,
+        string sourcePart,
+        string targetPart,
+        string relationshipType)
+    {
+        relationshipsXml.Root?
+            .Elements(PackageRelNs + "Relationship")
+            .Where(relationship =>
+                string.Equals(relationship.Attribute("Type")?.Value, relationshipType, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(
+                    XlsxPackagePath.ResolveRelationshipTarget(sourcePart, relationship.Attribute("Target")?.Value ?? ""),
+                    targetPart,
+                    StringComparison.OrdinalIgnoreCase))
+            .Remove();
     }
 
     private static string NormalizeAuthor(string? author) =>
