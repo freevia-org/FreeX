@@ -7,6 +7,8 @@ namespace FreeX.Core.IO;
 internal static class XlsxStylesheetSchemaNormalizer
 {
     private static readonly IReadOnlySet<string> EmptyAttributes = new HashSet<string>(StringComparer.Ordinal);
+    private static readonly IReadOnlySet<string> ExtensionAttributes =
+        new HashSet<string>(StringComparer.Ordinal) { "uri" };
     private static readonly IReadOnlySet<string> DifferentialStylesAttributes =
         new HashSet<string>(StringComparer.Ordinal) { "count" };
     private static readonly IReadOnlySet<string> DifferentialStyleChildren =
@@ -140,6 +142,7 @@ internal static class XlsxStylesheetSchemaNormalizer
             changed = true;
         }
 
+        changed |= NormalizeStylesheetExtensionLists(root, workbookNs);
         return changed;
     }
 
@@ -183,9 +186,93 @@ internal static class XlsxStylesheetSchemaNormalizer
             "alignment" => RemoveUnknownAttributes(child, AlignmentAttributes),
             "border" => RemoveUnknownAttributes(child, BorderAttributes),
             "protection" => RemoveUnknownAttributes(child, ProtectionAttributes),
-            "extLst" => RemoveUnknownAttributes(child, EmptyAttributes),
+            "extLst" => NormalizeExtensionListElement(child, workbookNs),
             _ => false
         };
+    }
+
+    internal static bool NormalizeStylesheetExtensionLists(XElement stylesheetRoot, XNamespace workbookNs)
+    {
+        var changed = false;
+        var keptExtensionList = false;
+        var seenUris = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var extensionList in stylesheetRoot.Elements(workbookNs + "extLst").ToList())
+        {
+            if (keptExtensionList)
+            {
+                extensionList.Remove();
+                changed = true;
+                continue;
+            }
+
+            changed |= NormalizeExtensionListElement(extensionList, workbookNs, seenUris);
+            if (ShouldRemoveExtensionListElement(extensionList, workbookNs))
+            {
+                extensionList.Remove();
+                changed = true;
+                continue;
+            }
+
+            keptExtensionList = true;
+        }
+
+        return changed;
+    }
+
+    private static bool NormalizeExtensionListElement(XElement extensionList, XNamespace workbookNs)
+    {
+        var seenUris = new HashSet<string>(StringComparer.Ordinal);
+        var changed = NormalizeExtensionListElement(extensionList, workbookNs, seenUris);
+        if (ShouldRemoveExtensionListElement(extensionList, workbookNs))
+        {
+            extensionList.Remove();
+            return true;
+        }
+
+        return changed;
+    }
+
+    private static bool NormalizeExtensionListElement(
+        XElement extensionList,
+        XNamespace workbookNs,
+        HashSet<string> seenUris)
+    {
+        var changed = false;
+        changed |= RemoveUnknownAttributes(extensionList, EmptyAttributes);
+        changed |= RemoveUnexpectedChildren(extensionList, workbookNs + "ext");
+
+        foreach (var extension in extensionList.Elements(workbookNs + "ext").ToList())
+        {
+            changed |= RemoveUnknownAttributes(extension, ExtensionAttributes);
+            changed |= NormalizeExtensionUri(extension);
+            var uri = extension.Attribute("uri")?.Value;
+            if (string.IsNullOrWhiteSpace(uri) || !seenUris.Add(uri))
+            {
+                extension.Remove();
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    private static bool ShouldRemoveExtensionListElement(XElement extensionList, XNamespace workbookNs) =>
+        !extensionList.Elements(workbookNs + "ext").Any();
+
+    private static bool NormalizeExtensionUri(XElement extension)
+    {
+        var attribute = extension.Attribute("uri");
+        var trimmed = attribute?.Value.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            if (attribute is null)
+                return false;
+
+            attribute.Remove();
+            return true;
+        }
+
+        return SetAttributeIfChanged(extension, "uri", trimmed);
     }
 
     private static bool NormalizeDifferentialFont(XElement font, XNamespace workbookNs)

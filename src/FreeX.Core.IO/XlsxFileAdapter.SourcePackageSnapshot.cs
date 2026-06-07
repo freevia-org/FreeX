@@ -859,6 +859,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchLegacyCommentFonts(archive);
                 NormalizePatchStylesheetDifferentialStyles(archive);
                 NormalizePatchStylesheetTableStyles(archive);
+                NormalizePatchStylesheetExtensionLists(archive);
                 NormalizePatchWorksheetGridXml(archive);
                 NormalizePatchWorksheetMergeCells(archive);
                 NormalizePatchWorksheetDimension(archive);
@@ -1518,6 +1519,24 @@ public sealed partial class XlsxFileAdapter
             var tableStyles = stylesXml.Root?.Element(workbookNs + "tableStyles");
             if (tableStyles is null ||
                 !XlsxStylesheetSchemaNormalizer.NormalizeTableStyles(tableStyles, workbookNs))
+            {
+                return;
+            }
+
+            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/styles.xml", stylesXml);
+        }
+
+        private static void NormalizePatchStylesheetExtensionLists(ZipArchive archive)
+        {
+            var stylesEntry = archive.GetEntry("xl/styles.xml");
+            if (stylesEntry is null)
+                return;
+
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var stylesXml = XlsxPackageXmlEditor.LoadXml(stylesEntry);
+            var root = stylesXml.Root;
+            if (root is null ||
+                !XlsxStylesheetSchemaNormalizer.NormalizeStylesheetExtensionLists(root, workbookNs))
             {
                 return;
             }
