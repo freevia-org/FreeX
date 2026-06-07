@@ -3738,6 +3738,49 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         document.Save(replacementStream, System.Xml.Linq.SaveOptions.DisableFormatting);
     }
 
+    private static void AddContentTypeOverride(
+        XDocument contentTypesXml,
+        XNamespace contentTypeNs,
+        string partName,
+        string contentType)
+    {
+        contentTypesXml.Root!
+            .Elements(contentTypeNs + "Override")
+            .Where(element => string.Equals((string?)element.Attribute("PartName"), partName, StringComparison.OrdinalIgnoreCase))
+            .Remove();
+        contentTypesXml.Root.Add(new XElement(
+            contentTypeNs + "Override",
+            new XAttribute("PartName", partName),
+            new XAttribute("ContentType", contentType)));
+    }
+
+    private static void AddContentTypeDefault(
+        XDocument contentTypesXml,
+        XNamespace contentTypeNs,
+        string extension,
+        string contentType)
+    {
+        if (contentTypesXml.Root!
+            .Elements(contentTypeNs + "Default")
+            .Any(element => string.Equals((string?)element.Attribute("Extension"), extension, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        contentTypesXml.Root.Add(new XElement(
+            contentTypeNs + "Default",
+            new XAttribute("Extension", extension),
+            new XAttribute("ContentType", contentType)));
+    }
+
+    private static void WritePackageBytes(ZipArchive archive, string path, byte[] bytes)
+    {
+        archive.GetEntry(path)?.Delete();
+        var replacement = archive.CreateEntry(path);
+        using var replacementStream = replacement.Open();
+        replacementStream.Write(bytes, 0, bytes.Length);
+    }
+
     private static string? ReadMarkupCompatibilityIgnorable(byte[] packageBytes, string path)
     {
         using var stream = new MemoryStream(packageBytes, writable: false);
