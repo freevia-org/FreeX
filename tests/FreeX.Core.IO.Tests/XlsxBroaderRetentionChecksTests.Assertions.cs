@@ -38,19 +38,19 @@ public sealed partial class XlsxBroaderRetentionChecksTests
         workbookPr.Should().NotBeNull();
         workbookPr!.Attribute("date1904")?.Value.Should().NotBe("1");
         workbookPr.Attribute("defaultThemeVersion")!.Value.Should().Be("166925");
-        workbookPr.Element(FxNs + "workbookPrNativeChild")!.Attribute("id")!.Value.Should().Be("workbook-pr");
+        workbookPr.Element(FxNs + "workbookPrNativeChild").Should().BeNull();
 
         var fileSharing = workbookXml.Root.Element(MainNs + "fileSharing");
         fileSharing.Should().NotBeNull();
         fileSharing!.Attribute("userName")!.Value.Should().Be("EditedUser");
-        fileSharing.Attribute("customFileSharingAttr")!.Value.Should().Be("keep");
+        fileSharing.Attribute("customFileSharingAttr").Should().BeNull();
         workbookText.Should().NotContain("userName=\"SourceUser\"");
 
-        workbookText.Should().Contain("customVersionFlag=\"keep\"");
-        workbookText.Should().Contain("customRecoveryFlag=\"keep\"");
-        workbookText.Should().Contain("customSmartTagFlag=\"keep\"");
-        workbookText.Should().Contain("customSmartTagTypeFlag=\"keep\"");
-        workbookText.Should().Contain("customFunctionGroupFlag=\"keep\"");
+        workbookText.Should().NotContain("customVersionFlag=\"keep\"");
+        workbookText.Should().NotContain("customRecoveryFlag=\"keep\"");
+        workbookText.Should().NotContain("customSmartTagFlag=\"keep\"");
+        workbookText.Should().NotContain("customSmartTagTypeFlag=\"keep\"");
+        workbookText.Should().NotContain("customFunctionGroupFlag=\"keep\"");
         workbookText.Should().Contain("FreeXNativeFunctions");
         workbookText.Should().Contain("nativeHiddenViewAttr=\"kept\"");
         workbookXml.Root.Element(MainNs + "customWorkbookViews").Should().BeNull();
@@ -74,9 +74,9 @@ public sealed partial class XlsxBroaderRetentionChecksTests
     {
         var stylesText = LoadXml(archive, "xl/styles.xml").ToString(SaveOptions.DisableFormatting);
         stylesText.Should().Contain("FF010203");
-        stylesText.Should().Contain("nativeDxfAttr=\"kept\"");
-        stylesText.Should().Contain("dxfNativeChild");
-        stylesText.Should().Contain("nativeTableStylesAttr=\"kept\"");
+        stylesText.Should().NotContain("nativeDxfAttr=\"kept\"");
+        stylesText.Should().NotContain("dxfNativeChild");
+        stylesText.Should().NotContain("nativeTableStylesAttr=\"kept\"");
         stylesText.Should().Contain("FreeXNativeTableStyle");
         stylesText.Should().Contain("{FREEX-STYLES-EXT}");
 

@@ -1180,6 +1180,63 @@ public static partial class AccessibilityCheckerService
             case "STANDARDIZE":
                 kind = ConditionalFormulaScalarFunctionKind.Standardize;
                 return true;
+            case "TDIST":
+                kind = ConditionalFormulaScalarFunctionKind.TDistCompat;
+                return true;
+            case "T.DIST":
+                kind = ConditionalFormulaScalarFunctionKind.TDist;
+                return true;
+            case "T.DIST.RT":
+                kind = ConditionalFormulaScalarFunctionKind.TDistRt;
+                return true;
+            case "T.DIST.2T":
+                kind = ConditionalFormulaScalarFunctionKind.TDist2T;
+                return true;
+            case "TINV":
+                kind = ConditionalFormulaScalarFunctionKind.TInv2T;
+                return true;
+            case "T.INV":
+                kind = ConditionalFormulaScalarFunctionKind.TInv;
+                return true;
+            case "T.INV.2T":
+                kind = ConditionalFormulaScalarFunctionKind.TInv2T;
+                return true;
+            case "FDIST":
+                kind = ConditionalFormulaScalarFunctionKind.FDistRt;
+                return true;
+            case "F.DIST":
+                kind = ConditionalFormulaScalarFunctionKind.FDist;
+                return true;
+            case "F.DIST.RT":
+                kind = ConditionalFormulaScalarFunctionKind.FDistRt;
+                return true;
+            case "FINV":
+                kind = ConditionalFormulaScalarFunctionKind.FInvRt;
+                return true;
+            case "F.INV":
+                kind = ConditionalFormulaScalarFunctionKind.FInv;
+                return true;
+            case "F.INV.RT":
+                kind = ConditionalFormulaScalarFunctionKind.FInvRt;
+                return true;
+            case "CHIDIST":
+                kind = ConditionalFormulaScalarFunctionKind.ChiSqDistRt;
+                return true;
+            case "CHISQ.DIST":
+                kind = ConditionalFormulaScalarFunctionKind.ChiSqDist;
+                return true;
+            case "CHISQ.DIST.RT":
+                kind = ConditionalFormulaScalarFunctionKind.ChiSqDistRt;
+                return true;
+            case "CHIINV":
+                kind = ConditionalFormulaScalarFunctionKind.ChiSqInvRt;
+                return true;
+            case "CHISQ.INV":
+                kind = ConditionalFormulaScalarFunctionKind.ChiSqInv;
+                return true;
+            case "CHISQ.INV.RT":
+                kind = ConditionalFormulaScalarFunctionKind.ChiSqInvRt;
+                return true;
             case "BETA.DIST":
                 kind = ConditionalFormulaScalarFunctionKind.BetaDist;
                 return true;
@@ -1768,6 +1825,11 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Date or
             ConditionalFormulaScalarFunctionKind.Time or
             ConditionalFormulaScalarFunctionKind.Datedif or
+            ConditionalFormulaScalarFunctionKind.TDistCompat or
+            ConditionalFormulaScalarFunctionKind.FDistRt or
+            ConditionalFormulaScalarFunctionKind.FInv or
+            ConditionalFormulaScalarFunctionKind.FInvRt or
+            ConditionalFormulaScalarFunctionKind.ChiSqDist or
             ConditionalFormulaScalarFunctionKind.NormInv or
             ConditionalFormulaScalarFunctionKind.ExponDist or
             ConditionalFormulaScalarFunctionKind.GammaInv or
@@ -1775,6 +1837,8 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.LogNormInv or
             ConditionalFormulaScalarFunctionKind.Standardize or
             ConditionalFormulaScalarFunctionKind.Convert => argumentCount == 3,
+            ConditionalFormulaScalarFunctionKind.TDist or
+            ConditionalFormulaScalarFunctionKind.FDist or
             ConditionalFormulaScalarFunctionKind.NormDist or
             ConditionalFormulaScalarFunctionKind.GammaDist or
             ConditionalFormulaScalarFunctionKind.LogNormDist or
@@ -1783,6 +1847,13 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.BetaDistCompat or
             ConditionalFormulaScalarFunctionKind.BetaInv => argumentCount is >= 3 and <= 5,
             ConditionalFormulaScalarFunctionKind.NormSDist => argumentCount == 2,
+            ConditionalFormulaScalarFunctionKind.TDistRt or
+            ConditionalFormulaScalarFunctionKind.TDist2T or
+            ConditionalFormulaScalarFunctionKind.TInv or
+            ConditionalFormulaScalarFunctionKind.TInv2T or
+            ConditionalFormulaScalarFunctionKind.ChiSqDistRt or
+            ConditionalFormulaScalarFunctionKind.ChiSqInv or
+            ConditionalFormulaScalarFunctionKind.ChiSqInvRt => argumentCount == 2,
             ConditionalFormulaScalarFunctionKind.Multinomial => argumentCount is >= 1 and <= MaxFormulaMultinomialArgumentCount,
             ConditionalFormulaScalarFunctionKind.Gcd or
             ConditionalFormulaScalarFunctionKind.Lcm => argumentCount is >= 1 and <= MaxFormulaGcdArgumentCount,
@@ -2516,6 +2587,20 @@ public static partial class AccessibilityCheckerService
         Phi,
         Gauss,
         Standardize,
+        TDistCompat,
+        TDist,
+        TDistRt,
+        TDist2T,
+        TInv,
+        TInv2T,
+        FDist,
+        FDistRt,
+        FInv,
+        FInvRt,
+        ChiSqDist,
+        ChiSqDistRt,
+        ChiSqInv,
+        ChiSqInvRt,
         BetaDist,
         BetaDistCompat,
         BetaInv,
@@ -3249,6 +3334,21 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Gauss:
                 case ConditionalFormulaScalarFunctionKind.Standardize:
                     return TryEvaluateFormulaNormalDistributionFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.TDistCompat:
+                case ConditionalFormulaScalarFunctionKind.TDist:
+                case ConditionalFormulaScalarFunctionKind.TDistRt:
+                case ConditionalFormulaScalarFunctionKind.TDist2T:
+                case ConditionalFormulaScalarFunctionKind.TInv:
+                case ConditionalFormulaScalarFunctionKind.TInv2T:
+                case ConditionalFormulaScalarFunctionKind.FDist:
+                case ConditionalFormulaScalarFunctionKind.FDistRt:
+                case ConditionalFormulaScalarFunctionKind.FInv:
+                case ConditionalFormulaScalarFunctionKind.FInvRt:
+                case ConditionalFormulaScalarFunctionKind.ChiSqDist:
+                case ConditionalFormulaScalarFunctionKind.ChiSqDistRt:
+                case ConditionalFormulaScalarFunctionKind.ChiSqInv:
+                case ConditionalFormulaScalarFunctionKind.ChiSqInvRt:
+                    return TryEvaluateFormulaTFChiSquareDistributionFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.BetaDist:
                 case ConditionalFormulaScalarFunctionKind.BetaDistCompat:
                 case ConditionalFormulaScalarFunctionKind.BetaInv:
@@ -7345,6 +7445,411 @@ public static partial class AccessibilityCheckerService
 
             return FormulaDistributionNumberResult(Math.Exp(FormulaNormSInv(probability) * stdev + mean));
         }
+
+        private bool TryEvaluateFormulaTFChiSquareDistributionFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            var arguments = new ScalarValue[function.Arguments.Count];
+            for (var i = 0; i < function.Arguments.Count; i++)
+            {
+                if (function.Arguments[i].Kind == ConditionalFormulaOperandKind.ReferenceRange ||
+                    !TryResolveFormulaOperand(function.Arguments[i], rowOffset, colOffset, out arguments[i]))
+                {
+                    return false;
+                }
+            }
+
+            for (var i = 0; i < arguments.Length; i++)
+            {
+                if (arguments[i] is ErrorValue error)
+                {
+                    value = error;
+                    return true;
+                }
+            }
+
+            if (arguments.Any(static argument => argument is RangeValue))
+                return false;
+
+            switch (function.Kind)
+            {
+                case ConditionalFormulaScalarFunctionKind.TDistCompat:
+                    if (!TryGetFormulaNormalNumber(arguments[0], out var tDistCompatX) ||
+                        !TryGetFormulaNormalNumber(arguments[1], out var tDistCompatDf) ||
+                        !TryGetFormulaNormalNumber(arguments[2], out var tDistCompatTailsNumber))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    var tails = (int)Math.Truncate(tDistCompatTailsNumber);
+                    value = tails switch
+                    {
+                        1 => FormulaTDistRtScalar(tDistCompatX, tDistCompatDf),
+                        2 => FormulaTDist2TScalar(tDistCompatX, tDistCompatDf),
+                        _ => ErrorValue.Num
+                    };
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.TDist:
+                    if (!TryGetFormulaNormalNumber(arguments[0], out var tDistX) ||
+                        !TryGetFormulaNormalNumber(arguments[1], out var tDistDf) ||
+                        !TryGetFormulaNormalBoolean(arguments[2], out var tDistCumulative))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaTDistScalar(tDistX, tDistDf, tDistCumulative);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.TDistRt:
+                    if (!TryGetFormulaNormalNumber(arguments[0], out var tDistRtX) ||
+                        !TryGetFormulaNormalNumber(arguments[1], out var tDistRtDf))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaTDistRtScalar(tDistRtX, tDistRtDf);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.TDist2T:
+                    if (!TryGetFormulaNormalNumber(arguments[0], out var tDist2TX) ||
+                        !TryGetFormulaNormalNumber(arguments[1], out var tDist2TDf))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaTDist2TScalar(tDist2TX, tDist2TDf);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.TInv:
+                    if (!TryGetFormulaNormalNumber(arguments[0], out var tInvProbability) ||
+                        !TryGetFormulaNormalNumber(arguments[1], out var tInvDf))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaTInvScalar(tInvProbability, tInvDf);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.TInv2T:
+                    if (!TryGetFormulaNormalNumber(arguments[0], out var tInv2TProbability) ||
+                        !TryGetFormulaNormalNumber(arguments[1], out var tInv2TDf))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaTInv2TScalar(tInv2TProbability, tInv2TDf);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.FDist:
+                    if (!TryGetFormulaNormalNumber(arguments[0], out var fDistX) ||
+                        !TryGetFormulaNormalNumber(arguments[1], out var fDistD1) ||
+                        !TryGetFormulaNormalNumber(arguments[2], out var fDistD2) ||
+                        !TryGetFormulaNormalBoolean(arguments[3], out var fDistCumulative))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaFDistScalar(fDistX, fDistD1, fDistD2, fDistCumulative);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.FDistRt:
+                    if (!TryGetFormulaNormalNumber(arguments[0], out var fDistRtX) ||
+                        !TryGetFormulaNormalNumber(arguments[1], out var fDistRtD1) ||
+                        !TryGetFormulaNormalNumber(arguments[2], out var fDistRtD2))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaFDistRtScalar(fDistRtX, fDistRtD1, fDistRtD2);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.FInv:
+                    if (!TryGetFormulaNormalNumber(arguments[0], out var fInvProbability) ||
+                        !TryGetFormulaNormalNumber(arguments[1], out var fInvD1) ||
+                        !TryGetFormulaNormalNumber(arguments[2], out var fInvD2))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaFInvScalar(fInvProbability, fInvD1, fInvD2);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.FInvRt:
+                    if (!TryGetFormulaNormalNumber(arguments[0], out var fInvRtProbability) ||
+                        !TryGetFormulaNormalNumber(arguments[1], out var fInvRtD1) ||
+                        !TryGetFormulaNormalNumber(arguments[2], out var fInvRtD2))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaFInvRtScalar(fInvRtProbability, fInvRtD1, fInvRtD2);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.ChiSqDist:
+                    if (!TryGetFormulaNormalNumber(arguments[0], out var chiSqDistX) ||
+                        !TryGetFormulaNormalNumber(arguments[1], out var chiSqDistDf) ||
+                        !TryGetFormulaNormalBoolean(arguments[2], out var chiSqDistCumulative))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaChiSqDistScalar(chiSqDistX, chiSqDistDf, chiSqDistCumulative);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.ChiSqDistRt:
+                    if (!TryGetFormulaNormalNumber(arguments[0], out var chiSqDistRtX) ||
+                        !TryGetFormulaNormalNumber(arguments[1], out var chiSqDistRtDf))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaChiSqDistRtScalar(chiSqDistRtX, chiSqDistRtDf);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.ChiSqInv:
+                    if (!TryGetFormulaNormalNumber(arguments[0], out var chiSqInvProbability) ||
+                        !TryGetFormulaNormalNumber(arguments[1], out var chiSqInvDf))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaChiSqInvScalar(chiSqInvProbability, chiSqInvDf);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.ChiSqInvRt:
+                    if (!TryGetFormulaNormalNumber(arguments[0], out var chiSqInvRtProbability) ||
+                        !TryGetFormulaNormalNumber(arguments[1], out var chiSqInvRtDf))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaChiSqInvRtScalar(chiSqInvRtProbability, chiSqInvRtDf);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static ScalarValue FormulaTDistScalar(double x, double dfValue, bool cumulative)
+        {
+            var df = Math.Truncate(dfValue);
+            if (df < 1d)
+                return ErrorValue.Num;
+
+            return FormulaDistributionNumberResult(cumulative
+                ? FormulaTCdf(x, df)
+                : FormulaTPdf(x, df));
+        }
+
+        private static ScalarValue FormulaTDistRtScalar(double x, double dfValue)
+        {
+            var df = Math.Truncate(dfValue);
+            if (df < 1d || x < 0d)
+                return ErrorValue.Num;
+
+            return FormulaDistributionNumberResult(1.0d - FormulaTCdf(x, df));
+        }
+
+        private static ScalarValue FormulaTDist2TScalar(double x, double dfValue)
+        {
+            var df = Math.Truncate(dfValue);
+            if (df < 1d || x < 0d)
+                return ErrorValue.Num;
+
+            return FormulaDistributionNumberResult(2.0d * (1.0d - FormulaTCdf(x, df)));
+        }
+
+        private static ScalarValue FormulaTInvScalar(double probability, double dfValue)
+        {
+            var df = Math.Truncate(dfValue);
+            if (df < 1d || probability <= 0d || probability >= 1d)
+                return ErrorValue.Num;
+
+            return FormulaDistributionNumberResult(FormulaTInv(probability, df));
+        }
+
+        private static ScalarValue FormulaTInv2TScalar(double probability, double dfValue)
+        {
+            var df = Math.Truncate(dfValue);
+            if (df < 1d || probability <= 0d || probability > 1d)
+                return ErrorValue.Num;
+
+            return FormulaDistributionNumberResult(FormulaTInv(1.0d - probability / 2.0d, df));
+        }
+
+        private static ScalarValue FormulaFDistScalar(double x, double d1Value, double d2Value, bool cumulative)
+        {
+            var d1 = Math.Truncate(d1Value);
+            var d2 = Math.Truncate(d2Value);
+            if (d1 < 1d || d2 < 1d || x < 0d)
+                return ErrorValue.Num;
+
+            return FormulaDistributionNumberResult(cumulative
+                ? FormulaFCdf(x, d1, d2)
+                : FormulaFPdf(x, d1, d2));
+        }
+
+        private static ScalarValue FormulaFDistRtScalar(double x, double d1Value, double d2Value)
+        {
+            var d1 = Math.Truncate(d1Value);
+            var d2 = Math.Truncate(d2Value);
+            if (d1 < 1d || d2 < 1d || x < 0d)
+                return ErrorValue.Num;
+
+            return FormulaDistributionNumberResult(1.0d - FormulaFCdf(x, d1, d2));
+        }
+
+        private static ScalarValue FormulaFInvScalar(double probability, double d1Value, double d2Value)
+        {
+            var d1 = Math.Truncate(d1Value);
+            var d2 = Math.Truncate(d2Value);
+            if (d1 < 1d || d2 < 1d || probability <= 0d || probability >= 1d)
+                return ErrorValue.Num;
+
+            return FormulaDistributionNumberResult(FormulaFInv(probability, d1, d2));
+        }
+
+        private static ScalarValue FormulaFInvRtScalar(double probability, double d1Value, double d2Value)
+        {
+            var d1 = Math.Truncate(d1Value);
+            var d2 = Math.Truncate(d2Value);
+            if (d1 < 1d || d2 < 1d || probability <= 0d || probability >= 1d)
+                return ErrorValue.Num;
+
+            return FormulaDistributionNumberResult(FormulaFInv(1.0d - probability, d1, d2));
+        }
+
+        private static ScalarValue FormulaChiSqDistScalar(double x, double dfValue, bool cumulative)
+        {
+            var df = Math.Truncate(dfValue);
+            if (df < 1d || x < 0d)
+                return ErrorValue.Num;
+
+            return FormulaDistributionNumberResult(cumulative
+                ? FormulaChiSqCdf(x, df)
+                : FormulaChiSqPdf(x, df));
+        }
+
+        private static ScalarValue FormulaChiSqDistRtScalar(double x, double dfValue)
+        {
+            var df = Math.Truncate(dfValue);
+            if (df < 1d || x < 0d)
+                return ErrorValue.Num;
+
+            return FormulaDistributionNumberResult(1.0d - FormulaChiSqCdf(x, df));
+        }
+
+        private static ScalarValue FormulaChiSqInvScalar(double probability, double dfValue)
+        {
+            var df = Math.Truncate(dfValue);
+            if (df < 1d || probability < 0d || probability >= 1d)
+                return ErrorValue.Num;
+
+            return FormulaDistributionNumberResult(FormulaChiSqInv(probability, df));
+        }
+
+        private static ScalarValue FormulaChiSqInvRtScalar(double probability, double dfValue)
+        {
+            var df = Math.Truncate(dfValue);
+            if (df < 1d || probability <= 0d || probability > 1d)
+                return ErrorValue.Num;
+
+            return FormulaDistributionNumberResult(FormulaChiSqInv(1.0d - probability, df));
+        }
+
+        private static double FormulaTCdf(double t, double df)
+        {
+            var x = df / (df + t * t);
+            var tail = 0.5d * FormulaBetaInc(df / 2.0d, 0.5d, x);
+            return t >= 0d ? 1.0d - tail : tail;
+        }
+
+        private static double FormulaTPdf(double t, double df) =>
+            Math.Exp(FormulaLogGamma((df + 1.0d) / 2.0d) - FormulaLogGamma(df / 2.0d)) /
+            (Math.Sqrt(df * Math.PI) * Math.Pow(1.0d + t * t / df, (df + 1.0d) / 2.0d));
+
+        private static double FormulaTInv(double probability, double df)
+        {
+            var lo = -1e9d;
+            var hi = 1e9d;
+            for (var i = 0; i < 300; i++)
+            {
+                var mid = (lo + hi) / 2.0d;
+                if (FormulaTCdf(mid, df) < probability)
+                    lo = mid;
+                else
+                    hi = mid;
+                if (hi - lo < 1e-10d)
+                    break;
+            }
+
+            return (lo + hi) / 2.0d;
+        }
+
+        private static double FormulaFCdf(double x, double d1, double d2)
+        {
+            if (x <= 0d)
+                return 0d;
+
+            var t = d1 * x / (d1 * x + d2);
+            return FormulaBetaInc(d1 / 2.0d, d2 / 2.0d, t);
+        }
+
+        private static double FormulaFPdf(double x, double d1, double d2)
+        {
+            if (x <= 0d)
+                return 0d;
+
+            var lbeta = FormulaLogGamma(d1 / 2.0d) + FormulaLogGamma(d2 / 2.0d) - FormulaLogGamma((d1 + d2) / 2.0d);
+            return Math.Exp(
+                (d1 / 2.0d) * Math.Log(d1) +
+                (d2 / 2.0d) * Math.Log(d2) +
+                (d1 / 2.0d - 1.0d) * Math.Log(x) -
+                ((d1 + d2) / 2.0d) * Math.Log(d1 * x + d2) -
+                lbeta);
+        }
+
+        private static double FormulaFInv(double probability, double d1, double d2)
+        {
+            var lo = 0d;
+            var hi = 1e9d;
+            for (var i = 0; i < 300; i++)
+            {
+                var mid = (lo + hi) / 2.0d;
+                if (FormulaFCdf(mid, d1, d2) < probability)
+                    lo = mid;
+                else
+                    hi = mid;
+                if (hi - lo < 1e-9d)
+                    break;
+            }
+
+            return (lo + hi) / 2.0d;
+        }
+
+        private static double FormulaChiSqCdf(double x, double df) =>
+            x <= 0d ? 0d : FormulaGammaInc(df / 2.0d, x / 2.0d);
+
+        private static double FormulaChiSqPdf(double x, double df)
+        {
+            if (x <= 0d)
+                return 0d;
+
+            return Math.Exp(
+                (df / 2.0d - 1.0d) * Math.Log(x) -
+                x / 2.0d -
+                (df / 2.0d) * Math.Log(2d) -
+                FormulaLogGamma(df / 2.0d));
+        }
+
+        private static double FormulaChiSqInv(double probability, double df) =>
+            2.0d * FormulaGammaInv(probability, df / 2.0d);
 
         private static ScalarValue FormulaDistributionNumberResult(double result) =>
             double.IsFinite(result) ? new NumberValue(result) : ErrorValue.Num;

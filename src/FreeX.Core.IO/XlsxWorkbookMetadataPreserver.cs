@@ -68,9 +68,9 @@ internal static class XlsxWorkbookMetadataPreserver
             changed = true;
         if (MergeFileRecoveryProperties(sourceFileRecoveryProperties, targetRoot, workbookNs + "fileRecoveryPr"))
             changed = true;
-        if (MergeChildBlock(sourceSmartTagProperties, targetRoot, workbookNs + "smartTagPr"))
+        if (MergeSmartTagProperties(sourceSmartTagProperties, targetRoot, workbookNs + "smartTagPr"))
             changed = true;
-        if (MergeChildBlock(sourceSmartTagTypes, targetRoot, workbookNs + "smartTagTypes"))
+        if (MergeSmartTagTypes(sourceSmartTagTypes, targetRoot, workbookNs + "smartTagTypes"))
             changed = true;
         if (MergeFunctionGroups(sourceFunctionGroups, targetRoot, workbookNs + "functionGroups"))
             changed = true;
@@ -151,6 +151,31 @@ internal static class XlsxWorkbookMetadataPreserver
 
         var clone = new XElement(sourceBlock);
         XlsxWorkbookFunctionGroupsNormalizer.NormalizeElement(clone);
+        targetRoot.Add(clone);
+        return true;
+    }
+
+    private static bool MergeSmartTagProperties(XElement? sourceBlock, XElement targetRoot, XName blockName)
+    {
+        if (sourceBlock is null || targetRoot.Element(blockName) is not null)
+            return false;
+
+        var clone = new XElement(sourceBlock);
+        XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagPropertiesElement(clone);
+        targetRoot.Add(clone);
+        return true;
+    }
+
+    private static bool MergeSmartTagTypes(XElement? sourceBlock, XElement targetRoot, XName blockName)
+    {
+        if (sourceBlock is null || targetRoot.Element(blockName) is not null)
+            return false;
+
+        var clone = new XElement(sourceBlock);
+        XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagTypesElement(clone);
+        if (XlsxWorkbookSmartTagNormalizer.ShouldRemoveSmartTagTypesElement(clone))
+            return false;
+
         targetRoot.Add(clone);
         return true;
     }
@@ -371,6 +396,7 @@ internal static class XlsxWorkbookMetadataPreserver
             var cloned = new XElement(sourceWorkbookProperties);
             foreach (var attribute in modeledAttributes)
                 cloned.Attribute(attribute)?.Remove();
+            XlsxWorkbookPropertiesNormalizer.NormalizeElement(cloned);
 
             if (!cloned.HasAttributes && !cloned.HasElements)
                 return false;
@@ -379,10 +405,14 @@ internal static class XlsxWorkbookMetadataPreserver
             return true;
         }
 
-        return XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(
+        var changed = XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(
             sourceWorkbookProperties,
             targetWorkbookProperties,
             modeledAttributes);
+        if (XlsxWorkbookPropertiesNormalizer.NormalizeElement(targetWorkbookProperties))
+            changed = true;
+
+        return changed;
     }
 
     private static bool MergeWorkbookViews(XElement? sourceBookViews, XElement targetRoot, XNamespace workbookNs)
