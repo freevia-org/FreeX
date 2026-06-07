@@ -77,6 +77,19 @@ A separate `macOS App Preview` workflow builds and publishes `src/FreeX.App.Aval
 
 Use [release/macos-signing-notarization.md](macos-signing-notarization.md) to configure Developer ID signing secrets, run the non-PR hosted validation, and record the expected `codesign_mode=developer-id`, `notarization_status=accepted`, and `stapler_validated=true` evidence before treating a macOS artifact as externally distributable.
 
+### macOS Hosted Artifact Retrieval
+
+GitHub-hosted macOS runners can produce downloadable macOS app artifacts without local macOS hardware. Open GitHub Actions > `macOS App Preview` > the completed run, then download each runtime artifact from the run summary:
+
+- `freex-<run-id>-<run-attempt>-osx-arm64-macos-app`
+- `freex-<run-id>-<run-attempt>-osx-x64-macos-app`
+
+Each download is a GitHub Actions artifact wrapper. Unzip the wrapper first, then use the inner app ZIP, checksum, tester instructions, evidence file, and smoke logs. The current workflow uploads Actions artifacts only, has `contents: read`, and does not publish GitHub Release assets or stable `latest` links.
+
+Signed and internal ad-hoc outputs use the same artifact names. Treat `codesign_mode=ad-hoc` or a skipped notarization status as internal preview evidence only. External distribution requires `codesign_mode=developer-id`, `notarization_status=accepted`, `stapler_validated=true`, and a release-asset publication path.
+
+Without local macOS hardware, Windows agents can run repository preflight and static macOS readiness checks, while hosted macOS runners can build the bundle, verify metadata and checksums, ad-hoc or Developer ID sign when configured, run native-architecture packaging and launch smoke, exercise LaunchServices, and capture evidence/logs. Human validation of Finder open, Gatekeeper prompts, basic workbook workflows, and candidate accessibility checks still needs a tester on macOS.
+
 ### macOS App Preview Tester Instructions
 
 This is a preview validation path, not a public release channel. Use `osx-arm64` for Apple Silicon Macs and `osx-x64` for Intel Macs. GitHub downloads the result as an Actions artifact wrapper; unzip that wrapper first, then use the files inside it:

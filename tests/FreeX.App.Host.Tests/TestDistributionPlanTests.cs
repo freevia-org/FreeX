@@ -91,12 +91,19 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("self-checks each SHA-256 file with `shasum -a 256 -c`");
         source.Should().Contain("records `zip_sha256` in evidence");
         source.Should().Contain("not a public release channel");
+        source.Should().Contain("GitHub-hosted macOS runners can produce downloadable macOS app artifacts without local macOS hardware");
+        source.Should().Contain("GitHub Actions > `macOS App Preview` > the completed run");
+        source.Should().Contain("freex-<run-id>-<run-attempt>-osx-arm64-macos-app");
+        source.Should().Contain("freex-<run-id>-<run-attempt>-osx-x64-macos-app");
+        source.Should().Contain("does not publish GitHub Release assets or stable `latest` links");
+        source.Should().Contain("Signed and internal ad-hoc outputs use the same artifact names");
         source.Should().Contain("Use `osx-arm64` for Apple Silicon Macs and `osx-x64` for Intel Macs");
         source.Should().Contain("Actions artifact wrapper");
         source.Should().Contain("freex-<runtime>-macos-tester-instructions.md");
         source.Should().Contain("freex-<runtime>-macos-evidence.txt");
         source.Should().Contain("shasum -a 256 -c freex-<runtime>-macos-app.zip.sha256");
         source.Should().Contain("open `FreeX.app`");
+        source.Should().Contain("Human validation of Finder open, Gatekeeper prompts, basic workbook workflows");
         source.Should().Contain("codesign_mode");
         source.Should().Contain("notarization_status");
         source.Should().Contain("stapler_validated");
@@ -113,8 +120,13 @@ public sealed class TestDistributionPlanTests
 
         readme.Should().Contain("[release/macos-signing-notarization.md](release/macos-signing-notarization.md)");
         source.Should().Contain("macOS Signing And Notarization Runbook");
+        source.Should().Contain("Artifact Retrieval");
         source.Should().Contain("workflow_dispatch");
         source.Should().Contain("pull request events intentionally fall back to ad-hoc signing");
+        source.Should().Contain("gh run download <run-id>");
+        source.Should().Contain("codesign_mode=ad-hoc");
+        source.Should().Contain("notarization_status=skipped_missing_credentials");
+        source.Should().Contain("No local Mac is needed to produce the downloadable artifacts");
         source.Should().Contain("MACOS_CODESIGN_CERTIFICATE_P12");
         source.Should().Contain("MACOS_CODESIGN_CERTIFICATE_PASSWORD");
         source.Should().Contain("MACOS_DEVELOPER_ID_APPLICATION");
