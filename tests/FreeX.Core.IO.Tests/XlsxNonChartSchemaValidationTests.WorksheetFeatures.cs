@@ -1825,6 +1825,27 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         ReadLegacyCommentRunFont(saved, "C2").Should().Be("Google Sans");
     }
 
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesRichCommentFontFamiliesForSchemaValidity()
+    {
+        using var source = CreateLegacyCommentSourcePackage();
+        AddCssFontFamilyRichComment(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadLegacyCommentRunFont(saved, "C2").Should().Be("Google Sans");
+    }
+
 
     [Fact]
     public void SheetProtection_ProducesSchemaValidWorkbook()
