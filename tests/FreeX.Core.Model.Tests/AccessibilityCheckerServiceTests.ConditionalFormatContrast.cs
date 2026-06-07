@@ -4728,6 +4728,43 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatXLookupExactAndDefaults()
+    {
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,$F$1:$F$4,$G$1:$G$4)=20", "B2", "B4");
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,$H$1:$K$1,$H$2:$K$2)=20", "B2", "B4");
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,$F$1:$F$4,$G$1:$G$4,99)=99", "B5");
+        AssertFormulaLookupReferenceFunctionContrastLocations("ISNA(XLOOKUP($C1,$F$1:$F$4,$G$1:$G$4))", "B5");
+        AssertFormulaLookupReferenceFunctionContrastLocations("IFERROR(XLOOKUP($C1,$F$1:$F$4,$G$1:$G$4)=20,$C1=\"Missing\")", "B2", "B4", "B5");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatXLookupApproximateAndShiftedReferences()
+    {
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($D1,$M$1:$M$4,$N$1:$N$4,\"Missing\",-1)=\"Band3\"", "B4");
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($D1,$M$1:$M$4,$N$1:$N$4,\"Missing\",-1)=\"Missing\"", "B1");
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP(\"Beta\",$F1:$F4,$G1:$G4)=20", "B1", "B2");
+        AssertFormulaLookupReferenceFunctionContrastLocations("AND(XLOOKUP($C1,$F$1:$F$4,$G$1:$G$4,0)=20,$C1=\"Beta\")", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatLookupVectorFunction()
+    {
+        AssertFormulaLookupReferenceFunctionContrastLocations("LOOKUP($D1,$M$1:$M$4,$N$1:$N$4)=\"Band2\"", "B3");
+        AssertFormulaLookupReferenceFunctionContrastLocations("LOOKUP($D1,$M$1:$N$4)=\"Band3\"", "B4");
+        AssertFormulaLookupReferenceFunctionContrastLocations("ISNA(LOOKUP($D1,$M$1:$M$4,$N$1:$N$4))", "B1");
+        AssertFormulaLookupReferenceFunctionContrastLocations("IFERROR(LOOKUP($D1,$M$1:$M$4,$N$1:$N$4)=\"Missing\",$D1<10)", "B1");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatOffsetFunction()
+    {
+        AssertFormulaLookupReferenceFunctionContrastLocations("OFFSET($G$1,MATCH($C1,$F$1:$F$4,0)-1,0)=20", "B2", "B4");
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,OFFSET($F$1,0,0,4,1),OFFSET($G$1,0,0,4,1))=20", "B2", "B4");
+        AssertFormulaLookupReferenceFunctionContrastLocations("OFFSET($F1,1,1)=20", "B1");
+        AssertFormulaLookupReferenceFunctionContrastLocations("ISERROR(OFFSET($G$1,-1,0))", FormulaLookupReferenceAllLocations);
+    }
+
+    [Fact]
     public void FindIssues_DoesNotMatchFormulaConditionalFormatLookupReferenceUnsupportedShapes()
     {
         AssertFormulaLookupReferenceFunctionContrastLocations("MATCH($C1,$F$1:$G$4,0)=1");
@@ -4735,6 +4772,14 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaLookupReferenceFunctionContrastLocations("VLOOKUP($C1,$F$1:$G$4,3,FALSE)=20");
         AssertFormulaLookupReferenceFunctionContrastLocations("INDEX($G$1:$G$4,0,0)=20");
         AssertFormulaLookupReferenceFunctionContrastLocations("MATCH($D1,$U$1:$U$4,1)>0");
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,$F$1:$G$4,$G$1:$G$4)=20");
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,$F$1:$F$4,$F$1:$G$4)=20");
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,$F$1:$F$4,$G$1:$G$4,\"Missing\",2)=20");
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,$F$1:$F$4,$G$1:$G$4,\"Missing\",0,2)=20");
+        AssertFormulaLookupReferenceFunctionContrastLocations("LOOKUP($C1,$F$1:$G$4,$G$1:$G$4)=20");
+        AssertFormulaLookupReferenceFunctionContrastLocations("LOOKUP($D1,$U$1:$U$4,$N$1:$N$4)=\"Band3\"");
+        AssertFormulaLookupReferenceFunctionContrastLocations("OFFSET($A:$A,0,0)>0");
+        AssertFormulaLookupReferenceFunctionContrastLocations("OFFSET($G$1,0,0,1,2)=20");
     }
 
     [Fact]
