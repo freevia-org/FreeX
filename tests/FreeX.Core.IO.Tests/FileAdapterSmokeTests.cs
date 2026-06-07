@@ -17509,10 +17509,10 @@ public partial class FileAdapterSmokeTests
         dataConsolidate.Should().NotBeNull();
         dataConsolidate!.Attribute("function")!.Value.Should().Be("sum");
         dataConsolidate.Attribute("leftLabels")!.Value.Should().Be("1");
-        dataConsolidate.Attribute("customDataConsolidationFlag")!.Value.Should().Be("keep");
+        dataConsolidate.Attribute("customDataConsolidationFlag").Should().BeNull();
         dataConsolidate.ToString().Should().Contain("ref=\"A1:B2\"");
         dataConsolidate.ToString().Should().Contain("sheet=\"Data\"");
-        dataConsolidate.ToString().Should().Contain("customDataRefFlag=\"keep\"");
+        dataConsolidate.ToString().Should().NotContain("customDataRefFlag=\"keep\"");
         dataConsolidate.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
 
@@ -17557,9 +17557,9 @@ public partial class FileAdapterSmokeTests
         dataConsolidate.Attribute("topLabels")!.Value.Should().Be("1");
         dataConsolidate.Attribute("link")!.Value.Should().Be("1");
         dataConsolidate.Attribute("wrongNamespace").Should().BeNull();
-        dataConsolidate.Attribute("customDataConsolidationFlag")!.Value.Should().Be("keep");
+        dataConsolidate.Attribute("customDataConsolidationFlag").Should().BeNull();
         dataConsolidate.Descendants(worksheetNs + "dataRef").Should().ContainSingle()
-            .Which.Attribute("customDataRefFlag")!.Value.Should().Be("keep");
+            .Which.Attribute("customDataRefFlag").Should().BeNull();
 
         var worksheetChildren = worksheetXml.Root!.Elements().Select(element => element.Name.LocalName).ToList();
         var dataConsolidateIndex = worksheetChildren.IndexOf("dataConsolidate");

@@ -416,14 +416,19 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var workbook = CreateWorksheetSortStateAndDataConsolidationSourceWorkbook();
         var dataConsolidation = workbook.GetSheetAt(0).DataConsolidation!;
         dataConsolidation.Function = "invalid";
+        dataConsolidation.NativeAttributes["startLabels"] = "maybe";
+        dataConsolidation.NativeAttributes["customDataConsolidationFlag"] = "removed";
+        dataConsolidation.References[0].NativeAttributes["customDataRefFlag"] = "removed";
 
         using var saved = Save(workbook);
 
         SchemaErrors(saved).Should().BeEmpty();
-        ReadWorksheetChildElement(saved, "dataConsolidate")
-            .Attribute("function")
-            .Should()
-            .BeNull();
+        var dataConsolidate = ReadWorksheetChildElement(saved, "dataConsolidate");
+        dataConsolidate.Attribute("function").Should().BeNull();
+        dataConsolidate.Attribute("startLabels").Should().BeNull();
+        dataConsolidate.Attribute("customDataConsolidationFlag").Should().BeNull();
+        dataConsolidate.Descendants(dataConsolidate.Name.Namespace + "dataRef").Should().ContainSingle()
+            .Which.Attribute("customDataRefFlag").Should().BeNull();
     }
 
     [Fact]
@@ -513,9 +518,17 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var dataRefs = dataConsolidate.Element(dataConsolidate.Name.Namespace + "dataRefs")!;
         dataConsolidate.Attribute("function").Should().BeNull();
         dataConsolidate.Attribute("leftLabels").Should().BeNull();
+        dataConsolidate.Attribute("startLabels").Should().BeNull();
         dataConsolidate.Attribute("topLabels").Should().BeNull();
         dataConsolidate.Attribute("link").Should().BeNull();
+        dataConsolidate.Attribute("customDataConsolidationFlag").Should().BeNull();
+        dataConsolidate.Element(dataConsolidate.Name.Namespace + "nativeDataConsolidateChild").Should().BeNull();
         dataRefs.Attribute("count")!.Value.Should().Be("1");
+        dataRefs.Attribute("customDataRefsFlag").Should().BeNull();
+        dataRefs.Element(dataConsolidate.Name.Namespace + "nativeDataRefsChild").Should().BeNull();
+        var dataRef = dataRefs.Element(dataConsolidate.Name.Namespace + "dataRef")!;
+        dataRef.Attribute("customDataRefFlag").Should().BeNull();
+        dataRef.Element(dataConsolidate.Name.Namespace + "nativeDataRefChild").Should().BeNull();
     }
 
 
@@ -2563,9 +2576,18 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var dataConsolidate = worksheetXml.Root!.Element(workbookNs + "dataConsolidate")!;
         dataConsolidate.SetAttributeValue("function", "invalid");
         dataConsolidate.SetAttributeValue("leftLabels", "maybe");
+        dataConsolidate.SetAttributeValue("startLabels", "maybe");
         dataConsolidate.SetAttributeValue("topLabels", "maybe");
         dataConsolidate.SetAttributeValue("link", "maybe");
-        dataConsolidate.Element(workbookNs + "dataRefs")!.SetAttributeValue("count", "not-a-number");
+        dataConsolidate.SetAttributeValue("customDataConsolidationFlag", "removed");
+        dataConsolidate.Add(new XElement(workbookNs + "nativeDataConsolidateChild"));
+        var dataRefs = dataConsolidate.Element(workbookNs + "dataRefs")!;
+        dataRefs.SetAttributeValue("count", "not-a-number");
+        dataRefs.SetAttributeValue("customDataRefsFlag", "removed");
+        dataRefs.Add(new XElement(workbookNs + "nativeDataRefsChild"));
+        var dataRef = dataRefs.Element(workbookNs + "dataRef")!;
+        dataRef.SetAttributeValue("customDataRefFlag", "removed");
+        dataRef.Add(new XElement(workbookNs + "nativeDataRefChild"));
         ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
     }
 
