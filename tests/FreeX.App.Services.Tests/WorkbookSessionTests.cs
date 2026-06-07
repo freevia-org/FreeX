@@ -2411,6 +2411,82 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SetShowFormulas_RefreshesViewportPreservesSelectionAndKeepsUndoRedoCoherent()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var formulaAddress = new CellAddress(sheet.Id, 1, 1);
+        var formulaCell = Cell.FromFormula("B1+1");
+        formulaCell.Value = new NumberValue(5);
+        sheet.SetCell(formulaAddress, formulaCell);
+        var selectedCell = new CellAddress(sheet.Id, 2, 2);
+        sheet.SetCell(selectedCell, new TextValue("selected"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(selectedCell);
+
+        session.Viewport.Cells.Should().Contain(cell =>
+            cell.Row == 1 &&
+            cell.Col == 1 &&
+            cell.DisplayText == "5");
+
+        var result = session.SetShowFormulas(true);
+
+        result.Success.Should().BeTrue();
+        session.IsShowingFormulas.Should().BeTrue();
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveCell.Should().Be(selectedCell);
+        session.SelectedRange.Should().Be(new GridRange(selectedCell, selectedCell));
+        session.Viewport.Cells.Should().Contain(cell =>
+            cell.Row == 1 &&
+            cell.Col == 1 &&
+            cell.DisplayText == "=B1+1");
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        session.IsShowingFormulas.Should().BeFalse();
+        session.ActiveCell.Should().Be(selectedCell);
+        session.Viewport.Cells.Should().Contain(cell =>
+            cell.Row == 1 &&
+            cell.Col == 1 &&
+            cell.DisplayText == "5");
+        session.CanRedo.Should().BeTrue();
+
+        var redo = session.RedoLastEdit();
+
+        redo.Success.Should().BeTrue();
+        session.IsShowingFormulas.Should().BeTrue();
+        session.ActiveCell.Should().Be(selectedCell);
+        session.Viewport.Cells.Should().Contain(cell =>
+            cell.Row == 1 &&
+            cell.Col == 1 &&
+            cell.DisplayText == "=B1+1");
+    }
+
+    [Fact]
+    public void SetShowFormulas_NoOpsSameStateWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var result = session.SetShowFormulas(false);
+
+        result.Success.Should().BeTrue();
+        session.IsShowingFormulas.Should().BeFalse();
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void AddSheet_AppendsSelectsNewSheetAndKeepsUndoRedoCoherent()
     {
         var workbook = CreateWorkbook();

@@ -145,6 +145,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"native_select_all_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_edit_menu=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_format_menu=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_view_menu=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_sheet_menu=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_help_menu=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_new_sheet_menu_item=true\" \"$launch_smoke_report\"");
@@ -194,6 +195,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"native_align_left_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_align_center_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_align_right_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_show_formulas_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_help_online_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_send_feedback_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_check_for_updates_menu_item=true\" \"$launch_smoke_report\"");

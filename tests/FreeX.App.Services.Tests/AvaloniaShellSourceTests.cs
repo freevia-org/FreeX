@@ -214,6 +214,19 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_alignCenterMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Center);");
         source.Should().Contain("_alignRightMenuItem.Header = \"Align Right\";");
         source.Should().Contain("_alignRightMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Right);");
+        source.Should().Contain("private readonly NativeMenuItem _showFormulasMenuItem = new();");
+        source.Should().Contain("_showFormulasMenuItem.Header = \"Show Formulas\";");
+        source.Should().Contain("_showFormulasMenuItem.Gesture = new KeyGesture(Key.Oem3, KeyModifiers.Control);");
+        source.Should().Contain("_showFormulasMenuItem.ToggleType = MenuItemToggleType.CheckBox;");
+        source.Should().Contain("_showFormulasMenuItem.Click += (_, _) => ToggleShowFormulas();");
+        source.Should().Contain("viewMenu.Items.Add(_showFormulasMenuItem);");
+        source.Should().Contain("Header = \"View\"");
+        source.Should().Contain("_showFormulasMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("_showFormulasMenuItem.IsChecked = _session.IsShowingFormulas;");
+        source.Should().Contain("private void ToggleShowFormulas()");
+        source.Should().Contain("var showFormulas = !_session.IsShowingFormulas;");
+        source.Should().Contain("var result = _session.SetShowFormulas(showFormulas);");
+        source.Should().Contain("RefreshShell(showFormulas ? \"Showing formulas\" : \"Showing values\");");
         source.Should().Contain("_helpOnlineMenuItem.Header = \"Help Online\";");
         source.Should().Contain("_helpOnlineMenuItem.Gesture = new KeyGesture(Key.F1, default);");
         source.Should().Contain("_helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, \"Help Online\");");
@@ -402,6 +415,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_close_workbook_menu_item={FormatBool(snapshot.HasNativeCloseWorkbookMenuItem)}");
         smokeSource.Should().Contain("native_edit_menu={FormatBool(snapshot.HasNativeEditMenu)}");
         smokeSource.Should().Contain("native_format_menu={FormatBool(snapshot.HasNativeFormatMenu)}");
+        smokeSource.Should().Contain("native_view_menu={FormatBool(snapshot.HasNativeViewMenu)}");
         smokeSource.Should().Contain("native_help_menu={FormatBool(snapshot.HasNativeHelpMenu)}");
         smokeSource.Should().Contain("native_undo_menu_item={FormatBool(snapshot.HasNativeUndoMenuItem)}");
         smokeSource.Should().Contain("native_redo_menu_item={FormatBool(snapshot.HasNativeRedoMenuItem)}");
@@ -445,6 +459,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_align_left_menu_item={FormatBool(snapshot.HasNativeAlignLeftMenuItem)}");
         smokeSource.Should().Contain("native_align_center_menu_item={FormatBool(snapshot.HasNativeAlignCenterMenuItem)}");
         smokeSource.Should().Contain("native_align_right_menu_item={FormatBool(snapshot.HasNativeAlignRightMenuItem)}");
+        smokeSource.Should().Contain("native_show_formulas_menu_item={FormatBool(snapshot.HasNativeShowFormulasMenuItem)}");
         smokeSource.Should().Contain("native_help_online_menu_item={FormatBool(snapshot.HasNativeHelpOnlineMenuItem)}");
         smokeSource.Should().Contain("native_send_feedback_menu_item={FormatBool(snapshot.HasNativeSendFeedbackMenuItem)}");
         smokeSource.Should().Contain("native_check_for_updates_menu_item={FormatBool(snapshot.HasNativeCheckForUpdatesMenuItem)}");
@@ -464,6 +479,7 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeCloseWorkbookMenuItem: HasNativeMenuItem(_closeWorkbookMenuItem, \"Close Workbook\")");
         windowSource.Should().Contain("HasNativeEditMenu: hasNativeEditMenu");
         windowSource.Should().Contain("HasNativeFormatMenu: hasNativeFormatMenu");
+        windowSource.Should().Contain("HasNativeViewMenu: hasNativeViewMenu");
         windowSource.Should().Contain("HasNativeHelpMenu: hasNativeHelpMenu");
         windowSource.Should().Contain("HasNativeUndoMenuItem: HasNativeMenuItem(_undoMenuItem, \"Undo\")");
         windowSource.Should().Contain("HasNativeRedoMenuItem: HasNativeMenuItem(_redoMenuItem, \"Redo\")");
@@ -507,6 +523,7 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeAlignLeftMenuItem: HasNativeMenuItem(_alignLeftMenuItem, \"Align Left\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAlignCenterMenuItem: HasNativeMenuItem(_alignCenterMenuItem, \"Align Center\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAlignRightMenuItem: HasNativeMenuItem(_alignRightMenuItem, \"Align Right\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeShowFormulasMenuItem: HasNativeMenuItem(_showFormulasMenuItem, \"Show Formulas\")");
         windowSource.Should().Contain("HasNativeHelpOnlineMenuItem: HasNativeMenuItem(_helpOnlineMenuItem, \"Help Online\")");
         windowSource.Should().Contain("HasNativeSendFeedbackMenuItem: HasNativeMenuItem(_sendFeedbackMenuItem, \"Send Feedback\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeCheckForUpdatesMenuItem: HasNativeMenuItem(_checkForUpdatesMenuItem, \"Check for Updates\", requireGesture: false)");

@@ -71,6 +71,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeFileMenu,
     bool HasNativeEditMenu,
     bool HasNativeFormatMenu,
+    bool HasNativeViewMenu,
     bool HasNativeSheetMenu,
     bool HasNativeHelpMenu,
     bool HasNativeNewWorkbookMenuItem,
@@ -130,6 +131,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeAlignLeftMenuItem,
     bool HasNativeAlignCenterMenuItem,
     bool HasNativeAlignRightMenuItem,
+    bool HasNativeShowFormulasMenuItem,
     bool HasNativeHelpOnlineMenuItem,
     bool HasNativeSendFeedbackMenuItem,
     bool HasNativeCheckForUpdatesMenuItem,
@@ -148,6 +150,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeFileMenu &&
         HasNativeEditMenu &&
         HasNativeFormatMenu &&
+        HasNativeViewMenu &&
         HasNativeSheetMenu &&
         HasNativeHelpMenu &&
         HasNativeNewWorkbookMenuItem &&
@@ -207,6 +210,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeAlignLeftMenuItem &&
         HasNativeAlignCenterMenuItem &&
         HasNativeAlignRightMenuItem &&
+        HasNativeShowFormulasMenuItem &&
         HasNativeHelpOnlineMenuItem &&
         HasNativeSendFeedbackMenuItem &&
         HasNativeCheckForUpdatesMenuItem &&
@@ -273,6 +277,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_file_menu={FormatBool(snapshot.HasNativeFileMenu)}",
                 $"native_edit_menu={FormatBool(snapshot.HasNativeEditMenu)}",
                 $"native_format_menu={FormatBool(snapshot.HasNativeFormatMenu)}",
+                $"native_view_menu={FormatBool(snapshot.HasNativeViewMenu)}",
                 $"native_sheet_menu={FormatBool(snapshot.HasNativeSheetMenu)}",
                 $"native_help_menu={FormatBool(snapshot.HasNativeHelpMenu)}",
                 $"native_new_workbook_menu_item={FormatBool(snapshot.HasNativeNewWorkbookMenuItem)}",
@@ -332,6 +337,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_align_left_menu_item={FormatBool(snapshot.HasNativeAlignLeftMenuItem)}",
                 $"native_align_center_menu_item={FormatBool(snapshot.HasNativeAlignCenterMenuItem)}",
                 $"native_align_right_menu_item={FormatBool(snapshot.HasNativeAlignRightMenuItem)}",
+                $"native_show_formulas_menu_item={FormatBool(snapshot.HasNativeShowFormulasMenuItem)}",
                 $"native_help_online_menu_item={FormatBool(snapshot.HasNativeHelpOnlineMenuItem)}",
                 $"native_send_feedback_menu_item={FormatBool(snapshot.HasNativeSendFeedbackMenuItem)}",
                 $"native_check_for_updates_menu_item={FormatBool(snapshot.HasNativeCheckForUpdatesMenuItem)}",

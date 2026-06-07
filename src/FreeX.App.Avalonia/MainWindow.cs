@@ -177,6 +177,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _wrapTextMenuItem = new();
     private readonly NativeMenuItem _decreaseIndentMenuItem = new();
     private readonly NativeMenuItem _increaseIndentMenuItem = new();
+    private readonly NativeMenuItem _showFormulasMenuItem = new();
     private readonly NativeMenuItem _helpOnlineMenuItem = new();
     private readonly NativeMenuItem _sendFeedbackMenuItem = new();
     private readonly NativeMenuItem _checkForUpdatesMenuItem = new();
@@ -506,6 +507,11 @@ public sealed class MainWindow : Window
         _alignRightMenuItem.Header = "Align Right";
         _alignRightMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Right);
 
+        _showFormulasMenuItem.Header = "Show Formulas";
+        _showFormulasMenuItem.Gesture = new KeyGesture(Key.Oem3, KeyModifiers.Control);
+        _showFormulasMenuItem.ToggleType = MenuItemToggleType.CheckBox;
+        _showFormulasMenuItem.Click += (_, _) => ToggleShowFormulas();
+
         _helpOnlineMenuItem.Header = "Help Online";
         _helpOnlineMenuItem.Gesture = new KeyGesture(Key.F1, default);
         _helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, "Help Online");
@@ -585,6 +591,9 @@ public sealed class MainWindow : Window
         formatMenu.Items.Add(_alignCenterMenuItem);
         formatMenu.Items.Add(_alignRightMenuItem);
 
+        var viewMenu = new NativeMenu();
+        viewMenu.Items.Add(_showFormulasMenuItem);
+
         var sheetMenu = new NativeMenu();
         sheetMenu.Items.Add(_newSheetMenuItem);
         sheetMenu.Items.Add(_renameSheetMenuItem);
@@ -620,6 +629,11 @@ public sealed class MainWindow : Window
         {
             Header = "Format",
             Menu = formatMenu,
+        });
+        _nativeMenu.Items.Add(new NativeMenuItem
+        {
+            Header = "View",
+            Menu = viewMenu,
         });
         _nativeMenu.Items.Add(new NativeMenuItem
         {
@@ -1119,6 +1133,8 @@ public sealed class MainWindow : Window
         _wrapTextMenuItem.IsEnabled = _wrapTextButton.IsEnabled;
         _decreaseIndentMenuItem.IsEnabled = _decreaseIndentButton.IsEnabled;
         _increaseIndentMenuItem.IsEnabled = _increaseIndentButton.IsEnabled;
+        _showFormulasMenuItem.IsEnabled = isIdle;
+        _showFormulasMenuItem.IsChecked = _session.IsShowingFormulas;
     }
 
     private int FindActiveSheetTabIndex()
@@ -2272,6 +2288,26 @@ public sealed class MainWindow : Window
         }
 
         RefreshShell($"Moved {sheetName} right");
+    }
+
+    private void ToggleShowFormulas()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        ClearSelectedDrawingObject();
+        var showFormulas = !_session.IsShowingFormulas;
+        var result = _session.SetShowFormulas(showFormulas);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Show Formulas failed.");
+            return;
+        }
+
+        RefreshShell(showFormulas ? "Showing formulas" : "Showing values");
     }
 
     private void HideActiveSheet()
@@ -3444,6 +3480,9 @@ public sealed class MainWindow : Window
         var hasNativeFormatMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
             string.Equals(item.Header?.ToString(), "Format", StringComparison.Ordinal) &&
             item.Menu is not null) == true;
+        var hasNativeViewMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
+            string.Equals(item.Header?.ToString(), "View", StringComparison.Ordinal) &&
+            item.Menu is not null) == true;
         var hasNativeSheetMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
             string.Equals(item.Header?.ToString(), "Sheet", StringComparison.Ordinal) &&
             item.Menu is not null) == true;
@@ -3472,6 +3511,7 @@ public sealed class MainWindow : Window
             HasNativeFileMenu: hasNativeFileMenu,
             HasNativeEditMenu: hasNativeEditMenu,
             HasNativeFormatMenu: hasNativeFormatMenu,
+            HasNativeViewMenu: hasNativeViewMenu,
             HasNativeSheetMenu: hasNativeSheetMenu,
             HasNativeHelpMenu: hasNativeHelpMenu,
             HasNativeNewWorkbookMenuItem: HasNativeMenuItem(_newWorkbookMenuItem, "New Workbook"),
@@ -3531,6 +3571,7 @@ public sealed class MainWindow : Window
             HasNativeAlignLeftMenuItem: HasNativeMenuItem(_alignLeftMenuItem, "Align Left", requireGesture: false),
             HasNativeAlignCenterMenuItem: HasNativeMenuItem(_alignCenterMenuItem, "Align Center", requireGesture: false),
             HasNativeAlignRightMenuItem: HasNativeMenuItem(_alignRightMenuItem, "Align Right", requireGesture: false),
+            HasNativeShowFormulasMenuItem: HasNativeMenuItem(_showFormulasMenuItem, "Show Formulas"),
             HasNativeHelpOnlineMenuItem: HasNativeMenuItem(_helpOnlineMenuItem, "Help Online"),
             HasNativeSendFeedbackMenuItem: HasNativeMenuItem(_sendFeedbackMenuItem, "Send Feedback", requireGesture: false),
             HasNativeCheckForUpdatesMenuItem: HasNativeMenuItem(_checkForUpdatesMenuItem, "Check for Updates", requireGesture: false),

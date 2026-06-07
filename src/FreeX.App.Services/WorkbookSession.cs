@@ -83,6 +83,8 @@ public sealed class WorkbookSession
 
     public IReadOnlyList<WorkbookSheetTab> SheetTabs { get; private set; }
 
+    public bool IsShowingFormulas => ActiveSheet.ShowFormulas;
+
     public IReadOnlyList<WorkbookHiddenSheet> HiddenSheets =>
         Workbook.Sheets
             .Where(sheet => sheet.IsHidden && !sheet.IsVeryHidden)
@@ -306,6 +308,27 @@ public sealed class WorkbookSession
 
     public WorkbookCellEditResult MoveActiveSheetRight() =>
         MoveActiveSheetBy(offset: 1);
+
+    public WorkbookCellEditResult SetShowFormulas(bool showFormulas)
+    {
+        if (ActiveSheet.ShowFormulas == showFormulas)
+        {
+            return new WorkbookCellEditResult(
+                true,
+                null,
+                [],
+                RecalcReport: null);
+        }
+
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new SetWorksheetShowFormulasCommand(ActiveSheet.Id, showFormulas));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
+        return result;
+    }
 
     public WorkbookCellEditResult HideActiveSheet()
     {
