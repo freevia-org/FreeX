@@ -145,6 +145,54 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
     }
 
     [Fact]
+    public void ResolveStorePath_UsesEnvironmentOverrideWhenProvided()
+    {
+        var provider = new TestApplicationDataPathProvider(Path.Combine(_temp.Path, "ignored"));
+        var overridePath = Path.Combine(_temp.Path, "custom-options.json");
+        using var optionsPath = TestEnvironmentVariableScope.Set(FreeXOptions.OptionsPathEnvironmentVariable, overridePath);
+
+        var path = FreeXOptions.ResolveStorePath(provider);
+
+        path.Should().Be(overridePath);
+    }
+
+    [Fact]
+    public void LoadFromPath_WithMissingOrFutureSchemaKeepsCurrentDefaultsAndKnownValues()
+    {
+        var path = Path.Combine(_temp.Path, "options.json");
+        File.WriteAllText(
+            path,
+            """
+            {
+              "DefaultFormat": ".json",
+              "DefaultFontName": "  Aptos  ",
+              "DefaultFontSize": 500,
+              "DefaultSheetCount": 300,
+              "UserName": "  Analyst  ",
+              "SpellCheckCustomDictionaryWords": [ "  TeH  ", "adn", "teh", "" ],
+              "QuickAccessToolbarCommands": null,
+              "FutureSetting": true
+            }
+            """);
+
+        var options = FreeXOptions.LoadFromPath(path);
+
+        options.DefaultFormat.Should().Be(FreeXOptions.FreeXWorkbookDefaultFormat);
+        options.DefaultFontName.Should().Be("Aptos");
+        options.DefaultFontSize.Should().Be(FreeXOptions.MaxDefaultFontSize);
+        options.DefaultSheetCount.Should().Be(FreeXOptions.MaxDefaultSheetCount);
+        options.UserName.Should().Be("Analyst");
+        options.SpellCheckCustomDictionaryWords.Should().Equal("adn", "TeH");
+        options.QuickAccessToolbarCommands.Should().Equal(
+            QuickAccessToolbarCommandIds.Save,
+            QuickAccessToolbarCommandIds.Undo,
+            QuickAccessToolbarCommandIds.Redo);
+        options.ShowScreenTips.Should().BeTrue();
+        options.AutoCalculate.Should().BeTrue();
+        options.LastPersistenceError.Should().BeNull();
+    }
+
+    [Fact]
     public void SaveToPath_WritesAtomicallyAndClearsPreviousError()
     {
         var path = Path.Combine(_temp.Path, "options.json");
@@ -187,6 +235,22 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
             QuickAccessToolbarCommandIds.Print);
         reloaded.SpellCheckCustomDictionaryWords.Should().Equal("adn", "TeH");
         Directory.EnumerateFiles(_temp.Path, "*.tmp").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FreeXOptions_CurrentDefaultsMatchPortableAppOptions()
+    {
+        var hostOptions = new FreeXOptions();
+        var appOptions = new AppOptions();
+
+        hostOptions.ToAppOptions().Should().BeEquivalentTo(appOptions);
+        hostOptions.DefaultFontName.Should().Be(FreeXOptions.DefaultFontNameFallback);
+        hostOptions.DefaultFontSize.Should().Be(FreeXOptions.DefaultFontSizeFallback);
+        hostOptions.DefaultSheetCount.Should().Be(1);
+        hostOptions.UserName.Should().Be(Environment.UserName);
+        hostOptions.QuickAccessToolbarCommands.Should().Equal(QuickAccessToolbarCatalog.DefaultCommandIds);
+        hostOptions.PdfExportLanguage.Should().Be(ExportPlanner.DefaultPdfLanguage);
+        hostOptions.LastPersistenceError.Should().BeNull();
     }
 
     [Fact]

@@ -1,8 +1,5 @@
-using System.IO;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using FreeX.App.Services;
-using FreeX.Core.IO;
 
 namespace FreeX.App.Host;
 
@@ -23,20 +20,14 @@ public enum FreeXObjectDisplay
 
 public sealed class FreeXOptions
 {
-    internal const string OptionsPathEnvironmentVariable = "FREEX_OPTIONS_PATH";
-    internal const string DefaultFontNameFallback = "Calibri";
-    internal const int DefaultFontSizeFallback = 11;
-    internal const int MaxDefaultFontSize = 409;
-    internal const int MinDefaultSheetCount = 1;
-    internal const int MaxDefaultSheetCount = 255;
-    public const string XlsxDefaultFormat = ".xlsx";
-    public const string FreeXWorkbookDefaultFormat = ".fxl";
-    private const string LegacyJsonDefaultFormat = ".json";
-
-    private static readonly JsonSerializerOptions StoreJsonOptions = new()
-    {
-        WriteIndented = true
-    };
+    internal const string OptionsPathEnvironmentVariable = AppOptionsStore.OptionsPathEnvironmentVariable;
+    internal const string DefaultFontNameFallback = AppOptions.DefaultFontNameFallback;
+    internal const int DefaultFontSizeFallback = AppOptions.DefaultFontSizeFallback;
+    internal const int MaxDefaultFontSize = AppOptions.MaxDefaultFontSize;
+    internal const int MinDefaultSheetCount = AppOptions.MinDefaultSheetCount;
+    internal const int MaxDefaultSheetCount = AppOptions.MaxDefaultSheetCount;
+    public const string XlsxDefaultFormat = AppOptions.XlsxDefaultFormat;
+    public const string FreeXWorkbookDefaultFormat = AppOptions.FreeXWorkbookDefaultFormat;
 
     // General — new workbooks
     public string DefaultFontName  { get; set; } = DefaultFontNameFallback;
@@ -83,7 +74,7 @@ public sealed class FreeXOptions
     [JsonIgnore]
     public string? LastPersistenceError { get; private set; }
 
-    private static string StorePath => ResolveStorePath(PlatformApplicationDataPathProvider.Instance);
+    private static string StorePath => AppOptionsStore.StorePath;
 
     internal static string StorePathForDisplay => StorePath;
 
@@ -92,133 +83,114 @@ public sealed class FreeXOptions
     internal static string ResolveStorePath(IApplicationDataPathProvider pathProvider)
     {
         var overridePath = Environment.GetEnvironmentVariable(OptionsPathEnvironmentVariable);
-        return AppStoragePathPlanner.ResolveOptionsFilePath(pathProvider, overridePath);
+        return AppOptionsStore.ResolveStorePath(pathProvider, overridePath);
     }
 
-    internal static FreeXOptions LoadFromPath(string storePath)
-    {
-        try
-        {
-            if (File.Exists(storePath))
-            {
-                var json = File.ReadAllText(storePath);
-                var options = JsonSerializer.Deserialize<FreeXOptions>(json) ?? new();
-                options.NormalizePersistedCollections();
-                return options;
-            }
-        }
-        catch (Exception ex)
-        {
-            return new FreeXOptions
-            {
-                LastPersistenceError = $"Failed to load options from '{storePath}': {ex.Message}"
-            };
-        }
-
-        return new FreeXOptions();
-    }
+    internal static FreeXOptions LoadFromPath(string storePath) =>
+        FromAppOptions(AppOptionsStore.LoadFromPath(storePath));
 
     public bool Save() => SaveToPath(StorePath);
 
     internal bool SaveToPath(string storePath)
     {
-        string? tempPath = null;
-        try
-        {
-            NormalizePersistedCollections();
-            var directory = System.IO.Path.GetDirectoryName(storePath)!;
-            Directory.CreateDirectory(directory);
-
-            tempPath = System.IO.Path.Combine(
-                directory,
-                $".{System.IO.Path.GetFileName(storePath)}.{Guid.NewGuid():N}.tmp");
-            File.WriteAllText(tempPath, JsonSerializer.Serialize(this, StoreJsonOptions));
-            File.Move(tempPath, storePath, overwrite: true);
-            LastPersistenceError = null;
-            return true;
-        }
-        catch (Exception ex)
-        {
-            LastPersistenceError = $"Failed to save options to '{storePath}': {ex.Message}";
-            return false;
-        }
-        finally
-        {
-            if (!string.IsNullOrWhiteSpace(tempPath) && File.Exists(tempPath))
-                File.Delete(tempPath);
-        }
+        var options = ToAppOptions();
+        var saved = AppOptionsStore.SaveToPath(options, storePath);
+        ApplyAppOptions(options, copyPersistenceError: true);
+        return saved;
     }
 
     internal void NormalizePersistedCollections()
     {
-        DefaultFontName = NormalizeDefaultFontName(DefaultFontName);
-        DefaultFontSize = NormalizeDefaultFontSize(DefaultFontSize);
-        DefaultFormat = NormalizeDefaultFormat(DefaultFormat);
-        DefaultSheetCount = NormalizeDefaultSheetCount(DefaultSheetCount);
-        UserName = NormalizeUserName(UserName);
-        SpellCheckCustomDictionaryWords = NormalizeSpellCheckCustomDictionaryWords(SpellCheckCustomDictionaryWords);
+        var options = ToAppOptions();
+        options.NormalizePersistedCollections();
+        ApplyAppOptions(options, copyPersistenceError: false);
     }
 
-    internal static string NormalizeDefaultFontName(string? fontName)
-    {
-        var normalized = fontName?.Trim();
-        return string.IsNullOrEmpty(normalized) ? DefaultFontNameFallback : normalized;
-    }
+    internal static string NormalizeDefaultFontName(string? fontName) =>
+        AppOptions.NormalizeDefaultFontName(fontName);
 
-    internal static int NormalizeDefaultFontSize(int fontSize)
-    {
-        if (fontSize <= 0)
-            return DefaultFontSizeFallback;
-
-        return Math.Min(fontSize, MaxDefaultFontSize);
-    }
+    internal static int NormalizeDefaultFontSize(int fontSize) =>
+        AppOptions.NormalizeDefaultFontSize(fontSize);
 
     internal static int NormalizeDefaultSheetCount(int sheetCount) =>
-        Math.Clamp(sheetCount, MinDefaultSheetCount, MaxDefaultSheetCount);
+        AppOptions.NormalizeDefaultSheetCount(sheetCount);
 
-    internal static string NormalizeUserName(string? userName)
-    {
-        var normalized = userName?.Trim();
-        return string.IsNullOrEmpty(normalized) ? Environment.UserName : normalized;
-    }
+    internal static string NormalizeUserName(string? userName) =>
+        AppOptions.NormalizeUserName(userName);
 
-    internal static string NormalizeDefaultFormat(string? extension)
-    {
-        var normalized = string.IsNullOrWhiteSpace(extension)
-            ? XlsxDefaultFormat
-            : FileFormatResolver.NormalizeExtension(extension);
+    internal static string NormalizeDefaultFormat(string? extension) =>
+        AppOptions.NormalizeDefaultFormat(extension);
 
-        if (string.Equals(normalized, LegacyJsonDefaultFormat, StringComparison.OrdinalIgnoreCase))
-            return FreeXWorkbookDefaultFormat;
+    internal static List<string> NormalizeSpellCheckCustomDictionaryWords(IEnumerable<string>? words) =>
+        AppOptions.NormalizeSpellCheckCustomDictionaryWords(words);
 
-        return string.Equals(normalized, FreeXWorkbookDefaultFormat, StringComparison.OrdinalIgnoreCase)
-            ? FreeXWorkbookDefaultFormat
-            : XlsxDefaultFormat;
-    }
+    internal static string? NormalizeSpellCheckCustomDictionaryWord(string? word) =>
+        AppOptions.NormalizeSpellCheckCustomDictionaryWord(word);
 
-    internal static List<string> NormalizeSpellCheckCustomDictionaryWords(IEnumerable<string>? words)
-    {
-        if (words is null)
-            return [];
-
-        var normalized = new List<string>();
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var word in words)
+    internal AppOptions ToAppOptions() =>
+        new()
         {
-            var value = NormalizeSpellCheckCustomDictionaryWord(word);
-            if (value is null || !seen.Add(value))
-                continue;
+            DefaultFontName = DefaultFontName,
+            DefaultFontSize = DefaultFontSize,
+            DefaultSheetCount = DefaultSheetCount,
+            UserName = UserName,
+            CollapseRibbonAutomatically = CollapseRibbonAutomatically,
+            ShowScreenTips = ShowScreenTips,
+            AppLanguage = AppLanguage,
+            SpellCheckCustomDictionaryWords = SpellCheckCustomDictionaryWords,
+            AutoCalculate = AutoCalculate,
+            UseR1C1ReferenceStyle = UseR1C1ReferenceStyle,
+            ShowFormulaBar = ShowFormulaBar,
+            FormulaBarExpanded = FormulaBarExpanded,
+            MoveSelectionAfterEnter = MoveSelectionAfterEnter,
+            AfterEnterDirection = (AppOptionsEnterDirection)AfterEnterDirection,
+            ShowGridlines = ShowGridlines,
+            ShowHeadings = ShowHeadings,
+            ObjectsDisplay = (AppOptionsObjectDisplay)ObjectsDisplay,
+            DefaultFormat = DefaultFormat,
+            QuickAccessToolbarBelowRibbon = QuickAccessToolbarBelowRibbon,
+            QuickAccessToolbarCommands = QuickAccessToolbarCommands,
+            CrashAnalyticsEnabled = CrashAnalyticsEnabled,
+            CrashAnalyticsPrompted = CrashAnalyticsPrompted,
+            PdfExportLanguage = PdfExportLanguage
+        };
 
-            normalized.Add(value);
-        }
-
-        normalized.Sort(StringComparer.OrdinalIgnoreCase);
-        return normalized;
+    internal static FreeXOptions FromAppOptions(AppOptions options)
+    {
+        var hostOptions = new FreeXOptions();
+        hostOptions.ApplyAppOptions(options, copyPersistenceError: true);
+        return hostOptions;
     }
 
-    internal static string? NormalizeSpellCheckCustomDictionaryWord(string? word)
+    private void ApplyAppOptions(AppOptions options, bool copyPersistenceError)
     {
-        var value = word?.Trim();
-        return string.IsNullOrEmpty(value) ? null : value;
+        DefaultFontName = options.DefaultFontName;
+        DefaultFontSize = options.DefaultFontSize;
+        DefaultSheetCount = options.DefaultSheetCount;
+        UserName = options.UserName;
+        CollapseRibbonAutomatically = options.CollapseRibbonAutomatically;
+        ShowScreenTips = options.ShowScreenTips;
+        AppLanguage = options.AppLanguage;
+        SpellCheckCustomDictionaryWords = options.SpellCheckCustomDictionaryWords;
+        AutoCalculate = options.AutoCalculate;
+        UseR1C1ReferenceStyle = options.UseR1C1ReferenceStyle;
+        ShowFormulaBar = options.ShowFormulaBar;
+        FormulaBarExpanded = options.FormulaBarExpanded;
+        MoveSelectionAfterEnter = options.MoveSelectionAfterEnter;
+        AfterEnterDirection = (FreeXEnterDirection)options.AfterEnterDirection;
+        ShowGridlines = options.ShowGridlines;
+        ShowHeadings = options.ShowHeadings;
+        ObjectsDisplay = (FreeXObjectDisplay)options.ObjectsDisplay;
+        DefaultFormat = options.DefaultFormat;
+        QuickAccessToolbarBelowRibbon = options.QuickAccessToolbarBelowRibbon;
+        QuickAccessToolbarCommands = options.QuickAccessToolbarCommands;
+        CrashAnalyticsEnabled = options.CrashAnalyticsEnabled;
+        CrashAnalyticsPrompted = options.CrashAnalyticsPrompted;
+        PdfExportLanguage = options.PdfExportLanguage;
+
+        if (copyPersistenceError)
+        {
+            LastPersistenceError = options.LastPersistenceError;
+        }
     }
 }
