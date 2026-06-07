@@ -18,6 +18,9 @@ public sealed class FormatCellsCompactPlannerTests
             Italic = true,
             Underline = true,
             Strikethrough = true,
+            Superscript = true,
+            Subscript = false,
+            FontName = "Aptos",
             FontSize = 18,
             FontColor = new CellColor(12, 34, 56),
             FillColor = new CellColor(90, 91, 92),
@@ -25,6 +28,12 @@ public sealed class FormatCellsCompactPlannerTests
             HorizontalAlignment = CellHAlign.Right,
             VerticalAlignment = CellVAlign.Top,
             WrapText = true,
+            ShrinkToFit = true,
+            DoubleUnderline = true,
+            IndentLevel = 7,
+            TextRotation = 45,
+            Locked = false,
+            Hidden = true,
             BorderTop = new CellBorder(BorderStyle.Thick, new CellColor(1, 2, 3)),
             BorderRight = new CellBorder(BorderStyle.Dashed, new CellColor(4, 5, 6)),
             BorderBottom = new CellBorder(BorderStyle.Double, new CellColor(7, 8, 9)),
@@ -53,19 +62,55 @@ public sealed class FormatCellsCompactPlannerTests
             Strikethrough: true,
             FontSize: 13.5,
             FillColor: fill,
-            FontColor: font));
+            FontColor: font,
+            DoubleUnderline: true,
+            ShrinkToFit: true,
+            IndentLevel: 4,
+            TextRotation: 255,
+            FontName: " Aptos ",
+            Locked: false,
+            Hidden: true,
+            Superscript: true,
+            Subscript: false));
 
         diff.NumberFormat.Should().Be("#,##0.00");
         diff.HAlign.Should().Be(CellHAlign.Center);
         diff.VAlign.Should().Be(CellVAlign.Top);
         diff.WrapText.Should().BeTrue();
+        diff.ShrinkToFit.Should().BeTrue();
         diff.Bold.Should().BeTrue();
         diff.Italic.Should().BeTrue();
         diff.Underline.Should().BeTrue();
         diff.Strikethrough.Should().BeTrue();
+        diff.DoubleUnderline.Should().BeTrue();
+        diff.Superscript.Should().BeTrue();
+        diff.Subscript.Should().BeFalse();
+        diff.FontName.Should().Be("Aptos");
         diff.FontSize.Should().Be(13.5);
         diff.FillColor.Should().Be(fill);
         diff.FontColor.Should().Be(font);
+        diff.IndentLevel.Should().Be(4);
+        diff.TextRotation.Should().Be(255);
+        diff.Locked.Should().BeFalse();
+        diff.Hidden.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Plan_DoubleUnderlineUsesFormatCellsSemanticsWithoutClearingUnderlineOrStrikethrough()
+    {
+        var baseStyle = new CellStyle
+        {
+            Underline = true,
+            Strikethrough = true,
+            DoubleUnderline = false
+        };
+
+        var result = FormatCellsCompactPlanner.Plan(new FormatCellsCompactRequest(DoubleUnderline: true))
+            .ApplyTo(baseStyle);
+
+        result.Underline.Should().BeTrue();
+        result.Strikethrough.Should().BeTrue();
+        result.DoubleUnderline.Should().BeTrue();
     }
 
     [Fact]
@@ -162,12 +207,58 @@ public sealed class FormatCellsCompactPlannerTests
     [InlineData(double.NaN)]
     [InlineData(double.PositiveInfinity)]
     [InlineData(double.NegativeInfinity)]
-    public void Plan_FontSizeRejectsInvalidValues(double fontSize)
+    public void TryPlan_FontSizeRejectsInvalidValuesWithClearError(double fontSize)
     {
-        Action act = () => FormatCellsCompactPlanner.Plan(new FormatCellsCompactRequest(FontSize: fontSize));
+        var result = FormatCellsCompactPlanner.TryPlan(
+            new FormatCellsCompactRequest(FontSize: fontSize),
+            out var diff,
+            out var errorMessage);
 
-        act.Should().Throw<ArgumentOutOfRangeException>()
-            .WithParameterName(nameof(FormatCellsCompactRequest.FontSize));
+        result.Should().BeFalse();
+        diff.Should().Be(new StyleDiff());
+        errorMessage.Should().Contain("Font size");
+    }
+
+    [Theory]
+    [InlineData(-4, 0)]
+    [InlineData(0, 0)]
+    [InlineData(7, 7)]
+    [InlineData(15, 15)]
+    [InlineData(99, 15)]
+    public void Plan_IndentLevelClampsToWpfParserRange(int requested, int expected)
+    {
+        var diff = FormatCellsCompactPlanner.Plan(new FormatCellsCompactRequest(IndentLevel: requested));
+
+        diff.IndentLevel.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(-90)]
+    [InlineData(0)]
+    [InlineData(90)]
+    [InlineData(255)]
+    public void Plan_TextRotationAcceptsWpfParserSupportedValues(int rotation)
+    {
+        var diff = FormatCellsCompactPlanner.Plan(new FormatCellsCompactRequest(TextRotation: rotation));
+
+        diff.TextRotation.Should().Be(rotation);
+    }
+
+    [Theory]
+    [InlineData(-91)]
+    [InlineData(91)]
+    [InlineData(254)]
+    [InlineData(256)]
+    public void TryPlan_TextRotationRejectsUnsupportedValuesWithClearError(int rotation)
+    {
+        var result = FormatCellsCompactPlanner.TryPlan(
+            new FormatCellsCompactRequest(TextRotation: rotation),
+            out var diff,
+            out var errorMessage);
+
+        result.Should().BeFalse();
+        diff.Should().Be(new StyleDiff());
+        errorMessage.Should().Contain("Text rotation");
     }
 
     private static GridRange Range(uint startRow, uint startCol, uint endRow, uint endCol)

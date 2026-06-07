@@ -2019,6 +2019,7 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "FormatCellsCompactPlanner.cs"));
 
         source.Should().Contain("private readonly NativeMenuItem _formatCellsMenuItem = new();");
         source.Should().Contain("_formatCellsMenuItem.Header = \"Format Cells...\";");
@@ -2041,8 +2042,37 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"FormatCellsFontColorBox\"");
         source.Should().Contain("\"FormatCellsFillColorBox\"");
         source.Should().Contain("\"FormatCellsBorderPresetBox\"");
+        source.Should().Contain("\"FormatCellsDoubleUnderlineBox\"");
+        source.Should().Contain("\"FormatCellsShrinkToFitBox\"");
+        source.Should().Contain("\"FormatCellsIndentLevelBox\"");
+        source.Should().Contain("\"FormatCellsTextRotationBox\"");
+        source.Should().Contain("\"FormatCellsFontNameBox\"");
+        source.Should().Contain("\"FormatCellsSuperscriptBox\"");
+        source.Should().Contain("\"FormatCellsSubscriptBox\"");
+        source.Should().Contain("\"FormatCellsLockedBox\"");
+        source.Should().Contain("\"FormatCellsHiddenBox\"");
+        source.Should().Contain("var currentUnderline = currentStyle.Underline ?? CellStyle.Default.Underline;");
+        source.Should().Contain("Underline: ReadChangedFormatCellsBool(currentUnderline, underlineBox)");
 
         sessionSource.Should().Contain("public WorkbookCellEditResult ApplySelectedRangeCompactFormat(");
+        plannerSource.Should().Contain("bool? DoubleUnderline = null");
+        plannerSource.Should().Contain("bool? ShrinkToFit = null");
+        plannerSource.Should().Contain("int? IndentLevel = null");
+        plannerSource.Should().Contain("int? TextRotation = null");
+        plannerSource.Should().Contain("string? FontName = null");
+        plannerSource.Should().Contain("bool? Superscript = null");
+        plannerSource.Should().Contain("bool? Subscript = null");
+        plannerSource.Should().Contain("bool? Locked = null");
+        plannerSource.Should().Contain("bool? Hidden = null");
+        plannerSource.Should().Contain("DoubleUnderline: request.DoubleUnderline");
+        plannerSource.Should().Contain("ShrinkToFit: request.ShrinkToFit");
+        plannerSource.Should().Contain("IndentLevel: NormalizeIndentLevel(request.IndentLevel)");
+        plannerSource.Should().Contain("TextRotation: NormalizeTextRotation(request.TextRotation)");
+        plannerSource.Should().Contain("FontName: NormalizeFontName(request.FontName)");
+        plannerSource.Should().Contain("Superscript: request.Superscript");
+        plannerSource.Should().Contain("Subscript: request.Subscript");
+        plannerSource.Should().Contain("Locked: request.Locked");
+        plannerSource.Should().Contain("Hidden: request.Hidden");
     }
 
     [Fact]

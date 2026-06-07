@@ -4724,6 +4724,17 @@ public sealed class MainWindow : Window
         var currentHorizontalAlignment = _session.SelectedRangeStartHorizontalAlignment;
         var currentVerticalAlignment = _session.SelectedRangeStartVerticalAlignment;
         var currentFontSize = _session.SelectedRangeStartFontSize;
+        var currentStyle = _session.CreateFormatDiffFromActiveCell() ?? StyleDiff.FromStyle(CellStyle.Default);
+        var currentUnderline = currentStyle.Underline ?? CellStyle.Default.Underline;
+        var currentDoubleUnderline = currentStyle.DoubleUnderline ?? _session.IsSelectedRangeStartDoubleUnderline;
+        var currentShrinkToFit = currentStyle.ShrinkToFit ?? CellStyle.Default.ShrinkToFit;
+        var currentIndentLevel = currentStyle.IndentLevel ?? _session.SelectedRangeStartIndentLevel;
+        var currentTextRotation = currentStyle.TextRotation ?? _session.SelectedRangeStartTextRotation;
+        var currentFontName = currentStyle.FontName ?? CellStyle.Default.FontName;
+        var currentLocked = currentStyle.Locked ?? CellStyle.Default.Locked;
+        var currentHidden = currentStyle.Hidden ?? CellStyle.Default.Hidden;
+        var currentSuperscript = currentStyle.Superscript ?? CellStyle.Default.Superscript;
+        var currentSubscript = currentStyle.Subscript ?? CellStyle.Default.Subscript;
 
         var dialog = new Window
         {
@@ -4798,11 +4809,49 @@ public sealed class MainWindow : Window
             CreateFormatCellsVerticalAlignmentChoices(),
             currentVerticalAlignment);
         var wrapTextBox = CreateFormatCellsCheckBox("Wrap text", "FormatCellsWrapTextBox", _session.IsSelectedRangeStartWrapText);
+        var shrinkToFitBox = CreateFormatCellsCheckBox("Shrink to fit", "FormatCellsShrinkToFitBox", currentShrinkToFit);
+        var indentLevelBox = new TextBox
+        {
+            Text = currentIndentLevel.ToString(CultureInfo.InvariantCulture),
+            MinWidth = 100,
+        };
+        AutomationProperties.SetName(indentLevelBox, "Indent level");
+        AutomationProperties.SetAutomationId(indentLevelBox, "FormatCellsIndentLevelBox");
+
+        var textRotationBox = new TextBox
+        {
+            Text = currentTextRotation.ToString(CultureInfo.InvariantCulture),
+            MinWidth = 100,
+        };
+        AutomationProperties.SetName(textRotationBox, "Text rotation");
+        AutomationProperties.SetAutomationId(textRotationBox, "FormatCellsTextRotationBox");
 
         var boldBox = CreateFormatCellsCheckBox("Bold", "FormatCellsBoldBox", _session.IsSelectedRangeStartBold);
         var italicBox = CreateFormatCellsCheckBox("Italic", "FormatCellsItalicBox", _session.IsSelectedRangeStartItalic);
-        var underlineBox = CreateFormatCellsCheckBox("Underline", "FormatCellsUnderlineBox", _session.IsSelectedRangeStartUnderline);
+        var underlineBox = CreateFormatCellsCheckBox("Underline", "FormatCellsUnderlineBox", currentUnderline);
+        var doubleUnderlineBox = CreateFormatCellsCheckBox("Double underline", "FormatCellsDoubleUnderlineBox", currentDoubleUnderline);
         var strikethroughBox = CreateFormatCellsCheckBox("Strikethrough", "FormatCellsStrikethroughBox", _session.IsSelectedRangeStartStrikethrough);
+        var superscriptBox = CreateFormatCellsCheckBox("Superscript", "FormatCellsSuperscriptBox", currentSuperscript);
+        var subscriptBox = CreateFormatCellsCheckBox("Subscript", "FormatCellsSubscriptBox", currentSubscript);
+        superscriptBox.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == ToggleButton.IsCheckedProperty && superscriptBox.IsChecked == true)
+                subscriptBox.IsChecked = false;
+        };
+        subscriptBox.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == ToggleButton.IsCheckedProperty && subscriptBox.IsChecked == true)
+                superscriptBox.IsChecked = false;
+        };
+
+        var fontNameBox = new TextBox
+        {
+            Text = currentFontName,
+            MinWidth = 180,
+        };
+        AutomationProperties.SetName(fontNameBox, "Font");
+        AutomationProperties.SetAutomationId(fontNameBox, "FormatCellsFontNameBox");
+
         var fontSizeBox = new TextBox
         {
             Text = currentFontSize.ToString("0.##", CultureInfo.InvariantCulture),
@@ -4838,8 +4887,8 @@ public sealed class MainWindow : Window
         AutomationProperties.SetName(borderPresetBox, "Border preset");
         AutomationProperties.SetAutomationId(borderPresetBox, "FormatCellsBorderPresetBox");
 
-        var lockedBox = CreateFormatCellsCheckBox("Locked", "FormatCellsLockedBox", false);
-        var hiddenBox = CreateFormatCellsCheckBox("Hidden", "FormatCellsHiddenBox", false);
+        var lockedBox = CreateFormatCellsCheckBox("Locked", "FormatCellsLockedBox", currentLocked);
+        var hiddenBox = CreateFormatCellsCheckBox("Hidden", "FormatCellsHiddenBox", currentHidden);
 
         var okButton = new Button
         {
@@ -4870,6 +4919,16 @@ public sealed class MainWindow : Window
                 errorText.Text = message;
                 return;
             }
+            if (!TryReadFormatCellsIndentLevel(indentLevelBox.Text, currentIndentLevel, out var indentLevel, out message))
+            {
+                errorText.Text = message;
+                return;
+            }
+            if (!TryReadFormatCellsTextRotation(textRotationBox.Text, currentTextRotation, out var textRotation, out message))
+            {
+                errorText.Text = message;
+                return;
+            }
 
             var numberFormat = numberFormatBox.SelectedItem is FormatCellsNumberFormatChoice numberChoice &&
                 !string.Equals(numberChoice.FormatCode, currentNumberFormat, StringComparison.Ordinal)
@@ -4884,12 +4943,21 @@ public sealed class MainWindow : Window
                 WrapText: ReadChangedFormatCellsBool(_session.IsSelectedRangeStartWrapText, wrapTextBox),
                 Bold: ReadChangedFormatCellsBool(_session.IsSelectedRangeStartBold, boldBox),
                 Italic: ReadChangedFormatCellsBool(_session.IsSelectedRangeStartItalic, italicBox),
-                Underline: ReadChangedFormatCellsBool(_session.IsSelectedRangeStartUnderline, underlineBox),
+                Underline: ReadChangedFormatCellsBool(currentUnderline, underlineBox),
                 Strikethrough: ReadChangedFormatCellsBool(_session.IsSelectedRangeStartStrikethrough, strikethroughBox),
+                DoubleUnderline: ReadChangedFormatCellsBool(currentDoubleUnderline, doubleUnderlineBox),
+                Superscript: ReadChangedFormatCellsBool(currentSuperscript, superscriptBox),
+                Subscript: ReadChangedFormatCellsBool(currentSubscript, subscriptBox),
+                FontName: ReadChangedFormatCellsText(currentFontName, fontNameBox),
                 FontSize: fontSize,
                 FillColor: fillChoice?.Color,
                 ClearFill: fillChoice?.Clear == true,
-                FontColor: (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color);
+                FontColor: (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color,
+                ShrinkToFit: ReadChangedFormatCellsBool(currentShrinkToFit, shrinkToFitBox),
+                IndentLevel: indentLevel,
+                TextRotation: textRotation,
+                Locked: ReadChangedFormatCellsBool(currentLocked, lockedBox),
+                Hidden: ReadChangedFormatCellsBool(currentHidden, hiddenBox));
             result = new FormatCellsDialogResult(request, borderChoice?.Value);
             dialog.Close();
         }
@@ -4942,6 +5010,9 @@ public sealed class MainWindow : Window
                     CreateFormatCellsField("Horizontal", horizontalAlignmentBox),
                     CreateFormatCellsField("Vertical", verticalAlignmentBox),
                     wrapTextBox,
+                    shrinkToFitBox,
+                    CreateFormatCellsField("Indent", indentLevelBox),
+                    CreateFormatCellsField("Text rotation", textRotationBox),
                 },
             });
         var fontTab = CreateFormatCellsTab(
@@ -4961,9 +5032,21 @@ public sealed class MainWindow : Window
                             boldBox,
                             italicBox,
                             underlineBox,
+                            doubleUnderlineBox,
                             strikethroughBox,
                         },
                     },
+                    new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        Spacing = 12,
+                        Children =
+                        {
+                            superscriptBox,
+                            subscriptBox,
+                        },
+                    },
+                    CreateFormatCellsField("Font", fontNameBox),
                     CreateFormatCellsField("Size", fontSizeBox),
                     CreateFormatCellsField("Color", fontColorBox),
                 },
@@ -5200,6 +5283,15 @@ public sealed class MainWindow : Window
         return null;
     }
 
+    private static string? ReadChangedFormatCellsText(string currentValue, TextBox textBox)
+    {
+        var value = textBox.Text?.Trim();
+        return !string.IsNullOrWhiteSpace(value) &&
+            !string.Equals(value, currentValue, StringComparison.Ordinal)
+                ? value
+                : null;
+    }
+
     private static bool TryReadFormatCellsFontSize(
         string? text,
         double currentFontSize,
@@ -5227,6 +5319,56 @@ public sealed class MainWindow : Window
 
         if (Math.Abs(parsed - currentFontSize) > 0.001)
             fontSize = parsed;
+
+        return true;
+    }
+
+    private static bool TryReadFormatCellsIndentLevel(
+        string? text,
+        int currentIndentLevel,
+        out int? indentLevel,
+        out string errorMessage)
+    {
+        indentLevel = null;
+        errorMessage = "";
+        var trimmed = text?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+            return true;
+
+        if (!int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+        {
+            errorMessage = "Indent level must be a whole number from 0 through 15.";
+            return false;
+        }
+
+        var normalized = Math.Clamp(parsed, 0, 15);
+        if (normalized != currentIndentLevel)
+            indentLevel = normalized;
+
+        return true;
+    }
+
+    private static bool TryReadFormatCellsTextRotation(
+        string? text,
+        int currentTextRotation,
+        out int? textRotation,
+        out string errorMessage)
+    {
+        textRotation = null;
+        errorMessage = "";
+        var trimmed = text?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+            return true;
+
+        if (!int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ||
+            parsed != 255 && parsed is < -90 or > 90)
+        {
+            errorMessage = "Text rotation must be 255 or a whole number from -90 through 90.";
+            return false;
+        }
+
+        if (parsed != currentTextRotation)
+            textRotation = parsed;
 
         return true;
     }

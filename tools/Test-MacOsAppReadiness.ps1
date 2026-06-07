@@ -686,6 +686,15 @@ function Test-SourceWiring {
                 "`"FormatCellsFontColorBox`"",
                 "`"FormatCellsFillColorBox`"",
                 "`"FormatCellsBorderPresetBox`"",
+                "`"FormatCellsDoubleUnderlineBox`"",
+                "`"FormatCellsShrinkToFitBox`"",
+                "`"FormatCellsIndentLevelBox`"",
+                "`"FormatCellsTextRotationBox`"",
+                "`"FormatCellsFontNameBox`"",
+                "`"FormatCellsSuperscriptBox`"",
+                "`"FormatCellsSubscriptBox`"",
+                "`"FormatCellsLockedBox`"",
+                "`"FormatCellsHiddenBox`"",
                 "_autoSumButton.Content = `"AutoSum`";",
                 "_autoSumButton.Flyout = CreateAutoSumFlyout();",
                 "AutomationProperties.SetAutomationId(_autoSumButton, `"HomeAutoSumButton`");",
@@ -1844,6 +1853,31 @@ function Test-SourceWiring {
                 "private static bool TryResolveReferenceSheet(",
                 "private static string? NormalizeAbsoluteA1Reference(string input)",
                 "private static bool TryParseAbsoluteR1C1CellReference(string input, SheetId sheetId, out CellAddress address)"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "src\FreeX.App.Services\FormatCellsCompactPlanner.cs"
+            Markers = @(
+                "public sealed record FormatCellsCompactRequest(",
+                "bool? DoubleUnderline = null",
+                "bool? ShrinkToFit = null",
+                "int? IndentLevel = null",
+                "int? TextRotation = null",
+                "string? FontName = null",
+                "bool? Superscript = null",
+                "bool? Subscript = null",
+                "bool? Locked = null",
+                "bool? Hidden = null",
+                "DoubleUnderline: request.DoubleUnderline",
+                "ShrinkToFit: request.ShrinkToFit",
+                "IndentLevel: NormalizeIndentLevel(request.IndentLevel)",
+                "TextRotation: NormalizeTextRotation(request.TextRotation)",
+                "FontName: NormalizeFontName(request.FontName)",
+                "Superscript: request.Superscript",
+                "Subscript: request.Subscript",
+                "Locked: request.Locked",
+                "Hidden: request.Hidden"
             )
             OrderedPairs = @()
         },

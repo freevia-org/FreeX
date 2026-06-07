@@ -17,7 +17,16 @@ public sealed record FormatCellsCompactRequest(
     CellColor? FontColor = null,
     CellBorderPreset? BorderPreset = null,
     BorderStyle BorderStyle = BorderStyle.Thin,
-    CellColor? BorderColor = null);
+    CellColor? BorderColor = null,
+    bool? DoubleUnderline = null,
+    bool? ShrinkToFit = null,
+    int? IndentLevel = null,
+    int? TextRotation = null,
+    string? FontName = null,
+    bool? Locked = null,
+    bool? Hidden = null,
+    bool? Superscript = null,
+    bool? Subscript = null);
 
 public readonly record struct FormatCellsCompactBorderPresetMetadata(
     CellBorderPreset Preset,
@@ -27,6 +36,8 @@ public readonly record struct FormatCellsCompactBorderPresetMetadata(
 public static class FormatCellsCompactPlanner
 {
     private const double MinimumFontSize = 1.0;
+    private const int MinimumIndentLevel = 0;
+    private const int MaximumIndentLevel = 15;
 
     private static readonly IReadOnlyList<FormatCellsCompactBorderPresetMetadata> BorderPresetMetadata =
         Enum.GetValues<CellBorderPreset>()
@@ -57,17 +68,26 @@ public static class FormatCellsCompactPlanner
             Italic: request.Italic,
             Underline: request.Underline,
             Strikethrough: request.Strikethrough,
+            Superscript: request.Superscript,
+            Subscript: request.Subscript,
+            FontName: NormalizeFontName(request.FontName),
             FontSize: NormalizeFontSize(request.FontSize),
             FontColor: request.FontColor,
             FillColor: request.ClearFill ? null : request.FillColor,
             HAlign: request.HorizontalAlignment,
             VAlign: request.VerticalAlignment,
             WrapText: request.WrapText,
+            ShrinkToFit: request.ShrinkToFit,
             NumberFormat: request.NumberFormat,
+            DoubleUnderline: request.DoubleUnderline,
+            IndentLevel: NormalizeIndentLevel(request.IndentLevel),
+            TextRotation: NormalizeTextRotation(request.TextRotation),
             BorderTop: borderDiff?.BorderTop,
             BorderRight: borderDiff?.BorderRight,
             BorderBottom: borderDiff?.BorderBottom,
             BorderLeft: borderDiff?.BorderLeft,
+            Locked: request.Locked,
+            Hidden: request.Hidden,
             ClearFill: request.ClearFill ? true : null);
     }
 
@@ -134,5 +154,32 @@ public static class FormatCellsCompactPlanner
             throw new ArgumentOutOfRangeException(nameof(FormatCellsCompactRequest.FontSize), value, "Font size must be a positive, finite value.");
 
         return Math.Max(MinimumFontSize, value);
+    }
+
+    private static string? NormalizeFontName(string? fontName)
+    {
+        if (string.IsNullOrWhiteSpace(fontName))
+            return null;
+
+        return fontName.Trim();
+    }
+
+    private static int? NormalizeIndentLevel(int? indentLevel)
+    {
+        return indentLevel is null
+            ? null
+            : Math.Clamp(indentLevel.Value, MinimumIndentLevel, MaximumIndentLevel);
+    }
+
+    private static int? NormalizeTextRotation(int? textRotation)
+    {
+        if (textRotation is null)
+            return null;
+
+        var value = textRotation.Value;
+        if (value == 255 || value is >= -90 and <= 90)
+            return value;
+
+        throw new ArgumentOutOfRangeException(nameof(FormatCellsCompactRequest.TextRotation), value, "Text rotation must be 255 or between -90 and 90 degrees.");
     }
 }
