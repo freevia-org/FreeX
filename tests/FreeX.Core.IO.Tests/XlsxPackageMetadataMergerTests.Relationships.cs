@@ -297,6 +297,116 @@ public sealed partial class XlsxPackageMetadataMergerTests
     }
 
     [Fact]
+    public void MergeRelationshipParts_PreservesWorkbookRevisionUserNamesGraphAndRemapsCollidingRelationshipId()
+    {
+        using var sourcePackage = XlsxPackageTestFixtures.CreatePackage(
+            ("[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/revisionHeaders/revisionHeader1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.revisionHeaders+xml"/>
+                  <Override PartName="/xl/revisions/revisionLog1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.revisionLog+xml"/>
+                  <Override PartName="/xl/revisions/usernames.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.userNames+xml"/>
+                </Types>
+                """),
+            ("xl/workbook.xml", """
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """),
+            ("xl/_rels/workbook.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/revisionHeaders"
+                                Target="revisionHeaders/revisionHeader1.xml"/>
+                  <Relationship Id="rIdRevisionUserNames"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/usernames"
+                                Target="revisions/usernames.xml"/>
+                </Relationships>
+                """),
+            ("xl/revisionHeaders/revisionHeader1.xml", """
+                <headers xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """),
+            ("xl/revisionHeaders/_rels/revisionHeader1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdRevisionLog"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/revisionLog"
+                                Target="../revisions/revisionLog1.xml"/>
+                </Relationships>
+                """),
+            ("xl/revisions/revisionLog1.xml", """
+                <revisions xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """),
+            ("xl/revisions/usernames.xml", """
+                <users xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <user guid="{11111111-2222-3333-4444-555555555555}" name="FreeX Revision User"/>
+                </users>
+                """));
+        using var targetPackage = XlsxPackageTestFixtures.CreatePackage(
+            ("[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+                  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+                </Types>
+                """),
+            ("xl/workbook.xml", """
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """),
+            ("xl/_rels/workbook.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"
+                                Target="worksheets/sheet1.xml"/>
+                </Relationships>
+                """),
+            ("xl/worksheets/sheet1.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """));
+        using var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var targetArchive = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, targetArchive);
+        XlsxPackageMetadataMerger.MergeContentTypes(sourceArchive, targetArchive);
+        XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, targetArchive, generatedEntriesBeforeMerge);
+
+        targetArchive.GetEntry("xl/revisionHeaders/revisionHeader1.xml").Should().NotBeNull();
+        targetArchive.GetEntry("xl/revisions/revisionLog1.xml").Should().NotBeNull();
+        targetArchive.GetEntry("xl/revisions/usernames.xml").Should().NotBeNull();
+
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var workbookRelationshipsXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "xl/_rels/workbook.xml.rels");
+        var workbookRelationships = workbookRelationshipsXml.Root!.Elements(relationshipNs + "Relationship").ToList();
+        workbookRelationships
+            .GroupBy(relationship => relationship.Attribute("Id")?.Value, StringComparer.OrdinalIgnoreCase)
+            .Should()
+            .OnlyContain(group => group.Count() == 1);
+        workbookRelationships.Should().ContainSingle(relationship =>
+            (string?)relationship.Attribute("Id") == "rId1" &&
+            (string?)relationship.Attribute("Type") == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" &&
+            (string?)relationship.Attribute("Target") == "worksheets/sheet1.xml");
+        workbookRelationships.Should().ContainSingle(relationship =>
+            (string?)relationship.Attribute("Id") != "rId1" &&
+            (string?)relationship.Attribute("Type") == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/revisionHeaders" &&
+            (string?)relationship.Attribute("Target") == "revisionHeaders/revisionHeader1.xml");
+        workbookRelationships.Should().ContainSingle(relationship =>
+            (string?)relationship.Attribute("Type") == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/usernames" &&
+            (string?)relationship.Attribute("Target") == "revisions/usernames.xml");
+
+        var revisionHeaderRelationshipsXml = XlsxPackageTestFixtures.LoadPackageXml(
+            targetArchive,
+            "xl/revisionHeaders/_rels/revisionHeader1.xml.rels");
+        revisionHeaderRelationshipsXml.Root!.Elements(relationshipNs + "Relationship").Should().ContainSingle(relationship =>
+            (string?)relationship.Attribute("Type") == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/revisionLog" &&
+            (string?)relationship.Attribute("Target") == "../revisions/revisionLog1.xml");
+
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "[Content_Types].xml");
+        contentTypesXml.Root!.Elements(contentTypeNs + "Override").Should().ContainSingle(element =>
+            (string?)element.Attribute("PartName") == "/xl/revisions/usernames.xml" &&
+            (string?)element.Attribute("ContentType") == "application/vnd.openxmlformats-officedocument.spreadsheetml.userNames+xml");
+    }
+
+    [Fact]
     public void MergeRelationshipParts_DeduplicatesExternalTargetsWithTrimmedTargetMode()
     {
         using var sourcePackage = CreatePackageWithWhitespacePaddedExternalWorksheetRelationship();

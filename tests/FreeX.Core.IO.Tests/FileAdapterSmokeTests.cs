@@ -12912,16 +12912,45 @@ public partial class FileAdapterSmokeTests
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         archive.GetEntry("xl/revisionHeaders/revisionHeader1.xml").Should().NotBeNull();
         archive.GetEntry("xl/revisions/revisionLog1.xml").Should().NotBeNull();
+        archive.GetEntry("xl/revisions/usernames.xml").Should().NotBeNull();
 
         var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
         workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("revisionPtr");
         workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("documentId=\"FreeXRevisionDoc\"");
 
         var workbookRelsXml = LoadPackageXml(archive.GetEntry("xl/_rels/workbook.xml.rels")!);
-        workbookRelsXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("revisionHeaders/revisionHeader1.xml");
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var workbookRelationships = workbookRelsXml.Root!.Elements(packageRelNs + "Relationship").ToList();
+        workbookRelationships
+            .GroupBy(relationship => relationship.Attribute("Id")?.Value, StringComparer.OrdinalIgnoreCase)
+            .Should()
+            .OnlyContain(group => group.Count() == 1);
+        workbookRelationships.Should().ContainSingle(relationship =>
+            (string?)relationship.Attribute("Type") == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/revisionHeaders" &&
+            (string?)relationship.Attribute("Target") == "revisionHeaders/revisionHeader1.xml");
+        workbookRelationships.Should().ContainSingle(relationship =>
+            (string?)relationship.Attribute("Type") == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/usernames" &&
+            (string?)relationship.Attribute("Target") == "revisions/usernames.xml");
 
         var revisionHeaderRelsXml = LoadPackageXml(archive.GetEntry("xl/revisionHeaders/_rels/revisionHeader1.xml.rels")!);
         revisionHeaderRelsXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("../revisions/revisionLog1.xml");
+
+        var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        contentTypesXml.Root!.Elements(contentTypeNs + "Override").Should().ContainSingle(element =>
+            (string?)element.Attribute("PartName") == "/xl/revisions/revisionLog1.xml" &&
+            (string?)element.Attribute("ContentType") == "application/vnd.openxmlformats-officedocument.spreadsheetml.revisionLog+xml");
+        contentTypesXml.Root.Elements(contentTypeNs + "Override").Should().ContainSingle(element =>
+            (string?)element.Attribute("PartName") == "/xl/revisions/usernames.xml" &&
+            (string?)element.Attribute("ContentType") == "application/vnd.openxmlformats-officedocument.spreadsheetml.userNames+xml");
+
+        var userNamesXml = LoadPackageXml(archive.GetEntry("xl/revisions/usernames.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        userNamesXml.Root!.Element(workbookNs + "user")!
+            .Attribute("name")!
+            .Value
+            .Should()
+            .Be("FreeX Revision User");
     }
 
     [Fact]
