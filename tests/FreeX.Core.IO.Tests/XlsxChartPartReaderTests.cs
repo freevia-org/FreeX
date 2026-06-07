@@ -1,7 +1,11 @@
+using System.Xml.Linq;
+
 namespace FreeX.Core.IO.Tests;
 
 public sealed partial class XlsxChartPartReaderTests
 {
+    private static XDocument ParseChartXml(string xml) => XDocument.Parse(xml);
+
     private static string BuildSingleSeriesChartXml(string chartElementName, string chartBody = "") =>
         $$"""
           <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
