@@ -73,6 +73,29 @@ internal static class XlsxWorksheetNativeMetadataHelpers
         }
     }
 
+    public static XElement? TryParseNativeElement(
+        string? xml,
+        XName expectedName,
+        Func<XElement, bool>? normalize = null)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
+            return null;
+
+        try
+        {
+            var element = XElement.Parse(xml);
+            if (element.Name != expectedName)
+                return null;
+
+            _ = normalize?.Invoke(element);
+            return element;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public static string? ToBoolAttribute(bool? value) =>
         value is { } boolValue ? boolValue ? "1" : "0" : null;
 
