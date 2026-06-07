@@ -98,10 +98,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
-        ReadWorkbookChildElement(saved, "fileSharing")
-            .Attribute("readOnlyRecommended")
-            .Should()
-            .BeNull();
+        var fileSharing = ReadWorkbookChildElement(saved, "fileSharing");
+        fileSharing.Attribute("readOnlyRecommended").Should().BeNull();
+        fileSharing.Attribute("reservationPassword")!.Value.Should().Be("1234");
+        fileSharing.Attribute("revisionsPassword").Should().BeNull();
+        fileSharing.Attribute("customFileSharingFlag").Should().BeNull();
+        fileSharing.Attribute("spinCount").Should().BeNull();
+        fileSharing.Element(fileSharing.Name.Namespace + "nativeFileSharingChild").Should().BeNull();
     }
 
     [Fact]
@@ -516,6 +519,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
         var fileSharing = workbookXml.Root!.Element(workbookNs + "fileSharing")!;
         fileSharing.SetAttributeValue("readOnlyRecommended", "maybe");
+        fileSharing.SetAttributeValue("revisionsPassword", "removed");
+        fileSharing.SetAttributeValue("customFileSharingFlag", "removed");
+        fileSharing.SetAttributeValue("spinCount", "not-a-number");
+        fileSharing.Add(new XElement(workbookNs + "nativeFileSharingChild"));
         ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
     }
 
