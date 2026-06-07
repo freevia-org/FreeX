@@ -109,6 +109,7 @@ internal static class XlsxWorkbookCustomViewNormalizer
         var changed = false;
         changed |= RemoveUnknownAttributes(customWorkbookView, CustomWorkbookViewAttributes);
         changed |= RemoveUnexpectedChildElements(customWorkbookView, WorkbookNs + "extLst");
+        changed |= NormalizeExtensionLists(customWorkbookView);
         changed |= NormalizeAttribute(customWorkbookView, "name", NormalizeOptionalText);
         changed |= NormalizeAttribute(customWorkbookView, "guid", NormalizeGuid);
         changed |= NormalizeAttribute(customWorkbookView, "showComments", value => NormalizeToken(value, ShowCommentsValues));
@@ -128,6 +129,33 @@ internal static class XlsxWorkbookCustomViewNormalizer
     private static bool ShouldRemoveCustomWorkbookViewElement(XElement customWorkbookView) =>
         string.IsNullOrWhiteSpace(customWorkbookView.Attribute("name")?.Value) ||
         string.IsNullOrWhiteSpace(customWorkbookView.Attribute("guid")?.Value);
+
+    private static bool NormalizeExtensionLists(XElement customWorkbookView)
+    {
+        var changed = false;
+        var keptExtensionList = false;
+        foreach (var extensionList in customWorkbookView.Elements(WorkbookNs + "extLst").ToList())
+        {
+            if (keptExtensionList)
+            {
+                extensionList.Remove();
+                changed = true;
+                continue;
+            }
+
+            changed |= XlsxWorkbookExtensionListNormalizer.NormalizeExtensionListElement(extensionList);
+            if (XlsxWorkbookExtensionListNormalizer.ShouldRemoveExtensionListElement(extensionList))
+            {
+                extensionList.Remove();
+                changed = true;
+                continue;
+            }
+
+            keptExtensionList = true;
+        }
+
+        return changed;
+    }
 
     private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedAttributes)
     {

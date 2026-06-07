@@ -74,6 +74,7 @@ internal static class XlsxWorkbookViewNormalizer
         var changed = false;
         changed |= RemoveUnknownAttributes(workbookView, WorkbookViewAttributes);
         changed |= RemoveUnexpectedChildElements(workbookView, WorkbookNs + "extLst");
+        changed |= NormalizeExtensionLists(workbookView);
         changed |= NormalizeAttribute(workbookView, "visibility", value => NormalizeToken(value, ValidVisibilityValues));
 
         foreach (var attributeName in BooleanAttributes)
@@ -82,6 +83,33 @@ internal static class XlsxWorkbookViewNormalizer
             changed |= NormalizeAttribute(workbookView, attributeName, NormalizeIntOrNull);
         foreach (var attributeName in UnsignedIntAttributes)
             changed |= NormalizeAttribute(workbookView, attributeName, NormalizeUnsignedIntOrNull);
+
+        return changed;
+    }
+
+    private static bool NormalizeExtensionLists(XElement workbookView)
+    {
+        var changed = false;
+        var keptExtensionList = false;
+        foreach (var extensionList in workbookView.Elements(WorkbookNs + "extLst").ToList())
+        {
+            if (keptExtensionList)
+            {
+                extensionList.Remove();
+                changed = true;
+                continue;
+            }
+
+            changed |= XlsxWorkbookExtensionListNormalizer.NormalizeExtensionListElement(extensionList);
+            if (XlsxWorkbookExtensionListNormalizer.ShouldRemoveExtensionListElement(extensionList))
+            {
+                extensionList.Remove();
+                changed = true;
+                continue;
+            }
+
+            keptExtensionList = true;
+        }
 
         return changed;
     }
