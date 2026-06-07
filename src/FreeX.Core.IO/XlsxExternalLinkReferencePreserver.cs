@@ -46,7 +46,7 @@ internal static class XlsxExternalLinkReferencePreserver
 
         foreach (var sourceReference in sourceExternalReferences)
         {
-            var sourceRelId = sourceReference.Attribute(relNs + "id")?.Value;
+            var sourceRelId = sourceReference.Attribute(relNs + "id")?.Value.Trim();
             if (string.IsNullOrWhiteSpace(sourceRelId) ||
                 !sourceWorkbookRels.TryGetValue(sourceRelId, out var externalLinkPath))
             {

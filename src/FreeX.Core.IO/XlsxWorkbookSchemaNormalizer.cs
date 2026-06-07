@@ -229,6 +229,8 @@ internal static class XlsxWorkbookSchemaNormalizer
             }
         }
 
+        changed |= XlsxWorkbookExternalReferencesNormalizer.NormalizeWorkbookRoot(root, workbookNs);
+
         foreach (var definedNames in root.Elements(workbookNs + "definedNames").ToList())
         {
             changed |= XlsxWorkbookDefinedNameNormalizer.NormalizeDefinedNamesElement(definedNames);

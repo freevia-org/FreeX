@@ -25,8 +25,17 @@ public partial class FileAdapterSmokeTests
 
             var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
             workbookXml.Root!.Elements(workbookNs + "externalReferences").Remove();
+            var externalReference = new XElement(
+                workbookNs + "externalReference",
+                new XAttribute(relNs + "id", " rIdFreeXExternalLink "),
+                new XAttribute("customExternalReferenceFlag", "removed"),
+                new XElement(workbookNs + "nativeExternalReferenceChild"));
             workbookXml.Root!.Add(new XElement(
                 workbookNs + "externalReferences",
+                new XAttribute("customExternalReferencesFlag", "removed"),
+                externalReference,
+                new XElement(workbookNs + "nativeExternalReferencesChild"),
+                new XElement(workbookNs + "externalReference", new XAttribute(relNs + "id", " ")),
                 new XElement(workbookNs + "externalReference", new XAttribute(relNs + "id", "rIdFreeXExternalLink"))));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
 
