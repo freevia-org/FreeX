@@ -95,7 +95,45 @@ public sealed record DrawingObjectBounds(
     CellColor? FillColor = null,
     CellColor? OutlineColor = null,
     byte[]? ImageBytes = null,
-    string? ImageContentType = null);
+    string? ImageContentType = null,
+    double CropLeft = 0,
+    double CropTop = 0,
+    double CropRight = 0,
+    double CropBottom = 0,
+    uint SourceRowCount = 0,
+    uint SourceColumnCount = 0,
+    IReadOnlyList<PictureCellSnapshot> PictureCells = null!);
+
+public enum DrawingObjectRenderPrimitiveKind
+{
+    BoundsFallback,
+    Shape,
+    Image,
+    CroppedImage,
+    CellRangeSnapshot,
+    TextBox
+}
+
+public sealed record DrawingObjectRenderPlan(
+    DrawingObjectBounds Bounds,
+    DrawingObjectRenderPrimitiveKind PrimitiveKind,
+    DrawingPictureCrop? Crop = null,
+    DrawingPictureGrid? PictureGrid = null,
+    string? FallbackReason = null)
+{
+    public bool IsReady => FallbackReason is null;
+}
+
+public sealed record DrawingPictureCrop(
+    double Left,
+    double Top,
+    double Right,
+    double Bottom);
+
+public sealed record DrawingPictureGrid(
+    uint RowCount,
+    uint ColumnCount,
+    IReadOnlyList<PictureCellSnapshot> Cells);
 
 public sealed record RowMetric(uint Row, double Height, double TopOffset);
 public sealed record ColMetric(uint Col, double Width, double LeftOffset);
