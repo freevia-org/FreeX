@@ -2133,6 +2133,8 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     private const string WorksheetFilterColumnExtensionUri = "{FREEX-WORKSHEET-FILTER-COLUMN-EXT}";
     private const string WorksheetSortStateExtensionUri = "{FREEX-WORKSHEET-SORTSTATE-EXT}";
     private const string WorksheetSortConditionExtensionUri = "{FREEX-WORKSHEET-SORT-CONDITION-EXT}";
+    private const string WorksheetRowExtensionUri = "{FREEX-WORKSHEET-ROW-EXT}";
+    private const string WorksheetCellExtensionUri = "{FREEX-WORKSHEET-CELL-EXT}";
 
     private static Workbook CreateStructuredTableSourceWorkbook()
     {
@@ -3721,12 +3723,16 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         row.SetAttributeValue("customAttr", "row-native");
         row.Add(
             new XElement(freexNs + "rowNativeChild", new XAttribute("value", "kept")),
+            CreateInvalidExtensionList(
+                worksheetNs,
+                WorksheetRowExtensionUri,
+                "FreeXWorksheetRowExtension",
+                "customRowExtLstFlag",
+                "customRowExtFlag",
+                "nativeRowExtLstChild"),
             new XElement(
                 worksheetNs + "extLst",
-                new XElement(
-                    worksheetNs + "ext",
-                    new XAttribute("uri", "{FREEX-ROW-GRID-EXT}"),
-                    new XElement(freexNs + "rowExt", new XAttribute("value", "row-extension")))));
+                new XElement(worksheetNs + "ext", new XAttribute("uri", "{FREEX-DUPLICATE-WORKSHEET-ROW-EXTLST}"))));
 
         var cell = row.Elements(worksheetNs + "c")
             .Single(element => element.Attribute("r")?.Value == "A2");
@@ -3736,12 +3742,16 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         cell.SetAttributeValue("customAttr", "cell-native");
         cell.Add(
             new XElement(freexNs + "cellNativeChild", new XAttribute("value", "kept")),
+            CreateInvalidExtensionList(
+                worksheetNs,
+                WorksheetCellExtensionUri,
+                "FreeXWorksheetCellExtension",
+                "customCellExtLstFlag",
+                "customCellExtFlag",
+                "nativeCellExtLstChild"),
             new XElement(
                 worksheetNs + "extLst",
-                new XElement(
-                    worksheetNs + "ext",
-                    new XAttribute("uri", "{FREEX-CELL-GRID-EXT}"),
-                    new XElement(freexNs + "cellExt", new XAttribute("value", "cell-extension")))));
+                new XElement(worksheetNs + "ext", new XAttribute("uri", "{FREEX-DUPLICATE-WORKSHEET-CELL-EXTLST}"))));
 
         var formula = cell.Element(worksheetNs + "f")!;
         formula.SetAttributeValue("t", "array");
@@ -3776,10 +3786,14 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         row.Attribute("ph")!.Value.Should().Be("1");
         row.Attribute("customAttr").Should().BeNull();
         row.Element(freexNs + "rowNativeChild").Should().BeNull();
-        row.Element(worksheetNs + "extLst")!
-            .Element(worksheetNs + "ext")!
-            .Element(freexNs + "rowExt")!
-            .Attribute("value")!.Value.Should().Be("row-extension");
+        AssertExtensionListSanitized(
+            row,
+            worksheetNs,
+            WorksheetRowExtensionUri,
+            "FreeXWorksheetRowExtension",
+            "customRowExtLstFlag",
+            "customRowExtFlag",
+            "nativeRowExtLstChild");
 
         var cell = row.Elements(worksheetNs + "c")
             .Single(element => element.Attribute("r")?.Value == "A2");
@@ -3788,10 +3802,14 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         cell.Attribute("ph")!.Value.Should().Be("1");
         cell.Attribute("customAttr").Should().BeNull();
         cell.Element(freexNs + "cellNativeChild").Should().BeNull();
-        cell.Element(worksheetNs + "extLst")!
-            .Element(worksheetNs + "ext")!
-            .Element(freexNs + "cellExt")!
-            .Attribute("value")!.Value.Should().Be("cell-extension");
+        AssertExtensionListSanitized(
+            cell,
+            worksheetNs,
+            WorksheetCellExtensionUri,
+            "FreeXWorksheetCellExtension",
+            "customCellExtLstFlag",
+            "customCellExtFlag",
+            "nativeCellExtLstChild");
 
         var formula = cell.Element(worksheetNs + "f")!;
         formula.Attribute("t")!.Value.Should().Be("array");
