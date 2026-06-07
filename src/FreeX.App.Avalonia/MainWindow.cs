@@ -1890,6 +1890,8 @@ public sealed class MainWindow : Window
         yield return CreatePasteLinkMenuItem("Paste Link");
         yield return CreatePasteSpecialTextMenuItem("Text");
         yield return CreatePasteSpecialTextMenuItem("Unicode Text");
+        yield return CreatePastePictureMenuItem("Picture", linkedPicture: false);
+        yield return CreatePastePictureMenuItem("Linked Picture", linkedPicture: true);
         yield return CreatePasteSpecialMenuItem("Transpose", PasteCellsMode.All, new PasteSpecialOptions(Transpose: true));
         yield return CreatePasteSpecialMenuItem("Skip Blanks", PasteCellsMode.All, new PasteSpecialOptions(SkipBlanks: true));
         yield return CreatePasteSpecialMenuItem("Add", PasteCellsMode.All, new PasteSpecialOptions(Operation: PasteSpecialOperation.Add));
@@ -1945,6 +1947,13 @@ public sealed class MainWindow : Window
         return menuItem;
     }
 
+    private MenuItem CreatePastePictureMenuItem(string header, bool linkedPicture)
+    {
+        var menuItem = new MenuItem { Header = header };
+        menuItem.Click += async (_, _) => await PastePictureFromClipboardAsync(header, linkedPicture);
+        return menuItem;
+    }
+
     private NativeMenu CreateNativePasteSpecialMenu()
     {
         var menu = new NativeMenu();
@@ -1963,6 +1972,8 @@ public sealed class MainWindow : Window
         menu.Items.Add(CreateNativePasteLinkMenuItem("Paste Link"));
         menu.Items.Add(CreateNativePasteSpecialTextMenuItem("Text"));
         menu.Items.Add(CreateNativePasteSpecialTextMenuItem("Unicode Text"));
+        menu.Items.Add(CreateNativePastePictureMenuItem("Picture", linkedPicture: false));
+        menu.Items.Add(CreateNativePastePictureMenuItem("Linked Picture", linkedPicture: true));
         menu.Items.Add(CreateNativePasteSpecialMenuItem("Transpose", PasteCellsMode.All, new PasteSpecialOptions(Transpose: true)));
         menu.Items.Add(CreateNativePasteSpecialMenuItem("Skip Blanks", PasteCellsMode.All, new PasteSpecialOptions(SkipBlanks: true)));
         menu.Items.Add(new NativeMenuItemSeparator());
@@ -2017,6 +2028,13 @@ public sealed class MainWindow : Window
     {
         var menuItem = new NativeMenuItem { Header = header };
         menuItem.Click += async (_, _) => await PasteSpecialExternalTextFromClipboardAsync(header);
+        return menuItem;
+    }
+
+    private NativeMenuItem CreateNativePastePictureMenuItem(string header, bool linkedPicture)
+    {
+        var menuItem = new NativeMenuItem { Header = header };
+        menuItem.Click += async (_, _) => await PastePictureFromClipboardAsync(header, linkedPicture);
         return menuItem;
     }
 
@@ -3207,6 +3225,33 @@ public sealed class MainWindow : Window
         RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
     }
 
+    private async Task PastePictureFromClipboardAsync(string label, bool linkedPicture)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard is null)
+        {
+            ShowEditIssue("Clipboard unavailable on this platform.");
+            return;
+        }
+
+        var text = await clipboard.TryGetTextAsync();
+        var destination = _session.ActiveCell;
+        var result = _session.PastePictureFromClipboardAtActiveCell(text, linkedPicture);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Paste Picture failed.");
+            return;
+        }
+
+        RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
+    }
+
     private void ClearSelectedRangeContents()
     {
         if (_isOpening || _isSaving)
@@ -3783,6 +3828,8 @@ public sealed class MainWindow : Window
             HasNativePasteSpecialPasteLinkMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Paste Link"),
             HasNativePasteSpecialTextMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Text"),
             HasNativePasteSpecialUnicodeTextMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Unicode Text"),
+            HasNativePasteSpecialPictureMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Picture"),
+            HasNativePasteSpecialLinkedPictureMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Linked Picture"),
             HasNativeSelectAllMenuItem: HasNativeMenuItem(_selectAllMenuItem, "Select All"),
             HasNativeClearContentsMenuItem: HasNativeMenuItem(_clearContentsMenuItem, "Clear Contents"),
             HasNativeBoldMenuItem: HasNativeMenuItem(_boldMenuItem, "Bold"),

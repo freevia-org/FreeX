@@ -107,6 +107,8 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativePasteSpecialPasteLinkMenuItem,
     bool HasNativePasteSpecialTextMenuItem,
     bool HasNativePasteSpecialUnicodeTextMenuItem,
+    bool HasNativePasteSpecialPictureMenuItem,
+    bool HasNativePasteSpecialLinkedPictureMenuItem,
     bool HasNativeSelectAllMenuItem,
     bool HasNativeClearContentsMenuItem,
     bool HasNativeBoldMenuItem,
@@ -198,6 +200,8 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativePasteSpecialPasteLinkMenuItem &&
         HasNativePasteSpecialTextMenuItem &&
         HasNativePasteSpecialUnicodeTextMenuItem &&
+        HasNativePasteSpecialPictureMenuItem &&
+        HasNativePasteSpecialLinkedPictureMenuItem &&
         HasNativeSelectAllMenuItem &&
         HasNativeClearContentsMenuItem &&
         HasNativeBoldMenuItem &&
@@ -337,6 +341,8 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_paste_special_paste_link_menu_item={FormatBool(snapshot.HasNativePasteSpecialPasteLinkMenuItem)}",
                 $"native_paste_special_text_menu_item={FormatBool(snapshot.HasNativePasteSpecialTextMenuItem)}",
                 $"native_paste_special_unicode_text_menu_item={FormatBool(snapshot.HasNativePasteSpecialUnicodeTextMenuItem)}",
+                $"native_paste_special_picture_menu_item={FormatBool(snapshot.HasNativePasteSpecialPictureMenuItem)}",
+                $"native_paste_special_linked_picture_menu_item={FormatBool(snapshot.HasNativePasteSpecialLinkedPictureMenuItem)}",
                 $"native_select_all_menu_item={FormatBool(snapshot.HasNativeSelectAllMenuItem)}",
                 $"native_clear_contents_menu_item={FormatBool(snapshot.HasNativeClearContentsMenuItem)}",
                 $"native_bold_menu_item={FormatBool(snapshot.HasNativeBoldMenuItem)}",

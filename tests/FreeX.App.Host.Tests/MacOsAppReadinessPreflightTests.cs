@@ -64,8 +64,13 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("CreatePasteSpecialTextMenuItem(`\"Text`\")");
         script.Should().Contain("CreateNativePasteSpecialTextMenuItem(`\"Unicode Text`\")");
         script.Should().Contain("_session.PasteClipboardTextAtActiveCell(text, preserveText: true)");
+        script.Should().Contain("CreatePastePictureMenuItem(`\"Picture`\", linkedPicture: false)");
+        script.Should().Contain("CreateNativePastePictureMenuItem(`\"Linked Picture`\", linkedPicture: true)");
+        script.Should().Contain("_session.PastePictureFromClipboardAtActiveCell(text, linkedPicture)");
         script.Should().Contain("native_paste_special_text_menu_item=true");
         script.Should().Contain("native_paste_special_unicode_text_menu_item=true");
+        script.Should().Contain("native_paste_special_picture_menu_item=true");
+        script.Should().Contain("native_paste_special_linked_picture_menu_item=true");
         script.Should().Contain("AddStyledCellBorderOverlay(content, style);");
         script.Should().Contain("CreateSelectableDrawingObjectVisual(drawingObject, width, height)");
         script.Should().Contain("AutomationProperties.SetItemStatus(container, selected ? `\"Selected`\" : `\"Not selected`\")");
@@ -408,6 +413,8 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_paste_special_paste_link_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_paste_special_text_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_paste_special_unicode_text_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_paste_special_picture_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_paste_special_linked_picture_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_select_all_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_clear_contents_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_bold_menu_item=true" "$artifact_root/launch.txt"
@@ -537,11 +544,19 @@ public sealed class MacOsAppReadinessPreflightTests
                     */
                     CreatePasteSpecialTextMenuItem("Text");
                     CreatePasteSpecialTextMenuItem("Unicode Text");
+                    CreatePastePictureMenuItem("Picture", linkedPicture: false);
+                    CreatePastePictureMenuItem("Linked Picture", linkedPicture: true);
                     CreateNativePasteSpecialTextMenuItem("Text");
                     CreateNativePasteSpecialTextMenuItem("Unicode Text");
+                    CreateNativePastePictureMenuItem("Picture", linkedPicture: false);
+                    CreateNativePastePictureMenuItem("Linked Picture", linkedPicture: true);
                     _session.PasteClipboardTextAtActiveCell(text, preserveText: true);
+                    private async Task PastePictureFromClipboardAsync(string label, bool linkedPicture)
+                    _session.PastePictureFromClipboardAtActiveCell(text, linkedPicture);
                     HasNativePasteSpecialTextMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Text");
                     HasNativePasteSpecialUnicodeTextMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Unicode Text");
+                    HasNativePasteSpecialPictureMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Picture");
+                    HasNativePasteSpecialLinkedPictureMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Linked Picture");
                     CellColorPalettePlanner.BuildDefaultSwatches();
                     CreateSelectableDrawingObjectVisual(drawingObject, width, height);
                     AutomationProperties.SetAutomationId(container, $"DrawingObject{drawingObject.Kind}{drawingObject.Id:N}");
@@ -703,6 +718,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativePasteSpecialPasteLinkMenuItem &&
                     HasNativePasteSpecialTextMenuItem &&
                     HasNativePasteSpecialUnicodeTextMenuItem &&
+                    HasNativePasteSpecialPictureMenuItem &&
+                    HasNativePasteSpecialLinkedPictureMenuItem &&
                     HasNativeCellStylesMenuItem &&
                     HasNativeCopyMenuItem;
                 private bool HasNativeFileMenu { get; }
@@ -737,8 +754,10 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativeCopyMenuItem { get; }
                 private bool HasNativePasteSpecialTextMenuItem { get; }
                 private bool HasNativePasteSpecialUnicodeTextMenuItem { get; }
+                private bool HasNativePasteSpecialPictureMenuItem { get; }
+                private bool HasNativePasteSpecialLinkedPictureMenuItem { get; }
                 public int NativeCellStylesPresetCount { get; }
-                public string Report => "native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_select_all_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+                public string Report => "native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
             }
             """);
 
@@ -825,6 +844,9 @@ public sealed class MacOsAppReadinessPreflightTests
                 new PasteDataValidationCommand(
                 public WorkbookCellEditResult PasteLinkFromClipboardAtActiveCell(
                 PasteLinkService.CreateLinkedCells(
+                public WorkbookCellEditResult PastePictureFromClipboardAtActiveCell(
+                new PasteRangeAsPictureCommand(
+                private static string FormatPictureCellText(ScalarValue value)
                 new PasteColumnWidthsCommand(
                 new EditCellsCommand(ActiveSheet.Id, linkedCells)
                 bool keepSourceColumnWidths = false

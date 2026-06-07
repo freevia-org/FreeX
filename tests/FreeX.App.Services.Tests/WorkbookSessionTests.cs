@@ -1079,6 +1079,121 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void PastePictureFromClipboardAtActiveCell_AddsCellRangeSnapshotPreservesSourceAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var d4 = new CellAddress(sheet.Id, 4, 4);
+        sheet.SetCell(a1, new TextValue("Q1"));
+        sheet.SetCell(b1, new NumberValue(10));
+        sheet.SetCell(a2, new BoolValue(true));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b2));
+        var clipboardText = session.CopySelectedRangeText();
+        session.SelectCell(d4);
+
+        var result = session.PastePictureFromClipboardAtActiveCell(clipboardText);
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().ContainSingle().Which.Should().Be(d4);
+        session.SelectedRange.Should().Be(new GridRange(d4, d4));
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        sheet.GetValue(a1).Should().Be(new TextValue("Q1"));
+        sheet.GetValue(b1).Should().Be(new NumberValue(10));
+        sheet.GetValue(a2).Should().Be(new BoolValue(true));
+        var picture = sheet.Pictures.Should().ContainSingle().Subject;
+        picture.Anchor.Should().Be(d4);
+        picture.Kind.Should().Be(PictureKind.CellRangeSnapshot);
+        picture.IsLinkedToSourceRange.Should().BeFalse();
+        picture.SourceRowCount.Should().Be(2);
+        picture.SourceColumnCount.Should().Be(2);
+        picture.Cells.Should().Contain(cell => cell.RowOffset == 0 && cell.ColumnOffset == 0 && cell.Text == "Q1");
+        picture.Cells.Should().Contain(cell => cell.RowOffset == 0 && cell.ColumnOffset == 1 && cell.Text == "10");
+        picture.Cells.Should().Contain(cell => cell.RowOffset == 1 && cell.ColumnOffset == 0 && cell.Text == "TRUE");
+        picture.Cells.Should().Contain(cell => cell.RowOffset == 1 && cell.ColumnOffset == 1 && cell.Text == "");
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.Pictures.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void PastePictureFromClipboardAtActiveCell_LinkedPictureRecordsSourceRangeAndSheetName()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var e5 = new CellAddress(sheet.Id, 5, 5);
+        sheet.SetCell(a1, new TextValue("source"));
+        sheet.SetCell(b2, new NumberValue(42));
+        var sourceRange = new GridRange(a1, b2);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(sourceRange);
+        var clipboardText = session.CopySelectedRangeText();
+        session.SelectCell(e5);
+
+        var result = session.PastePictureFromClipboardAtActiveCell(clipboardText, linkedPicture: true);
+
+        result.Success.Should().BeTrue();
+        var picture = sheet.Pictures.Should().ContainSingle().Subject;
+        picture.Anchor.Should().Be(e5);
+        picture.IsLinkedToSourceRange.Should().BeTrue();
+        picture.LinkedSourceRange.Should().Be(sourceRange);
+        picture.LinkedSourceSheetName.Should().Be(sheet.Name);
+        picture.Cells.Should().Contain(cell => cell.RowOffset == 0 && cell.ColumnOffset == 0 && cell.Text == "source");
+        picture.Cells.Should().Contain(cell => cell.RowOffset == 1 && cell.ColumnOffset == 1 && cell.Text == "42");
+    }
+
+    [Fact]
+    public void PastePictureFromClipboardAtActiveCell_RejectsChangedPlatformClipboardText()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var d1 = new CellAddress(sheet.Id, 1, 4);
+        sheet.SetCell(a1, new TextValue("source"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+        session.CopySelectedRangeText();
+        session.SelectCell(d1);
+
+        var pictureResult = session.PastePictureFromClipboardAtActiveCell("external");
+
+        pictureResult.Success.Should().BeFalse();
+        pictureResult.ErrorMessage.Should().Be("Paste Picture requires copied FreeX cells.");
+        sheet.Pictures.Should().BeEmpty();
+
+        session.SelectCell(a1);
+        session.CopySelectedRangeText();
+        session.SelectCell(d1);
+
+        var linkedPictureResult = session.PastePictureFromClipboardAtActiveCell("external", linkedPicture: true);
+
+        linkedPictureResult.Success.Should().BeFalse();
+        linkedPictureResult.ErrorMessage.Should().Be("Paste Linked Picture requires copied FreeX cells.");
+        sheet.Pictures.Should().BeEmpty();
+    }
+
+    [Fact]
     public void ClearSelectedRangeContents_ClearsValuesAndFormulasPreservesSelectionAndUndo()
     {
         var workbook = CreateWorkbook();

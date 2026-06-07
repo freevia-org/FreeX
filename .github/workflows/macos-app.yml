@@ -309,6 +309,8 @@ jobs:
             grep -q "native_paste_special_paste_link_menu_item=true" "$launch_smoke_report"
             grep -q "native_paste_special_text_menu_item=true" "$launch_smoke_report"
             grep -q "native_paste_special_unicode_text_menu_item=true" "$launch_smoke_report"
+            grep -q "native_paste_special_picture_menu_item=true" "$launch_smoke_report"
+            grep -q "native_paste_special_linked_picture_menu_item=true" "$launch_smoke_report"
             grep -q "native_select_all_menu_item=true" "$launch_smoke_report"
             grep -q "native_clear_contents_menu_item=true" "$launch_smoke_report"
             grep -q "native_bold_menu_item=true" "$launch_smoke_report"

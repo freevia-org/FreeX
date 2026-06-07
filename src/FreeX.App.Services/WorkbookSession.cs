@@ -1,3 +1,4 @@
+using System.Globalization;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -729,6 +730,55 @@ public sealed class WorkbookSession
         ApplySuccessfulEditResult(result, destination);
         var pasteSize = GetPasteDimensions(internalClipboard.SourceRange, transpose);
         SelectPastedRange(destination, pasteSize.RowCount, pasteSize.ColCount);
+        return result;
+    }
+
+    public WorkbookCellEditResult PastePictureFromClipboardAtActiveCell(
+        string? text,
+        bool linkedPicture = false)
+    {
+        if (_internalClipboard is not { } internalClipboard ||
+            (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
+        {
+            _internalClipboard = null;
+            return new WorkbookCellEditResult(
+                false,
+                linkedPicture
+                    ? "Paste Linked Picture requires copied FreeX cells."
+                    : "Paste Picture requires copied FreeX cells.",
+                [],
+                RecalcReport: null);
+        }
+
+        var sourceSheet = linkedPicture
+            ? Workbook.GetSheet(internalClipboard.SourceRange.Start.Sheet)
+            : null;
+        if (linkedPicture && sourceSheet is null)
+        {
+            return new WorkbookCellEditResult(
+                false,
+                "Paste Linked Picture source sheet was not found.",
+                [],
+                RecalcReport: null);
+        }
+
+        var destination = ActiveCell;
+        var sourceCells = internalClipboard.Cells
+            .Select(static cell => (cell.Source, FormatPictureCellText(cell.Cell.Value)))
+            .ToList();
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new PasteRangeAsPictureCommand(
+                ActiveSheet.Id,
+                internalClipboard.SourceRange,
+                sourceCells,
+                destination,
+                linkedPicture,
+                sourceSheet?.Name));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulEditResult(result, destination);
         return result;
     }
 
@@ -1547,6 +1597,17 @@ public sealed class WorkbookSession
 
         return Math.Max(1, Math.Ceiling(value));
     }
+
+    private static string FormatPictureCellText(ScalarValue value) =>
+        value switch
+        {
+            BlankValue => "",
+            NumberValue number => number.Value.ToString(CultureInfo.CurrentCulture),
+            BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+            TextValue text => text.Value,
+            ErrorValue error => error.Code,
+            _ => value.ToString() ?? ""
+        };
 
     private static IReadOnlyList<FileFormatDescriptor> BuildFormats(
         IReadOnlyList<IFileAdapter> adapters,

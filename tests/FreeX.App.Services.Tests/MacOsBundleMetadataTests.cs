@@ -174,6 +174,8 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"native_paste_special_paste_link_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_paste_special_text_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_paste_special_unicode_text_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_paste_special_picture_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_paste_special_linked_picture_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_clear_contents_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_bold_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_italic_menu_item=true\" \"$launch_smoke_report\"");
