@@ -1,4 +1,3 @@
-using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -19,7 +18,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_RecognizesAdvancedChartFamilies(string chartElementName, ChartType expectedType)
     {
         var sheetId = SheetId.New();
-        var chartXml = XDocument.Parse(BuildSingleSeriesChartXml(chartElementName));
+        var chartXml = ParseChartXml(BuildSingleSeriesChartXml(chartElementName));
 
         XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
             .Should().BeTrue();
@@ -37,7 +36,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_RecognizesParetoHistogramAsRenderable()
     {
         var sheetId = SheetId.New();
-        var chartXml = XDocument.Parse(BuildSingleSeriesChartXml("histogramChart", """<c:paretoLine val="1"/>"""));
+        var chartXml = ParseChartXml(BuildSingleSeriesChartXml("histogramChart", """<c:paretoLine val="1"/>"""));
 
         XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
             .Should().BeTrue();
@@ -50,7 +49,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_RecognizesMapChartExtensionAsDeferred()
     {
         var sheetId = SheetId.New();
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
                           xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                           xmlns:c16="http://schemas.microsoft.com/office/drawing/2014/chart"
@@ -94,7 +93,7 @@ public sealed partial class XlsxChartPartReaderTests
         ChartType expectedType)
     {
         var sheetId = SheetId.New();
-        var chartXml = XDocument.Parse($$"""
+        var chartXml = ParseChartXml($$"""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
                           xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex"
                           xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
@@ -130,7 +129,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_RecognizesStandaloneChartExChartSpace()
     {
         var sheetId = SheetId.New();
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <cx:chartSpace xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex"
                            xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
               <cx:chart>
@@ -164,7 +163,7 @@ public sealed partial class XlsxChartPartReaderTests
         var fallbackRange = new GridRange(
             new CellAddress(sheetId, 1, 1),
             new CellAddress(sheetId, 15, 1));
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <cx:chartSpace xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
                            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
                            xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex">
@@ -209,7 +208,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_DoesNotLetAdvancedExtensionOverrideDirectSupportedChart()
     {
         var sheetId = SheetId.New();
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
                           xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex">
               <c:chart>
