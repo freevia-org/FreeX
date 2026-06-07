@@ -16,7 +16,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
 
         var maxBreakId = rowBreaks ? CellAddress.MaxRow : CellAddress.MaxCol;
         return (rowBreaks ? sheet.RowPageBreaks : sheet.ColumnPageBreaks)
-            .Where(id => IsSupportedWorksheetBreakId(id, maxBreakId))
+            .Where(id => XlsxWorksheetPageBreakIdReader.IsSupported(id, maxBreakId))
             .ToHashSet();
     }
 
@@ -33,7 +33,10 @@ internal static partial class XlsxWorksheetMetadataPreserver
             var retainedBreaks = sourceBreaks
                 .Elements(workbookNs + "brk")
                 .Where(sourceBreak =>
-                    !TryGetSupportedWorksheetBreakId(sourceBreak, maxBreakId, out var sourceId) ||
+                    !XlsxWorksheetPageBreakIdReader.TryReadSupportedId(
+                        sourceBreak,
+                        maxBreakId,
+                        out var sourceId) ||
                     modeledBreakIds.Contains(sourceId))
                 .Select(sourceBreak => new XElement(sourceBreak))
                 .ToList();
@@ -59,7 +62,10 @@ internal static partial class XlsxWorksheetMetadataPreserver
             .Select(element => new
             {
                 Element = element,
-                Parsed = TryGetSupportedWorksheetBreakId(element, maxBreakId, out var id),
+                Parsed = XlsxWorksheetPageBreakIdReader.TryReadSupportedId(
+                    element,
+                    maxBreakId,
+                    out var id),
                 Id = id
             })
             .Where(entry => entry.Parsed)
@@ -79,7 +85,10 @@ internal static partial class XlsxWorksheetMetadataPreserver
         foreach (var sourceBreak in sourceBreaks.Elements(workbookNs + "brk"))
         {
             var id = sourceBreak.Attribute("id")?.Value;
-            if (TryGetSupportedWorksheetBreakId(sourceBreak, maxBreakId, out var sourceId))
+            if (XlsxWorksheetPageBreakIdReader.TryReadSupportedId(
+                sourceBreak,
+                maxBreakId,
+                out var sourceId))
             {
                 if (!modeledBreakIds.Contains(sourceId))
                     continue;
@@ -112,24 +121,6 @@ internal static partial class XlsxWorksheetMetadataPreserver
         }
 
         return changed;
-    }
-
-    private static bool TryGetSupportedWorksheetBreakId(XElement breakElement, uint maxBreakId, out uint id)
-    {
-        id = 0;
-        var rawId = breakElement.Attribute("id")?.Value;
-        if (string.IsNullOrWhiteSpace(rawId) ||
-            !uint.TryParse(rawId, NumberStyles.None, CultureInfo.InvariantCulture, out id))
-        {
-            return false;
-        }
-
-        return IsSupportedWorksheetBreakId(id, maxBreakId);
-    }
-
-    private static bool IsSupportedWorksheetBreakId(uint id, uint maxBreakId)
-    {
-        return id >= 2 && id <= maxBreakId;
     }
 
     private static bool MergeWorksheetCalculationProperties(

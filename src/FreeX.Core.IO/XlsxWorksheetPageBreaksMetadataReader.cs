@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -19,8 +18,13 @@ internal static class XlsxWorksheetPageBreaksMetadataReader
             if (!string.Equals(breakElement.Name.LocalName, "brk", StringComparison.Ordinal))
                 continue;
 
-            if (!TryReadPageBreakId(breakElement, maxBreakId, out var id))
+            if (!XlsxWorksheetPageBreakIdReader.TryReadSupportedId(
+                breakElement,
+                maxBreakId,
+                out var id))
+            {
                 continue;
+            }
 
             var attributes = new Dictionary<string, string>(StringComparer.Ordinal);
             XlsxWorksheetNativeMetadataHelpers.ReadNativeAttributes(breakElement, attributes, ["id"]);
@@ -32,13 +36,5 @@ internal static class XlsxWorksheetPageBreaksMetadataReader
         return model.NativeAttributes.Count == 0 && model.BreakNativeAttributes.Count == 0
             ? null
             : model;
-    }
-
-    private static bool TryReadPageBreakId(XElement breakElement, uint maxBreakId, out uint id)
-    {
-        id = 0;
-        return uint.TryParse(breakElement.Attribute("id")?.Value, NumberStyles.None, CultureInfo.InvariantCulture, out id) &&
-            id >= 2 &&
-            id <= maxBreakId;
     }
 }
