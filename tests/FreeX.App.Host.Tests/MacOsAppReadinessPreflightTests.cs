@@ -308,6 +308,10 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("selection.Request.MergeCells");
         script.Should().Contain("`\"FormatCellsCompactDialog`\"");
         script.Should().Contain("`\"FormatCellsNumberFormatBox`\"");
+        script.Should().Contain("new(`\"Justify`\", CellHAlign.Justify)");
+        script.Should().Contain("new(`\"Distributed`\", CellHAlign.Distributed)");
+        script.Should().Contain("new(`\"Justify`\", CellVAlign.Justify)");
+        script.Should().Contain("new(`\"Distributed`\", CellVAlign.Distributed)");
         script.Should().Contain("`\"FormatCellsMergeCellsBox`\"");
         script.Should().Contain("MergeCells: ReadChangedFormatCellsBool(currentMergeCells, mergeCellsBox)");
         script.Should().Contain("bool? mergeCells = null");
@@ -1594,6 +1598,10 @@ public sealed class MacOsAppReadinessPreflightTests
                     "FormatCellsNumberFormatBox"
                     "FormatCellsHorizontalAlignmentBox"
                     "FormatCellsVerticalAlignmentBox"
+                    new("Justify", CellHAlign.Justify)
+                    new("Distributed", CellHAlign.Distributed)
+                    new("Justify", CellVAlign.Justify)
+                    new("Distributed", CellVAlign.Distributed)
                     "FormatCellsWrapTextBox"
                     "FormatCellsMergeCellsBox"
                     "FormatCellsFontSizeBox"

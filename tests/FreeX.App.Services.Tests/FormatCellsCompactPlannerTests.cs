@@ -156,6 +156,33 @@ public sealed class FormatCellsCompactPlannerTests
         diff.Should().Be(new StyleDiff());
     }
 
+    [Theory]
+    [InlineData(HorizontalAlignment.General)]
+    [InlineData(HorizontalAlignment.Left)]
+    [InlineData(HorizontalAlignment.Center)]
+    [InlineData(HorizontalAlignment.Right)]
+    [InlineData(HorizontalAlignment.Justify)]
+    [InlineData(HorizontalAlignment.Distributed)]
+    public void Plan_HorizontalAlignmentMapsModeledValues(HorizontalAlignment alignment)
+    {
+        var diff = FormatCellsCompactPlanner.Plan(new FormatCellsCompactRequest(HorizontalAlignment: alignment));
+
+        diff.HAlign.Should().Be(alignment);
+    }
+
+    [Theory]
+    [InlineData(VerticalAlignment.Top)]
+    [InlineData(VerticalAlignment.Center)]
+    [InlineData(VerticalAlignment.Bottom)]
+    [InlineData(VerticalAlignment.Justify)]
+    [InlineData(VerticalAlignment.Distributed)]
+    public void Plan_VerticalAlignmentMapsModeledValues(VerticalAlignment alignment)
+    {
+        var diff = FormatCellsCompactPlanner.Plan(new FormatCellsCompactRequest(VerticalAlignment: alignment));
+
+        diff.VAlign.Should().Be(alignment);
+    }
+
     [Fact]
     public void Plan_BorderPresetMapsThroughCellBorderPresetPlanner()
     {

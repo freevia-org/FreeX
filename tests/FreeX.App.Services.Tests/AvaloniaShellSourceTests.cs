@@ -2037,6 +2037,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"FormatCellsNumberFormatBox\"");
         source.Should().Contain("\"FormatCellsHorizontalAlignmentBox\"");
         source.Should().Contain("\"FormatCellsVerticalAlignmentBox\"");
+        source.Should().Contain("new(\"Justify\", CellHAlign.Justify)");
+        source.Should().Contain("new(\"Distributed\", CellHAlign.Distributed)");
+        source.Should().Contain("new(\"Justify\", CellVAlign.Justify)");
+        source.Should().Contain("new(\"Distributed\", CellVAlign.Distributed)");
         source.Should().Contain("\"FormatCellsWrapTextBox\"");
         source.Should().Contain("\"FormatCellsMergeCellsBox\"");
         source.Should().Contain("\"FormatCellsFontSizeBox\"");

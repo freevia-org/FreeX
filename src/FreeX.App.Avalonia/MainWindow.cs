@@ -5281,6 +5281,8 @@ public sealed class MainWindow : Window
         new("Left", CellHAlign.Left),
         new("Center", CellHAlign.Center),
         new("Right", CellHAlign.Right),
+        new("Justify", CellHAlign.Justify),
+        new("Distributed", CellHAlign.Distributed),
     ];
 
     private static IReadOnlyList<FormatCellsNullableChoice<CellVAlign>> CreateFormatCellsVerticalAlignmentChoices() =>
@@ -5288,6 +5290,8 @@ public sealed class MainWindow : Window
         new("Top", CellVAlign.Top),
         new("Middle", CellVAlign.Center),
         new("Bottom", CellVAlign.Bottom),
+        new("Justify", CellVAlign.Justify),
+        new("Distributed", CellVAlign.Distributed),
     ];
 
     private static IReadOnlyList<FormatCellsColorChoice> CreateFormatCellsColorChoices(bool includeClear)
