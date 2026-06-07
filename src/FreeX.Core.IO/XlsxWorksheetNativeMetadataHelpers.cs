@@ -21,9 +21,12 @@ internal static class XlsxWorksheetNativeMetadataHelpers
 
     public static void ApplyNativeAttributes(
         XElement element,
-        Dictionary<string, string> attributes,
+        IReadOnlyDictionary<string, string>? attributes,
         IReadOnlyCollection<string> modeledNames)
     {
+        if (attributes is null)
+            return;
+
         foreach (var attribute in attributes)
         {
             if (string.IsNullOrWhiteSpace(attribute.Key) || modeledNames.Contains(attribute.Key, StringComparer.Ordinal))

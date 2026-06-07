@@ -141,13 +141,10 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
                     new XAttribute("emptyCellReference", "1"));
                 if (run.NativeAttributes is not null)
                 {
-                    foreach (var attribute in run.NativeAttributes)
-                    {
-                        if (ShouldSkipIgnoredErrorNativeAttribute(attribute.Key))
-                            continue;
-
-                        XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(ignoredError, attribute.Key, attribute.Value);
-                    }
+                    XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(
+                        ignoredError,
+                        run.NativeAttributes,
+                        ["sqref", "numberStoredAsText", "evalError", "formula", "emptyCellReference"]);
                 }
 
                 ignoredErrors.Add(ignoredError);
