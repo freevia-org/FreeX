@@ -11,6 +11,8 @@ internal static class XlsxPackageMetadataMerger
     private const string PackageRelationshipType = SpreadsheetRelationshipPrefix + "package";
     private const string PivotCacheDefinitionRelationshipType = SpreadsheetRelationshipPrefix + "pivotCacheDefinition";
     private const string PivotCacheRecordsRelationshipType = SpreadsheetRelationshipPrefix + "pivotCacheRecords";
+    private const string ThreadedCommentsRelationshipType = "http://schemas.microsoft.com/office/2017/10/relationships/threadedComment";
+    private const string PersonRelationshipType = "http://schemas.microsoft.com/office/2017/10/relationships/person";
     private const string ChartExStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartStyle";
     private const string ChartExColorStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartColorStyle";
     private const string WebExtensionTaskpanesRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/webextensiontaskpanes";
@@ -160,9 +162,6 @@ internal static class XlsxPackageMetadataMerger
             var targetEntry = targetIndex.Get(sourceEntry.FullName);
             if (targetEntry is null)
             {
-                if (RelationshipsPartTargetsOnlyExcludedParts(sourceEntry, excludedSourceParts))
-                    continue;
-
                 var filteredRelationships = CreateFilteredRelationshipPart(
                     sourceEntry,
                     targetIndex,
@@ -558,7 +557,9 @@ internal static class XlsxPackageMetadataMerger
             return true;
 
         var targetPart = XlsxPackagePath.ResolveRelationshipTarget(RelationshipPartToSourcePart(relationshipPartPath), target);
-        if (IsExcludedSourcePart(targetPart, excludedSourceParts))
+        var isModernCommentPackageGraphRelationship =
+            IsModernCommentPackageGraphRelationship(relationshipPartPath, relationship, targetPart);
+        if (IsExcludedSourcePart(targetPart, excludedSourceParts) && !isModernCommentPackageGraphRelationship)
             return false;
 
         return !string.IsNullOrWhiteSpace(targetPart) &&
@@ -570,8 +571,30 @@ internal static class XlsxPackageMetadataMerger
                 IsXmlMapsPackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
                 IsWebExtensionPackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
                 IsPivotCacheRecordsPackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
+                isModernCommentPackageGraphRelationship ||
                 IsSlicerTimelinePackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
                 IsCustomXmlPackageGraphRelationship(relationshipPartPath, relationship, targetPart));
+    }
+
+    private static bool IsModernCommentPackageGraphRelationship(
+        string relationshipPartPath,
+        XElement relationship,
+        string targetPart)
+    {
+        var relationshipType = NormalizeRelationshipType(relationship);
+        if (string.Equals(relationshipType, ThreadedCommentsRelationshipType, StringComparison.OrdinalIgnoreCase))
+        {
+            return IsWorksheetOrModernCommentPart(RelationshipPartToSourcePart(relationshipPartPath)) &&
+                   IsThreadedCommentPart(targetPart);
+        }
+
+        if (string.Equals(relationshipType, PersonRelationshipType, StringComparison.OrdinalIgnoreCase))
+        {
+            return IsWorkbookOrModernCommentPart(RelationshipPartToSourcePart(relationshipPartPath)) &&
+                   IsPersonPart(targetPart);
+        }
+
+        return false;
     }
 
     private static bool IsSlicerTimelinePackageGraphRelationship(
@@ -773,6 +796,31 @@ internal static class XlsxPackageMetadataMerger
 
         return true;
     }
+
+    private static bool IsWorkbookOrModernCommentPart(string sourcePart) =>
+        string.Equals(sourcePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase) ||
+        IsModernCommentPart(sourcePart);
+
+    private static bool IsWorksheetOrModernCommentPart(string sourcePart) =>
+        sourcePart.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+        sourcePart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ||
+        IsModernCommentPart(sourcePart);
+
+    private static bool IsModernCommentPart(string part) =>
+        IsThreadedCommentPart(part) ||
+        IsPersonPart(part) ||
+        part.StartsWith("xl/threadedComments/", StringComparison.OrdinalIgnoreCase) ||
+        part.StartsWith("xl/commentsExtensible/", StringComparison.OrdinalIgnoreCase) ||
+        part.StartsWith("xl/commentAuthors/", StringComparison.OrdinalIgnoreCase) ||
+        part.StartsWith("xl/people/", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsThreadedCommentPart(string part) =>
+        part.StartsWith("xl/threadedComments/", StringComparison.OrdinalIgnoreCase) &&
+        part.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsPersonPart(string part) =>
+        part.StartsWith("xl/persons/", StringComparison.OrdinalIgnoreCase) &&
+        part.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
 
     private static bool ShouldRebindRelationshipReferenceOnCopiedPart(XElement relationship)
     {
