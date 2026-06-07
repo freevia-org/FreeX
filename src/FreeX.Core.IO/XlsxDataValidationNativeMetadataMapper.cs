@@ -516,7 +516,7 @@ internal static class XlsxDataValidationNativeMetadataMapper
     {
         var changed = false;
         if (source.NativeContainerAttributes is { Count: > 0 } attributes)
-            changed |= ApplyNativeAttributesIfMissing(dataValidations, attributes);
+            changed |= XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(dataValidations, attributes);
 
         if (source.NativeContainerChildXmls is { Count: > 0 } childXmls)
         {
@@ -540,7 +540,7 @@ internal static class XlsxDataValidationNativeMetadataMapper
     {
         var changed = false;
         if (source.NativeAttributes is { Count: > 0 } attributes)
-            changed |= ApplyNativeAttributesIfMissing(validationElement, attributes);
+            changed |= XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(validationElement, attributes);
 
         if (source.NativeChildXmls is { Count: > 0 } childXmls)
         {
@@ -578,18 +578,6 @@ internal static class XlsxDataValidationNativeMetadataMapper
         }
     }
 
-    private static bool ApplyNativeAttributesIfMissing(
-        XElement element,
-        IReadOnlyDictionary<string, string> attributes)
-    {
-        var changed = false;
-        foreach (var (name, value) in attributes)
-        {
-            changed |= XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttributeIfMissing(element, name, value);
-        }
-
-        return changed;
-    }
 }
 
 internal sealed record DataValidationNativeMetadata(
