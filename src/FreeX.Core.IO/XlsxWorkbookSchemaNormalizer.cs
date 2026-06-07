@@ -214,6 +214,10 @@ internal static class XlsxWorkbookSchemaNormalizer
         if (root is null)
             return false;
 
+        var changed = false;
+        if (root.Element(workbookNs + "fileVersion") is { } fileVersion)
+            changed |= XlsxWorkbookFileVersionNormalizer.NormalizeElement(fileVersion);
+
         var orderedChildren = root.Elements()
             .Select((element, index) => new { Element = element, Index = index })
             .OrderBy(item => WorkbookChildOrder(item.Element, workbookNs))
@@ -221,7 +225,7 @@ internal static class XlsxWorkbookSchemaNormalizer
             .Select(item => item.Element)
             .ToList();
         if (orderedChildren.Count == 0 || root.Elements().SequenceEqual(orderedChildren))
-            return false;
+            return changed;
 
         root.ReplaceNodes(orderedChildren);
         return true;

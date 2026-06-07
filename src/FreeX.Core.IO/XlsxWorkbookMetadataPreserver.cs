@@ -62,7 +62,7 @@ internal static class XlsxWorkbookMetadataPreserver
         var changed = false;
         if (MergeChildBlock(sourceRevisionPointer, targetRoot, workbookNs + "revisionPtr"))
             changed = true;
-        if (MergeChildBlock(sourceFileVersion, targetRoot, workbookNs + "fileVersion"))
+        if (MergeFileVersion(sourceFileVersion, targetRoot, workbookNs + "fileVersion"))
             changed = true;
         if (MergeFileSharing(sourceFileSharing, targetRoot, workbookNs, workbook.FileSharing is not null))
             changed = true;
@@ -115,6 +115,17 @@ internal static class XlsxWorkbookMetadataPreserver
 
         foreach (var sourceBlock in sourceBlocks)
             targetRoot.Add(new XElement(sourceBlock));
+        return true;
+    }
+
+    private static bool MergeFileVersion(XElement? sourceBlock, XElement targetRoot, XName blockName)
+    {
+        if (sourceBlock is null || targetRoot.Element(blockName) is not null)
+            return false;
+
+        var clone = new XElement(sourceBlock);
+        XlsxWorkbookFileVersionNormalizer.NormalizeElement(clone);
+        targetRoot.Add(clone);
         return true;
     }
 

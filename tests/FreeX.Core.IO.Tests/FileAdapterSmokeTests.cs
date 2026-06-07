@@ -13175,7 +13175,7 @@ public partial class FileAdapterSmokeTests
         fileVersion.Should().NotBeNull();
         fileVersion!.Attribute("appName")!.Value.Should().Be("xl");
         fileVersion.Attribute("lastEdited")!.Value.Should().Be("7");
-        fileVersion.Attribute("customVersionFlag")!.Value.Should().Be("keep");
+        fileVersion.Attribute("customVersionFlag").Should().BeNull();
     }
 
     [Fact]
@@ -13270,7 +13270,7 @@ public partial class FileAdapterSmokeTests
         var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
         var xml = workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
         xml.Should().Contain("validWorkbookPrAttr=\"keep\"");
-        xml.Should().Contain("validFileVersionAttr=\"keep\"");
+        xml.Should().NotContain("validFileVersionAttr=\"keep\"");
         xml.Should().NotContain("validRecoveryAttr=\"keep\"");
         xml.Should().Contain("validFunctionGroupsAttr=\"keep\"");
         xml.Should().Contain("validFunctionGroupAttr=\"keep\"");
