@@ -35,7 +35,7 @@ public sealed partial class XsltWorkbookTransformTests
         using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
 
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
-        var document = XDocument.Load(transformed);
+        var document = LoadTransformedXml(transformed);
 
         document.Root!.Name.Should().Be(ss + "Workbook");
         var worksheet = document.Root.Element(ss + "Worksheet");
