@@ -34,13 +34,8 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     private static GridRange Range(Sheet sheet, uint startRow, uint startCol, uint endRow, uint endCol) =>
         new(new CellAddress(sheet.Id, startRow, startCol), new CellAddress(sheet.Id, endRow, endCol));
 
-    private static MemoryStream Save(Workbook workbook)
-    {
-        var stream = new MemoryStream();
-        new XlsxFileAdapter().Save(workbook, stream);
-        stream.Position = 0;
-        return stream;
-    }
+    private static MemoryStream Save(Workbook workbook) =>
+        XlsxPackageTestHelper.SaveWorkbook(workbook);
 
     private static Workbook CreateExcelAuthoredSchemaRegressionWorkbook()
     {
