@@ -1297,11 +1297,29 @@ public static partial class AccessibilityCheckerService
             case "BIN2DEC":
                 kind = ConditionalFormulaScalarFunctionKind.Bin2Dec;
                 return true;
+            case "BIN2HEX":
+                kind = ConditionalFormulaScalarFunctionKind.Bin2Hex;
+                return true;
+            case "BIN2OCT":
+                kind = ConditionalFormulaScalarFunctionKind.Bin2Oct;
+                return true;
+            case "HEX2BIN":
+                kind = ConditionalFormulaScalarFunctionKind.Hex2Bin;
+                return true;
             case "HEX2DEC":
                 kind = ConditionalFormulaScalarFunctionKind.Hex2Dec;
                 return true;
+            case "HEX2OCT":
+                kind = ConditionalFormulaScalarFunctionKind.Hex2Oct;
+                return true;
+            case "OCT2BIN":
+                kind = ConditionalFormulaScalarFunctionKind.Oct2Bin;
+                return true;
             case "OCT2DEC":
                 kind = ConditionalFormulaScalarFunctionKind.Oct2Dec;
+                return true;
+            case "OCT2HEX":
+                kind = ConditionalFormulaScalarFunctionKind.Oct2Hex;
                 return true;
             case "DEC2BIN":
                 kind = ConditionalFormulaScalarFunctionKind.Dec2Bin;
@@ -1532,6 +1550,12 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Delta or
             ConditionalFormulaScalarFunctionKind.GeStep or
             ConditionalFormulaScalarFunctionKind.Weekday or
+            ConditionalFormulaScalarFunctionKind.Bin2Hex or
+            ConditionalFormulaScalarFunctionKind.Bin2Oct or
+            ConditionalFormulaScalarFunctionKind.Hex2Bin or
+            ConditionalFormulaScalarFunctionKind.Hex2Oct or
+            ConditionalFormulaScalarFunctionKind.Oct2Bin or
+            ConditionalFormulaScalarFunctionKind.Oct2Hex or
             ConditionalFormulaScalarFunctionKind.Dec2Bin or
             ConditionalFormulaScalarFunctionKind.Dec2Hex or
             ConditionalFormulaScalarFunctionKind.Dec2Oct or
@@ -2261,8 +2285,14 @@ public static partial class AccessibilityCheckerService
         Columns,
         Areas,
         Bin2Dec,
+        Bin2Hex,
+        Bin2Oct,
+        Hex2Bin,
         Hex2Dec,
+        Hex2Oct,
+        Oct2Bin,
         Oct2Dec,
+        Oct2Hex,
         Dec2Bin,
         Dec2Hex,
         Dec2Oct,
@@ -2976,6 +3006,13 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Hex2Dec:
                 case ConditionalFormulaScalarFunctionKind.Oct2Dec:
                     return TryEvaluateFormulaBaseToDecimalFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Bin2Hex:
+                case ConditionalFormulaScalarFunctionKind.Bin2Oct:
+                case ConditionalFormulaScalarFunctionKind.Hex2Bin:
+                case ConditionalFormulaScalarFunctionKind.Hex2Oct:
+                case ConditionalFormulaScalarFunctionKind.Oct2Bin:
+                case ConditionalFormulaScalarFunctionKind.Oct2Hex:
+                    return TryEvaluateFormulaBaseToBaseFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Dec2Bin:
                 case ConditionalFormulaScalarFunctionKind.Dec2Hex:
                 case ConditionalFormulaScalarFunctionKind.Dec2Oct:
@@ -3049,6 +3086,79 @@ public static partial class AccessibilityCheckerService
             }
 
             value = new NumberValue(result);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaBaseToBaseFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaOperand(function.Arguments[0], rowOffset, colOffset, out var source))
+                return false;
+
+            if (source is ErrorValue sourceError)
+            {
+                value = sourceError;
+                return true;
+            }
+
+            ScalarValue? places = null;
+            if (function.Arguments.Count == 2)
+            {
+                if (!TryResolveFormulaOperand(function.Arguments[1], rowOffset, colOffset, out places))
+                    return false;
+
+                if (places is ErrorValue placesError)
+                {
+                    value = placesError;
+                    return true;
+                }
+            }
+
+            var (fromBase, maxDigits, signThreshold, modulus, toBase, upper) = function.Kind switch
+            {
+                ConditionalFormulaScalarFunctionKind.Bin2Hex => (2, 10, 512L, 1024L, 16, true),
+                ConditionalFormulaScalarFunctionKind.Bin2Oct => (2, 10, 512L, 1024L, 8, false),
+                ConditionalFormulaScalarFunctionKind.Hex2Bin => (16, 10, 549755813888L, 1099511627776L, 2, false),
+                ConditionalFormulaScalarFunctionKind.Hex2Oct => (16, 10, 549755813888L, 1099511627776L, 8, false),
+                ConditionalFormulaScalarFunctionKind.Oct2Bin => (8, 10, 536870912L, 1073741824L, 2, false),
+                ConditionalFormulaScalarFunctionKind.Oct2Hex => (8, 10, 536870912L, 1073741824L, 16, true),
+                _ => (0, 0, 0L, 0L, 0, false)
+            };
+
+            if (!TryParseFormulaBaseNumber(source, fromBase, maxDigits, signThreshold, modulus, out var number))
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            if (number < 0)
+            {
+                value = new TextValue(DecimalToFormulaBaseText(
+                    number,
+                    toBase,
+                    FormulaNegativeModulusForBase(toBase),
+                    10,
+                    upper));
+                return true;
+            }
+
+            if (places is not null and not BlankValue)
+            {
+                if (!TryFormatFormulaBaseText(number, toBase, places, upper, out var padded))
+                {
+                    value = ErrorValue.Num;
+                    return true;
+                }
+
+                value = new TextValue(padded);
+                return true;
+            }
+
+            value = new TextValue(FormulaBaseText(number, toBase, upper));
             return true;
         }
 
@@ -4382,6 +4492,14 @@ public static partial class AccessibilityCheckerService
             int width,
             bool upper) =>
             FormulaBaseText(number < 0 ? modulus + number : number, toBase, upper).PadLeft(width, '0');
+
+        private static long FormulaNegativeModulusForBase(int toBase) => toBase switch
+        {
+            2 => 1024L,
+            8 => 1073741824L,
+            16 => 1099511627776L,
+            _ => throw new ArgumentOutOfRangeException(nameof(toBase), toBase, null)
+        };
 
         private static string FormulaBaseText(long number, int toBase, bool upper)
         {
