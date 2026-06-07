@@ -12696,8 +12696,21 @@ public partial class FileAdapterSmokeTests
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         archive.GetEntry("xl/externalLinks/externalLink1.xml").Should().NotBeNull();
         archive.GetEntry("xl/externalLinks/_rels/externalLink1.xml.rels").Should().NotBeNull();
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
-        workbookXml.ToString().Should().Contain("externalReferences");
+        var externalReferences = workbookXml.Root!.Element(workbookNs + "externalReferences");
+        externalReferences.Should().NotBeNull();
+        externalReferences!.Attribute("customExternalReferencesFlag").Should().BeNull();
+        externalReferences.Element(workbookNs + "nativeExternalReferencesChild").Should().BeNull();
+        var externalReference = externalReferences
+            .Elements(workbookNs + "externalReference")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        externalReference.Attribute(relNs + "id")!.Value.Should().Be("rIdFreeXExternalLink");
+        externalReference.Attribute("customExternalReferenceFlag").Should().BeNull();
+        externalReference.Elements().Should().BeEmpty();
         var workbookRelsXml = LoadPackageXml(archive.GetEntry("xl/_rels/workbook.xml.rels")!);
         workbookRelsXml.ToString().Should().Contain("externalLink1.xml");
     }

@@ -13809,16 +13809,28 @@ internal static class ExcelOpenSmoke
         if (workbookEntry is null)
             return;
 
-        var externalReferences = LoadPackageXml(workbookEntry)
-            .Descendants(SpreadsheetNs + "externalReference")
+        var workbookXml = LoadPackageXml(workbookEntry);
+        var workbookRoot = workbookXml.Root;
+        if (workbookRoot is null)
+            return;
+
+        var issues = new List<string>();
+        var externalReferenceContainers = workbookRoot
+            .Elements(SpreadsheetNs + "externalReferences")
+            .ToArray();
+        if (externalReferenceContainers.Length == 0)
+            return;
+
+        AddWorkbookExternalReferencesSchemaIssues(externalReferenceContainers, issues);
+        var externalReferences = externalReferenceContainers
+            .SelectMany(externalReferences => externalReferences.Elements(SpreadsheetNs + "externalReference"))
             .Select((externalReference, index) => new WorkbookExternalReference(
                 index + 1,
                 externalReference.Attribute(OfficeRelationshipNs + "id")?.Value))
             .ToArray();
-        if (externalReferences.Length == 0)
+        if (externalReferences.Length == 0 && issues.Count == 0)
             return;
 
-        var issues = new List<string>();
         var workbookRelationshipEntry = FindPackageEntry(archive, WorkbookRelationshipPart);
         if (workbookRelationshipEntry is null)
         {
@@ -13863,6 +13875,61 @@ internal static class ExcelOpenSmoke
             return;
 
         ThrowInvalidExternalLinkPackage(label, sourcePath, issues);
+    }
+
+    private static void AddWorkbookExternalReferencesSchemaIssues(
+        XElement[] externalReferenceContainers,
+        List<string> issues)
+    {
+        if (externalReferenceContainers.Length > 1)
+            issues.Add($"{WorkbookPart} has {externalReferenceContainers.Length} externalReferences elements; expected at most one");
+
+        var seenRelationshipIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var externalReferences in externalReferenceContainers.Select((element, index) => (Element: element, Ordinal: index + 1)))
+        {
+            var description = $"externalReferences #{externalReferences.Ordinal}";
+            foreach (var attribute in externalReferences.Element.Attributes())
+            {
+                if (!attribute.IsNamespaceDeclaration)
+                    issues.Add($"{WorkbookPart} {description} has unsupported attribute {attribute.Name}");
+            }
+
+            var externalReferenceElements = externalReferences.Element.Elements(SpreadsheetNs + "externalReference").ToArray();
+            if (externalReferenceElements.Length == 0)
+                issues.Add($"{WorkbookPart} {description} has no externalReference entries");
+
+            foreach (var unexpectedChild in externalReferences.Element.Elements().Where(child => child.Name != SpreadsheetNs + "externalReference"))
+                issues.Add($"{WorkbookPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}; expected externalReference entries only");
+
+            foreach (var externalReference in externalReferenceElements.Select((element, index) => (Element: element, Ordinal: index + 1)))
+            {
+                var childDescription = $"{description} externalReference #{externalReference.Ordinal}";
+                foreach (var attribute in externalReference.Element.Attributes())
+                {
+                    if (attribute.IsNamespaceDeclaration || attribute.Name == OfficeRelationshipNs + "id")
+                        continue;
+
+                    issues.Add($"{WorkbookPart} {childDescription} has unsupported attribute {attribute.Name}");
+                }
+
+                var relationshipId = externalReference.Element.Attribute(OfficeRelationshipNs + "id")?.Value;
+                if (string.IsNullOrWhiteSpace(relationshipId))
+                {
+                    issues.Add($"{WorkbookPart} {childDescription} has no relationship id");
+                }
+                else
+                {
+                    var trimmedRelationshipId = relationshipId.Trim();
+                    if (!string.Equals(relationshipId, trimmedRelationshipId, StringComparison.Ordinal))
+                        issues.Add($"{WorkbookPart} {childDescription} has untrimmed relationship id '{relationshipId}'");
+                    if (!seenRelationshipIds.Add(trimmedRelationshipId))
+                        issues.Add($"{WorkbookPart} {childDescription} duplicates relationship id {trimmedRelationshipId}");
+                }
+
+                if (externalReference.Element.Elements().Any())
+                    issues.Add($"{WorkbookPart} {childDescription} has child elements; expected attributes only");
+            }
+        }
     }
 
     private static void AddWorkbookExternalReferencePackageIssues(
