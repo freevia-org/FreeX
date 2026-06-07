@@ -51,6 +51,50 @@ public sealed class RecentFilesStoreTests
     }
 
     [Fact]
+    public void AddOrUpdate_WithWindowsPathIdentityKeepsCaseInsensitiveBehavior()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "recent.json");
+        var now = new DateTimeOffset(2026, 6, 8, 8, 0, 0, TimeSpan.Zero);
+        var clockTicks = 0;
+        var store = RecentFilesStore.Load(
+            path,
+            PlatformPathIdentityComparer.Windows,
+            () => now.AddMinutes(clockTicks++));
+
+        store.AddOrUpdate(@"C:\Work\Budget.xlsx");
+        store.Pin(@"c:\work\budget.xlsx");
+        store.AddOrUpdate("C:/WORK/BUDGET.xlsx");
+
+        var reloaded = RecentFilesStore.Load(path, PlatformPathIdentityComparer.Windows);
+        reloaded.Entries.Should().ContainSingle();
+        reloaded.Entries[0].Path.Should().Be("C:/WORK/BUDGET.xlsx");
+        reloaded.Entries[0].IsPinned.Should().BeTrue();
+        reloaded.Entries[0].LastOpened.Should().Be(now.AddMinutes(1));
+    }
+
+    [Fact]
+    public void AddOrUpdate_WithUnixPathIdentityPreservesCaseSensitiveDistinctPaths()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "recent.json");
+        var store = RecentFilesStore.Load(
+            path,
+            PlatformPathIdentityComparer.Unix);
+
+        store.AddOrUpdate("/Users/quinn/Work/Budget.xlsx");
+        store.Pin("/Users/quinn/Work/Budget.xlsx");
+        store.AddOrUpdate("/Users/quinn/Work/budget.xlsx");
+
+        var reloaded = RecentFilesStore.Load(path, PlatformPathIdentityComparer.Unix);
+        reloaded.Entries.Should().HaveCount(2);
+        reloaded.Entries[0].Path.Should().Be("/Users/quinn/Work/budget.xlsx");
+        reloaded.Entries[0].IsPinned.Should().BeFalse();
+        reloaded.Entries[1].Path.Should().Be("/Users/quinn/Work/Budget.xlsx");
+        reloaded.Entries[1].IsPinned.Should().BeTrue();
+    }
+
+    [Fact]
     public void AddOrUpdate_TrimsToRecentFileLimit()
     {
         using var temp = new TestTemporaryDirectory();

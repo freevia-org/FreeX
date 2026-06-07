@@ -14,14 +14,19 @@ public sealed class RecentFilesStore
     private const int MaxEntries = 25;
 
     private readonly Func<DateTimeOffset> _clock;
+    private readonly PlatformPathIdentityComparer _pathIdentityComparer;
     private readonly string _storePath;
 
-    private RecentFilesStore(string storePath, Func<DateTimeOffset>? clock)
+    private RecentFilesStore(
+        string storePath,
+        Func<DateTimeOffset>? clock,
+        PlatformPathIdentityComparer? pathIdentityComparer)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(storePath);
 
         _storePath = storePath;
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
+        _pathIdentityComparer = pathIdentityComparer ?? PlatformPathIdentityComparer.Current;
     }
 
     public static string DefaultStorePath => GetDefaultStorePath(PlatformApplicationDataPathProvider.Instance);
@@ -36,9 +41,27 @@ public sealed class RecentFilesStore
     public static RecentFilesStore Load(IApplicationDataPathProvider pathProvider, Func<DateTimeOffset>? clock = null) =>
         Load(GetDefaultStorePath(pathProvider), clock);
 
-    public static RecentFilesStore Load(string storePath, Func<DateTimeOffset>? clock = null)
+    public static RecentFilesStore Load(
+        IApplicationDataPathProvider pathProvider,
+        PlatformPathIdentityComparer pathIdentityComparer,
+        Func<DateTimeOffset>? clock = null) =>
+        Load(GetDefaultStorePath(pathProvider), pathIdentityComparer, clock);
+
+    public static RecentFilesStore Load(string storePath, Func<DateTimeOffset>? clock = null) =>
+        LoadCore(storePath, clock, pathIdentityComparer: null);
+
+    public static RecentFilesStore Load(
+        string storePath,
+        PlatformPathIdentityComparer pathIdentityComparer,
+        Func<DateTimeOffset>? clock = null) =>
+        LoadCore(storePath, clock, pathIdentityComparer);
+
+    private static RecentFilesStore LoadCore(
+        string storePath,
+        Func<DateTimeOffset>? clock,
+        PlatformPathIdentityComparer? pathIdentityComparer)
     {
-        var store = new RecentFilesStore(storePath, clock);
+        var store = new RecentFilesStore(storePath, clock, pathIdentityComparer);
         try
         {
             if (File.Exists(storePath))
@@ -70,10 +93,9 @@ public sealed class RecentFilesStore
         if (string.IsNullOrWhiteSpace(path))
             return;
 
-        var existing = Entries.FirstOrDefault(entry =>
-            string.Equals(entry.Path, path, StringComparison.OrdinalIgnoreCase));
+        var existing = Entries.FirstOrDefault(entry => PathsMatch(entry.Path, path));
         var wasPinned = existing?.IsPinned ?? false;
-        Entries.RemoveAll(entry => string.Equals(entry.Path, path, StringComparison.OrdinalIgnoreCase));
+        Entries.RemoveAll(entry => PathsMatch(entry.Path, path));
         Entries.Insert(0, new RecentFileEntry { Path = path, LastOpened = _clock(), IsPinned = wasPinned });
         if (Entries.Count > MaxEntries)
             Entries.RemoveRange(MaxEntries, Entries.Count - MaxEntries);
@@ -83,8 +105,7 @@ public sealed class RecentFilesStore
 
     public void Pin(string path)
     {
-        var entry = Entries.FirstOrDefault(entry =>
-            string.Equals(entry.Path, path, StringComparison.OrdinalIgnoreCase));
+        var entry = Entries.FirstOrDefault(entry => PathsMatch(entry.Path, path));
         if (entry is null)
             return;
 
@@ -94,8 +115,7 @@ public sealed class RecentFilesStore
 
     public void Unpin(string path)
     {
-        var entry = Entries.FirstOrDefault(entry =>
-            string.Equals(entry.Path, path, StringComparison.OrdinalIgnoreCase));
+        var entry = Entries.FirstOrDefault(entry => PathsMatch(entry.Path, path));
         if (entry is null)
             return;
 
@@ -105,9 +125,12 @@ public sealed class RecentFilesStore
 
     public void Remove(string path)
     {
-        Entries.RemoveAll(entry => string.Equals(entry.Path, path, StringComparison.OrdinalIgnoreCase));
+        Entries.RemoveAll(entry => PathsMatch(entry.Path, path));
         Save();
     }
+
+    private bool PathsMatch(string existingPath, string candidatePath) =>
+        _pathIdentityComparer.Equals(existingPath, candidatePath);
 
     private void Save()
     {
