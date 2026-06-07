@@ -219,6 +219,24 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void WorkbookFunctionGroups_SanitizesInvalidAttributesForSchemaValidity()
+    {
+        var workbook = CreateWorkbookFunctionGroupsSourceWorkbook();
+        workbook.FunctionGroups!.NativeAttributes["customFunctionGroupsFlag"] = "removed";
+        workbook.FunctionGroups.Groups[0].NativeAttributes["customFunctionGroupFlag"] = "removed";
+
+        using var saved = Save(workbook);
+
+        SchemaErrors(saved).Should().BeEmpty();
+        var functionGroups = ReadWorkbookChildElement(saved, "functionGroups");
+        functionGroups.Attribute("builtInGroupCount")!.Value.Should().Be("16");
+        functionGroups.Attribute("customFunctionGroupsFlag").Should().BeNull();
+        var functionGroup = functionGroups.Element(functionGroups.Name.Namespace + "functionGroup")!;
+        functionGroup.Attribute("name")!.Value.Should().Be("FreeXNativeFunctions");
+        functionGroup.Attribute("customFunctionGroupFlag").Should().BeNull();
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithWorkbookFunctionGroups_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreateWorkbookFunctionGroupsSourceWorkbook());
@@ -244,6 +262,38 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceFunctionGroups.ToString(SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorkbookFunctionGroupsForSchemaValidity()
+    {
+        using var source = Save(CreateWorkbookFunctionGroupsSourceWorkbook());
+        SetWorkbookFunctionGroupsInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var functionGroups = ReadWorkbookChildElement(saved, "functionGroups");
+        functionGroups.Attribute("builtInGroupCount").Should().BeNull();
+        functionGroups.Attribute("customFunctionGroupsFlag").Should().BeNull();
+        functionGroups.Element(functionGroups.Name.Namespace + "nativeFunctionGroupsChild").Should().BeNull();
+
+        var functionGroup = functionGroups.Element(functionGroups.Name.Namespace + "functionGroup")!;
+        functionGroup.Attribute("name")!.Value.Should().Be("FreeXNativeFunctions");
+        functionGroup.Attribute("customFunctionGroupFlag").Should().BeNull();
+        functionGroup.Element(functionGroup.Name.Namespace + "nativeFunctionGroupChild").Should().BeNull();
     }
 
     [Fact]
@@ -631,6 +681,22 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("functions"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
         return workbook;
+    }
+
+    private static void SetWorkbookFunctionGroupsInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var functionGroups = workbookXml.Root!.Element(workbookNs + "functionGroups")!;
+        functionGroups.SetAttributeValue("builtInGroupCount", "not-a-number");
+        functionGroups.SetAttributeValue("customFunctionGroupsFlag", "removed");
+        functionGroups.Add(new XElement(workbookNs + "nativeFunctionGroupsChild"));
+        var functionGroup = functionGroups.Element(workbookNs + "functionGroup")!;
+        functionGroup.SetAttributeValue("customFunctionGroupFlag", "removed");
+        functionGroup.Add(new XElement(workbookNs + "nativeFunctionGroupChild"));
+        ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
     }
 
     private static Workbook CreateWorkbookPropertiesSourceWorkbook()

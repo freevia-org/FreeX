@@ -842,6 +842,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchWorkbookFileVersion(archive);
                 NormalizePatchWorkbookFileSharing(archive);
                 NormalizePatchWorkbookFileRecoveryProperties(archive);
+                NormalizePatchWorkbookFunctionGroups(archive);
                 NormalizePatchWorkbookProtection(archive);
                 NormalizePatchSharedStrings(archive);
                 NormalizePatchInlineStringFonts(archive);
@@ -1182,6 +1183,22 @@ public sealed partial class XlsxFileAdapter
 
             if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
+        }
+
+        private static void NormalizePatchWorkbookFunctionGroups(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var functionGroups = workbookXml.Root?.Element(workbookNs + "functionGroups");
+            if (functionGroups is not null &&
+                XlsxWorkbookFunctionGroupsNormalizer.NormalizeElement(functionGroups))
+            {
+                XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
+            }
         }
 
         private static void NormalizePatchWorkbookProtection(ZipArchive archive)

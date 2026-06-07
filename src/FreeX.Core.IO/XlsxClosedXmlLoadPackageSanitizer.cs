@@ -665,6 +665,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         workbookXml.Root?.Elements(workbookNs + "pivotCaches").Remove();
         if (workbookXml.Root?.Element(workbookNs + "fileVersion") is { } fileVersion)
             XlsxWorkbookFileVersionNormalizer.NormalizeElement(fileVersion);
+        if (workbookXml.Root?.Element(workbookNs + "functionGroups") is { } functionGroups)
+            XlsxWorkbookFunctionGroupsNormalizer.NormalizeElement(functionGroups);
         if (workbookXml.Root?.Element(workbookNs + "bookViews") is { } bookViews)
             XlsxWorkbookViewNormalizer.NormalizeBookViewsElement(bookViews);
         if (workbookXml.Root?.Element(workbookNs + "calcPr") is { } calcPr)
