@@ -3,9 +3,10 @@ using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia;
 
-internal sealed record MacOsLaunchSmokeOptions(string ReportPath)
+internal sealed record MacOsLaunchSmokeOptions(string ReportPath, bool VerifyImageClipboardPaste)
 {
     public const string Argument = "--macos-launch-smoke";
+    public const string VerifyImageClipboardPasteArgument = "--macos-launch-smoke-verify-image-clipboard";
 
     public static bool TryParse(
         IReadOnlyList<string> args,
@@ -18,16 +19,24 @@ internal sealed record MacOsLaunchSmokeOptions(string ReportPath)
         options = null;
         error = "";
         var filteredArguments = new List<string>();
+        string? reportPath = null;
+        var verifyImageClipboardPaste = false;
         for (var index = 0; index < args.Count; index++)
         {
             var argument = args[index];
+            if (string.Equals(argument, VerifyImageClipboardPasteArgument, StringComparison.OrdinalIgnoreCase))
+            {
+                verifyImageClipboardPaste = true;
+                continue;
+            }
+
             if (!string.Equals(argument, Argument, StringComparison.OrdinalIgnoreCase))
             {
                 filteredArguments.Add(argument);
                 continue;
             }
 
-            if (options is not null)
+            if (reportPath is not null)
             {
                 startupArguments = [];
                 error = $"{Argument} was specified more than once.";
@@ -41,16 +50,17 @@ internal sealed record MacOsLaunchSmokeOptions(string ReportPath)
                 return false;
             }
 
-            var reportPath = args[++index];
+            reportPath = args[++index];
             if (string.IsNullOrWhiteSpace(reportPath))
             {
                 startupArguments = [];
                 error = $"{Argument} requires a non-empty report path.";
                 return false;
             }
-
-            options = new MacOsLaunchSmokeOptions(reportPath);
         }
+
+        if (reportPath is not null)
+            options = new MacOsLaunchSmokeOptions(reportPath, verifyImageClipboardPaste);
 
         startupArguments = filteredArguments.ToArray();
         return true;
@@ -65,6 +75,8 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     int SheetTabCount,
     int ViewportRowCount,
     int ViewportColumnCount,
+    int ExternalImageClipboardPictureCount,
+    int ExternalImageClipboardPicturePngByteCount,
     string? OpenedSourcePath,
     bool IsOpening,
     bool HasNewSheetButton,
@@ -312,34 +324,70 @@ internal static class MacOsLaunchSmokeCoordinator
     {
         var deadline = DateTimeOffset.UtcNow.AddMilliseconds(MaxWaitMilliseconds);
         var snapshot = mainWindow.CreateLaunchSmokeSnapshot();
+        var initialExternalImageClipboardPictureCount = snapshot.ExternalImageClipboardPictureCount;
+        var attemptedImageClipboardPaste = false;
         try
         {
-            while (!snapshot.IsPassed && DateTimeOffset.UtcNow < deadline)
+            while (!IsPassed(snapshot, options, initialExternalImageClipboardPictureCount) &&
+                DateTimeOffset.UtcNow < deadline)
             {
+                if (snapshot.IsPassed &&
+                    options.VerifyImageClipboardPaste &&
+                    !attemptedImageClipboardPaste)
+                {
+                    attemptedImageClipboardPaste = true;
+                    await mainWindow.TryPasteLaunchSmokeClipboardImageAsync();
+                    snapshot = mainWindow.CreateLaunchSmokeSnapshot();
+                    continue;
+                }
+
                 await Task.Delay(PollDelayMilliseconds);
                 snapshot = mainWindow.CreateLaunchSmokeSnapshot();
             }
 
-            WriteReport(options.ReportPath, snapshot);
-            Shutdown(snapshot.IsPassed ? 0 : 1);
+            WriteReport(options.ReportPath, snapshot, options, initialExternalImageClipboardPictureCount);
+            Shutdown(IsPassed(snapshot, options, initialExternalImageClipboardPictureCount) ? 0 : 1);
         }
         catch (Exception ex)
         {
-            WriteFailureReport(options.ReportPath, snapshot, ex);
+            WriteFailureReport(options.ReportPath, snapshot, options, initialExternalImageClipboardPictureCount, ex);
             Shutdown(1);
         }
     }
 
-    private static void WriteReport(string reportPath, MacOsLaunchSmokeSnapshot snapshot)
+    private static bool IsPassed(
+        MacOsLaunchSmokeSnapshot snapshot,
+        MacOsLaunchSmokeOptions options,
+        int initialExternalImageClipboardPictureCount) =>
+        snapshot.IsPassed &&
+        (!options.VerifyImageClipboardPaste || HasExternalImageClipboardPasteEvidence(
+            snapshot,
+            initialExternalImageClipboardPictureCount));
+
+    private static bool HasExternalImageClipboardPasteEvidence(
+        MacOsLaunchSmokeSnapshot snapshot,
+        int initialExternalImageClipboardPictureCount) =>
+        snapshot.ExternalImageClipboardPictureCount > initialExternalImageClipboardPictureCount &&
+        snapshot.ExternalImageClipboardPicturePngByteCount > 0;
+
+    private static void WriteReport(
+        string reportPath,
+        MacOsLaunchSmokeSnapshot snapshot,
+        MacOsLaunchSmokeOptions options,
+        int initialExternalImageClipboardPictureCount)
     {
         var directory = Path.GetDirectoryName(reportPath);
         if (!string.IsNullOrWhiteSpace(directory))
             Directory.CreateDirectory(directory);
 
+        var imageClipboardPasteVerified = HasExternalImageClipboardPasteEvidence(
+            snapshot,
+            initialExternalImageClipboardPictureCount);
+
         File.WriteAllLines(
             reportPath,
             [
-                $"macos_launch_smoke={(snapshot.IsPassed ? "passed" : "failed")}",
+                $"macos_launch_smoke={(IsPassed(snapshot, options, initialExternalImageClipboardPictureCount) ? "passed" : "failed")}",
                 $"window_shown={FormatBool(snapshot.WindowShown)}",
                 $"window_title={snapshot.WindowTitle}",
                 $"display_name={snapshot.DisplayName}",
@@ -347,6 +395,10 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"sheet_tab_count={snapshot.SheetTabCount}",
                 $"viewport_rows={snapshot.ViewportRowCount}",
                 $"viewport_columns={snapshot.ViewportColumnCount}",
+                $"external_image_clipboard_paste_required={FormatBool(options.VerifyImageClipboardPaste)}",
+                $"external_image_clipboard_paste={FormatBool(imageClipboardPasteVerified)}",
+                $"external_image_clipboard_picture_count={snapshot.ExternalImageClipboardPictureCount}",
+                $"external_image_clipboard_picture_png_bytes={snapshot.ExternalImageClipboardPicturePngByteCount}",
                 $"opened_source_path={snapshot.OpenedSourcePath ?? ""}",
                 $"is_opening={FormatBool(snapshot.IsOpening)}",
                 $"new_sheet_button={FormatBool(snapshot.HasNewSheetButton)}",
@@ -464,9 +516,11 @@ internal static class MacOsLaunchSmokeCoordinator
     private static void WriteFailureReport(
         string reportPath,
         MacOsLaunchSmokeSnapshot snapshot,
+        MacOsLaunchSmokeOptions options,
+        int initialExternalImageClipboardPictureCount,
         Exception exception)
     {
-        WriteReport(reportPath, snapshot);
+        WriteReport(reportPath, snapshot, options, initialExternalImageClipboardPictureCount);
         File.AppendAllLines(reportPath, [$"error={exception.GetType().Name}: {exception.Message}"]);
     }
 

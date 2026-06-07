@@ -3748,6 +3748,25 @@ public sealed class MainWindow : Window
         return true;
     }
 
+    internal async Task<bool> TryPasteLaunchSmokeClipboardImageAsync()
+    {
+        if (_isOpening || _isSaving)
+            return false;
+
+        if (!TryCommitPendingFormulaEdit())
+            return false;
+
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard is null)
+            return false;
+
+        var text = await clipboard.TryGetTextAsync();
+        if (!_session.ShouldPreferExternalClipboardImage(text))
+            return false;
+
+        return await TryPasteClipboardImageAsync(clipboard, _session.ActiveCell);
+    }
+
     private async Task PasteSpecialClipboardTextAsync(
         PasteCellsMode mode,
         PasteSpecialOptions options,
@@ -4509,6 +4528,12 @@ public sealed class MainWindow : Window
         var nativeFillColorSwatchCount = CountNativeColorPaletteSwatches(_fillColorMenuItem.Menu);
         var nativeFontColorSwatchCount = CountNativeColorPaletteSwatches(_fontColorMenuItem.Menu);
         var nativeTabColorSwatchCount = CountNativeColorPaletteSwatches(_tabColorMenuItem.Menu);
+        var externalImageClipboardPictures = _session.ActiveSheet.Pictures
+            .Where(static picture =>
+                picture.Kind == PictureKind.Image &&
+                string.Equals(picture.ContentType, "image/png", StringComparison.OrdinalIgnoreCase) &&
+                picture.ImageBytes is { Length: > 0 })
+            .ToArray();
 
         return new MacOsLaunchSmokeSnapshot(
             WindowShown: IsVisible,
@@ -4518,6 +4543,8 @@ public sealed class MainWindow : Window
             SheetTabCount: _session.SheetTabs.Count,
             ViewportRowCount: _session.Viewport.RowMetrics.Count,
             ViewportColumnCount: _session.Viewport.ColMetrics.Count,
+            ExternalImageClipboardPictureCount: externalImageClipboardPictures.Length,
+            ExternalImageClipboardPicturePngByteCount: externalImageClipboardPictures.Sum(static picture => picture.ImageBytes!.Length),
             OpenedSourcePath: _session.CurrentFilePath,
             IsOpening: _isOpening,
             HasNewSheetButton: _newSheetButton.Content?.ToString() == "+",

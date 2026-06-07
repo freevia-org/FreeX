@@ -25,6 +25,14 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_font_color_swatch_count=69");
         script.Should().Contain("native_cell_styles_menu_item=true");
         script.Should().Contain("native_cell_styles_preset_count=33");
+        script.Should().Contain("--macos-launch-smoke-verify-image-clipboard");
+        script.Should().Contain("launch_clipboard_image=\"$RUNNER_TEMP/freex-$runtime-clipboard.png\"");
+        script.Should().Contain("/usr/bin/swift - \"$launch_clipboard_image\"");
+        script.Should().Contain("NSPasteboard.general");
+        script.Should().Contain("external_image_clipboard_paste_required=true");
+        script.Should().Contain("external_image_clipboard_paste=true");
+        script.Should().Contain("external_image_clipboard_picture_count=[1-9]");
+        script.Should().Contain("external_image_clipboard_picture_png_bytes=[1-9]");
         script.Should().Contain("native_new_workbook_menu_item=true");
         script.Should().Contain("native_open_recent_menu_item=true");
         script.Should().Contain("native_open_recent_item_count=[1-9]");
@@ -121,6 +129,14 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("await clipboard.TryGetBitmapAsync()");
         script.Should().Contain("bitmap.Save(stream)");
         script.Should().Contain("_session.PasteClipboardImageAtActiveCell(pngBytes, pixelWidth, pixelHeight)");
+        script.Should().Contain("internal async Task<bool> TryPasteLaunchSmokeClipboardImageAsync()");
+        script.Should().Contain("return await TryPasteClipboardImageAsync(clipboard, _session.ActiveCell);");
+        script.Should().Contain("ExternalImageClipboardPictureCount: externalImageClipboardPictures.Length");
+        script.Should().Contain("ExternalImageClipboardPicturePngByteCount: externalImageClipboardPictures.Sum(static picture => picture.ImageBytes!.Length)");
+        script.Should().Contain("VerifyImageClipboardPasteArgument");
+        script.Should().Contain("await mainWindow.TryPasteLaunchSmokeClipboardImageAsync();");
+        script.Should().Contain("external_image_clipboard_paste_required=");
+        script.Should().Contain("external_image_clipboard_picture_png_bytes=");
         script.Should().Contain("_session.PastePictureFromClipboardAtActiveCell(text, linkedPicture)");
         script.Should().Contain("public WorkbookCellEditResult PasteClipboardImageAtActiveCell(");
         script.Should().Contain("ClipboardPictureService.CreateInsertCommand(");
@@ -475,8 +491,19 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "Packaging smoke opened" "$artifact_root/smoke.log"
                       grep -q "edited, saved, and reopened" "$artifact_root/smoke.log"
                       /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$unzip_root/FreeX.app"
-                      open -W -n -b io.github.tony-xmelon.freex "$RUNNER_TEMP/launch.csv" --args --macos-launch-smoke "$artifact_root/launch.txt"
+                      launch_clipboard_image="$RUNNER_TEMP/freex-$runtime-clipboard.png"
+                      base64 -D > "$launch_clipboard_image"
+                      /usr/bin/swift - "$launch_clipboard_image" <<'SWIFT'
+                      NSPasteboard.general
+                      pasteboard.clearContents()
+                      pasteboard.writeObjects([image])
+                      SWIFT
+                      open -W -n -b io.github.tony-xmelon.freex "$RUNNER_TEMP/launch.csv" --args --macos-launch-smoke "$artifact_root/launch.txt" --macos-launch-smoke-verify-image-clipboard
                       osascript -e 'tell application id "io.github.tony-xmelon.freex" to quit' || true
+                      grep -q "external_image_clipboard_paste_required=true" "$artifact_root/launch.txt"
+                      grep -q "external_image_clipboard_paste=true" "$artifact_root/launch.txt"
+                      grep -q "external_image_clipboard_picture_count=[1-9]" "$artifact_root/launch.txt"
+                      grep -q "external_image_clipboard_picture_png_bytes=[1-9]" "$artifact_root/launch.txt"
                       grep -q "new_sheet_button=true" "$artifact_root/launch.txt"
                       grep -q "native_file_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_new_workbook_menu_item=true" "$artifact_root/launch.txt"
@@ -688,6 +715,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     await clipboard.TryGetBitmapAsync()
                     bitmap.Save(stream)
                     _session.PasteClipboardImageAtActiveCell(pngBytes, pixelWidth, pixelHeight);
+                    internal async Task<bool> TryPasteLaunchSmokeClipboardImageAsync()
+                    return await TryPasteClipboardImageAsync(clipboard, _session.ActiveCell);
                     private async Task PastePictureFromClipboardAsync(string label, bool linkedPicture)
                     _session.PastePictureFromClipboardAtActiveCell(text, linkedPicture);
                     HasNativePasteSpecialTextMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Text");
@@ -1004,7 +1033,12 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool IsAnyToolbarControlFocused() => true;
                 private bool IsAnySheetTabFocused() => true;
                 private static bool FocusControl(Control control) => true;
-                internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot() => new();
+                internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot()
+                {
+                    ExternalImageClipboardPictureCount: externalImageClipboardPictures.Length;
+                    ExternalImageClipboardPicturePngByteCount: externalImageClipboardPictures.Sum(static picture => picture.ImageBytes!.Length);
+                    return new();
+                }
             }
             """);
 
@@ -1017,8 +1051,13 @@ public sealed class MacOsAppReadinessPreflightTests
             internal sealed class MacOsLaunchSmokeOptions
             {
                 public const string Argument = "--macos-launch-smoke";
+                public const string VerifyImageClipboardPasteArgument = "--macos-launch-smoke-verify-image-clipboard";
+                public bool VerifyImageClipboardPaste { get; }
                 public static void Parse(List<string> filteredArguments, out string[] startupArguments)
                 {
+                    var reportPath = "";
+                    var verifyImageClipboardPaste = true;
+                    new MacOsLaunchSmokeOptions(reportPath, verifyImageClipboardPaste).ToString();
                     startupArguments = filteredArguments.ToArray();
                 }
             }
@@ -1142,8 +1181,22 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativePasteSpecialUnicodeTextMenuItem { get; }
                 private bool HasNativePasteSpecialPictureMenuItem { get; }
                 private bool HasNativePasteSpecialLinkedPictureMenuItem { get; }
+                public int ExternalImageClipboardPictureCount { get; }
+                public int ExternalImageClipboardPicturePngByteCount { get; }
                 public int NativeCellStylesPresetCount { get; }
-                public string Report => "native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= focusable_sheet_tab= focusable_active_sheet_tab= shell_focus_cycle_targets= sheet_tab_context_keyboard_help= sheet_tab_context_rename_menu_item= sheet_tab_context_tab_color_menu_item= sheet_tab_context_no_color_menu_item= sheet_tab_context_select_all_sheets_menu_item= sheet_tab_context_ungroup_sheets_menu_item= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_select_all_sheets_menu_item= native_ungroup_sheets_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+                public string Report => "external_image_clipboard_paste_required= external_image_clipboard_paste= external_image_clipboard_picture_count= external_image_clipboard_picture_png_bytes= native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= focusable_sheet_tab= focusable_active_sheet_tab= shell_focus_cycle_targets= sheet_tab_context_keyboard_help= sheet_tab_context_rename_menu_item= sheet_tab_context_tab_color_menu_item= sheet_tab_context_no_color_menu_item= sheet_tab_context_select_all_sheets_menu_item= sheet_tab_context_ungroup_sheets_menu_item= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_select_all_sheets_menu_item= native_ungroup_sheets_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+            }
+
+            internal sealed class MacOsLaunchSmokeCoordinator
+            {
+                private static async Task RunAsync(MainWindow mainWindow, MacOsLaunchSmokeOptions options)
+                {
+                    var snapshot = mainWindow.CreateLaunchSmokeSnapshot();
+                    var initialExternalImageClipboardPictureCount = snapshot.ExternalImageClipboardPictureCount;
+                    await mainWindow.TryPasteLaunchSmokeClipboardImageAsync();
+                    IsPassed(snapshot, options, initialExternalImageClipboardPictureCount).ToString();
+                    HasExternalImageClipboardPasteEvidence(snapshot, initialExternalImageClipboardPictureCount).ToString();
+                }
             }
             """);
 
