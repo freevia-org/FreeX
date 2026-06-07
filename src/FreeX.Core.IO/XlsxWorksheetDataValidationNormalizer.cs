@@ -11,7 +11,7 @@ internal static class XlsxWorksheetDataValidationNormalizer
 
     public static void NormalizeWorksheets(ZipArchive archive)
     {
-        foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
+        foreach (var worksheetEntry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry).ToList())
         {
             var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
             if (!NormalizeWorksheet(worksheetXml))
@@ -76,8 +76,4 @@ internal static class XlsxWorksheetDataValidationNormalizer
         child.Name == WorksheetNs + "formula2" ? 10 :
         90;
 
-    private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry) =>
-        entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
-        entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
-        !entry.FullName.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
 }
