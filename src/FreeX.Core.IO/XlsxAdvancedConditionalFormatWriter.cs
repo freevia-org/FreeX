@@ -116,11 +116,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         ConditionalFormat cf,
         XNamespace worksheetNs)
     {
-        if (cf.NativeContainerAttributes is { } attributes)
-        {
-            foreach (var (name, value) in attributes)
-                TrySetNativeAttributeIfMissing(element, name, value);
-        }
+        AddNativeAttributes(element, cf.NativeContainerAttributes);
 
         if (cf.NativeContainerChildXmls is { } childXmls)
         {
@@ -236,11 +232,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 break;
         }
 
-        if (cf.NativeAttributes is { } attributes)
-        {
-            foreach (var (name, value) in attributes)
-                TrySetNativeAttributeIfMissing(rule, name, value);
-        }
+        AddNativeAttributes(rule, cf.NativeAttributes);
 
         if (cf.NativeChildXmls is { } childXmls)
         {
@@ -261,14 +253,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         var modeledDataBarAttributes = cf.RuleType == CfRuleType.DataBar
             ? XlsxAdvancedConditionalFormatMetadata.ModeledDataBarPayloadAttributes(cf)
             : [];
-        if (cf.NativePayloadAttributes is { } attributes)
-        {
-            foreach (var (name, value) in attributes)
-            {
-                if (!modeledDataBarAttributes.Contains(name))
-                    TrySetNativeAttributeIfMissing(payload, name, value);
-            }
-        }
+        AddNativeAttributes(payload, cf.NativePayloadAttributes, modeledDataBarAttributes);
 
         var modeledDataBarChildren = cf.RuleType == CfRuleType.DataBar
             ? XlsxAdvancedConditionalFormatMetadata.ModeledDataBarPayloadChildren(cf)
@@ -305,6 +290,23 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
 
     private static bool IsValidIconOverride(CfIconOverride icon) =>
         !string.IsNullOrWhiteSpace(icon.IconSet) && icon.IconId >= 0;
+
+    private static void AddNativeAttributes(
+        XElement element,
+        IReadOnlyDictionary<string, string>? attributes,
+        IReadOnlyCollection<string>? excludedAttributeNames = null)
+    {
+        if (attributes is null)
+            return;
+
+        foreach (var (name, value) in attributes)
+        {
+            if (excludedAttributeNames?.Contains(name) == true)
+                continue;
+
+            TrySetNativeAttributeIfMissing(element, name, value);
+        }
+    }
 
     private static bool TrySetNativeAttributeIfMissing(XElement element, string name, string value)
     {
