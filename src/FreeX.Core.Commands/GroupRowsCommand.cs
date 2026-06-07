@@ -15,8 +15,7 @@ public sealed class GroupRowsCommand : IWorkbookCommand
 
     public GroupRowsCommand(SheetId sheetId, uint startRow, uint endRow, int level)
     {
-        if (level is < 0 or > 8)
-            throw new ArgumentOutOfRangeException(nameof(level), "Outline level must be 0–8.");
+        OutlineGroupingService.ValidateOutlineLevel(level);
         _sheetId  = sheetId;
         _startRow = startRow;
         _endRow   = endRow;
