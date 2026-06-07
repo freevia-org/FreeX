@@ -3073,13 +3073,8 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         return bytes.ToArray();
     }
 
-    private static XDocument LoadPackageXml(ZipArchive archive, string path)
-    {
-        var entry = archive.GetEntry(path);
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        return XDocument.Load(entryStream);
-    }
+    private static XDocument LoadPackageXml(ZipArchive archive, string path) =>
+        XlsxPackageTestFixtures.LoadPackageXml(archive, path);
 
     private static void ReplacePackageXml(ZipArchive archive, string path, XDocument document)
     {

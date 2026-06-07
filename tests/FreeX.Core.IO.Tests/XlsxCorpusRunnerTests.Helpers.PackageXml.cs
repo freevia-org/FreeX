@@ -1210,11 +1210,8 @@ public partial class XlsxCorpusRunnerTests
             .ToArray() ?? [];
     }
 
-    private static XDocument LoadPackageXml(ZipArchiveEntry entry)
-    {
-        using var stream = entry.Open();
-        return XDocument.Load(stream);
-    }
+    private static XDocument LoadPackageXml(ZipArchiveEntry entry) =>
+        XlsxPackageTestFixtures.LoadPackageXml(entry);
 
     private static void ReplacePackageXml(ZipArchive archive, string entryName, XDocument document)
     {
