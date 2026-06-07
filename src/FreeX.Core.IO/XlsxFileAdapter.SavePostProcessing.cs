@@ -335,6 +335,8 @@ public sealed partial class XlsxFileAdapter
         {
             packageStream.Position = 0;
             XlsxWorkbookSchemaNormalizer.Normalize(packageStream);
+            packageStream.Position = 0;
+            XlsxDrawingSchemaNormalizer.NormalizePackage(packageStream);
         }
     }
 
