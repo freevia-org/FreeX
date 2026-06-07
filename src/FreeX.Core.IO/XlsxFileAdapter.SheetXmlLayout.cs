@@ -97,6 +97,7 @@ public sealed partial class XlsxFileAdapter
         bool HasClosedXmlUnsupportedConditionalFormatting,
         bool HasUnsupportedConditionalFormatting,
         bool HasWorksheetDynamicFilters,
+        bool HasWorksheetRelationshipMarkerSchemaIssues,
         IReadOnlyList<string> TableRelationshipIds,
         string? CodeName);
 
@@ -322,6 +323,9 @@ public sealed partial class XlsxFileAdapter
             XlsxConditionalFormatRuleSupport.HasUnsupportedRule(worksheetXml, worksheetNs, allowBlankType: false);
         var hasUnsupportedConditionalFormatting =
             XlsxConditionalFormatRuleSupport.HasUnsupportedRule(worksheetXml, worksheetNs, allowBlankType: true);
+        var hasWorksheetRelationshipMarkerSchemaIssues =
+            worksheetXml.Root is { } worksheetRoot &&
+            XlsxWorksheetRelationshipMarkerNormalizer.NormalizeWorksheetRoot(new XElement(worksheetRoot));
         var tableRelationshipIds = ReadTableRelationshipIds(worksheetXml, worksheetNs, relNs);
 
         return new SheetXmlLayout(
@@ -411,6 +415,7 @@ public sealed partial class XlsxFileAdapter
             hasClosedXmlUnsupportedConditionalFormatting,
             hasUnsupportedConditionalFormatting,
             hasWorksheetDynamicFilters,
+            hasWorksheetRelationshipMarkerSchemaIssues,
             tableRelationshipIds,
             codeName);
     }

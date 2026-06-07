@@ -25,6 +25,7 @@ internal readonly record struct XlsxClosedXmlLoadSanitizationHints(
     bool? HasWorkbookFileSharingSchemaIssues,
     bool? HasWorkbookFileRecoveryPropertySchemaIssues,
     bool? HasWorkbookProtectionSchemaIssues,
+    bool? HasWorksheetRelationshipMarkerSchemaIssues,
     IReadOnlySet<string>? MergeCellWorksheetPathsToStrip);
 
 internal static class XlsxClosedXmlLoadPackageSanitizer
@@ -114,6 +115,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 NormalizeWorkbookFileRecoveryProperties(archive);
             if (requirements.HasWorkbookProtectionSchemaIssues)
                 NormalizeWorkbookProtection(archive);
+            if (requirements.HasWorksheetRelationshipMarkerSchemaIssues)
+                NormalizeWorksheetRelationshipMarkers(archive);
             if (requirements.MergeCellWorksheetPathsToStrip is { Count: > 0 } mergeCellWorksheetPaths)
                 RemoveWorksheetMergeCells(archive, mergeCellWorksheetPaths);
             if (requirements.HasDocumentPropertiesPackageGraphIssues)
@@ -235,11 +238,12 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 ResolveKnownOrScan(knownHints.HasWorkbookFileSharingSchemaIssues, archive, HasWorkbookFileSharingSchemaIssues),
                 ResolveKnownOrScan(knownHints.HasWorkbookFileRecoveryPropertySchemaIssues, archive, HasWorkbookFileRecoveryPropertySchemaIssues),
                 ResolveKnownOrScan(knownHints.HasWorkbookProtectionSchemaIssues, archive, HasWorkbookProtectionSchemaIssues),
+                ResolveKnownOrScan(knownHints.HasWorksheetRelationshipMarkerSchemaIssues, archive, HasWorksheetRelationshipMarkerSchemaIssues),
                 knownHints.MergeCellWorksheetPathsToStrip);
         }
         catch
         {
-            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, null);
+            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, null);
         }
         finally
         {
@@ -272,7 +276,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             hints.HasWorkbookCalculationPropertySchemaIssues is not { } hasWorkbookCalculationPropertySchemaIssues ||
             hints.HasWorkbookFileSharingSchemaIssues is not { } hasWorkbookFileSharingSchemaIssues ||
             hints.HasWorkbookFileRecoveryPropertySchemaIssues is not { } hasWorkbookFileRecoveryPropertySchemaIssues ||
-            hints.HasWorkbookProtectionSchemaIssues is not { } hasWorkbookProtectionSchemaIssues)
+            hints.HasWorkbookProtectionSchemaIssues is not { } hasWorkbookProtectionSchemaIssues ||
+            hints.HasWorksheetRelationshipMarkerSchemaIssues is not { } hasWorksheetRelationshipMarkerSchemaIssues)
         {
             return false;
         }
@@ -310,6 +315,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             hasWorkbookFileSharingSchemaIssues,
             hasWorkbookFileRecoveryPropertySchemaIssues,
             hasWorkbookProtectionSchemaIssues,
+            hasWorksheetRelationshipMarkerSchemaIssues,
             hints.MergeCellWorksheetPathsToStrip);
         return true;
     }
@@ -434,6 +440,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         bool HasWorkbookFileSharingSchemaIssues,
         bool HasWorkbookFileRecoveryPropertySchemaIssues,
         bool HasWorkbookProtectionSchemaIssues,
+        bool HasWorksheetRelationshipMarkerSchemaIssues,
         IReadOnlySet<string>? MergeCellWorksheetPathsToStrip)
     {
         public bool RequiresAny =>
@@ -457,6 +464,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             HasWorkbookFileSharingSchemaIssues ||
             HasWorkbookFileRecoveryPropertySchemaIssues ||
             HasWorkbookProtectionSchemaIssues ||
+            HasWorksheetRelationshipMarkerSchemaIssues ||
             MergeCellWorksheetPathsToStrip is { Count: > 0 };
     }
 
@@ -637,6 +645,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         requirements.HasWorksheetPageBreakSchemaIssues ||
         requirements.HasWorksheetAutoFilterSchemaIssues ||
         requirements.HasWorksheetSheetViewSchemaIssues ||
+        requirements.HasWorksheetRelationshipMarkerSchemaIssues ||
         ShouldStripMergeCells(requirements, normalizedPath);
 
     private static bool ShouldTransformRelationshipEntry(
@@ -831,6 +840,11 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             root.Element(worksheetNs + "sheetViews") is { } sheetViews)
         {
             changed |= XlsxWorksheetSheetViewNormalizer.NormalizeSheetViewsElement(sheetViews);
+        }
+
+        if (requirements.HasWorksheetRelationshipMarkerSchemaIssues)
+        {
+            changed |= XlsxWorksheetRelationshipMarkerNormalizer.NormalizeWorksheetRoot(root);
         }
 
         if (ShouldStripMergeCells(requirements, normalizedPath))
@@ -1821,6 +1835,34 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
 
     private static void NormalizeWorksheetGridXml(ZipArchive archive) =>
         XlsxWorksheetGridXmlNormalizer.NormalizeWorksheets(archive);
+
+    private static bool HasWorksheetRelationshipMarkerSchemaIssues(ZipArchive archive)
+    {
+        foreach (var worksheetEntry in archive.Entries
+                     .Where(XlsxConditionalFormatRuleSupport.IsWorksheetEntry)
+                     .ToList())
+        {
+            try
+            {
+                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+                var root = worksheetXml.Root;
+                if (root is not null &&
+                    XlsxWorksheetRelationshipMarkerNormalizer.NormalizeWorksheetRoot(root))
+                {
+                    return true;
+                }
+            }
+            catch
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static void NormalizeWorksheetRelationshipMarkers(ZipArchive archive) =>
+        XlsxWorksheetRelationshipMarkerNormalizer.NormalizeWorksheets(archive);
 
     private static void RemoveWorksheetDynamicFilters(ZipArchive archive)
     {

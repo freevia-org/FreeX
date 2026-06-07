@@ -173,6 +173,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookFileSharingSchemaIssues: false,
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
             HasWorkbookProtectionSchemaIssues: false,
+            HasWorksheetRelationshipMarkerSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
         var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
@@ -246,6 +247,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookFileSharingSchemaIssues: false,
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
             HasWorkbookProtectionSchemaIssues: false,
+            HasWorksheetRelationshipMarkerSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
         var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
@@ -291,6 +293,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookFileSharingSchemaIssues: false,
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
             HasWorkbookProtectionSchemaIssues: false,
+            HasWorksheetRelationshipMarkerSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
         using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
@@ -332,6 +335,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookFileSharingSchemaIssues: false,
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
             HasWorkbookProtectionSchemaIssues: false,
+            HasWorksheetRelationshipMarkerSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
         using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
@@ -402,6 +406,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookFileSharingSchemaIssues: false,
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
             HasWorkbookProtectionSchemaIssues: false,
+            HasWorksheetRelationshipMarkerSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
         var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
@@ -442,6 +447,42 @@ public sealed class XlsxLoadPackageStreamTests
         relationships[0].Attribute("Type")!.Value.Should().Be(
             "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties");
         relationships[0].Attribute("Target")!.Value.Should().Be("docProps/core.xml");
+    }
+
+    [Fact]
+    public void ClosedXmlLoadSanitizer_NormalizesWorksheetRelationshipMarkers()
+    {
+        using var package = CreatePackageWithWorksheet(
+            """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <sheetData>
+                <row r="1"><c r="A1"><v>1</v></c></row>
+              </sheetData>
+              <picture r:id="rIdPicture1" customPictureFlag="removed">
+                <nativePictureChild/>
+              </picture>
+              <picture r:id="rIdPicture1" customDuplicatePictureFlag="removed"/>
+            </worksheet>
+            """,
+            includeLargePayload: false);
+
+        using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(package);
+
+        sanitized.Should().NotBeSameAs(package);
+        using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var worksheetXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        var picture = worksheetXml.Root!
+            .Elements(worksheetNs + "picture")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        picture.Attribute(relNs + "id")!.Value.Should().Be("rIdPicture1");
+        picture.Attribute("customPictureFlag").Should().BeNull();
+        picture.Attribute("customDuplicatePictureFlag").Should().BeNull();
+        picture.Elements().Should().BeEmpty();
     }
 
     [Fact]
@@ -488,6 +529,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookFileSharingSchemaIssues: false,
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
             HasWorkbookProtectionSchemaIssues: false,
+            HasWorksheetRelationshipMarkerSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 "xl/worksheets/sheet1.xml"
