@@ -55,6 +55,10 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_rotate_text_down_menu_item=");
         script.Should().Contain("native_show_gridlines_menu_item=true");
         script.Should().Contain("native_show_headings_menu_item=true");
+        script.Should().Contain("native_zoom_in_menu_item=true");
+        script.Should().Contain("native_zoom_out_menu_item=true");
+        script.Should().Contain("native_zoom_100_menu_item=true");
+        script.Should().Contain("native_zoom_to_selection_menu_item=true");
         script.Should().Contain("native_freeze_panes_menu_item=true");
         script.Should().Contain("native_freeze_top_row_menu_item=true");
         script.Should().Contain("native_freeze_first_column_menu_item=true");
@@ -99,6 +103,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("private void RecordRecentWorkbook(string path)");
         script.Should().Contain("_closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();");
         script.Should().Contain("_sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true)");
+        script.Should().Contain("RefreshViewportSizeForZoom();");
         script.Should().Contain("private async void MainWindow_Closing(object? sender, WindowClosingEventArgs e)");
         script.Should().Contain("private async Task<bool> ConfirmDirtyWorkbookCloseAsync(string title, string discardButtonText)");
         script.Should().Contain("AutomationProperties.SetAutomationId(saveButton, `\"DirtyWorkbookSaveButton`\");");
@@ -117,6 +122,15 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("viewMenu.Items.Add(_showGridlinesMenuItem);");
         script.Should().Contain("var result = _session.SetShowGridlines(showGridlines);");
         script.Should().Contain("var result = _session.SetShowHeadings(showHeadings);");
+        script.Should().Contain("_zoomInMenuItem.Header = `\"Zoom In`\";");
+        script.Should().Contain("_zoomOutMenuItem.Header = `\"Zoom Out`\";");
+        script.Should().Contain("_zoom100MenuItem.Header = `\"100%`\";");
+        script.Should().Contain("_zoomToSelectionMenuItem.Header = `\"Zoom to Selection`\";");
+        script.Should().Contain("viewMenu.Items.Add(_zoomInMenuItem);");
+        script.Should().Contain("var result = _session.SetZoomPercent(zoomPercent);");
+        script.Should().Contain("_zoomText.Text = FormatZoomPercent(_session.ZoomPercent);");
+        script.Should().Contain("CalculateDisplayedGridWidth(viewport, showHeadings, zoomFactor)");
+        script.Should().Contain("displayHeight / zoomFactor");
         script.Should().Contain("showGridlines ? GridLine : Brushes.Transparent");
         script.Should().Contain("_freezePanesMenuItem.Header = `\"Freeze Panes`\";");
         script.Should().Contain("_freezePanesMenuItem.Click += (_, _) => FreezePanesAtActiveCell();");
@@ -131,6 +145,9 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("public WorkbookCellEditResult SetShowGridlines(bool showGridlines)");
         script.Should().Contain("public WorkbookCellEditResult SetShowHeadings(bool showHeadings)");
         script.Should().Contain("new SetWorksheetViewOptionsCommand(ActiveSheet.Id, showGridlines, showHeadings, showRulers)");
+        script.Should().Contain("public int ZoomPercent => ActiveSheet.ZoomPercent;");
+        script.Should().Contain("public WorkbookCellEditResult SetZoomPercent(int zoomPercent)");
+        script.Should().Contain("new SetWorksheetZoomCommand(ActiveSheet.Id, zoomPercent)");
         script.Should().Contain("public WorkbookCellEditResult AddSheet()");
         script.Should().Contain("public WorkbookCellEditResult RenameActiveSheet(string? name)");
         script.Should().Contain("new RenameSheetCommand(ActiveSheet.Id, newName)");
@@ -464,6 +481,10 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_rotate_text_down_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_show_gridlines_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_show_headings_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_zoom_in_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_zoom_out_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_zoom_100_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_zoom_to_selection_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_freeze_panes_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_freeze_top_row_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_freeze_first_column_menu_item=true" "$artifact_root/launch.txt"
@@ -633,6 +654,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     fileMenu.Items.Add(_newWorkbookMenuItem);
                     fileMenu.Items.Add(_closeWorkbookMenuItem);
                     _sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true);
+                    RefreshViewportSizeForZoom();
                     Closing += MainWindow_Closing;
                     ConfirmDirtyWorkbookCloseAsync("Close Workbook", "Discard and Close").ToString();
                     ResetToNewWorkbook("Closed workbook.");
@@ -659,8 +681,20 @@ public sealed class MacOsAppReadinessPreflightTests
                     _showHeadingsMenuItem.Header = "Headings";
                     _showHeadingsMenuItem.ToggleType = MenuItemToggleType.CheckBox;
                     _showHeadingsMenuItem.Click += (_, _) => ToggleShowHeadings();
+                    _zoomInMenuItem.Header = "Zoom In";
+                    _zoomOutMenuItem.Header = "Zoom Out";
+                    _zoom100MenuItem.Header = "100%";
+                    _zoomToSelectionMenuItem.Header = "Zoom to Selection";
+                    _zoomInMenuItem.Click += (_, _) => ZoomIn();
+                    _zoomOutMenuItem.Click += (_, _) => ZoomOut();
+                    _zoom100MenuItem.Click += (_, _) => ZoomTo100Percent();
+                    _zoomToSelectionMenuItem.Click += (_, _) => ZoomToSelection();
                     viewMenu.Items.Add(_showGridlinesMenuItem);
                     viewMenu.Items.Add(_showHeadingsMenuItem);
+                    viewMenu.Items.Add(_zoomInMenuItem);
+                    viewMenu.Items.Add(_zoomOutMenuItem);
+                    viewMenu.Items.Add(_zoom100MenuItem);
+                    viewMenu.Items.Add(_zoomToSelectionMenuItem);
                     _freezePanesMenuItem.Header = "Freeze Panes";
                     _freezePanesMenuItem.Click += (_, _) => FreezePanesAtActiveCell();
                     _freezeTopRowMenuItem.Header = "Freeze Top Row";
@@ -692,10 +726,24 @@ public sealed class MacOsAppReadinessPreflightTests
                     var result = _session.SetShowGridlines(showGridlines);
                     ToggleShowHeadings();
                     var result = _session.SetShowHeadings(showHeadings);
+                    ZoomIn();
+                    ApplyZoomPercent(_session.ZoomPercent + ZoomStepPercent, "Zoom In failed.");
+                    ZoomOut();
+                    ApplyZoomPercent(_session.ZoomPercent - ZoomStepPercent, "Zoom Out failed.");
+                    ZoomTo100Percent();
+                    ApplyZoomPercent(100, "100% Zoom failed.");
+                    ZoomToSelection();
+                    ApplyZoomPercent(zoomPercent, "Zoom to Selection failed.");
+                    var result = _session.SetZoomPercent(zoomPercent);
+                    CalculateZoomAxisFitPercent(viewportWidth, range.ColCount, ZoomToSelectionDefaultColumnWidth);
+                    _zoomText.Text = FormatZoomPercent(_session.ZoomPercent);
                     var showHeadings = _session.ActiveSheet.ShowHeadings;
+                    var zoomFactor = GetActiveZoomFactor();
                     showGridlines ? GridLine : Brushes.Transparent;
-                    CalculateDisplayedGridWidth(viewport, showHeadings);
-                    CalculateDisplayedGridHeight(viewport, showHeadings);
+                    CalculateDisplayedGridWidth(viewport, showHeadings, zoomFactor);
+                    CalculateDisplayedGridHeight(viewport, showHeadings, zoomFactor);
+                    fontSize * zoomFactor;
+                    displayHeight / zoomFactor;
                     FreezePanesAtActiveCell();
                     FreezeTopRow();
                     FreezeFirstColumn();
@@ -740,6 +788,13 @@ public sealed class MacOsAppReadinessPreflightTests
                 private async Task<WorkbookHiddenSheet?> ShowUnhideSheetDialogAsync(IReadOnlyList<WorkbookHiddenSheet> hiddenSheets) => await Task.FromResult<WorkbookHiddenSheet?>(null);
                 private void ToggleShowGridlines() { }
                 private void ToggleShowHeadings() { }
+                private void ZoomIn() => ApplyZoomPercent(_session.ZoomPercent + ZoomStepPercent, "Zoom In failed.");
+                private void ZoomOut() => ApplyZoomPercent(_session.ZoomPercent - ZoomStepPercent, "Zoom Out failed.");
+                private void ZoomTo100Percent() => ApplyZoomPercent(100, "100% Zoom failed.");
+                private void ZoomToSelection() { }
+                private void ApplyZoomPercent(int zoomPercent, string errorMessage) { }
+                private int CalculateZoomToSelectionPercent() => 100;
+                private double GetActiveZoomFactor() => 1;
                 private void FreezePanesAtActiveCell() { }
                 private void FreezeTopRow() { }
                 private void FreezeFirstColumn() { }
@@ -787,6 +842,10 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativeDeleteSheetMenuItem &&
                     HasNativeShowGridlinesMenuItem &&
                     HasNativeShowHeadingsMenuItem &&
+                    HasNativeZoomInMenuItem &&
+                    HasNativeZoomOutMenuItem &&
+                    HasNativeZoom100MenuItem &&
+                    HasNativeZoomToSelectionMenuItem &&
                     HasNativeFreezePanesMenuItem &&
                     HasNativeFreezeTopRowMenuItem &&
                     HasNativeFreezeFirstColumnMenuItem &&
@@ -827,6 +886,10 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativeDeleteSheetMenuItem { get; }
                 private bool HasNativeShowGridlinesMenuItem { get; }
                 private bool HasNativeShowHeadingsMenuItem { get; }
+                private bool HasNativeZoomInMenuItem { get; }
+                private bool HasNativeZoomOutMenuItem { get; }
+                private bool HasNativeZoom100MenuItem { get; }
+                private bool HasNativeZoomToSelectionMenuItem { get; }
                 private bool HasNativeFreezePanesMenuItem { get; }
                 private bool HasNativeFreezeTopRowMenuItem { get; }
                 private bool HasNativeFreezeFirstColumnMenuItem { get; }
@@ -849,7 +912,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativePasteSpecialPictureMenuItem { get; }
                 private bool HasNativePasteSpecialLinkedPictureMenuItem { get; }
                 public int NativeCellStylesPresetCount { get; }
-                public string Report => "native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+                public string Report => "native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
             }
             """);
 
@@ -934,6 +997,9 @@ public sealed class MacOsAppReadinessPreflightTests
                 public WorkbookCellEditResult SetShowGridlines(bool showGridlines)
                 public WorkbookCellEditResult SetShowHeadings(bool showHeadings)
                 new SetWorksheetViewOptionsCommand(ActiveSheet.Id, showGridlines, showHeadings, showRulers)
+                public int ZoomPercent => ActiveSheet.ZoomPercent;
+                public WorkbookCellEditResult SetZoomPercent(int zoomPercent)
+                new SetWorksheetZoomCommand(ActiveSheet.Id, zoomPercent)
                 public WorkbookCellEditResult FreezePanesAtActiveCell()
                 public WorkbookCellEditResult FreezeTopRow()
                 public WorkbookCellEditResult FreezeFirstColumn()

@@ -90,6 +90,8 @@ public sealed class WorkbookSession
 
     public bool IsShowingFormulas => ActiveSheet.ShowFormulas;
 
+    public int ZoomPercent => ActiveSheet.ZoomPercent;
+
     public IReadOnlyList<WorkbookHiddenSheet> HiddenSheets =>
         Workbook.Sheets
             .Where(sheet => sheet.IsHidden && !sheet.IsVeryHidden)
@@ -367,6 +369,31 @@ public sealed class WorkbookSession
             ActiveSheet.ShowGridlines,
             showHeadings,
             ActiveSheet.ShowRulers);
+    }
+
+    public WorkbookCellEditResult SetZoomPercent(int zoomPercent)
+    {
+        zoomPercent = Math.Clamp(
+            zoomPercent,
+            SetWorksheetZoomCommand.MinZoomPercent,
+            SetWorksheetZoomCommand.MaxZoomPercent);
+        if (ActiveSheet.ZoomPercent == zoomPercent)
+        {
+            return new WorkbookCellEditResult(
+                true,
+                null,
+                [],
+                RecalcReport: null);
+        }
+
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new SetWorksheetZoomCommand(ActiveSheet.Id, zoomPercent));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
+        return result;
     }
 
     public WorkbookCellEditResult FreezePanesAtActiveCell()

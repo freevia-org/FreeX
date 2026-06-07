@@ -142,6 +142,10 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeWrapTextMenuItem,
     bool HasNativeShowGridlinesMenuItem,
     bool HasNativeShowHeadingsMenuItem,
+    bool HasNativeZoomInMenuItem,
+    bool HasNativeZoomOutMenuItem,
+    bool HasNativeZoom100MenuItem,
+    bool HasNativeZoomToSelectionMenuItem,
     bool HasNativeFreezePanesMenuItem,
     bool HasNativeFreezeTopRowMenuItem,
     bool HasNativeFreezeFirstColumnMenuItem,
@@ -241,6 +245,10 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeWrapTextMenuItem &&
         HasNativeShowGridlinesMenuItem &&
         HasNativeShowHeadingsMenuItem &&
+        HasNativeZoomInMenuItem &&
+        HasNativeZoomOutMenuItem &&
+        HasNativeZoom100MenuItem &&
+        HasNativeZoomToSelectionMenuItem &&
         HasNativeFreezePanesMenuItem &&
         HasNativeFreezeTopRowMenuItem &&
         HasNativeFreezeFirstColumnMenuItem &&
@@ -388,6 +396,10 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_wrap_text_menu_item={FormatBool(snapshot.HasNativeWrapTextMenuItem)}",
                 $"native_show_gridlines_menu_item={FormatBool(snapshot.HasNativeShowGridlinesMenuItem)}",
                 $"native_show_headings_menu_item={FormatBool(snapshot.HasNativeShowHeadingsMenuItem)}",
+                $"native_zoom_in_menu_item={FormatBool(snapshot.HasNativeZoomInMenuItem)}",
+                $"native_zoom_out_menu_item={FormatBool(snapshot.HasNativeZoomOutMenuItem)}",
+                $"native_zoom_100_menu_item={FormatBool(snapshot.HasNativeZoom100MenuItem)}",
+                $"native_zoom_to_selection_menu_item={FormatBool(snapshot.HasNativeZoomToSelectionMenuItem)}",
                 $"native_freeze_panes_menu_item={FormatBool(snapshot.HasNativeFreezePanesMenuItem)}",
                 $"native_freeze_top_row_menu_item={FormatBool(snapshot.HasNativeFreezeTopRowMenuItem)}",
                 $"native_freeze_first_column_menu_item={FormatBool(snapshot.HasNativeFreezeFirstColumnMenuItem)}",

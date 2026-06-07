@@ -59,6 +59,9 @@ public sealed class MainWindow : Window
     private const double InitialViewportWidth = 1440;
     private const double MinimumDisplayedColumnWidth = 54;
     private const double MinimumDisplayedRowHeight = 22;
+    private const double ZoomToSelectionDefaultColumnWidth = 80;
+    private const double ZoomToSelectionDefaultRowHeight = 20;
+    private const int ZoomStepPercent = 10;
     private const string NativeWorkbookExtension = ".fxl";
     private const string PlatformAboutSummary = "Built with .NET 10, Avalonia, ClosedXML.";
     private static readonly IBrush WindowBackground = Brush(246, 247, 249);
@@ -86,6 +89,7 @@ public sealed class MainWindow : Window
     private readonly TextBlock _detailText = new();
     private readonly TextBlock _statusText = new();
     private readonly TextBlock _selectionStatsText = new();
+    private readonly TextBlock _zoomText = new();
     private readonly TextBlock _cellAddressText = new();
     private readonly TextBox _formulaBox = new();
     private readonly Button _openButton = new();
@@ -179,6 +183,10 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _increaseIndentMenuItem = new();
     private readonly NativeMenuItem _showGridlinesMenuItem = new();
     private readonly NativeMenuItem _showHeadingsMenuItem = new();
+    private readonly NativeMenuItem _zoomInMenuItem = new();
+    private readonly NativeMenuItem _zoomOutMenuItem = new();
+    private readonly NativeMenuItem _zoom100MenuItem = new();
+    private readonly NativeMenuItem _zoomToSelectionMenuItem = new();
     private readonly NativeMenuItem _freezePanesMenuItem = new();
     private readonly NativeMenuItem _freezeTopRowMenuItem = new();
     private readonly NativeMenuItem _freezeFirstColumnMenuItem = new();
@@ -521,6 +529,21 @@ public sealed class MainWindow : Window
         _showHeadingsMenuItem.ToggleType = MenuItemToggleType.CheckBox;
         _showHeadingsMenuItem.Click += (_, _) => ToggleShowHeadings();
 
+        _zoomInMenuItem.Header = "Zoom In";
+        _zoomInMenuItem.Gesture = new KeyGesture(Key.OemPlus, KeyModifiers.Meta);
+        _zoomInMenuItem.Click += (_, _) => ZoomIn();
+
+        _zoomOutMenuItem.Header = "Zoom Out";
+        _zoomOutMenuItem.Gesture = new KeyGesture(Key.OemMinus, KeyModifiers.Meta);
+        _zoomOutMenuItem.Click += (_, _) => ZoomOut();
+
+        _zoom100MenuItem.Header = "100%";
+        _zoom100MenuItem.Gesture = new KeyGesture(Key.D0, KeyModifiers.Meta);
+        _zoom100MenuItem.Click += (_, _) => ZoomTo100Percent();
+
+        _zoomToSelectionMenuItem.Header = "Zoom to Selection";
+        _zoomToSelectionMenuItem.Click += (_, _) => ZoomToSelection();
+
         _freezePanesMenuItem.Header = "Freeze Panes";
         _freezePanesMenuItem.Click += (_, _) => FreezePanesAtActiveCell();
 
@@ -621,6 +644,11 @@ public sealed class MainWindow : Window
         viewMenu.Items.Add(_showGridlinesMenuItem);
         viewMenu.Items.Add(_showHeadingsMenuItem);
         viewMenu.Items.Add(new NativeMenuItemSeparator());
+        viewMenu.Items.Add(_zoomInMenuItem);
+        viewMenu.Items.Add(_zoomOutMenuItem);
+        viewMenu.Items.Add(_zoom100MenuItem);
+        viewMenu.Items.Add(_zoomToSelectionMenuItem);
+        viewMenu.Items.Add(new NativeMenuItemSeparator());
         viewMenu.Items.Add(_freezePanesMenuItem);
         viewMenu.Items.Add(_freezeTopRowMenuItem);
         viewMenu.Items.Add(_freezeFirstColumnMenuItem);
@@ -716,6 +744,13 @@ public sealed class MainWindow : Window
         _selectionStatsText.MaxWidth = 420;
         _selectionStatsText.TextTrimming = TextTrimming.CharacterEllipsis;
         _selectionStatsText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+
+        _zoomText.FontSize = 12;
+        _zoomText.FontWeight = FontWeight.SemiBold;
+        _zoomText.Foreground = Brush(73, 80, 93);
+        _zoomText.MinWidth = 44;
+        _zoomText.TextAlignment = TextAlignment.Right;
+        _zoomText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
 
         _openButton.Content = "Open";
         _openButton.Padding = new Thickness(10, 4);
@@ -992,6 +1027,7 @@ public sealed class MainWindow : Window
                     _formulaBox,
                     _statusText,
                     _selectionStatsText,
+                    _zoomText,
                 },
             },
         };
@@ -1034,6 +1070,7 @@ public sealed class MainWindow : Window
 
         _statusText.Text = status;
         _selectionStatsText.Text = _session.SelectionStatsText;
+        _zoomText.Text = FormatZoomPercent(_session.ZoomPercent);
         _statusText.Foreground = ShouldUseWarningStatusColor(status)
             ? Brush(143, 74, 18)
             : Brush(67, 113, 83);
@@ -1171,6 +1208,10 @@ public sealed class MainWindow : Window
         _showGridlinesMenuItem.IsChecked = _session.IsShowingGridlines;
         _showHeadingsMenuItem.IsEnabled = isIdle;
         _showHeadingsMenuItem.IsChecked = _session.IsShowingHeadings;
+        _zoomInMenuItem.IsEnabled = isIdle && _session.ZoomPercent < SetWorksheetZoomCommand.MaxZoomPercent;
+        _zoomOutMenuItem.IsEnabled = isIdle && _session.ZoomPercent > SetWorksheetZoomCommand.MinZoomPercent;
+        _zoom100MenuItem.IsEnabled = isIdle;
+        _zoomToSelectionMenuItem.IsEnabled = isIdle;
         _freezePanesMenuItem.IsEnabled = isIdle;
         _freezeTopRowMenuItem.IsEnabled = isIdle;
         _freezeFirstColumnMenuItem.IsEnabled = isIdle;
@@ -1230,6 +1271,7 @@ public sealed class MainWindow : Window
     {
         var viewport = _session.Viewport;
         var showHeadings = _session.ActiveSheet.ShowHeadings;
+        var zoomFactor = GetActiveZoomFactor();
         var headerOffset = showHeadings ? 1 : 0;
         var cellsByAddress = viewport.Cells.ToDictionary(cell => (cell.Row, cell.Col));
         var grid = new AvaloniaGrid
@@ -1238,23 +1280,23 @@ public sealed class MainWindow : Window
         };
 
         if (showHeadings)
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(HeaderColumnWidth) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(HeaderColumnWidth * zoomFactor) });
         foreach (var metric in viewport.ColMetrics)
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(GetDisplayedColumnWidth(metric)) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(GetDisplayedColumnWidth(metric, zoomFactor)) });
 
         if (showHeadings)
-            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(HeaderRowHeight) });
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(HeaderRowHeight * zoomFactor) });
         foreach (var metric in viewport.RowMetrics)
-            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(GetDisplayedRowHeight(metric)) });
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(GetDisplayedRowHeight(metric, zoomFactor)) });
 
         if (showHeadings)
         {
-            AddGridChild(grid, CreateHeaderCell(""), 0, 0);
+            AddGridChild(grid, CreateHeaderCell("", zoomFactor: zoomFactor), 0, 0);
             for (var colIndex = 0; colIndex < viewport.ColMetrics.Count; colIndex++)
             {
                 var col = viewport.ColMetrics[colIndex].Col;
                 var selected = IsSelectedColumn(col);
-                AddGridChild(grid, CreateHeaderCell(CellAddress.NumberToColumnName(col), selected), 0, colIndex + headerOffset);
+                AddGridChild(grid, CreateHeaderCell(CellAddress.NumberToColumnName(col), selected, zoomFactor), 0, colIndex + headerOffset);
             }
         }
 
@@ -1264,14 +1306,14 @@ public sealed class MainWindow : Window
             if (showHeadings)
             {
                 var selectedRow = IsSelectedRow(row);
-                AddGridChild(grid, CreateHeaderCell(row.ToString(), selectedRow), rowIndex + headerOffset, 0);
+                AddGridChild(grid, CreateHeaderCell(row.ToString(), selectedRow, zoomFactor), rowIndex + headerOffset, 0);
             }
 
             for (var colIndex = 0; colIndex < viewport.ColMetrics.Count; colIndex++)
             {
                 var col = viewport.ColMetrics[colIndex].Col;
                 cellsByAddress.TryGetValue((row, col), out var cell);
-                AddGridChild(grid, CreateCell(cell, row, col), rowIndex + headerOffset, colIndex + headerOffset);
+                AddGridChild(grid, CreateCell(cell, row, col, zoomFactor), rowIndex + headerOffset, colIndex + headerOffset);
             }
         }
 
@@ -1293,10 +1335,11 @@ public sealed class MainWindow : Window
     private Canvas BuildDrawingObjectOverlay(ViewportModel viewport)
     {
         var showHeadings = _session.ActiveSheet.ShowHeadings;
+        var zoomFactor = GetActiveZoomFactor();
         var overlay = new Canvas
         {
-            Width = CalculateDisplayedGridWidth(viewport, showHeadings),
-            Height = CalculateDisplayedGridHeight(viewport, showHeadings),
+            Width = CalculateDisplayedGridWidth(viewport, showHeadings, zoomFactor),
+            Height = CalculateDisplayedGridHeight(viewport, showHeadings, zoomFactor),
             ClipToBounds = true,
             IsHitTestVisible = true,
         };
@@ -1310,6 +1353,7 @@ public sealed class MainWindow : Window
                     viewport,
                     drawingObject,
                     showHeadings,
+                    zoomFactor,
                     out var left,
                     out var top,
                     out var width,
@@ -1580,6 +1624,7 @@ public sealed class MainWindow : Window
         ViewportModel viewport,
         DrawingObjectBounds drawingObject,
         bool showHeadings,
+        double zoomFactor,
         out double left,
         out double top,
         out double width,
@@ -1589,22 +1634,23 @@ public sealed class MainWindow : Window
         top = 0;
         width = 0;
         height = 0;
-        if (!TryGetDisplayedColumnLeft(viewport.ColMetrics, drawingObject.AnchorCol, out var columnLeft) ||
-            !TryGetDisplayedRowTop(viewport.RowMetrics, drawingObject.AnchorRow, out var rowTop))
+        if (!TryGetDisplayedColumnLeft(viewport.ColMetrics, drawingObject.AnchorCol, zoomFactor, out var columnLeft) ||
+            !TryGetDisplayedRowTop(viewport.RowMetrics, drawingObject.AnchorRow, zoomFactor, out var rowTop))
         {
             return false;
         }
 
-        left = (showHeadings ? HeaderColumnWidth : 0) + columnLeft;
-        top = (showHeadings ? HeaderRowHeight : 0) + rowTop;
-        width = Math.Max(1, drawingObject.Width);
-        height = Math.Max(1, drawingObject.Height);
+        left = (showHeadings ? HeaderColumnWidth * zoomFactor : 0) + columnLeft;
+        top = (showHeadings ? HeaderRowHeight * zoomFactor : 0) + rowTop;
+        width = Math.Max(1, drawingObject.Width * zoomFactor);
+        height = Math.Max(1, drawingObject.Height * zoomFactor);
         return true;
     }
 
     private static bool TryGetDisplayedColumnLeft(
         IReadOnlyList<ColMetric> columns,
         uint column,
+        double zoomFactor,
         out double left)
     {
         left = 0;
@@ -1613,7 +1659,7 @@ public sealed class MainWindow : Window
             var metric = columns[i];
             if (metric.Col == column)
                 return true;
-            left += GetDisplayedColumnWidth(metric);
+            left += GetDisplayedColumnWidth(metric, zoomFactor);
         }
 
         left = 0;
@@ -1623,6 +1669,7 @@ public sealed class MainWindow : Window
     private static bool TryGetDisplayedRowTop(
         IReadOnlyList<RowMetric> rows,
         uint row,
+        double zoomFactor,
         out double top)
     {
         top = 0;
@@ -1631,36 +1678,36 @@ public sealed class MainWindow : Window
             var metric = rows[i];
             if (metric.Row == row)
                 return true;
-            top += GetDisplayedRowHeight(metric);
+            top += GetDisplayedRowHeight(metric, zoomFactor);
         }
 
         top = 0;
         return false;
     }
 
-    private static double CalculateDisplayedGridWidth(ViewportModel viewport, bool showHeadings)
+    private static double CalculateDisplayedGridWidth(ViewportModel viewport, bool showHeadings, double zoomFactor)
     {
-        var width = showHeadings ? HeaderColumnWidth : 0;
+        var width = showHeadings ? HeaderColumnWidth * zoomFactor : 0;
         foreach (var metric in viewport.ColMetrics)
-            width += GetDisplayedColumnWidth(metric);
+            width += GetDisplayedColumnWidth(metric, zoomFactor);
 
         return width;
     }
 
-    private static double CalculateDisplayedGridHeight(ViewportModel viewport, bool showHeadings)
+    private static double CalculateDisplayedGridHeight(ViewportModel viewport, bool showHeadings, double zoomFactor)
     {
-        var height = showHeadings ? HeaderRowHeight : 0;
+        var height = showHeadings ? HeaderRowHeight * zoomFactor : 0;
         foreach (var metric in viewport.RowMetrics)
-            height += GetDisplayedRowHeight(metric);
+            height += GetDisplayedRowHeight(metric, zoomFactor);
 
         return height;
     }
 
-    private static double GetDisplayedColumnWidth(ColMetric metric) =>
-        Math.Max(MinimumDisplayedColumnWidth, metric.Width);
+    private static double GetDisplayedColumnWidth(ColMetric metric, double zoomFactor) =>
+        Math.Max(MinimumDisplayedColumnWidth, metric.Width) * zoomFactor;
 
-    private static double GetDisplayedRowHeight(RowMetric metric) =>
-        Math.Max(MinimumDisplayedRowHeight, metric.Height);
+    private static double GetDisplayedRowHeight(RowMetric metric, double zoomFactor) =>
+        Math.Max(MinimumDisplayedRowHeight, metric.Height) * zoomFactor;
 
     private bool IsSelectedColumn(uint col) =>
         _session.SelectedRange.Start.Col <= col && col <= _session.SelectedRange.End.Col;
@@ -1668,7 +1715,7 @@ public sealed class MainWindow : Window
     private bool IsSelectedRow(uint row) =>
         _session.SelectedRange.Start.Row <= row && row <= _session.SelectedRange.End.Row;
 
-    private Border CreateHeaderCell(string text, bool selected = false) =>
+    private Border CreateHeaderCell(string text, bool selected = false, double zoomFactor = 1) =>
         CreateCellBorder(
             text,
             selected ? SelectionHeaderBackground : HeaderBackground,
@@ -1680,9 +1727,10 @@ public sealed class MainWindow : Window
             FontStyle.Normal,
             fontSize: 12,
             textDecorations: null,
-            selected: false);
+            selected: false,
+            zoomFactor: zoomFactor);
 
-    private Border CreateCell(DisplayCell cell, uint row, uint col)
+    private Border CreateCell(DisplayCell cell, uint row, uint col, double zoomFactor)
     {
         var hasCell = cell.Row != 0 && cell.Col != 0;
         var address = new CellAddress(_session.ActiveSheet.Id, row, col);
@@ -1701,7 +1749,8 @@ public sealed class MainWindow : Window
                 fontSize: 12,
                 textDecorations: null,
                 selected,
-                address);
+                address,
+                zoomFactor: zoomFactor);
 
         var style = cell.Style;
         var background = style?.ResolveFillColor(_session.Workbook.Theme) is { } fillColor
@@ -1737,7 +1786,8 @@ public sealed class MainWindow : Window
             address,
             indentPadding,
             textRotation,
-            style);
+            style,
+            zoomFactor);
     }
 
     private Border CreateInteractiveCellBorder(
@@ -1755,7 +1805,8 @@ public sealed class MainWindow : Window
         CellAddress address,
         double indentPadding = 0,
         int textRotation = 0,
-        CellStyle? style = null)
+        CellStyle? style = null,
+        double zoomFactor = 1)
     {
         var border = CreateCellBorder(
             text,
@@ -1772,7 +1823,8 @@ public sealed class MainWindow : Window
             indentPadding,
             textRotation,
             style,
-            _session.ActiveSheet.ShowGridlines);
+            _session.ActiveSheet.ShowGridlines,
+            zoomFactor);
         border.Cursor = new Cursor(StandardCursorType.Hand);
         border.PointerPressed += (_, args) =>
         {
@@ -1805,14 +1857,18 @@ public sealed class MainWindow : Window
         double indentPadding = 0,
         int textRotation = 0,
         CellStyle? style = null,
-        bool showGridlines = true)
+        bool showGridlines = true,
+        double zoomFactor = 1)
     {
         var effectiveText = FormatTextForRotation(text, textRotation);
         var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;
+        var scaledFontSize = Math.Max(1, fontSize * zoomFactor);
+        var scaledHorizontalPadding = 8 * zoomFactor;
+        var scaledIndentPadding = indentPadding * zoomFactor;
         var textBlock = new TextBlock
         {
             Text = effectiveText,
-            FontSize = fontSize,
+            FontSize = scaledFontSize,
             FontWeight = fontWeight,
             FontStyle = fontStyle,
             TextDecorations = textDecorations,
@@ -1823,7 +1879,7 @@ public sealed class MainWindow : Window
                 ? TextTrimming.None
                 : TextTrimming.CharacterEllipsis,
             VerticalAlignment = verticalAlignment,
-            Margin = new Thickness(8 + indentPadding, 0, 8, 0),
+            Margin = new Thickness(scaledHorizontalPadding + scaledIndentPadding, 0, scaledHorizontalPadding, 0),
         };
         if (CreateTextRotationTransform(textRotation) is { } transform)
         {
@@ -2351,6 +2407,7 @@ public sealed class MainWindow : Window
 
         var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
         _session = _sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true);
+        RefreshViewportSizeForZoom();
         ClearSelectedDrawingObject();
         RefreshShell(_session.StartupStatus);
     }
@@ -2373,6 +2430,7 @@ public sealed class MainWindow : Window
     {
         var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
         _session = _sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true);
+        RefreshViewportSizeForZoom();
         ClearSelectedDrawingObject();
         RefreshShell(status);
     }
@@ -2500,7 +2558,67 @@ public sealed class MainWindow : Window
             return;
         }
 
+        RefreshViewportSizeForZoom();
         RefreshShell(showHeadings ? "Showing headings" : "Hiding headings");
+    }
+
+    private void ZoomIn() =>
+        ApplyZoomPercent(_session.ZoomPercent + ZoomStepPercent, "Zoom In failed.");
+
+    private void ZoomOut() =>
+        ApplyZoomPercent(_session.ZoomPercent - ZoomStepPercent, "Zoom Out failed.");
+
+    private void ZoomTo100Percent() =>
+        ApplyZoomPercent(100, "100% Zoom failed.");
+
+    private void ZoomToSelection()
+    {
+        var zoomPercent = CalculateZoomToSelectionPercent();
+        ApplyZoomPercent(zoomPercent, "Zoom to Selection failed.");
+    }
+
+    private void ApplyZoomPercent(int zoomPercent, string errorMessage)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        ClearSelectedDrawingObject();
+        zoomPercent = ClampZoomPercent(zoomPercent);
+        var result = _session.SetZoomPercent(zoomPercent);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? errorMessage);
+            return;
+        }
+
+        RefreshViewportSizeForZoom();
+        RefreshShell($"Zoom {FormatZoomPercent(_session.ZoomPercent)}");
+    }
+
+    private int CalculateZoomToSelectionPercent()
+    {
+        if (!TryGetSheetViewportDisplaySize(out var viewportHeight, out var viewportWidth))
+            return 100;
+
+        var range = _session.SelectedRange;
+        var widthFit = CalculateZoomAxisFitPercent(
+            viewportWidth,
+            range.ColCount,
+            ZoomToSelectionDefaultColumnWidth);
+        var heightFit = CalculateZoomAxisFitPercent(
+            viewportHeight,
+            range.RowCount,
+            ZoomToSelectionDefaultRowHeight);
+        return ClampZoomPercent((int)Math.Round(Math.Min(widthFit, heightFit)));
+    }
+
+    private static double CalculateZoomAxisFitPercent(double viewportPixels, uint selectedCount, double defaultCellPixels)
+    {
+        var selectionPixels = Math.Max(1, selectedCount * defaultCellPixels);
+        return viewportPixels / selectionPixels * 100;
     }
 
     private void ToggleShowFormulas()
@@ -4040,6 +4158,10 @@ public sealed class MainWindow : Window
             HasNativeWrapTextMenuItem: HasNativeMenuItem(_wrapTextMenuItem, "Wrap Text", requireGesture: false),
             HasNativeShowGridlinesMenuItem: HasNativeMenuItem(_showGridlinesMenuItem, "Gridlines", requireGesture: false),
             HasNativeShowHeadingsMenuItem: HasNativeMenuItem(_showHeadingsMenuItem, "Headings", requireGesture: false),
+            HasNativeZoomInMenuItem: HasNativeMenuItem(_zoomInMenuItem, "Zoom In"),
+            HasNativeZoomOutMenuItem: HasNativeMenuItem(_zoomOutMenuItem, "Zoom Out"),
+            HasNativeZoom100MenuItem: HasNativeMenuItem(_zoom100MenuItem, "100%"),
+            HasNativeZoomToSelectionMenuItem: HasNativeMenuItem(_zoomToSelectionMenuItem, "Zoom to Selection", requireGesture: false),
             HasNativeFreezePanesMenuItem: HasNativeMenuItem(_freezePanesMenuItem, "Freeze Panes", requireGesture: false),
             HasNativeFreezeTopRowMenuItem: HasNativeMenuItem(_freezeTopRowMenuItem, "Freeze Top Row", requireGesture: false),
             HasNativeFreezeFirstColumnMenuItem: HasNativeMenuItem(_freezeFirstColumnMenuItem, "Freeze First Column", requireGesture: false),
@@ -4648,6 +4770,7 @@ public sealed class MainWindow : Window
                 progress);
             var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
             _session = _sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true);
+            RefreshViewportSizeForZoom();
             RecordRecentWorkbook(target.Path);
             ClearSelectedDrawingObject();
             RefreshShell(_session.StartupStatus);
@@ -5095,18 +5218,55 @@ public sealed class MainWindow : Window
 
     private bool TryGetSheetViewportSize(out double viewportHeight, out double viewportWidth)
     {
-        var bounds = _sheetScrollViewer.Bounds;
-        if (bounds.Height <= HeaderRowHeight || bounds.Width <= HeaderColumnWidth)
+        if (!TryGetSheetViewportDisplaySize(out var displayHeight, out var displayWidth))
         {
             viewportHeight = 0;
             viewportWidth = 0;
             return false;
         }
 
-        viewportHeight = bounds.Height - HeaderRowHeight;
-        viewportWidth = bounds.Width - HeaderColumnWidth;
+        var zoomFactor = GetActiveZoomFactor();
+        viewportHeight = displayHeight / zoomFactor;
+        viewportWidth = displayWidth / zoomFactor;
         return true;
     }
+
+    private bool TryGetSheetViewportDisplaySize(out double viewportHeight, out double viewportWidth)
+    {
+        var bounds = _sheetScrollViewer.Bounds;
+        var zoomFactor = GetActiveZoomFactor();
+        var showHeadings = _session.ActiveSheet.ShowHeadings;
+        var headerHeight = showHeadings ? HeaderRowHeight * zoomFactor : 0;
+        var headerWidth = showHeadings ? HeaderColumnWidth * zoomFactor : 0;
+        if (bounds.Height <= headerHeight || bounds.Width <= headerWidth)
+        {
+            viewportHeight = 0;
+            viewportWidth = 0;
+            return false;
+        }
+
+        viewportHeight = bounds.Height - headerHeight;
+        viewportWidth = bounds.Width - headerWidth;
+        return true;
+    }
+
+    private void RefreshViewportSizeForZoom()
+    {
+        if (TryGetSheetViewportSize(out var viewportHeight, out var viewportWidth))
+            _session.UpdateViewportSize(viewportHeight, viewportWidth);
+    }
+
+    private double GetActiveZoomFactor() =>
+        ClampZoomPercent(_session.ZoomPercent) / 100d;
+
+    private static int ClampZoomPercent(int zoomPercent) =>
+        Math.Clamp(
+            zoomPercent,
+            SetWorksheetZoomCommand.MinZoomPercent,
+            SetWorksheetZoomCommand.MaxZoomPercent);
+
+    private static string FormatZoomPercent(int zoomPercent) =>
+        $"{ClampZoomPercent(zoomPercent)}%";
 
     private bool ShouldUseWarningStatusColor(string status) =>
         _session.IsFallback ||

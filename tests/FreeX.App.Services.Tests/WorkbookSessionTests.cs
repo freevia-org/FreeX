@@ -3211,6 +3211,63 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SetZoomPercent_ClampsPreservesSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        sheet.ZoomPercent = 125;
+        var selectedCell = new CellAddress(sheet.Id, 3, 4);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(selectedCell);
+
+        var result = session.SetZoomPercent(999);
+
+        result.Success.Should().BeTrue();
+        sheet.ZoomPercent.Should().Be(SetWorksheetZoomCommand.MaxZoomPercent);
+        session.ZoomPercent.Should().Be(SetWorksheetZoomCommand.MaxZoomPercent);
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveCell.Should().Be(selectedCell);
+        session.SelectedRange.Should().Be(new GridRange(selectedCell, selectedCell));
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.ZoomPercent.Should().Be(125);
+        session.ZoomPercent.Should().Be(125);
+        session.ActiveCell.Should().Be(selectedCell);
+        session.CanRedo.Should().BeTrue();
+
+        var minResult = session.SetZoomPercent(-10);
+
+        minResult.Success.Should().BeTrue();
+        sheet.ZoomPercent.Should().Be(SetWorksheetZoomCommand.MinZoomPercent);
+        session.ZoomPercent.Should().Be(SetWorksheetZoomCommand.MinZoomPercent);
+    }
+
+    [Fact]
+    public void SetZoomPercent_NoOpsSameStateWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var result = session.SetZoomPercent(100);
+
+        result.Success.Should().BeTrue();
+        session.ZoomPercent.Should().Be(100);
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void FreezePanesAtActiveCell_SetsFrozenRowsAndColumnsClearsSplitRefreshesViewportAndUndo()
     {
         var workbook = CreateWorkbook();

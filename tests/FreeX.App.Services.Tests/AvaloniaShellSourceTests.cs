@@ -58,6 +58,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresNativeFileMenuToSharedOpenSavePipeline()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("ConfigureNativeMenu();");
         source.Should().Contain("private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();");
@@ -230,12 +231,28 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_alignRightMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Right);");
         source.Should().Contain("private readonly NativeMenuItem _showGridlinesMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _showHeadingsMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _zoomInMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _zoomOutMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _zoom100MenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _zoomToSelectionMenuItem = new();");
+        source.Should().Contain("private readonly TextBlock _zoomText = new();");
         source.Should().Contain("_showGridlinesMenuItem.Header = \"Gridlines\";");
         source.Should().Contain("_showGridlinesMenuItem.ToggleType = MenuItemToggleType.CheckBox;");
         source.Should().Contain("_showGridlinesMenuItem.Click += (_, _) => ToggleShowGridlines();");
         source.Should().Contain("_showHeadingsMenuItem.Header = \"Headings\";");
         source.Should().Contain("_showHeadingsMenuItem.ToggleType = MenuItemToggleType.CheckBox;");
         source.Should().Contain("_showHeadingsMenuItem.Click += (_, _) => ToggleShowHeadings();");
+        source.Should().Contain("_zoomInMenuItem.Header = \"Zoom In\";");
+        source.Should().Contain("_zoomInMenuItem.Gesture = new KeyGesture(Key.OemPlus, KeyModifiers.Meta);");
+        source.Should().Contain("_zoomInMenuItem.Click += (_, _) => ZoomIn();");
+        source.Should().Contain("_zoomOutMenuItem.Header = \"Zoom Out\";");
+        source.Should().Contain("_zoomOutMenuItem.Gesture = new KeyGesture(Key.OemMinus, KeyModifiers.Meta);");
+        source.Should().Contain("_zoomOutMenuItem.Click += (_, _) => ZoomOut();");
+        source.Should().Contain("_zoom100MenuItem.Header = \"100%\";");
+        source.Should().Contain("_zoom100MenuItem.Gesture = new KeyGesture(Key.D0, KeyModifiers.Meta);");
+        source.Should().Contain("_zoom100MenuItem.Click += (_, _) => ZoomTo100Percent();");
+        source.Should().Contain("_zoomToSelectionMenuItem.Header = \"Zoom to Selection\";");
+        source.Should().Contain("_zoomToSelectionMenuItem.Click += (_, _) => ZoomToSelection();");
         source.Should().Contain("private readonly NativeMenuItem _freezePanesMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _freezeTopRowMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _freezeFirstColumnMenuItem = new();");
@@ -255,6 +272,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_showFormulasMenuItem.Click += (_, _) => ToggleShowFormulas();");
         source.Should().Contain("viewMenu.Items.Add(_showGridlinesMenuItem);");
         source.Should().Contain("viewMenu.Items.Add(_showHeadingsMenuItem);");
+        source.Should().Contain("viewMenu.Items.Add(_zoomInMenuItem);");
+        source.Should().Contain("viewMenu.Items.Add(_zoomOutMenuItem);");
+        source.Should().Contain("viewMenu.Items.Add(_zoom100MenuItem);");
+        source.Should().Contain("viewMenu.Items.Add(_zoomToSelectionMenuItem);");
         source.Should().Contain("viewMenu.Items.Add(_freezePanesMenuItem);");
         source.Should().Contain("viewMenu.Items.Add(_freezeTopRowMenuItem);");
         source.Should().Contain("viewMenu.Items.Add(_freezeFirstColumnMenuItem);");
@@ -269,6 +290,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_showGridlinesMenuItem.IsChecked = _session.IsShowingGridlines;");
         source.Should().Contain("_showHeadingsMenuItem.IsEnabled = isIdle;");
         source.Should().Contain("_showHeadingsMenuItem.IsChecked = _session.IsShowingHeadings;");
+        source.Should().Contain("_zoomInMenuItem.IsEnabled = isIdle && _session.ZoomPercent < SetWorksheetZoomCommand.MaxZoomPercent;");
+        source.Should().Contain("_zoomOutMenuItem.IsEnabled = isIdle && _session.ZoomPercent > SetWorksheetZoomCommand.MinZoomPercent;");
+        source.Should().Contain("_zoom100MenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("_zoomToSelectionMenuItem.IsEnabled = isIdle;");
         source.Should().Contain("private void ToggleShowGridlines()");
         source.Should().Contain("var showGridlines = !_session.IsShowingGridlines;");
         source.Should().Contain("var result = _session.SetShowGridlines(showGridlines);");
@@ -276,7 +301,21 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private void ToggleShowHeadings()");
         source.Should().Contain("var showHeadings = !_session.IsShowingHeadings;");
         source.Should().Contain("var result = _session.SetShowHeadings(showHeadings);");
+        source.Should().Contain("RefreshViewportSizeForZoom();");
         source.Should().Contain("RefreshShell(showHeadings ? \"Showing headings\" : \"Hiding headings\");");
+        source.Should().Contain("private void ZoomIn() =>");
+        source.Should().Contain("ApplyZoomPercent(_session.ZoomPercent + ZoomStepPercent, \"Zoom In failed.\")");
+        source.Should().Contain("private void ZoomOut() =>");
+        source.Should().Contain("ApplyZoomPercent(_session.ZoomPercent - ZoomStepPercent, \"Zoom Out failed.\")");
+        source.Should().Contain("private void ZoomTo100Percent() =>");
+        source.Should().Contain("ApplyZoomPercent(100, \"100% Zoom failed.\")");
+        source.Should().Contain("private void ZoomToSelection()");
+        source.Should().Contain("private void ApplyZoomPercent(int zoomPercent, string errorMessage)");
+        source.Should().Contain("var result = _session.SetZoomPercent(zoomPercent);");
+        source.Should().Contain("RefreshShell($\"Zoom {FormatZoomPercent(_session.ZoomPercent)}\");");
+        source.Should().Contain("private int CalculateZoomToSelectionPercent()");
+        source.Should().Contain("CalculateZoomAxisFitPercent(");
+        source.Should().Contain("_zoomText.Text = FormatZoomPercent(_session.ZoomPercent);");
         source.Should().Contain("_showFormulasMenuItem.IsEnabled = isIdle;");
         source.Should().Contain("_showFormulasMenuItem.IsChecked = _session.IsShowingFormulas;");
         source.Should().Contain("private void FreezePanesAtActiveCell()");
@@ -294,11 +333,15 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var result = _session.SetShowFormulas(showFormulas);");
         source.Should().Contain("RefreshShell(showFormulas ? \"Showing formulas\" : \"Showing values\");");
         source.Should().Contain("var showHeadings = _session.ActiveSheet.ShowHeadings;");
+        source.Should().Contain("var zoomFactor = GetActiveZoomFactor();");
         source.Should().Contain("var headerOffset = showHeadings ? 1 : 0;");
         source.Should().Contain("if (showHeadings)");
         source.Should().Contain("showGridlines ? GridLine : Brushes.Transparent");
-        source.Should().Contain("CalculateDisplayedGridWidth(viewport, showHeadings)");
-        source.Should().Contain("CalculateDisplayedGridHeight(viewport, showHeadings)");
+        source.Should().Contain("CalculateDisplayedGridWidth(viewport, showHeadings, zoomFactor)");
+        source.Should().Contain("CalculateDisplayedGridHeight(viewport, showHeadings, zoomFactor)");
+        source.Should().Contain("fontSize * zoomFactor");
+        source.Should().Contain("displayHeight / zoomFactor");
+        source.Should().Contain("private double GetActiveZoomFactor()");
         source.Should().Contain("TryGetDisplayedDrawingObjectBounds(");
         source.Should().Contain("_helpOnlineMenuItem.Header = \"Help Online\";");
         source.Should().Contain("_helpOnlineMenuItem.Gesture = new KeyGesture(Key.F1, default);");
@@ -411,6 +454,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private void CreateNewWorkbook()");
         source.Should().Contain("ShowOpenIssue(\"Save changes before creating a new workbook.\");");
         source.Should().Contain("_sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true)");
+        normalizedSource.Should().Contain("_session = _sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true);\n        RefreshViewportSizeForZoom();\n        ClearSelectedDrawingObject();\n        RefreshShell(_session.StartupStatus);");
+        normalizedSource.Should().Contain("_session = _sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true);\n        RefreshViewportSizeForZoom();\n        ClearSelectedDrawingObject();\n        RefreshShell(status);");
         source.Should().Contain("RefreshShell(_session.StartupStatus);");
         source.Should().Contain("RecordStartupRecentWorkbook(source);");
         source.Should().Contain("private NativeMenu CreateNativeOpenRecentMenu(bool isIdle)");
@@ -424,6 +469,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private void RecordRecentWorkbook(string path)");
         source.Should().Contain("_recentFiles.AddOrUpdate(path);");
         source.Should().Contain("RecordRecentWorkbook(target.Path);");
+        normalizedSource.Should().Contain("_session = _sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true);\n            RefreshViewportSizeForZoom();\n            RecordRecentWorkbook(target.Path);");
         source.Should().Contain("Closing += MainWindow_Closing;");
         source.Should().Contain("private async Task CloseWorkbookAsync()");
         source.Should().Contain("ConfirmDirtyWorkbookCloseAsync(\"Close Workbook\", \"Discard and Close\")");
@@ -496,6 +542,10 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("HasNativePasteSpecialLinkedPictureMenuItem &&");
         smokeSource.Should().Contain("HasNativeShowGridlinesMenuItem &&");
         smokeSource.Should().Contain("HasNativeShowHeadingsMenuItem &&");
+        smokeSource.Should().Contain("HasNativeZoomInMenuItem &&");
+        smokeSource.Should().Contain("HasNativeZoomOutMenuItem &&");
+        smokeSource.Should().Contain("HasNativeZoom100MenuItem &&");
+        smokeSource.Should().Contain("HasNativeZoomToSelectionMenuItem &&");
         smokeSource.Should().Contain("HasNativeFreezePanesMenuItem &&");
         smokeSource.Should().Contain("HasNativeFreezeTopRowMenuItem &&");
         smokeSource.Should().Contain("HasNativeFreezeFirstColumnMenuItem &&");
@@ -563,6 +613,10 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_wrap_text_menu_item={FormatBool(snapshot.HasNativeWrapTextMenuItem)}");
         smokeSource.Should().Contain("native_show_gridlines_menu_item={FormatBool(snapshot.HasNativeShowGridlinesMenuItem)}");
         smokeSource.Should().Contain("native_show_headings_menu_item={FormatBool(snapshot.HasNativeShowHeadingsMenuItem)}");
+        smokeSource.Should().Contain("native_zoom_in_menu_item={FormatBool(snapshot.HasNativeZoomInMenuItem)}");
+        smokeSource.Should().Contain("native_zoom_out_menu_item={FormatBool(snapshot.HasNativeZoomOutMenuItem)}");
+        smokeSource.Should().Contain("native_zoom_100_menu_item={FormatBool(snapshot.HasNativeZoom100MenuItem)}");
+        smokeSource.Should().Contain("native_zoom_to_selection_menu_item={FormatBool(snapshot.HasNativeZoomToSelectionMenuItem)}");
         smokeSource.Should().Contain("native_freeze_panes_menu_item={FormatBool(snapshot.HasNativeFreezePanesMenuItem)}");
         smokeSource.Should().Contain("native_freeze_top_row_menu_item={FormatBool(snapshot.HasNativeFreezeTopRowMenuItem)}");
         smokeSource.Should().Contain("native_freeze_first_column_menu_item={FormatBool(snapshot.HasNativeFreezeFirstColumnMenuItem)}");
@@ -648,6 +702,10 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeWrapTextMenuItem: HasNativeMenuItem(_wrapTextMenuItem, \"Wrap Text\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeShowGridlinesMenuItem: HasNativeMenuItem(_showGridlinesMenuItem, \"Gridlines\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeShowHeadingsMenuItem: HasNativeMenuItem(_showHeadingsMenuItem, \"Headings\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeZoomInMenuItem: HasNativeMenuItem(_zoomInMenuItem, \"Zoom In\")");
+        windowSource.Should().Contain("HasNativeZoomOutMenuItem: HasNativeMenuItem(_zoomOutMenuItem, \"Zoom Out\")");
+        windowSource.Should().Contain("HasNativeZoom100MenuItem: HasNativeMenuItem(_zoom100MenuItem, \"100%\")");
+        windowSource.Should().Contain("HasNativeZoomToSelectionMenuItem: HasNativeMenuItem(_zoomToSelectionMenuItem, \"Zoom to Selection\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeFreezePanesMenuItem: HasNativeMenuItem(_freezePanesMenuItem, \"Freeze Panes\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeFreezeTopRowMenuItem: HasNativeMenuItem(_freezeTopRowMenuItem, \"Freeze Top Row\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeFreezeFirstColumnMenuItem: HasNativeMenuItem(_freezeFirstColumnMenuItem, \"Freeze First Column\", requireGesture: false)");
@@ -718,8 +776,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("drawingObject.AnchorRow");
         source.Should().Contain("Canvas.SetLeft(visual, left);");
         source.Should().Contain("Canvas.SetTop(visual, top);");
-        source.Should().Contain("GetDisplayedColumnWidth(metric)");
-        source.Should().Contain("GetDisplayedRowHeight(metric)");
+        source.Should().Contain("GetDisplayedColumnWidth(metric, zoomFactor)");
+        source.Should().Contain("GetDisplayedRowHeight(metric, zoomFactor)");
         source.Should().Contain("ApplyDrawingObjectRotation(visual, drawingObject.RotationDegrees);");
         source.Should().Contain("new RotateTransform(rotationDegrees)");
     }
@@ -1093,7 +1151,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Decrease Font Size failed.\");");
         source.Should().Contain("RefreshShell($\"Decreased font size for {rangeReference}\");");
         source.Should().Contain("var fontSize = style?.FontSize ?? CellStyle.Default.FontSize;");
-        source.Should().Contain("FontSize = fontSize,");
+        source.Should().Contain("FontSize = scaledFontSize,");
     }
 
     [Fact]
@@ -1348,7 +1406,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var indentPadding = GetCellIndentPadding(style);");
         source.Should().Contain("private static double GetCellIndentPadding(CellStyle? style)");
         source.Should().Contain("Math.Clamp(style.IndentLevel, 0, 15) * CellIndentLevelWidth;");
-        source.Should().Contain("Margin = new Thickness(8 + indentPadding, 0, 8, 0),");
+        source.Should().Contain("Margin = new Thickness(scaledHorizontalPadding + scaledIndentPadding, 0, scaledHorizontalPadding, 0),");
     }
 
     [Fact]
