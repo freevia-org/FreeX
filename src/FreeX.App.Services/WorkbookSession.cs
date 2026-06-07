@@ -199,7 +199,7 @@ public sealed class WorkbookSession
         GetCellStyle(SelectedRange.Start).NumberFormat;
 
     public WorkbookSelectionStats SelectionStats =>
-        _selectionStatsCache.GetOrCalculate(ActiveSheet, SelectedRange, _selectionStatsRevision);
+        _selectionStatsCache.GetOrCalculate(ActiveSheet, SelectedRanges, _selectionStatsRevision);
 
     public string SelectionStatsText =>
         WorkbookSelectionStatsFormatter.Format(SelectionStats);
@@ -235,7 +235,7 @@ public sealed class WorkbookSession
         SelectRanges(range, [range]);
     }
 
-    private void SelectRanges(GridRange primaryRange, IReadOnlyList<GridRange> ranges)
+    public void SelectRanges(GridRange primaryRange, IReadOnlyList<GridRange> ranges)
     {
         ValidateSelectionRange(primaryRange, nameof(primaryRange));
         if (ranges.Count == 0)

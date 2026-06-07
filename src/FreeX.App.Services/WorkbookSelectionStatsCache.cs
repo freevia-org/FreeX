@@ -6,8 +6,27 @@ public sealed class WorkbookSelectionStatsCache
 {
     private readonly record struct Source(Sheet Sheet, GridRange Range, ulong Revision);
 
+    private readonly record struct RangeSetSource(Sheet Sheet, GridRange[] Ranges, ulong Revision)
+    {
+        public bool Matches(Sheet sheet, IReadOnlyList<GridRange> ranges, ulong revision)
+        {
+            if (Sheet != sheet || Revision != revision || Ranges.Length != ranges.Count)
+                return false;
+
+            for (var index = 0; index < Ranges.Length; index++)
+            {
+                if (Ranges[index] != ranges[index])
+                    return false;
+            }
+
+            return true;
+        }
+    }
+
     private Source? _lastSource;
     private WorkbookSelectionStats? _lastStats;
+    private RangeSetSource? _lastRangeSetSource;
+    private WorkbookSelectionStats? _lastRangeSetStats;
 
     public WorkbookSelectionStats GetOrCreate(
         Sheet sheet,
@@ -22,6 +41,26 @@ public sealed class WorkbookSelectionStatsCache
         var stats = create();
         _lastSource = source;
         _lastStats = stats;
+        return stats;
+    }
+
+    public WorkbookSelectionStats GetOrCalculate(Sheet sheet, IReadOnlyList<GridRange> ranges, ulong revision)
+    {
+        ArgumentNullException.ThrowIfNull(ranges);
+
+        if (ranges.Count == 1)
+            return GetOrCalculate(sheet, ranges[0], revision);
+
+        if (_lastRangeSetSource is { } source &&
+            _lastRangeSetStats is { } cached &&
+            source.Matches(sheet, ranges, revision))
+        {
+            return cached;
+        }
+
+        var stats = WorkbookSelectionStatsCalculator.Calculate(sheet, ranges);
+        _lastRangeSetSource = new RangeSetSource(sheet, CopyRanges(ranges), revision);
+        _lastRangeSetStats = stats;
         return stats;
     }
 
@@ -52,6 +91,17 @@ public sealed class WorkbookSelectionStatsCache
     {
         _lastSource = null;
         _lastStats = null;
+        _lastRangeSetSource = null;
+        _lastRangeSetStats = null;
+    }
+
+    private static GridRange[] CopyRanges(IReadOnlyList<GridRange> ranges)
+    {
+        var copy = new GridRange[ranges.Count];
+        for (var index = 0; index < ranges.Count; index++)
+            copy[index] = ranges[index];
+
+        return copy;
     }
 
     private static bool TryCalculateContainingExpansion(

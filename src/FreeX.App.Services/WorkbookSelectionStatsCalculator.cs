@@ -5,6 +5,7 @@ namespace FreeX.App.Services;
 public static class WorkbookSelectionStatsCalculator
 {
     private static readonly WorkbookSelectionStats EmptyStats = new(0, 0, 0, null, null, null);
+    private const int ColumnKeyBits = 15;
 
     public static WorkbookSelectionStats Calculate(Sheet sheet, GridRange range)
     {
@@ -42,8 +43,69 @@ public static class WorkbookSelectionStatsCalculator
             }
         }
 
-        double? average = numericalCount > 0 ? sum / numericalCount : null;
-        return new WorkbookSelectionStats(sum, count, numericalCount, average, min, max);
+        return CreateStats(sum, count, numericalCount, min, max);
+    }
+
+    public static WorkbookSelectionStats Calculate(Sheet sheet, IReadOnlyList<GridRange> ranges)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+        ArgumentNullException.ThrowIfNull(ranges);
+
+        if (ranges.Count == 0)
+            return EmptyStats;
+        if (ranges.Count == 1)
+            return Calculate(sheet, ranges[0]);
+        if (sheet.GetUsedRange() is not { } usedRange)
+            return EmptyStats;
+
+        var scanRanges = new List<GridRange>(ranges.Count);
+        long totalCells = 0;
+        for (var index = 0; index < ranges.Count; index++)
+        {
+            var range = ranges[index];
+            if (!usedRange.Overlaps(range))
+                continue;
+
+            var scanRange = Intersect(range, usedRange);
+            scanRanges.Add(scanRange);
+            totalCells = AddCellCount(totalCells, scanRange.CellCount);
+        }
+
+        if (scanRanges.Count == 0)
+            return EmptyStats;
+
+        double sum = 0;
+        int count = 0;
+        int numericalCount = 0;
+        double? min = null, max = null;
+
+        if (sheet.CellCount < totalCells)
+        {
+            foreach (var entry in sheet.GetOccupiedCellMap())
+            {
+                var (row, col) = entry.Key;
+                if (ContainsAny(scanRanges, row, col))
+                    Accumulate(entry.Value.Value, ref sum, ref count, ref numericalCount, ref min, ref max);
+            }
+        }
+        else
+        {
+            var visited = new HashSet<ulong>();
+            for (var rangeIndex = 0; rangeIndex < scanRanges.Count; rangeIndex++)
+            {
+                var range = scanRanges[rangeIndex];
+                for (var row = range.Start.Row; row <= range.End.Row; row++)
+                {
+                    for (var col = range.Start.Col; col <= range.End.Col; col++)
+                    {
+                        if (visited.Add(CreateAddressKey(row, col)))
+                            Accumulate(sheet.GetValue(row, col), ref sum, ref count, ref numericalCount, ref min, ref max);
+                    }
+                }
+            }
+        }
+
+        return CreateStats(sum, count, numericalCount, min, max);
     }
 
     public static WorkbookSelectionStats Combine(WorkbookSelectionStats left, WorkbookSelectionStats right)
@@ -51,10 +113,9 @@ public static class WorkbookSelectionStatsCalculator
         var sum = left.Sum + right.Sum;
         var count = left.Count + right.Count;
         var numericalCount = left.NumericalCount + right.NumericalCount;
-        double? average = numericalCount > 0 ? sum / numericalCount : null;
         var min = Min(left.Min, right.Min);
         var max = Max(left.Max, right.Max);
-        return new WorkbookSelectionStats(sum, count, numericalCount, average, min, max);
+        return CreateStats(sum, count, numericalCount, min, max);
     }
 
     private static WorkbookSelectionStats CalculateSingleCell(ScalarValue value) =>
@@ -95,6 +156,34 @@ public static class WorkbookSelectionStatsCalculator
     private static bool Contains(GridRange range, uint row, uint col) =>
         row >= range.Start.Row && row <= range.End.Row &&
         col >= range.Start.Col && col <= range.End.Col;
+
+    private static bool ContainsAny(IReadOnlyList<GridRange> ranges, uint row, uint col)
+    {
+        for (var index = 0; index < ranges.Count; index++)
+        {
+            if (Contains(ranges[index], row, col))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static long AddCellCount(long totalCells, long cellCount) =>
+        totalCells > long.MaxValue - cellCount ? long.MaxValue : totalCells + cellCount;
+
+    private static ulong CreateAddressKey(uint row, uint col) =>
+        ((ulong)row << ColumnKeyBits) | col;
+
+    private static WorkbookSelectionStats CreateStats(
+        double sum,
+        int count,
+        int numericalCount,
+        double? min,
+        double? max)
+    {
+        double? average = numericalCount > 0 ? sum / numericalCount : null;
+        return new WorkbookSelectionStats(sum, count, numericalCount, average, min, max);
+    }
 
     private static void Accumulate(
         ScalarValue value,

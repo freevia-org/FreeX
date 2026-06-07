@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services.Tests;
@@ -241,6 +242,85 @@ public sealed class WorkbookSelectionStatsCalculatorTests
     }
 
     [Fact]
+    public void WorkbookSession_SelectionStatsAggregatesGoToSpecialSelectedRanges()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        workbook.ActiveSheetIndex = 0;
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        var d1 = new CellAddress(sheet.Id, 1, 4);
+        var f1 = new CellAddress(sheet.Id, 1, 6);
+        sheet.SetCell(a1, new NumberValue(10));
+        sheet.SetCell(c1, new NumberValue(20));
+        sheet.SetCell(d1, new TextValue("counted"));
+        sheet.SetCell(f1, new NumberValue(-4));
+        var session = new WorkbookSessionFactory().Create(
+            new StartupWorkbookLoadResult(workbook, "Book.fxl", "Opened .fxl.", IsFallback: false),
+            viewportHeight: 240,
+            viewportWidth: 320);
+        session.SelectRange(new GridRange(a1, f1));
+
+        var result = session.GoToSpecial(
+            GoToSpecialKind.Constants,
+            new GoToSpecialOptions(GoToSpecialValueTypes.Numbers | GoToSpecialValueTypes.Text));
+
+        result.Success.Should().BeTrue();
+        result.SelectedRanges.Should().Equal(
+            new GridRange(a1, a1),
+            new GridRange(c1, d1),
+            new GridRange(f1, f1));
+        AssertSelectionStats(
+            session.SelectionStats,
+            sum: 26,
+            count: 4,
+            numericalCount: 3,
+            average: 26.0 / 3,
+            min: -4,
+            max: 20);
+        session.SelectionStatsText.Should().Contain("Count: 4");
+        session.SelectionStatsText.Should().Contain("Numerical Count: 3");
+        session.SelectionStatsText.Should().Contain("Sum: 26");
+    }
+
+    [Fact]
+    public void WorkbookSession_SelectionStatsDoesNotDoubleCountOverlappingSelectedRanges()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        workbook.ActiveSheetIndex = 0;
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var firstRange = new GridRange(a1, b2);
+        var secondRange = new GridRange(b1, c1);
+        sheet.SetCell(a1, new NumberValue(10));
+        sheet.SetCell(b1, new NumberValue(20));
+        sheet.SetCell(c1, new NumberValue(-5));
+        sheet.SetCell(a2, new NumberValue(30));
+        sheet.SetCell(b2, new TextValue("counted"));
+        var session = new WorkbookSessionFactory().Create(
+            new StartupWorkbookLoadResult(workbook, "Book.fxl", "Opened .fxl.", IsFallback: false),
+            viewportHeight: 240,
+            viewportWidth: 320);
+
+        session.SelectRanges(firstRange, [firstRange, secondRange]);
+
+        session.SelectedRange.Should().Be(firstRange);
+        session.SelectedRanges.Should().Equal(firstRange, secondRange);
+        AssertSelectionStats(
+            session.SelectionStats,
+            sum: 55,
+            count: 5,
+            numericalCount: 4,
+            average: 13.75,
+            min: -5,
+            max: 30);
+    }
+
+    [Fact]
     public void Calculate_LargeSelections_ScansSparseCellsWithoutCopyingUsedCellDictionary()
     {
         var calculatorSource = File.ReadAllText(
@@ -280,5 +360,23 @@ public sealed class WorkbookSelectionStatsCalculatorTests
         calculatorSource.Should().NotContain(
             "sheet.EnumerateCells()",
             "status-bar hot paths should avoid address tuple allocation while scanning occupied cells");
+    }
+
+    private static void AssertSelectionStats(
+        WorkbookSelectionStats stats,
+        double sum,
+        int count,
+        int numericalCount,
+        double average,
+        double min,
+        double max)
+    {
+        stats.Sum.Should().Be(sum);
+        stats.Count.Should().Be(count);
+        stats.NumericalCount.Should().Be(numericalCount);
+        stats.Average.Should().NotBeNull();
+        stats.Average!.Value.Should().BeApproximately(average, 1e-12);
+        stats.Min.Should().Be(min);
+        stats.Max.Should().Be(max);
     }
 }
