@@ -24,10 +24,7 @@ public sealed class RecentFilesStore
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
     }
 
-    public static string DefaultStorePath => System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "FreeX",
-        "recent.json");
+    public static string DefaultStorePath => GetDefaultStorePath(PlatformApplicationDataPathProvider.Instance);
 
     public List<RecentFileEntry> Entries { get; private set; } = [];
 
@@ -35,6 +32,9 @@ public sealed class RecentFilesStore
         Entries.Where(entry => entry.IsPinned);
 
     public static RecentFilesStore Load() => Load(DefaultStorePath);
+
+    public static RecentFilesStore Load(IApplicationDataPathProvider pathProvider, Func<DateTimeOffset>? clock = null) =>
+        Load(GetDefaultStorePath(pathProvider), clock);
 
     public static RecentFilesStore Load(string storePath, Func<DateTimeOffset>? clock = null)
     {
@@ -53,6 +53,16 @@ public sealed class RecentFilesStore
         }
 
         return store;
+    }
+
+    public static string GetDefaultStorePath(IApplicationDataPathProvider pathProvider)
+    {
+        ArgumentNullException.ThrowIfNull(pathProvider);
+
+        return System.IO.Path.Combine(
+            pathProvider.GetApplicationDataDirectory(),
+            "FreeX",
+            "recent.json");
     }
 
     public void AddOrUpdate(string path)

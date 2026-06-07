@@ -68,6 +68,60 @@ public sealed class RecentFilesStoreTests
     }
 
     [Fact]
+    public void GetDefaultStorePath_UsesApplicationDataPathProvider()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var provider = new TestApplicationDataPathProvider(temp.Path);
+
+        var path = RecentFilesStore.GetDefaultStorePath(provider);
+
+        path.Should().Be(Path.Combine(temp.Path, "FreeX", "recent.json"));
+    }
+
+    [Fact]
+    public void Load_WithApplicationDataPathProviderPersistsUnderProviderRoot()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var provider = new TestApplicationDataPathProvider(temp.Path);
+        var now = new DateTimeOffset(2026, 6, 7, 13, 0, 0, TimeSpan.Zero);
+        var store = RecentFilesStore.Load(provider, () => now);
+
+        store.AddOrUpdate(Path.Combine(temp.Path, "Book.fxl"));
+
+        var storePath = Path.Combine(temp.Path, "FreeX", "recent.json");
+        File.Exists(storePath).Should().BeTrue();
+        var reloaded = RecentFilesStore.Load(provider);
+        reloaded.Entries.Should().ContainSingle();
+        reloaded.Entries[0].LastOpened.Should().Be(now);
+    }
+
+    [Fact]
+    public void PlatformApplicationDataPathProvider_UsesMacOsApplicationSupportDirectory()
+    {
+        var home = Path.Combine("Users", "quinn");
+        var provider = new PlatformApplicationDataPathProvider(
+            isMacOsProvider: () => true,
+            userProfilePathProvider: () => home,
+            applicationDataPathProvider: () => "ignored");
+
+        provider.GetApplicationDataDirectory()
+            .Should()
+            .Be(Path.Combine(home, "Library", "Application Support"));
+    }
+
+    [Fact]
+    public void PlatformApplicationDataPathProvider_UsesApplicationDataDirectoryOutsideMacOs()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var provider = new PlatformApplicationDataPathProvider(
+            isMacOsProvider: () => false,
+            userProfilePathProvider: () => "ignored",
+            applicationDataPathProvider: () => temp.Path);
+
+        provider.GetApplicationDataDirectory().Should().Be(temp.Path);
+    }
+
+    [Fact]
     public void RecentFileEntry_SerializesLastOpenedWithUtcOffset()
     {
         var entry = new RecentFileEntry
@@ -79,5 +133,10 @@ public sealed class RecentFilesStoreTests
         var json = JsonSerializer.Serialize(entry);
 
         json.Should().Contain(@"""LastOpened"":""2026-05-28T12:34:56+00:00""");
+    }
+
+    private sealed class TestApplicationDataPathProvider(string path) : IApplicationDataPathProvider
+    {
+        public string GetApplicationDataDirectory() => path;
     }
 }
