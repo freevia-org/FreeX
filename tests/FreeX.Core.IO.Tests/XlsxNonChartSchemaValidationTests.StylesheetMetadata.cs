@@ -92,6 +92,32 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         AssertStylesheetTableStylesSanitized(savedStylesXml);
     }
 
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidStylesheetDifferentialStyleMetadataForSchemaValidity()
+    {
+        using var source = CreateExcelStylesheetMetadataSourcePackage();
+        SetStylesheetDifferentialStylesInvalidNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var savedStylesXml = ReadPackageRootElement(saved, "xl/styles.xml");
+        AssertStylesheetDifferentialStylesSanitized(savedStylesXml);
+        AssertStylesheetTableStyleMetadata(savedStylesXml, "ExcelNativeStructuredStyle", "ExcelNativePivotStyle");
+    }
+
     private static Workbook CreateAuthoredStylesheetMetadataWorkbook()
     {
         var workbook = CreateStylesheetMetadataWorkbook("FreeXAuthoredTableStyle");
@@ -266,6 +292,30 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         ReplacePackageXml(archive, "xl/styles.xml", stylesXml);
     }
 
+    private static void SetStylesheetDifferentialStylesInvalidNativeMetadata(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexNs = "urn:freex:test";
+        var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
+        var differentialStyles = stylesXml.Root!.Element(workbookNs + "dxfs")!;
+        differentialStyles.SetAttributeValue("customDxfsAttr", "removed");
+        differentialStyles.Add(new XElement(freexNs + "dxfsNativeChild"));
+
+        var dxf = differentialStyles.Elements(workbookNs + "dxf").First();
+        dxf.SetAttributeValue("customDxfAttr", "removed");
+        dxf.Add(new XElement(freexNs + "dxfNativeChild"));
+        dxf.Add(new XElement(
+            workbookNs + "extLst",
+            new XElement(workbookNs + "ext", new XAttribute("uri", "{FREEX-DXF-VALID-EXT}"))));
+
+        var font = dxf.Element(workbookNs + "font")!;
+        font.SetAttributeValue("customFontAttr", "removed");
+        font.Add(new XElement(freexNs + "fontNativeChild"));
+        ReplacePackageXml(archive, "xl/styles.xml", stylesXml);
+    }
+
     private static void AssertStylesheetTableStyleMetadata(
         XElement stylesRoot,
         string expectedTableStyleName,
@@ -314,6 +364,25 @@ public sealed partial class XlsxNonChartSchemaValidationTests
                     element.Attribute("customElementAttr") == null &&
                     !element.Elements().Any());
         }
+    }
+
+    private static void AssertStylesheetDifferentialStylesSanitized(XElement stylesRoot)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexNs = "urn:freex:test";
+        var differentialStyles = stylesRoot.Element(workbookNs + "dxfs")!;
+        differentialStyles.Attribute("customDxfsAttr").Should().BeNull();
+        differentialStyles.Element(freexNs + "dxfsNativeChild").Should().BeNull();
+        differentialStyles.Attribute("count")!.Value.Should().Be(differentialStyles.Elements(workbookNs + "dxf").Count().ToString());
+
+        var dxf = differentialStyles.Elements(workbookNs + "dxf").First();
+        dxf.Attribute("customDxfAttr").Should().BeNull();
+        dxf.Element(freexNs + "dxfNativeChild").Should().BeNull();
+        dxf.Element(workbookNs + "extLst").Should().NotBeNull();
+        var font = dxf.Element(workbookNs + "font");
+        font.Should().NotBeNull();
+        font!.Attribute("customFontAttr").Should().BeNull();
+        font.Element(freexNs + "fontNativeChild").Should().BeNull();
     }
 
     private static XElement ReadStylesheetChildElement(XElement stylesRoot, string localName)
