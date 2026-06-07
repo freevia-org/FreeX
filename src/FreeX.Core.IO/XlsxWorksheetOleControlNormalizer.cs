@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
 
@@ -179,9 +178,9 @@ internal static class XlsxWorksheetOleControlNormalizer
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(oleObject, OleObjectAttributes, RelNs + "id");
         changed |= RemoveUnexpectedChildElements(oleObject, WorksheetNs + "objectPr");
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "shapeId", NormalizeUnsignedIntOrNull);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "autoLoad", NormalizeBoolean);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "oleUpdate", NormalizeOleUpdate);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "shapeId", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "autoLoad", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "oleUpdate", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, OleUpdateValues));
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "progId", NormalizeOptionalText);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "dvAspect", NormalizeOptionalText);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "link", NormalizeOptionalText);
@@ -194,7 +193,7 @@ internal static class XlsxWorksheetOleControlNormalizer
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(control, ControlAttributes, RelNs + "id");
         changed |= RemoveUnexpectedChildElements(control, WorksheetNs + "controlPr");
         changed |= NormalizeControlProperties(control);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(control, "shapeId", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(control, "shapeId", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(control, "name", NormalizeOptionalText);
         return changed;
     }
@@ -214,15 +213,15 @@ internal static class XlsxWorksheetOleControlNormalizer
 
             changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(controlProperties, ControlPropertiesAttributes, RelNs + "id");
             changed |= RemoveUnexpectedChildElements(controlProperties, WorksheetNs + "anchor");
-            changed |= NormalizeBooleanAttribute(controlProperties, "locked");
-            changed |= NormalizeBooleanAttribute(controlProperties, "defaultSize");
-            changed |= NormalizeBooleanAttribute(controlProperties, "print");
-            changed |= NormalizeBooleanAttribute(controlProperties, "disabled");
-            changed |= NormalizeBooleanAttribute(controlProperties, "recalcAlways");
-            changed |= NormalizeBooleanAttribute(controlProperties, "uiObject");
-            changed |= NormalizeBooleanAttribute(controlProperties, "autoFill");
-            changed |= NormalizeBooleanAttribute(controlProperties, "autoLine");
-            changed |= NormalizeBooleanAttribute(controlProperties, "autoPict");
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "locked", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "defaultSize", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "print", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "disabled", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "recalcAlways", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "uiObject", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "autoFill", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "autoLine", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "autoPict", XlsxXmlNormalizationHelpers.NormalizeBoolean);
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "macro", NormalizeOptionalText);
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "altText", NormalizeOptionalText);
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "linkedCell", NormalizeOptionalText);
@@ -437,38 +436,10 @@ internal static class XlsxWorksheetOleControlNormalizer
         return changed;
     }
 
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed switch
-        {
-            "0" or "1" => trimmed,
-            "true" or "false" => trimmed,
-            _ => null
-        };
-    }
-
-    private static bool NormalizeBooleanAttribute(XElement element, string attributeName) =>
-        XlsxXmlNormalizationHelpers.NormalizeAttribute(element, attributeName, NormalizeBoolean);
-
-    private static string? NormalizeOleUpdate(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed is not null && OleUpdateValues.Contains(trimmed) ? trimmed : null;
-    }
-
     private static string? NormalizeOptionalText(string? value)
     {
         var trimmed = value?.Trim();
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
-    }
-
-    private static string? NormalizeUnsignedIntOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed.ToString(CultureInfo.InvariantCulture)
-            : null;
     }
 
     private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
