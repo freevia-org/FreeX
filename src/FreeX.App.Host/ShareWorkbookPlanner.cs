@@ -1,4 +1,4 @@
-using System.IO;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host;
 
@@ -26,119 +26,66 @@ public static class ShareWorkbookPlanner
 {
     public static ShareWorkbookPlan CreatePlan(string? currentFilePath, Func<string, bool>? fileExists = null)
     {
-        return TryGetShareableWorkbookPath(
+        var plan = WorkbookShareReadinessPlanner.CreatePlan(
             currentFilePath,
-            fileExists ?? File.Exists,
-            out var shareablePath,
-            out var saveAsReason,
-            out var candidatePath)
-            ? new ShareWorkbookPlan(ShareWorkbookPlanKind.ShareExistingFile, shareablePath)
-            : new ShareWorkbookPlan(ShareWorkbookPlanKind.SaveAsBeforeShare, null, saveAsReason, candidatePath);
+            WorkbookShareSurface.WindowsShare,
+            fileExists);
+
+        return ToHostPlan(plan);
     }
 
     public static string FormatStatus(ShareWorkbookPlan plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
 
-        if (plan.Kind == ShareWorkbookPlanKind.ShareExistingFile)
-            return string.IsNullOrWhiteSpace(plan.Path)
-                ? "Ready for Windows Share from the saved local file."
-                : $"Ready for Windows Share from {plan.Path}.";
+        return WorkbookShareReadinessPlanner.FormatStatus(ToReadinessPlan(plan));
+    }
 
-        return plan.SaveAsReason switch
+    private static ShareWorkbookPlan ToHostPlan(WorkbookShareReadinessPlan plan) =>
+        new(
+            ToHostKind(plan.Kind),
+            plan.Path,
+            ToHostSaveAsReason(plan.SaveAsReason),
+            plan.CandidatePath);
+
+    private static WorkbookShareReadinessPlan ToReadinessPlan(ShareWorkbookPlan plan) =>
+        new(
+            ToReadinessKind(plan.Kind),
+            plan.Path,
+            ToReadinessSaveAsReason(plan.SaveAsReason),
+            plan.CandidatePath,
+            WorkbookShareSurface.WindowsShare);
+
+    private static ShareWorkbookPlanKind ToHostKind(WorkbookShareReadinessPlanKind kind) =>
+        kind switch
         {
-            ShareWorkbookSaveAsReason.MissingFile when !string.IsNullOrWhiteSpace(plan.CandidatePath) =>
-                $"Save As is required before Windows Share can send the workbook because the saved path is missing: {plan.CandidatePath}.",
-            ShareWorkbookSaveAsReason.InvalidPath =>
-                "Save As is required before Windows Share can send the workbook because the saved path is not a valid local file path.",
-            _ =>
-                "Save As is required before Windows Share can send the workbook because it has not been saved yet."
+            WorkbookShareReadinessPlanKind.ShareExistingFile => ShareWorkbookPlanKind.ShareExistingFile,
+            WorkbookShareReadinessPlanKind.SaveAsBeforeShare => ShareWorkbookPlanKind.SaveAsBeforeShare,
+            _ => ShareWorkbookPlanKind.SaveAsBeforeShare
         };
-    }
 
-    private static bool TryGetShareableWorkbookPath(
-        string? currentFilePath,
-        Func<string, bool> fileExists,
-        out string shareablePath,
-        out ShareWorkbookSaveAsReason saveAsReason,
-        out string? candidatePath)
-    {
-        shareablePath = "";
-        candidatePath = null;
-        saveAsReason = ShareWorkbookSaveAsReason.None;
+    private static WorkbookShareReadinessPlanKind ToReadinessKind(ShareWorkbookPlanKind kind) =>
+        kind switch
+        {
+            ShareWorkbookPlanKind.ShareExistingFile => WorkbookShareReadinessPlanKind.ShareExistingFile,
+            _ => WorkbookShareReadinessPlanKind.SaveAsBeforeShare
+        };
 
-        if (string.IsNullOrWhiteSpace(currentFilePath))
+    private static ShareWorkbookSaveAsReason ToHostSaveAsReason(WorkbookShareReadinessSaveAsReason reason) =>
+        reason switch
         {
-            saveAsReason = ShareWorkbookSaveAsReason.UnsavedWorkbook;
-            return false;
-        }
+            WorkbookShareReadinessSaveAsReason.UnsavedWorkbook => ShareWorkbookSaveAsReason.UnsavedWorkbook,
+            WorkbookShareReadinessSaveAsReason.MissingFile => ShareWorkbookSaveAsReason.MissingFile,
+            WorkbookShareReadinessSaveAsReason.InvalidPath => ShareWorkbookSaveAsReason.InvalidPath,
+            _ => ShareWorkbookSaveAsReason.None
+        };
 
-        var trimmedPath = currentFilePath.Trim();
-        if (!TryNormalizePath(trimmedPath, out var normalizedPath))
+    private static WorkbookShareReadinessSaveAsReason ToReadinessSaveAsReason(ShareWorkbookSaveAsReason reason) =>
+        reason switch
         {
-            saveAsReason = ShareWorkbookSaveAsReason.InvalidPath;
-            candidatePath = trimmedPath;
-            return false;
-        }
-
-        candidatePath = normalizedPath;
-        if (!FileExists(fileExists, normalizedPath))
-        {
-            saveAsReason = ShareWorkbookSaveAsReason.MissingFile;
-            return false;
-        }
-
-        shareablePath = normalizedPath;
-        return true;
-    }
-
-    private static bool TryNormalizePath(string path, out string normalizedPath)
-    {
-        normalizedPath = "";
-        try
-        {
-            normalizedPath = System.IO.Path.GetFullPath(path);
-            return !string.IsNullOrWhiteSpace(normalizedPath);
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (NotSupportedException)
-        {
-            return false;
-        }
-        catch (PathTooLongException)
-        {
-            return false;
-        }
-    }
-
-    private static bool FileExists(Func<string, bool> fileExists, string path)
-    {
-        try
-        {
-            return fileExists(path);
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (NotSupportedException)
-        {
-            return false;
-        }
-        catch (PathTooLongException)
-        {
-            return false;
-        }
-        catch (IOException)
-        {
-            return false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return false;
-        }
-    }
+            ShareWorkbookSaveAsReason.UnsavedWorkbook => WorkbookShareReadinessSaveAsReason.UnsavedWorkbook,
+            ShareWorkbookSaveAsReason.MissingFile => WorkbookShareReadinessSaveAsReason.MissingFile,
+            ShareWorkbookSaveAsReason.InvalidPath => WorkbookShareReadinessSaveAsReason.InvalidPath,
+            _ => WorkbookShareReadinessSaveAsReason.None
+        };
 }
