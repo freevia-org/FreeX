@@ -399,6 +399,37 @@ public sealed partial class XlsxPackageMetadataMergerTests
     }
 
     [Fact]
+    public void MergeRelationshipParts_RebindsGeneratedPivotCacheRecordsReferenceWhenRelationshipIdCollides()
+    {
+        using var sourcePackage = CreatePackageWithPivotCacheRecordsRelationshipIdCollisionSource();
+        using var targetPackage = CreatePackageWithGeneratedPivotCacheRecordsRelationshipIdCollisionTarget();
+        using var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var targetArchive = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, targetArchive);
+        XlsxPackageMetadataMerger.MergeContentTypes(sourceArchive, targetArchive);
+        XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, targetArchive, generatedEntriesBeforeMerge);
+
+        targetArchive.GetEntry("xl/pivotCache/pivotCacheDefinition1.xml").Should().NotBeNull();
+        targetArchive.GetEntry("xl/pivotCache/pivotCacheRecords1.xml").Should().NotBeNull();
+
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationshipsXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels");
+        var recordsRelationship = relationshipsXml.Root!
+            .Elements(relationshipNs + "Relationship")
+            .Single(element =>
+                (string?)element.Attribute("Type") == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords" &&
+                (string?)element.Attribute("Target") == "pivotCacheRecords1.xml");
+        var reboundId = recordsRelationship.Attribute("Id")!.Value;
+
+        reboundId.Should().NotBe("rIdPivotCacheRecords");
+
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var cacheXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "xl/pivotCache/pivotCacheDefinition1.xml");
+        cacheXml.Root!.Attribute(relNs + "id")!.Value.Should().Be(reboundId);
+    }
+
+    [Fact]
     public void MergeRelationshipParts_PreservesWorkbookWebExtensionTaskpaneGraph()
     {
         using var sourcePackage = CreatePackageWithWorkbookWebExtensionTaskpaneGraph();
