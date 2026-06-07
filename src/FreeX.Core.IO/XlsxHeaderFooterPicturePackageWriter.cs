@@ -247,6 +247,7 @@ internal static class XlsxHeaderFooterPicturePackageWriter
 
         var vmlRelsXml = new XDocument(new XElement(packageRelNs + "Relationships"));
         var shapes = new List<XElement>();
+        var usedImagePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var pictureIndex = 1;
 
         foreach (var slot in XlsxHeaderFooterPicturePackagePlanner.Slots)
@@ -256,8 +257,7 @@ internal static class XlsxHeaderFooterPicturePackageWriter
                 continue;
 
             var extension = XlsxPackagePath.GetImageExtension(picture.ContentType);
-            var imagePath = $"xl/media/{XlsxHeaderFooterPicturePackagePlanner.GetMediaFileName(picture.FileName, sheetIndex, pictureIndex, extension)}";
-            archive.GetEntry(imagePath)?.Delete();
+            var imagePath = GetAvailableHeaderFooterImagePath(archive, usedImagePaths, picture.FileName, sheetIndex, pictureIndex, extension);
             var imageEntry = archive.CreateEntry(imagePath, CompressionLevel.Optimal);
             using (var imageStream = imageEntry.Open())
                 imageStream.Write(picture.ImageBytes);
@@ -320,6 +320,32 @@ internal static class XlsxHeaderFooterPicturePackageWriter
             worksheetNs,
             new XElement(worksheetNs + "legacyDrawingHF", new XAttribute(relNs + "id", vmlRelId)));
         XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static string GetAvailableHeaderFooterImagePath(
+        ZipArchive archive,
+        HashSet<string> usedImagePaths,
+        string? fileName,
+        int sheetIndex,
+        int pictureIndex,
+        string extension)
+    {
+        var mediaFileName = XlsxHeaderFooterPicturePackagePlanner.GetMediaFileName(fileName, sheetIndex, pictureIndex, extension);
+        var candidatePath = $"xl/media/{mediaFileName}";
+        if (archive.GetEntry(candidatePath) is null && usedImagePaths.Add(candidatePath))
+            return candidatePath;
+
+        var baseName = Path.GetFileNameWithoutExtension(mediaFileName);
+        var candidateExtension = Path.GetExtension(mediaFileName);
+        if (string.IsNullOrWhiteSpace(candidateExtension))
+            candidateExtension = extension;
+
+        for (var suffix = 1; ; suffix++)
+        {
+            candidatePath = $"xl/media/{baseName}_hf{sheetIndex}_{pictureIndex}_{suffix}{candidateExtension}";
+            if (archive.GetEntry(candidatePath) is null && usedImagePaths.Add(candidatePath))
+                return candidatePath;
+        }
     }
 
     private static void InsertLegacyDrawingHeaderFooterInOrder(
