@@ -2354,6 +2354,44 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatConvertScalarComparisons()
+    {
+        AssertFormulaConvertFunctionContrastLocations("CONVERT($A1,$C1,$D1)=1000", "B1");
+        AssertFormulaConvertFunctionContrastLocations("CONVERT($A1,$C1,$D1)=100", "B2");
+        AssertFormulaConvertFunctionContrastLocations("CONVERT($A1,$C1,$D1)=20", "B3");
+        AssertFormulaConvertFunctionContrastLocations("CONVERT($A1,$C1,$D1)=2048", "B4");
+        AssertFormulaConvertFunctionContrastLocations("CONVERT($A1,$C1,$D1)<1", "B5");
+        AssertFormulaConvertFunctionContrastLocations("CONVERT($A1,$C1,$D1)>200", "B1", "B4", "B6");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatConvertWrappersPredicatesAndAggregates()
+    {
+        AssertFormulaConvertFunctionContrastLocations("AND(CONVERT($A1,$C1,$D1)>=100,$E1)", "B1", "B2", "B4");
+        AssertFormulaConvertFunctionContrastLocations("IF(CONVERT($A1,$C1,$D1)>100,TRUE,FALSE)", "B1", "B4", "B6");
+        AssertFormulaConvertFunctionContrastLocations("ISNUMBER(CONVERT($A1,$C1,$D1))", FormulaConvertNumericLocations);
+        AssertFormulaConvertFunctionContrastLocations("CONVERT($A1,LOWER(\"M\"),$D1)=100", "B2");
+        AssertFormulaConvertFunctionContrastLocations("CONVERT($A1,$C1,$D1)+1=101", "B2");
+        AssertFormulaConvertFunctionContrastLocations("SUM(CONVERT($A1,$C1,$D1),1)>2000", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatConvertInvalidUnitsAndErrors()
+    {
+        AssertFormulaConvertFunctionContrastLocations("ISERROR(CONVERT($A1,$C1,$D1))", "B7", "B8", "B9", "B10", "B11");
+        AssertFormulaConvertFunctionContrastLocations("ISNA(CONVERT($A1,$C1,$D1))", "B7", "B8", "B10");
+        AssertFormulaConvertFunctionContrastLocations("ISERR(CONVERT($A1,$C1,$D1))", "B9", "B11");
+        AssertFormulaConvertFunctionContrastLocations("CONVERT($A1,$C1,$D1)>0", "B1", "B2", "B3", "B4", "B6");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatConvertWrongArity()
+    {
+        AssertFormulaConvertFunctionContrastLocations("CONVERT($A1,$C1)>0");
+        AssertFormulaConvertFunctionContrastLocations("CONVERT($A1,$C1,$D1,1)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatErrorFunctionComparisons()
     {
         AssertFormulaArithmeticContrastLocations("ERF($A1/100)", "B1", "B2", "B3", "B4");
@@ -4279,6 +4317,64 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 7), new TextValue(status));
     }
 
+    private static Workbook CreateFormulaConvertFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 11, 2);
+
+        SetFormulaConvertFunctionContrastRow(sheet, 1, new NumberValue(1), "kg", "g", flag: true, "Kilogram to grams");
+        SetFormulaConvertFunctionContrastRow(sheet, 2, new NumberValue(1), "m", "cm", flag: true, "Meter to centimeters");
+        SetFormulaConvertFunctionContrastRow(sheet, 3, new NumberValue(2), "dam", "m", flag: false, "Deka meter prefix");
+        SetFormulaConvertFunctionContrastRow(sheet, 4, new NumberValue(2), "kibyte", "byte", flag: true, "Binary byte prefix");
+        SetFormulaConvertFunctionContrastRow(sheet, 5, new NumberValue(32), "F", "C", flag: true, "Freezing point");
+        SetFormulaConvertFunctionContrastRow(sheet, 6, new NumberValue(100), "C", "F", flag: false, "Boiling point");
+        SetFormulaConvertFunctionContrastRow(sheet, 7, new NumberValue(1), "kg", "m", flag: true, "Category mismatch");
+        SetFormulaConvertFunctionContrastRow(sheet, 8, new NumberValue(1), "foo", "g", flag: true, "Unknown unit");
+        SetFormulaConvertFunctionContrastRow(sheet, 9, ErrorValue.Value, "m", "cm", flag: true, "Value error source");
+        SetFormulaConvertFunctionContrastRow(sheet, 10, ErrorValue.NA, "m", "cm", flag: true, "NA error source");
+        SetFormulaConvertFunctionContrastRow(sheet, 11, new NumberValue(1E308), "Yg", "yg", flag: true, "Nonfinite result");
+
+        return workbook;
+    }
+
+    private static void SetFormulaConvertFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        ScalarValue number,
+        string fromUnit,
+        string toUnit,
+        bool flag,
+        string label) =>
+        SetFormulaConvertFunctionContrastRow(
+            sheet,
+            row,
+            number,
+            new TextValue(fromUnit),
+            new TextValue(toUnit),
+            flag,
+            label);
+
+    private static void SetFormulaConvertFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        ScalarValue number,
+        ScalarValue fromUnit,
+        ScalarValue toUnit,
+        bool flag,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), number);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), fromUnit);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 4), toUnit);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 5), new BoolValue(flag));
+    }
+
     private static Workbook CreateFormulaArabicRomanFunctionContrastWorkbook(
         out Sheet sheet,
         out CellAddress firstLabel,
@@ -4649,6 +4745,19 @@ public sealed partial class AccessibilityCheckerServiceTests
             .Equal(expectedLocations);
     }
 
+    private static void AssertFormulaConvertFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaConvertFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
     private static void AssertFormulaDateFunctionContrastLocations(
         string formulaText,
         params string[] expectedLocations)
@@ -4735,6 +4844,9 @@ public sealed partial class AccessibilityCheckerServiceTests
 
     private static string[] FormulaBaseConversionAllLocations =>
         ["B1", "B2", "B3", "B4", "B5", "B6", "B7"];
+
+    private static string[] FormulaConvertNumericLocations =>
+        ["B1", "B2", "B3", "B4", "B5", "B6"];
 
     private static string[] FormulaNumberValueAllLocations =>
         ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8"];

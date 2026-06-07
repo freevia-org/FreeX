@@ -1312,6 +1312,9 @@ public static partial class AccessibilityCheckerService
             case "DECIMAL":
                 kind = ConditionalFormulaScalarFunctionKind.Decimal;
                 return true;
+            case "CONVERT":
+                kind = ConditionalFormulaScalarFunctionKind.Convert;
+                return true;
             case "DELTA":
                 kind = ConditionalFormulaScalarFunctionKind.Delta;
                 return true;
@@ -1465,7 +1468,8 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Mid or
             ConditionalFormulaScalarFunctionKind.Date or
             ConditionalFormulaScalarFunctionKind.Time or
-            ConditionalFormulaScalarFunctionKind.Datedif => argumentCount == 3,
+            ConditionalFormulaScalarFunctionKind.Datedif or
+            ConditionalFormulaScalarFunctionKind.Convert => argumentCount == 3,
             ConditionalFormulaScalarFunctionKind.Multinomial => argumentCount is >= 1 and <= MaxFormulaMultinomialArgumentCount,
             ConditionalFormulaScalarFunctionKind.Gcd or
             ConditionalFormulaScalarFunctionKind.Lcm => argumentCount is >= 1 and <= MaxFormulaGcdArgumentCount,
@@ -2150,6 +2154,7 @@ public static partial class AccessibilityCheckerService
         Dec2Oct,
         Base,
         Decimal,
+        Convert,
         Delta,
         Erf,
         ErfPrecise,
@@ -2837,6 +2842,8 @@ public static partial class AccessibilityCheckerService
                     return TryEvaluateFormulaBaseFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Decimal:
                     return TryEvaluateFormulaDecimalFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Convert:
+                    return TryEvaluateFormulaConvertFunction(function, rowOffset, colOffset, out value);
                 default:
                     return false;
             }
@@ -3076,6 +3083,454 @@ public static partial class AccessibilityCheckerService
             value = new NumberValue(result);
             return true;
         }
+
+        private enum FormulaConvertUnitCategory
+        {
+            Weight,
+            Distance,
+            Time,
+            Pressure,
+            Force,
+            Energy,
+            Power,
+            Area,
+            Volume,
+            Speed,
+            Information,
+            Temperature
+        }
+
+        private static readonly CultureInfo FormulaConvertTextNumberCulture = CultureInfo.GetCultureInfo("en-US");
+
+        private static readonly Dictionary<string, (FormulaConvertUnitCategory Cat, double Factor)> FormulaConvertUnits =
+            BuildFormulaConvertUnits();
+
+        private static Dictionary<string, (FormulaConvertUnitCategory Cat, double Factor)> BuildFormulaConvertUnits()
+        {
+            var units = new Dictionary<string, (FormulaConvertUnitCategory, double)>(StringComparer.Ordinal);
+            void Add(FormulaConvertUnitCategory category, string unit, double factor) =>
+                units[unit] = (category, factor);
+
+            Add(FormulaConvertUnitCategory.Weight, "g", 1);
+            Add(FormulaConvertUnitCategory.Weight, "kg", 1000);
+            Add(FormulaConvertUnitCategory.Weight, "lbm", 453.59237);
+            Add(FormulaConvertUnitCategory.Weight, "ozm", 28.349523);
+            Add(FormulaConvertUnitCategory.Weight, "grain", 0.06479891);
+            Add(FormulaConvertUnitCategory.Weight, "stone", 6350.293);
+            Add(FormulaConvertUnitCategory.Weight, "ton", 907184.74);
+            Add(FormulaConvertUnitCategory.Weight, "uk_ton", 1016046.91);
+            Add(FormulaConvertUnitCategory.Weight, "mg", 0.001);
+            Add(FormulaConvertUnitCategory.Weight, "ug", 0.000001);
+            Add(FormulaConvertUnitCategory.Weight, "ng", 1e-9);
+            Add(FormulaConvertUnitCategory.Weight, "sg", 14593.903);
+            Add(FormulaConvertUnitCategory.Weight, "cwt", 45359.237);
+            Add(FormulaConvertUnitCategory.Weight, "uk_cwt", 50802.345);
+
+            Add(FormulaConvertUnitCategory.Distance, "m", 1);
+            Add(FormulaConvertUnitCategory.Distance, "km", 1000);
+            Add(FormulaConvertUnitCategory.Distance, "mi", 1609.344);
+            Add(FormulaConvertUnitCategory.Distance, "survey_mi", 1609.347218694);
+            Add(FormulaConvertUnitCategory.Distance, "Nmi", 1852);
+            Add(FormulaConvertUnitCategory.Distance, "in", 0.0254);
+            Add(FormulaConvertUnitCategory.Distance, "ft", 0.3048);
+            Add(FormulaConvertUnitCategory.Distance, "yd", 0.9144);
+            Add(FormulaConvertUnitCategory.Distance, "ang", 1e-10);
+            Add(FormulaConvertUnitCategory.Distance, "ell", 1.143);
+            Add(FormulaConvertUnitCategory.Distance, "Pica", 0.000423333);
+            Add(FormulaConvertUnitCategory.Distance, "Picapt", 0.000352777778);
+            Add(FormulaConvertUnitCategory.Distance, "pica", 0.00423333333);
+            Add(FormulaConvertUnitCategory.Distance, "cm", 0.01);
+            Add(FormulaConvertUnitCategory.Distance, "mm", 0.001);
+            Add(FormulaConvertUnitCategory.Distance, "um", 1e-6);
+            Add(FormulaConvertUnitCategory.Distance, "nm", 1e-9);
+            Add(FormulaConvertUnitCategory.Distance, "ly", 9.4607304725808e15);
+            Add(FormulaConvertUnitCategory.Distance, "au", 149597870700.0);
+            Add(FormulaConvertUnitCategory.Distance, "pc", 3.085677581491367e16);
+            Add(FormulaConvertUnitCategory.Distance, "parsec", 3.085677581491367e16);
+
+            Add(FormulaConvertUnitCategory.Time, "sec", 1);
+            Add(FormulaConvertUnitCategory.Time, "s", 1);
+            Add(FormulaConvertUnitCategory.Time, "min", 60);
+            Add(FormulaConvertUnitCategory.Time, "mn", 60);
+            Add(FormulaConvertUnitCategory.Time, "hr", 3600);
+            Add(FormulaConvertUnitCategory.Time, "day", 86400);
+            Add(FormulaConvertUnitCategory.Time, "d", 86400);
+            Add(FormulaConvertUnitCategory.Time, "yr", 31557600);
+
+            Add(FormulaConvertUnitCategory.Pressure, "Pa", 1);
+            Add(FormulaConvertUnitCategory.Pressure, "p", 1);
+            Add(FormulaConvertUnitCategory.Pressure, "atm", 101325);
+            Add(FormulaConvertUnitCategory.Pressure, "at", 101325);
+            Add(FormulaConvertUnitCategory.Pressure, "mmHg", 133.322);
+            Add(FormulaConvertUnitCategory.Pressure, "psi", 6894.757);
+            Add(FormulaConvertUnitCategory.Pressure, "Torr", 133.322);
+
+            Add(FormulaConvertUnitCategory.Force, "N", 1);
+            Add(FormulaConvertUnitCategory.Force, "dyn", 1e-5);
+            Add(FormulaConvertUnitCategory.Force, "lbf", 4.44822);
+            Add(FormulaConvertUnitCategory.Force, "pond", 0.00980665);
+
+            Add(FormulaConvertUnitCategory.Energy, "J", 1);
+            Add(FormulaConvertUnitCategory.Energy, "kJ", 1000);
+            Add(FormulaConvertUnitCategory.Energy, "e", 1e-7);
+            Add(FormulaConvertUnitCategory.Energy, "c", 4.184);
+            Add(FormulaConvertUnitCategory.Energy, "cal", 4.184);
+            Add(FormulaConvertUnitCategory.Energy, "eV", 1.60218e-19);
+            Add(FormulaConvertUnitCategory.Energy, "HPh", 2684519.54);
+            Add(FormulaConvertUnitCategory.Energy, "Wh", 3600);
+            Add(FormulaConvertUnitCategory.Energy, "flb", 1.35582);
+            Add(FormulaConvertUnitCategory.Energy, "BTU", 1055.056);
+
+            Add(FormulaConvertUnitCategory.Power, "W", 1);
+            Add(FormulaConvertUnitCategory.Power, "kW", 1000);
+            Add(FormulaConvertUnitCategory.Power, "HP", 745.69987);
+            Add(FormulaConvertUnitCategory.Power, "PS", 735.49875);
+
+            Add(FormulaConvertUnitCategory.Temperature, "C", double.NaN);
+            Add(FormulaConvertUnitCategory.Temperature, "F", double.NaN);
+            Add(FormulaConvertUnitCategory.Temperature, "K", double.NaN);
+            Add(FormulaConvertUnitCategory.Temperature, "Rank", double.NaN);
+            Add(FormulaConvertUnitCategory.Temperature, "Reau", double.NaN);
+
+            Add(FormulaConvertUnitCategory.Area, "m2", 1);
+            Add(FormulaConvertUnitCategory.Area, "m^2", 1);
+            Add(FormulaConvertUnitCategory.Area, "km2", 1e6);
+            Add(FormulaConvertUnitCategory.Area, "km^2", 1e6);
+            Add(FormulaConvertUnitCategory.Area, "mi2", 2589988.11);
+            Add(FormulaConvertUnitCategory.Area, "mi^2", 2589988.11);
+            Add(FormulaConvertUnitCategory.Area, "ft2", 0.092903);
+            Add(FormulaConvertUnitCategory.Area, "ft^2", 0.092903);
+            Add(FormulaConvertUnitCategory.Area, "in2", 0.000645);
+            Add(FormulaConvertUnitCategory.Area, "in^2", 0.000645);
+            Add(FormulaConvertUnitCategory.Area, "yd2", 0.836127);
+            Add(FormulaConvertUnitCategory.Area, "yd^2", 0.836127);
+            Add(FormulaConvertUnitCategory.Area, "ha", 10000);
+            Add(FormulaConvertUnitCategory.Area, "acre", 4046.856);
+
+            Add(FormulaConvertUnitCategory.Volume, "l", 1);
+            Add(FormulaConvertUnitCategory.Volume, "L", 1);
+            Add(FormulaConvertUnitCategory.Volume, "tsp", 0.00492892);
+            Add(FormulaConvertUnitCategory.Volume, "tbs", 0.0147868);
+            Add(FormulaConvertUnitCategory.Volume, "oz", 0.0295735);
+            Add(FormulaConvertUnitCategory.Volume, "cup", 0.236588);
+            Add(FormulaConvertUnitCategory.Volume, "pt", 0.473176);
+            Add(FormulaConvertUnitCategory.Volume, "qt", 0.946353);
+            Add(FormulaConvertUnitCategory.Volume, "gal", 3.785412);
+            Add(FormulaConvertUnitCategory.Volume, "m3", 1000);
+            Add(FormulaConvertUnitCategory.Volume, "m^3", 1000);
+            Add(FormulaConvertUnitCategory.Volume, "mi3", 4168181825441);
+            Add(FormulaConvertUnitCategory.Volume, "mi^3", 4168181825441);
+            Add(FormulaConvertUnitCategory.Volume, "ft3", 28.3168);
+            Add(FormulaConvertUnitCategory.Volume, "ft^3", 28.3168);
+            Add(FormulaConvertUnitCategory.Volume, "in3", 0.0163871);
+            Add(FormulaConvertUnitCategory.Volume, "in^3", 0.0163871);
+            Add(FormulaConvertUnitCategory.Volume, "yd3", 764.555);
+            Add(FormulaConvertUnitCategory.Volume, "yd^3", 764.555);
+            Add(FormulaConvertUnitCategory.Volume, "ml", 0.001);
+            Add(FormulaConvertUnitCategory.Volume, "cl", 0.01);
+            Add(FormulaConvertUnitCategory.Volume, "dl", 0.1);
+            Add(FormulaConvertUnitCategory.Volume, "Nmi3", 6352182208);
+            Add(FormulaConvertUnitCategory.Volume, "Nmi^3", 6352182208);
+
+            Add(FormulaConvertUnitCategory.Speed, "m/s", 1);
+            Add(FormulaConvertUnitCategory.Speed, "m/h", 1.0 / 3600);
+            Add(FormulaConvertUnitCategory.Speed, "mph", 0.44704);
+            Add(FormulaConvertUnitCategory.Speed, "kn", 0.514444);
+
+            Add(FormulaConvertUnitCategory.Information, "bit", 1);
+            Add(FormulaConvertUnitCategory.Information, "byte", 8);
+            Add(FormulaConvertUnitCategory.Information, "kbit", 1000);
+            Add(FormulaConvertUnitCategory.Information, "kbyte", 8000);
+            Add(FormulaConvertUnitCategory.Information, "Mbit", 1e6);
+            Add(FormulaConvertUnitCategory.Information, "Mbyte", 8e6);
+            Add(FormulaConvertUnitCategory.Information, "Gbit", 1e9);
+            Add(FormulaConvertUnitCategory.Information, "Gbyte", 8e9);
+            Add(FormulaConvertUnitCategory.Information, "Tbit", 1e12);
+            Add(FormulaConvertUnitCategory.Information, "Tbyte", 8e12);
+
+            return units;
+        }
+
+        private static readonly Dictionary<string, double> FormulaConvertPrefixes = new(StringComparer.Ordinal)
+        {
+            ["Y"] = 1e24,
+            ["Z"] = 1e21,
+            ["E"] = 1e18,
+            ["P"] = 1e15,
+            ["T"] = 1e12,
+            ["G"] = 1e9,
+            ["M"] = 1e6,
+            ["k"] = 1e3,
+            ["h"] = 1e2,
+            ["da"] = 1e1,
+            ["e"] = 1e1,
+            ["d"] = 1e-1,
+            ["c"] = 1e-2,
+            ["m"] = 1e-3,
+            ["u"] = 1e-6,
+            ["n"] = 1e-9,
+            ["p"] = 1e-12,
+            ["f"] = 1e-15,
+            ["a"] = 1e-18,
+            ["z"] = 1e-21,
+            ["y"] = 1e-24
+        };
+
+        private static readonly Dictionary<string, double> FormulaConvertBinaryPrefixes = new(StringComparer.Ordinal)
+        {
+            ["Yi"] = Math.Pow(2, 80),
+            ["Zi"] = Math.Pow(2, 70),
+            ["Ei"] = Math.Pow(2, 60),
+            ["Pi"] = Math.Pow(2, 50),
+            ["Ti"] = Math.Pow(2, 40),
+            ["Gi"] = Math.Pow(2, 30),
+            ["Mi"] = Math.Pow(2, 20),
+            ["ki"] = Math.Pow(2, 10)
+        };
+
+        private bool TryEvaluateFormulaConvertFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaOperand(function.Arguments[0], rowOffset, colOffset, out var numberValue))
+                return false;
+
+            if (numberValue is ErrorValue numberError)
+            {
+                value = numberError;
+                return true;
+            }
+
+            if (!TryResolveFormulaOperand(function.Arguments[1], rowOffset, colOffset, out var fromValue))
+                return false;
+
+            if (fromValue is ErrorValue fromError)
+            {
+                value = fromError;
+                return true;
+            }
+
+            if (!TryResolveFormulaOperand(function.Arguments[2], rowOffset, colOffset, out var toValue))
+                return false;
+
+            if (toValue is ErrorValue toError)
+            {
+                value = toError;
+                return true;
+            }
+
+            if (!TryGetFormulaConvertNumber(numberValue, out var number))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            if (!double.IsFinite(number))
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            value = EvaluateFormulaConvert(number, FormulaConvertText(fromValue), FormulaConvertText(toValue));
+            return true;
+        }
+
+        private static ScalarValue EvaluateFormulaConvert(double number, string from, string to)
+        {
+            if (!TryResolveFormulaConvertUnit(from, out var fromCategory, out var fromFactor) ||
+                !TryResolveFormulaConvertUnit(to, out var toCategory, out var toFactor) ||
+                fromCategory != toCategory)
+            {
+                return ErrorValue.NA;
+            }
+
+            if (fromCategory == FormulaConvertUnitCategory.Temperature)
+            {
+                var kelvin = from switch
+                {
+                    "C" => number + 273.15,
+                    "F" => (number - 32) * 5.0 / 9.0 + 273.15,
+                    "K" => number,
+                    "Rank" => number * 5.0 / 9.0,
+                    "Reau" => number * 5.0 / 4.0 + 273.15,
+                    _ => double.NaN
+                };
+                if (!double.IsFinite(kelvin))
+                    return ErrorValue.NA;
+
+                var result = to switch
+                {
+                    "C" => kelvin - 273.15,
+                    "F" => (kelvin - 273.15) * 9.0 / 5.0 + 32,
+                    "K" => kelvin,
+                    "Rank" => kelvin * 9.0 / 5.0,
+                    "Reau" => (kelvin - 273.15) * 4.0 / 5.0,
+                    _ => double.NaN
+                };
+                return double.IsFinite(result) ? new NumberValue(result) : ErrorValue.NA;
+            }
+
+            var converted = number * fromFactor / toFactor;
+            return double.IsFinite(converted) ? new NumberValue(converted) : ErrorValue.Num;
+        }
+
+        private static bool TryResolveFormulaConvertUnit(
+            string unit,
+            out FormulaConvertUnitCategory category,
+            out double factor)
+        {
+            if (FormulaConvertUnits.TryGetValue(unit, out var entry))
+            {
+                category = entry.Cat;
+                factor = entry.Factor;
+                return true;
+            }
+
+            if (TryResolveFormulaConvertBinaryPrefixedUnit(unit, out category, out factor))
+                return true;
+
+            if (TryResolveFormulaConvertPrefixedUnit(unit, 2, out category, out factor))
+                return true;
+
+            if (TryResolveFormulaConvertPrefixedUnit(unit, 1, out category, out factor))
+                return true;
+
+            category = default;
+            factor = 0;
+            return false;
+        }
+
+        private static bool TryResolveFormulaConvertBinaryPrefixedUnit(
+            string unit,
+            out FormulaConvertUnitCategory category,
+            out double factor)
+        {
+            if (unit.Length > 2)
+            {
+                var prefix = unit[..2];
+                var rest = unit[2..];
+                if (FormulaConvertBinaryPrefixes.TryGetValue(prefix, out var prefixFactor) &&
+                    FormulaConvertUnits.TryGetValue(rest, out var entry) &&
+                    entry.Cat == FormulaConvertUnitCategory.Information)
+                {
+                    category = entry.Cat;
+                    factor = entry.Factor * prefixFactor;
+                    return true;
+                }
+            }
+
+            category = default;
+            factor = 0;
+            return false;
+        }
+
+        private static bool TryResolveFormulaConvertPrefixedUnit(
+            string unit,
+            int prefixLength,
+            out FormulaConvertUnitCategory category,
+            out double factor)
+        {
+            if (unit.Length > prefixLength)
+            {
+                var prefix = unit[..prefixLength];
+                var rest = unit[prefixLength..];
+                if (FormulaConvertPrefixes.TryGetValue(prefix, out var prefixFactor) &&
+                    FormulaConvertUnits.TryGetValue(rest, out var entry) &&
+                    entry.Cat != FormulaConvertUnitCategory.Temperature)
+                {
+                    category = entry.Cat;
+                    factor = entry.Factor * prefixFactor;
+                    return true;
+                }
+            }
+
+            category = default;
+            factor = 0;
+            return false;
+        }
+
+        private static bool TryGetFormulaConvertNumber(ScalarValue value, out double number)
+        {
+            switch (value)
+            {
+                case NumberValue numeric:
+                    number = numeric.Value;
+                    return true;
+                case DateTimeValue dateTime:
+                    number = dateTime.Value;
+                    return true;
+                case BoolValue boolean:
+                    number = boolean.Value ? 1d : 0d;
+                    return true;
+                case BlankValue:
+                    number = 0d;
+                    return true;
+                case TextValue text:
+                    return TryParseFormulaConvertNumberText(text.Value, out number);
+                default:
+                    number = 0;
+                    return false;
+            }
+        }
+
+        private static bool TryParseFormulaConvertNumberText(string text, out double number)
+        {
+            var candidate = text.Trim();
+
+            var percentCount = 0;
+            while (candidate.EndsWith('%'))
+            {
+                percentCount++;
+                candidate = candidate[..^1].TrimEnd();
+            }
+
+            if (percentCount > 0 &&
+                double.TryParse(candidate, NumberStyles.Any, FormulaConvertTextNumberCulture, out number))
+            {
+                for (var i = 0; i < percentCount; i++)
+                    number /= 100d;
+
+                return true;
+            }
+
+            if (double.TryParse(candidate, NumberStyles.Any, FormulaConvertTextNumberCulture, out number))
+                return true;
+
+            if (TryParseFormulaExcelFakeLeapDayValueText(candidate, out number))
+                return true;
+
+            if (DateTime.TryParse(candidate, FormulaConvertTextNumberCulture, DateTimeStyles.None, out var dateTime))
+            {
+                number = IsFormulaConvertTimeOnlyText(candidate)
+                    ? dateTime.TimeOfDay.TotalDays
+                    : FormulaDateToExcelSerial(dateTime);
+                return true;
+            }
+
+            number = 0;
+            return false;
+        }
+
+        private static bool IsFormulaConvertTimeOnlyText(string text) =>
+            !text.Contains('/') &&
+            !text.Contains('-') &&
+            !FormulaDateTimeTextHasMonthNameRegex.IsMatch(text) &&
+            (text.Contains(':') || FormulaDateTimeTextHasAmPmRegex.IsMatch(text));
+
+        private static string FormulaConvertText(ScalarValue value) =>
+            value switch
+            {
+                TextValue text => text.Value,
+                NumberValue number => number.Value.ToString(CultureInfo.InvariantCulture),
+                DateTimeValue dateTime => dateTime.Value.ToString(CultureInfo.InvariantCulture),
+                BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+                BlankValue => string.Empty,
+                ErrorValue error => error.Code,
+                _ => value.ToString() ?? string.Empty
+            };
 
         private static bool TryParseFormulaBaseNumber(
             ScalarValue source,
