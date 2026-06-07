@@ -40,6 +40,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_tab_color_swatch_count=69");
         script.Should().Contain("focusable_sheet_tab=true");
         script.Should().Contain("focusable_active_sheet_tab=true");
+        script.Should().Contain("shell_focus_cycle_targets=true");
         script.Should().Contain("sheet_tab_context_keyboard_help=true");
         script.Should().Contain("sheet_tab_context_rename_menu_item=true");
         script.Should().Contain("sheet_tab_context_tab_color_menu_item=true");
@@ -58,6 +59,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("HasNativeTabColorMenuItem &&");
         script.Should().Contain("HasFocusableSheetTab &&");
         script.Should().Contain("HasFocusableActiveSheetTab &&");
+        script.Should().Contain("HasShellFocusCycleTargets &&");
         script.Should().Contain("HasSheetTabContextKeyboardHelp &&");
         script.Should().Contain("HasSheetTabContextRenameMenuItem &&");
         script.Should().Contain("HasSheetTabContextTabColorMenuItem &&");
@@ -100,7 +102,17 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("_session.PasteClipboardTextAtActiveCell(text, preserveText: true)");
         script.Should().Contain("CreatePastePictureMenuItem(`\"Picture`\", linkedPicture: false)");
         script.Should().Contain("CreateNativePastePictureMenuItem(`\"Linked Picture`\", linkedPicture: true)");
-        script.Should().Contain("private static bool IsSheetTabFocusKey(KeyEventArgs args)");
+        script.Should().Contain("private enum ShellFocusRegion");
+        script.Should().Contain("private static readonly ShellFocusRegion[] ShellFocusCycle");
+        script.Should().Contain("private static bool IsShellFocusCycleKey(KeyEventArgs args)");
+        script.Should().Contain("CycleShellFocus(reverse: e.KeyModifiers == KeyModifiers.Shift);");
+        script.Should().Contain("private void CycleShellFocus(bool reverse)");
+        script.Should().Contain("private static ShellFocusRegion GetNextShellFocusRegion(ShellFocusRegion current, bool reverse)");
+        script.Should().Contain("private ShellFocusRegion GetCurrentShellFocusRegion()");
+        script.Should().Contain("private bool FocusShellRegion(ShellFocusRegion region)");
+        script.Should().Contain("private bool FocusFirstEnabledToolbarControl()");
+        script.Should().Contain("private IReadOnlyList<Control> GetToolbarFocusTargets()");
+        script.Should().Contain("private static bool FocusControl(Control control)");
         script.Should().Contain("private void NavigateSheetTabFromKeyboard(SheetId sheetId, KeyEventArgs args)");
         script.Should().Contain("private bool SelectAdjacentVisibleSheetFromKeyboard(int direction, bool selectRange)");
         script.Should().Contain("Math.Clamp(targetIndex, 0, _session.SheetTabs.Count - 1)");
@@ -486,6 +498,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_tab_color_swatch_count=69" "$artifact_root/launch.txt"
                       grep -q "focusable_sheet_tab=true" "$artifact_root/launch.txt"
                       grep -q "focusable_active_sheet_tab=true" "$artifact_root/launch.txt"
+                      grep -q "shell_focus_cycle_targets=true" "$artifact_root/launch.txt"
                       grep -q "sheet_tab_context_keyboard_help=true" "$artifact_root/launch.txt"
                       grep -q "sheet_tab_context_rename_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "sheet_tab_context_tab_color_menu_item=true" "$artifact_root/launch.txt"
@@ -605,6 +618,15 @@ public sealed class MacOsAppReadinessPreflightTests
             public sealed class MainWindow
             {
                 private const string NativeWorkbookExtension = ".fxl";
+                private enum ShellFocusRegion { Worksheet, Toolbar, FormulaBar, SheetTabs, StatusBar }
+                private static readonly ShellFocusRegion[] ShellFocusCycle =
+                [
+                    ShellFocusRegion.Worksheet,
+                    ShellFocusRegion.Toolbar,
+                    ShellFocusRegion.FormulaBar,
+                    ShellFocusRegion.SheetTabs,
+                    ShellFocusRegion.StatusBar
+                ];
                 public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files) => await Task.CompletedTask;
                 private static void RenderCell(CellStyle? style)
                 {
@@ -786,7 +808,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     ShowRenameSheetDialogAsync(currentName).ToString();
                     AutomationProperties.SetAutomationId(nameBox, "RenameSheetNameBox");
                     var validationError = _session.Workbook.ValidateSheetName(proposedName, _session.ActiveSheet.Id);
-                    private const string SheetTabContextHelpText = "Selects this sheet. Press F6 to focus sheet tabs, use arrow keys to switch sheets, or right-click/press Shift+F10 for sheet tab options.";
+                    private const string SheetTabContextHelpText = "Selects this sheet. Press F6 repeatedly to reach sheet tabs, use arrow keys to switch sheets, or right-click/press Shift+F10 for sheet tab options.";
+                    _sheetGridHost.Focusable = true;
+                    AutomationProperties.SetName(_sheetGridHost, "Worksheet");
+                    _zoomText.Focusable = true;
+                    AutomationProperties.SetName(_zoomText, "Zoom");
                     Focusable = true,
                     Tag = tab.Id,
                     button.ContextMenu = CreateSheetTabContextMenu(tab);
@@ -863,8 +889,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     ToggleShowFormulas();
                     var result = _session.SetShowFormulas(showFormulas);
                     if (e.Key == Key.F11 && e.KeyModifiers == KeyModifiers.Shift) { }
-                    if (IsSheetTabFocusKey(e)) { }
-                    FocusActiveSheetTab();
+                    if (IsShellFocusCycleKey(e)) { }
+                    CycleShellFocus(reverse: e.KeyModifiers == KeyModifiers.Shift);
                     args.Key == Key.F6 && args.KeyModifiers == KeyModifiers.None;
                     if (e.Key == Key.PageUp && HasCommandAndShiftModifiers(e.KeyModifiers)) { SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: true); }
                     if (e.Key == Key.PageDown && HasCommandAndShiftModifiers(e.KeyModifiers)) { SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: true); }
@@ -881,6 +907,10 @@ public sealed class MacOsAppReadinessPreflightTests
                     LegalNoticeProvider.GetDocuments().Select(document => document.Title);
                     HasFocusableSheetTab: HasSheetTabButton(button => button.Focusable);
                     HasFocusableActiveSheetTab: FindSheetTabButton(_session.ActiveSheet.Id)?.Focusable == true;
+                    HasShellFocusCycleTargets: _sheetGridHost.Focusable &&;
+                    GetToolbarFocusTargets().Any(control => control.Focusable) &&;
+                    _formulaBox.Focusable &&;
+                    _zoomText.Focusable;
                     HasSheetTabContextKeyboardHelp: HasSheetTabButton(button =>;
                     string.Equals(AutomationProperties.GetHelpText(button), SheetTabContextHelpText, StringComparison.Ordinal));
                     HasSheetTabContextRenameMenuItem: HasSheetTabContextMenuItem("Rename...");
@@ -926,7 +956,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 private void SelectSheetTabFromKeyboard(SheetId sheetId, bool selectRange) { }
                 private SheetId? GetAdjacentSheetTabId(SheetId sheetId, int direction) => null;
                 private SheetId? GetEdgeSheetTabId(bool first) => null;
-                private void FocusActiveSheetTab() { }
+                private bool FocusActiveSheetTab() => true;
                 private bool FocusSheetTab(SheetId sheetId) => true;
                 private static void SheetTabContextMenu_Opened(object? sender, RoutedEventArgs args) { }
                 private Button? FindSheetTabButton(SheetId sheetId) => button.Tag is SheetId tag && tag == sheetId ? new() : null;
@@ -953,7 +983,27 @@ public sealed class MacOsAppReadinessPreflightTests
                 private void ApplyFreezePaneCommand(Func<WorkbookCellEditResult> execute, string successAction, string failureMessage) { }
                 private void ToggleShowFormulas() { }
                 private static bool HasCommandAndShiftModifiers(KeyModifiers modifiers) => true;
-                private static bool IsSheetTabFocusKey(KeyEventArgs args) => true;
+                private static bool IsShellFocusCycleKey(KeyEventArgs args) => true;
+                private void CycleShellFocus(bool reverse) { }
+                private static ShellFocusRegion GetNextShellFocusRegion(ShellFocusRegion current, bool reverse) => current;
+                private ShellFocusRegion GetCurrentShellFocusRegion() => ShellFocusRegion.Worksheet;
+                private bool FocusShellRegion(ShellFocusRegion region) => region switch
+                {
+                    ShellFocusRegion.Toolbar => FocusFirstEnabledToolbarControl(),
+                    ShellFocusRegion.FormulaBar => FocusControl(_formulaBox),
+                    ShellFocusRegion.SheetTabs => FocusActiveSheetTab(),
+                    ShellFocusRegion.StatusBar => FocusControl(_zoomText),
+                    _ => FocusControl(_sheetGridHost)
+                };
+                private bool FocusFirstEnabledToolbarControl() => true;
+                private IReadOnlyList<Control> GetToolbarFocusTargets() =>
+                [
+                    _openButton,
+                    _alignRightButton
+                ];
+                private bool IsAnyToolbarControlFocused() => true;
+                private bool IsAnySheetTabFocused() => true;
+                private static bool FocusControl(Control control) => true;
                 internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot() => new();
             }
             """);
@@ -995,6 +1045,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     NativeTabColorSwatchCount == CellColorPalettePlanner.BuildDefaultSwatches().Count &&
                     HasFocusableSheetTab &&
                     HasFocusableActiveSheetTab &&
+                    HasShellFocusCycleTargets &&
                     HasSheetTabContextKeyboardHelp &&
                     HasSheetTabContextRenameMenuItem &&
                     HasSheetTabContextTabColorMenuItem &&
@@ -1052,6 +1103,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 private int NativeTabColorSwatchCount { get; }
                 private bool HasFocusableSheetTab { get; }
                 private bool HasFocusableActiveSheetTab { get; }
+                private bool HasShellFocusCycleTargets { get; }
                 private bool HasSheetTabContextKeyboardHelp { get; }
                 private bool HasSheetTabContextRenameMenuItem { get; }
                 private bool HasSheetTabContextTabColorMenuItem { get; }
@@ -1091,7 +1143,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativePasteSpecialPictureMenuItem { get; }
                 private bool HasNativePasteSpecialLinkedPictureMenuItem { get; }
                 public int NativeCellStylesPresetCount { get; }
-                public string Report => "native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= focusable_sheet_tab= focusable_active_sheet_tab= sheet_tab_context_keyboard_help= sheet_tab_context_rename_menu_item= sheet_tab_context_tab_color_menu_item= sheet_tab_context_no_color_menu_item= sheet_tab_context_select_all_sheets_menu_item= sheet_tab_context_ungroup_sheets_menu_item= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_select_all_sheets_menu_item= native_ungroup_sheets_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+                public string Report => "native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= focusable_sheet_tab= focusable_active_sheet_tab= shell_focus_cycle_targets= sheet_tab_context_keyboard_help= sheet_tab_context_rename_menu_item= sheet_tab_context_tab_color_menu_item= sheet_tab_context_no_color_menu_item= sheet_tab_context_select_all_sheets_menu_item= sheet_tab_context_ungroup_sheets_menu_item= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_select_all_sheets_menu_item= native_ungroup_sheets_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
             }
             """);
 

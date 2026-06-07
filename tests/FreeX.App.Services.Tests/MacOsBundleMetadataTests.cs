@@ -136,6 +136,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"new_sheet_button=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"focusable_sheet_tab=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"focusable_active_sheet_tab=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"shell_focus_cycle_targets=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"sheet_tab_context_keyboard_help=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"sheet_tab_context_rename_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"sheet_tab_context_tab_color_menu_item=true\" \"$launch_smoke_report\"");

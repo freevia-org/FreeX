@@ -48,6 +48,15 @@ public sealed class MainWindow : Window
         Discard
     }
 
+    private enum ShellFocusRegion
+    {
+        Worksheet,
+        Toolbar,
+        FormulaBar,
+        SheetTabs,
+        StatusBar
+    }
+
     private const double CellIndentLevelWidth = 12;
     private const string CommaNumberFormat = "#,##0.00";
     private const string CurrencyNumberFormat = "$#,##0.00";
@@ -64,7 +73,15 @@ public sealed class MainWindow : Window
     private const int ZoomStepPercent = 10;
     private const string NativeWorkbookExtension = ".fxl";
     private const string PlatformAboutSummary = "Built with .NET 10, Avalonia, ClosedXML.";
-    private const string SheetTabContextHelpText = "Selects this sheet. Press F6 to focus sheet tabs, use arrow keys to switch sheets, or right-click/press Shift+F10 for sheet tab options.";
+    private const string SheetTabContextHelpText = "Selects this sheet. Press F6 repeatedly to reach sheet tabs, use arrow keys to switch sheets, or right-click/press Shift+F10 for sheet tab options.";
+    private static readonly ShellFocusRegion[] ShellFocusCycle =
+    [
+        ShellFocusRegion.Worksheet,
+        ShellFocusRegion.Toolbar,
+        ShellFocusRegion.FormulaBar,
+        ShellFocusRegion.SheetTabs,
+        ShellFocusRegion.StatusBar
+    ];
     private static readonly IBrush WindowBackground = Brush(246, 247, 249);
     private static readonly IBrush HeaderBackground = Brush(241, 243, 246);
     private static readonly IBrush HeaderForeground = Brush(73, 80, 93);
@@ -253,6 +270,10 @@ public sealed class MainWindow : Window
 
     private Control BuildWorksheetViewportChrome()
     {
+        _sheetGridHost.Focusable = true;
+        AutomationProperties.SetName(_sheetGridHost, "Worksheet");
+        AutomationProperties.SetHelpText(_sheetGridHost, "Shows the active workbook sheet.");
+
         _sheetScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
         _sheetScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
         _sheetScrollViewer.Content = _sheetGridHost;
@@ -767,6 +788,9 @@ public sealed class MainWindow : Window
         _zoomText.MinWidth = 44;
         _zoomText.TextAlignment = TextAlignment.Right;
         _zoomText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _zoomText.Focusable = true;
+        AutomationProperties.SetName(_zoomText, "Zoom");
+        AutomationProperties.SetHelpText(_zoomText, "Shows the active worksheet zoom.");
 
         _openButton.Content = "Open";
         _openButton.Padding = new Thickness(10, 4);
@@ -2713,7 +2737,7 @@ public sealed class MainWindow : Window
         return _session.SheetTabs[first ? 0 : _session.SheetTabs.Count - 1].Id;
     }
 
-    private void FocusActiveSheetTab()
+    private bool FocusActiveSheetTab()
         => FocusSheetTab(_session.ActiveSheet.Id);
 
     private bool FocusSheetTab(SheetId sheetId)
@@ -4499,6 +4523,11 @@ public sealed class MainWindow : Window
             HasNewSheetButton: _newSheetButton.Content?.ToString() == "+",
             HasFocusableSheetTab: HasSheetTabButton(button => button.Focusable),
             HasFocusableActiveSheetTab: FindSheetTabButton(_session.ActiveSheet.Id)?.Focusable == true,
+            HasShellFocusCycleTargets: _sheetGridHost.Focusable &&
+                GetToolbarFocusTargets().Any(control => control.Focusable) &&
+                _formulaBox.Focusable &&
+                FindSheetTabButton(_session.ActiveSheet.Id)?.Focusable == true &&
+                _zoomText.Focusable,
             HasSheetTabContextKeyboardHelp: HasSheetTabButton(button =>
                 string.Equals(AutomationProperties.GetHelpText(button), SheetTabContextHelpText, StringComparison.Ordinal)),
             HasSheetTabContextRenameMenuItem: HasSheetTabContextMenuItem("Rename..."),
@@ -4769,7 +4798,7 @@ public sealed class MainWindow : Window
             (modifiers & ~(commandModifiers | KeyModifiers.Shift)) == 0;
     }
 
-    private static bool IsSheetTabFocusKey(KeyEventArgs args) =>
+    private static bool IsShellFocusCycleKey(KeyEventArgs args) =>
         args.Key == Key.F6 &&
         (args.KeyModifiers == KeyModifiers.None || args.KeyModifiers == KeyModifiers.Shift);
 
@@ -4778,10 +4807,10 @@ public sealed class MainWindow : Window
 
     private async void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {
-        if (IsSheetTabFocusKey(e))
+        if (IsShellFocusCycleKey(e))
         {
             e.Handled = true;
-            FocusActiveSheetTab();
+            CycleShellFocus(reverse: e.KeyModifiers == KeyModifiers.Shift);
             return;
         }
 
@@ -4923,6 +4952,125 @@ public sealed class MainWindow : Window
             e.Handled = true;
             await OpenWorkbookAsync();
         }
+    }
+
+    private void CycleShellFocus(bool reverse)
+    {
+        var current = GetCurrentShellFocusRegion();
+        for (var attempt = 0; attempt < ShellFocusCycle.Length; attempt++)
+        {
+            current = GetNextShellFocusRegion(current, reverse);
+            if (FocusShellRegion(current))
+                return;
+        }
+    }
+
+    private static ShellFocusRegion GetNextShellFocusRegion(ShellFocusRegion current, bool reverse)
+    {
+        var index = Array.IndexOf(ShellFocusCycle, current);
+        if (index < 0)
+            index = 0;
+
+        var offset = reverse ? -1 : 1;
+        var nextIndex = (index + offset + ShellFocusCycle.Length) % ShellFocusCycle.Length;
+        return ShellFocusCycle[nextIndex];
+    }
+
+    private ShellFocusRegion GetCurrentShellFocusRegion()
+    {
+        if (_formulaBox.IsFocused)
+            return ShellFocusRegion.FormulaBar;
+
+        if (IsAnySheetTabFocused())
+            return ShellFocusRegion.SheetTabs;
+
+        if (_zoomText.IsFocused)
+            return ShellFocusRegion.StatusBar;
+
+        if (IsAnyToolbarControlFocused())
+            return ShellFocusRegion.Toolbar;
+
+        return ShellFocusRegion.Worksheet;
+    }
+
+    private bool FocusShellRegion(ShellFocusRegion region) =>
+        region switch
+        {
+            ShellFocusRegion.Toolbar => FocusFirstEnabledToolbarControl(),
+            ShellFocusRegion.FormulaBar => FocusControl(_formulaBox),
+            ShellFocusRegion.SheetTabs => FocusActiveSheetTab(),
+            ShellFocusRegion.StatusBar => FocusControl(_zoomText),
+            _ => FocusControl(_sheetGridHost)
+        };
+
+    private bool FocusFirstEnabledToolbarControl()
+    {
+        foreach (var control in GetToolbarFocusTargets())
+        {
+            if (FocusControl(control))
+                return true;
+        }
+
+        return false;
+    }
+
+    private IReadOnlyList<Control> GetToolbarFocusTargets() =>
+    [
+        _openButton,
+        _saveButton,
+        _saveAsButton,
+        _undoButton,
+        _redoButton,
+        _cutButton,
+        _copyButton,
+        _pasteButton,
+        _pasteSpecialButton,
+        _clearContentsButton,
+        _boldButton,
+        _italicButton,
+        _underlineButton,
+        _doubleUnderlineButton,
+        _strikethroughButton,
+        _increaseFontSizeButton,
+        _decreaseFontSizeButton,
+        _fillColorButton,
+        _fontColorButton,
+        _cellStylesButton,
+        _orientationButton,
+        _currencyFormatButton,
+        _percentFormatButton,
+        _commaStyleButton,
+        _increaseDecimalButton,
+        _decreaseDecimalButton,
+        _alignTopButton,
+        _alignMiddleButton,
+        _alignBottomButton,
+        _wrapTextButton,
+        _decreaseIndentButton,
+        _increaseIndentButton,
+        _alignLeftButton,
+        _alignCenterButton,
+        _alignRightButton
+    ];
+
+    private bool IsAnyToolbarControlFocused() =>
+        GetToolbarFocusTargets().Any(control => control.IsFocused);
+
+    private bool IsAnySheetTabFocused() =>
+        _sheetTabsHost.Content is StackPanel panel &&
+        panel.Children.OfType<Button>().Any(button => button.IsFocused);
+
+    private static bool FocusControl(Control control)
+    {
+        if (!control.Focusable ||
+            !control.IsEnabled ||
+            !control.IsVisible)
+        {
+            return false;
+        }
+
+        control.Focus();
+        return control.IsFocused;
     }
 
     private async void MainWindow_Closing(object? sender, WindowClosingEventArgs e)
