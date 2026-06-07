@@ -524,22 +524,11 @@ internal static class XlsxDataValidationNativeMetadataMapper
         {
             foreach (var nativeChildXml in childXmls)
             {
-                if (string.IsNullOrWhiteSpace(nativeChildXml))
-                    continue;
-
-                try
-                {
-                    var nativeChild = XElement.Parse(nativeChildXml);
-                    if (nativeChild.Name.Namespace == worksheetNs && nativeChild.Name.LocalName != "dataValidation")
-                    {
-                        dataValidations.Add(nativeChild);
-                        changed = true;
-                    }
-                }
-                catch
-                {
-                    // Ignore malformed native data-validation container payloads from older saves.
-                }
+                changed |= TryAddNativeWorksheetElement(
+                    dataValidations,
+                    nativeChildXml,
+                    worksheetNs,
+                    "dataValidation");
             }
         }
 
@@ -562,26 +551,36 @@ internal static class XlsxDataValidationNativeMetadataMapper
         {
             foreach (var nativeChildXml in childXmls)
             {
-                if (string.IsNullOrWhiteSpace(nativeChildXml))
-                    continue;
-
-                try
-                {
-                    var nativeChild = XElement.Parse(nativeChildXml);
-                    if (nativeChild.Name.Namespace == worksheetNs)
-                    {
-                        validationElement.Add(nativeChild);
-                        changed = true;
-                    }
-                }
-                catch
-                {
-                    // Ignore malformed native data-validation payloads from older saves.
-                }
+                changed |= TryAddNativeWorksheetElement(validationElement, nativeChildXml, worksheetNs);
             }
         }
 
         return changed;
+    }
+
+    private static bool TryAddNativeWorksheetElement(
+        XElement target,
+        string? xml,
+        XNamespace worksheetNs,
+        params string[] excludedLocalNames)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
+            return false;
+
+        try
+        {
+            var element = XElement.Parse(xml);
+            if (element.Name.Namespace != worksheetNs || excludedLocalNames.Contains(element.Name.LocalName))
+                return false;
+
+            target.Add(element);
+            return true;
+        }
+        catch
+        {
+            // Ignore malformed native data-validation payloads from older saves.
+            return false;
+        }
     }
 
     private static bool TrySetNativeAttributeIfMissing(XElement element, string name, string value)
