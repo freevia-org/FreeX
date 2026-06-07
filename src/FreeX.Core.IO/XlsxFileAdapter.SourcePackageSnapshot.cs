@@ -1506,15 +1506,7 @@ public sealed partial class XlsxFileAdapter
 
         private static void NormalizePatchThemeTypefaces(ZipArchive archive)
         {
-            foreach (var themeEntry in archive.Entries.Where(IsThemeXmlEntry).ToList())
-            {
-                var themeXml = XlsxPackageXmlEditor.LoadXml(themeEntry);
-                if (themeXml.Root is null)
-                    continue;
-
-                if (XlsxThemeTypefaceNormalizer.SanitizeNonEmptyTypefaceAttributes(themeXml.Root))
-                    XlsxPackageXmlEditor.ReplaceXml(archive, themeEntry.FullName, themeXml);
-            }
+            XlsxThemeTypefaceNormalizer.NormalizePackage(archive);
         }
 
         private static void NormalizePatchLegacyCommentFonts(ZipArchive archive)
@@ -3744,14 +3736,6 @@ public sealed partial class XlsxFileAdapter
         {
             var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
             return path.StartsWith("xl/tables/tableSingleCells", StringComparison.OrdinalIgnoreCase) &&
-                   path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
-                   !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static bool IsThemeXmlEntry(ZipArchiveEntry entry)
-        {
-            var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
-            return path.StartsWith("xl/theme/", StringComparison.OrdinalIgnoreCase) &&
                    path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
                    !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
         }

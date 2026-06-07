@@ -127,6 +127,27 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         ReadThemeMajorLatinTypeface(saved).Should().Be("Google Sans");
     }
 
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesThemeTypefaceNamesForSchemaValidity()
+    {
+        using var source = Save(CreateWorkbookThemeSourceWorkbook());
+        SetThemeMajorLatinTypeface(source, "\"Google Sans\", Roboto, sans-serif");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadThemeMajorLatinTypeface(saved).Should().Be("Google Sans");
+    }
+
     private static Workbook CreateWorkbookThemeSourceWorkbook()
     {
         var workbook = new Workbook("WorkbookThemePatchSave")
