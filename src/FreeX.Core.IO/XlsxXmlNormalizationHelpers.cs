@@ -78,6 +78,51 @@ internal static class XlsxXmlNormalizationHelpers
         return true;
     }
 
+    public static bool RemoveChildElementsExcept(XElement element, XName allowedChildName)
+    {
+        var changed = false;
+        foreach (var child in element.Elements().Where(child => child.Name != allowedChildName).ToList())
+        {
+            child.Remove();
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    public static bool RemoveChildElementsExcept(
+        XElement element,
+        XNamespace allowedNamespace,
+        IReadOnlySet<string> allowedLocalNames)
+    {
+        var changed = false;
+        foreach (var child in element.Elements().ToList())
+        {
+            if (child.Name.Namespace == allowedNamespace && allowedLocalNames.Contains(child.Name.LocalName))
+                continue;
+
+            child.Remove();
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    public static bool NormalizeChildOrder(XElement element, Func<XElement, int> orderSelector)
+    {
+        var children = element.Elements()
+            .Select((child, index) => new { Child = child, Index = index })
+            .OrderBy(item => orderSelector(item.Child))
+            .ThenBy(item => item.Index)
+            .Select(item => item.Child)
+            .ToList();
+        if (children.Count == 0 || element.Elements().SequenceEqual(children))
+            return false;
+
+        element.ReplaceNodes(children);
+        return true;
+    }
+
     public static bool NormalizeAttribute(
         XElement element,
         string attributeName,

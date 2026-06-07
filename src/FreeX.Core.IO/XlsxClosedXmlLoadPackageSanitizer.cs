@@ -19,6 +19,7 @@ internal readonly record struct XlsxClosedXmlLoadSanitizationHints(
     bool? HasStructuredTableSortStateSchemaIssues,
     bool? HasStructuredTableMetadataSchemaIssues,
     bool? HasDocumentPropertiesPackageGraphIssues,
+    bool? HasCustomRibbonPackageGraphIssues,
     bool? HasWorksheetSheetViewSchemaIssues,
     bool? HasWorkbookViewSchemaIssues,
     bool? HasWorkbookCalculationPropertySchemaIssues,
@@ -133,6 +134,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 RemoveWorksheetMergeCells(archive, mergeCellWorksheetPaths);
             if (requirements.HasDocumentPropertiesPackageGraphIssues)
                 XlsxDocumentPropertiesPreserver.NormalizePackageGraph(archive);
+            if (requirements.HasCustomRibbonPackageGraphIssues)
+                XlsxCustomRibbonPackageGraphNormalizer.NormalizePackage(archive);
         }
 
         sanitized.Position = 0;
@@ -244,6 +247,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 ResolveKnownOrScan(knownHints.HasStructuredTableSortStateSchemaIssues, archive, HasStructuredTableSortStateSchemaIssues),
                 ResolveKnownOrScan(knownHints.HasStructuredTableMetadataSchemaIssues, archive, HasStructuredTableMetadataSchemaIssues),
                 ResolveKnownOrScan(knownHints.HasDocumentPropertiesPackageGraphIssues, archive, HasDocumentPropertiesPackageGraphIssues),
+                ResolveKnownOrScan(knownHints.HasCustomRibbonPackageGraphIssues, archive, HasCustomRibbonPackageGraphIssues),
                 ResolveKnownOrScan(knownHints.HasWorksheetSheetViewSchemaIssues, archive, HasWorksheetSheetViewSchemaIssues),
                 ResolveKnownOrScan(knownHints.HasWorkbookViewSchemaIssues, archive, HasWorkbookViewSchemaIssues),
                 ResolveKnownOrScan(knownHints.HasWorkbookCalculationPropertySchemaIssues, archive, HasWorkbookCalculationPropertySchemaIssues),
@@ -259,7 +263,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         }
         catch
         {
-            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, null);
+            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, null);
         }
         finally
         {
@@ -287,6 +291,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             hints.HasStructuredTableSortStateSchemaIssues is not { } hasStructuredTableSortStateSchemaIssues ||
             hints.HasStructuredTableMetadataSchemaIssues is not { } hasStructuredTableMetadataSchemaIssues ||
             hints.HasDocumentPropertiesPackageGraphIssues is not { } hasDocumentPropertiesPackageGraphIssues ||
+            hints.HasCustomRibbonPackageGraphIssues is not { } hasCustomRibbonPackageGraphIssues ||
             hints.HasWorksheetSheetViewSchemaIssues is not { } hasWorksheetSheetViewSchemaIssues ||
             hints.HasWorkbookViewSchemaIssues is not { } hasWorkbookViewSchemaIssues ||
             hints.HasWorkbookCalculationPropertySchemaIssues is not { } hasWorkbookCalculationPropertySchemaIssues ||
@@ -329,6 +334,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             hasStructuredTableSortStateSchemaIssues,
             hasStructuredTableMetadataSchemaIssues,
             hasDocumentPropertiesPackageGraphIssues,
+            hasCustomRibbonPackageGraphIssues,
             hasWorksheetSheetViewSchemaIssues,
             hasWorkbookViewSchemaIssues,
             hasWorkbookCalculationPropertySchemaIssues,
@@ -388,6 +394,108 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             return false;
         }
     }
+
+    private static bool HasCustomRibbonPackageGraphIssues(ZipArchive archive)
+    {
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationshipsEntry = archive.GetEntry("_rels/.rels");
+        if (relationshipsEntry is null)
+            return false;
+
+        try
+        {
+            var relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
+            var root = relationshipsXml.Root;
+            if (root is null || root.Name != relationshipNs + "Relationships")
+                return false;
+
+            var relationships = root.Elements(relationshipNs + "Relationship").ToList();
+            var idCounts = relationships
+                .Select(relationship => relationship.Attribute("Id")?.Value)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .GroupBy(value => value!, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
+            foreach (var relationship in relationships)
+            {
+                var isCustomUiRelationship = IsCustomRibbonRootRelationship(relationship);
+                var id = relationship.Attribute("Id")?.Value;
+                if (!string.IsNullOrWhiteSpace(id) &&
+                    idCounts.TryGetValue(id, out var count) &&
+                    count > 1 &&
+                    isCustomUiRelationship)
+                {
+                    return true;
+                }
+
+                if (isCustomUiRelationship && !CustomRibbonRootRelationshipTargetsExistingPart(archive, relationship))
+                    return true;
+            }
+        }
+        catch
+        {
+            return false;
+        }
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is null)
+            return false;
+
+        try
+        {
+            var contentTypesXml = XlsxPackageXmlEditor.LoadXml(contentTypesEntry);
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            foreach (var contentType in contentTypesXml.Root?.Elements(contentTypeNs + "Override") ?? [])
+            {
+                var partName = contentType.Attribute("PartName")?.Value;
+                if (string.IsNullOrWhiteSpace(partName))
+                    continue;
+
+                var normalizedPartName = XlsxPackagePath.NormalizeZipPath(partName.Trim().TrimStart('/').Replace('\\', '/'));
+                if (IsCustomRibbonPart(normalizedPartName) && archive.GetEntry(normalizedPartName) is null)
+                    return true;
+            }
+        }
+        catch
+        {
+            return false;
+        }
+
+        return false;
+    }
+
+    private static bool IsCustomRibbonRootRelationship(XElement relationship)
+    {
+        var relationshipType = relationship.Attribute("Type")?.Value?.Trim();
+        return string.Equals(
+                   relationshipType,
+                   "http://schemas.microsoft.com/office/2006/relationships/ui/extensibility",
+                   StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(
+                   relationshipType,
+                   "http://schemas.microsoft.com/office/2007/relationships/ui/extensibility",
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool CustomRibbonRootRelationshipTargetsExistingPart(ZipArchive archive, XElement relationship)
+    {
+        var targetMode = relationship.Attribute("TargetMode")?.Value?.Trim();
+        if (!string.IsNullOrWhiteSpace(targetMode) &&
+            !string.Equals(targetMode, "Internal", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var target = relationship.Attribute("Target")?.Value?.Trim();
+        if (string.IsNullOrWhiteSpace(target))
+            return false;
+
+        var targetPart = XlsxPackagePath.ResolveRelationshipTarget("", target.Replace('\\', '/'));
+        return IsCustomRibbonPart(targetPart) && archive.GetEntry(targetPart) is not null;
+    }
+
+    private static bool IsCustomRibbonPart(string partName) =>
+        partName.StartsWith("customUI/", StringComparison.OrdinalIgnoreCase) &&
+        partName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
 
     private static bool HasDocumentPropertyRelationshipIssue(
         ZipArchive archive,
@@ -463,6 +571,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         bool HasStructuredTableSortStateSchemaIssues,
         bool HasStructuredTableMetadataSchemaIssues,
         bool HasDocumentPropertiesPackageGraphIssues,
+        bool HasCustomRibbonPackageGraphIssues,
         bool HasWorksheetSheetViewSchemaIssues,
         bool HasWorkbookViewSchemaIssues,
         bool HasWorkbookCalculationPropertySchemaIssues,
@@ -491,6 +600,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             HasStructuredTableSortStateSchemaIssues ||
             HasStructuredTableMetadataSchemaIssues ||
             HasDocumentPropertiesPackageGraphIssues ||
+            HasCustomRibbonPackageGraphIssues ||
             HasWorksheetSheetViewSchemaIssues ||
             HasWorkbookViewSchemaIssues ||
             HasWorkbookCalculationPropertySchemaIssues ||
@@ -551,10 +661,13 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             targetArchive?.Dispose();
             targetArchive = null;
             targetPackage.Position = 0;
-            if (requirements.HasDocumentPropertiesPackageGraphIssues)
+            if (requirements.HasDocumentPropertiesPackageGraphIssues || requirements.HasCustomRibbonPackageGraphIssues)
             {
                 using var archive = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
-                XlsxDocumentPropertiesPreserver.NormalizePackageGraph(archive);
+                if (requirements.HasDocumentPropertiesPackageGraphIssues)
+                    XlsxDocumentPropertiesPreserver.NormalizePackageGraph(archive);
+                if (requirements.HasCustomRibbonPackageGraphIssues)
+                    XlsxCustomRibbonPackageGraphNormalizer.NormalizePackage(archive);
                 targetPackage.Position = 0;
             }
 

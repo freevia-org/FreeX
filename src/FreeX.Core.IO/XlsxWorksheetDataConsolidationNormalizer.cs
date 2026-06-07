@@ -31,7 +31,7 @@ internal static class XlsxWorksheetDataConsolidationNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(dataConsolidate, DataConsolidateAttributes);
-        changed |= RemoveUnexpectedChildren(dataConsolidate, WorksheetNs + "dataRefs");
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(dataConsolidate, WorksheetNs + "dataRefs");
         changed |= MergeDuplicateDataReferences(dataConsolidate);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(dataConsolidate, "function", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, ValidFunctions));
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(dataConsolidate, "leftLabels", XlsxXmlNormalizationHelpers.NormalizeBoolean);
@@ -42,7 +42,7 @@ internal static class XlsxWorksheetDataConsolidationNormalizer
         foreach (var dataRefs in dataConsolidate.Elements(WorksheetNs + "dataRefs"))
         {
             changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(dataRefs, DataReferencesAttributes);
-            changed |= RemoveUnexpectedChildren(dataRefs, WorksheetNs + "dataRef");
+            changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(dataRefs, WorksheetNs + "dataRef");
             foreach (var dataRef in dataRefs.Elements(WorksheetNs + "dataRef"))
             {
                 changed |= RemoveUnknownDataReferenceAttributes(dataRef);
@@ -91,21 +91,6 @@ internal static class XlsxWorksheetDataConsolidationNormalizer
         }
 
         return true;
-    }
-
-    private static bool RemoveUnexpectedChildren(XElement element, XName allowedChildName)
-    {
-        var changed = false;
-        foreach (var child in element.Elements().ToList())
-        {
-            if (child.Name == allowedChildName)
-                continue;
-
-            child.Remove();
-            changed = true;
-        }
-
-        return changed;
     }
 
     private static bool RemoveUnknownDataReferenceAttributes(XElement element)

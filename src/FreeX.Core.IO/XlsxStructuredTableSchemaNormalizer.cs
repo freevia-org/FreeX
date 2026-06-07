@@ -98,7 +98,7 @@ internal static class XlsxStructuredTableSchemaNormalizer
             changed |= NormalizeTableStyleInfoElement(tableStyleInfo);
 
         changed |= NormalizeExtensionLists(table);
-        changed |= NormalizeChildOrder(table, TableChildOrder);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeChildOrder(table, TableChildOrder);
         return changed;
     }
 
@@ -129,7 +129,7 @@ internal static class XlsxStructuredTableSchemaNormalizer
             changed |= NormalizeTableColumnElement(columns[index], index + 1);
 
         changed |= RemoveExtensionLists(tableColumns);
-        changed |= NormalizeChildOrder(tableColumns, TableColumnsChildOrder);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeChildOrder(tableColumns, TableColumnsChildOrder);
         return changed;
     }
 
@@ -154,7 +154,7 @@ internal static class XlsxStructuredTableSchemaNormalizer
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(formula, "array", XlsxXmlNormalizationHelpers.NormalizeBoolean);
 
         changed |= NormalizeExtensionLists(tableColumn);
-        changed |= NormalizeChildOrder(tableColumn, TableColumnChildOrder);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeChildOrder(tableColumn, TableColumnChildOrder);
         return changed;
     }
 
@@ -190,7 +190,7 @@ internal static class XlsxStructuredTableSchemaNormalizer
         foreach (var sortCondition in sortState.Elements(WorksheetNs + "sortCondition"))
             changed |= NormalizeExtensionLists(sortCondition);
 
-        changed |= NormalizeChildOrder(sortState, SortStateChildOrder);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeChildOrder(sortState, SortStateChildOrder);
         return changed;
     }
 
@@ -229,21 +229,6 @@ internal static class XlsxStructuredTableSchemaNormalizer
 
         foreach (var extensionList in extensionLists)
             extensionList.Remove();
-        return true;
-    }
-
-    private static bool NormalizeChildOrder(XElement parent, Func<XElement, int> orderSelector)
-    {
-        var orderedChildren = parent.Elements()
-            .Select((element, index) => new { Element = element, Index = index })
-            .OrderBy(item => orderSelector(item.Element))
-            .ThenBy(item => item.Index)
-            .Select(item => item.Element)
-            .ToList();
-        if (orderedChildren.Count == 0 || parent.Elements().SequenceEqual(orderedChildren))
-            return false;
-
-        parent.ReplaceNodes(orderedChildren);
         return true;
     }
 

@@ -34,20 +34,15 @@ public sealed class OneVariableDataTableCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
-        if (_tableRange.Start.Sheet != _tableRange.End.Sheet ||
-            _formulaCell.Sheet != _tableRange.Start.Sheet ||
-            _inputCell.Sheet != _tableRange.Start.Sheet)
-        {
-            return new CommandOutcome(false, "Data Table cells must be on one sheet.");
-        }
-
-        if (_tableRange.RowCount < 2 || _tableRange.ColCount < 2)
-            return new CommandOutcome(false, "Data Table requires at least two rows and two columns.");
-
-        var sheet = ctx.GetSheet(_tableRange.Start.Sheet);
-        var formula = sheet.GetCell(_formulaCell)?.FormulaText;
-        if (string.IsNullOrWhiteSpace(formula))
-            return new CommandOutcome(false, "Data Table formula cell must contain a formula.");
+        var validation = DataTableCommandGuards.ValidateInputs(
+            ctx,
+            _tableRange,
+            _formulaCell,
+            [_inputCell],
+            out var sheet,
+            out var formula);
+        if (validation is not null)
+            return validation;
 
         _snapshot = [];
         var affected = new List<CellAddress>();
@@ -59,8 +54,8 @@ public sealed class OneVariableDataTableCommand : IWorkbookCommand
                 for (uint row = _tableRange.Start.Row + 1; row <= _tableRange.End.Row; row++)
                 {
                     var outputAddress = new CellAddress(_tableRange.Start.Sheet, row, col);
-                    _snapshot.Add((outputAddress, sheet.GetCell(outputAddress)?.Clone()));
-                    sheet.SetCell(outputAddress, Cell.FromFormula(DataTableFormulaRewriter.ReplaceCellReference(formula, _inputCell, trialInputAddress)));
+                    _snapshot.Add((outputAddress, sheet!.GetCell(outputAddress)?.Clone()));
+                    sheet.SetCell(outputAddress, Cell.FromFormula(DataTableFormulaRewriter.ReplaceCellReference(formula!, _inputCell, trialInputAddress)));
                     affected.Add(outputAddress);
                 }
             }
@@ -73,8 +68,8 @@ public sealed class OneVariableDataTableCommand : IWorkbookCommand
                 for (uint col = _tableRange.Start.Col + 1; col <= _tableRange.End.Col; col++)
                 {
                     var outputAddress = new CellAddress(_tableRange.Start.Sheet, row, col);
-                    _snapshot.Add((outputAddress, sheet.GetCell(outputAddress)?.Clone()));
-                    sheet.SetCell(outputAddress, Cell.FromFormula(DataTableFormulaRewriter.ReplaceCellReference(formula, _inputCell, trialInputAddress)));
+                    _snapshot.Add((outputAddress, sheet!.GetCell(outputAddress)?.Clone()));
+                    sheet.SetCell(outputAddress, Cell.FromFormula(DataTableFormulaRewriter.ReplaceCellReference(formula!, _inputCell, trialInputAddress)));
                     affected.Add(outputAddress);
                 }
             }
@@ -128,21 +123,15 @@ public sealed class TwoVariableDataTableCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
-        if (_tableRange.Start.Sheet != _tableRange.End.Sheet ||
-            _formulaCell.Sheet != _tableRange.Start.Sheet ||
-            _rowInputCell.Sheet != _tableRange.Start.Sheet ||
-            _columnInputCell.Sheet != _tableRange.Start.Sheet)
-        {
-            return new CommandOutcome(false, "Data Table cells must be on one sheet.");
-        }
-
-        if (_tableRange.RowCount < 2 || _tableRange.ColCount < 2)
-            return new CommandOutcome(false, "Data Table requires at least two rows and two columns.");
-
-        var sheet = ctx.GetSheet(_tableRange.Start.Sheet);
-        var formula = sheet.GetCell(_formulaCell)?.FormulaText;
-        if (string.IsNullOrWhiteSpace(formula))
-            return new CommandOutcome(false, "Data Table formula cell must contain a formula.");
+        var validation = DataTableCommandGuards.ValidateInputs(
+            ctx,
+            _tableRange,
+            _formulaCell,
+            [_rowInputCell, _columnInputCell],
+            out var sheet,
+            out var formula);
+        if (validation is not null)
+            return validation;
 
         _snapshot = [];
         var affected = new List<CellAddress>();
@@ -153,9 +142,9 @@ public sealed class TwoVariableDataTableCommand : IWorkbookCommand
             {
                 var rowTrialInputAddress = new CellAddress(_tableRange.Start.Sheet, _tableRange.Start.Row, col);
                 var outputAddress = new CellAddress(_tableRange.Start.Sheet, row, col);
-                var rewritten = DataTableFormulaRewriter.ReplaceCellReference(formula, _columnInputCell, columnTrialInputAddress);
+                var rewritten = DataTableFormulaRewriter.ReplaceCellReference(formula!, _columnInputCell, columnTrialInputAddress);
                 rewritten = DataTableFormulaRewriter.ReplaceCellReference(rewritten, _rowInputCell, rowTrialInputAddress);
-                _snapshot.Add((outputAddress, sheet.GetCell(outputAddress)?.Clone()));
+                _snapshot.Add((outputAddress, sheet!.GetCell(outputAddress)?.Clone()));
                 sheet.SetCell(outputAddress, Cell.FromFormula(rewritten));
                 affected.Add(outputAddress);
             }
@@ -180,6 +169,49 @@ public sealed class TwoVariableDataTableCommand : IWorkbookCommand
         }
 
         _applied = false;
+    }
+}
+
+internal static class DataTableCommandGuards
+{
+    public static CommandOutcome? ValidateInputs(
+        ICommandContext ctx,
+        GridRange tableRange,
+        CellAddress formulaCell,
+        ReadOnlySpan<CellAddress> inputCells,
+        out Sheet? sheet,
+        out string? formula)
+    {
+        sheet = null;
+        formula = null;
+
+        if (tableRange.Start.Sheet != tableRange.End.Sheet ||
+            formulaCell.Sheet != tableRange.Start.Sheet ||
+            HasInputCellOnDifferentSheet(tableRange, inputCells))
+        {
+            return new CommandOutcome(false, "Data Table cells must be on one sheet.");
+        }
+
+        if (tableRange.RowCount < 2 || tableRange.ColCount < 2)
+            return new CommandOutcome(false, "Data Table requires at least two rows and two columns.");
+
+        sheet = ctx.GetSheet(tableRange.Start.Sheet);
+        formula = sheet.GetCell(formulaCell)?.FormulaText;
+        if (string.IsNullOrWhiteSpace(formula))
+            return new CommandOutcome(false, "Data Table formula cell must contain a formula.");
+
+        return null;
+    }
+
+    private static bool HasInputCellOnDifferentSheet(GridRange tableRange, ReadOnlySpan<CellAddress> inputCells)
+    {
+        foreach (var inputCell in inputCells)
+        {
+            if (inputCell.Sheet != tableRange.Start.Sheet)
+                return true;
+        }
+
+        return false;
     }
 }
 

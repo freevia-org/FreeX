@@ -40,7 +40,7 @@ internal static class XlsxWorksheetCustomPropertiesNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(customProperties, EmptyAttributes);
-        changed |= RemoveUnexpectedChildren(customProperties, WorksheetNs + "customPr");
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(customProperties, WorksheetNs + "customPr");
 
         var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var customProperty in customProperties.Elements(WorksheetNs + "customPr").ToList())
@@ -125,21 +125,6 @@ internal static class XlsxWorksheetCustomPropertiesNormalizer
 
         id.Value = normalized;
         return true;
-    }
-
-    private static bool RemoveUnexpectedChildren(XElement element, XName allowedChildName)
-    {
-        var changed = false;
-        foreach (var child in element.Elements().ToList())
-        {
-            if (child.Name == allowedChildName)
-                continue;
-
-            child.Remove();
-            changed = true;
-        }
-
-        return changed;
     }
 
     private static bool RemoveUnknownCustomPropertyAttributes(XElement element)

@@ -122,6 +122,46 @@ public partial class MainWindow
                 pivotTable.ReportLayout);
     }
 
+    private void PivotExpandCollapseButtonsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (TryGetActivePivotTable(out _, out var pivotTable))
+            ApplyPivotOptions(
+                pivotTable,
+                pivotTable.ShowRowGrandTotals,
+                pivotTable.ShowColumnGrandTotals,
+                pivotTable.ShowSubtotals,
+                pivotTable.SubtotalPlacement,
+                pivotTable.RepeatItemLabels,
+                pivotTable.BlankLineAfterItems,
+                pivotTable.StyleName,
+                pivotTable.ShowRowHeaders,
+                pivotTable.ShowColumnHeaders,
+                pivotTable.ShowRowStripes,
+                pivotTable.ShowColumnStripes,
+                pivotTable.ReportLayout,
+                showExpandCollapseButtons: !pivotTable.ShowExpandCollapseButtons);
+    }
+
+    private void PivotFieldHeadersBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (TryGetActivePivotTable(out _, out var pivotTable))
+            ApplyPivotOptions(
+                pivotTable,
+                pivotTable.ShowRowGrandTotals,
+                pivotTable.ShowColumnGrandTotals,
+                pivotTable.ShowSubtotals,
+                pivotTable.SubtotalPlacement,
+                pivotTable.RepeatItemLabels,
+                pivotTable.BlankLineAfterItems,
+                pivotTable.StyleName,
+                pivotTable.ShowRowHeaders,
+                pivotTable.ShowColumnHeaders,
+                pivotTable.ShowRowStripes,
+                pivotTable.ShowColumnStripes,
+                pivotTable.ReportLayout,
+                showFieldHeaders: !pivotTable.ShowFieldHeaders);
+    }
+
     private void ApplyPivotOptions(PivotTableModel pivotTable, PivotTableOptionsDialogResult result) =>
         ApplyPivotOptions(
             pivotTable,

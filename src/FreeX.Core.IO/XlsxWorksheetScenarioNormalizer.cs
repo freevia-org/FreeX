@@ -64,7 +64,7 @@ internal static class XlsxWorksheetScenarioNormalizer
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenarios, "current", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenarios, "show", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenarios, "sqref", NormalizeSqref);
-        changed |= RemoveUnexpectedChildren(scenarios, WorksheetNs + "scenario");
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(scenarios, WorksheetNs + "scenario");
 
         foreach (var scenario in scenarios.Elements(WorksheetNs + "scenario").ToList())
         {
@@ -88,7 +88,7 @@ internal static class XlsxWorksheetScenarioNormalizer
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenario, "hidden", NormalizeBooleanOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenario, "user", NormalizeOptionalText);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenario, "comment", NormalizeOptionalText);
-        changed |= RemoveUnexpectedChildren(scenario, WorksheetNs + "inputCells");
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(scenario, WorksheetNs + "inputCells");
 
         foreach (var inputCell in scenario.Elements(WorksheetNs + "inputCells").ToList())
         {
@@ -127,21 +127,6 @@ internal static class XlsxWorksheetScenarioNormalizer
     private static bool ShouldRemoveInputCellElement(XElement inputCell) =>
         string.IsNullOrWhiteSpace(inputCell.Attribute("r")?.Value) ||
         inputCell.Attribute("val") is null;
-
-    private static bool RemoveUnexpectedChildren(XElement element, XName allowedChildName)
-    {
-        var changed = false;
-        foreach (var child in element.Elements().ToList())
-        {
-            if (child.Name == allowedChildName)
-                continue;
-
-            child.Remove();
-            changed = true;
-        }
-
-        return changed;
-    }
 
     private static string? NormalizeRequiredText(string? value)
     {

@@ -86,7 +86,7 @@ internal static class XlsxWorkbookCustomViewNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(customWorkbookViews, NoAttributes);
-        changed |= RemoveUnexpectedChildElements(customWorkbookViews, WorkbookNs + "customWorkbookView");
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(customWorkbookViews, WorkbookNs + "customWorkbookView");
 
         foreach (var customWorkbookView in customWorkbookViews.Elements(WorkbookNs + "customWorkbookView").ToList())
         {
@@ -108,7 +108,7 @@ internal static class XlsxWorkbookCustomViewNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(customWorkbookView, CustomWorkbookViewAttributes);
-        changed |= RemoveUnexpectedChildElements(customWorkbookView, WorkbookNs + "extLst");
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(customWorkbookView, WorkbookNs + "extLst");
         changed |= NormalizeExtensionLists(customWorkbookView);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, "name", NormalizeOptionalText);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, "guid", NormalizeGuid);
@@ -152,18 +152,6 @@ internal static class XlsxWorkbookCustomViewNormalizer
             }
 
             keptExtensionList = true;
-        }
-
-        return changed;
-    }
-
-    private static bool RemoveUnexpectedChildElements(XElement element, XName allowedChildName)
-    {
-        var changed = false;
-        foreach (var child in element.Elements().Where(child => child.Name != allowedChildName).ToList())
-        {
-            child.Remove();
-            changed = true;
         }
 
         return changed;

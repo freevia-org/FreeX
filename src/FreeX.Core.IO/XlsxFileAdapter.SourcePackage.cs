@@ -38,6 +38,7 @@ public sealed partial class XlsxFileAdapter
             generatedArchive,
             generatedEntriesBeforeMerge,
             excludedSourceParts);
+        XlsxCustomRibbonPackageGraphNormalizer.NormalizePackage(generatedArchive);
         XlsxPackageMetadataMerger.NormalizeCustomXmlPackageGraph(generatedArchive);
         XlsxDocumentPropertiesPreserver.Preserve(sourceArchive, generatedArchive);
         XlsxWorkbookMetadataPreserver.Preserve(sourceArchive, generatedArchive, workbook);
@@ -104,6 +105,7 @@ public sealed partial class XlsxFileAdapter
         XlsxWorksheetPageBreakNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxRichTextFontNormalizer.NormalizePackage(generatedArchive);
         XlsxSharedStringPackageGraphNormalizer.NormalizePackage(generatedArchive);
+        XlsxDocumentThumbnailPackageGraphNormalizer.NormalizePackage(generatedArchive);
         XlsxThemeTypefaceNormalizer.NormalizePackage(generatedArchive);
         XlsxLegacyCommentFontNormalizer.NormalizePackage(generatedArchive);
         XlsxStructuredTableSchemaNormalizer.NormalizePackage(generatedArchive);
