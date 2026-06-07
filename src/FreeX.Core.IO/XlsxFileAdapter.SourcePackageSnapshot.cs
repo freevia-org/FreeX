@@ -1638,18 +1638,7 @@ public sealed partial class XlsxFileAdapter
         }
 
         private static void NormalizePatchWorksheetPageLayout(ZipArchive archive)
-        {
-            foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
-            {
-                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-                var root = worksheetXml.Root;
-                if (root is null)
-                    continue;
-
-                if (XlsxWorksheetPageLayoutNormalizer.NormalizeWorksheetRoot(root))
-                    XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
-            }
-        }
+            => XlsxWorksheetPageLayoutNormalizer.NormalizeWorksheets(archive);
 
         private static void NormalizePatchWorksheetGridXml(ZipArchive archive) =>
             XlsxWorksheetGridXmlNormalizer.NormalizeWorksheets(archive);
@@ -1682,25 +1671,7 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetSmartTagNormalizer.NormalizeWorksheets(archive);
 
         private static void NormalizePatchWorksheetPageBreaks(ZipArchive archive)
-        {
-            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
-            {
-                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-                var root = worksheetXml.Root;
-                if (root is null)
-                    continue;
-
-                var changed = false;
-                if (root.Element(worksheetNs + "rowBreaks") is { } rowBreaks)
-                    changed |= XlsxWorksheetPageBreakNormalizer.NormalizeElement(rowBreaks);
-                if (root.Element(worksheetNs + "colBreaks") is { } columnBreaks)
-                    changed |= XlsxWorksheetPageBreakNormalizer.NormalizeElement(columnBreaks);
-
-                if (changed)
-                    XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
-            }
-        }
+            => XlsxWorksheetPageBreakNormalizer.NormalizeWorksheets(archive);
 
         private static bool HasPartBackedSingleXmlCells(ZipArchive archive, string worksheetPath)
         {

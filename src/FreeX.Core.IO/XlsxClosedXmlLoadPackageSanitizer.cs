@@ -2166,6 +2166,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         changed |= XlsxWorksheetExtensionListNormalizer.NormalizeWorksheetRoot(root);
         changed |= XlsxWorksheetWebPublishItemsNormalizer.NormalizeWorksheetRoot(root);
         changed |= XlsxWorksheetOleControlNormalizer.NormalizeWorksheetRoot(root);
+        changed |= XlsxWorksheetPageLayoutNormalizer.NormalizeWorksheetRoot(root);
+        changed |= XlsxWorksheetPageBreakNormalizer.NormalizeWorksheetRoot(root);
 
         foreach (var dataValidations in root.Elements(root.Name.Namespace + "dataValidations").ToList())
             changed |= XlsxWorksheetDataValidationNormalizer.NormalizeElement(dataValidations);
