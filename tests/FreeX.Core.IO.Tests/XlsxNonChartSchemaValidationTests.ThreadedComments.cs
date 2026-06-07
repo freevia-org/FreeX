@@ -164,6 +164,32 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         AssertThreadedCommentPackageGraph(saved);
     }
 
+    [Fact]
+    public void LoadedWorkbookFullSave_WithModernCommentSidecar_PreservesPackageGraph()
+    {
+        using var source = Save(CreateThreadedCommentSourceWorkbook());
+        AddModernCommentMetadataSidecar(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(42));
+        workbook.RegisterStyle(new CellStyle { Italic = true });
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertThreadedCommentPackageGraph(saved);
+        AssertModernCommentMetadataSidecarPackageGraph(saved);
+    }
+
     private static Workbook CreateThreadedCommentSourceWorkbook()
     {
         var workbook = new Workbook("ThreadedCommentPatchSave");
@@ -282,6 +308,111 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
     }
 
+    private static void AddModernCommentMetadataSidecar(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            PatchPackageRootElement(archive, "[Content_Types].xml", root =>
+            {
+                XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+                root.Add(new XElement(
+                    contentTypeNs + "Override",
+                    new XAttribute("PartName", "/xl/threadedComments/threadedCommentMetadata1.xml"),
+                    new XAttribute("ContentType", "application/vnd.ms-excel.threadedcommentmetadata+xml")));
+            });
+
+            PatchPackageRootElement(archive, "xl/worksheets/_rels/sheet1.xml.rels", root =>
+            {
+                XNamespace packageRelationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+                root.Add(new XElement(
+                    packageRelationshipNs + "Relationship",
+                    new XAttribute("Id", "rIdModernCommentMetadata"),
+                    new XAttribute("Type", "http://schemas.microsoft.com/office/2021/relationships/threadedCommentMetadata"),
+                    new XAttribute("Target", "../threadedComments/threadedCommentMetadata1.xml")));
+            });
+
+            WriteTextEntry(
+                archive,
+                "xl/threadedComments/threadedCommentMetadata1.xml",
+                """
+                <xltc2:threadedCommentMetadata xmlns:xltc2="http://schemas.microsoft.com/office/spreadsheetml/2021/threadedcomments2">
+                  <xltc2:commentMetadata ref="C2"/>
+                </xltc2:threadedCommentMetadata>
+                """);
+            WriteTextEntry(
+                archive,
+                "xl/threadedComments/_rels/threadedCommentMetadata1.xml.rels",
+                """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdThread"
+                                Type="http://schemas.microsoft.com/office/2017/10/relationships/threadedComment"
+                                Target="threadedComment1.xml"/>
+                  <Relationship Id="rIdPerson"
+                                Type="http://schemas.microsoft.com/office/2017/10/relationships/person"
+                                Target="../persons/person.xml"/>
+                </Relationships>
+                """);
+        }
+
+        stream.Position = 0;
+    }
+
+    private static void AssertModernCommentMetadataSidecarPackageGraph(Stream stream)
+    {
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace packageRelationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        ReadPackageEntryNames(stream)
+            .Should()
+            .Contain("xl/threadedComments/threadedCommentMetadata1.xml")
+            .And.Contain("xl/threadedComments/_rels/threadedCommentMetadata1.xml.rels");
+
+        ReadPackageRootElement(stream, "[Content_Types].xml")
+            .Elements(contentTypeNs + "Override")
+            .Should()
+            .ContainSingle(element =>
+                ThreadedAttributeValue(element, "PartName") == "/xl/threadedComments/threadedCommentMetadata1.xml" &&
+                ThreadedAttributeValue(element, "ContentType") == "application/vnd.ms-excel.threadedcommentmetadata+xml");
+
+        ReadPackageRootElement(stream, "xl/worksheets/_rels/sheet1.xml.rels")
+            .Elements(packageRelationshipNs + "Relationship")
+            .Should()
+            .ContainSingle(element =>
+                ThreadedAttributeValue(element, "Type") == "http://schemas.microsoft.com/office/2021/relationships/threadedCommentMetadata" &&
+                ThreadedAttributeValue(element, "Target") == "../threadedComments/threadedCommentMetadata1.xml");
+
+        ReadPackageRootElement(stream, "xl/threadedComments/_rels/threadedCommentMetadata1.xml.rels")
+            .Elements(packageRelationshipNs + "Relationship")
+            .Should()
+            .Contain(element =>
+                ThreadedAttributeValue(element, "Type") == "http://schemas.microsoft.com/office/2017/10/relationships/threadedComment" &&
+                ThreadedAttributeValue(element, "Target") == "threadedComment1.xml")
+            .And
+            .Contain(element =>
+                ThreadedAttributeValue(element, "Type") == "http://schemas.microsoft.com/office/2017/10/relationships/person" &&
+                ThreadedAttributeValue(element, "Target") == "../persons/person.xml");
+    }
+
     private static string? ThreadedAttributeValue(XElement element, string name) =>
         element.Attribute(name)?.Value;
+
+    private static void PatchPackageRootElement(ZipArchive archive, string path, Action<XElement> patchRoot)
+    {
+        var document = XlsxPackageTestFixtures.LoadPackageXml(archive, path, path);
+        patchRoot(document.Root!);
+        archive.GetEntry(path)?.Delete();
+        var replacement = archive.CreateEntry(path, CompressionLevel.Optimal);
+        using var replacementStream = replacement.Open();
+        document.Save(replacementStream, SaveOptions.DisableFormatting);
+    }
+
+    private static void WriteTextEntry(ZipArchive archive, string path, string content)
+    {
+        archive.GetEntry(path)?.Delete();
+        var entry = archive.CreateEntry(path, CompressionLevel.Optimal);
+        using var stream = entry.Open();
+        using var writer = new StreamWriter(stream);
+        writer.Write(content);
+    }
 }
