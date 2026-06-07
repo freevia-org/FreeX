@@ -2454,6 +2454,61 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatContinuousDistributionScalarFunctions()
+    {
+        AssertFormulaContinuousDistributionFunctionContrastLocations("AND($G1,BETA.DIST($A1,$C1,$D1,$F1,$H1,$I1)>0.49)", "B1");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("AND($G1,BETA.INV($E1,$C1,$D1,$H1,$I1)>0.49)", "B1");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("AND($G1,BETADIST($A1,$C1,$D1,$H1,$I1)>0.49)", "B1");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("AND($G1,BETAINV($E1,$C1,$D1,$H1,$I1)>0.49)", "B1");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("AND($G1,GAMMA($A1)>1.7)", "B1");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("AND($G1,GAMMA.DIST($A1,$C1,$D1,$F1)>0.02)", "B1");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("AND($G1,GAMMA.INV($E1,$C1,$D1)>3)", "B1");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("AND($G1,GAMMADIST($A1,$C1,$D1,$F1)>0.02)", "B1");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("AND($G1,GAMMAINV($E1,$C1,$D1)>3)", "B1");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("AND($G1,GAMMALN($A1)>0.5)", "B1");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("AND($G1,GAMMALN.PRECISE($A1)>0.5)", "B1");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("AND($G1,LOGNORM.DIST($A1,$J1,$K1,$F1)>0.2)", "B1");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("AND($G1,LOGNORM.INV($E1,$J1,$K1)>0.9)", "B1");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("AND($G1,LOGNORMDIST($A1,$J1,$K1)>0.2)", "B1");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("AND($G1,LOGINV($E1,$J1,$K1)>0.9)", "B1");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("AND($G1,EXPON.DIST($A1,$L1,$F1)>0.3)", "B1");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("AND($G1,EXPONDIST($A1,$L1,$F1)>0.3)", "B1");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("AND($G1,WEIBULL($A1,$C1,$D1,$F1)>0.05)", "B1");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("AND($G1,WEIBULL.DIST($A1,$C1,$D1,$F1)>0.05)", "B1");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatContinuousDistributionNestedScalars()
+    {
+        AssertFormulaContinuousDistributionFunctionContrastLocations("AND($G1,BETA.DIST(ABS($A1),$C1,$D1,$F1,$H1,$I1)>0.49)", "B1");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("AND($G1,SUM(GAMMA($A1),LOGNORM.INV($E1,$J1,$K1))>2.7)", "B1");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatContinuousDistributionErrors()
+    {
+        AssertFormulaContinuousDistributionFunctionContrastLocations("ISERROR(BETA.DIST($A1,$C1,$D1,$F1,$H1,$I1))", "B2", "B3", "B4", "B6", "B7");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("ISNA(BETA.INV($E1,$C1,$D1,$H1,$I1))", "B6");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("ISERROR(GAMMA($A1))", "B3", "B6", "B7");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("ISERROR(GAMMA.INV($E1,$C1,$D1))", "B2", "B4", "B5", "B6", "B7");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("ISERR(GAMMALN($A1))", "B3", "B7");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("ISERROR(LOGNORM.DIST($A1,$J1,$K1,$F1))", "B3", "B4", "B6", "B7");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("ISERROR(LOGNORM.INV($E1,$J1,$K1))", "B4", "B5", "B6", "B7");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("ISERROR(EXPON.DIST($A1,$L1,$F1))", "B3", "B4", "B6", "B7");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("ISERROR(WEIBULL.DIST($A1,$C1,$D1,$F1))", "B2", "B3", "B4", "B6", "B7");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatContinuousDistributionUnsupportedShapes()
+    {
+        AssertFormulaContinuousDistributionFunctionContrastLocations("BETA.DIST($A$1:$A$2,2,2,TRUE)>0");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("GAMMA.INV($E1,$C1)>0");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("LOGNORM.DIST($A1,$J1,$K1)>0");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("EXPON.DIST($A1,$L1,\"TRUE\")>0");
+        AssertFormulaContinuousDistributionFunctionContrastLocations("WEIBULL.DIST($A1,$C1,$D1,$F1,1)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatConvertScalarComparisons()
     {
         AssertFormulaConvertFunctionContrastLocations("CONVERT($A1,$C1,$D1)=1000", "B1");
@@ -5106,6 +5161,155 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 7), new BoolValue(active));
     }
 
+    private static Workbook CreateFormulaContinuousDistributionFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 7, 2);
+
+        SetFormulaContinuousDistributionFunctionContrastRow(
+            sheet,
+            1,
+            new NumberValue(0.5),
+            new NumberValue(2),
+            new NumberValue(2),
+            new NumberValue(0.5),
+            new BoolValue(true),
+            active: true,
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(1),
+            "Reference hit");
+        SetFormulaContinuousDistributionFunctionContrastRow(
+            sheet,
+            2,
+            new NumberValue(0.5),
+            new NumberValue(0),
+            new NumberValue(2),
+            new NumberValue(0.5),
+            new BoolValue(true),
+            active: false,
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(1),
+            "Zero alpha");
+        SetFormulaContinuousDistributionFunctionContrastRow(
+            sheet,
+            3,
+            new NumberValue(-1),
+            new NumberValue(2),
+            new NumberValue(2),
+            new NumberValue(0.5),
+            new BoolValue(true),
+            active: false,
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(1),
+            "Negative x");
+        SetFormulaContinuousDistributionFunctionContrastRow(
+            sheet,
+            4,
+            new NumberValue(0.5),
+            new NumberValue(2),
+            new NumberValue(0),
+            new NumberValue(0.5),
+            new BoolValue(true),
+            active: false,
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(0),
+            new NumberValue(0),
+            new NumberValue(0),
+            "Zero scale");
+        SetFormulaContinuousDistributionFunctionContrastRow(
+            sheet,
+            5,
+            new NumberValue(0.5),
+            new NumberValue(2),
+            new NumberValue(2),
+            new NumberValue(1),
+            new BoolValue(true),
+            active: false,
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(1),
+            "One probability");
+        SetFormulaContinuousDistributionFunctionContrastRow(
+            sheet,
+            6,
+            ErrorValue.NA,
+            new NumberValue(2),
+            new NumberValue(2),
+            ErrorValue.NA,
+            new BoolValue(true),
+            active: false,
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(1),
+            "NA source");
+        SetFormulaContinuousDistributionFunctionContrastRow(
+            sheet,
+            7,
+            new TextValue("Open"),
+            new NumberValue(2),
+            new NumberValue(2),
+            new TextValue("Open"),
+            new BoolValue(true),
+            active: false,
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(1),
+            "Value source");
+
+        return workbook;
+    }
+
+    private static void SetFormulaContinuousDistributionFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        ScalarValue x,
+        ScalarValue alpha,
+        ScalarValue beta,
+        ScalarValue probability,
+        ScalarValue cumulative,
+        bool active,
+        ScalarValue lower,
+        ScalarValue upper,
+        ScalarValue mean,
+        ScalarValue stdev,
+        ScalarValue lambda,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), x);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), alpha);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 4), beta);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 5), probability);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 6), cumulative);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 7), new BoolValue(active));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 8), lower);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 9), upper);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 10), mean);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 11), stdev);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 12), lambda);
+    }
+
     private static Workbook CreateFormulaConvertFunctionContrastWorkbook(
         out Sheet sheet,
         out CellAddress firstLabel,
@@ -5693,6 +5897,20 @@ public sealed partial class AccessibilityCheckerServiceTests
         params string[] expectedLocations)
     {
         var workbook = CreateFormulaNormalDistributionFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaContinuousDistributionFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaContinuousDistributionFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
 
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
 
