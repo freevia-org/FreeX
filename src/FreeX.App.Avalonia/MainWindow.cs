@@ -11,6 +11,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using System.Globalization;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -134,11 +135,42 @@ public sealed class MainWindow : Window
     {
         public override string ToString() => Label;
     }
+    private sealed record FormatCellsDialogResult(
+        FormatCellsCompactRequest Request,
+        CellBorderPreset? BorderPreset);
+    private sealed record FormatCellsNumberFormatChoice(string Category, string FormatCode, string Preview)
+    {
+        public override string ToString() => FormatCode;
+    }
+    private sealed record FormatCellsNullableChoice<T>(string Label, T? Value)
+        where T : struct
+    {
+        public override string ToString() => Label;
+    }
+    private sealed record FormatCellsColorChoice(string Label, CellColor? Color, bool Clear)
+    {
+        public override string ToString() => Label;
+    }
+    private sealed record FormatCellsDialogSmokeProbe(
+        Window Dialog,
+        TabControl TabStrip,
+        TabItem NumberTab,
+        TabItem AlignmentTab,
+        TabItem FontTab,
+        TabItem FillTab,
+        TabItem BorderTab,
+        TabItem ProtectionTab,
+        ListBox NumberCategoryList,
+        ComboBox NumberFormatBox,
+        TextBlock NumberPreview,
+        Button OkButton,
+        Button CancelButton);
 
     private const double CellIndentLevelWidth = 12;
     private const string CommaNumberFormat = "#,##0.00";
     private const string CurrencyNumberFormat = "$#,##0.00";
     private const double DoubleUnderlineSecondStrokeOffset = 2;
+    private const string GeneralNumberFormat = "General";
     private const string PercentNumberFormat = "0%";
     private const double HeaderColumnWidth = 58;
     private const double HeaderRowHeight = 28;
@@ -304,6 +336,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _fontColorMenuItem = new();
     private readonly NativeMenuItem _bordersMenuItem = new();
     private readonly NativeMenuItem _cellStylesMenuItem = new();
+    private readonly NativeMenuItem _formatCellsMenuItem = new();
     private readonly NativeMenuItem _horizontalTextMenuItem = new();
     private readonly NativeMenuItem _angleCounterclockwiseMenuItem = new();
     private readonly NativeMenuItem _angleClockwiseMenuItem = new();
@@ -693,6 +726,10 @@ public sealed class MainWindow : Window
         _cellStylesMenuItem.Header = "Cell Styles";
         _cellStylesMenuItem.Menu = CreateNativeCellStylesMenu();
 
+        _formatCellsMenuItem.Header = "Format Cells...";
+        _formatCellsMenuItem.Gesture = new KeyGesture(Key.D1, KeyModifiers.Meta);
+        _formatCellsMenuItem.Click += async (_, _) => await ShowFormatCellsDialogAsync();
+
         _horizontalTextMenuItem.Header = "Horizontal";
         _horizontalTextMenuItem.Click += (_, _) =>
             ApplySelectedRangeTextRotation(0, "Set horizontal text for", "Horizontal Text failed.");
@@ -871,6 +908,7 @@ public sealed class MainWindow : Window
         formatMenu.Items.Add(_fontColorMenuItem);
         formatMenu.Items.Add(_bordersMenuItem);
         formatMenu.Items.Add(_cellStylesMenuItem);
+        formatMenu.Items.Add(_formatCellsMenuItem);
         formatMenu.Items.Add(new NativeMenuItemSeparator());
         formatMenu.Items.Add(_horizontalTextMenuItem);
         formatMenu.Items.Add(_angleCounterclockwiseMenuItem);
@@ -1600,6 +1638,7 @@ public sealed class MainWindow : Window
         _fontColorMenuItem.IsEnabled = _fontColorButton.IsEnabled;
         _bordersMenuItem.IsEnabled = _bordersButton.IsEnabled;
         _cellStylesMenuItem.IsEnabled = _cellStylesButton.IsEnabled;
+        _formatCellsMenuItem.IsEnabled = isIdle;
         _horizontalTextMenuItem.IsEnabled = isIdle;
         _angleCounterclockwiseMenuItem.IsEnabled = isIdle;
         _angleClockwiseMenuItem.IsEnabled = isIdle;
@@ -4650,6 +4689,548 @@ public sealed class MainWindow : Window
         return true;
     }
 
+    private async Task ShowFormatCellsDialogAsync()
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var selection = await ShowFormatCellsInputDialogAsync();
+        if (selection is null)
+            return;
+
+        if (!FormatCellsCompactPlanner.TryPlan(selection.Request, out var diff, out var errorMessage))
+        {
+            ShowEditIssue(errorMessage);
+            return;
+        }
+
+        ClearSelectedDrawingObject();
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.ApplySelectedRangeCompactFormat(diff, selection.BorderPreset);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Format Cells failed.");
+            return;
+        }
+
+        RefreshShell($"Formatted {rangeReference}");
+    }
+
+    private async Task<FormatCellsDialogResult?> ShowFormatCellsInputDialogAsync(
+        Action<FormatCellsDialogSmokeProbe>? launchSmokeProbe = null)
+    {
+        FormatCellsDialogResult? result = null;
+        var currentNumberFormat = _session.SelectedRangeStartNumberFormat;
+        var currentHorizontalAlignment = _session.SelectedRangeStartHorizontalAlignment;
+        var currentVerticalAlignment = _session.SelectedRangeStartVerticalAlignment;
+        var currentFontSize = _session.SelectedRangeStartFontSize;
+
+        var dialog = new Window
+        {
+            Title = "Format Cells",
+            Width = 560,
+            Height = 560,
+            MinWidth = 480,
+            MinHeight = 500,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "FormatCellsCompactDialog");
+
+        var numberChoices = CreateFormatCellsNumberFormatChoices(currentNumberFormat);
+        var currentNumberChoice = numberChoices.FirstOrDefault(choice =>
+            string.Equals(choice.FormatCode, currentNumberFormat, StringComparison.Ordinal)) ?? numberChoices[0];
+        var numberCategoryList = new ListBox
+        {
+            ItemsSource = numberChoices.Select(choice => choice.Category).Distinct().ToArray(),
+            SelectedItem = currentNumberChoice.Category,
+            MinWidth = 150,
+            MaxHeight = 180,
+        };
+        AutomationProperties.SetName(numberCategoryList, "Category");
+        AutomationProperties.SetAutomationId(numberCategoryList, "FormatCellsNumberCategoryList");
+
+        var numberFormatBox = new ComboBox
+        {
+            MinWidth = 260,
+        };
+        AutomationProperties.SetName(numberFormatBox, "Type");
+        AutomationProperties.SetAutomationId(numberFormatBox, "FormatCellsNumberFormatCombo");
+        AutomationProperties.SetAutomationId(numberFormatBox, "FormatCellsNumberFormatBox");
+
+        var numberPreview = new TextBlock
+        {
+            Text = currentNumberChoice.Preview,
+            MinHeight = 28,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        AutomationProperties.SetAutomationId(numberPreview, "FormatCellsNumberPreview");
+
+        void RefreshNumberChoices()
+        {
+            var category = numberCategoryList.SelectedItem?.ToString() ?? currentNumberChoice.Category;
+            var filteredChoices = numberChoices
+                .Where(choice => string.Equals(choice.Category, category, StringComparison.Ordinal))
+                .ToArray();
+            numberFormatBox.ItemsSource = filteredChoices;
+            if (numberFormatBox.SelectedItem is not FormatCellsNumberFormatChoice selected ||
+                !filteredChoices.Contains(selected))
+            {
+                numberFormatBox.SelectedItem = filteredChoices.FirstOrDefault() ?? currentNumberChoice;
+            }
+        }
+
+        numberCategoryList.SelectionChanged += (_, _) => RefreshNumberChoices();
+        numberFormatBox.SelectionChanged += (_, _) =>
+        {
+            if (numberFormatBox.SelectedItem is FormatCellsNumberFormatChoice choice)
+                numberPreview.Text = choice.Preview;
+        };
+        RefreshNumberChoices();
+        numberFormatBox.SelectedItem = currentNumberChoice;
+
+        var horizontalAlignmentBox = CreateFormatCellsComboBox(
+            "FormatCellsHorizontalAlignmentBox",
+            CreateFormatCellsHorizontalAlignmentChoices(),
+            currentHorizontalAlignment);
+        var verticalAlignmentBox = CreateFormatCellsComboBox(
+            "FormatCellsVerticalAlignmentBox",
+            CreateFormatCellsVerticalAlignmentChoices(),
+            currentVerticalAlignment);
+        var wrapTextBox = CreateFormatCellsCheckBox("Wrap text", "FormatCellsWrapTextBox", _session.IsSelectedRangeStartWrapText);
+
+        var boldBox = CreateFormatCellsCheckBox("Bold", "FormatCellsBoldBox", _session.IsSelectedRangeStartBold);
+        var italicBox = CreateFormatCellsCheckBox("Italic", "FormatCellsItalicBox", _session.IsSelectedRangeStartItalic);
+        var underlineBox = CreateFormatCellsCheckBox("Underline", "FormatCellsUnderlineBox", _session.IsSelectedRangeStartUnderline);
+        var strikethroughBox = CreateFormatCellsCheckBox("Strikethrough", "FormatCellsStrikethroughBox", _session.IsSelectedRangeStartStrikethrough);
+        var fontSizeBox = new TextBox
+        {
+            Text = currentFontSize.ToString("0.##", CultureInfo.InvariantCulture),
+            MinWidth = 100,
+        };
+        AutomationProperties.SetName(fontSizeBox, "Size");
+        AutomationProperties.SetAutomationId(fontSizeBox, "FormatCellsFontSizeBox");
+
+        var fontColorBox = new ComboBox
+        {
+            ItemsSource = CreateFormatCellsColorChoices(includeClear: false),
+            SelectedIndex = 0,
+            MinWidth = 180,
+        };
+        AutomationProperties.SetName(fontColorBox, "Font color");
+        AutomationProperties.SetAutomationId(fontColorBox, "FormatCellsFontColorBox");
+
+        var fillColorBox = new ComboBox
+        {
+            ItemsSource = CreateFormatCellsColorChoices(includeClear: true),
+            SelectedIndex = 0,
+            MinWidth = 180,
+        };
+        AutomationProperties.SetName(fillColorBox, "Fill color");
+        AutomationProperties.SetAutomationId(fillColorBox, "FormatCellsFillColorBox");
+
+        var borderPresetBox = new ComboBox
+        {
+            ItemsSource = CreateFormatCellsBorderPresetChoices(),
+            SelectedIndex = 0,
+            MinWidth = 220,
+        };
+        AutomationProperties.SetName(borderPresetBox, "Border preset");
+        AutomationProperties.SetAutomationId(borderPresetBox, "FormatCellsBorderPresetBox");
+
+        var lockedBox = CreateFormatCellsCheckBox("Locked", "FormatCellsLockedBox", false);
+        var hiddenBox = CreateFormatCellsCheckBox("Hidden", "FormatCellsHiddenBox", false);
+
+        var okButton = new Button
+        {
+            Content = "OK",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(okButton, "FormatCellsOkButton");
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(cancelButton, "FormatCellsCancelButton");
+
+        var errorText = new TextBlock
+        {
+            Foreground = Brush(143, 74, 18),
+            TextWrapping = TextWrapping.Wrap,
+        };
+
+        void Accept()
+        {
+            if (!TryReadFormatCellsFontSize(fontSizeBox.Text, currentFontSize, out var fontSize, out var message))
+            {
+                errorText.Text = message;
+                return;
+            }
+
+            var numberFormat = numberFormatBox.SelectedItem is FormatCellsNumberFormatChoice numberChoice &&
+                !string.Equals(numberChoice.FormatCode, currentNumberFormat, StringComparison.Ordinal)
+                    ? numberChoice.FormatCode
+                    : null;
+            var fillChoice = fillColorBox.SelectedItem as FormatCellsColorChoice;
+            var borderChoice = borderPresetBox.SelectedItem as FormatCellsNullableChoice<CellBorderPreset>;
+            var request = new FormatCellsCompactRequest(
+                NumberFormat: numberFormat,
+                HorizontalAlignment: ReadChangedFormatCellsValue(currentHorizontalAlignment, horizontalAlignmentBox),
+                VerticalAlignment: ReadChangedFormatCellsValue(currentVerticalAlignment, verticalAlignmentBox),
+                WrapText: ReadChangedFormatCellsBool(_session.IsSelectedRangeStartWrapText, wrapTextBox),
+                Bold: ReadChangedFormatCellsBool(_session.IsSelectedRangeStartBold, boldBox),
+                Italic: ReadChangedFormatCellsBool(_session.IsSelectedRangeStartItalic, italicBox),
+                Underline: ReadChangedFormatCellsBool(_session.IsSelectedRangeStartUnderline, underlineBox),
+                Strikethrough: ReadChangedFormatCellsBool(_session.IsSelectedRangeStartStrikethrough, strikethroughBox),
+                FontSize: fontSize,
+                FillColor: fillChoice?.Color,
+                ClearFill: fillChoice?.Clear == true,
+                FontColor: (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color);
+            result = new FormatCellsDialogResult(request, borderChoice?.Value);
+            dialog.Close();
+        }
+
+        okButton.Click += (_, _) => Accept();
+        cancelButton.Click += (_, _) => dialog.Close();
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                e.Handled = true;
+                Accept();
+            }
+            else if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                dialog.Close();
+            }
+        };
+
+        var numberTab = CreateFormatCellsTab(
+            "Number",
+            "FormatCellsNumberTab",
+            new StackPanel
+            {
+                Spacing = 10,
+                Children =
+                {
+                    new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        Spacing = 12,
+                        Children =
+                        {
+                            CreateFormatCellsField("Category", numberCategoryList),
+                            CreateFormatCellsField("Type", numberFormatBox),
+                        },
+                    },
+                    CreateFormatCellsField("Sample", numberPreview),
+                },
+            });
+        var alignmentTab = CreateFormatCellsTab(
+            "Alignment",
+            "FormatCellsAlignmentTab",
+            new StackPanel
+            {
+                Spacing = 10,
+                Children =
+                {
+                    CreateFormatCellsField("Horizontal", horizontalAlignmentBox),
+                    CreateFormatCellsField("Vertical", verticalAlignmentBox),
+                    wrapTextBox,
+                },
+            });
+        var fontTab = CreateFormatCellsTab(
+            "Font",
+            "FormatCellsFontTab",
+            new StackPanel
+            {
+                Spacing = 10,
+                Children =
+                {
+                    new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        Spacing = 12,
+                        Children =
+                        {
+                            boldBox,
+                            italicBox,
+                            underlineBox,
+                            strikethroughBox,
+                        },
+                    },
+                    CreateFormatCellsField("Size", fontSizeBox),
+                    CreateFormatCellsField("Color", fontColorBox),
+                },
+            });
+        var fillTab = CreateFormatCellsTab(
+            "Fill",
+            "FormatCellsFillTab",
+            new StackPanel
+            {
+                Spacing = 10,
+                Children =
+                {
+                    CreateFormatCellsField("Fill color", fillColorBox),
+                },
+            });
+        var borderTab = CreateFormatCellsTab(
+            "Border",
+            "FormatCellsBorderTab",
+            new StackPanel
+            {
+                Spacing = 10,
+                Children =
+                {
+                    CreateFormatCellsField("Preset", borderPresetBox),
+                },
+            });
+        var protectionTab = CreateFormatCellsTab(
+            "Protection",
+            "FormatCellsProtectionTab",
+            new StackPanel
+            {
+                Spacing = 10,
+                Children =
+                {
+                    lockedBox,
+                    hiddenBox,
+                },
+            });
+        var tabStrip = new TabControl
+        {
+            SelectedIndex = 0,
+            ItemsSource = new[]
+            {
+                numberTab,
+                alignmentTab,
+                fontTab,
+                fillTab,
+                borderTab,
+                protectionTab,
+            },
+        };
+        AutomationProperties.SetAutomationId(tabStrip, "FormatCellsTabStrip");
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Children =
+            {
+                cancelButton,
+                okButton,
+            },
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 10,
+            Children =
+            {
+                tabStrip,
+                errorText,
+                buttonRow,
+            },
+        };
+        dialog.Opened += (_, _) => numberFormatBox.Focus();
+        if (launchSmokeProbe is not null)
+        {
+            dialog.Opened += (_, _) =>
+            {
+                RunLaunchSmokeDialogProbe(
+                    dialog,
+                    () => launchSmokeProbe(new FormatCellsDialogSmokeProbe(
+                        dialog,
+                        tabStrip,
+                        numberTab,
+                        alignmentTab,
+                        fontTab,
+                        fillTab,
+                        borderTab,
+                        protectionTab,
+                        numberCategoryList,
+                        numberFormatBox,
+                        numberPreview,
+                        okButton,
+                        cancelButton)));
+            };
+        }
+
+        await dialog.ShowDialog(this);
+        return result;
+    }
+
+    private static TabItem CreateFormatCellsTab(string header, string automationId, Control content)
+    {
+        var tab = new TabItem
+        {
+            Header = header,
+            Content = new ScrollViewer
+            {
+                Content = content,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            },
+        };
+        AutomationProperties.SetAutomationId(tab, automationId);
+        return tab;
+    }
+
+    private static StackPanel CreateFormatCellsField(string label, Control control) =>
+        new()
+        {
+            Spacing = 4,
+            Children =
+            {
+                new TextBlock { Text = label },
+                control,
+            },
+        };
+
+    private static ComboBox CreateFormatCellsComboBox<T>(
+        string automationId,
+        IReadOnlyList<FormatCellsNullableChoice<T>> choices,
+        T currentValue)
+        where T : struct
+    {
+        var selected = choices.FirstOrDefault(choice =>
+            choice.Value.HasValue &&
+            EqualityComparer<T>.Default.Equals(choice.Value.Value, currentValue)) ?? choices[0];
+        var comboBox = new ComboBox
+        {
+            ItemsSource = choices,
+            SelectedItem = selected,
+            MinWidth = 180,
+        };
+        AutomationProperties.SetAutomationId(comboBox, automationId);
+        return comboBox;
+    }
+
+    private static CheckBox CreateFormatCellsCheckBox(string label, string automationId, bool isChecked)
+    {
+        var checkBox = new CheckBox
+        {
+            Content = label,
+            IsChecked = isChecked,
+        };
+        AutomationProperties.SetAutomationId(checkBox, automationId);
+        return checkBox;
+    }
+
+    private static IReadOnlyList<FormatCellsNumberFormatChoice> CreateFormatCellsNumberFormatChoices(string currentNumberFormat)
+    {
+        var choices = new List<FormatCellsNumberFormatChoice>
+        {
+            new("General", GeneralNumberFormat, "Sample"),
+            new("Number", "0", "1234"),
+            new("Number", "0.00", "1234.00"),
+            new("Number", "#,##0", "1,234"),
+            new("Number", CommaNumberFormat, "1,234.00"),
+            new("Currency", CurrencyNumberFormat, "$1,234.00"),
+            new("Percentage", PercentNumberFormat, "12%"),
+            new("Percentage", "0.00%", "12.34%"),
+            new("Date", "m/d/yyyy", "1/1/2026"),
+            new("Time", "h:mm AM/PM", "9:30 AM"),
+        };
+        if (!choices.Any(choice => string.Equals(choice.FormatCode, currentNumberFormat, StringComparison.Ordinal)))
+            choices.Add(new FormatCellsNumberFormatChoice("Custom", currentNumberFormat, "Custom"));
+
+        return choices;
+    }
+
+    private static IReadOnlyList<FormatCellsNullableChoice<CellHAlign>> CreateFormatCellsHorizontalAlignmentChoices() =>
+    [
+        new("General", CellHAlign.General),
+        new("Left", CellHAlign.Left),
+        new("Center", CellHAlign.Center),
+        new("Right", CellHAlign.Right),
+    ];
+
+    private static IReadOnlyList<FormatCellsNullableChoice<CellVAlign>> CreateFormatCellsVerticalAlignmentChoices() =>
+    [
+        new("Top", CellVAlign.Top),
+        new("Middle", CellVAlign.Center),
+        new("Bottom", CellVAlign.Bottom),
+    ];
+
+    private static IReadOnlyList<FormatCellsColorChoice> CreateFormatCellsColorChoices(bool includeClear)
+    {
+        var choices = new List<FormatCellsColorChoice>
+        {
+            new("No change", null, Clear: false),
+        };
+        if (includeClear)
+            choices.Add(new FormatCellsColorChoice("No fill", null, Clear: true));
+
+        choices.AddRange(CellColorPalettePlanner.BuildDefaultSwatches()
+            .Take(16)
+            .Select(swatch => new FormatCellsColorChoice(swatch.Hex, swatch.Color, Clear: false)));
+        return choices;
+    }
+
+    private static IReadOnlyList<FormatCellsNullableChoice<CellBorderPreset>> CreateFormatCellsBorderPresetChoices() =>
+    [
+        new("No border change", null),
+        .. FormatCellsCompactPlanner.GetBorderPresetMetadata()
+            .Select(metadata => new FormatCellsNullableChoice<CellBorderPreset>(metadata.DisplayName, metadata.Preset)),
+    ];
+
+    private static bool? ReadChangedFormatCellsBool(bool currentValue, CheckBox checkBox)
+    {
+        var value = checkBox.IsChecked == true;
+        return value == currentValue ? null : value;
+    }
+
+    private static T? ReadChangedFormatCellsValue<T>(T currentValue, ComboBox comboBox)
+        where T : struct
+    {
+        if (comboBox.SelectedItem is FormatCellsNullableChoice<T> { Value: { } value } &&
+            !EqualityComparer<T>.Default.Equals(value, currentValue))
+        {
+            return value;
+        }
+
+        return null;
+    }
+
+    private static bool TryReadFormatCellsFontSize(
+        string? text,
+        double currentFontSize,
+        out double? fontSize,
+        out string errorMessage)
+    {
+        fontSize = null;
+        errorMessage = "";
+        var trimmed = text?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+            return true;
+
+        if (!double.TryParse(trimmed, NumberStyles.Float, CultureInfo.CurrentCulture, out var parsed) &&
+            !double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed))
+        {
+            errorMessage = "Font size must be a number.";
+            return false;
+        }
+
+        if (!double.IsFinite(parsed) || parsed <= 0)
+        {
+            errorMessage = "Font size must be a positive number.";
+            return false;
+        }
+
+        if (Math.Abs(parsed - currentFontSize) > 0.001)
+            fontSize = parsed;
+
+        return true;
+    }
+
     private async Task<string?> ShowSingleInputDialogAsync(
         string title,
         string label,
@@ -6394,6 +6975,37 @@ public sealed class MainWindow : Window
             hasGoToSpecialDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 310, minWidth: 360, minHeight: 280);
         });
 
+        var hasFormatCellsDialog = false;
+        var hasFormatCellsDialogTabStrip = false;
+        var hasFormatCellsDialogDefaultNumberTab = false;
+        var hasFormatCellsDialogNumberControls = false;
+        var hasFormatCellsDialogActionButtons = false;
+        var hasFormatCellsDialogCompactLayout = false;
+        var formatCellsDialogResult = await ShowFormatCellsInputDialogAsync(probe =>
+        {
+            hasFormatCellsDialog = HasLaunchSmokeDialog(probe.Dialog, "Format Cells");
+            hasFormatCellsDialogTabStrip =
+                HasLaunchSmokeAutomationId(probe.TabStrip, "FormatCellsTabStrip") &&
+                HasLaunchSmokeAutomationId(probe.NumberTab, "FormatCellsNumberTab") &&
+                HasLaunchSmokeAutomationId(probe.AlignmentTab, "FormatCellsAlignmentTab") &&
+                HasLaunchSmokeAutomationId(probe.FontTab, "FormatCellsFontTab") &&
+                HasLaunchSmokeAutomationId(probe.FillTab, "FormatCellsFillTab") &&
+                HasLaunchSmokeAutomationId(probe.BorderTab, "FormatCellsBorderTab") &&
+                HasLaunchSmokeAutomationId(probe.ProtectionTab, "FormatCellsProtectionTab");
+            hasFormatCellsDialogDefaultNumberTab =
+                probe.TabStrip.SelectedIndex == 0 &&
+                HasLaunchSmokeAutomationId(probe.NumberTab, "FormatCellsNumberTab");
+            hasFormatCellsDialogNumberControls =
+                HasLaunchSmokeAutomationId(probe.NumberCategoryList, "FormatCellsNumberCategoryList") &&
+                HasLaunchSmokeAutomationId(probe.NumberFormatBox, "FormatCellsNumberFormatBox") &&
+                HasLaunchSmokeAutomationId(probe.NumberPreview, "FormatCellsNumberPreview") &&
+                probe.NumberFormatBox.MinWidth >= 260;
+            hasFormatCellsDialogActionButtons =
+                HasLaunchSmokeButton(probe.OkButton, "FormatCellsOkButton", "OK") &&
+                HasLaunchSmokeButton(probe.CancelButton, "FormatCellsCancelButton", "Cancel");
+            hasFormatCellsDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 560, height: 560, minWidth: 480, minHeight: 500);
+        });
+
         _launchSmokeDialogEvidence = new MacOsLaunchSmokeDialogSnapshot(
             hasFindDialog,
             hasFindDialogTextBox,
@@ -6417,7 +7029,14 @@ public sealed class MainWindow : Window
             findDialogResult is null,
             replaceDialogResult is null,
             goToDialogResult is null,
-            goToSpecialDialogResult is null);
+            goToSpecialDialogResult is null,
+            hasFormatCellsDialog,
+            hasFormatCellsDialogTabStrip,
+            hasFormatCellsDialogDefaultNumberTab,
+            hasFormatCellsDialogNumberControls,
+            hasFormatCellsDialogActionButtons,
+            hasFormatCellsDialogCompactLayout,
+            formatCellsDialogResult is null);
         return _launchSmokeDialogEvidence;
     }
 
@@ -6632,6 +7251,7 @@ public sealed class MainWindow : Window
             HasNativeReplaceMenuItem: HasNativeMenuItem(_replaceMenuItem, "Replace..."),
             HasNativeGoToMenuItem: HasNativeMenuItem(_goToMenuItem, "Go To..."),
             HasNativeGoToSpecialMenuItem: HasNativeMenuItem(_goToSpecialMenuItem, "Go To Special...", requireGesture: false),
+            HasNativeFormatCellsMenuItem: HasNativeMenuItem(_formatCellsMenuItem, "Format Cells..."),
             HasNativeAutoSumMenuItem: HasNativeMenuItem(_autoSumMenuItem, "AutoSum", requireGesture: false),
             HasNativeAutoSumSumMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, "Sum"),
             HasNativeAutoSumAverageMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, "Average"),
@@ -6994,6 +7614,11 @@ public sealed class MainWindow : Window
         {
             e.Handled = true;
             await ShowGoToDialogAsync();
+        }
+        else if ((e.Key is Key.D1 or Key.NumPad1) && HasOnlyCommandModifier(e.KeyModifiers))
+        {
+            e.Handled = true;
+            await ShowFormatCellsDialogAsync();
         }
         else if (e.Key == Key.Z && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {

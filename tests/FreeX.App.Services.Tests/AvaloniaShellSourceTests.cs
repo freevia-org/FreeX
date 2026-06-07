@@ -2015,6 +2015,37 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_WiresCompactFormatCellsRouteThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
+
+        source.Should().Contain("private readonly NativeMenuItem _formatCellsMenuItem = new();");
+        source.Should().Contain("_formatCellsMenuItem.Header = \"Format Cells...\";");
+        source.Should().Contain("_formatCellsMenuItem.Gesture = new KeyGesture(Key.D1, KeyModifiers.Meta);");
+        source.Should().Contain("_formatCellsMenuItem.Click += async (_, _) => await ShowFormatCells");
+        source.Should().Contain("formatMenu.Items.Add(_formatCellsMenuItem);");
+        source.Should().Contain("_formatCellsMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("Key.D1");
+        source.Should().Contain("HasOnlyCommandModifier(e.KeyModifiers)");
+        source.Should().Contain("await ShowFormatCells");
+        source.Should().Contain("private async Task ShowFormatCells");
+        source.Should().Contain("FormatCellsCompactPlanner.TryPlan");
+        source.Should().Contain("_session.ApplySelectedRangeCompactFormat(");
+        source.Should().Contain("\"FormatCellsCompactDialog\"");
+        source.Should().Contain("\"FormatCellsNumberFormatBox\"");
+        source.Should().Contain("\"FormatCellsHorizontalAlignmentBox\"");
+        source.Should().Contain("\"FormatCellsVerticalAlignmentBox\"");
+        source.Should().Contain("\"FormatCellsWrapTextBox\"");
+        source.Should().Contain("\"FormatCellsFontSizeBox\"");
+        source.Should().Contain("\"FormatCellsFontColorBox\"");
+        source.Should().Contain("\"FormatCellsFillColorBox\"");
+        source.Should().Contain("\"FormatCellsBorderPresetBox\"");
+
+        sessionSource.Should().Contain("public WorkbookCellEditResult ApplySelectedRangeCompactFormat(");
+    }
+
+    [Fact]
     public void MainWindow_RendersCellStyleBordersFromWorkbookStyles()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
@@ -2558,7 +2589,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("bool HasFindDialogClosedWithoutAccept,");
         smokeSource.Should().Contain("bool HasReplaceDialogClosedWithoutAccept,");
         smokeSource.Should().Contain("bool HasGoToDialogClosedWithoutAccept,");
-        smokeSource.Should().Contain("bool HasGoToSpecialDialogClosedWithoutAccept)");
+        smokeSource.Should().Contain("bool HasGoToSpecialDialogClosedWithoutAccept,");
         smokeSource.Should().Contain("MacOsLaunchSmokeDialogSnapshot DialogEvidence,");
         smokeSource.Should().Contain("HasNativeFindMenuItem &&");
         smokeSource.Should().Contain("HasNativeFindNextMenuItem &&");

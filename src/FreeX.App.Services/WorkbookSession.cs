@@ -15,6 +15,8 @@ public sealed class WorkbookSession
 
     private const double MaximumRowHeight = 409.5;
 
+    private static readonly StyleDiff EmptyStyleDiff = new();
+
     private readonly IReadOnlyList<IFileAdapter> _adapters;
     private readonly StartupWorkbookLoadResult _source;
     private readonly WorkbookCellEditService _cellEditService;
@@ -1527,6 +1529,36 @@ public sealed class WorkbookSession
         return ApplySelectedRangeStyle(diff);
     }
 
+    public WorkbookCellEditResult ApplySelectedRangeCompactFormat(StyleDiff diff, CellBorderPreset? borderPreset)
+    {
+        ArgumentNullException.ThrowIfNull(diff);
+
+        var range = SelectedRange;
+        var commands = new List<IWorkbookCommand>();
+        var remainingDiff = diff.FontSize is null ? diff : diff with { FontSize = null };
+
+        if (HasStyleDiffChanges(remainingDiff))
+            commands.Add(CreateApplyStyleCommand(range, remainingDiff));
+
+        if (borderPreset is { } preset && HasBorderPresetChanges(range, preset))
+            commands.Add(CreateBorderPresetCommand(range, preset));
+
+        if (diff.FontSize is { } fontSize)
+            commands.Add(CreateSetFontSizeCommand(range, fontSize, GetFittingRowHeight(fontSize)));
+
+        if (commands.Count == 0)
+            return new WorkbookCellEditResult(true, null, [], RecalcReport: null);
+
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new CompositeWorkbookCommand("Format Cells", commands));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
     public WorkbookCellEditResult SetSelectedRangeBorderPreset(CellBorderPreset preset)
     {
         var range = SelectedRange;
@@ -1588,7 +1620,7 @@ public sealed class WorkbookSession
     public WorkbookCellEditResult SetSelectedRangeFontSize(double fontSize)
     {
         var range = SelectedRange;
-        var rowHeight = Math.Min(MaximumRowHeight, FontSizePlanner.EstimateFittingRowHeight(fontSize));
+        var rowHeight = GetFittingRowHeight(fontSize);
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
             CreateSetFontSizeCommand(range, fontSize, rowHeight));
@@ -2153,6 +2185,12 @@ public sealed class WorkbookSession
         commands.Count == 1
             ? commands[0]
             : new CompositeWorkbookCommand(title, commands);
+
+    private static bool HasStyleDiffChanges(StyleDiff diff) =>
+        diff != EmptyStyleDiff;
+
+    private static double GetFittingRowHeight(double fontSize) =>
+        Math.Min(MaximumRowHeight, FontSizePlanner.EstimateFittingRowHeight(fontSize));
 
     private static bool HasBorderPresetChanges(GridRange range, CellBorderPreset preset)
     {
