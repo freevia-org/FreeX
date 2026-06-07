@@ -1386,6 +1386,15 @@ public static partial class AccessibilityCheckerService
             case "NUMBERVALUE":
                 kind = ConditionalFormulaScalarFunctionKind.NumberValue;
                 return true;
+            case "TEXT":
+                kind = ConditionalFormulaScalarFunctionKind.Text;
+                return true;
+            case "FIXED":
+                kind = ConditionalFormulaScalarFunctionKind.Fixed;
+                return true;
+            case "DOLLAR":
+                kind = ConditionalFormulaScalarFunctionKind.Dollar;
+                return true;
             case "LEN":
                 kind = ConditionalFormulaScalarFunctionKind.Len;
                 return true;
@@ -1816,6 +1825,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Concatenate => argumentCount is >= 1 and <= 255,
             ConditionalFormulaScalarFunctionKind.TextJoin => argumentCount is >= 3 and <= 255,
             ConditionalFormulaScalarFunctionKind.NumberValue => argumentCount is >= 1 and <= 3,
+            ConditionalFormulaScalarFunctionKind.Fixed => argumentCount is >= 1 and <= 3,
             ConditionalFormulaScalarFunctionKind.Log or
             ConditionalFormulaScalarFunctionKind.Roman or
             ConditionalFormulaScalarFunctionKind.IsoCeiling or
@@ -1824,6 +1834,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Erf or
             ConditionalFormulaScalarFunctionKind.Delta or
             ConditionalFormulaScalarFunctionKind.GeStep or
+            ConditionalFormulaScalarFunctionKind.Dollar or
             ConditionalFormulaScalarFunctionKind.Weekday or
             ConditionalFormulaScalarFunctionKind.Bin2Hex or
             ConditionalFormulaScalarFunctionKind.Bin2Oct or
@@ -1854,6 +1865,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Left or
             ConditionalFormulaScalarFunctionKind.Right or
             ConditionalFormulaScalarFunctionKind.Exact or
+            ConditionalFormulaScalarFunctionKind.Text or
             ConditionalFormulaScalarFunctionKind.BitAnd or
             ConditionalFormulaScalarFunctionKind.BitOr or
             ConditionalFormulaScalarFunctionKind.BitXor or
@@ -2737,6 +2749,9 @@ public static partial class AccessibilityCheckerService
         T,
         Value,
         NumberValue,
+        Text,
+        Fixed,
+        Dollar,
         Len,
         LenB,
         Upper,
@@ -3525,6 +3540,12 @@ public static partial class AccessibilityCheckerService
                     return TryEvaluateFormulaValueFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.NumberValue:
                     return TryEvaluateFormulaNumberValueFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Text:
+                    return TryEvaluateFormulaTextFormatFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Fixed:
+                    return TryEvaluateFormulaFixedFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Dollar:
+                    return TryEvaluateFormulaDollarFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Concat:
                     return TryEvaluateFormulaConcatFunction(function, rowOffset, colOffset, concatenate: false, out value);
                 case ConditionalFormulaScalarFunctionKind.Concatenate:
@@ -10492,6 +10513,258 @@ public static partial class AccessibilityCheckerService
 
             return double.IsFinite(number);
         }
+
+        private bool TryEvaluateFormulaTextFormatFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaTextScalarArgument(function.Arguments[0], rowOffset, colOffset, out var source) ||
+                !TryResolveFormulaTextScalarArgument(function.Arguments[1], rowOffset, colOffset, out var formatSource))
+            {
+                return false;
+            }
+
+            value = MapFormulaTextScalarBinaryArguments(source, formatSource, FormulaTextFormatScalar);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaFixedFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaTextScalarArgument(function.Arguments[0], rowOffset, colOffset, out var numberSource))
+                return false;
+
+            var decimalsSource = (ScalarValue)new NumberValue(2);
+            if (function.Arguments.Count >= 2 &&
+                !TryResolveFormulaTextScalarArgument(function.Arguments[1], rowOffset, colOffset, out decimalsSource))
+            {
+                return false;
+            }
+
+            var noCommasSource = (ScalarValue)BlankValue.Instance;
+            if (function.Arguments.Count == 3 &&
+                !TryResolveFormulaTextScalarArgument(function.Arguments[2], rowOffset, colOffset, out noCommasSource))
+            {
+                return false;
+            }
+
+            value = MapFormulaTextScalarArguments(
+                new[] { numberSource, decimalsSource, noCommasSource },
+                static arguments => FormulaFixedScalar(arguments[0], arguments[1], arguments[2]));
+            return true;
+        }
+
+        private bool TryEvaluateFormulaDollarFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaTextScalarArgument(function.Arguments[0], rowOffset, colOffset, out var numberSource))
+                return false;
+
+            var decimalsSource = (ScalarValue)new NumberValue(2);
+            if (function.Arguments.Count == 2 &&
+                !TryResolveFormulaTextScalarArgument(function.Arguments[1], rowOffset, colOffset, out decimalsSource))
+            {
+                return false;
+            }
+
+            value = MapFormulaTextScalarBinaryArguments(numberSource, decimalsSource, FormulaDollarScalar);
+            return true;
+        }
+
+        private static ScalarValue FormulaTextFormatScalar(ScalarValue value, ScalarValue formatValue)
+        {
+            if (value is ErrorValue valueError)
+                return valueError;
+
+            if (formatValue is ErrorValue formatError)
+                return formatError;
+
+            if (!TryGetFormulaCoercedText(formatValue, out var formatText) ||
+                FormulaTextScalarExceedsExcelTextLimit(formatText))
+            {
+                return ErrorValue.Value;
+            }
+
+            if (value is NumberValue or DateTimeValue)
+            {
+                try
+                {
+                    return FormulaTextScalarResult(NumberFormatter.Format(value, formatText));
+                }
+                catch (FormulaEvalException ex)
+                {
+                    return FormulaErrorValueFromCode(ex.ErrorCode);
+                }
+                catch
+                {
+                    return ErrorValue.Value;
+                }
+            }
+
+            return TryGetFormulaCoercedText(value, out var text)
+                ? FormulaTextScalarResult(text)
+                : ErrorValue.Value;
+        }
+
+        private static ScalarValue FormulaFixedScalar(
+            ScalarValue value,
+            ScalarValue decimalsValue,
+            ScalarValue noCommasValue)
+        {
+            if (value is ErrorValue valueError)
+                return valueError;
+
+            if (decimalsValue is ErrorValue decimalsError)
+                return decimalsError;
+
+            if (noCommasValue is ErrorValue noCommasError)
+                return noCommasError;
+
+            if (!TryGetFormulaTextFormattingNumber(value, out var number, out var error) ||
+                !TryGetFormulaTextFormattingInteger(decimalsValue, out var decimals, out error) ||
+                !TryGetFormulaTextFormattingBoolean(noCommasValue, out var noCommas, out error))
+                return error ?? ErrorValue.Value;
+
+            return FormulaTextFormatRoundedNumber(number, decimals, useCommas: !noCommas);
+        }
+
+        private static ScalarValue FormulaDollarScalar(ScalarValue value, ScalarValue decimalsValue)
+        {
+            if (value is ErrorValue valueError)
+                return valueError;
+
+            if (decimalsValue is ErrorValue decimalsError)
+                return decimalsError;
+
+            if (!TryGetFormulaTextFormattingNumber(value, out var number, out var error) ||
+                !TryGetFormulaTextFormattingInteger(decimalsValue, out var decimals, out error))
+                return error ?? ErrorValue.Value;
+
+            var numberText = FormulaTextFormatRoundedNumber(Math.Abs(number), decimals, useCommas: true);
+            if (numberText is not TextValue text)
+                return numberText;
+
+            var formatted = "$" + text.Value;
+            return FormulaTextScalarResult(number < 0d && (decimals >= 0 || text.Value != "0")
+                ? "(" + formatted + ")"
+                : formatted);
+        }
+
+        private static ScalarValue FormulaTextFormatRoundedNumber(
+            double value,
+            int decimals,
+            bool useCommas)
+        {
+            if (!double.IsFinite(value))
+                return ErrorValue.Num;
+
+            if (decimals > MaxFormulaTextSliceLength)
+                return ErrorValue.Value;
+
+            var rounded = decimals < -308
+                ? 0d
+                : decimals <= MaxFormulaRoundDigits
+                    ? RoundFormulaNumber(value, decimals)
+                    : value;
+            if (!double.IsFinite(rounded))
+                return ErrorValue.Num;
+
+            var displayDecimals = Math.Clamp(decimals, 0, 99);
+            var format = (useCommas ? "N" : "F") + displayDecimals.ToString(CultureInfo.InvariantCulture);
+            return FormulaTextScalarResult(rounded.ToString(format, CultureInfo.InvariantCulture));
+        }
+
+        private static bool TryGetFormulaTextFormattingNumber(
+            ScalarValue value,
+            out double number,
+            out ErrorValue? error)
+        {
+            error = null;
+            if (!TryGetFormulaTextScalarNumber(value, out number))
+            {
+                error = ErrorValue.Value;
+                return false;
+            }
+
+            if (!double.IsFinite(number))
+            {
+                error = ErrorValue.Num;
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryGetFormulaTextFormattingInteger(
+            ScalarValue value,
+            out int integer,
+            out ErrorValue? error)
+        {
+            integer = 0;
+            if (!TryGetFormulaTextFormattingNumber(value, out var number, out error))
+                return false;
+
+            if (number < int.MinValue || number > int.MaxValue)
+            {
+                error = ErrorValue.Num;
+                return false;
+            }
+
+            integer = (int)number;
+            return true;
+        }
+
+        private static bool TryGetFormulaTextFormattingBoolean(
+            ScalarValue value,
+            out bool boolean,
+            out ErrorValue? error)
+        {
+            error = null;
+            switch (value)
+            {
+                case BoolValue logical:
+                    boolean = logical.Value;
+                    return true;
+                case NumberValue number when double.IsFinite(number.Value):
+                    boolean = number.Value != 0d;
+                    return true;
+                case DateTimeValue dateTime when double.IsFinite(dateTime.Value):
+                    boolean = dateTime.Value != 0d;
+                    return true;
+                case BlankValue:
+                    boolean = false;
+                    return true;
+                default:
+                    boolean = false;
+                    error = value is NumberValue or DateTimeValue ? ErrorValue.Num : ErrorValue.Value;
+                    return false;
+            }
+        }
+
+        private static ErrorValue FormulaErrorValueFromCode(string code) => code.ToUpperInvariant() switch
+        {
+            "#DIV/0!" => ErrorValue.DivByZero,
+            "#VALUE!" => ErrorValue.Value,
+            "#REF!" => ErrorValue.Ref,
+            "#NAME?" => ErrorValue.Name,
+            "#NULL!" => ErrorValue.Null,
+            "#N/A" => ErrorValue.NA,
+            "#NUM!" => ErrorValue.Num,
+            "#SPILL!" => ErrorValue.Spill,
+            "#CALC!" => ErrorValue.Calc,
+            _ => ErrorValue.Value
+        };
 
         private bool TryEvaluateFormulaDateScalarFunction(
             ConditionalFormulaScalarFunction function,
