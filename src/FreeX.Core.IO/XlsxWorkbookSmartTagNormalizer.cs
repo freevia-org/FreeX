@@ -30,7 +30,7 @@ internal static class XlsxWorkbookSmartTagNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(smartTagPr, SmartTagPropertyAttributes);
-        changed |= RemoveAllNodes(smartTagPr);
+        changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(smartTagPr);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(smartTagPr, "embed", NormalizeBoolean);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(smartTagPr, "show", NormalizeShow);
         return changed;
@@ -71,20 +71,11 @@ internal static class XlsxWorkbookSmartTagNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(smartTagType, SmartTagTypeAttributes);
-        changed |= RemoveAllNodes(smartTagType);
+        changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(smartTagType);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(smartTagType, "namespaceUri", NormalizeNonEmptyText);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(smartTagType, "name", NormalizeNonEmptyText);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(smartTagType, "url", NormalizeOptionalText);
         return changed;
-    }
-
-    private static bool RemoveAllNodes(XElement element)
-    {
-        if (!element.Nodes().Any())
-            return false;
-
-        element.RemoveNodes();
-        return true;
     }
 
     private static string? NormalizeBoolean(string? value)
