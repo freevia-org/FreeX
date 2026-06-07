@@ -315,6 +315,90 @@ public sealed partial class XlsxPackageMetadataMergerTests
     }
 
     [Fact]
+    public void MergeRelationshipParts_PreservesChartExStyleColorRelationshipsToGeneratedSidecarsAndRemapsIds()
+    {
+        using var sourcePackage = XlsxPackageTestFixtures.CreatePackage(
+            ("[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/charts/chart1.xml" ContentType="application/vnd.ms-office.chartex+xml"/>
+                  <Override PartName="/xl/charts/style1.xml" ContentType="application/vnd.ms-office.chartstyle+xml"/>
+                  <Override PartName="/xl/charts/colors1.xml" ContentType="application/vnd.ms-office.chartcolorstyle+xml"/>
+                </Types>
+                """),
+            ("xl/charts/chart1.xml", """
+                <cx:chartSpace xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex"/>
+                """),
+            ("xl/charts/style1.xml", """
+                <cs:chartStyle xmlns:cs="http://schemas.microsoft.com/office/drawing/2012/chartStyle" id="201"/>
+                """),
+            ("xl/charts/colors1.xml", """
+                <cs:colorStyle xmlns:cs="http://schemas.microsoft.com/office/drawing/2012/chartStyle" id="10"/>
+                """),
+            ("xl/charts/_rels/chart1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1"
+                                Type="http://schemas.microsoft.com/office/2011/relationships/chartStyle"
+                                Target="style1.xml"/>
+                  <Relationship Id="rId2"
+                                Type="http://schemas.microsoft.com/office/2011/relationships/chartColorStyle"
+                                Target="colors1.xml"/>
+                </Relationships>
+                """));
+        using var targetPackage = XlsxPackageTestFixtures.CreatePackage(
+            ("[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/charts/chart1.xml" ContentType="application/vnd.ms-office.chartex+xml"/>
+                  <Override PartName="/xl/charts/style1.xml" ContentType="application/vnd.ms-office.chartstyle+xml"/>
+                  <Override PartName="/xl/charts/colors1.xml" ContentType="application/vnd.ms-office.chartcolorstyle+xml"/>
+                </Types>
+                """),
+            ("xl/charts/chart1.xml", """
+                <cx:chartSpace xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex"/>
+                """),
+            ("xl/charts/style1.xml", """
+                <cs:chartStyle xmlns:cs="http://schemas.microsoft.com/office/drawing/2012/chartStyle" id="201"/>
+                """),
+            ("xl/charts/colors1.xml", """
+                <cs:colorStyle xmlns:cs="http://schemas.microsoft.com/office/drawing/2012/chartStyle" id="10"/>
+                """),
+            ("xl/charts/_rels/chart1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
+                                Target="https://example.com/chart"
+                                TargetMode="External"/>
+                </Relationships>
+                """));
+        using var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var targetArchive = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, targetArchive);
+        generatedEntriesBeforeMerge.Should().Contain(["xl/charts/style1.xml", "xl/charts/colors1.xml"]);
+
+        XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, targetArchive, generatedEntriesBeforeMerge);
+
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationshipsXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "xl/charts/_rels/chart1.xml.rels");
+        var relationships = relationshipsXml.Root!.Elements(relationshipNs + "Relationship").ToList();
+        relationships
+            .Select(element => element.Attribute("Id")?.Value)
+            .OfType<string>()
+            .Should()
+            .OnlyHaveUniqueItems();
+        relationships.Should().ContainSingle(element =>
+            (string?)element.Attribute("Type") == "http://schemas.microsoft.com/office/2011/relationships/chartStyle" &&
+            (string?)element.Attribute("Target") == "style1.xml" &&
+            (string?)element.Attribute("Id") != "rId1");
+        relationships.Should().ContainSingle(element =>
+            (string?)element.Attribute("Type") == "http://schemas.microsoft.com/office/2011/relationships/chartColorStyle" &&
+            (string?)element.Attribute("Target") == "colors1.xml");
+    }
+
+    [Fact]
     public void MergeRelationshipParts_PreservesWorkbookWebExtensionTaskpaneGraph()
     {
         using var sourcePackage = CreatePackageWithWorkbookWebExtensionTaskpaneGraph();
