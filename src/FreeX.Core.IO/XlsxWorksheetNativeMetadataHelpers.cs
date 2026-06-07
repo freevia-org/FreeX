@@ -87,6 +87,26 @@ internal static class XlsxWorksheetNativeMetadataHelpers
         }
     }
 
+    public static bool ApplyNativeAttributesIfDifferent(
+        XElement element,
+        IReadOnlyDictionary<string, string>? attributes,
+        IReadOnlyCollection<string> modeledNames)
+    {
+        if (attributes is null)
+            return false;
+
+        var changed = false;
+        foreach (var (name, value) in attributes)
+        {
+            if (string.IsNullOrWhiteSpace(name) || modeledNames.Contains(name, StringComparer.Ordinal))
+                continue;
+
+            changed |= TrySetNativeAttributeIfDifferent(element, name, value);
+        }
+
+        return changed;
+    }
+
     public static bool TrySetNativeAttributeIfMissing(XElement element, string name, string value)
     {
         if (string.IsNullOrWhiteSpace(name))

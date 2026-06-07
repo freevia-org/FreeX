@@ -119,32 +119,20 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
 
         if (metadata is not null)
         {
-            foreach (var attribute in metadata.NativeAttributes)
-            {
-                if (string.IsNullOrWhiteSpace(attribute.Key) ||
-                    string.Equals(attribute.Key, "count", StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                changed |= XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttributeIfDifferent(pageBreaks, attribute.Key, attribute.Value);
-            }
+            changed |= XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfDifferent(
+                pageBreaks,
+                metadata.NativeAttributes,
+                ["count"]);
 
             foreach (var (breakId, attributes) in metadata.BreakNativeAttributes)
             {
                 if (!breaksById.TryGetValue(breakId.ToString(CultureInfo.InvariantCulture), out var breakElement))
                     continue;
 
-                foreach (var attribute in attributes)
-                {
-                    if (string.IsNullOrWhiteSpace(attribute.Key) ||
-                        string.Equals(attribute.Key, "id", StringComparison.Ordinal))
-                    {
-                        continue;
-                    }
-
-                    changed |= XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttributeIfDifferent(breakElement, attribute.Key, attribute.Value);
-                }
+                changed |= XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfDifferent(
+                    breakElement,
+                    attributes,
+                    ["id"]);
             }
         }
 
