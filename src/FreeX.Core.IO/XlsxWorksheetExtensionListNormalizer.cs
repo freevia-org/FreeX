@@ -64,7 +64,7 @@ internal static class XlsxWorksheetExtensionListNormalizer
     private static bool NormalizeExtensionListElement(XElement extensionList, HashSet<string> seenUris)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(extensionList, NoAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(extensionList, NoAttributes);
         changed |= RemoveUnexpectedChildElements(extensionList, WorksheetNs + "ext");
 
         foreach (var extension in extensionList.Elements(WorksheetNs + "ext").ToList())
@@ -84,26 +84,8 @@ internal static class XlsxWorksheetExtensionListNormalizer
     private static bool NormalizeExtensionElement(XElement extension)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(extension, ExtensionAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(extension, ExtensionAttributes);
         changed |= NormalizeUri(extension);
-        return changed;
-    }
-
-    private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedAttributes)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                (attribute.Name.NamespaceName.Length == 0 && allowedAttributes.Contains(attribute.Name.LocalName)))
-            {
-                continue;
-            }
-
-            attribute.Remove();
-            changed = true;
-        }
-
         return changed;
     }
 
