@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
 
@@ -82,7 +81,7 @@ internal static class XlsxWorksheetProtectionNormalizer
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protection, "algorithmName", NormalizeOptionalText);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protection, "hashValue", NormalizeBase64BinaryOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protection, "saltValue", NormalizeBase64BinaryOrNull);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protection, "spinCount", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protection, "spinCount", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         foreach (var attributeName in BooleanAttributes)
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protection, attributeName, NormalizeBoolean);
         changed |= RemoveLegacyPasswordWhenAdvancedHashExists(protection);
@@ -180,14 +179,6 @@ internal static class XlsxWorksheetProtectionNormalizer
         }
 
         return trimmed.ToUpperInvariant();
-    }
-
-    private static string? NormalizeUnsignedIntOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed.ToString(CultureInfo.InvariantCulture)
-            : null;
     }
 
     private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
