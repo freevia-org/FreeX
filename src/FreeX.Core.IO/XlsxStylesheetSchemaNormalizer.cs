@@ -6,6 +6,53 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxStylesheetSchemaNormalizer
 {
+    private static readonly IReadOnlySet<string> EmptyAttributes = new HashSet<string>(StringComparer.Ordinal);
+    private static readonly IReadOnlySet<string> DifferentialStylesAttributes =
+        new HashSet<string>(StringComparer.Ordinal) { "count" };
+    private static readonly IReadOnlySet<string> DifferentialStyleChildren =
+        new HashSet<string>(StringComparer.Ordinal) { "font", "numFmt", "fill", "alignment", "border", "protection", "extLst" };
+    private static readonly IReadOnlySet<string> DifferentialFontChildren =
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            "b",
+            "i",
+            "strike",
+            "condense",
+            "extend",
+            "outline",
+            "shadow",
+            "u",
+            "vertAlign",
+            "sz",
+            "color",
+            "name",
+            "charset",
+            "family",
+            "scheme"
+        };
+    private static readonly IReadOnlySet<string> ValAttribute =
+        new HashSet<string>(StringComparer.Ordinal) { "val" };
+    private static readonly IReadOnlySet<string> ColorAttributes =
+        new HashSet<string>(StringComparer.Ordinal) { "auto", "indexed", "rgb", "theme", "tint" };
+    private static readonly IReadOnlySet<string> NumFmtAttributes =
+        new HashSet<string>(StringComparer.Ordinal) { "numFmtId", "formatCode" };
+    private static readonly IReadOnlySet<string> AlignmentAttributes =
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            "horizontal",
+            "vertical",
+            "textRotation",
+            "wrapText",
+            "indent",
+            "relativeIndent",
+            "justifyLastLine",
+            "shrinkToFit",
+            "readingOrder"
+        };
+    private static readonly IReadOnlySet<string> BorderAttributes =
+        new HashSet<string>(StringComparer.Ordinal) { "diagonalUp", "diagonalDown", "outline" };
+    private static readonly IReadOnlySet<string> ProtectionAttributes =
+        new HashSet<string>(StringComparer.Ordinal) { "locked", "hidden" };
     private static readonly IReadOnlySet<string> TableStylesAttributes =
         new HashSet<string>(StringComparer.Ordinal) { "count", "defaultTableStyle", "defaultPivotStyle" };
     private static readonly IReadOnlySet<string> TableStyleAttributes =
@@ -81,10 +128,10 @@ internal static class XlsxStylesheetSchemaNormalizer
                 changed = true;
         }
 
-        foreach (var dxf in root.Element(workbookNs + "dxfs")?.Elements(workbookNs + "dxf") ?? [])
+        if (root.Element(workbookNs + "dxfs") is { } differentialStyles &&
+            NormalizeDifferentialStyles(differentialStyles, workbookNs))
         {
-            if (XlsxAdvancedConditionalFormatWriter.NormalizeDifferentialStyleOrder(dxf, workbookNs))
-                changed = true;
+            changed = true;
         }
 
         if (root.Element(workbookNs + "tableStyles") is { } tableStyles &&
@@ -95,6 +142,73 @@ internal static class XlsxStylesheetSchemaNormalizer
 
         return changed;
     }
+
+    internal static bool NormalizeDifferentialStyles(XElement differentialStyles, XNamespace workbookNs)
+    {
+        var changed = false;
+        changed |= RemoveUnknownAttributes(differentialStyles, DifferentialStylesAttributes);
+        changed |= RemoveUnexpectedChildren(differentialStyles, workbookNs + "dxf");
+
+        foreach (var dxf in differentialStyles.Elements(workbookNs + "dxf"))
+            changed |= NormalizeDifferentialStyle(dxf, workbookNs);
+
+        changed |= SetAttributeIfChanged(
+            differentialStyles,
+            "count",
+            differentialStyles.Elements(workbookNs + "dxf").Count().ToString(CultureInfo.InvariantCulture));
+        return changed;
+    }
+
+    private static bool NormalizeDifferentialStyle(XElement dxf, XNamespace workbookNs)
+    {
+        var changed = false;
+        changed |= RemoveUnknownAttributes(dxf, EmptyAttributes);
+        changed |= RemoveUnexpectedChildren(dxf, DifferentialStyleChildren, workbookNs);
+        changed |= RemoveDuplicateChildren(dxf, DifferentialStyleChildren, workbookNs);
+
+        foreach (var child in dxf.Elements().ToList())
+            changed |= NormalizeDifferentialStyleChild(child, workbookNs);
+
+        changed |= XlsxAdvancedConditionalFormatWriter.NormalizeDifferentialStyleOrder(dxf, workbookNs);
+        return changed;
+    }
+
+    private static bool NormalizeDifferentialStyleChild(XElement child, XNamespace workbookNs)
+    {
+        return child.Name.LocalName switch
+        {
+            "font" => NormalizeDifferentialFont(child, workbookNs),
+            "numFmt" => RemoveUnknownAttributes(child, NumFmtAttributes),
+            "fill" => RemoveUnknownAttributes(child, EmptyAttributes),
+            "alignment" => RemoveUnknownAttributes(child, AlignmentAttributes),
+            "border" => RemoveUnknownAttributes(child, BorderAttributes),
+            "protection" => RemoveUnknownAttributes(child, ProtectionAttributes),
+            "extLst" => RemoveUnknownAttributes(child, EmptyAttributes),
+            _ => false
+        };
+    }
+
+    private static bool NormalizeDifferentialFont(XElement font, XNamespace workbookNs)
+    {
+        var changed = false;
+        changed |= RemoveUnknownAttributes(font, EmptyAttributes);
+        changed |= RemoveUnexpectedChildren(font, DifferentialFontChildren, workbookNs);
+        changed |= RemoveDuplicateChildren(font, DifferentialFontChildren, workbookNs);
+
+        foreach (var child in font.Elements())
+            changed |= RemoveUnknownAttributes(child, DifferentialFontChildAttributes(child.Name.LocalName));
+
+        return changed;
+    }
+
+    private static IReadOnlySet<string> DifferentialFontChildAttributes(string localName) =>
+        localName switch
+        {
+            "color" => ColorAttributes,
+            "b" or "i" or "strike" or "condense" or "extend" or "outline" or "shadow" or "u" or
+                "vertAlign" or "sz" or "name" or "charset" or "family" or "scheme" => ValAttribute,
+            _ => EmptyAttributes
+        };
 
     internal static bool NormalizeTableStyles(XElement tableStyles, XNamespace workbookNs)
     {
@@ -288,6 +402,47 @@ internal static class XlsxStylesheetSchemaNormalizer
         {
             if (child.Name == allowedChildName)
                 continue;
+
+            child.Remove();
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool RemoveUnexpectedChildren(
+        XElement element,
+        IReadOnlySet<string> allowedLocalNames,
+        XNamespace allowedNamespace)
+    {
+        var changed = false;
+        foreach (var child in element.Elements().ToList())
+        {
+            if (child.Name.Namespace == allowedNamespace && allowedLocalNames.Contains(child.Name.LocalName))
+                continue;
+
+            child.Remove();
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool RemoveDuplicateChildren(
+        XElement element,
+        IReadOnlySet<string> singletonLocalNames,
+        XNamespace singletonNamespace)
+    {
+        var changed = false;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var child in element.Elements().ToList())
+        {
+            if (child.Name.Namespace != singletonNamespace ||
+                !singletonLocalNames.Contains(child.Name.LocalName) ||
+                seen.Add(child.Name.LocalName))
+            {
+                continue;
+            }
 
             child.Remove();
             changed = true;
