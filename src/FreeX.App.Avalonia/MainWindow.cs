@@ -93,6 +93,41 @@ public sealed class MainWindow : Window
         CheckBox MatchCaseBox,
         CheckBox MatchEntireCellBox,
         Control Panel);
+    private sealed record FindDialogSmokeProbe(
+        Window Dialog,
+        TextBox FindBox,
+        Button FindNextButton,
+        Button FindAllButton,
+        Button CancelButton,
+        FindOptionsControls OptionsControls,
+        Button ChooseFormatButton,
+        Button ClearFormatButton);
+    private sealed record ReplaceDialogSmokeProbe(
+        Window Dialog,
+        TextBox FindBox,
+        TextBox ReplaceBox,
+        Button ReplaceButton,
+        Button ReplaceAllButton,
+        Button CancelButton,
+        FindOptionsControls OptionsControls,
+        Button ChooseFindFormatButton,
+        Button ClearFindFormatButton,
+        Button ChooseReplaceFormatButton,
+        Button ClearReplaceFormatButton);
+    private sealed record SingleInputDialogSmokeProbe(
+        Window Dialog,
+        TextBox InputBox,
+        Button AcceptButton,
+        Button CancelButton);
+    private sealed record GoToSpecialDialogSmokeProbe(
+        Window Dialog,
+        ComboBox KindBox,
+        CheckBox NumbersBox,
+        CheckBox TextBox,
+        CheckBox LogicalsBox,
+        CheckBox ErrorsBox,
+        Button OkButton,
+        Button CancelButton);
     private sealed record GoToSpecialDialogResult(GoToSpecialKind Kind, GoToSpecialOptions Options);
     private sealed record GoToSpecialChoice(GoToSpecialKind Kind, string Label)
     {
@@ -309,6 +344,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _quitMenuItem = new();
     private NativeMenu? _nativeMenu;
     private WorkbookSession _session;
+    private MacOsLaunchSmokeDialogSnapshot _launchSmokeDialogEvidence = MacOsLaunchSmokeDialogSnapshot.Empty;
     private string? _formulaBoxEditOriginalText;
     private bool _isOpening;
     private bool _isSaving;
@@ -3908,7 +3944,7 @@ public sealed class MainWindow : Window
         await ShowFindAllResultsDialogAsync(search.FindText, result.Matches);
     }
 
-    private async Task<FindDialogResult?> ShowFindInputDialogAsync()
+    private async Task<FindDialogResult?> ShowFindInputDialogAsync(Action<FindDialogSmokeProbe>? launchSmokeProbe = null)
     {
         FindDialogResult? result = null;
         var dialog = new Window
@@ -4030,6 +4066,22 @@ public sealed class MainWindow : Window
             findBox.Focus();
             findBox.SelectAll();
         };
+        if (launchSmokeProbe is not null)
+        {
+            dialog.Opened += (_, _) =>
+            {
+                launchSmokeProbe(new FindDialogSmokeProbe(
+                    dialog,
+                    findBox,
+                    findNextButton,
+                    findAllButton,
+                    cancelButton,
+                    optionsControls,
+                    chooseFormatButton,
+                    clearFormatButton));
+                dialog.Close();
+            };
+        }
 
         await dialog.ShowDialog(this);
         return result;
@@ -4183,7 +4235,7 @@ public sealed class MainWindow : Window
             : $"Replaced {FormatRangeReference(result.ReplacedRange!.Value)} ({result.MatchIndex} of {result.MatchCount})");
     }
 
-    private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync()
+    private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync(Action<ReplaceDialogSmokeProbe>? launchSmokeProbe = null)
     {
         ReplaceDialogResult? result = null;
         var dialog = new Window
@@ -4322,6 +4374,25 @@ public sealed class MainWindow : Window
             findBox.Focus();
             findBox.SelectAll();
         };
+        if (launchSmokeProbe is not null)
+        {
+            dialog.Opened += (_, _) =>
+            {
+                launchSmokeProbe(new ReplaceDialogSmokeProbe(
+                    dialog,
+                    findBox,
+                    replaceBox,
+                    replaceButton,
+                    replaceAllButton,
+                    cancelButton,
+                    optionsControls,
+                    chooseFindFormatButton,
+                    clearFindFormatButton,
+                    chooseReplaceFormatButton,
+                    clearReplaceFormatButton));
+                dialog.Close();
+            };
+        }
 
         await dialog.ShowDialog(this);
         return result;
@@ -4363,7 +4434,7 @@ public sealed class MainWindow : Window
         SelectGoToSpecial(selection.Kind, selection.Options);
     }
 
-    private async Task<GoToSpecialDialogResult?> ShowGoToSpecialInputDialogAsync()
+    private async Task<GoToSpecialDialogResult?> ShowGoToSpecialInputDialogAsync(Action<GoToSpecialDialogSmokeProbe>? launchSmokeProbe = null)
     {
         GoToSpecialDialogResult? result = null;
         var dialog = new Window
@@ -4502,6 +4573,22 @@ public sealed class MainWindow : Window
             RefreshValueTypeState();
             kindBox.Focus();
         };
+        if (launchSmokeProbe is not null)
+        {
+            dialog.Opened += (_, _) =>
+            {
+                launchSmokeProbe(new GoToSpecialDialogSmokeProbe(
+                    dialog,
+                    kindBox,
+                    numbersBox,
+                    textBox,
+                    logicalsBox,
+                    errorsBox,
+                    okButton,
+                    cancelButton));
+                dialog.Close();
+            };
+        }
 
         await dialog.ShowDialog(this);
         return result;
@@ -4564,7 +4651,8 @@ public sealed class MainWindow : Window
         string label,
         string initialText,
         string acceptText,
-        string automationId)
+        string automationId,
+        Action<SingleInputDialogSmokeProbe>? launchSmokeProbe = null)
     {
         string? result = null;
         var dialog = new Window
@@ -4652,6 +4740,18 @@ public sealed class MainWindow : Window
             inputBox.Focus();
             inputBox.SelectAll();
         };
+        if (launchSmokeProbe is not null)
+        {
+            dialog.Opened += (_, _) =>
+            {
+                launchSmokeProbe(new SingleInputDialogSmokeProbe(
+                    dialog,
+                    inputBox,
+                    acceptButton,
+                    cancelButton));
+                dialog.Close();
+            };
+        }
 
         await dialog.ShowDialog(this);
         return result;
@@ -6194,6 +6294,141 @@ public sealed class MainWindow : Window
         await OpenWorkbookPathAsync(path!);
     }
 
+    internal async Task<MacOsLaunchSmokeDialogSnapshot> CaptureLaunchSmokeDialogEvidenceAsync()
+    {
+        _launchSmokeDialogEvidence = MacOsLaunchSmokeDialogSnapshot.Empty;
+
+        var hasFindDialog = false;
+        var hasFindDialogTextBox = false;
+        var hasFindDialogActionButtons = false;
+        var hasFindDialogOptions = false;
+        var hasFindDialogFormatControls = false;
+        await ShowFindInputDialogAsync(probe =>
+        {
+            hasFindDialog = HasLaunchSmokeDialog(probe.Dialog, "Find");
+            hasFindDialogTextBox = HasLaunchSmokeAutomationId(probe.FindBox, "FindTextBox") &&
+                probe.FindBox.MinWidth >= 300;
+            hasFindDialogActionButtons =
+                HasLaunchSmokeButton(probe.FindNextButton, "FindNextButton", "Find Next") &&
+                HasLaunchSmokeButton(probe.FindAllButton, "FindAllButton", "Find All") &&
+                HasLaunchSmokeButton(probe.CancelButton, "FindCancelButton", "Cancel");
+            hasFindDialogOptions = HasLaunchSmokeFindOptions(probe.OptionsControls, "Find", defaultLookInIndex: 0);
+            hasFindDialogFormatControls =
+                HasLaunchSmokeButton(probe.ChooseFormatButton, "FindChooseFormatFromCellButton", "Choose From Cell") &&
+                HasLaunchSmokeButton(probe.ClearFormatButton, "FindClearFormatButton", "Clear Format") &&
+                !probe.ClearFormatButton.IsVisible;
+        });
+
+        var hasReplaceDialog = false;
+        var hasReplaceDialogTextBoxes = false;
+        var hasReplaceDialogActionButtons = false;
+        var hasReplaceDialogOptions = false;
+        var hasReplaceDialogFormatControls = false;
+        await ShowReplaceInputDialogAsync(probe =>
+        {
+            hasReplaceDialog = HasLaunchSmokeDialog(probe.Dialog, "Replace");
+            hasReplaceDialogTextBoxes =
+                HasLaunchSmokeAutomationId(probe.FindBox, "ReplaceFindTextBox") &&
+                HasLaunchSmokeAutomationId(probe.ReplaceBox, "ReplaceWithTextBox") &&
+                probe.FindBox.MinWidth >= 300 &&
+                probe.ReplaceBox.MinWidth >= 300;
+            hasReplaceDialogActionButtons =
+                HasLaunchSmokeButton(probe.ReplaceButton, "ReplaceButton", "Replace") &&
+                HasLaunchSmokeButton(probe.ReplaceAllButton, "ReplaceAllButton", "Replace All") &&
+                HasLaunchSmokeButton(probe.CancelButton, "ReplaceCancelButton", "Cancel");
+            hasReplaceDialogOptions = HasLaunchSmokeFindOptions(probe.OptionsControls, "Replace", defaultLookInIndex: 1);
+            hasReplaceDialogFormatControls =
+                HasLaunchSmokeButton(probe.ChooseFindFormatButton, "ReplaceFindChooseFormatFromCellButton", "Choose From Cell") &&
+                HasLaunchSmokeButton(probe.ClearFindFormatButton, "ReplaceFindClearFormatButton", "Clear Format") &&
+                !probe.ClearFindFormatButton.IsVisible &&
+                HasLaunchSmokeButton(probe.ChooseReplaceFormatButton, "ReplaceWithChooseFormatFromCellButton", "Choose From Cell") &&
+                HasLaunchSmokeButton(probe.ClearReplaceFormatButton, "ReplaceWithClearFormatButton", "Clear Format") &&
+                !probe.ClearReplaceFormatButton.IsVisible;
+        });
+
+        var hasGoToDialog = false;
+        var hasGoToDialogReferenceControls = false;
+        await ShowSingleInputDialogAsync(
+            "Go To",
+            "Reference",
+            FormatRangeReference(_session.SelectedRange),
+            "Go",
+            "GoToReferenceBox",
+            probe =>
+            {
+                hasGoToDialog = HasLaunchSmokeDialog(probe.Dialog, "Go To");
+                hasGoToDialogReferenceControls =
+                    HasLaunchSmokeAutomationId(probe.InputBox, "GoToReferenceBox") &&
+                    HasLaunchSmokeButton(probe.AcceptButton, "GoToReferenceBoxAcceptButton", "Go") &&
+                    HasLaunchSmokeButton(probe.CancelButton, "GoToReferenceBoxCancelButton", "Cancel");
+            });
+
+        var hasGoToSpecialDialog = false;
+        var hasGoToSpecialKindControls = false;
+        var hasGoToSpecialValueTypeControls = false;
+        await ShowGoToSpecialInputDialogAsync(probe =>
+        {
+            hasGoToSpecialDialog = HasLaunchSmokeDialog(probe.Dialog, "Go To Special");
+            hasGoToSpecialKindControls =
+                HasLaunchSmokeAutomationId(probe.KindBox, "GoToSpecialKindBox") &&
+                probe.KindBox.SelectedIndex == 0 &&
+                HasLaunchSmokeButton(probe.OkButton, "GoToSpecialOkButton", "OK") &&
+                HasLaunchSmokeButton(probe.CancelButton, "GoToSpecialCancelButton", "Cancel");
+            hasGoToSpecialValueTypeControls =
+                HasLaunchSmokeCheckBox(probe.NumbersBox, "GoToSpecialNumbersBox", "Numbers") &&
+                HasLaunchSmokeCheckBox(probe.TextBox, "GoToSpecialTextBox", "Text") &&
+                HasLaunchSmokeCheckBox(probe.LogicalsBox, "GoToSpecialLogicalsBox", "Logicals") &&
+                HasLaunchSmokeCheckBox(probe.ErrorsBox, "GoToSpecialErrorsBox", "Errors");
+        });
+
+        _launchSmokeDialogEvidence = new MacOsLaunchSmokeDialogSnapshot(
+            hasFindDialog,
+            hasFindDialogTextBox,
+            hasFindDialogActionButtons,
+            hasFindDialogOptions,
+            hasFindDialogFormatControls,
+            hasReplaceDialog,
+            hasReplaceDialogTextBoxes,
+            hasReplaceDialogActionButtons,
+            hasReplaceDialogOptions,
+            hasReplaceDialogFormatControls,
+            hasGoToDialog,
+            hasGoToDialogReferenceControls,
+            hasGoToSpecialDialog,
+            hasGoToSpecialKindControls,
+            hasGoToSpecialValueTypeControls);
+        return _launchSmokeDialogEvidence;
+    }
+
+    private static bool HasLaunchSmokeDialog(Window dialog, string title) =>
+        dialog.IsVisible &&
+        string.Equals(dialog.Title, title, StringComparison.Ordinal);
+
+    private static bool HasLaunchSmokeButton(Button button, string automationId, string content) =>
+        HasLaunchSmokeAutomationId(button, automationId) &&
+        string.Equals(button.Content?.ToString(), content, StringComparison.Ordinal);
+
+    private static bool HasLaunchSmokeCheckBox(CheckBox checkBox, string automationId, string content) =>
+        HasLaunchSmokeAutomationId(checkBox, automationId) &&
+        string.Equals(checkBox.Content?.ToString(), content, StringComparison.Ordinal);
+
+    private static bool HasLaunchSmokeAutomationId(Control control, string automationId) =>
+        string.Equals(AutomationProperties.GetAutomationId(control), automationId, StringComparison.Ordinal);
+
+    private static bool HasLaunchSmokeFindOptions(
+        FindOptionsControls controls,
+        string automationPrefix,
+        int defaultLookInIndex) =>
+        HasLaunchSmokeAutomationId(controls.Panel, $"{automationPrefix}OptionsPanel") &&
+        HasLaunchSmokeAutomationId(controls.WithinBox, $"{automationPrefix}WithinBox") &&
+        HasLaunchSmokeAutomationId(controls.SearchBox, $"{automationPrefix}SearchBox") &&
+        HasLaunchSmokeAutomationId(controls.LookInBox, $"{automationPrefix}LookInBox") &&
+        HasLaunchSmokeAutomationId(controls.MatchCaseBox, $"{automationPrefix}MatchCaseBox") &&
+        HasLaunchSmokeAutomationId(controls.MatchEntireCellBox, $"{automationPrefix}MatchEntireCellBox") &&
+        controls.WithinBox.SelectedIndex == 0 &&
+        controls.SearchBox.SelectedIndex == 0 &&
+        controls.LookInBox.SelectedIndex == defaultLookInIndex;
+
     internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot()
     {
         var hasNativeFileMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
@@ -6243,6 +6478,7 @@ public sealed class MainWindow : Window
             ViewportColumnCount: _session.Viewport.ColMetrics.Count,
             ExternalImageClipboardPictureCount: externalImageClipboardPictures.Length,
             ExternalImageClipboardPicturePngByteCount: externalImageClipboardPictures.Sum(static picture => picture.ImageBytes!.Length),
+            DialogEvidence: _launchSmokeDialogEvidence,
             OpenedSourcePath: _session.CurrentFilePath,
             IsOpening: _isOpening,
             HasNewSheetButton: _newSheetButton.Content?.ToString() == "+",

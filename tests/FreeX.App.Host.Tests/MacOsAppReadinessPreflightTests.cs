@@ -62,6 +62,29 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_replace_menu_item=true");
         script.Should().Contain("native_go_to_menu_item=true");
         script.Should().Contain("native_go_to_special_menu_item=true");
+        script.Should().Contain("macos_dialog_smoke=passed");
+        script.Should().Contain("macos_dialog_smoke_attempted=true");
+        script.Should().Contain("macos_dialog_smoke_status=passed");
+        script.Should().Contain("macos_dialog_activation_completed=true");
+        script.Should().Contain("find_dialog=true");
+        script.Should().Contain("find_dialog_text_box=true");
+        script.Should().Contain("find_dialog_action_buttons=true");
+        script.Should().Contain("find_dialog_options=true");
+        script.Should().Contain("find_dialog_format_controls=true");
+        script.Should().Contain("find_dialog_result_closed_without_accept=true");
+        script.Should().Contain("replace_dialog=true");
+        script.Should().Contain("replace_dialog_text_boxes=true");
+        script.Should().Contain("replace_dialog_action_buttons=true");
+        script.Should().Contain("replace_dialog_options=true");
+        script.Should().Contain("replace_dialog_format_controls=true");
+        script.Should().Contain("replace_dialog_result_closed_without_accept=true");
+        script.Should().Contain("go_to_dialog=true");
+        script.Should().Contain("go_to_dialog_reference_controls=true");
+        script.Should().Contain("go_to_dialog_result_closed_without_accept=true");
+        script.Should().Contain("go_to_special_dialog=true");
+        script.Should().Contain("go_to_special_dialog_kind_controls=true");
+        script.Should().Contain("go_to_special_dialog_value_type_controls=true");
+        script.Should().Contain("go_to_special_dialog_result_closed_without_accept=true");
         script.Should().Contain("native_fill_cells_menu_item=true");
         script.Should().Contain("native_fill_down_menu_item=true");
         script.Should().Contain("native_fill_right_menu_item=true");
@@ -181,6 +204,29 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_find_next_menu_item=");
         script.Should().Contain("native_replace_menu_item=");
         script.Should().Contain("native_go_to_menu_item=");
+        script.Should().Contain("macos_dialog_smoke=");
+        script.Should().Contain("macos_dialog_smoke_attempted=");
+        script.Should().Contain("macos_dialog_smoke_status=");
+        script.Should().Contain("macos_dialog_activation_completed=");
+        script.Should().Contain("find_dialog=");
+        script.Should().Contain("find_dialog_text_box=");
+        script.Should().Contain("find_dialog_action_buttons=");
+        script.Should().Contain("find_dialog_options=");
+        script.Should().Contain("find_dialog_format_controls=");
+        script.Should().Contain("find_dialog_result_closed_without_accept=");
+        script.Should().Contain("replace_dialog=");
+        script.Should().Contain("replace_dialog_text_boxes=");
+        script.Should().Contain("replace_dialog_action_buttons=");
+        script.Should().Contain("replace_dialog_options=");
+        script.Should().Contain("replace_dialog_format_controls=");
+        script.Should().Contain("replace_dialog_result_closed_without_accept=");
+        script.Should().Contain("go_to_dialog=");
+        script.Should().Contain("go_to_dialog_reference_controls=");
+        script.Should().Contain("go_to_dialog_result_closed_without_accept=");
+        script.Should().Contain("go_to_special_dialog=");
+        script.Should().Contain("go_to_special_dialog_kind_controls=");
+        script.Should().Contain("go_to_special_dialog_value_type_controls=");
+        script.Should().Contain("go_to_special_dialog_result_closed_without_accept=");
         script.Should().Contain("native_help_menu=true");
         script.Should().Contain("native_help_online_menu_item=true");
         script.Should().Contain("native_legal_notices_menu_item=");
@@ -780,6 +826,29 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_replace_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_go_to_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_go_to_special_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "macos_dialog_smoke=passed" "$artifact_root/launch.txt"
+                      grep -q "macos_dialog_smoke_attempted=true" "$artifact_root/launch.txt"
+                      grep -q "macos_dialog_smoke_status=passed" "$artifact_root/launch.txt"
+                      grep -q "macos_dialog_activation_completed=true" "$artifact_root/launch.txt"
+                      grep -q "find_dialog=true" "$artifact_root/launch.txt"
+                      grep -q "find_dialog_text_box=true" "$artifact_root/launch.txt"
+                      grep -q "find_dialog_action_buttons=true" "$artifact_root/launch.txt"
+                      grep -q "find_dialog_options=true" "$artifact_root/launch.txt"
+                      grep -q "find_dialog_format_controls=true" "$artifact_root/launch.txt"
+                      grep -q "find_dialog_result_closed_without_accept=true" "$artifact_root/launch.txt"
+                      grep -q "replace_dialog=true" "$artifact_root/launch.txt"
+                      grep -q "replace_dialog_text_boxes=true" "$artifact_root/launch.txt"
+                      grep -q "replace_dialog_action_buttons=true" "$artifact_root/launch.txt"
+                      grep -q "replace_dialog_options=true" "$artifact_root/launch.txt"
+                      grep -q "replace_dialog_format_controls=true" "$artifact_root/launch.txt"
+                      grep -q "replace_dialog_result_closed_without_accept=true" "$artifact_root/launch.txt"
+                      grep -q "go_to_dialog=true" "$artifact_root/launch.txt"
+                      grep -q "go_to_dialog_reference_controls=true" "$artifact_root/launch.txt"
+                      grep -q "go_to_dialog_result_closed_without_accept=true" "$artifact_root/launch.txt"
+                      grep -q "go_to_special_dialog=true" "$artifact_root/launch.txt"
+                      grep -q "go_to_special_dialog_kind_controls=true" "$artifact_root/launch.txt"
+                      grep -q "go_to_special_dialog_value_type_controls=true" "$artifact_root/launch.txt"
+                      grep -q "go_to_special_dialog_result_closed_without_accept=true" "$artifact_root/launch.txt"
                       grep -q "native_autosum_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_autosum_sum_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_autosum_average_menu_item=true" "$artifact_root/launch.txt"
@@ -1145,15 +1214,15 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativeReplaceMenuItem: HasNativeMenuItem(_replaceMenuItem, "Replace...");
                     HasNativeGoToMenuItem: HasNativeMenuItem(_goToMenuItem, "Go To...");
                     private async Task ShowFindDialogAsync()
-                    private async Task<FindDialogResult?> ShowFindInputDialogAsync()
+                    private async Task<FindDialogResult?> ShowFindInputDialogAsync(Action<FindDialogSmokeProbe>? launchSmokeProbe = null)
                     private async Task ShowFindAllResultsDialogAsync(string searchText, IReadOnlyList<WorkbookFindAllMatch> matches)
                     private void NavigateToFindAllMatch(WorkbookFindAllMatch match)
                     FindOptions? options = null,
                     private async Task ShowReplaceDialogAsync()
-                    private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync()
+                    private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync(Action<ReplaceDialogSmokeProbe>? launchSmokeProbe = null)
                     private async Task ShowGoToDialogAsync()
                     private async Task ShowGoToSpecialDialogAsync()
-                    private async Task<GoToSpecialDialogResult?> ShowGoToSpecialInputDialogAsync()
+                    private async Task<GoToSpecialDialogResult?> ShowGoToSpecialInputDialogAsync(Action<GoToSpecialDialogSmokeProbe>? launchSmokeProbe = null)
                     private static GoToSpecialChoice[] CreateGoToSpecialChoices()
                     private bool SelectGoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
                     private async Task<string?> ShowSingleInputDialogAsync(
@@ -1890,6 +1959,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 public int ExternalImageClipboardPicturePngByteCount { get; }
                 public int NativeBordersPresetCount { get; }
                 public int NativeCellStylesPresetCount { get; }
+                public string DialogReport => "macos_dialog_smoke= macos_dialog_smoke_attempted= macos_dialog_smoke_status= macos_dialog_activation_completed= find_dialog= find_dialog_text_box= find_dialog_action_buttons= find_dialog_options= find_dialog_format_controls= find_dialog_result_closed_without_accept= replace_dialog= replace_dialog_text_boxes= replace_dialog_action_buttons= replace_dialog_options= replace_dialog_format_controls= replace_dialog_result_closed_without_accept= go_to_dialog= go_to_dialog_reference_controls= go_to_dialog_result_closed_without_accept= go_to_special_dialog= go_to_special_dialog_kind_controls= go_to_special_dialog_value_type_controls= go_to_special_dialog_result_closed_without_accept=";
                 public string Report => "external_image_clipboard_paste_required= external_image_clipboard_paste= external_image_clipboard_picture_count= external_image_clipboard_picture_png_bytes= native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= toolbar_format_painter_button= toolbar_autosum_button= toolbar_autosum_sum_menu_item= toolbar_autosum_average_menu_item= toolbar_autosum_count_numbers_menu_item= toolbar_autosum_count_all_menu_item= toolbar_autosum_max_menu_item= toolbar_autosum_min_menu_item= toolbar_fill_cells_button= toolbar_fill_down_menu_item= toolbar_fill_right_menu_item= toolbar_fill_up_menu_item= toolbar_fill_left_menu_item= toolbar_clear_button= toolbar_clear_all_menu_item= toolbar_clear_formats_menu_item= toolbar_clear_contents_menu_item= toolbar_clear_comments_menu_item= toolbar_clear_hyperlinks_menu_item= toolbar_borders_button= toolbar_wrap_text_button= toolbar_merge_and_center_button= focusable_sheet_tab= focusable_active_sheet_tab= shell_focus_cycle_targets= sheet_tab_context_keyboard_help= sheet_tab_context_rename_menu_item= sheet_tab_context_tab_color_menu_item= sheet_tab_context_no_color_menu_item= sheet_tab_context_select_all_sheets_menu_item= sheet_tab_context_ungroup_sheets_menu_item= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_select_all_sheets_menu_item= native_ungroup_sheets_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_format_painter_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_find_menu_item= native_find_next_menu_item= native_replace_menu_item= native_go_to_menu_item= native_go_to_special_menu_item= native_autosum_menu_item= native_autosum_sum_menu_item= native_autosum_average_menu_item= native_autosum_count_numbers_menu_item= native_autosum_count_all_menu_item= native_autosum_max_menu_item= native_autosum_min_menu_item= native_fill_cells_menu_item= native_fill_down_menu_item= native_fill_right_menu_item= native_fill_up_menu_item= native_fill_left_menu_item= native_clear_menu_item= native_clear_all_menu_item= native_clear_formats_menu_item= native_clear_contents_menu_item= native_clear_comments_menu_item= native_clear_hyperlinks_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_borders_menu_item= native_borders_preset_count= native_merge_and_center_menu_item= native_unmerge_cells_menu_item= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
             }
 

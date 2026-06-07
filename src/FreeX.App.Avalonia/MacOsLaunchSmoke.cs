@@ -67,6 +67,58 @@ internal sealed record MacOsLaunchSmokeOptions(string ReportPath, bool VerifyIma
     }
 }
 
+internal sealed record MacOsLaunchSmokeDialogSnapshot(
+    bool HasFindDialog,
+    bool HasFindDialogTextBox,
+    bool HasFindDialogActionButtons,
+    bool HasFindDialogOptions,
+    bool HasFindDialogFormatControls,
+    bool HasReplaceDialog,
+    bool HasReplaceDialogTextBoxes,
+    bool HasReplaceDialogActionButtons,
+    bool HasReplaceDialogOptions,
+    bool HasReplaceDialogFormatControls,
+    bool HasGoToDialog,
+    bool HasGoToDialogReferenceControls,
+    bool HasGoToSpecialDialog,
+    bool HasGoToSpecialKindControls,
+    bool HasGoToSpecialValueTypeControls)
+{
+    public static MacOsLaunchSmokeDialogSnapshot Empty { get; } = new(
+        HasFindDialog: false,
+        HasFindDialogTextBox: false,
+        HasFindDialogActionButtons: false,
+        HasFindDialogOptions: false,
+        HasFindDialogFormatControls: false,
+        HasReplaceDialog: false,
+        HasReplaceDialogTextBoxes: false,
+        HasReplaceDialogActionButtons: false,
+        HasReplaceDialogOptions: false,
+        HasReplaceDialogFormatControls: false,
+        HasGoToDialog: false,
+        HasGoToDialogReferenceControls: false,
+        HasGoToSpecialDialog: false,
+        HasGoToSpecialKindControls: false,
+        HasGoToSpecialValueTypeControls: false);
+
+    public bool IsPassed =>
+        HasFindDialog &&
+        HasFindDialogTextBox &&
+        HasFindDialogActionButtons &&
+        HasFindDialogOptions &&
+        HasFindDialogFormatControls &&
+        HasReplaceDialog &&
+        HasReplaceDialogTextBoxes &&
+        HasReplaceDialogActionButtons &&
+        HasReplaceDialogOptions &&
+        HasReplaceDialogFormatControls &&
+        HasGoToDialog &&
+        HasGoToDialogReferenceControls &&
+        HasGoToSpecialDialog &&
+        HasGoToSpecialKindControls &&
+        HasGoToSpecialValueTypeControls;
+}
+
 internal sealed record MacOsLaunchSmokeSnapshot(
     bool WindowShown,
     string WindowTitle,
@@ -77,6 +129,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     int ViewportColumnCount,
     int ExternalImageClipboardPictureCount,
     int ExternalImageClipboardPicturePngByteCount,
+    MacOsLaunchSmokeDialogSnapshot DialogEvidence,
     string? OpenedSourcePath,
     bool IsOpening,
     bool HasNewSheetButton,
@@ -238,7 +291,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeLegalNoticesMenuItem,
     bool HasNativeQuitMenuItem)
 {
-    public bool IsPassed =>
+    public bool HasShellEvidence =>
         WindowShown &&
         !IsOpening &&
         !string.IsNullOrWhiteSpace(OpenedSourcePath) &&
@@ -403,6 +456,8 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeAboutMenuItem &&
         HasNativeLegalNoticesMenuItem &&
         HasNativeQuitMenuItem;
+
+    public bool IsPassed => HasShellEvidence && DialogEvidence.IsPassed;
 }
 
 internal static class MacOsLaunchSmokeCoordinator
@@ -424,12 +479,24 @@ internal static class MacOsLaunchSmokeCoordinator
         var snapshot = mainWindow.CreateLaunchSmokeSnapshot();
         var initialExternalImageClipboardPictureCount = snapshot.ExternalImageClipboardPictureCount;
         var attemptedImageClipboardPaste = false;
+        var attemptedDialogEvidence = false;
         try
         {
             while (!IsPassed(snapshot, options, initialExternalImageClipboardPictureCount) &&
                 DateTimeOffset.UtcNow < deadline)
             {
-                if (snapshot.IsPassed &&
+                if (snapshot.HasShellEvidence &&
+                    !snapshot.DialogEvidence.IsPassed &&
+                    !attemptedDialogEvidence)
+                {
+                    attemptedDialogEvidence = true;
+                    await mainWindow.CaptureLaunchSmokeDialogEvidenceAsync();
+                    snapshot = mainWindow.CreateLaunchSmokeSnapshot();
+                    continue;
+                }
+
+                if (snapshot.HasShellEvidence &&
+                    snapshot.DialogEvidence.IsPassed &&
                     options.VerifyImageClipboardPaste &&
                     !attemptedImageClipboardPaste)
                 {
@@ -443,12 +510,23 @@ internal static class MacOsLaunchSmokeCoordinator
                 snapshot = mainWindow.CreateLaunchSmokeSnapshot();
             }
 
-            WriteReport(options.ReportPath, snapshot, options, initialExternalImageClipboardPictureCount);
+            WriteReport(
+                options.ReportPath,
+                snapshot,
+                options,
+                initialExternalImageClipboardPictureCount,
+                attemptedDialogEvidence);
             Shutdown(IsPassed(snapshot, options, initialExternalImageClipboardPictureCount) ? 0 : 1);
         }
         catch (Exception ex)
         {
-            WriteFailureReport(options.ReportPath, snapshot, options, initialExternalImageClipboardPictureCount, ex);
+            WriteFailureReport(
+                options.ReportPath,
+                snapshot,
+                options,
+                initialExternalImageClipboardPictureCount,
+                attemptedDialogEvidence,
+                ex);
             Shutdown(1);
         }
     }
@@ -472,7 +550,8 @@ internal static class MacOsLaunchSmokeCoordinator
         string reportPath,
         MacOsLaunchSmokeSnapshot snapshot,
         MacOsLaunchSmokeOptions options,
-        int initialExternalImageClipboardPictureCount)
+        int initialExternalImageClipboardPictureCount,
+        bool attemptedDialogEvidence)
     {
         var directory = Path.GetDirectoryName(reportPath);
         if (!string.IsNullOrWhiteSpace(directory))
@@ -481,6 +560,7 @@ internal static class MacOsLaunchSmokeCoordinator
         var imageClipboardPasteVerified = HasExternalImageClipboardPasteEvidence(
             snapshot,
             initialExternalImageClipboardPictureCount);
+        var dialogSmokeStatus = GetDialogSmokeStatus(snapshot, attemptedDialogEvidence);
 
         File.WriteAllLines(
             reportPath,
@@ -497,6 +577,29 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"external_image_clipboard_paste={FormatBool(imageClipboardPasteVerified)}",
                 $"external_image_clipboard_picture_count={snapshot.ExternalImageClipboardPictureCount}",
                 $"external_image_clipboard_picture_png_bytes={snapshot.ExternalImageClipboardPicturePngByteCount}",
+                $"macos_dialog_smoke={(snapshot.DialogEvidence.IsPassed ? "passed" : "failed")}",
+                $"macos_dialog_smoke_attempted={FormatBool(attemptedDialogEvidence)}",
+                $"macos_dialog_smoke_status={dialogSmokeStatus}",
+                $"macos_dialog_activation_completed={FormatBool(attemptedDialogEvidence && snapshot.DialogEvidence.IsPassed)}",
+                $"find_dialog={FormatBool(snapshot.DialogEvidence.HasFindDialog)}",
+                $"find_dialog_text_box={FormatBool(snapshot.DialogEvidence.HasFindDialogTextBox)}",
+                $"find_dialog_action_buttons={FormatBool(snapshot.DialogEvidence.HasFindDialogActionButtons)}",
+                $"find_dialog_options={FormatBool(snapshot.DialogEvidence.HasFindDialogOptions)}",
+                $"find_dialog_format_controls={FormatBool(snapshot.DialogEvidence.HasFindDialogFormatControls)}",
+                $"find_dialog_result_closed_without_accept={FormatBool(attemptedDialogEvidence && snapshot.DialogEvidence.HasFindDialog)}",
+                $"replace_dialog={FormatBool(snapshot.DialogEvidence.HasReplaceDialog)}",
+                $"replace_dialog_text_boxes={FormatBool(snapshot.DialogEvidence.HasReplaceDialogTextBoxes)}",
+                $"replace_dialog_action_buttons={FormatBool(snapshot.DialogEvidence.HasReplaceDialogActionButtons)}",
+                $"replace_dialog_options={FormatBool(snapshot.DialogEvidence.HasReplaceDialogOptions)}",
+                $"replace_dialog_format_controls={FormatBool(snapshot.DialogEvidence.HasReplaceDialogFormatControls)}",
+                $"replace_dialog_result_closed_without_accept={FormatBool(attemptedDialogEvidence && snapshot.DialogEvidence.HasReplaceDialog)}",
+                $"go_to_dialog={FormatBool(snapshot.DialogEvidence.HasGoToDialog)}",
+                $"go_to_dialog_reference_controls={FormatBool(snapshot.DialogEvidence.HasGoToDialogReferenceControls)}",
+                $"go_to_dialog_result_closed_without_accept={FormatBool(attemptedDialogEvidence && snapshot.DialogEvidence.HasGoToDialog)}",
+                $"go_to_special_dialog={FormatBool(snapshot.DialogEvidence.HasGoToSpecialDialog)}",
+                $"go_to_special_dialog_kind_controls={FormatBool(snapshot.DialogEvidence.HasGoToSpecialKindControls)}",
+                $"go_to_special_dialog_value_type_controls={FormatBool(snapshot.DialogEvidence.HasGoToSpecialValueTypeControls)}",
+                $"go_to_special_dialog_result_closed_without_accept={FormatBool(attemptedDialogEvidence && snapshot.DialogEvidence.HasGoToSpecialDialog)}",
                 $"opened_source_path={snapshot.OpenedSourcePath ?? ""}",
                 $"is_opening={FormatBool(snapshot.IsOpening)}",
                 $"new_sheet_button={FormatBool(snapshot.HasNewSheetButton)}",
@@ -665,10 +768,32 @@ internal static class MacOsLaunchSmokeCoordinator
         MacOsLaunchSmokeSnapshot snapshot,
         MacOsLaunchSmokeOptions options,
         int initialExternalImageClipboardPictureCount,
+        bool attemptedDialogEvidence,
         Exception exception)
     {
-        WriteReport(reportPath, snapshot, options, initialExternalImageClipboardPictureCount);
+        WriteReport(
+            reportPath,
+            snapshot,
+            options,
+            initialExternalImageClipboardPictureCount,
+            attemptedDialogEvidence);
         File.AppendAllLines(reportPath, [$"error={exception.GetType().Name}: {exception.Message}"]);
+    }
+
+    private static string GetDialogSmokeStatus(
+        MacOsLaunchSmokeSnapshot snapshot,
+        bool attemptedDialogEvidence)
+    {
+        if (snapshot.DialogEvidence.IsPassed)
+            return "passed";
+
+        if (!snapshot.HasShellEvidence)
+            return "not_attempted_shell_evidence_incomplete";
+
+        if (!attemptedDialogEvidence)
+            return "not_attempted";
+
+        return "failed_missing_dialog_evidence";
     }
 
     private static void Shutdown(int exitCode)
