@@ -54,7 +54,7 @@ internal static class XlsxWorkbookPivotCachesNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(pivotCaches, Array.Empty<XName>());
-        changed |= RemoveUnexpectedChildElements(pivotCaches, WorkbookNs + "pivotCache");
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(pivotCaches, WorkbookNs + "pivotCache");
 
         foreach (var pivotCache in pivotCaches.Elements(WorkbookNs + "pivotCache").ToList())
         {
@@ -84,18 +84,6 @@ internal static class XlsxWorkbookPivotCachesNormalizer
         changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(pivotCache);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pivotCache, "cacheId", NormalizeNonNegativeIntTextOrNull);
         changed |= NormalizeRelationshipId(pivotCache);
-        return changed;
-    }
-
-    private static bool RemoveUnexpectedChildElements(XElement element, XName allowedChildName)
-    {
-        var changed = false;
-        foreach (var child in element.Elements().Where(child => child.Name != allowedChildName).ToList())
-        {
-            child.Remove();
-            changed = true;
-        }
-
         return changed;
     }
 
