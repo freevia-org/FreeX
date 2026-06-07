@@ -43,6 +43,50 @@ public sealed class CellMergePlannerTests
     }
 
     [Fact]
+    public void CreateMergeCommands_MergesMultiCellRangeWithoutCenteringCommand()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var range = Range(sheet.Id, 1, 1, 2, 2);
+
+        var commands = CellMergePlanner.CreateMergeCommands(sheet, sheet.Id, range, mergeCells: true);
+
+        commands.Should().ContainSingle().Which.Should().BeOfType<MergeCellsCommand>();
+    }
+
+    [Fact]
+    public void CreateMergeCommands_SingleCellMergeIsNoOp()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+
+        var commands = CellMergePlanner.CreateMergeCommands(
+            sheet,
+            sheet.Id,
+            Range(sheet.Id, 1, 1, 1, 1),
+            mergeCells: true);
+
+        commands.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void CreateMergeCommands_UnmergeTargetsOverlappingMergedRegions()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var merged = Range(sheet.Id, 1, 1, 2, 2);
+        sheet.AddMergedRegion(merged);
+
+        var commands = CellMergePlanner.CreateMergeCommands(
+            sheet,
+            sheet.Id,
+            Range(sheet.Id, 2, 2, 2, 2),
+            mergeCells: false);
+
+        commands.Should().ContainSingle().Which.Should().BeOfType<UnmergeCellsCommand>();
+    }
+
+    [Fact]
     public void CreateUnmergeCommands_TargetsOverlappingMergedRegions()
     {
         var workbook = CreateWorkbook();

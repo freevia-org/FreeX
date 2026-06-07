@@ -18,6 +18,18 @@ public static class CellMergePlanner
         return commands;
     }
 
+    public static IReadOnlyList<IWorkbookCommand> CreateMergeCommands(
+        Sheet sheet,
+        SheetId sheetId,
+        GridRange range,
+        bool mergeCells)
+    {
+        if (mergeCells)
+            return range.CellCount <= 1 ? [] : [new MergeCellsCommand(sheetId, range)];
+
+        return CreateUnmergeCommands(sheet, sheetId, range);
+    }
+
     public static IReadOnlyList<IWorkbookCommand> CreateUnmergeCommands(Sheet sheet, SheetId sheetId, GridRange range) =>
         sheet.MergedRegions
             .Where(region => region.Overlaps(range))

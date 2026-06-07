@@ -305,8 +305,15 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("_formatCellsMenuItem.Header = `\"Format Cells...`\"");
         script.Should().Contain("FormatCellsCompactPlanner.TryPlan");
         script.Should().Contain("_session.ApplySelectedRangeCompactFormat(");
+        script.Should().Contain("selection.Request.MergeCells");
         script.Should().Contain("`\"FormatCellsCompactDialog`\"");
         script.Should().Contain("`\"FormatCellsNumberFormatBox`\"");
+        script.Should().Contain("`\"FormatCellsMergeCellsBox`\"");
+        script.Should().Contain("MergeCells: ReadChangedFormatCellsBool(currentMergeCells, mergeCellsBox)");
+        script.Should().Contain("bool? mergeCells = null");
+        script.Should().Contain("CreateFormatCellsMergeCommands(range, shouldMerge)");
+        script.Should().Contain("CellMergePlanner.CreateMergeCommands(");
+        script.Should().Contain("bool? MergeCells = null");
         script.Should().Contain("`\"FormatCellsFillPatternStyleBox`\"");
         script.Should().Contain("`\"FormatCellsFillPatternColorBox`\"");
         script.Should().Contain("FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillPatternStyle, fillPatternStyleBox)");
@@ -1581,12 +1588,14 @@ public sealed class MacOsAppReadinessPreflightTests
                         diff,
                         selection.BorderPreset,
                         selection.BorderStyle,
-                        selection.BorderColor);
+                        selection.BorderColor,
+                        selection.Request.MergeCells);
                     "FormatCellsCompactDialog"
                     "FormatCellsNumberFormatBox"
                     "FormatCellsHorizontalAlignmentBox"
                     "FormatCellsVerticalAlignmentBox"
                     "FormatCellsWrapTextBox"
+                    "FormatCellsMergeCellsBox"
                     "FormatCellsFontSizeBox"
                     "FormatCellsFontColorBox"
                     "FormatCellsFillColorBox"
@@ -1604,6 +1613,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     "FormatCellsSubscriptBox"
                     "FormatCellsLockedBox"
                     "FormatCellsHiddenBox"
+                    var currentMergeCells = _session.IsSelectedRangeMerged;
+                    MergeCells: ReadChangedFormatCellsBool(currentMergeCells, mergeCellsBox)
                     FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillPatternStyle, fillPatternStyleBox)
                     FillPatternColor: clearFill ? null : (fillPatternColorBox.SelectedItem as FormatCellsColorChoice)?.Color
                     CreateFormatCellsField("Pattern style", fillPatternStyleBox)
@@ -2161,6 +2172,12 @@ public sealed class MacOsAppReadinessPreflightTests
                     return [];
                 }
 
+                public static IReadOnlyList<IWorkbookCommand> CreateMergeCommands(Sheet sheet, SheetId sheetId, GridRange range, bool mergeCells)
+                {
+                    new MergeCellsCommand(sheetId, range).ToString();
+                    return CreateUnmergeCommands(sheet, sheetId, range);
+                }
+
                 public static IReadOnlyList<IWorkbookCommand> CreateUnmergeCommands(Sheet sheet, SheetId sheetId, GridRange range)
                 {
                     new UnmergeCellsCommand(sheetId, region).ToString();
@@ -2305,6 +2322,8 @@ public sealed class MacOsAppReadinessPreflightTests
                 BorderShortcutService.HasBorderChanges(diff)
                 GroupedApplyStyleCommand(targetSheetIds, sourceRange, diff)
                 public WorkbookCellEditResult ApplySelectedRangeCompactFormat(
+                    bool? mergeCells = null)
+                CreateFormatCellsMergeCommands(range, shouldMerge)
                 public bool IsSelectedRangeMerged => CellMergePlanner.IsSelectionMerged(ActiveSheet, SelectedRange);
                 public WorkbookCellEditResult MergeAndCenterSelectedRange()
                 CreateMergeAndCenterCommand(range)
@@ -2312,6 +2331,8 @@ public sealed class MacOsAppReadinessPreflightTests
                 CreateUnmergeCommands(range)
                 private IWorkbookCommand CreateMergeAndCenterCommand(GridRange range)
                 CellMergePlanner.CreateMergeAndCenterCommands(sheetId, sheetRange)
+                private IReadOnlyList<IWorkbookCommand> CreateFormatCellsMergeCommands(GridRange range, bool mergeCells)
+                CellMergePlanner.CreateMergeCommands(
                 private IReadOnlyList<IWorkbookCommand> CreateUnmergeCommands(GridRange range)
                 CellMergePlanner.CreateUnmergeCommands(sheet, sheetId, RemapRangeToSheet(range, sheetId))
                 public bool SelectSheetFromTab(SheetId sheetId, bool selectRange, bool toggle)
@@ -2503,6 +2524,7 @@ public sealed class MacOsAppReadinessPreflightTests
             public sealed record FormatCellsCompactRequest(
                 CellColor? FillColor = null,
                 bool ClearFill = false,
+                bool? MergeCells = null,
                 bool? DoubleUnderline = null,
                 bool? ShrinkToFit = null,
                 int? IndentLevel = null,

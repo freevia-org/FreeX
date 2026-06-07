@@ -2038,6 +2038,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"FormatCellsHorizontalAlignmentBox\"");
         source.Should().Contain("\"FormatCellsVerticalAlignmentBox\"");
         source.Should().Contain("\"FormatCellsWrapTextBox\"");
+        source.Should().Contain("\"FormatCellsMergeCellsBox\"");
         source.Should().Contain("\"FormatCellsFontSizeBox\"");
         source.Should().Contain("\"FormatCellsFontColorBox\"");
         source.Should().Contain("\"FormatCellsFillColorBox\"");
@@ -2055,18 +2056,25 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"FormatCellsSubscriptBox\"");
         source.Should().Contain("\"FormatCellsLockedBox\"");
         source.Should().Contain("\"FormatCellsHiddenBox\"");
+        source.Should().Contain("var currentMergeCells = _session.IsSelectedRangeMerged;");
         source.Should().Contain("var currentUnderline = currentStyle.Underline ?? CellStyle.Default.Underline;");
         source.Should().Contain("Underline: ReadChangedFormatCellsBool(currentUnderline, underlineBox)");
+        source.Should().Contain("MergeCells: ReadChangedFormatCellsBool(currentMergeCells, mergeCellsBox)");
         source.Should().Contain("FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillPatternStyle, fillPatternStyleBox)");
         source.Should().Contain("FillPatternColor: clearFill ? null : (fillPatternColorBox.SelectedItem as FormatCellsColorChoice)?.Color");
+        source.Should().Contain("selection.Request.MergeCells");
         source.Should().Contain("selection.BorderStyle");
         source.Should().Contain("selection.BorderColor");
 
         sessionSource.Should().Contain("public WorkbookCellEditResult ApplySelectedRangeCompactFormat(");
         sessionSource.Should().Contain("BorderStyle borderStyle = BorderStyle.Thin");
         sessionSource.Should().Contain("CellColor? borderColor = null");
+        sessionSource.Should().Contain("bool? mergeCells = null");
         sessionSource.Should().Contain("CreateBorderPresetCommand(range, preset, borderStyle, borderColor)");
+        sessionSource.Should().Contain("CreateFormatCellsMergeCommands(range, shouldMerge)");
+        sessionSource.Should().Contain("CellMergePlanner.CreateMergeCommands(");
         sessionSource.Should().Contain("CellBorderPresetPlanner.Plan(preset, range, address, borderStyle, borderColor)");
+        plannerSource.Should().Contain("bool? MergeCells = null");
         plannerSource.Should().Contain("bool? DoubleUnderline = null");
         plannerSource.Should().Contain("bool? ShrinkToFit = null");
         plannerSource.Should().Contain("int? IndentLevel = null");

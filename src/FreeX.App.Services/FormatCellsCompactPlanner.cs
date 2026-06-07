@@ -7,6 +7,7 @@ public sealed record FormatCellsCompactRequest(
     HorizontalAlignment? HorizontalAlignment = null,
     VerticalAlignment? VerticalAlignment = null,
     bool? WrapText = null,
+    bool? MergeCells = null,
     bool? Bold = null,
     bool? Italic = null,
     bool? Underline = null,

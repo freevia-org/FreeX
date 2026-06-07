@@ -162,6 +162,99 @@ public sealed class WorkbookSessionCompactFormatTests
     }
 
     [Fact]
+    public void ApplySelectedRangeCompactFormat_MergesWithoutCenteringAndUndoRestoresCells()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var range = new GridRange(a1, b2);
+        sheet.SetCell(a1, new TextValue("kept"));
+        sheet.SetCell(b2, new TextValue("restored"));
+        var session = CreateSession(workbook);
+        session.SelectRange(range);
+
+        var result = session.ApplySelectedRangeCompactFormat(
+            new StyleDiff(),
+            borderPreset: null,
+            mergeCells: true);
+
+        result.Success.Should().BeTrue();
+        sheet.MergedRegions.Should().Contain(range);
+        sheet.GetValue(b2).Should().Be(BlankValue.Instance);
+        GetStyle(workbook, sheet, a1).HorizontalAlignment.Should().Be(HorizontalAlignment.General);
+        session.SelectedRange.Should().Be(range);
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.MergedRegions.Should().BeEmpty();
+        sheet.GetValue(b2).Should().Be(new TextValue("restored"));
+    }
+
+    [Fact]
+    public void ApplySelectedRangeCompactFormat_UnmergesOverlappingRegionAndUndoRestoresMerge()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var range = new GridRange(a1, b2);
+        sheet.AddMergedRegion(range);
+        var session = CreateSession(workbook);
+        session.SelectCell(b2);
+
+        var result = session.ApplySelectedRangeCompactFormat(
+            new StyleDiff(),
+            borderPreset: null,
+            mergeCells: false);
+
+        result.Success.Should().BeTrue();
+        sheet.MergedRegions.Should().BeEmpty();
+        session.SelectedRange.Should().Be(new GridRange(b2, b2));
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.MergedRegions.Should().Contain(range);
+    }
+
+    [Fact]
+    public void ApplySelectedRangeCompactFormat_MergeCellsPropagatesAcrossGroupedSheets()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var summaryA1 = new CellAddress(summary.Id, 1, 1);
+        var summaryB2 = new CellAddress(summary.Id, 2, 2);
+        var detailsA1 = new CellAddress(details.Id, 1, 1);
+        var detailsB2 = new CellAddress(details.Id, 2, 2);
+        var session = CreateSession(workbook);
+        session.SelectAllVisibleSheets();
+        session.SelectRange(new GridRange(summaryA1, summaryB2));
+
+        var result = session.ApplySelectedRangeCompactFormat(
+            new StyleDiff(),
+            borderPreset: null,
+            mergeCells: true);
+
+        result.Success.Should().BeTrue();
+        summary.MergedRegions.Should().Contain(new GridRange(summaryA1, summaryB2));
+        details.MergedRegions.Should().Contain(new GridRange(detailsA1, detailsB2));
+        session.IsWorkbookGrouped.Should().BeTrue();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        summary.MergedRegions.Should().BeEmpty();
+        details.MergedRegions.Should().BeEmpty();
+    }
+
+    [Fact]
     public void ApplySelectedRangeCompactFormat_EmptyRequestSucceedsWithoutDirtyingWorkbook()
     {
         var workbook = CreateWorkbook();

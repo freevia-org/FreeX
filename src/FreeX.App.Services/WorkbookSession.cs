@@ -1533,7 +1533,8 @@ public sealed class WorkbookSession
         StyleDiff diff,
         CellBorderPreset? borderPreset,
         BorderStyle borderStyle = BorderStyle.Thin,
-        CellColor? borderColor = null)
+        CellColor? borderColor = null,
+        bool? mergeCells = null)
     {
         ArgumentNullException.ThrowIfNull(diff);
 
@@ -1549,6 +1550,9 @@ public sealed class WorkbookSession
 
         if (diff.FontSize is { } fontSize)
             commands.Add(CreateSetFontSizeCommand(range, fontSize, GetFittingRowHeight(fontSize)));
+
+        if (mergeCells is { } shouldMerge)
+            commands.AddRange(CreateFormatCellsMergeCommands(range, shouldMerge));
 
         if (commands.Count == 0)
             return new WorkbookCellEditResult(true, null, [], RecalcReport: null);
@@ -1994,6 +1998,26 @@ public sealed class WorkbookSession
         }
 
         return ToCommand("Merge & Center", commands);
+    }
+
+    private IReadOnlyList<IWorkbookCommand> CreateFormatCellsMergeCommands(GridRange range, bool mergeCells)
+    {
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        var commands = new List<IWorkbookCommand>();
+        foreach (var sheetId in targetSheetIds)
+        {
+            var sheet = Workbook.GetSheet(sheetId);
+            if (sheet is null)
+                continue;
+
+            commands.AddRange(CellMergePlanner.CreateMergeCommands(
+                sheet,
+                sheetId,
+                RemapRangeToSheet(range, sheetId),
+                mergeCells));
+        }
+
+        return commands;
     }
 
     private IWorkbookCommand CreateFormatPainterCommand(Sheet sourceSheet, GridRange sourceRange, GridRange targetRange)

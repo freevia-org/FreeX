@@ -149,6 +149,14 @@ public sealed class FormatCellsCompactPlannerTests
     }
 
     [Fact]
+    public void Plan_MergeCellsIntentDoesNotCreateStyleDiff()
+    {
+        var diff = FormatCellsCompactPlanner.Plan(new FormatCellsCompactRequest(MergeCells: true));
+
+        diff.Should().Be(new StyleDiff());
+    }
+
+    [Fact]
     public void Plan_BorderPresetMapsThroughCellBorderPresetPlanner()
     {
         var range = Range(2, 3, 4, 5);

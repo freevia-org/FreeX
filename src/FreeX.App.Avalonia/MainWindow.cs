@@ -4712,7 +4712,8 @@ public sealed class MainWindow : Window
             diff,
             selection.BorderPreset,
             selection.BorderStyle,
-            selection.BorderColor);
+            selection.BorderColor,
+            selection.Request.MergeCells);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? "Format Cells failed.");
@@ -4729,6 +4730,7 @@ public sealed class MainWindow : Window
         var currentNumberFormat = _session.SelectedRangeStartNumberFormat;
         var currentHorizontalAlignment = _session.SelectedRangeStartHorizontalAlignment;
         var currentVerticalAlignment = _session.SelectedRangeStartVerticalAlignment;
+        var currentMergeCells = _session.IsSelectedRangeMerged;
         var currentFontSize = _session.SelectedRangeStartFontSize;
         var currentStyle = _session.CreateFormatDiffFromActiveCell() ?? StyleDiff.FromStyle(CellStyle.Default);
         var currentUnderline = currentStyle.Underline ?? CellStyle.Default.Underline;
@@ -4817,6 +4819,7 @@ public sealed class MainWindow : Window
             currentVerticalAlignment);
         var wrapTextBox = CreateFormatCellsCheckBox("Wrap text", "FormatCellsWrapTextBox", _session.IsSelectedRangeStartWrapText);
         var shrinkToFitBox = CreateFormatCellsCheckBox("Shrink to fit", "FormatCellsShrinkToFitBox", currentShrinkToFit);
+        var mergeCellsBox = CreateFormatCellsCheckBox("Merge cells", "FormatCellsMergeCellsBox", currentMergeCells);
         var indentLevelBox = new TextBox
         {
             Text = currentIndentLevel.ToString(CultureInfo.InvariantCulture),
@@ -4992,6 +4995,7 @@ public sealed class MainWindow : Window
                 FillPatternColor: clearFill ? null : (fillPatternColorBox.SelectedItem as FormatCellsColorChoice)?.Color,
                 FontColor: (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color,
                 ShrinkToFit: ReadChangedFormatCellsBool(currentShrinkToFit, shrinkToFitBox),
+                MergeCells: ReadChangedFormatCellsBool(currentMergeCells, mergeCellsBox),
                 IndentLevel: indentLevel,
                 TextRotation: textRotation,
                 Locked: ReadChangedFormatCellsBool(currentLocked, lockedBox),
@@ -5049,6 +5053,7 @@ public sealed class MainWindow : Window
                     CreateFormatCellsField("Vertical", verticalAlignmentBox),
                     wrapTextBox,
                     shrinkToFitBox,
+                    mergeCellsBox,
                     CreateFormatCellsField("Indent", indentLevelBox),
                     CreateFormatCellsField("Text rotation", textRotationBox),
                 },
