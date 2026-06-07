@@ -39,8 +39,8 @@ internal static class XlsxWorksheetDimensionNormalizer
             }
 
             keptDimension = true;
-            changed |= RemoveUnknownAttributes(dimension, DimensionAttributes);
-            changed |= SetAttributeIfChanged(dimension, "ref", normalizedReference);
+            changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(dimension, DimensionAttributes);
+            changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(dimension, "ref", normalizedReference);
             changed |= RemoveAllChildren(dimension);
         }
 
@@ -61,40 +61,12 @@ internal static class XlsxWorksheetDimensionNormalizer
         }
     }
 
-    private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedNames)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                (attribute.Name.NamespaceName.Length == 0 && allowedNames.Contains(attribute.Name.LocalName)))
-            {
-                continue;
-            }
-
-            attribute.Remove();
-            changed = true;
-        }
-
-        return changed;
-    }
-
     private static bool RemoveAllChildren(XElement element)
     {
         if (!element.HasElements)
             return false;
 
         element.Elements().Remove();
-        return true;
-    }
-
-    private static bool SetAttributeIfChanged(XElement element, string attributeName, string value)
-    {
-        var attribute = element.Attribute(attributeName);
-        if (attribute is not null && string.Equals(attribute.Value, value, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(attributeName, value);
         return true;
     }
 
