@@ -18,9 +18,9 @@ internal static class XlsxWorksheetSortStateNormalizer
         var changed = false;
         changed |= RemoveUnexpectedChildren(sortState, SortStateChildren);
         changed |= NormalizeExtensionLists(sortState);
-        changed |= NormalizeAttribute(sortState, "columnSort", NormalizeBoolean);
-        changed |= NormalizeAttribute(sortState, "caseSensitive", NormalizeBoolean);
-        changed |= NormalizeAttribute(sortState, "sortMethod", value => NormalizeToken(value, ValidSortMethods));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sortState, "columnSort", NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sortState, "caseSensitive", NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sortState, "sortMethod", value => NormalizeToken(value, ValidSortMethods));
 
         foreach (var condition in sortState.Elements(WorksheetNs + "sortCondition").ToList())
         {
@@ -31,10 +31,10 @@ internal static class XlsxWorksheetSortStateNormalizer
                 continue;
             }
 
-            changed |= NormalizeAttribute(condition, "descending", NormalizeBoolean);
-            changed |= NormalizeAttribute(condition, "sortBy", value => NormalizeToken(value, ValidSortByValues));
-            changed |= NormalizeAttribute(condition, "dxfId", NormalizeUnsignedIntOrNull);
-            changed |= NormalizeAttribute(condition, "iconId", NormalizeUnsignedIntOrNull);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(condition, "descending", NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(condition, "sortBy", value => NormalizeToken(value, ValidSortByValues));
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(condition, "dxfId", NormalizeUnsignedIntOrNull);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(condition, "iconId", NormalizeUnsignedIntOrNull);
             changed |= RemoveAllNodes(condition);
         }
 
@@ -130,29 +130,6 @@ internal static class XlsxWorksheetSortStateNormalizer
             return false;
 
         element.RemoveNodes();
-        return true;
-    }
-
-    private static bool NormalizeAttribute(
-        XElement element,
-        string attributeName,
-        Func<string?, string?> normalize)
-    {
-        var attribute = element.Attribute(attributeName);
-        var normalized = normalize(attribute?.Value);
-        if (normalized is null)
-        {
-            if (attribute is null)
-                return false;
-
-            attribute.Remove();
-            return true;
-        }
-
-        if (attribute is not null && string.Equals(attribute.Value, normalized, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(attributeName, normalized);
         return true;
     }
 
