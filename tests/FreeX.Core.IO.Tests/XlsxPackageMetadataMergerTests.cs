@@ -31,6 +31,34 @@ public sealed partial class XlsxPackageMetadataMergerTests
             ("xl/worksheets/sheet1.xml", "<worksheet />"),
             ("xl/worksheets/sheet2.xml", "<worksheet />"));
 
+    private static MemoryStream CreatePackageWithMacroEnabledWorkbookContentType() =>
+        XlsxPackageTestFixtures.CreatePackage(
+            ("[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/workbook.xml"
+                            ContentType="application/vnd.ms-excel.sheet.macroEnabled.main+xml"/>
+                  <Override PartName="/xl/vbaProject.bin"
+                            ContentType="application/vnd.ms-office.vbaProject"/>
+                </Types>
+                """),
+            ("xl/workbook.xml", "<workbook />"),
+            ("xl/vbaProject.bin", "macro"));
+
+    private static MemoryStream CreatePackageWithPlainWorkbookContentType() =>
+        XlsxPackageTestFixtures.CreatePackage(
+            ("[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/workbook.xml"
+                            ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+                </Types>
+                """),
+            ("xl/workbook.xml", "<workbook />"),
+            ("xl/vbaProject.bin", "macro"));
+
     private static MemoryStream CreatePackageWithDanglingAndInvalidContentTypeOverrides() =>
         XlsxPackageTestFixtures.CreatePackage(
             ("[Content_Types].xml", """
