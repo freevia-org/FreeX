@@ -140,6 +140,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _copyMenuItem = new();
     private readonly NativeMenuItem _pasteMenuItem = new();
     private readonly NativeMenuItem _pasteSpecialMenuItem = new();
+    private readonly NativeMenuItem _selectAllMenuItem = new();
     private readonly NativeMenuItem _clearContentsMenuItem = new();
     private readonly NativeMenuItem _boldMenuItem = new();
     private readonly NativeMenuItem _italicMenuItem = new();
@@ -378,6 +379,10 @@ public sealed class MainWindow : Window
         _pasteSpecialMenuItem.Gesture = new KeyGesture(Key.V, KeyModifiers.Meta | KeyModifiers.Alt);
         _pasteSpecialMenuItem.Menu = CreateNativePasteSpecialMenu();
 
+        _selectAllMenuItem.Header = "Select All";
+        _selectAllMenuItem.Gesture = new KeyGesture(Key.A, KeyModifiers.Meta);
+        _selectAllMenuItem.Click += (_, _) => SelectCurrentRegionOrAll();
+
         _clearContentsMenuItem.Header = "Clear Contents";
         _clearContentsMenuItem.Gesture = new KeyGesture(Key.Delete);
         _clearContentsMenuItem.Click += (_, _) => ClearSelectedRangeContents();
@@ -525,6 +530,7 @@ public sealed class MainWindow : Window
         editMenu.Items.Add(_pasteMenuItem);
         editMenu.Items.Add(_pasteSpecialMenuItem);
         editMenu.Items.Add(new NativeMenuItemSeparator());
+        editMenu.Items.Add(_selectAllMenuItem);
         editMenu.Items.Add(_clearContentsMenuItem);
 
         var formatMenu = new NativeMenu();
@@ -1050,6 +1056,7 @@ public sealed class MainWindow : Window
         _copyMenuItem.IsEnabled = _copyButton.IsEnabled;
         _pasteMenuItem.IsEnabled = _pasteButton.IsEnabled;
         _pasteSpecialMenuItem.IsEnabled = _pasteSpecialButton.IsEnabled;
+        _selectAllMenuItem.IsEnabled = isIdle;
         _clearContentsMenuItem.IsEnabled = _clearContentsButton.IsEnabled;
         _boldMenuItem.IsEnabled = _boldButton.IsEnabled;
         _italicMenuItem.IsEnabled = _italicButton.IsEnabled;
@@ -2634,6 +2641,19 @@ public sealed class MainWindow : Window
         RefreshShell($"Copied {rangeReference}");
     }
 
+    private void SelectCurrentRegionOrAll()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        ClearSelectedDrawingObject();
+        var range = _session.SelectCurrentRegionOrAll();
+        RefreshShell($"Selected {FormatRangeReference(range)}");
+    }
+
     private async Task PasteClipboardTextAsync()
     {
         if (_isOpening || _isSaving)
@@ -3247,6 +3267,7 @@ public sealed class MainWindow : Window
             HasNativeCopyMenuItem: HasNativeMenuItem(_copyMenuItem, "Copy"),
             HasNativePasteMenuItem: HasNativeMenuItem(_pasteMenuItem, "Paste"),
             HasNativePasteSpecialMenuItem: HasNativeMenuItem(_pasteSpecialMenuItem, "Paste Special"),
+            HasNativeSelectAllMenuItem: HasNativeMenuItem(_selectAllMenuItem, "Select All"),
             HasNativeClearContentsMenuItem: HasNativeMenuItem(_clearContentsMenuItem, "Clear Contents"),
             HasNativeBoldMenuItem: HasNativeMenuItem(_boldMenuItem, "Bold"),
             HasNativeItalicMenuItem: HasNativeMenuItem(_italicMenuItem, "Italic"),
@@ -3446,7 +3467,7 @@ public sealed class MainWindow : Window
         }
 
         if (_formulaBox.IsFocused &&
-            e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.B or Key.I or Key.U or Key.D4 or Key.NumPad4 or Key.D5 or Key.NumPad5)
+            e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.I or Key.U or Key.D4 or Key.NumPad4 or Key.D5 or Key.NumPad5)
         {
             return;
         }
@@ -3480,6 +3501,11 @@ public sealed class MainWindow : Window
         {
             e.Handled = true;
             await PasteClipboardTextAsync();
+        }
+        else if (e.Key == Key.A && HasOnlyCommandModifier(e.KeyModifiers))
+        {
+            e.Handled = true;
+            SelectCurrentRegionOrAll();
         }
         else if (e.Key == Key.B && HasOnlyCommandModifier(e.KeyModifiers))
         {

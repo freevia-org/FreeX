@@ -144,6 +144,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_pasteSpecialMenuItem.Header = \"Paste Special\";");
         source.Should().Contain("_pasteSpecialMenuItem.Gesture = new KeyGesture(Key.V, KeyModifiers.Meta | KeyModifiers.Alt);");
         source.Should().Contain("_pasteSpecialMenuItem.Menu = CreateNativePasteSpecialMenu();");
+        source.Should().Contain("_selectAllMenuItem.Header = \"Select All\";");
+        source.Should().Contain("_selectAllMenuItem.Gesture = new KeyGesture(Key.A, KeyModifiers.Meta);");
+        source.Should().Contain("_selectAllMenuItem.Click += (_, _) => SelectCurrentRegionOrAll();");
         source.Should().Contain("_clearContentsMenuItem.Header = \"Clear Contents\";");
         source.Should().Contain("_clearContentsMenuItem.Gesture = new KeyGesture(Key.Delete);");
         source.Should().Contain("_clearContentsMenuItem.Click += (_, _) => ClearSelectedRangeContents();");
@@ -406,6 +409,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_copy_menu_item={FormatBool(snapshot.HasNativeCopyMenuItem)}");
         smokeSource.Should().Contain("native_paste_menu_item={FormatBool(snapshot.HasNativePasteMenuItem)}");
         smokeSource.Should().Contain("native_paste_special_menu_item={FormatBool(snapshot.HasNativePasteSpecialMenuItem)}");
+        smokeSource.Should().Contain("native_select_all_menu_item={FormatBool(snapshot.HasNativeSelectAllMenuItem)}");
         smokeSource.Should().Contain("native_clear_contents_menu_item={FormatBool(snapshot.HasNativeClearContentsMenuItem)}");
         smokeSource.Should().Contain("native_bold_menu_item={FormatBool(snapshot.HasNativeBoldMenuItem)}");
         smokeSource.Should().Contain("native_italic_menu_item={FormatBool(snapshot.HasNativeItalicMenuItem)}");
@@ -467,6 +471,7 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeCopyMenuItem: HasNativeMenuItem(_copyMenuItem, \"Copy\")");
         windowSource.Should().Contain("HasNativePasteMenuItem: HasNativeMenuItem(_pasteMenuItem, \"Paste\")");
         windowSource.Should().Contain("HasNativePasteSpecialMenuItem: HasNativeMenuItem(_pasteSpecialMenuItem, \"Paste Special\")");
+        windowSource.Should().Contain("HasNativeSelectAllMenuItem: HasNativeMenuItem(_selectAllMenuItem, \"Select All\")");
         windowSource.Should().Contain("HasNativeClearContentsMenuItem: HasNativeMenuItem(_clearContentsMenuItem, \"Clear Contents\")");
         windowSource.Should().Contain("HasNativeBoldMenuItem: HasNativeMenuItem(_boldMenuItem, \"Bold\")");
         windowSource.Should().Contain("HasNativeItalicMenuItem: HasNativeMenuItem(_italicMenuItem, \"Italic\")");
@@ -698,14 +703,18 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("args.KeyModifiers.HasFlag(KeyModifiers.Shift)");
         source.Should().Contain("_session.SelectRange(new GridRange(_session.ActiveCell, address));");
         source.Should().Contain("private static string FormatRangeReference(GridRange range)");
+        source.Should().Contain("private void SelectCurrentRegionOrAll()");
+        source.Should().Contain("var range = _session.SelectCurrentRegionOrAll();");
         source.Should().Contain("if (_formulaBox.IsFocused &&");
-        source.Should().Contain("e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.B or Key.I or Key.U or Key.D4 or Key.NumPad4 or Key.D5 or Key.NumPad5)");
+        source.Should().Contain("e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.I or Key.U or Key.D4 or Key.NumPad4 or Key.D5 or Key.NumPad5)");
         source.Should().Contain("else if (e.Key == Key.X)");
         source.Should().Contain("await CutSelectedRangeToClipboardAsync();");
         source.Should().Contain("else if (e.Key == Key.C)");
         source.Should().Contain("await CopySelectedRangeToClipboardAsync();");
         source.Should().Contain("else if (e.Key == Key.V)");
         source.Should().Contain("await PasteClipboardTextAsync();");
+        source.Should().Contain("else if (e.Key == Key.A && HasOnlyCommandModifier(e.KeyModifiers))");
+        source.Should().Contain("SelectCurrentRegionOrAll();");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Paste Special failed.\");");
         source.Should().Contain("ShowEditIssue(\"Clipboard unavailable on this platform.\");");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Paste failed.\");");

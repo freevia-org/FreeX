@@ -90,6 +90,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeCopyMenuItem,
     bool HasNativePasteMenuItem,
     bool HasNativePasteSpecialMenuItem,
+    bool HasNativeSelectAllMenuItem,
     bool HasNativeClearContentsMenuItem,
     bool HasNativeBoldMenuItem,
     bool HasNativeItalicMenuItem,
@@ -162,6 +163,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeCopyMenuItem &&
         HasNativePasteMenuItem &&
         HasNativePasteSpecialMenuItem &&
+        HasNativeSelectAllMenuItem &&
         HasNativeClearContentsMenuItem &&
         HasNativeBoldMenuItem &&
         HasNativeItalicMenuItem &&
@@ -282,6 +284,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_copy_menu_item={FormatBool(snapshot.HasNativeCopyMenuItem)}",
                 $"native_paste_menu_item={FormatBool(snapshot.HasNativePasteMenuItem)}",
                 $"native_paste_special_menu_item={FormatBool(snapshot.HasNativePasteSpecialMenuItem)}",
+                $"native_select_all_menu_item={FormatBool(snapshot.HasNativeSelectAllMenuItem)}",
                 $"native_clear_contents_menu_item={FormatBool(snapshot.HasNativeClearContentsMenuItem)}",
                 $"native_bold_menu_item={FormatBool(snapshot.HasNativeBoldMenuItem)}",
                 $"native_italic_menu_item={FormatBool(snapshot.HasNativeItalicMenuItem)}",

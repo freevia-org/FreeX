@@ -117,6 +117,65 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SelectCurrentRegionOrAll_SelectsCurrentRegionThenWholeSheetWithoutDirtyingWorkbook()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var c3 = new CellAddress(sheet.Id, 3, 3);
+        sheet.SetCell(b2, new TextValue("Name"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(10));
+        sheet.SetCell(c3, new NumberValue(20));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.BeginFormulaEdit(b2);
+
+        var currentRegion = session.SelectCurrentRegionOrAll();
+
+        currentRegion.Should().Be(new GridRange(b2, c3));
+        session.SelectedRange.Should().Be(currentRegion);
+        session.ActiveCell.Should().Be(b2);
+        session.FormulaEditAddress.Should().BeNull();
+        session.IsDirty.Should().BeFalse();
+
+        var wholeSheet = session.SelectCurrentRegionOrAll();
+
+        wholeSheet.Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, CellAddress.MaxRow, CellAddress.MaxCol)));
+        session.SelectedRange.Should().Be(wholeSheet);
+        session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 1, 1));
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SelectCurrentRegionOrAll_SelectsWholeSheetForBlankActiveCell()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var blank = new CellAddress(sheet.Id, 4, 4);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.BeginFormulaEdit(blank);
+
+        var range = session.SelectCurrentRegionOrAll();
+
+        range.Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, CellAddress.MaxRow, CellAddress.MaxCol)));
+        session.SelectedRange.Should().Be(range);
+        session.FormulaEditAddress.Should().BeNull();
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
     public void CreateOpened_CreatesTemplateSessionWithOpenMetadata()
     {
         var path = Path.Combine(Path.GetTempPath(), "Budget.xltx");

@@ -180,6 +180,22 @@ public sealed class WorkbookSession
         EnsureActiveCellVisible();
     }
 
+    public GridRange SelectCurrentRegionOrAll()
+    {
+        if (SelectionRangeService.GetCurrentRegion(ActiveSheet, ActiveCell) is { } currentRegion &&
+            SelectedRange != currentRegion)
+        {
+            SelectRange(currentRegion);
+            return currentRegion;
+        }
+
+        var wholeSheet = new GridRange(
+            new CellAddress(ActiveSheet.Id, 1, 1),
+            new CellAddress(ActiveSheet.Id, CellAddress.MaxRow, CellAddress.MaxCol));
+        SelectRange(wholeSheet);
+        return wholeSheet;
+    }
+
     public void MoveActiveCell(int rowDelta, int colDelta)
     {
         var address = new CellAddress(
