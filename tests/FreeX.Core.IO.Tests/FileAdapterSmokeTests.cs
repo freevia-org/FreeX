@@ -14464,6 +14464,57 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PrunesStaleWorksheetPrinterSettingsRelationships()
+    {
+        var workbook = new Workbook("PrinterSettingsStaleRelationshipTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("print me"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalPrinterSettingsPackage(source);
+        AddStalePrinterSettingsRelationship(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        const string printerSettingsRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings";
+        const string printerSettingsContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings";
+
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var pageSetupRelId = worksheetXml.Root!.Element(worksheetNs + "pageSetup")!.Attribute(relNs + "id")!.Value;
+        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var printerRelationships = worksheetRelsXml.Root!.Elements(packageRelNs + "Relationship")
+            .Where(rel => string.Equals(rel.Attribute("Type")?.Value, printerSettingsRelationshipType, StringComparison.Ordinal))
+            .ToList();
+
+        var printerRelationship = printerRelationships.Should().ContainSingle().Subject;
+        printerRelationship.Attribute("Id")!.Value.Should().Be(pageSetupRelId);
+        printerRelationship.Attribute("Target")!.Value.Should().Be("../printerSettings/printerSettings1.bin");
+        archive.GetEntry("xl/printerSettings/printerSettings1.bin").Should().NotBeNull();
+
+        var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+        var printerSettingsContentTypeOverrides = contentTypesXml.Root!.Elements(contentTypeNs + "Override")
+            .Where(element =>
+                string.Equals(element.Attribute("PartName")?.Value, "/xl/printerSettings/printerSettings1.bin", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(element.Attribute("ContentType")?.Value, printerSettingsContentType, StringComparison.Ordinal))
+            .ToList();
+        printerSettingsContentTypeOverrides.Should().ContainSingle();
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesEmbeddedOlePackageAndWorksheetReference()
     {
         var workbook = new Workbook("EmbeddedOleRetentionTest");
