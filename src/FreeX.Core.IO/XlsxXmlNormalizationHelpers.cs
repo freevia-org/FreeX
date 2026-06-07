@@ -59,7 +59,10 @@ internal static class XlsxXmlNormalizationHelpers
         return SetAttributeIfChanged(element, attributeName, normalized);
     }
 
-    public static bool SetAttributeIfChanged(XElement element, string attributeName, string value)
+    public static bool SetAttributeIfChanged(XElement element, string attributeName, string value) =>
+        SetAttributeIfChanged(element, XName.Get(attributeName), value);
+
+    public static bool SetAttributeIfChanged(XElement element, XName attributeName, string value)
     {
         var attribute = element.Attribute(attributeName);
         if (attribute is not null && string.Equals(attribute.Value, value, StringComparison.Ordinal))

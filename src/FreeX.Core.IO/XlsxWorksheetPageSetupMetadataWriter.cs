@@ -158,17 +158,8 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
 
     private static bool SetOptionalAttribute(XElement element, XName name, string? value) =>
         value is not null
-            ? SetAttributeIfDifferent(element, name, value)
+            ? XlsxXmlNormalizationHelpers.SetAttributeIfChanged(element, name, value)
             : RemoveAttributeIfPresent(element, name);
-
-    private static bool SetAttributeIfDifferent(XElement element, XName name, string value)
-    {
-        if (string.Equals(element.Attribute(name)?.Value, value, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(name, value);
-        return true;
-    }
 
     private static bool RemoveAttributeIfPresent(XElement element, XName name)
     {
