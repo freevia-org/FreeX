@@ -194,8 +194,11 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"native_save_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_save_as_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_close_workbook_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_data_menu=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_select_all_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_go_to_special_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_sort_ascending_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_sort_descending_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"macos_dialog_smoke=passed\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"macos_dialog_smoke_attempted=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"macos_dialog_smoke_status=passed\" \"$launch_smoke_report\"");
@@ -224,6 +227,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"go_to_special_dialog_compact_layout=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"go_to_special_dialog_result_closed_without_accept=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_edit_menu=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_data_menu=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_format_menu=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_view_menu=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_sheet_menu=true\" \"$launch_smoke_report\"");

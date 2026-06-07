@@ -211,6 +211,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasSheetTabContextUngroupSheetsMenuItem,
     bool HasNativeFileMenu,
     bool HasNativeEditMenu,
+    bool HasNativeDataMenu,
     bool HasNativeFormatMenu,
     bool HasNativeViewMenu,
     bool HasNativeSheetMenu,
@@ -262,6 +263,8 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeReplaceMenuItem,
     bool HasNativeGoToMenuItem,
     bool HasNativeGoToSpecialMenuItem,
+    bool HasNativeSortAscendingMenuItem,
+    bool HasNativeSortDescendingMenuItem,
     bool HasNativeAutoSumMenuItem,
     bool HasNativeAutoSumSumMenuItem,
     bool HasNativeAutoSumAverageMenuItem,
@@ -378,6 +381,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasSheetTabContextUngroupSheetsMenuItem &&
         HasNativeFileMenu &&
         HasNativeEditMenu &&
+        HasNativeDataMenu &&
         HasNativeFormatMenu &&
         HasNativeViewMenu &&
         HasNativeSheetMenu &&
@@ -429,6 +433,8 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeReplaceMenuItem &&
         HasNativeGoToMenuItem &&
         HasNativeGoToSpecialMenuItem &&
+        HasNativeSortAscendingMenuItem &&
+        HasNativeSortDescendingMenuItem &&
         HasNativeFormatCellsMenuItem &&
         HasNativeAutoSumMenuItem &&
         HasNativeAutoSumSumMenuItem &&
@@ -694,6 +700,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"sheet_tab_context_ungroup_sheets_menu_item={FormatBool(snapshot.HasSheetTabContextUngroupSheetsMenuItem)}",
                 $"native_file_menu={FormatBool(snapshot.HasNativeFileMenu)}",
                 $"native_edit_menu={FormatBool(snapshot.HasNativeEditMenu)}",
+                $"native_data_menu={FormatBool(snapshot.HasNativeDataMenu)}",
                 $"native_format_menu={FormatBool(snapshot.HasNativeFormatMenu)}",
                 $"native_view_menu={FormatBool(snapshot.HasNativeViewMenu)}",
                 $"native_sheet_menu={FormatBool(snapshot.HasNativeSheetMenu)}",
@@ -745,6 +752,8 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_replace_menu_item={FormatBool(snapshot.HasNativeReplaceMenuItem)}",
                 $"native_go_to_menu_item={FormatBool(snapshot.HasNativeGoToMenuItem)}",
                 $"native_go_to_special_menu_item={FormatBool(snapshot.HasNativeGoToSpecialMenuItem)}",
+                $"native_sort_ascending_menu_item={FormatBool(snapshot.HasNativeSortAscendingMenuItem)}",
+                $"native_sort_descending_menu_item={FormatBool(snapshot.HasNativeSortDescendingMenuItem)}",
                 $"native_format_cells_menu_item={FormatBool(snapshot.HasNativeFormatCellsMenuItem)}",
                 $"native_autosum_menu_item={FormatBool(snapshot.HasNativeAutoSumMenuItem)}",
                 $"native_autosum_sum_menu_item={FormatBool(snapshot.HasNativeAutoSumSumMenuItem)}",

@@ -1417,6 +1417,33 @@ public sealed class WorkbookSession
             _ => false
         };
 
+    public bool CanSortSelectedRange => SelectedRange.RowCount > 1;
+
+    public WorkbookCellEditResult SortSelectedRange(bool ascending)
+    {
+        if (!CanSortSelectedRange)
+        {
+            return new WorkbookCellEditResult(
+                false,
+                "Select at least two rows to sort.",
+                [],
+                RecalcReport: null);
+        }
+
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            CreateRangeCommand(
+                range,
+                "Sort",
+                (sheetId, sheetRange) => new SortCommand(sheetId, sheetRange, sortByColOffset: 0, ascending)));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
     public WorkbookCellEditResult FillSelectedRange(FillCellsDirection direction)
     {
         var range = SelectedRange;

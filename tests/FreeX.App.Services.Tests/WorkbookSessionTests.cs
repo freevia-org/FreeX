@@ -1467,6 +1467,89 @@ public sealed class WorkbookSessionTests
         session.StartupStatus.Should().Contain("1 load warning.");
     }
 
+    [Theory]
+    [InlineData(true, 1, 2, 3, "one", "two", "three")]
+    [InlineData(false, 3, 2, 1, "three", "two", "one")]
+    public void SortSelectedRange_SortsRowsByFirstColumnPreservesSelectionAndUndo(
+        bool ascending,
+        int first,
+        int second,
+        int third,
+        string firstLabel,
+        string secondLabel,
+        string thirdLabel)
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var a3 = new CellAddress(sheet.Id, 3, 1);
+        sheet.SetCell(a1, new NumberValue(2));
+        sheet.SetCell(b1, new TextValue("two"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(3));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("three"));
+        sheet.SetCell(a3, new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new TextValue("one"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        var range = new GridRange(a1, new CellAddress(sheet.Id, 3, 2));
+        session.SelectRange(range);
+
+        var result = session.SortSelectedRange(ascending);
+
+        result.Success.Should().BeTrue();
+        session.CanSortSelectedRange.Should().BeTrue();
+        session.SelectedRange.Should().Be(range);
+        session.ActiveCell.Should().Be(a1);
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(first));
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(second));
+        sheet.GetValue(3, 1).Should().Be(new NumberValue(third));
+        sheet.GetValue(1, 2).Should().Be(new TextValue(firstLabel));
+        sheet.GetValue(2, 2).Should().Be(new TextValue(secondLabel));
+        sheet.GetValue(3, 2).Should().Be(new TextValue(thirdLabel));
+
+        session.UndoLastEdit().Success.Should().BeTrue();
+
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(2));
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(3));
+        sheet.GetValue(3, 1).Should().Be(new NumberValue(1));
+        sheet.GetValue(1, 2).Should().Be(new TextValue("two"));
+        sheet.GetValue(2, 2).Should().Be(new TextValue("three"));
+        sheet.GetValue(3, 2).Should().Be(new TextValue("one"));
+    }
+
+    [Fact]
+    public void SortSelectedRange_SingleRowRejectsWithoutDirtyingWorkbook()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(a1, new NumberValue(2));
+        sheet.SetCell(b1, new TextValue("two"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b1));
+
+        var result = session.SortSelectedRange(ascending: true);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be("Select at least two rows to sort.");
+        session.CanSortSelectedRange.Should().BeFalse();
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(2));
+        sheet.GetValue(1, 2).Should().Be(new TextValue("two"));
+    }
+
     [Fact]
     public void CommitCellText_MarksDirtyAndRecalculatesDependents()
     {

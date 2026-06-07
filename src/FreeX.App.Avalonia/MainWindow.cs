@@ -309,6 +309,8 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _replaceMenuItem = new();
     private readonly NativeMenuItem _goToMenuItem = new();
     private readonly NativeMenuItem _goToSpecialMenuItem = new();
+    private readonly NativeMenuItem _sortAscendingMenuItem = new();
+    private readonly NativeMenuItem _sortDescendingMenuItem = new();
     private readonly NativeMenuItem _autoSumMenuItem = new();
     private readonly NativeMenuItem _autoSumSumMenuItem = new();
     private readonly NativeMenuItem _autoSumAverageMenuItem = new();
@@ -635,6 +637,12 @@ public sealed class MainWindow : Window
         _goToSpecialMenuItem.Header = "Go To Special...";
         _goToSpecialMenuItem.Click += async (_, _) => await ShowGoToSpecialDialogAsync();
 
+        _sortAscendingMenuItem.Header = "Sort A to Z";
+        _sortAscendingMenuItem.Click += (_, _) => SortSelectedRange(ascending: true);
+
+        _sortDescendingMenuItem.Header = "Sort Z to A";
+        _sortDescendingMenuItem.Click += (_, _) => SortSelectedRange(ascending: false);
+
         _autoSumMenuItem.Header = "AutoSum";
         _autoSumMenuItem.Menu = CreateNativeAutoSumMenu();
 
@@ -903,6 +911,10 @@ public sealed class MainWindow : Window
         editMenu.Items.Add(_fillCellsMenuItem);
         editMenu.Items.Add(_clearMenuItem);
 
+        var dataMenu = new NativeMenu();
+        dataMenu.Items.Add(_sortAscendingMenuItem);
+        dataMenu.Items.Add(_sortDescendingMenuItem);
+
         var formatMenu = new NativeMenu();
         formatMenu.Items.Add(_boldMenuItem);
         formatMenu.Items.Add(_italicMenuItem);
@@ -992,6 +1004,11 @@ public sealed class MainWindow : Window
         {
             Header = "Edit",
             Menu = editMenu,
+        });
+        _nativeMenu.Items.Add(new NativeMenuItem
+        {
+            Header = "Data",
+            Menu = dataMenu,
         });
         _nativeMenu.Items.Add(new NativeMenuItem
         {
@@ -1617,6 +1634,8 @@ public sealed class MainWindow : Window
         _replaceMenuItem.IsEnabled = isIdle;
         _goToMenuItem.IsEnabled = isIdle;
         _goToSpecialMenuItem.IsEnabled = isIdle;
+        _sortAscendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
+        _sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _autoSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
         _autoSumSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
         _autoSumAverageMenuItem.IsEnabled = _autoSumButton.IsEnabled;
@@ -6043,6 +6062,25 @@ public sealed class MainWindow : Window
         RefreshShell($"{FormatFillCellsAction(direction)} in {rangeReference}");
     }
 
+    private void SortSelectedRange(bool ascending)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.SortSelectedRange(ascending);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Sort failed.");
+            return;
+        }
+
+        RefreshShell($"Sorted {rangeReference} {(ascending ? "A to Z" : "Z to A")}");
+    }
+
     private void BoldButton_Click(object? sender, RoutedEventArgs e)
     {
         ApplySelectedRangeBold(_boldButton.IsChecked == true);
@@ -7459,6 +7497,9 @@ public sealed class MainWindow : Window
         var hasNativeEditMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
             string.Equals(item.Header?.ToString(), "Edit", StringComparison.Ordinal) &&
             item.Menu is not null) == true;
+        var hasNativeDataMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
+            string.Equals(item.Header?.ToString(), "Data", StringComparison.Ordinal) &&
+            item.Menu is not null) == true;
         var hasNativeFormatMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
             string.Equals(item.Header?.ToString(), "Format", StringComparison.Ordinal) &&
             item.Menu is not null) == true;
@@ -7559,6 +7600,7 @@ public sealed class MainWindow : Window
             HasSheetTabContextUngroupSheetsMenuItem: HasSheetTabContextMenuItem("Ungroup Sheets"),
             HasNativeFileMenu: hasNativeFileMenu,
             HasNativeEditMenu: hasNativeEditMenu,
+            HasNativeDataMenu: hasNativeDataMenu,
             HasNativeFormatMenu: hasNativeFormatMenu,
             HasNativeViewMenu: hasNativeViewMenu,
             HasNativeSheetMenu: hasNativeSheetMenu,
@@ -7610,6 +7652,8 @@ public sealed class MainWindow : Window
             HasNativeReplaceMenuItem: HasNativeMenuItem(_replaceMenuItem, "Replace..."),
             HasNativeGoToMenuItem: HasNativeMenuItem(_goToMenuItem, "Go To..."),
             HasNativeGoToSpecialMenuItem: HasNativeMenuItem(_goToSpecialMenuItem, "Go To Special...", requireGesture: false),
+            HasNativeSortAscendingMenuItem: HasNativeMenuItem(_sortAscendingMenuItem, "Sort A to Z", requireGesture: false),
+            HasNativeSortDescendingMenuItem: HasNativeMenuItem(_sortDescendingMenuItem, "Sort Z to A", requireGesture: false),
             HasNativeFormatCellsMenuItem: HasNativeMenuItem(_formatCellsMenuItem, "Format Cells..."),
             HasNativeAutoSumMenuItem: HasNativeMenuItem(_autoSumMenuItem, "AutoSum", requireGesture: false),
             HasNativeAutoSumSumMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, "Sum"),

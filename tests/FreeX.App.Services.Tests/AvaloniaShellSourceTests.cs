@@ -605,6 +605,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_open_recent_item_count={snapshot.NativeOpenRecentItemCount}");
         smokeSource.Should().Contain("native_close_workbook_menu_item={FormatBool(snapshot.HasNativeCloseWorkbookMenuItem)}");
         smokeSource.Should().Contain("native_edit_menu={FormatBool(snapshot.HasNativeEditMenu)}");
+        smokeSource.Should().Contain("native_data_menu={FormatBool(snapshot.HasNativeDataMenu)}");
         smokeSource.Should().Contain("native_format_menu={FormatBool(snapshot.HasNativeFormatMenu)}");
         smokeSource.Should().Contain("native_view_menu={FormatBool(snapshot.HasNativeViewMenu)}");
         smokeSource.Should().Contain("native_help_menu={FormatBool(snapshot.HasNativeHelpMenu)}");
@@ -751,6 +752,7 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeUngroupSheetsMenuItem: HasNativeMenuItem(_ungroupSheetsMenuItem, \"Ungroup Sheets\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeCloseWorkbookMenuItem: HasNativeMenuItem(_closeWorkbookMenuItem, \"Close Workbook\")");
         windowSource.Should().Contain("HasNativeEditMenu: hasNativeEditMenu");
+        windowSource.Should().Contain("HasNativeDataMenu: hasNativeDataMenu");
         windowSource.Should().Contain("HasNativeFormatMenu: hasNativeFormatMenu");
         windowSource.Should().Contain("HasNativeViewMenu: hasNativeViewMenu");
         windowSource.Should().Contain("HasNativeHelpMenu: hasNativeHelpMenu");
@@ -1208,6 +1210,60 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("toolbar_autosum_sum_menu_item={FormatBool(snapshot.HasAutoSumSumMenuItem)}");
         smokeSource.Should().Contain("native_autosum_menu_item={FormatBool(snapshot.HasNativeAutoSumMenuItem)}");
         smokeSource.Should().Contain("native_autosum_sum_menu_item={FormatBool(snapshot.HasNativeAutoSumSumMenuItem)}");
+    }
+
+    [Fact]
+    public void MainWindow_WiresNativeDataSortMenuThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        sessionSource.Should().Contain("public bool CanSortSelectedRange => SelectedRange.RowCount > 1;");
+        sessionSource.Should().Contain("public WorkbookCellEditResult SortSelectedRange(bool ascending)");
+        sessionSource.Should().Contain("new SortCommand(sheetId, sheetRange, sortByColOffset: 0, ascending)");
+        sessionSource.Should().Contain("\"Select at least two rows to sort.\"");
+
+        source.Should().Contain("private readonly NativeMenuItem _sortAscendingMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _sortDescendingMenuItem = new();");
+        source.Should().Contain("_sortAscendingMenuItem.Header = \"Sort A to Z\";");
+        source.Should().Contain("_sortAscendingMenuItem.Click += (_, _) => SortSelectedRange(ascending: true);");
+        source.Should().Contain("_sortDescendingMenuItem.Header = \"Sort Z to A\";");
+        source.Should().Contain("_sortDescendingMenuItem.Click += (_, _) => SortSelectedRange(ascending: false);");
+        source.Should().Contain("var dataMenu = new NativeMenu();");
+        source.Should().Contain("dataMenu.Items.Add(_sortAscendingMenuItem);");
+        source.Should().Contain("dataMenu.Items.Add(_sortDescendingMenuItem);");
+        source.Should().Contain("Header = \"Data\",");
+        source.Should().Contain("Menu = dataMenu,");
+        source.Should().Contain("var hasNativeDataMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>");
+        source.Should().Contain("string.Equals(item.Header?.ToString(), \"Data\", StringComparison.Ordinal)");
+        source.Should().Contain("HasNativeDataMenu: hasNativeDataMenu");
+        source.Should().Contain("_sortAscendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;");
+        source.Should().Contain("_sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;");
+        source.Should().Contain("private void SortSelectedRange(bool ascending)");
+        source.Should().Contain("var result = _session.SortSelectedRange(ascending);");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Sort failed.\");");
+        source.Should().Contain("RefreshShell($\"Sorted {rangeReference} {(ascending ? \"A to Z\" : \"Z to A\")}\");");
+        source.Should().Contain("HasNativeSortAscendingMenuItem: HasNativeMenuItem(_sortAscendingMenuItem, \"Sort A to Z\", requireGesture: false)");
+        source.Should().Contain("HasNativeSortDescendingMenuItem: HasNativeMenuItem(_sortDescendingMenuItem, \"Sort Z to A\", requireGesture: false)");
+        smokeSource.Should().Contain("HasNativeDataMenu &&");
+        smokeSource.Should().Contain("HasNativeSortAscendingMenuItem &&");
+        smokeSource.Should().Contain("HasNativeSortDescendingMenuItem &&");
+        smokeSource.Should().Contain("native_data_menu={FormatBool(snapshot.HasNativeDataMenu)}");
+        smokeSource.Should().Contain("native_sort_ascending_menu_item={FormatBool(snapshot.HasNativeSortAscendingMenuItem)}");
+        smokeSource.Should().Contain("native_sort_descending_menu_item={FormatBool(snapshot.HasNativeSortDescendingMenuItem)}");
+
+        var editMenuIndex = normalizedSource.IndexOf("Header = \"Edit\",\n            Menu = editMenu,", StringComparison.Ordinal);
+        var dataMenuIndex = normalizedSource.IndexOf("Header = \"Data\",\n            Menu = dataMenu,", StringComparison.Ordinal);
+        var formatMenuIndex = normalizedSource.IndexOf("Header = \"Format\",\n            Menu = formatMenu,", StringComparison.Ordinal);
+        editMenuIndex.Should().BeGreaterThanOrEqualTo(0);
+        dataMenuIndex.Should().BeGreaterThanOrEqualTo(0);
+        formatMenuIndex.Should().BeGreaterThanOrEqualTo(0);
+        editMenuIndex.Should().BeLessThan(dataMenuIndex);
+        dataMenuIndex.Should().BeLessThan(formatMenuIndex);
+        source.Should().NotContain("SortDialog");
+        source.Should().NotContain("Custom Sort");
     }
 
     [Fact]
