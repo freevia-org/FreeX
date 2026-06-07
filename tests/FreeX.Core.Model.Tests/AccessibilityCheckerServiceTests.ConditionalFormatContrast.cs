@@ -2994,6 +2994,61 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDiscreteStatisticalScalarFunctions()
+    {
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("AND($G1,FISHER($A1)>0.5)", "B1");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("AND($G1,FISHERINV($E1)>0.6)", "B2", "B3");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("AND($G1,BINOM.DIST($A1,$C1,$D1,FALSE)>0.25)", "B2", "B4");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("AND($G1,BINOMDIST($A1,$C1,$D1,TRUE)>0.7)", "B3");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("AND($G1,BINOM.DIST.RANGE($C1,$D1,$A1,2)>0.6)", "B1", "B4");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("AND($G1,BINOM.INV($C1,$D1,$E1)>=2)", "B1", "B2", "B3");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("AND($G1,CRITBINOM($C1,$D1,$E1)=0)", "B4");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("AND($G1,HYPERGEOM.DIST($A1,$C1,2,$H1,FALSE)>0.3)", "B1", "B4");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("AND($G1,HYPGEOMDIST($A1,$C1,2,$H1)>0.3)", "B1", "B4");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("AND($G1,NEGBINOM.DIST($A1,$C1,$D1,FALSE)>0.05)", "B1", "B2");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("AND($G1,NEGBINOMDIST($A1,$C1,$D1)>0.05)", "B1", "B2");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("AND($G1,POISSON.DIST($A1,$C1,FALSE)>0.14)", "B2", "B3");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("AND($G1,POISSON($A1,$C1,TRUE)<0.3)", "B1", "B2", "B3", "B4");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("AND($G1,SERIESSUM($A1,$I1,$J1,$K1)>10)", "B2", "B3");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDiscreteStatisticalNestedScalars()
+    {
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("AND($G1,FISHERINV(ABS($E1))>0.6)", "B2", "B3");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations(
+            "AND($G1,SUM(BINOM.DIST($A1,$C1,$D1,FALSE),POISSON.DIST($A1,$C1,FALSE))>0.5)",
+            "B2",
+            "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDiscreteStatisticalErrors()
+    {
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("ISERROR(FISHER($A1))", "B2", "B3", "B5", "B8", "B9");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("ISERROR(BINOM.DIST($A1,$C1,$D1,TRUE))", "B5", "B6", "B7", "B8", "B9");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("ISNA(BINOM.DIST($A1,$C1,$D1,TRUE))", "B8");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("ISERR(BINOM.DIST($A1,$C1,$D1,TRUE))", "B5", "B6", "B7", "B9");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("ISERROR(HYPERGEOM.DIST($A1,$C1,2,$H1,TRUE))", "B3", "B5", "B6", "B8", "B9");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("ISERROR(NEGBINOM.DIST($A1,$C1,$D1,TRUE))", "B5", "B6", "B7", "B8", "B9");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("ISERROR(POISSON.DIST($A1,$C1,TRUE))", "B5", "B6", "B8", "B9");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("ISERROR(SERIESSUM($A1,$I1,$J1,$K1))", "B8", "B9");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatDiscreteStatisticalUnsupportedShapes()
+    {
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("FISHER($A$1:$A$1)>0");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("BINOM.DIST($A$1:$A$2,$C1,$D1,TRUE)>0");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("BINOM.DIST($A1,$C1,$D1)>0");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("HYPERGEOM.DIST($A1,$C1,2,$H1)>0");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("NEGBINOM.DIST($A1,$C1,$D1)>0");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("POISSON.DIST($A1,$C1,\"TRUE\")>0");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("SERIESSUM($A1,$I1,$J1,$K$1:$K$2)>0");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("SERIESSUM($A1,$I1,$J1)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialAnnuityFunctions()
     {
         AssertFormulaFinancialAnnuityFunctionContrastLocations("PMT($A1,$C1,$D1,$G1,$H1)<-180", "B1", "B3", "B6");
@@ -6503,6 +6558,174 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 12), lambda);
     }
 
+    private static Workbook CreateFormulaDiscreteStatisticalFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 9, 2);
+
+        SetFormulaDiscreteStatisticalFunctionContrastRow(
+            sheet,
+            1,
+            new NumberValue(0.5),
+            new NumberValue(4),
+            new NumberValue(0.5),
+            new NumberValue(0.5),
+            new BoolValue(true),
+            active: true,
+            new NumberValue(10),
+            new NumberValue(2),
+            new NumberValue(1),
+            new NumberValue(3),
+            "Half success");
+        SetFormulaDiscreteStatisticalFunctionContrastRow(
+            sheet,
+            2,
+            new NumberValue(2),
+            new NumberValue(4),
+            new NumberValue(0.5),
+            new NumberValue(0.7),
+            new BoolValue(false),
+            active: true,
+            new NumberValue(10),
+            new NumberValue(2),
+            new NumberValue(1),
+            new NumberValue(3),
+            "Two successes");
+        SetFormulaDiscreteStatisticalFunctionContrastRow(
+            sheet,
+            3,
+            new NumberValue(3),
+            new NumberValue(5),
+            new NumberValue(0.25),
+            new NumberValue(0.8),
+            new BoolValue(true),
+            active: true,
+            new NumberValue(12),
+            new NumberValue(3),
+            new NumberValue(1),
+            new NumberValue(2),
+            "Three successes");
+        SetFormulaDiscreteStatisticalFunctionContrastRow(
+            sheet,
+            4,
+            new NumberValue(0),
+            new NumberValue(3),
+            new NumberValue(0.2),
+            new NumberValue(0.2),
+            new BoolValue(false),
+            active: true,
+            new NumberValue(8),
+            new NumberValue(1),
+            new NumberValue(1),
+            new NumberValue(4),
+            "Zero successes");
+        SetFormulaDiscreteStatisticalFunctionContrastRow(
+            sheet,
+            5,
+            new NumberValue(-1),
+            new NumberValue(4),
+            new NumberValue(0.5),
+            new NumberValue(0.5),
+            new BoolValue(true),
+            active: false,
+            new NumberValue(10),
+            new NumberValue(2),
+            new NumberValue(1),
+            new NumberValue(3),
+            "Negative source");
+        SetFormulaDiscreteStatisticalFunctionContrastRow(
+            sheet,
+            6,
+            new NumberValue(0.5),
+            new NumberValue(-1),
+            new NumberValue(0.5),
+            new NumberValue(0.5),
+            new BoolValue(true),
+            active: false,
+            new NumberValue(10),
+            new NumberValue(2),
+            new NumberValue(1),
+            new NumberValue(3),
+            "Negative count");
+        SetFormulaDiscreteStatisticalFunctionContrastRow(
+            sheet,
+            7,
+            new NumberValue(0.5),
+            new NumberValue(4),
+            new NumberValue(-0.1),
+            new NumberValue(0.5),
+            new BoolValue(true),
+            active: false,
+            new NumberValue(10),
+            new NumberValue(2),
+            new NumberValue(1),
+            new NumberValue(3),
+            "Invalid probability");
+        SetFormulaDiscreteStatisticalFunctionContrastRow(
+            sheet,
+            8,
+            ErrorValue.NA,
+            new NumberValue(4),
+            new NumberValue(0.5),
+            ErrorValue.NA,
+            new BoolValue(true),
+            active: false,
+            new NumberValue(10),
+            new NumberValue(2),
+            new NumberValue(1),
+            new NumberValue(3),
+            "NA source");
+        SetFormulaDiscreteStatisticalFunctionContrastRow(
+            sheet,
+            9,
+            new TextValue("Open"),
+            new NumberValue(4),
+            new NumberValue(0.5),
+            new TextValue("Open"),
+            new BoolValue(true),
+            active: false,
+            new NumberValue(10),
+            new NumberValue(2),
+            new NumberValue(1),
+            new NumberValue(3),
+            "Value source");
+
+        return workbook;
+    }
+
+    private static void SetFormulaDiscreteStatisticalFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        ScalarValue x,
+        ScalarValue count,
+        ScalarValue probability,
+        ScalarValue alpha,
+        ScalarValue cumulative,
+        bool active,
+        ScalarValue populationSize,
+        ScalarValue seriesN,
+        ScalarValue seriesM,
+        ScalarValue coefficient,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), x);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), count);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 4), probability);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 5), alpha);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 6), cumulative);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 7), new BoolValue(active));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 8), populationSize);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 9), seriesN);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 10), seriesM);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 11), coefficient);
+    }
+
     private static Workbook CreateFormulaFinancialAnnuityFunctionContrastWorkbook(
         out Sheet sheet,
         out CellAddress firstLabel,
@@ -8385,6 +8608,20 @@ public sealed partial class AccessibilityCheckerServiceTests
         params string[] expectedLocations)
     {
         var workbook = CreateFormulaContinuousDistributionFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaDiscreteStatisticalFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaDiscreteStatisticalFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
 
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
 
