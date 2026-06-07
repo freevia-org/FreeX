@@ -843,6 +843,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchWorkbookDefinedNames(archive);
                 NormalizePatchWorkbookOleSize(archive);
                 NormalizePatchWorkbookPivotCaches(archive);
+                NormalizePatchPivotTableDefinitions(archive);
                 NormalizePatchWorkbookWebPublishing(archive);
                 NormalizePatchWorkbookWebPublishObjects(archive);
                 NormalizePatchWorkbookExtensionList(archive);
@@ -1291,6 +1292,9 @@ public sealed partial class XlsxFileAdapter
             if (XlsxWorkbookPivotCachesNormalizer.NormalizeWorkbookRoot(root, workbookNs))
                 XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
         }
+
+        private static void NormalizePatchPivotTableDefinitions(ZipArchive archive) =>
+            XlsxExcelCompatibilityNormalizer.NormalizeLegacyPivotTableDefinitionAttributes(archive);
 
         private static void NormalizePatchWorkbookWebPublishing(ZipArchive archive)
         {
