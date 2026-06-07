@@ -156,14 +156,20 @@ public partial class FileAdapterSmokeTests
             if (definedNames is null)
             {
                 definedNames = new XElement(workbookNs + "definedNames");
-                workbookXml.Root!.Add(definedNames);
+                var sheets = workbookXml.Root!.Element(workbookNs + "sheets");
+                if (sheets is not null)
+                    sheets.AddAfterSelf(definedNames);
+                else
+                    workbookXml.Root!.Add(definedNames);
             }
 
             definedNames.Add(new XElement(
                 workbookNs + "definedName",
                 new XAttribute("name", "DynamicSalesRange"),
                 new XAttribute("hidden", "1"),
-                "1+1"));
+                new XAttribute("customDefinedNameFlag", "removed"),
+                "1+1",
+                new XElement(workbookNs + "nativeDefinedNameChild")));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 

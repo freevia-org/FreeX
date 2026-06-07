@@ -5420,6 +5420,11 @@ internal static class ExcelOpenSmoke
             ],
             issues);
 
+        foreach (var attribute in definedNames.Attributes().Where(attribute => !attribute.IsNamespaceDeclaration))
+        {
+            issues.Add($"{WorkbookPart} {description} has unsupported attribute {attribute.Name}");
+        }
+
         foreach (var unexpectedChild in definedNames.Elements().Where(element => element.Name != SpreadsheetNs + "definedName"))
         {
             issues.Add($"{WorkbookPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}; expected definedName entries only");
@@ -5443,6 +5448,17 @@ internal static class ExcelOpenSmoke
         if (string.IsNullOrWhiteSpace(definedName.Attribute("name")?.Value))
             issues.Add($"{WorkbookPart} {description} has no name");
 
+        foreach (var attribute in definedName.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                (attribute.Name.NamespaceName.Length == 0 && IsKnownWorkbookDefinedNameAttribute(attribute.Name.LocalName)))
+            {
+                continue;
+            }
+
+            issues.Add($"{WorkbookPart} {description} has unsupported attribute {attribute.Name}");
+        }
+
         foreach (var attribute in definedName.Attributes().Where(attribute => IsKnownWorkbookDefinedNameBooleanAttribute(attribute.Name.LocalName)))
         {
             AddOptionalWorkbookMetadataBooleanIssue(description, attribute.Name.LocalName, attribute.Value, issues);
@@ -5454,6 +5470,23 @@ internal static class ExcelOpenSmoke
         if (definedName.Elements().Any())
             issues.Add($"{WorkbookPart} {description} has child elements; expected formula text only");
     }
+
+    private static bool IsKnownWorkbookDefinedNameAttribute(string name) =>
+        name is "name" or
+            "comment" or
+            "customMenu" or
+            "description" or
+            "help" or
+            "statusBar" or
+            "localSheetId" or
+            "hidden" or
+            "function" or
+            "vbProcedure" or
+            "xlm" or
+            "functionGroupId" or
+            "shortcutKey" or
+            "publishToServer" or
+            "workbookParameter";
 
     private static bool IsKnownWorkbookDefinedNameBooleanAttribute(string name) =>
         name is "hidden" or

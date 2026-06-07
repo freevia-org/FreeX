@@ -537,6 +537,38 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorkbookDefinedNamesForSchemaValidity()
+    {
+        using var source = Save(CreateWorkbookDefinedNamesSourceWorkbook());
+        SetWorkbookDefinedNamesInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var definedNames = ReadWorkbookChildElement(saved, "definedNames");
+        definedNames.Attribute("customDefinedNamesFlag").Should().BeNull();
+        definedNames.Element(definedNames.Name.Namespace + "nativeDefinedNamesChild").Should().BeNull();
+        var definedName = definedNames.Elements(definedNames.Name.Namespace + "definedName").Single();
+        definedName.Attribute("name")!.Value.Should().Be("DynamicSalesRange");
+        definedName.Attribute("hidden")!.Value.Should().Be("1");
+        definedName.Attribute("customDefinedNameFlag").Should().BeNull();
+        definedName.Element(definedName.Name.Namespace + "nativeDefinedNameChild").Should().BeNull();
+        definedName.Value.Should().Contain("1+1");
+    }
+
+    [Fact]
     public void WorkbookViewProperties_ProducesSchemaValidWorkbook()
     {
         SchemaErrors(CreateWorkbookViewPropertiesSourceWorkbook()).Should().BeEmpty();
@@ -902,6 +934,15 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         return workbook;
     }
 
+    private static Workbook CreateWorkbookDefinedNamesSourceWorkbook()
+    {
+        var workbook = new Workbook("WorkbookDefinedNamesPatchSave");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("defined name"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
+        return workbook;
+    }
+
     private static Workbook CreateWorkbookViewPropertiesSourceWorkbook()
     {
         var workbook = new Workbook("WorkbookViewPropertiesPatchSave")
@@ -934,6 +975,35 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         calcPr.SetAttributeValue("concurrentManualCount", "not-a-number");
         calcPr.SetAttributeValue("customCalcPrFlag", "removed");
         calcPr.Add(new XElement(workbookNs + "nativeCalcPrChild"));
+        ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+    }
+
+    private static void SetWorkbookDefinedNamesInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var definedNames = workbookXml.Root!.Element(workbookNs + "definedNames");
+        if (definedNames is null)
+        {
+            definedNames = new XElement(workbookNs + "definedNames");
+            var sheets = workbookXml.Root!.Element(workbookNs + "sheets");
+            if (sheets is not null)
+                sheets.AddAfterSelf(definedNames);
+            else
+                workbookXml.Root!.Add(definedNames);
+        }
+
+        definedNames.SetAttributeValue("customDefinedNamesFlag", "removed");
+        definedNames.Add(new XElement(workbookNs + "nativeDefinedNamesChild"));
+        definedNames.Add(new XElement(
+            workbookNs + "definedName",
+            new XAttribute("name", "DynamicSalesRange"),
+            new XAttribute("hidden", "1"),
+            new XAttribute("customDefinedNameFlag", "removed"),
+            "1+1",
+            new XElement(workbookNs + "nativeDefinedNameChild")));
         ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
     }
 
