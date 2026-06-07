@@ -554,6 +554,149 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatMaxMinIfsCriteriaAggregates()
+    {
+        AssertFormulaAggregateContrastLocations("MAXIFS($A$1:$A$4,$C$1:$C$4,$C1)>100", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("MINIFS($A$1:$A$4,$C$1:$C$4,$C1)=75", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("MAXIFS($A1:$A3,$C1:$C3,\"Open\")=125", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("MINIFS($A$1:$A$4,$C$1:$C$4,\"Missing\")=0", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatMaxMinIfsWrappersAndErrors()
+    {
+        AssertFormulaAggregateContrastLocations("IF(MAXIFS($A$1:$A$4,$C$1:$C$4,$C1)=125,TRUE,FALSE)", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(MAXIFS($A$1:$A$4,$C$1:$C$4,\"Open\"),MINIFS($A$1:$A$4,$C$1:$C$4,\"Open\"))=200", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISERROR(MAXIFS($A$1:$A$4,$C$1:$C$3,\"Open\"))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("MAXIFS(NA(),$C$1:$C$4,\"Open\")>0");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatMaxMinIfsUnsupportedArityAndComparisons()
+    {
+        AssertFormulaAggregateContrastLocations("MAXIFS($A$1:$A$4,$C$1:$C$4)>0");
+        AssertFormulaAggregateContrastLocations("MINIFS($A$1:$A$4,$C$1:$C$4,\"Open\",$A$1:$A$3,\">0\")>0");
+        AssertFormulaAggregateContrastLocations("MAXIFS($A$1:$A$4,$C$1:$C$4,\"Open\")>$A$1:$A$2");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatSubtotalFunctionNumbers()
+    {
+        AssertFormulaAggregateContrastLocations("SUBTOTAL(9,$A1:$A3)=250", "B1");
+        AssertFormulaAggregateContrastLocations("SUBTOTAL(4,$A1:$A3)=125", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUBTOTAL(5,$A1:$A3)=75", "B1", "B2", "B3");
+        AssertFormulaAggregateContrastLocations("SUBTOTAL(2,$A$1:$A$4)=4", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatSubtotalWrappersPredicatesAndErrors()
+    {
+        AssertFormulaAggregateContrastLocations("IF(SUBTOTAL(9,$A1:$A3)>250,TRUE,FALSE)", "B2");
+        AssertFormulaAggregateContrastLocations("ISNUMBER(SUBTOTAL(9,$A1:$A3))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISERROR(SUBTOTAL(1,NA()))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUBTOTAL(9,NA())>0");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatSubtotalHiddenRowsAndNestedAggregates()
+    {
+        var workbook = CreateFormulaAggregateContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        sheet.FilterHiddenRows.Add(2);
+        sheet.HiddenRows.Add(4);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, "SUBTOTAL(9,$A$1:$A$4)=275");
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal("B1", "B2", "B3", "B4");
+
+        workbook = CreateFormulaAggregateContrastWorkbook(out sheet, out firstLabel, out lastLabel);
+        sheet.FilterHiddenRows.Add(2);
+        sheet.HiddenRows.Add(4);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, "SUBTOTAL(109,$A$1:$A$4)=150");
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal("B1", "B2", "B3", "B4");
+
+        workbook = CreateFormulaAggregateContrastWorkbook(out sheet, out firstLabel, out lastLabel);
+        sheet.SetCell(
+            new CellAddress(sheet.Id, 2, 1),
+            new Cell { Value = new NumberValue(100), FormulaText = "SUBTOTAL(9,$A$1:$A$1)" });
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, "SUBTOTAL(9,$A$1:$A$4)=275");
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal("B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAggregateFunctionNumbers()
+    {
+        AssertFormulaAggregateContrastLocations("AGGREGATE(9,4,$A1:$A3)=250", "B1");
+        AssertFormulaAggregateContrastLocations("AGGREGATE(4,4,$A1:$A3)=125", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("AGGREGATE(14,4,$A$1:$A$4,2)=100", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("AGGREGATE(16,4,$A$1:$A$4,0.5)=87.5", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAggregateWrappersPredicatesAndOptions()
+    {
+        AssertFormulaAggregateContrastLocations("IF(AGGREGATE(9,4,$A1:$A3)>250,TRUE,FALSE)", "B2");
+        AssertFormulaAggregateContrastLocations("AGGREGATE(9,6,$A$1:$A$4,NA())=375", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("AGGREGATE(9,6,\"25\",$A$1:$A$1)=100", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISERROR(AGGREGATE(9,4,$A$1:$A$4,NA()))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISERROR(AGGREGATE(9,6,$A$1:$A$4,NA()))");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAggregateHiddenRowsAndNestedAggregates()
+    {
+        var workbook = CreateFormulaAggregateContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        sheet.FilterHiddenRows.Add(2);
+        sheet.HiddenRows.Add(4);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, "AGGREGATE(9,5,$A$1:$A$4)=150");
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal("B1", "B2", "B3", "B4");
+
+        workbook = CreateFormulaAggregateContrastWorkbook(out sheet, out firstLabel, out lastLabel);
+        sheet.SetCell(
+            new CellAddress(sheet.Id, 2, 1),
+            new Cell { Value = new NumberValue(100), FormulaText = "AGGREGATE(9,4,$A$1:$A$1)" });
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, "AGGREGATE(9,0,$A$1:$A$4)=275");
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal("B1", "B2", "B3", "B4");
+
+        workbook = CreateFormulaAggregateContrastWorkbook(out sheet, out firstLabel, out lastLabel);
+        sheet.SetCell(
+            new CellAddress(sheet.Id, 2, 1),
+            new Cell { Value = new NumberValue(100), FormulaText = "AGGREGATE(9,4,$A$1:$A$1)" });
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, "AGGREGATE(9,4,$A$1:$A$4)=375");
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal("B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatAggregateUnsupportedFunctionShapesOptionsAndComparisons()
+    {
+        AssertFormulaAggregateContrastLocations("AGGREGATE(20,4,$A$1:$A$4)>0");
+        AssertFormulaAggregateContrastLocations("AGGREGATE(9,8,$A$1:$A$4)>0");
+        AssertFormulaAggregateContrastLocations("AGGREGATE(14,4,$A$1:$A$4)>0");
+        AssertFormulaAggregateContrastLocations("AGGREGATE(9,4,$A$1:$A$4)>$A$1:$A$2");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDatabaseAggregateSubset()
     {
         AssertFormulaDatabaseAggregateContrastLocations("DSUM($F$1:$I$5,\"Amount\",$K$1:$K$2)=200", "B1", "B2", "B3", "B4");
