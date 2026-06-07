@@ -846,6 +846,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchInlineStringFonts(archive);
                 NormalizePatchThemeTypefaces(archive);
                 NormalizePatchLegacyCommentFonts(archive);
+                NormalizePatchStylesheetTableStyles(archive);
                 NormalizePatchWorksheetGridXml(archive);
                 NormalizePatchWorksheetMergeCells(archive);
                 NormalizePatchWorksheetDimension(archive);
@@ -1244,6 +1245,24 @@ public sealed partial class XlsxFileAdapter
                 if (XlsxLegacyCommentFontNormalizer.SanitizeRunFontNames(commentsXml))
                     XlsxPackageXmlEditor.ReplaceXml(archive, commentsEntry.FullName, commentsXml);
             }
+        }
+
+        private static void NormalizePatchStylesheetTableStyles(ZipArchive archive)
+        {
+            var stylesEntry = archive.GetEntry("xl/styles.xml");
+            if (stylesEntry is null)
+                return;
+
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var stylesXml = XlsxPackageXmlEditor.LoadXml(stylesEntry);
+            var tableStyles = stylesXml.Root?.Element(workbookNs + "tableStyles");
+            if (tableStyles is null ||
+                !XlsxStylesheetSchemaNormalizer.NormalizeTableStyles(tableStyles, workbookNs))
+            {
+                return;
+            }
+
+            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/styles.xml", stylesXml);
         }
 
         private static void NormalizePatchWorksheetPhoneticProperties(ZipArchive archive)

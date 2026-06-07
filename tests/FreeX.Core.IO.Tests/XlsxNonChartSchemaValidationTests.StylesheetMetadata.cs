@@ -66,6 +66,32 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Be(sourceTableStyles.ToString(SaveOptions.DisableFormatting));
     }
 
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidStylesheetTableStyleMetadataForSchemaValidity()
+    {
+        using var source = CreateExcelStylesheetMetadataSourcePackage();
+        SetStylesheetTableStylesInvalidNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var savedStylesXml = ReadPackageRootElement(saved, "xl/styles.xml");
+        AssertStylesheetTableStyleMetadata(savedStylesXml, "ExcelNativeStructuredStyle", "ExcelNativePivotStyle");
+        AssertStylesheetTableStylesSanitized(savedStylesXml);
+    }
+
     private static Workbook CreateAuthoredStylesheetMetadataWorkbook()
     {
         var workbook = CreateStylesheetMetadataWorkbook("FreeXAuthoredTableStyle");
@@ -84,9 +110,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             AppliesToTables = true,
             AppliesToPivotTables = false,
             NativeXml = """
-                <tableStyle xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" name="FreeXAuthoredTableStyle" pivot="0" table="1" count="2">
-                  <tableStyleElement type="wholeTable" dxfId="0" />
+                <tableStyle xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" name="FreeXAuthoredTableStyle" pivot="0" table="1" count="2" customTableStyleAttr="removed">
+                  <tableStyleElement type="wholeTable" dxfId="0" customElementAttr="removed"><nativeElementChild /></tableStyleElement>
                   <tableStyleElement type="firstRowStripe" dxfId="1" size="1" />
+                  <nativeTableStyleChild />
                 </tableStyle>
                 """
         });
@@ -216,6 +243,29 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         ReplacePackageXml(archive, "xl/styles.xml", stylesXml);
     }
 
+    private static void SetStylesheetTableStylesInvalidNativeMetadata(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexNs = "urn:freex:test";
+        var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
+        var tableStyles = stylesXml.Root!.Element(workbookNs + "tableStyles")!;
+        tableStyles.SetAttributeValue("nativeTableStylesAttr", "removed");
+        tableStyles.Add(new XElement(freexNs + "tableStylesNativeChild"));
+
+        var tableStyle = tableStyles
+            .Elements(workbookNs + "tableStyle")
+            .Single(element => element.Attribute("name")?.Value == "ExcelNativeStructuredStyle");
+        tableStyle.SetAttributeValue("customTableStyleAttr", "removed");
+        tableStyle.Add(new XElement(freexNs + "tableStyleNativeChild"));
+
+        var tableStyleElement = tableStyle.Elements(workbookNs + "tableStyleElement").First();
+        tableStyleElement.SetAttributeValue("customElementAttr", "removed");
+        tableStyleElement.Add(new XElement(freexNs + "tableStyleElementNativeChild"));
+        ReplacePackageXml(archive, "xl/styles.xml", stylesXml);
+    }
+
     private static void AssertStylesheetTableStyleMetadata(
         XElement stylesRoot,
         string expectedTableStyleName,
@@ -226,6 +276,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         tableStyles.Should().NotBeNull();
         var tableStylesElement = tableStyles!;
         tableStylesElement.Attribute("count")!.Value.Should().Be(tableStylesElement.Elements(workbookNs + "tableStyle").Count().ToString());
+        AssertStylesheetTableStylesSanitized(stylesRoot);
         tableStylesElement.Elements(workbookNs + "tableStyle")
             .Where(style => style.Attribute("name")?.Value == expectedTableStyleName)
             .Should()
@@ -244,6 +295,25 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Value
             .Should()
             .Be("1");
+    }
+
+    private static void AssertStylesheetTableStylesSanitized(XElement stylesRoot)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexNs = "urn:freex:test";
+        var tableStyles = stylesRoot.Element(workbookNs + "tableStyles")!;
+        tableStyles.Attribute("nativeTableStylesAttr").Should().BeNull();
+        tableStyles.Element(freexNs + "tableStylesNativeChild").Should().BeNull();
+        foreach (var tableStyle in tableStyles.Elements(workbookNs + "tableStyle"))
+        {
+            tableStyle.Attribute("customTableStyleAttr").Should().BeNull();
+            tableStyle.Element(freexNs + "tableStyleNativeChild").Should().BeNull();
+            tableStyle.Elements(workbookNs + "tableStyleElement")
+                .Should()
+                .OnlyContain(element =>
+                    element.Attribute("customElementAttr") == null &&
+                    !element.Elements().Any());
+        }
     }
 
     private static XElement ReadStylesheetChildElement(XElement stylesRoot, string localName)

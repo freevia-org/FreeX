@@ -13636,11 +13636,8 @@ public partial class FileAdapterSmokeTests
         tableStyles.Elements(workbookNs + "tableStyle")
             .Any(element => element.Attribute("name")?.Value == "FreeXNativeTableStyle")
             .Should().BeTrue();
-        tableStyles.Element(XName.Get("tableStylesNativeChild", "urn:freex:test"))!
-            .Attribute("value")!
-            .Value
-            .Should()
-            .Be("kept");
+        tableStyles.Attribute("nativeTableStylesAttr").Should().BeNull();
+        tableStyles.Element(XName.Get("tableStylesNativeChild", "urn:freex:test")).Should().BeNull();
         loaded.PivotTableStyles.Should().ContainSingle(style =>
             style.Name == "FreeXNativePivotStyle" &&
             style.AppliesToPivotTables &&
@@ -13764,7 +13761,7 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void XlsxAdapter_Save_WritesAuthoredStructuredTableStyleNativeXml()
+    public void XlsxAdapter_Save_SanitizesAuthoredStructuredTableStyleNativeXml()
     {
         var workbook = new Workbook("AuthoredStructuredTableStyleMetadataTest");
         var sheet = workbook.AddSheet("Data");
@@ -13798,12 +13795,11 @@ public partial class FileAdapterSmokeTests
             tableStyle.Attribute("pivot")!.Value.Should().Be("0");
             tableStyle.Attribute("table")!.Value.Should().Be("1");
             tableStyle.Attribute("count")!.Value.Should().Be("1");
-            tableStyle.Attribute("customTableStyleAttr")!.Value.Should().Be("kept");
+            tableStyle.Attribute("customTableStyleAttr").Should().BeNull();
             tableStyle.Element(workbookNs + "tableStyleElement")!
-                .Attribute("customElementAttr")!
-                .Value
+                .Attribute("customElementAttr")
                 .Should()
-                .Be("kept");
+                .BeNull();
         }
 
         saved.Position = 0;
@@ -13811,7 +13807,8 @@ public partial class FileAdapterSmokeTests
         loaded.StructuredTableStyles.Should().ContainSingle(style =>
             style.Name == "FreeXAuthoredTableStyle" &&
             style.NativeXml != null &&
-            style.NativeXml.Contains("customElementAttr=\"kept\"", StringComparison.Ordinal));
+            style.NativeXml.Contains("tableStyleElement", StringComparison.Ordinal) &&
+            !style.NativeXml.Contains("customElementAttr", StringComparison.Ordinal));
     }
 
     [Fact]
