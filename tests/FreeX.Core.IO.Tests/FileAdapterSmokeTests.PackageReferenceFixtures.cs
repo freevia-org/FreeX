@@ -153,6 +153,34 @@ public partial class FileAdapterSmokeTests
         packageStream.Position = 0;
     }
 
+    private static void RewritePrinterSettingsRelationship(
+        MemoryStream packageStream,
+        string relationshipId,
+        string relationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings")
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Element(worksheetNs + "pageSetup")!.SetAttributeValue(relNs + "id", relationshipId);
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+            var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+            var worksheetRelsXml = LoadPackageXml(archive.GetEntry(worksheetRelsPath)!);
+            var relationship = worksheetRelsXml.Root!
+                .Elements(packageRelNs + "Relationship")
+                .Single(rel => string.Equals(rel.Attribute("Target")?.Value, "../printerSettings/printerSettings1.bin", StringComparison.Ordinal));
+            relationship.SetAttributeValue("Id", relationshipId);
+            relationship.SetAttributeValue("Type", relationshipType);
+            ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
     private static void AddHeaderFooterLegacyDrawingPackage(MemoryStream packageStream)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
@@ -219,6 +247,30 @@ public partial class FileAdapterSmokeTests
                 "/xl/media/headerFooterImage1.png",
                 "image/png");
             ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void RewriteHeaderFooterLegacyDrawingRelationshipId(MemoryStream packageStream, string relationshipId)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Element(worksheetNs + "legacyDrawingHF")!.SetAttributeValue(relNs + "id", relationshipId);
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+            var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+            var worksheetRelsXml = LoadPackageXml(archive.GetEntry(worksheetRelsPath)!);
+            var relationship = worksheetRelsXml.Root!
+                .Elements(packageRelNs + "Relationship")
+                .Single(rel => string.Equals(rel.Attribute("Target")?.Value, "../drawings/vmlDrawing1.vml", StringComparison.Ordinal));
+            relationship.SetAttributeValue("Id", relationshipId);
+            ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
         }
 
         packageStream.Position = 0;
