@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services.Tests;
@@ -16,7 +17,15 @@ public sealed class WorkbookStartupSmokeServiceTests
         result.Message.Should().Contain("macOS Preview Workbook");
         result.Message.Should().Contain("Port Plan");
         result.Message.Should().Contain("drawing_object_previews=3");
+        result.Message.Should().Contain("drawing_object_viewport_objects=4");
+        result.Message.Should().Contain("drawing_object_render_plans=4");
+        result.Message.Should().Contain("cropped_image_render_plans=1");
+        result.Message.Should().Contain("cell_range_snapshot_render_plans=1");
         result.Message.Should().Contain("roundtrip_drawing_object_previews=3");
+        result.Message.Should().Contain("roundtrip_drawing_object_viewport_objects=4");
+        result.Message.Should().Contain("roundtrip_drawing_object_render_plans=4");
+        result.Message.Should().Contain("roundtrip_cropped_image_render_plans=1");
+        result.Message.Should().Contain("roundtrip_cell_range_snapshot_render_plans=1");
         result.Message.Should().Contain("edited, saved, and reopened");
     }
 
@@ -40,9 +49,24 @@ public sealed class WorkbookStartupSmokeServiceTests
             picture.Kind == PictureKind.Image &&
             picture.ImageBytes != null &&
             picture.ImageBytes.Length > 0 &&
-            picture.ContentType == "image/png");
+            picture.ContentType == "image/png" &&
+            picture.CropLeft > 0 &&
+            picture.CropTop > 0 &&
+            picture.CropRight > 0 &&
+            picture.CropBottom > 0);
+        sheet.Pictures.Should().ContainSingle(picture =>
+            picture.Id != Guid.Empty &&
+            picture.Name == PortPreviewWorkbookFactory.PreviewCellRangeSnapshotName &&
+            picture.Kind == PictureKind.CellRangeSnapshot &&
+            picture.SourceRowCount == 2 &&
+            picture.SourceColumnCount == 3 &&
+            picture.Cells.Count > 0);
         sheet.DrawingObjectZOrder.Select(entry => entry.Kind)
-            .Should().Equal(SelectionPaneObjectKind.Shape, SelectionPaneObjectKind.TextBox, SelectionPaneObjectKind.Picture);
+            .Should().Equal(
+                SelectionPaneObjectKind.Shape,
+                SelectionPaneObjectKind.TextBox,
+                SelectionPaneObjectKind.Picture,
+                SelectionPaneObjectKind.Picture);
 
         var session = new WorkbookSessionFactory().Create(source, 240, 320, includeObjects: true);
 
@@ -50,10 +74,28 @@ public sealed class WorkbookStartupSmokeServiceTests
             .Should().Equal(
                 PortPreviewWorkbookFactory.PreviewShapeName,
                 PortPreviewWorkbookFactory.PreviewTextBoxName,
-                PortPreviewWorkbookFactory.PreviewPictureName);
+                PortPreviewWorkbookFactory.PreviewPictureName,
+                PortPreviewWorkbookFactory.PreviewCellRangeSnapshotName);
         session.Viewport.DrawingObjects.Should().OnlyContain(drawingObject =>
             drawingObject.Width > 0 &&
             drawingObject.Height > 0);
+
+        var renderPlans = DrawingObjectRenderPlanner.Plan(session.Viewport);
+        var croppedPlan = renderPlans.Single(plan =>
+            plan.IsReady &&
+            plan.PrimitiveKind == DrawingObjectRenderPrimitiveKind.CroppedImage &&
+            plan.Bounds.DisplayName == PortPreviewWorkbookFactory.PreviewPictureName &&
+            plan.Crop is not null);
+        croppedPlan.Crop.Should().NotBeNull();
+
+        var snapshotPlan = renderPlans.Single(plan =>
+            plan.IsReady &&
+            plan.PrimitiveKind == DrawingObjectRenderPrimitiveKind.CellRangeSnapshot &&
+            plan.Bounds.DisplayName == PortPreviewWorkbookFactory.PreviewCellRangeSnapshotName &&
+            plan.PictureGrid is not null);
+        snapshotPlan.PictureGrid!.RowCount.Should().Be(2);
+        snapshotPlan.PictureGrid.ColumnCount.Should().Be(3);
+        snapshotPlan.PictureGrid.Cells.Should().NotBeEmpty();
     }
 
     [Fact]
@@ -69,7 +111,13 @@ public sealed class WorkbookStartupSmokeServiceTests
         result.Message.Should().Contain("Smoke.csv");
         result.Message.Should().Contain("Smoke");
         result.Message.Should().Contain("drawing_object_previews=0");
+        result.Message.Should().Contain("drawing_object_render_plans=0");
+        result.Message.Should().Contain("cropped_image_render_plans=0");
+        result.Message.Should().Contain("cell_range_snapshot_render_plans=0");
         result.Message.Should().Contain("roundtrip_drawing_object_previews=0");
+        result.Message.Should().Contain("roundtrip_drawing_object_render_plans=0");
+        result.Message.Should().Contain("roundtrip_cropped_image_render_plans=0");
+        result.Message.Should().Contain("roundtrip_cell_range_snapshot_render_plans=0");
         result.Message.Should().Contain("edited, saved, and reopened");
     }
 
