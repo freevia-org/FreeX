@@ -26,6 +26,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_cell_styles_menu_item=true");
         script.Should().Contain("native_cell_styles_preset_count=33");
         script.Should().Contain("native_new_workbook_menu_item=true");
+        script.Should().Contain("native_open_recent_menu_item=true");
+        script.Should().Contain("native_open_recent_item_count=[1-9]");
         script.Should().Contain("native_close_workbook_menu_item=true");
         script.Should().Contain("new_sheet_button=true");
         script.Should().Contain("native_sheet_menu=true");
@@ -34,6 +36,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_duplicate_sheet_menu_item=true");
         script.Should().Contain("native_delete_sheet_menu_item=true");
         script.Should().Contain("HasNativeNewWorkbookMenuItem &&");
+        script.Should().Contain("HasNativeOpenRecentMenuItem &&");
+        script.Should().Contain("NativeOpenRecentItemCount > 0 &&");
         script.Should().Contain("HasNativeCloseWorkbookMenuItem &&");
         script.Should().Contain("HasNativeRenameSheetMenuItem &&");
         script.Should().Contain("HasNativeDeleteSheetMenuItem &&");
@@ -61,7 +65,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("CreateDrawingObjectVisual(drawingObject, width, height)");
         script.Should().Contain("TryCreateDrawingBitmap(imageBytes, out var bitmap)");
         script.Should().Contain("private static bool HasVisibleCellBorder(CellStyle? style)");
+        script.Should().Contain("private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();");
         script.Should().Contain("_newWorkbookMenuItem.Click += (_, _) => CreateNewWorkbook();");
+        script.Should().Contain("_openRecentMenuItem.Header = `\"Open Recent`\";");
+        script.Should().Contain("private NativeMenu CreateNativeOpenRecentMenu(bool isIdle)");
+        script.Should().Contain("private void RecordRecentWorkbook(string path)");
         script.Should().Contain("_closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();");
         script.Should().Contain("_sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true)");
         script.Should().Contain("private async void MainWindow_Closing(object? sender, WindowClosingEventArgs e)");
@@ -87,6 +95,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl");
         script.Should().Contain("AppHelpInfo.BuildAboutText(versionText, PlatformAboutSummary)");
         script.Should().Contain("LegalNoticeProvider.GetDocuments().Select(document =>");
+        script.Should().Contain("public sealed class RecentFilesStore");
+        script.Should().Contain("public static class AtomicFileWriter");
         script.Should().Contain("Portable macOS source contains forbidden token");
     }
 
@@ -356,6 +366,8 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "new_sheet_button=true" "$artifact_root/launch.txt"
                       grep -q "native_file_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_new_workbook_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_open_recent_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_open_recent_item_count=[1-9]" "$artifact_root/launch.txt"
                       grep -q "native_edit_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_close_workbook_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_format_menu=true" "$artifact_root/launch.txt"
@@ -465,7 +477,16 @@ public sealed class MacOsAppReadinessPreflightTests
                     CreateDrawingObjectVisual(drawingObject, width, height);
                     TryCreateDrawingBitmap(imageBytes, out var bitmap);
                     AddStyledCellBorderOverlay(content, style);
+                    private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
                     _newWorkbookMenuItem.Click += (_, _) => CreateNewWorkbook();
+                    _openRecentMenuItem.Header = "Open Recent";
+                    _openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);
+                    fileMenu.Items.Add(_openRecentMenuItem);
+                    RefreshNativeOpenRecentMenu(isIdle);
+                    Header = "(No Recent Workbooks)";
+                    entries.Sort(static (left, right) => right.LastOpened.CompareTo(left.LastOpened));
+                    _recentFiles.AddOrUpdate(path);
+                    RecordRecentWorkbook(target.Path);
                     _closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();
                     fileMenu.Items.Add(_newWorkbookMenuItem);
                     fileMenu.Items.Add(_closeWorkbookMenuItem);
@@ -506,6 +527,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     LegalNoticeProvider.GetDocuments().Select(document => document.Title);
                 }
                 private static bool HasVisibleCellBorder(CellStyle? style) => true;
+                private NativeMenu CreateNativeOpenRecentMenu(bool isIdle) => new();
+                private List<RecentFileEntry> GetOpenableRecentWorkbookEntries() => new();
+                private async Task OpenRecentWorkbookAsync(string path) => await Task.CompletedTask;
+                private void RecordStartupRecentWorkbook(StartupWorkbookLoadResult source) { }
+                private void RecordRecentWorkbook(string path) { }
                 private void CreateNewWorkbook() { }
                 private async Task CloseWorkbookAsync() => await Task.CompletedTask;
                 private void ResetToNewWorkbook(string status) { }
@@ -538,20 +564,59 @@ public sealed class MacOsAppReadinessPreflightTests
 
             internal sealed class MacOsLaunchSmokeSnapshot
             {
-                public bool IsPassed => HasNativeFileMenu && HasNativeEditMenu && HasNativeFormatMenu && HasNativeSheetMenu && HasNativeHelpMenu && HasNativeNewWorkbookMenuItem && HasNativeCloseWorkbookMenuItem && HasNativeRenameSheetMenuItem && HasNativeDeleteSheetMenuItem && HasNativeCellStylesMenuItem && HasNativeCopyMenuItem;
+                public bool IsPassed => HasNativeFileMenu && HasNativeEditMenu && HasNativeFormatMenu && HasNativeSheetMenu && HasNativeHelpMenu && HasNativeNewWorkbookMenuItem && HasNativeOpenRecentMenuItem && NativeOpenRecentItemCount > 0 && HasNativeCloseWorkbookMenuItem && HasNativeRenameSheetMenuItem && HasNativeDeleteSheetMenuItem && HasNativeCellStylesMenuItem && HasNativeCopyMenuItem;
                 private bool HasNativeFileMenu { get; }
                 private bool HasNativeEditMenu { get; }
                 private bool HasNativeFormatMenu { get; }
                 private bool HasNativeSheetMenu { get; }
                 private bool HasNativeHelpMenu { get; }
                 private bool HasNativeNewWorkbookMenuItem { get; }
+                private bool HasNativeOpenRecentMenuItem { get; }
+                private int NativeOpenRecentItemCount { get; }
                 private bool HasNativeCloseWorkbookMenuItem { get; }
                 private bool HasNativeRenameSheetMenuItem { get; }
                 private bool HasNativeDeleteSheetMenuItem { get; }
                 private bool HasNativeCellStylesMenuItem { get; }
                 private bool HasNativeCopyMenuItem { get; }
                 public int NativeCellStylesPresetCount { get; }
-                public string Report => "native_new_workbook_menu_item= native_close_workbook_menu_item= new_sheet_button= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_delete_sheet_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+                public string Report => "native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_delete_sheet_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Services/RecentFilesStore.cs",
+            """
+            namespace FreeX.App.Services;
+
+            public sealed class RecentFileEntry { }
+
+            public sealed class RecentFilesStore
+            {
+                private Func<DateTimeOffset> _clock;
+                public static RecentFilesStore Load() => Load(DefaultStorePath);
+                public static RecentFilesStore Load(string storePath, Func<DateTimeOffset>? clock = null) => new();
+                private static string DefaultStorePath => "recent.json";
+                private void SetClock(Func<DateTimeOffset>? clock) { _clock = clock ?? (() => DateTimeOffset.UtcNow); }
+                private void AddOrUpdate() { LastOpened = _clock(); }
+                private DateTimeOffset LastOpened { get; set; }
+                private void Save() => AtomicFileWriter.WriteAllText(_storePath, JsonSerializer.Serialize(Entries));
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Services/AtomicFileWriter.cs",
+            """
+            namespace FreeX.App.Services;
+
+            public static class AtomicFileWriter
+            {
+                public static void WriteAllText(string path, string content)
+                {
+                    File.WriteAllText(tempPath, content);
+                    File.Move(tempPath, path, overwrite: true);
+                }
             }
             """);
 

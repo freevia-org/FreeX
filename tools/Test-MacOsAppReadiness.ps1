@@ -430,6 +430,8 @@ function Test-MacOsWorkflow {
         "native_sheet_menu=true",
         "native_help_menu=true",
         "native_new_workbook_menu_item=true",
+        "native_open_recent_menu_item=true",
+        "native_open_recent_item_count=[1-9]",
         "native_close_workbook_menu_item=true",
         "native_new_sheet_menu_item=true",
         "native_rename_sheet_menu_item=true",
@@ -515,7 +517,21 @@ function Test-SourceWiring {
                 "TryCreateDrawingBitmap(imageBytes, out var bitmap)",
                 "AddStyledCellBorderOverlay(content, style);",
                 "private static bool HasVisibleCellBorder(CellStyle? style)",
+                "private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();",
                 "_newWorkbookMenuItem.Click += (_, _) => CreateNewWorkbook();",
+                "_openRecentMenuItem.Header = `"Open Recent`";",
+                "_openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);",
+                "fileMenu.Items.Add(_openRecentMenuItem);",
+                "RefreshNativeOpenRecentMenu(isIdle);",
+                "private NativeMenu CreateNativeOpenRecentMenu(bool isIdle)",
+                "Header = `"(No Recent Workbooks)`"",
+                "private List<RecentFileEntry> GetOpenableRecentWorkbookEntries()",
+                "entries.Sort(static (left, right) => right.LastOpened.CompareTo(left.LastOpened));",
+                "private async Task OpenRecentWorkbookAsync(string path)",
+                "private void RecordStartupRecentWorkbook(StartupWorkbookLoadResult source)",
+                "private void RecordRecentWorkbook(string path)",
+                "_recentFiles.AddOrUpdate(path);",
+                "RecordRecentWorkbook(target.Path);",
                 "_closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();",
                 "fileMenu.Items.Add(_newWorkbookMenuItem);",
                 "fileMenu.Items.Add(_closeWorkbookMenuItem);",
@@ -573,10 +589,14 @@ function Test-SourceWiring {
                 "HasNativeSheetMenu &&",
                 "HasNativeHelpMenu &&",
                 "HasNativeNewWorkbookMenuItem &&",
+                "HasNativeOpenRecentMenuItem &&",
+                "NativeOpenRecentItemCount > 0 &&",
                 "HasNativeCloseWorkbookMenuItem &&",
                 "HasNativeRenameSheetMenuItem &&",
                 "HasNativeDeleteSheetMenuItem &&",
                 "native_new_workbook_menu_item=",
+                "native_open_recent_menu_item=",
+                "native_open_recent_item_count=",
                 "native_close_workbook_menu_item=",
                 "new_sheet_button=",
                 "native_sheet_menu=",
@@ -634,6 +654,28 @@ function Test-SourceWiring {
                 "ApplySuccessfulWorkbookStructureResult(Workbook.Sheets[^1].Id)",
                 "ApplySuccessfulHistoryResult(result, sheetIdsBefore)",
                 "private void ApplySuccessfulWorkbookStructureResult(SheetId preferredSheetId)"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "src\FreeX.App.Services\RecentFilesStore.cs"
+            Markers = @(
+                "public sealed class RecentFileEntry",
+                "public sealed class RecentFilesStore",
+                "public static RecentFilesStore Load() => Load(DefaultStorePath);",
+                "public static RecentFilesStore Load(string storePath, Func<DateTimeOffset>? clock = null)",
+                "_clock = clock ?? (() => DateTimeOffset.UtcNow);",
+                "LastOpened = _clock()",
+                "AtomicFileWriter.WriteAllText(_storePath, JsonSerializer.Serialize(Entries));"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "src\FreeX.App.Services\AtomicFileWriter.cs"
+            Markers = @(
+                "public static class AtomicFileWriter",
+                "File.WriteAllText(tempPath, content);",
+                "File.Move(tempPath, path, overwrite: true);"
             )
             OrderedPairs = @()
         },

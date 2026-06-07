@@ -60,8 +60,10 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
         source.Should().Contain("ConfigureNativeMenu();");
+        source.Should().Contain("private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();");
         source.Should().Contain("private readonly NativeMenuItem _newWorkbookMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _openMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _openRecentMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _saveMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _saveAsMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _closeWorkbookMenuItem = new();");
@@ -113,6 +115,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_openMenuItem.Header = \"Open...\";");
         source.Should().Contain("_openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);");
         source.Should().Contain("_openMenuItem.Click += async (_, _) => await OpenWorkbookAsync();");
+        source.Should().Contain("_openRecentMenuItem.Header = \"Open Recent\";");
+        source.Should().Contain("_openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);");
         source.Should().Contain("_saveMenuItem.Header = \"Save\";");
         source.Should().Contain("_saveMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta);");
         source.Should().Contain("_saveMenuItem.Click += async (_, _) => await SaveCurrentWorkbookAsync();");
@@ -222,6 +226,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);");
         source.Should().Contain("_quitMenuItem.Click += async (_, _) => await TryQuitApplicationAsync();");
         source.Should().Contain("fileMenu.Items.Add(_newWorkbookMenuItem);");
+        source.Should().Contain("fileMenu.Items.Add(_openRecentMenuItem);");
         source.Should().Contain("fileMenu.Items.Add(_closeWorkbookMenuItem);");
         source.Should().Contain("editMenu.Items.Add(_undoMenuItem);");
         source.Should().Contain("editMenu.Items.Add(_redoMenuItem);");
@@ -272,6 +277,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_nativeMenu.NeedsUpdate += (_, _) => UpdateSaveButton();");
         source.Should().Contain("_newWorkbookMenuItem.IsEnabled = isIdle;");
         source.Should().Contain("_openMenuItem.IsEnabled = _openButton.IsEnabled;");
+        source.Should().Contain("_openRecentMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("RefreshNativeOpenRecentMenu(isIdle);");
         source.Should().Contain("_saveMenuItem.IsEnabled = _saveButton.IsEnabled;");
         source.Should().Contain("_saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;");
         source.Should().Contain("_closeWorkbookMenuItem.IsEnabled = isIdle;");
@@ -316,6 +323,18 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ShowOpenIssue(\"Save changes before creating a new workbook.\");");
         source.Should().Contain("_sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true)");
         source.Should().Contain("RefreshShell(_session.StartupStatus);");
+        source.Should().Contain("RecordStartupRecentWorkbook(source);");
+        source.Should().Contain("private NativeMenu CreateNativeOpenRecentMenu(bool isIdle)");
+        source.Should().Contain("Header = \"(No Recent Workbooks)\"");
+        source.Should().Contain("private List<RecentFileEntry> GetOpenableRecentWorkbookEntries()");
+        source.Should().Contain("entries.Sort(static (left, right) => right.LastOpened.CompareTo(left.LastOpened));");
+        source.Should().Contain("private async Task OpenRecentWorkbookAsync(string path)");
+        source.Should().Contain("_recentFiles.Remove(path);");
+        source.Should().Contain("await OpenWorkbookPathAsync(path);");
+        source.Should().Contain("private void RecordStartupRecentWorkbook(StartupWorkbookLoadResult source)");
+        source.Should().Contain("private void RecordRecentWorkbook(string path)");
+        source.Should().Contain("_recentFiles.AddOrUpdate(path);");
+        source.Should().Contain("RecordRecentWorkbook(target.Path);");
         source.Should().Contain("Closing += MainWindow_Closing;");
         source.Should().Contain("private async Task CloseWorkbookAsync()");
         source.Should().Contain("ConfirmDirtyWorkbookCloseAsync(\"Close Workbook\", \"Discard and Close\")");
@@ -375,6 +394,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("opened_source_path={snapshot.OpenedSourcePath ?? \"\"}");
         smokeSource.Should().Contain("native_file_menu={FormatBool(snapshot.HasNativeFileMenu)}");
         smokeSource.Should().Contain("native_new_workbook_menu_item={FormatBool(snapshot.HasNativeNewWorkbookMenuItem)}");
+        smokeSource.Should().Contain("native_open_recent_menu_item={FormatBool(snapshot.HasNativeOpenRecentMenuItem)}");
+        smokeSource.Should().Contain("native_open_recent_item_count={snapshot.NativeOpenRecentItemCount}");
         smokeSource.Should().Contain("native_close_workbook_menu_item={FormatBool(snapshot.HasNativeCloseWorkbookMenuItem)}");
         smokeSource.Should().Contain("native_edit_menu={FormatBool(snapshot.HasNativeEditMenu)}");
         smokeSource.Should().Contain("native_format_menu={FormatBool(snapshot.HasNativeFormatMenu)}");
@@ -434,6 +455,8 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("WindowShown: IsVisible");
         windowSource.Should().Contain("OpenedSourcePath: _session.CurrentFilePath");
         windowSource.Should().Contain("HasNativeNewWorkbookMenuItem: HasNativeMenuItem(_newWorkbookMenuItem, \"New Workbook\")");
+        windowSource.Should().Contain("HasNativeOpenRecentMenuItem: HasNativeMenuItem(_openRecentMenuItem, \"Open Recent\", requireGesture: false)");
+        windowSource.Should().Contain("NativeOpenRecentItemCount: nativeOpenRecentItemCount");
         windowSource.Should().Contain("HasNativeCloseWorkbookMenuItem: HasNativeMenuItem(_closeWorkbookMenuItem, \"Close Workbook\")");
         windowSource.Should().Contain("HasNativeEditMenu: hasNativeEditMenu");
         windowSource.Should().Contain("HasNativeFormatMenu: hasNativeFormatMenu");

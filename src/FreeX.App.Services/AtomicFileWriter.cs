@@ -1,11 +1,7 @@
-using System.IO;
-
-namespace FreeX.App.Host;
+namespace FreeX.App.Services;
 
 /// <summary>
-/// Writes a file atomically: content is written to a sibling temp file and then
-/// moved into place, so an interrupted or failed write never truncates or corrupts
-/// the existing file. Creates the parent directory if needed.
+/// Writes a file through a sibling temp file before replacing the target.
 /// </summary>
 public static class AtomicFileWriter
 {

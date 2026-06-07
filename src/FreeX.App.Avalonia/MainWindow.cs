@@ -76,6 +76,7 @@ public sealed class MainWindow : Window
     private readonly WorkbookSessionFactory _sessionFactory = new();
     private readonly WorkbookOpenService _openService = new();
     private readonly WorkbookSaveService _saveService = new();
+    private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
     private readonly ContentControl _sheetGridHost = new();
     private readonly ContentControl _sheetTabsHost = new();
     private readonly ScrollViewer _sheetScrollViewer = new();
@@ -125,6 +126,7 @@ public sealed class MainWindow : Window
     private readonly Button _increaseIndentButton = new();
     private readonly NativeMenuItem _newWorkbookMenuItem = new();
     private readonly NativeMenuItem _openMenuItem = new();
+    private readonly NativeMenuItem _openRecentMenuItem = new();
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
     private readonly NativeMenuItem _closeWorkbookMenuItem = new();
@@ -200,6 +202,7 @@ public sealed class MainWindow : Window
         Background = WindowBackground;
         Content = BuildContent();
         ConfigureNativeMenu();
+        RecordStartupRecentWorkbook(source);
         ConfigureWorkbookDropTarget();
         KeyDown += MainWindow_KeyDown;
         TextInput += MainWindow_TextInput;
@@ -322,6 +325,9 @@ public sealed class MainWindow : Window
         _openMenuItem.Header = "Open...";
         _openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);
         _openMenuItem.Click += async (_, _) => await OpenWorkbookAsync();
+
+        _openRecentMenuItem.Header = "Open Recent";
+        _openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);
 
         _saveMenuItem.Header = "Save";
         _saveMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta);
@@ -502,6 +508,7 @@ public sealed class MainWindow : Window
         var fileMenu = new NativeMenu();
         fileMenu.Items.Add(_newWorkbookMenuItem);
         fileMenu.Items.Add(_openMenuItem);
+        fileMenu.Items.Add(_openRecentMenuItem);
         fileMenu.Items.Add(_saveMenuItem);
         fileMenu.Items.Add(_saveAsMenuItem);
         fileMenu.Items.Add(new NativeMenuItemSeparator());
@@ -1028,6 +1035,8 @@ public sealed class MainWindow : Window
 
         _newWorkbookMenuItem.IsEnabled = isIdle;
         _openMenuItem.IsEnabled = _openButton.IsEnabled;
+        _openRecentMenuItem.IsEnabled = isIdle;
+        RefreshNativeOpenRecentMenu(isIdle);
         _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
         _saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;
         _closeWorkbookMenuItem.IsEnabled = isIdle;
@@ -3201,6 +3210,7 @@ public sealed class MainWindow : Window
             .Items
             .OfType<NativeMenuItem>()
             .Count(item => item.Header is not null) ?? 0;
+        var nativeOpenRecentItemCount = CountNativeOpenRecentItems(_openRecentMenuItem.Menu);
         var nativeFillColorSwatchCount = CountNativeColorPaletteSwatches(_fillColorMenuItem.Menu);
         var nativeFontColorSwatchCount = CountNativeColorPaletteSwatches(_fontColorMenuItem.Menu);
 
@@ -3222,6 +3232,8 @@ public sealed class MainWindow : Window
             HasNativeHelpMenu: hasNativeHelpMenu,
             HasNativeNewWorkbookMenuItem: HasNativeMenuItem(_newWorkbookMenuItem, "New Workbook"),
             HasNativeOpenMenuItem: HasNativeMenuItem(_openMenuItem, "Open..."),
+            HasNativeOpenRecentMenuItem: HasNativeMenuItem(_openRecentMenuItem, "Open Recent", requireGesture: false),
+            NativeOpenRecentItemCount: nativeOpenRecentItemCount,
             HasNativeSaveMenuItem: HasNativeMenuItem(_saveMenuItem, "Save"),
             HasNativeSaveAsMenuItem: HasNativeMenuItem(_saveAsMenuItem, "Save As..."),
             HasNativeCloseWorkbookMenuItem: HasNativeMenuItem(_closeWorkbookMenuItem, "Close Workbook"),
@@ -3287,6 +3299,108 @@ public sealed class MainWindow : Window
             .Items
             .OfType<NativeMenuItem>()
             .Count(item => item.Header?.ToString()?.StartsWith("#", StringComparison.Ordinal) == true) ?? 0;
+
+    private static int CountNativeOpenRecentItems(NativeMenu? menu) =>
+        menu?
+            .Items
+            .OfType<NativeMenuItem>()
+            .Count(item => item.IsEnabled && !string.Equals(item.Header?.ToString(), "(No Recent Workbooks)", StringComparison.Ordinal)) ?? 0;
+
+    private void RefreshNativeOpenRecentMenu(bool isIdle)
+    {
+        _openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle);
+    }
+
+    private NativeMenu CreateNativeOpenRecentMenu(bool isIdle)
+    {
+        var menu = new NativeMenu();
+        var entries = GetOpenableRecentWorkbookEntries();
+        if (entries.Count == 0)
+        {
+            menu.Items.Add(new NativeMenuItem
+            {
+                Header = "(No Recent Workbooks)",
+                IsEnabled = false,
+            });
+            return menu;
+        }
+
+        foreach (var entry in entries)
+        {
+            var path = entry.Path;
+            var item = new NativeMenuItem
+            {
+                Header = FormatRecentWorkbookMenuHeader(entry),
+                IsEnabled = isIdle,
+            };
+            item.Click += async (_, _) => await OpenRecentWorkbookAsync(path);
+            menu.Items.Add(item);
+        }
+
+        return menu;
+    }
+
+    private List<RecentFileEntry> GetOpenableRecentWorkbookEntries()
+    {
+        var entries = new List<RecentFileEntry>();
+        foreach (var entry in _recentFiles.Entries)
+        {
+            if (string.IsNullOrWhiteSpace(entry.Path) ||
+                !File.Exists(entry.Path) ||
+                !_session.TryResolveOpenTarget(entry.Path, out _, out _))
+            {
+                continue;
+            }
+
+            entries.Add(entry);
+        }
+
+        entries.Sort(static (left, right) => right.LastOpened.CompareTo(left.LastOpened));
+        if (entries.Count > 10)
+            entries.RemoveRange(10, entries.Count - 10);
+
+        return entries;
+    }
+
+    private static string FormatRecentWorkbookMenuHeader(RecentFileEntry entry)
+    {
+        var fileName = Path.GetFileName(entry.Path);
+        if (string.IsNullOrWhiteSpace(fileName))
+            return entry.Path;
+
+        var directory = Path.GetDirectoryName(entry.Path);
+        return string.IsNullOrWhiteSpace(directory)
+            ? fileName
+            : $"{fileName} - {directory}";
+    }
+
+    private async Task OpenRecentWorkbookAsync(string path)
+    {
+        if (!File.Exists(path))
+        {
+            _recentFiles.Remove(path);
+            RefreshNativeOpenRecentMenu(!_isOpening && !_isSaving);
+            ShowOpenIssue($"Recent workbook no longer exists: {path}");
+            return;
+        }
+
+        await OpenWorkbookPathAsync(path);
+    }
+
+    private void RecordStartupRecentWorkbook(StartupWorkbookLoadResult source)
+    {
+        if (!source.IsFallback && !string.IsNullOrWhiteSpace(source.SourcePath))
+            RecordRecentWorkbook(source.SourcePath);
+    }
+
+    private void RecordRecentWorkbook(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            return;
+
+        _recentFiles.AddOrUpdate(path);
+        RefreshNativeOpenRecentMenu(!_isOpening && !_isSaving);
+    }
 
     private static bool HasOnlyCommandModifier(KeyModifiers modifiers)
     {
@@ -3755,6 +3869,7 @@ public sealed class MainWindow : Window
                 progress);
             var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
             _session = _sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true);
+            RecordRecentWorkbook(target.Path);
             ClearSelectedDrawingObject();
             RefreshShell(_session.StartupStatus);
         }
@@ -3857,6 +3972,7 @@ public sealed class MainWindow : Window
 
             await _saveService.SaveAsync(target.Path, target.Adapter, _session.Workbook, progress);
             _session.MarkSaved(target.Path);
+            RecordRecentWorkbook(target.Path);
             RefreshShell($"Saved {Path.GetFileName(target.Path)}");
         }
         catch (Exception ex)
