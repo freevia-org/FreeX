@@ -366,24 +366,7 @@ internal static class XlsxStructuredTableWriter
 
         foreach (var (name, value) in attributes)
         {
-            TrySetNativeAttributeIfMissing(element, name, value);
-        }
-    }
-
-    private static void TrySetNativeAttributeIfMissing(XElement element, string name, string value)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-            return;
-
-        try
-        {
-            var attributeName = XName.Get(name);
-            if (element.Attribute(attributeName) is null)
-                element.SetAttributeValue(attributeName, value);
-        }
-        catch
-        {
-            // Ignore malformed native table attribute names from authored metadata.
+            XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttributeIfMissing(element, name, value);
         }
     }
 }
