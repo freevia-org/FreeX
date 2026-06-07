@@ -313,6 +313,59 @@ public sealed class WorkbookSession
             results.Count);
     }
 
+    public WorkbookReplaceResult ReplaceAllValues(
+        string searchText,
+        string replaceText,
+        bool matchCase = false,
+        bool matchEntireCell = false)
+    {
+        ArgumentNullException.ThrowIfNull(searchText);
+        ArgumentNullException.ThrowIfNull(replaceText);
+
+        if (string.IsNullOrEmpty(searchText))
+            return WorkbookReplaceResult.Failed("Find text is required.");
+
+        var options = new FindOptions(
+            Within: FindWithin.Sheet,
+            CurrentSheetId: ActiveSheet.Id,
+            SearchOrder: FindSearchOrder.ByRows,
+            LookIn: FindLookIn.Values);
+        _lastFindText = searchText;
+        _lastFindOptions = options;
+        _lastFindMatchCase = matchCase;
+        _lastFindMatchEntireCell = matchEntireCell;
+        _lastFindAddress = null;
+
+        var matches = FindReplaceService.Find(Workbook, searchText, options, matchCase, matchEntireCell);
+        if (matches.Count == 0)
+            return WorkbookReplaceResult.Replaced(0);
+
+        var comparison = matchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+        var edits = new List<(CellAddress Address, Cell NewCell)>();
+        foreach (var match in matches)
+        {
+            var cell = ActiveSheet.GetCell(match.Address);
+            if (cell is null || cell.HasFormula)
+                continue;
+
+            if (TryCreateReplacementCell(cell, searchText, replaceText, comparison, matchEntireCell, out var newCell))
+                edits.Add((match.Address, newCell));
+        }
+
+        if (edits.Count == 0)
+            return WorkbookReplaceResult.Replaced(0);
+
+        var selectedRange = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new EditCellsCommand(ActiveSheet.Id, edits));
+        if (!result.Success)
+            return WorkbookReplaceResult.Failed(result.ErrorMessage ?? "Replace All failed.");
+
+        ApplySuccessfulRangeEditResult(result, selectedRange);
+        return WorkbookReplaceResult.Replaced(edits.Count);
+    }
+
     public void MoveActiveCell(int rowDelta, int colDelta)
     {
         var address = new CellAddress(
@@ -2078,6 +2131,48 @@ public sealed class WorkbookSession
 
         return int.MaxValue;
     }
+
+    private static bool TryCreateReplacementCell(
+        Cell cell,
+        string searchText,
+        string replaceText,
+        StringComparison comparison,
+        bool matchEntireCell,
+        out Cell newCell)
+    {
+        newCell = null!;
+        var currentText = GetReplaceableDisplayText(cell.Value);
+        if (currentText is null)
+            return false;
+
+        var isMatch = matchEntireCell
+            ? currentText.Equals(searchText, comparison)
+            : currentText.Contains(searchText, comparison);
+        if (!isMatch)
+            return false;
+
+        var newText = matchEntireCell
+            ? replaceText
+            : currentText.Replace(searchText, replaceText, comparison);
+
+        ScalarValue newValue = double.TryParse(newText, NumberStyles.Any, CultureInfo.InvariantCulture, out var number)
+            ? new NumberValue(number)
+            : new TextValue(newText);
+
+        newCell = Cell.FromValue(newValue);
+        return true;
+    }
+
+    private static string? GetReplaceableDisplayText(ScalarValue value) => value switch
+    {
+        BlankValue => null,
+        NumberValue number => number.Value.ToString(CultureInfo.InvariantCulture),
+        TextValue text => text.Value,
+        BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+        DateTimeValue dateTime => dateTime.ToDateTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        ErrorValue error => error.Code,
+        _ => null
+    };
 
     private SheetId? ResolveSheetIdByName(string sheetName) =>
         Workbook.Sheets.FirstOrDefault(sheet =>

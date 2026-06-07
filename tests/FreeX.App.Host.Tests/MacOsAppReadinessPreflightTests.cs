@@ -1013,33 +1013,47 @@ public sealed class MacOsAppReadinessPreflightTests
                     _selectAllMenuItem.IsEnabled = isIdle;
                     private readonly NativeMenuItem _findMenuItem = new();
                     private readonly NativeMenuItem _findNextMenuItem = new();
+                    private readonly NativeMenuItem _replaceMenuItem = new();
                     private readonly NativeMenuItem _goToMenuItem = new();
+                    private sealed record ReplaceDialogResult(string FindText, string ReplaceText);
                     _findMenuItem.Header = "Find...";
                     _findMenuItem.Gesture = new KeyGesture(Key.F, KeyModifiers.Meta);
                     _findMenuItem.Click += async (_, _) => await ShowFindDialogAsync();
                     _findNextMenuItem.Header = "Find Next";
                     _findNextMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Meta);
                     _findNextMenuItem.Click += (_, _) => FindNext();
+                    _replaceMenuItem.Header = "Replace...";
+                    _replaceMenuItem.Gesture = new KeyGesture(Key.H, KeyModifiers.Control);
+                    _replaceMenuItem.Click += async (_, _) => await ShowReplaceDialogAsync();
                     _goToMenuItem.Header = "Go To...";
                     _goToMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control);
                     _goToMenuItem.Click += async (_, _) => await ShowGoToDialogAsync();
                     editMenu.Items.Add(_findMenuItem);
                     editMenu.Items.Add(_findNextMenuItem);
+                    editMenu.Items.Add(_replaceMenuItem);
                     editMenu.Items.Add(_goToMenuItem);
                     _findMenuItem.IsEnabled = isIdle;
                     _findNextMenuItem.IsEnabled = isIdle && !string.IsNullOrWhiteSpace(_session.LastFindText);
+                    _replaceMenuItem.IsEnabled = isIdle;
                     _goToMenuItem.IsEnabled = isIdle;
                     private async Task ShowFindDialogAsync()
                     private void FindNext(string? searchText = null)
+                    private async Task ShowReplaceDialogAsync()
+                    private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync()
                     private async Task ShowGoToDialogAsync()
                     private async Task<string?> ShowSingleInputDialogAsync(
                     "FindTextBox"
+                    "ReplaceFindTextBox"
+                    "ReplaceWithTextBox"
+                    "ReplaceAllButton"
                     "GoToReferenceBox"
                     var result = _session.FindNext(searchText);
+                    var result = _session.ReplaceAllValues(replacement.FindText, replacement.ReplaceText);
                     var result = _session.GoToReference(reference);
                     e.Key == Key.F5;
                     e.Key == Key.F && HasOnlyCommandModifier(e.KeyModifiers);
                     e.Key == Key.G && e.KeyModifiers == KeyModifiers.Meta;
+                    e.Key == Key.H && HasOnlyControlModifier(e.KeyModifiers);
                     e.Key == Key.G && HasOnlyControlModifier(e.KeyModifiers);
                     e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.D or Key.I or Key.R or Key.U;
                     else if (e.Key == Key.A && HasOnlyCommandModifier(e.KeyModifiers)) { }

@@ -2337,34 +2337,48 @@ public sealed class AvaloniaShellSourceTests
 
         source.Should().Contain("private readonly NativeMenuItem _findMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _findNextMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _replaceMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _goToMenuItem = new();");
+        source.Should().Contain("private sealed record ReplaceDialogResult(string FindText, string ReplaceText);");
         source.Should().Contain("_findMenuItem.Header = \"Find...\";");
         source.Should().Contain("_findMenuItem.Gesture = new KeyGesture(Key.F, KeyModifiers.Meta);");
         source.Should().Contain("_findMenuItem.Click += async (_, _) => await ShowFindDialogAsync();");
         source.Should().Contain("_findNextMenuItem.Header = \"Find Next\";");
         source.Should().Contain("_findNextMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Meta);");
         source.Should().Contain("_findNextMenuItem.Click += (_, _) => FindNext();");
+        source.Should().Contain("_replaceMenuItem.Header = \"Replace...\";");
+        source.Should().Contain("_replaceMenuItem.Gesture = new KeyGesture(Key.H, KeyModifiers.Control);");
+        source.Should().Contain("_replaceMenuItem.Click += async (_, _) => await ShowReplaceDialogAsync();");
         source.Should().Contain("_goToMenuItem.Header = \"Go To...\";");
         source.Should().Contain("_goToMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control);");
         source.Should().Contain("_goToMenuItem.Click += async (_, _) => await ShowGoToDialogAsync();");
         source.Should().Contain("editMenu.Items.Add(_findMenuItem);");
         source.Should().Contain("editMenu.Items.Add(_findNextMenuItem);");
+        source.Should().Contain("editMenu.Items.Add(_replaceMenuItem);");
         source.Should().Contain("editMenu.Items.Add(_goToMenuItem);");
         source.Should().Contain("_findMenuItem.IsEnabled = isIdle;");
         source.Should().Contain("_findNextMenuItem.IsEnabled = isIdle && !string.IsNullOrWhiteSpace(_session.LastFindText);");
+        source.Should().Contain("_replaceMenuItem.IsEnabled = isIdle;");
         source.Should().Contain("_goToMenuItem.IsEnabled = isIdle;");
         source.Should().Contain("private async Task ShowFindDialogAsync()");
         source.Should().Contain("private void FindNext(string? searchText = null)");
+        source.Should().Contain("private async Task ShowReplaceDialogAsync()");
+        source.Should().Contain("private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync()");
         source.Should().Contain("private async Task ShowGoToDialogAsync()");
         source.Should().Contain("private async Task<string?> ShowSingleInputDialogAsync(");
         source.Should().Contain("\"FindTextBox\"");
+        source.Should().Contain("\"ReplaceFindTextBox\"");
+        source.Should().Contain("\"ReplaceWithTextBox\"");
+        source.Should().Contain("\"ReplaceAllButton\"");
         source.Should().Contain("\"GoToReferenceBox\"");
         source.Should().Contain("var result = _session.FindNext(searchText);");
+        source.Should().Contain("var result = _session.ReplaceAllValues(replacement.FindText, replacement.ReplaceText);");
         source.Should().Contain("var result = _session.GoToReference(reference);");
         source.Should().Contain("FormatRangeReference(result.SelectedRange!.Value)");
         source.Should().Contain("e.Key == Key.F5");
         source.Should().Contain("e.Key == Key.F && HasOnlyCommandModifier(e.KeyModifiers)");
         source.Should().Contain("e.Key == Key.G && e.KeyModifiers == KeyModifiers.Meta");
+        source.Should().Contain("e.Key == Key.H && HasOnlyControlModifier(e.KeyModifiers)");
         source.Should().Contain("e.Key == Key.G && HasOnlyControlModifier(e.KeyModifiers)");
     }
 }

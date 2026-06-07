@@ -58,6 +58,8 @@ public sealed class MainWindow : Window
         StatusBar
     }
 
+    private sealed record ReplaceDialogResult(string FindText, string ReplaceText);
+
     private const double CellIndentLevelWidth = 12;
     private const string CommaNumberFormat = "#,##0.00";
     private const string CurrencyNumberFormat = "$#,##0.00";
@@ -194,6 +196,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _selectAllMenuItem = new();
     private readonly NativeMenuItem _findMenuItem = new();
     private readonly NativeMenuItem _findNextMenuItem = new();
+    private readonly NativeMenuItem _replaceMenuItem = new();
     private readonly NativeMenuItem _goToMenuItem = new();
     private readonly NativeMenuItem _autoSumMenuItem = new();
     private readonly NativeMenuItem _autoSumSumMenuItem = new();
@@ -504,6 +507,10 @@ public sealed class MainWindow : Window
         _findNextMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Meta);
         _findNextMenuItem.Click += (_, _) => FindNext();
 
+        _replaceMenuItem.Header = "Replace...";
+        _replaceMenuItem.Gesture = new KeyGesture(Key.H, KeyModifiers.Control);
+        _replaceMenuItem.Click += async (_, _) => await ShowReplaceDialogAsync();
+
         _goToMenuItem.Header = "Go To...";
         _goToMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control);
         _goToMenuItem.Click += async (_, _) => await ShowGoToDialogAsync();
@@ -763,6 +770,7 @@ public sealed class MainWindow : Window
         editMenu.Items.Add(new NativeMenuItemSeparator());
         editMenu.Items.Add(_findMenuItem);
         editMenu.Items.Add(_findNextMenuItem);
+        editMenu.Items.Add(_replaceMenuItem);
         editMenu.Items.Add(_goToMenuItem);
         editMenu.Items.Add(new NativeMenuItemSeparator());
         editMenu.Items.Add(_autoSumMenuItem);
@@ -1478,6 +1486,7 @@ public sealed class MainWindow : Window
         _selectAllMenuItem.IsEnabled = isIdle;
         _findMenuItem.IsEnabled = isIdle;
         _findNextMenuItem.IsEnabled = isIdle && !string.IsNullOrWhiteSpace(_session.LastFindText);
+        _replaceMenuItem.IsEnabled = isIdle;
         _goToMenuItem.IsEnabled = isIdle;
         _autoSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
         _autoSumSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
@@ -3855,6 +3864,119 @@ public sealed class MainWindow : Window
         RefreshShell($"Found {FormatRangeReference(result.SelectedRange!.Value)} ({result.MatchIndex} of {result.MatchCount})");
     }
 
+    private async Task ShowReplaceDialogAsync()
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var replacement = await ShowReplaceInputDialogAsync();
+        if (replacement is null)
+            return;
+
+        var result = _session.ReplaceAllValues(replacement.FindText, replacement.ReplaceText);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Replace All failed.");
+            return;
+        }
+
+        RefreshShell(result.ReplacedCount == 0
+            ? "No matches found."
+            : $"Replaced {result.ReplacedCount} cells");
+    }
+
+    private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync()
+    {
+        ReplaceDialogResult? result = null;
+        var dialog = new Window
+        {
+            Title = "Replace",
+            Width = 420,
+            Height = 220,
+            MinWidth = 360,
+            MinHeight = 200,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+
+        var findBox = new TextBox
+        {
+            Text = _session.LastFindText,
+            MinWidth = 300,
+        };
+        AutomationProperties.SetName(findBox, "Find what");
+        AutomationProperties.SetAutomationId(findBox, "ReplaceFindTextBox");
+
+        var replaceBox = new TextBox
+        {
+            Text = "",
+            MinWidth = 300,
+        };
+        AutomationProperties.SetName(replaceBox, "Replace with");
+        AutomationProperties.SetAutomationId(replaceBox, "ReplaceWithTextBox");
+
+        var replaceAllButton = new Button
+        {
+            Content = "Replace All",
+            MinWidth = 96,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(replaceAllButton, "ReplaceAllButton");
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(cancelButton, "ReplaceCancelButton");
+
+        void Accept()
+        {
+            result = new ReplaceDialogResult(findBox.Text ?? "", replaceBox.Text ?? "");
+            dialog.Close();
+        }
+
+        replaceAllButton.Click += (_, _) => Accept();
+        cancelButton.Click += (_, _) => dialog.Close();
+        findBox.KeyDown += (_, e) => HandleReplaceDialogKey(e, Accept, () => dialog.Close());
+        replaceBox.KeyDown += (_, e) => HandleReplaceDialogKey(e, Accept, () => dialog.Close());
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Children =
+            {
+                cancelButton,
+                replaceAllButton,
+            },
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = "Find what" },
+                findBox,
+                new TextBlock { Text = "Replace with" },
+                replaceBox,
+                buttonRow,
+            },
+        };
+        dialog.Opened += (_, _) =>
+        {
+            findBox.Focus();
+            findBox.SelectAll();
+        };
+
+        await dialog.ShowDialog(this);
+        return result;
+    }
+
     private async Task ShowGoToDialogAsync()
     {
         if (!TryCommitPendingFormulaEdit())
@@ -3975,6 +4097,20 @@ public sealed class MainWindow : Window
 
         await dialog.ShowDialog(this);
         return result;
+    }
+
+    private static void HandleReplaceDialogKey(KeyEventArgs e, Action accept, Action cancel)
+    {
+        if (e.Key == Key.Enter)
+        {
+            accept();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            cancel();
+            e.Handled = true;
+        }
     }
 
     private void BeginFormulaEdit(CellAddress address, string? initialText = null)
@@ -5856,6 +5992,11 @@ public sealed class MainWindow : Window
         {
             e.Handled = true;
             FindNext();
+        }
+        else if (e.Key == Key.H && HasOnlyControlModifier(e.KeyModifiers))
+        {
+            e.Handled = true;
+            await ShowReplaceDialogAsync();
         }
         else if (e.Key == Key.G && HasOnlyControlModifier(e.KeyModifiers))
         {

@@ -257,6 +257,118 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void ReplaceAllValues_ReplacesActiveSheetValuesPreservesSelectionAndSupportsUndoRedo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var otherSheet = workbook.AddSheet("Other");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var otherA1 = new CellAddress(otherSheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("foo one"));
+        sheet.SetCell(c1, new TextValue("foo two"));
+        otherSheet.SetCell(otherA1, new TextValue("foo other"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(b2);
+
+        var result = session.ReplaceAllValues("foo", "bar");
+
+        result.Success.Should().BeTrue();
+        result.ReplacedCount.Should().Be(2);
+        session.SelectedRange.Should().Be(new GridRange(b2, b2));
+        session.ActiveCell.Should().Be(b2);
+        session.LastFindText.Should().Be("foo");
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        sheet.GetCell(a1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("bar one");
+        sheet.GetCell(c1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("bar two");
+        otherSheet.GetCell(otherA1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("foo other");
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        session.CanRedo.Should().BeTrue();
+        sheet.GetCell(a1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("foo one");
+        sheet.GetCell(c1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("foo two");
+
+        var redo = session.RedoLastEdit();
+
+        redo.Success.Should().BeTrue();
+        sheet.GetCell(a1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("bar one");
+        sheet.GetCell(c1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("bar two");
+    }
+
+    [Fact]
+    public void ReplaceAllValues_SkipsFormulaCellsWithoutDirtyingWorkbook()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var formulaCell = Cell.FromFormula("A2");
+        formulaCell.Value = new TextValue("foo calculated");
+        sheet.SetCell(a1, formulaCell);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var result = session.ReplaceAllValues("foo", "bar");
+
+        result.Success.Should().BeTrue();
+        result.ReplacedCount.Should().Be(0);
+        session.LastFindText.Should().Be("foo");
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+        sheet.GetCell(a1)!.FormulaText.Should().Be("A2");
+        sheet.GetCell(a1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("foo calculated");
+    }
+
+    [Fact]
+    public void ReplaceAllValues_NoMatchesLeavesWorkbookClean()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("value"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var result = session.ReplaceAllValues("missing", "bar");
+
+        result.Success.Should().BeTrue();
+        result.ReplacedCount.Should().Be(0);
+        session.LastFindText.Should().Be("missing");
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ReplaceAllValues_RejectsEmptyFindText()
+    {
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            CreateWorkbook(),
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var result = session.ReplaceAllValues("", "bar");
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be("Find text is required.");
+        result.ReplacedCount.Should().Be(0);
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void CreateOpened_CreatesTemplateSessionWithOpenMetadata()
     {
         var path = Path.Combine(Path.GetTempPath(), "Budget.xltx");
