@@ -667,6 +667,14 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             XlsxWorkbookFileVersionNormalizer.NormalizeElement(fileVersion);
         if (workbookXml.Root?.Element(workbookNs + "functionGroups") is { } functionGroups)
             XlsxWorkbookFunctionGroupsNormalizer.NormalizeElement(functionGroups);
+        if (workbookXml.Root?.Element(workbookNs + "smartTagPr") is { } smartTagPr)
+            XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagPropertiesElement(smartTagPr);
+        if (workbookXml.Root?.Element(workbookNs + "smartTagTypes") is { } smartTagTypes)
+        {
+            XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagTypesElement(smartTagTypes);
+            if (XlsxWorkbookSmartTagNormalizer.ShouldRemoveSmartTagTypesElement(smartTagTypes))
+                smartTagTypes.Remove();
+        }
         if (workbookXml.Root?.Element(workbookNs + "bookViews") is { } bookViews)
             XlsxWorkbookViewNormalizer.NormalizeBookViewsElement(bookViews);
         if (workbookXml.Root?.Element(workbookNs + "calcPr") is { } calcPr)

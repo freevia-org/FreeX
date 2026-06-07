@@ -13274,9 +13274,9 @@ public partial class FileAdapterSmokeTests
         xml.Should().NotContain("validRecoveryAttr=\"keep\"");
         xml.Should().NotContain("validFunctionGroupsAttr=\"keep\"");
         xml.Should().NotContain("validFunctionGroupAttr=\"keep\"");
-        xml.Should().Contain("validSmartTagPrAttr=\"keep\"");
-        xml.Should().Contain("validSmartTagTypesAttr=\"keep\"");
-        xml.Should().Contain("validSmartTagTypeAttr=\"keep\"");
+        xml.Should().NotContain("validSmartTagPrAttr=\"keep\"");
+        xml.Should().NotContain("validSmartTagTypesAttr=\"keep\"");
+        xml.Should().NotContain("validSmartTagTypeAttr=\"keep\"");
         xml.Should().Contain("validWorkbookProtectionAttr=\"keep\"");
         xml.Should().NotContain("invalid ");
     }
@@ -13481,12 +13481,76 @@ public partial class FileAdapterSmokeTests
         smartTagProperties.Should().NotBeNull();
         smartTagProperties!.Attribute("embed")!.Value.Should().Be("1");
         smartTagProperties.Attribute("show")!.Value.Should().Be("all");
-        smartTagProperties.Attribute("customSmartTagFlag")!.Value.Should().Be("keep");
+        smartTagProperties.Attribute("customSmartTagFlag").Should().BeNull();
         smartTagTypes.Should().NotBeNull();
-        smartTagTypes!.Attribute("customSmartTagTypesFlag")!.Value.Should().Be("keep");
+        smartTagTypes!.Attribute("customSmartTagTypesFlag").Should().BeNull();
         smartTagTypes!.Element(workbookNs + "smartTagType")!.Attribute("namespaceUri")!.Value.Should().Be("urn:schemas-microsoft-com:office:smarttags");
         smartTagTypes.Element(workbookNs + "smartTagType")!.Attribute("name")!.Value.Should().Be("place");
-        smartTagTypes.Element(workbookNs + "smartTagType")!.Attribute("customSmartTagTypeFlag")!.Value.Should().Be("keep");
+        smartTagTypes.Element(workbookNs + "smartTagType")!.Attribute("customSmartTagTypeFlag").Should().BeNull();
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookPatchSave_SanitizesInvalidWorkbookSmartTagMetadata()
+    {
+        var workbook = new Workbook("WorkbookSmartTagPatchSanitizeTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("smart tags"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorkbookSmartTagMetadata(source);
+        source.Position = 0;
+
+        using (var archive = new ZipArchive(source, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+
+            var smartTagProperties = workbookXml.Root!.Element(workbookNs + "smartTagPr")!;
+            smartTagProperties.SetAttributeValue("embed", "maybe");
+            smartTagProperties.SetAttributeValue("show", "invalid");
+            smartTagProperties.Add(new XElement(workbookNs + "nativeSmartTagPrChild"));
+
+            var smartTagTypes = workbookXml.Root.Element(workbookNs + "smartTagTypes")!;
+            smartTagTypes.Add(new XElement(workbookNs + "nativeSmartTagTypesChild"));
+            var smartTagType = smartTagTypes.Element(workbookNs + "smartTagType")!;
+            smartTagType.Add(new XElement(workbookNs + "nativeSmartTagTypeChild"));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(loaded, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        saved.Position = 0;
+        using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var savedWorkbookXml = LoadPackageXml(savedArchive.GetEntry("xl/workbook.xml")!);
+        XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var savedSmartTagProperties = savedWorkbookXml.Root!.Element(ns + "smartTagPr");
+        savedSmartTagProperties.Should().NotBeNull();
+        savedSmartTagProperties!.Attribute("embed").Should().BeNull();
+        savedSmartTagProperties.Attribute("show").Should().BeNull();
+        savedSmartTagProperties.Attribute("customSmartTagFlag").Should().BeNull();
+        savedSmartTagProperties.Element(ns + "nativeSmartTagPrChild").Should().BeNull();
+
+        var savedSmartTagTypes = savedWorkbookXml.Root.Element(ns + "smartTagTypes");
+        savedSmartTagTypes.Should().NotBeNull();
+        savedSmartTagTypes!.Attribute("customSmartTagTypesFlag").Should().BeNull();
+        savedSmartTagTypes.Element(ns + "nativeSmartTagTypesChild").Should().BeNull();
+        var savedSmartTagType = savedSmartTagTypes.Element(ns + "smartTagType");
+        savedSmartTagType.Should().NotBeNull();
+        savedSmartTagType!.Attribute("customSmartTagTypeFlag").Should().BeNull();
+        savedSmartTagType.Element(ns + "nativeSmartTagTypeChild").Should().BeNull();
     }
 
     [Fact]
