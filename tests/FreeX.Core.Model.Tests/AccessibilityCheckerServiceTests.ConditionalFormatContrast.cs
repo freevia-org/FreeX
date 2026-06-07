@@ -4705,6 +4705,45 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialBondYieldFunctions()
+    {
+        AssertFormulaFinancialBondYieldFunctionContrastLocations("PRICE($A1,$C1,$D1,$E1,$G1,$H1)>105", "B1", "B2", "B8");
+        AssertFormulaFinancialBondYieldFunctionContrastLocations("YIELD($A1,$C1,$D1,$F1,$G1,$H1)>0.08", "B1", "B2", "B4", "B8");
+        AssertFormulaFinancialBondYieldFunctionContrastLocations("DURATION($A1,$C1,$D1,$E1,$H1)>4", "B1", "B2", "B8");
+        AssertFormulaFinancialBondYieldFunctionContrastLocations("MDURATION($A1,$C1,$D1,$E1,$H1)>4", "B1", "B2", "B8");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialBondYieldWrappersAndOptionalBasis()
+    {
+        AssertFormulaFinancialBondYieldFunctionContrastLocations("PRICE($A1,$C1,$D1,$E1,$G1,$H1,$I1)>105", "B1", "B2", "B8");
+        AssertFormulaFinancialBondYieldFunctionContrastLocations("SUM(PRICE($A1,$C1,$D1,$E1,$G1,$H1),DURATION($A1,$C1,$D1,$E1,$H1))>117", "B1", "B2", "B8");
+        AssertFormulaFinancialBondYieldFunctionContrastLocations("YIELDDISC($A1,$J1,$K1,$G1,$I1)>0.04", "B1", "B2", "B4", "B8");
+        AssertFormulaFinancialBondYieldFunctionContrastLocations("YIELDMAT($A1,$J1,$A1,$D1,$K1,$I1)>0.05", "B1", "B2", "B4", "B8");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialBondYieldErrorPredicates()
+    {
+        AssertFormulaFinancialBondYieldFunctionContrastLocations("ISNUMBER(DURATION($A1,$C1,$D1,$E1,$H1))", "B1", "B2", "B3", "B4", "B8");
+        AssertFormulaFinancialBondYieldFunctionContrastLocations("ISNA(PRICE($A1,$C1,$D1,$E1,$G1,$H1))", "B5");
+        AssertFormulaFinancialBondYieldFunctionContrastLocations("ISERROR(YIELD($A1,$C1,$D1,$F1,$G1,$H1))", "B5", "B6", "B7");
+        AssertFormulaFinancialBondYieldFunctionContrastLocations("ISERROR(YIELDDISC($A1,$J1,$K1,$G1,$I1))", "B5", "B6", "B7");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatFinancialBondYieldUnsupportedShapesArityAndComparisons()
+    {
+        AssertFormulaFinancialBondYieldFunctionContrastLocations("PRICE($A$1:$A$2,$C1,$D1,$E1,$G1,$H1)>0");
+        AssertFormulaFinancialBondYieldFunctionContrastLocations("YIELD($A1,$C1,$D1,$F1,$G1)>0");
+        AssertFormulaFinancialBondYieldFunctionContrastLocations("DURATION($A1,$C1,$D1,$E1,$H1,$I1,$J1)>0");
+        AssertFormulaFinancialBondYieldFunctionContrastLocations("MDURATION($A1,$C1,$D1,$E1,$H$1:$H$2)>0");
+        AssertFormulaFinancialBondYieldFunctionContrastLocations("YIELDDISC($A1,$J1,$K1,$G1,$I1,$L1)>0");
+        AssertFormulaFinancialBondYieldFunctionContrastLocations("YIELDMAT($A1,$J1,$A1,$D1,$K$1:$K$2)>0");
+        AssertFormulaFinancialBondYieldFunctionContrastLocations("PRICE($A$6,$C$6,$D$6,$E$6,$G$6,$H$6)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatArithmeticComparison()
     {
         AssertFormulaArithmeticContrastLocations("($A1+25-50)*2/5>=40", "B4");
@@ -7005,6 +7044,160 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 13), new BoolValue(active));
     }
 
+    private static Workbook CreateFormulaFinancialBondYieldFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 8, 2);
+
+        SetFormulaFinancialBondYieldFunctionContrastRow(
+            sheet,
+            1,
+            new NumberValue(43831),
+            new NumberValue(45658),
+            new NumberValue(0.08),
+            new NumberValue(0.05),
+            new NumberValue(99),
+            new NumberValue(100),
+            new NumberValue(2),
+            new NumberValue(0),
+            new NumberValue(44197),
+            new NumberValue(95),
+            "Premium semiannual");
+        SetFormulaFinancialBondYieldFunctionContrastRow(
+            sheet,
+            2,
+            new NumberValue(43845),
+            new NumberValue(45672),
+            new NumberValue(0.07),
+            new NumberValue(0.06),
+            new NumberValue(101),
+            new NumberValue(110),
+            new NumberValue(4),
+            new NumberValue(1),
+            new NumberValue(44228),
+            new NumberValue(101),
+            "Quarter actual");
+        SetFormulaFinancialBondYieldFunctionContrastRow(
+            sheet,
+            3,
+            new NumberValue(43831),
+            new NumberValue(44197),
+            new NumberValue(0.03),
+            new NumberValue(0.08),
+            new NumberValue(105),
+            new NumberValue(100),
+            new NumberValue(1),
+            new NumberValue(0),
+            new NumberValue(44197),
+            new NumberValue(105),
+            "Discount below threshold");
+        SetFormulaFinancialBondYieldFunctionContrastRow(
+            sheet,
+            4,
+            new NumberValue(44016),
+            new NumberValue(44197),
+            new NumberValue(0.08),
+            new NumberValue(0.05),
+            new NumberValue(100),
+            new NumberValue(100),
+            new NumberValue(2),
+            new NumberValue(0),
+            new NumberValue(44197),
+            new NumberValue(98),
+            "Short remaining");
+        SetFormulaFinancialBondYieldFunctionContrastRow(
+            sheet,
+            5,
+            ErrorValue.NA,
+            new NumberValue(45658),
+            new NumberValue(0.08),
+            new NumberValue(0.05),
+            new NumberValue(99),
+            new NumberValue(100),
+            new NumberValue(2),
+            new NumberValue(0),
+            new NumberValue(44197),
+            new NumberValue(95),
+            "NA settlement");
+        SetFormulaFinancialBondYieldFunctionContrastRow(
+            sheet,
+            6,
+            new NumberValue(43831),
+            new NumberValue(43831),
+            new NumberValue(0.08),
+            new NumberValue(0.05),
+            new NumberValue(99),
+            new NumberValue(100),
+            new NumberValue(2),
+            new NumberValue(0),
+            new NumberValue(43831),
+            new NumberValue(95),
+            "Invalid order");
+        SetFormulaFinancialBondYieldFunctionContrastRow(
+            sheet,
+            7,
+            new TextValue("Open"),
+            new NumberValue(45658),
+            new NumberValue(0.08),
+            new NumberValue(0.05),
+            new NumberValue(99),
+            new NumberValue(100),
+            new NumberValue(2),
+            new NumberValue(0),
+            new NumberValue(44197),
+            new NumberValue(95),
+            "Value settlement");
+        SetFormulaFinancialBondYieldFunctionContrastRow(
+            sheet,
+            8,
+            new NumberValue(43831),
+            new NumberValue(45658),
+            new NumberValue(0.08),
+            new NumberValue(0.05),
+            new NumberValue(99),
+            new NumberValue(100),
+            new NumberValue(2.9),
+            new NumberValue(0.9),
+            new NumberValue(44197),
+            new NumberValue(95),
+            "Fractional optional");
+
+        return workbook;
+    }
+
+    private static void SetFormulaFinancialBondYieldFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        ScalarValue settlement,
+        ScalarValue maturity,
+        ScalarValue couponRate,
+        ScalarValue yield,
+        ScalarValue price,
+        ScalarValue redemption,
+        ScalarValue frequency,
+        ScalarValue basis,
+        ScalarValue shortMaturity,
+        ScalarValue discountPrice,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), settlement);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), maturity);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 4), couponRate);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 5), yield);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 6), price);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 7), redemption);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 8), frequency);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 9), basis);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 10), shortMaturity);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 11), discountPrice);
+    }
+
     private static void AssertFormulaBooleanContrastLocations(string formulaText, params string[] expectedLocations)
     {
         var workbook = CreateFormulaBooleanContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
@@ -7137,6 +7330,19 @@ public sealed partial class AccessibilityCheckerServiceTests
         params string[] expectedLocations)
     {
         var workbook = CreateFormulaFinancialBillDiscountFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaFinancialBondYieldFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaFinancialBondYieldFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
 
         FindLowContrastCellTextIssues(workbook)
