@@ -41,6 +41,8 @@ internal static class XlsxWorkbookSchemaNormalizer
         XlsxWorksheetRelationshipMarkerNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetPageLayoutNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetPageBreakNormalizer.NormalizeWorksheets(archive);
+        XlsxStructuredTableSchemaNormalizer.NormalizePackage(archive);
+        XlsxWorksheetSingleXmlCellMapper.NormalizePackage(archive);
         NormalizeWorksheets(archive, workbookNs);
 
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
