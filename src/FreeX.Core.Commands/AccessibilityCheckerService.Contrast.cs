@@ -2281,6 +2281,8 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaAggregateKind.Aggregate => argumentCount is >= 3 and <= MaxFormulaConditionalAggregateArgumentCount,
             ConditionalFormulaAggregateKind.SumProduct => argumentCount is >= 1 and <= MaxFormulaSumProductArgumentCount,
             _ when IsFormulaDatabaseAggregate(aggregateKind) => argumentCount == 3,
+            _ when IsFormulaForecastRegressionAggregate(aggregateKind) => argumentCount == 3,
+            _ when IsFormulaRegressionAggregate(aggregateKind) => argumentCount == 2,
             _ when IsFormulaPairwiseAggregate(aggregateKind) => argumentCount == 2,
             ConditionalFormulaAggregateKind.Large or
             ConditionalFormulaAggregateKind.Small or
@@ -2334,6 +2336,37 @@ public static partial class AccessibilityCheckerService
                 return true;
             case "SUMX2PY2":
                 kind = ConditionalFormulaAggregateKind.SumX2Py2;
+                return true;
+            case "CORREL":
+                kind = ConditionalFormulaAggregateKind.Correl;
+                return true;
+            case "PEARSON":
+                kind = ConditionalFormulaAggregateKind.Pearson;
+                return true;
+            case "COVARIANCE.P":
+            case "COVAR":
+                kind = ConditionalFormulaAggregateKind.CovariancePopulation;
+                return true;
+            case "COVARIANCE.S":
+                kind = ConditionalFormulaAggregateKind.CovarianceSample;
+                return true;
+            case "RSQ":
+                kind = ConditionalFormulaAggregateKind.Rsq;
+                return true;
+            case "SLOPE":
+                kind = ConditionalFormulaAggregateKind.Slope;
+                return true;
+            case "INTERCEPT":
+                kind = ConditionalFormulaAggregateKind.Intercept;
+                return true;
+            case "FORECAST":
+                kind = ConditionalFormulaAggregateKind.Forecast;
+                return true;
+            case "FORECAST.LINEAR":
+                kind = ConditionalFormulaAggregateKind.ForecastLinear;
+                return true;
+            case "STEYX":
+                kind = ConditionalFormulaAggregateKind.Steyx;
                 return true;
             case "DEVSQ":
                 kind = ConditionalFormulaAggregateKind.DevSq;
@@ -2504,6 +2537,24 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaAggregateKind.SumXMy2 or
             ConditionalFormulaAggregateKind.SumX2My2 or
             ConditionalFormulaAggregateKind.SumX2Py2;
+
+    private static bool IsFormulaRegressionAggregate(ConditionalFormulaAggregateKind aggregateKind) =>
+        aggregateKind is
+            ConditionalFormulaAggregateKind.Correl or
+            ConditionalFormulaAggregateKind.Pearson or
+            ConditionalFormulaAggregateKind.CovariancePopulation or
+            ConditionalFormulaAggregateKind.CovarianceSample or
+            ConditionalFormulaAggregateKind.Rsq or
+            ConditionalFormulaAggregateKind.Slope or
+            ConditionalFormulaAggregateKind.Intercept or
+            ConditionalFormulaAggregateKind.Forecast or
+            ConditionalFormulaAggregateKind.ForecastLinear or
+            ConditionalFormulaAggregateKind.Steyx;
+
+    private static bool IsFormulaForecastRegressionAggregate(ConditionalFormulaAggregateKind aggregateKind) =>
+        aggregateKind is
+            ConditionalFormulaAggregateKind.Forecast or
+            ConditionalFormulaAggregateKind.ForecastLinear;
 
     private static bool IsFormulaConditionalAggregate(ConditionalFormulaAggregateKind aggregateKind) =>
         aggregateKind is
@@ -3260,6 +3311,16 @@ public static partial class AccessibilityCheckerService
         SumXMy2,
         SumX2My2,
         SumX2Py2,
+        Correl,
+        Pearson,
+        CovariancePopulation,
+        CovarianceSample,
+        Rsq,
+        Slope,
+        Intercept,
+        Forecast,
+        ForecastLinear,
+        Steyx,
         DevSq,
         StdDevSample,
         StdDevPopulation,
@@ -3334,6 +3395,18 @@ public static partial class AccessibilityCheckerService
         int RowCount,
         int ColCount,
         IReadOnlyList<ConditionalFormulaPairwiseAggregateValue> Values);
+
+    private readonly record struct ConditionalFormulaRegressionPair(
+        double Y,
+        double X);
+
+    private readonly record struct ConditionalFormulaRegressionStatistics(
+        int Count,
+        double MeanY,
+        double MeanX,
+        double SumSquaresY,
+        double SumSquaresX,
+        double SumProducts);
 
     private enum ConditionalFormulaAggregateArgumentKind
     {
@@ -16655,6 +16728,368 @@ public static partial class AccessibilityCheckerService
             return double.IsFinite(term);
         }
 
+        private bool TryEvaluateFormulaRegressionAggregate(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (operand.AggregateArguments is not { Count: 2 or 3 } arguments ||
+                arguments.Count != (IsFormulaForecastRegressionAggregate(operand.AggregateKind) ? 3 : 2))
+            {
+                return false;
+            }
+
+            var forecastX = 0d;
+            var yArgumentIndex = 0;
+            var xArgumentIndex = 1;
+            if (IsFormulaForecastRegressionAggregate(operand.AggregateKind))
+            {
+                if (!TryResolveFormulaRegressionScalarNumber(
+                        arguments[0],
+                        rowOffset,
+                        colOffset,
+                        out forecastX,
+                        out var xError))
+                {
+                    value = xError ?? ErrorValue.Value;
+                    return xError is not null;
+                }
+
+                yArgumentIndex = 1;
+                xArgumentIndex = 2;
+            }
+
+            if (!TryGetFormulaRegressionStatistics(
+                    arguments[yArgumentIndex],
+                    arguments[xArgumentIndex],
+                    rowOffset,
+                    colOffset,
+                    out var statistics,
+                    out var statisticsError))
+            {
+                value = statisticsError ?? ErrorValue.Value;
+                return statisticsError is not null;
+            }
+
+            value = FormulaRegressionAggregateResult(operand.AggregateKind, statistics, forecastX);
+            return true;
+        }
+
+        private bool TryResolveFormulaRegressionScalarNumber(
+            ConditionalFormulaAggregateArgument argument,
+            int rowOffset,
+            int colOffset,
+            out double number,
+            out ErrorValue? error)
+        {
+            number = 0d;
+            error = null;
+            if (!TryResolveFormulaStatisticalScalarArgument(argument, rowOffset, colOffset, out var value))
+                return false;
+
+            if (!TryGetFormulaStatisticalNumber(value, out number, out error))
+                return false;
+
+            if (double.IsFinite(number))
+                return true;
+
+            error = ErrorValue.Num;
+            return false;
+        }
+
+        private bool TryGetFormulaRegressionStatistics(
+            ConditionalFormulaAggregateArgument yArgument,
+            ConditionalFormulaAggregateArgument xArgument,
+            int rowOffset,
+            int colOffset,
+            out ConditionalFormulaRegressionStatistics statistics,
+            out ErrorValue? error)
+        {
+            statistics = default;
+            error = null;
+            if (!TryResolveFormulaPairwiseAggregateValues(yArgument, rowOffset, colOffset, out var yValues) ||
+                !TryResolveFormulaPairwiseAggregateValues(xArgument, rowOffset, colOffset, out var xValues))
+            {
+                return false;
+            }
+
+            if (yValues.RowCount != xValues.RowCount ||
+                yValues.ColCount != xValues.ColCount ||
+                yValues.Values.Count != xValues.Values.Count)
+            {
+                error = ErrorValue.NA;
+                return false;
+            }
+
+            var pairs = new List<ConditionalFormulaRegressionPair>(yValues.Values.Count);
+            var sumY = 0d;
+            var sumX = 0d;
+            for (var i = 0; i < yValues.Values.Count; i++)
+            {
+                if (!TryGetFormulaRegressionPairNumber(yValues.Values[i], out var y, out var skipY, out error) ||
+                    !TryGetFormulaRegressionPairNumber(xValues.Values[i], out var x, out var skipX, out error))
+                {
+                    return false;
+                }
+
+                if (skipY || skipX)
+                    continue;
+
+                pairs.Add(new ConditionalFormulaRegressionPair(y, x));
+                sumY += y;
+                sumX += x;
+                if (!double.IsFinite(sumY) || !double.IsFinite(sumX))
+                {
+                    error = ErrorValue.Num;
+                    return false;
+                }
+            }
+
+            return TryCreateFormulaRegressionStatistics(pairs, sumY, sumX, out statistics, out error);
+        }
+
+        private static bool TryGetFormulaRegressionPairNumber(
+            ConditionalFormulaPairwiseAggregateValue value,
+            out double number,
+            out bool skipPair,
+            out ErrorValue? error)
+        {
+            number = 0d;
+            skipPair = false;
+            error = null;
+            if (value.Value is ErrorValue valueError)
+            {
+                error = valueError;
+                return false;
+            }
+
+            if (value.IsDirectArgument)
+            {
+                if (!TryGetFormulaStatisticalNumber(value.Value, out number, out error))
+                    return false;
+
+                if (double.IsFinite(number))
+                    return true;
+
+                error = ErrorValue.Num;
+                return false;
+            }
+
+            if (TryGetFormulaStatisticalCellNumber(value.Value, out number))
+            {
+                if (double.IsFinite(number))
+                    return true;
+
+                error = ErrorValue.Num;
+                return false;
+            }
+
+            skipPair = true;
+            return true;
+        }
+
+        private static bool TryCreateFormulaRegressionStatistics(
+            IReadOnlyList<ConditionalFormulaRegressionPair> pairs,
+            double sumY,
+            double sumX,
+            out ConditionalFormulaRegressionStatistics statistics,
+            out ErrorValue? error)
+        {
+            error = null;
+            if (pairs.Count == 0)
+            {
+                statistics = new ConditionalFormulaRegressionStatistics(0, 0d, 0d, 0d, 0d, 0d);
+                return true;
+            }
+
+            var meanY = sumY / pairs.Count;
+            var meanX = sumX / pairs.Count;
+            if (!double.IsFinite(meanY) || !double.IsFinite(meanX))
+            {
+                statistics = default;
+                error = ErrorValue.Num;
+                return false;
+            }
+
+            var sumSquaresY = 0d;
+            var sumSquaresX = 0d;
+            var sumProducts = 0d;
+            for (var i = 0; i < pairs.Count; i++)
+            {
+                var dy = pairs[i].Y - meanY;
+                var dx = pairs[i].X - meanX;
+                var ySquare = dy * dy;
+                var xSquare = dx * dx;
+                var product = dy * dx;
+                if (!double.IsFinite(ySquare) ||
+                    !double.IsFinite(xSquare) ||
+                    !double.IsFinite(product))
+                {
+                    statistics = default;
+                    error = ErrorValue.Num;
+                    return false;
+                }
+
+                sumSquaresY += ySquare;
+                sumSquaresX += xSquare;
+                sumProducts += product;
+                if (!double.IsFinite(sumSquaresY) ||
+                    !double.IsFinite(sumSquaresX) ||
+                    !double.IsFinite(sumProducts))
+                {
+                    statistics = default;
+                    error = ErrorValue.Num;
+                    return false;
+                }
+            }
+
+            statistics = new ConditionalFormulaRegressionStatistics(
+                pairs.Count,
+                meanY,
+                meanX,
+                sumSquaresY,
+                sumSquaresX,
+                sumProducts);
+            return true;
+        }
+
+        private static ScalarValue FormulaRegressionAggregateResult(
+            ConditionalFormulaAggregateKind aggregateKind,
+            ConditionalFormulaRegressionStatistics statistics,
+            double forecastX)
+        {
+            switch (aggregateKind)
+            {
+                case ConditionalFormulaAggregateKind.Correl:
+                case ConditionalFormulaAggregateKind.Pearson:
+                    return FormulaRegressionCorrelationResult(statistics);
+                case ConditionalFormulaAggregateKind.CovariancePopulation:
+                    return statistics.Count > 0
+                        ? FormulaStatisticalNumberResult(statistics.SumProducts / statistics.Count)
+                        : ErrorValue.DivByZero;
+                case ConditionalFormulaAggregateKind.CovarianceSample:
+                    return statistics.Count > 1
+                        ? FormulaStatisticalNumberResult(statistics.SumProducts / (statistics.Count - 1))
+                        : ErrorValue.DivByZero;
+                case ConditionalFormulaAggregateKind.Rsq:
+                    return FormulaRegressionRsqResult(statistics);
+                case ConditionalFormulaAggregateKind.Slope:
+                    return FormulaRegressionSlopeResult(statistics);
+                case ConditionalFormulaAggregateKind.Intercept:
+                    return FormulaRegressionInterceptResult(statistics);
+                case ConditionalFormulaAggregateKind.Forecast:
+                case ConditionalFormulaAggregateKind.ForecastLinear:
+                    return FormulaRegressionForecastResult(statistics, forecastX);
+                case ConditionalFormulaAggregateKind.Steyx:
+                    return FormulaRegressionSteyxResult(statistics);
+                default:
+                    return ErrorValue.Value;
+            }
+        }
+
+        private static ScalarValue FormulaRegressionCorrelationResult(
+            ConditionalFormulaRegressionStatistics statistics)
+        {
+            if (statistics.Count < 2 ||
+                statistics.SumSquaresX == 0d ||
+                statistics.SumSquaresY == 0d)
+            {
+                return ErrorValue.DivByZero;
+            }
+
+            var denominator = Math.Sqrt(statistics.SumSquaresX) * Math.Sqrt(statistics.SumSquaresY);
+            return denominator == 0d
+                ? ErrorValue.DivByZero
+                : FormulaStatisticalNumberResult(statistics.SumProducts / denominator);
+        }
+
+        private static ScalarValue FormulaRegressionRsqResult(
+            ConditionalFormulaRegressionStatistics statistics)
+        {
+            var correlation = FormulaRegressionCorrelationResult(statistics);
+            if (correlation is not NumberValue number)
+                return correlation;
+
+            return FormulaStatisticalNumberResult(number.Value * number.Value);
+        }
+
+        private static ScalarValue FormulaRegressionSlopeResult(
+            ConditionalFormulaRegressionStatistics statistics)
+        {
+            return TryGetFormulaRegressionSlope(statistics, out var slope, out var error)
+                ? FormulaStatisticalNumberResult(slope)
+                : error;
+        }
+
+        private static ScalarValue FormulaRegressionInterceptResult(
+            ConditionalFormulaRegressionStatistics statistics)
+        {
+            if (!TryGetFormulaRegressionSlope(statistics, out var slope, out var error))
+                return error;
+
+            return FormulaStatisticalNumberResult(statistics.MeanY - slope * statistics.MeanX);
+        }
+
+        private static ScalarValue FormulaRegressionForecastResult(
+            ConditionalFormulaRegressionStatistics statistics,
+            double forecastX)
+        {
+            if (!TryGetFormulaRegressionSlope(statistics, out var slope, out var error))
+                return error;
+
+            var intercept = statistics.MeanY - slope * statistics.MeanX;
+            return FormulaStatisticalNumberResult(intercept + slope * forecastX);
+        }
+
+        private static ScalarValue FormulaRegressionSteyxResult(
+            ConditionalFormulaRegressionStatistics statistics)
+        {
+            if (statistics.Count < 3)
+                return ErrorValue.DivByZero;
+
+            if (!TryGetFormulaRegressionSlope(statistics, out var slope, out var error))
+                return error;
+
+            var regressionSquares = slope * statistics.SumProducts;
+            if (!double.IsFinite(regressionSquares))
+                return ErrorValue.Num;
+
+            var residualSquares = statistics.SumSquaresY - regressionSquares;
+            if (!double.IsFinite(residualSquares))
+                return ErrorValue.Num;
+
+            if (residualSquares < 0d)
+            {
+                var tolerance = 1e-12 * Math.Max(1d, Math.Max(statistics.SumSquaresY, Math.Abs(regressionSquares)));
+                if (residualSquares < -tolerance)
+                    return ErrorValue.Num;
+
+                residualSquares = 0d;
+            }
+
+            return FormulaStatisticalNumberResult(Math.Sqrt(residualSquares / (statistics.Count - 2)));
+        }
+
+        private static bool TryGetFormulaRegressionSlope(
+            ConditionalFormulaRegressionStatistics statistics,
+            out double slope,
+            out ScalarValue error)
+        {
+            slope = 0d;
+            error = ErrorValue.DivByZero;
+            if (statistics.Count < 2 || statistics.SumSquaresX == 0d)
+                return false;
+
+            slope = statistics.SumProducts / statistics.SumSquaresX;
+            if (double.IsFinite(slope))
+                return true;
+
+            error = ErrorValue.Num;
+            return false;
+        }
+
         private static bool IsFormulaStatisticalSelectionAggregate(ConditionalFormulaAggregateKind aggregateKind) =>
             aggregateKind is
                 ConditionalFormulaAggregateKind.Large or
@@ -19797,6 +20232,9 @@ public static partial class AccessibilityCheckerService
 
             if (operand.AggregateKind == ConditionalFormulaAggregateKind.SumProduct)
                 return TryEvaluateFormulaSumProductAggregate(operand, rowOffset, colOffset, out value);
+
+            if (IsFormulaRegressionAggregate(operand.AggregateKind))
+                return TryEvaluateFormulaRegressionAggregate(operand, rowOffset, colOffset, out value);
 
             if (IsFormulaPairwiseAggregate(operand.AggregateKind))
                 return TryEvaluateFormulaPairwiseAggregate(operand, rowOffset, colOffset, out value);

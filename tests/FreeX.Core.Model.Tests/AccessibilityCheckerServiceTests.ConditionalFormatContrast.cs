@@ -975,6 +975,56 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatRegressionAggregateComparisons()
+    {
+        AssertFormulaAggregateContrastLocations("CORREL($A$1:$A$4,$A$1:$A$4)>0.99", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("PEARSON($A$1:$A$4,$A$1:$A$4)>0.99", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("COVARIANCE.P($A$1:$A$4,$A$1:$A$4)=429.6875", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("COVARIANCE.S($A$1:$A$4,$A$1:$A$4)>572", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("RSQ($A$1:$A$4,$A$1:$A$4)>0.99", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SLOPE($A$1:$A$4,$A$1:$A$4)=1", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("INTERCEPT($A$1:$A$4,$A$1:$A$4)=0", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("FORECAST(150,$A$1:$A$4,$A$1:$A$4)=150", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("FORECAST.LINEAR(150,$A$1:$A$4,$A$1:$A$4)=150", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("STEYX($A$1:$A$4,$A$1:$A$4)=0", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatRegressionShiftedRanges()
+    {
+        AssertFormulaAggregateContrastLocations("CORREL($A1:$A3,$A2:$A4)<-0.8", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("COVARIANCE.P($A1:$A3,$A2:$A4)<-200", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("COVARIANCE.S($A1:$A3,$A2:$A4)<-300", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("SLOPE($A1:$A3,$A2:$A4)<0", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("FORECAST($A1,$A1:$A3,$A2:$A4)>90", "B1");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatRegressionWrappersPredicatesAndScalarOperands()
+    {
+        AssertFormulaAggregateContrastLocations("AND(CORREL($A1:$A3,$A2:$A4)<-0.8,$C1=\"Closed\")", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("IF(RSQ($A$1:$A$4,$A$1:$A$4)>0.99,TRUE,FALSE)", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISNUMBER(STEYX($A$1:$A$4,$A$1:$A$4))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISERROR(SLOPE($A$1:$A$4,$D$1:$D$4))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISNA(CORREL($A$1:$A$3,$A$1:$A$4))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISERROR(FORECAST(\"n/a\",$A$1:$A$4,$A$1:$A$4))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("COVARIANCE.P(3,4)=0", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("COVARIANCE.P(SUM($A1:$A2),$A1^2)=0", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatRegressionUnsupportedArityShapesAndComparisons()
+    {
+        AssertFormulaAggregateContrastLocations("CORREL($A$1:$A$4)>0");
+        AssertFormulaAggregateContrastLocations("FORECAST($A1,$A$1:$A$4)>0");
+        AssertFormulaAggregateContrastLocations("FORECAST($A$1:$A$2,$A$1:$A$4,$A$1:$A$4)>0");
+        AssertFormulaAggregateContrastLocations("PEARSON($A1:$A20000,$A1:$A20000)>0");
+        AssertFormulaAggregateContrastLocations("CORREL(\"n/a\",1)>0");
+        AssertFormulaAggregateContrastLocations("CORREL($A$1:$A$3,$A$1:$A$4)>0");
+        AssertFormulaAggregateContrastLocations("SLOPE($A$1:$A$4,$A$1:$A$4)>$A$1:$A$2");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDevSqAggregate()
     {
         AssertFormulaAggregateContrastLocations("DEVSQ($A1:$A3)>400", "B1", "B2", "B3");
