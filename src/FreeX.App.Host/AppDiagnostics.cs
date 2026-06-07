@@ -3,25 +3,9 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host;
-
-public sealed record AppDiagnosticsOptions(string DiagnosticsDirectory, bool IsEnabled)
-{
-    public static AppDiagnosticsOptions CreateDefault() =>
-        CreateDefault(() => Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
-
-    internal static AppDiagnosticsOptions CreateDefault(Func<string> localAppDataProvider)
-    {
-        var disabled = string.Equals(
-            Environment.GetEnvironmentVariable("FREEX_DIAGNOSTICS"),
-            "0",
-            StringComparison.OrdinalIgnoreCase);
-        var localAppData = localAppDataProvider();
-        var diagnosticsDirectory = Path.Combine(localAppData, "FreeX", "Diagnostics");
-        return new AppDiagnosticsOptions(diagnosticsDirectory, IsEnabled: !disabled);
-    }
-}
 
 public sealed record AppDiagnosticsMetadata(
     string AppVersion,

@@ -88,8 +88,11 @@ public partial class App : Application
         var options = _startupOptions ?? FreeXOptions.Load();
         services.AddSingleton(options);
 
-        // Local tester diagnostics. No network upload; files stay under LocalAppData.
-        services.AddSingleton(AppDiagnosticsOptions.CreateDefault());
+        services.AddSingleton<IApplicationDataPathProvider>(PlatformApplicationDataPathProvider.LocalInstance);
+
+        // Local tester diagnostics. No network upload; files stay under the app data root.
+        services.AddSingleton(sp =>
+            AppDiagnosticsOptions.CreateDefault(sp.GetRequiredService<IApplicationDataPathProvider>()));
         services.AddSingleton(AppCrashAnalyticsOptions.CreateDefault(options.CrashAnalyticsEnabled));
         services.AddSingleton(AppDiagnosticsMetadata.Create(AppInfo.VersionText));
         services.AddSingleton<AppDiagnosticsFileStore>();
