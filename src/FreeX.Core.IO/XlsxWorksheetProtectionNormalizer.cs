@@ -78,7 +78,7 @@ internal static class XlsxWorksheetProtectionNormalizer
     {
         var changed = false;
         changed |= RemoveUnknownAttributes(protection);
-        changed |= NormalizeAttribute(protection, "password", NormalizeOptionalText);
+        changed |= NormalizeAttribute(protection, "password", NormalizeLegacyPasswordHashOrNull);
         changed |= NormalizeAttribute(protection, "algorithmName", NormalizeOptionalText);
         changed |= NormalizeAttribute(protection, "hashValue", NormalizeBase64BinaryOrNull);
         changed |= NormalizeAttribute(protection, "saltValue", NormalizeBase64BinaryOrNull);
@@ -218,6 +218,18 @@ internal static class XlsxWorksheetProtectionNormalizer
         {
             return null;
         }
+    }
+
+    private static string? NormalizeLegacyPasswordHashOrNull(string? value)
+    {
+        var trimmed = value?.Trim();
+        if (trimmed is not { Length: 4 } ||
+            !trimmed.All(static c => char.IsAsciiHexDigit(c)))
+        {
+            return null;
+        }
+
+        return trimmed.ToUpperInvariant();
     }
 
     private static string? NormalizeUnsignedIntOrNull(string? value)

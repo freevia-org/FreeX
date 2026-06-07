@@ -41,6 +41,8 @@ internal static class XlsxWorkbookProtectionNormalizer
         changed |= RemoveUnknownAttributes(workbookProtection);
         changed |= RemoveAllNodes(workbookProtection);
 
+        changed |= NormalizeAttribute(workbookProtection, "workbookPassword", NormalizeLegacyPasswordHashOrNull);
+        changed |= NormalizeAttribute(workbookProtection, "revisionsPassword", NormalizeLegacyPasswordHashOrNull);
         foreach (var attributeName in BooleanAttributes)
             changed |= NormalizeAttribute(workbookProtection, attributeName, NormalizeBoolean);
         foreach (var attributeName in UnsignedIntAttributes)
@@ -137,5 +139,17 @@ internal static class XlsxWorkbookProtectionNormalizer
         {
             return null;
         }
+    }
+
+    private static string? NormalizeLegacyPasswordHashOrNull(string? value)
+    {
+        var trimmed = value?.Trim();
+        if (trimmed is not { Length: 4 } ||
+            !trimmed.All(static c => char.IsAsciiHexDigit(c)))
+        {
+            return null;
+        }
+
+        return trimmed.ToUpperInvariant();
     }
 }

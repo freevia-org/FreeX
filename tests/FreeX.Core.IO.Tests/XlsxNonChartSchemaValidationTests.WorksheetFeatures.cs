@@ -1743,6 +1743,33 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         AssertWorksheetProtectionSanitized(saved);
     }
 
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidSheetProtectionPasswordForSchemaValidity()
+    {
+        using var source = Save(CreateSheetProtectionSourceWorkbook());
+        SetWorksheetProtectionInvalidLegacyPassword(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorksheetChildElement(saved, "sheetProtection")
+            .Attribute("password")
+            .Should()
+            .BeNull();
+    }
+
 
     [Fact]
     public void FreezePanes_ProducesSchemaValidWorkbook()
@@ -3919,7 +3946,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         var protectedRange = protectedRanges.Element(worksheetNs + "protectedRange")!;
         protectedRange.SetAttributeValue("name", " NativeEditableRange ");
-        protectedRange.SetAttributeValue("password", "ABCD");
+        protectedRange.SetAttributeValue("password", "not-hex");
         protectedRange.SetAttributeValue("securityDescriptor", "D:PAI");
         protectedRange.SetAttributeValue("hashValue", "not-base64");
         protectedRange.SetAttributeValue("saltValue", "also-not-base64");
@@ -3954,7 +3981,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Subject;
         protectedRange.Attribute("sqref")!.Value.Should().Be("B2:C3");
         protectedRange.Attribute("name")!.Value.Should().Be("NativeEditableRange");
-        protectedRange.Attribute("password")!.Value.Should().Be("ABCD");
+        protectedRange.Attribute("password").Should().BeNull();
         protectedRange.Attribute("securityDescriptor")!.Value.Should().Be("D:PAI");
         protectedRange.Attribute("hashValue").Should().BeNull();
         protectedRange.Attribute("saltValue").Should().BeNull();
@@ -4192,6 +4219,17 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             new XElement(worksheetNs + "nativeSheetProtectionChild"),
             new XElement(freexNs + "sheetProtectionNativeChild", new XAttribute("id", "source")));
 
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void SetWorksheetProtectionInvalidLegacyPassword(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        var protection = worksheetXml.Root!.Element(worksheetNs + "sheetProtection")!;
+        protection.SetAttributeValue("password", "not-hex");
         ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
     }
 
