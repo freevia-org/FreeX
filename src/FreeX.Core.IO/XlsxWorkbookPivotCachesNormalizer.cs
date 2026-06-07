@@ -78,8 +78,8 @@ internal static class XlsxWorkbookPivotCachesNormalizer
     {
         var changed = false;
         changed |= RemoveUnknownAttributes(pivotCache, allowCacheId: true, allowRelationshipId: true);
-        changed |= RemoveAllNodes(pivotCache);
-        changed |= NormalizeAttribute(pivotCache, "cacheId", NormalizeNonNegativeIntTextOrNull);
+        changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(pivotCache);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pivotCache, "cacheId", NormalizeNonNegativeIntTextOrNull);
         changed |= NormalizeRelationshipId(pivotCache);
         return changed;
     }
@@ -116,38 +116,6 @@ internal static class XlsxWorkbookPivotCachesNormalizer
         }
 
         return changed;
-    }
-
-    private static bool RemoveAllNodes(XElement element)
-    {
-        if (!element.Nodes().Any())
-            return false;
-
-        element.RemoveNodes();
-        return true;
-    }
-
-    private static bool NormalizeAttribute(
-        XElement element,
-        string attributeName,
-        Func<string?, string?> normalize)
-    {
-        var attribute = element.Attribute(attributeName);
-        var normalized = normalize(attribute?.Value);
-        if (normalized is null)
-        {
-            if (attribute is null)
-                return false;
-
-            attribute.Remove();
-            return true;
-        }
-
-        if (attribute is not null && string.Equals(attribute.Value, normalized, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(attributeName, normalized);
-        return true;
     }
 
     private static bool NormalizeRelationshipId(XElement pivotCache)
