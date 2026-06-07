@@ -1165,6 +1165,24 @@ public static partial class AccessibilityCheckerService
             case "UNICODE":
                 kind = ConditionalFormulaScalarFunctionKind.Unicode;
                 return true;
+            case "CHAR":
+                kind = ConditionalFormulaScalarFunctionKind.Char;
+                return true;
+            case "CODE":
+                kind = ConditionalFormulaScalarFunctionKind.Code;
+                return true;
+            case "PROPER":
+                kind = ConditionalFormulaScalarFunctionKind.Proper;
+                return true;
+            case "REPT":
+                kind = ConditionalFormulaScalarFunctionKind.Rept;
+                return true;
+            case "CLEAN":
+                kind = ConditionalFormulaScalarFunctionKind.Clean;
+                return true;
+            case "T":
+                kind = ConditionalFormulaScalarFunctionKind.T;
+                return true;
             case "VALUE":
                 kind = ConditionalFormulaScalarFunctionKind.Value;
                 return true;
@@ -1501,6 +1519,11 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.ErfcPrecise or
             ConditionalFormulaScalarFunctionKind.Unichar or
             ConditionalFormulaScalarFunctionKind.Unicode or
+            ConditionalFormulaScalarFunctionKind.Char or
+            ConditionalFormulaScalarFunctionKind.Code or
+            ConditionalFormulaScalarFunctionKind.Proper or
+            ConditionalFormulaScalarFunctionKind.Clean or
+            ConditionalFormulaScalarFunctionKind.T or
             ConditionalFormulaScalarFunctionKind.Value or
             ConditionalFormulaScalarFunctionKind.Len or
             ConditionalFormulaScalarFunctionKind.Upper or
@@ -1587,6 +1610,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.ImSub or
             ConditionalFormulaScalarFunctionKind.ImDiv or
             ConditionalFormulaScalarFunctionKind.ImPower or
+            ConditionalFormulaScalarFunctionKind.Rept or
             ConditionalFormulaScalarFunctionKind.EDate or
             ConditionalFormulaScalarFunctionKind.EOMonth or
             ConditionalFormulaScalarFunctionKind.Days or
@@ -2241,6 +2265,12 @@ public static partial class AccessibilityCheckerService
         Roman,
         Unichar,
         Unicode,
+        Char,
+        Code,
+        Proper,
+        Rept,
+        Clean,
+        T,
         Value,
         NumberValue,
         Len,
@@ -2405,6 +2435,8 @@ public static partial class AccessibilityCheckerService
     {
         private static readonly IReadOnlyDictionary<string, int> FormulaArabicRomanRemainders =
             BuildFormulaArabicRemainderMap();
+
+        private static readonly CultureInfo FormulaTextScalarNumberCulture = CultureInfo.GetCultureInfo("en-US");
 
         private readonly Dictionary<ConditionalFormat, Dictionary<string, int>> _valueCounts = new();
         private readonly Dictionary<ConditionalFormat, RangeAverage> _averages = new();
@@ -2913,6 +2945,18 @@ public static partial class AccessibilityCheckerService
                     return TryEvaluateFormulaUnicharFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Unicode:
                     return TryEvaluateFormulaUnicodeFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Char:
+                    return TryEvaluateFormulaTextScalarUnaryFunction(function, rowOffset, colOffset, FormulaCharScalar, out value);
+                case ConditionalFormulaScalarFunctionKind.Code:
+                    return TryEvaluateFormulaTextScalarUnaryFunction(function, rowOffset, colOffset, FormulaCodeScalar, out value);
+                case ConditionalFormulaScalarFunctionKind.Proper:
+                    return TryEvaluateFormulaTextScalarUnaryFunction(function, rowOffset, colOffset, FormulaProperScalar, out value);
+                case ConditionalFormulaScalarFunctionKind.Rept:
+                    return TryEvaluateFormulaReptFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Clean:
+                    return TryEvaluateFormulaTextScalarUnaryFunction(function, rowOffset, colOffset, FormulaCleanScalar, out value);
+                case ConditionalFormulaScalarFunctionKind.T:
+                    return TryEvaluateFormulaTextScalarUnaryFunction(function, rowOffset, colOffset, FormulaTScalar, out value);
                 case ConditionalFormulaScalarFunctionKind.Value:
                     return TryEvaluateFormulaValueFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.NumberValue:
@@ -4735,6 +4779,441 @@ public static partial class AccessibilityCheckerService
             value = new NumberValue(text[0]);
             return true;
         }
+
+        private bool TryEvaluateFormulaTextScalarUnaryFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            Func<ScalarValue, ScalarValue> map,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaTextScalarArgument(function.Arguments[0], rowOffset, colOffset, out var source))
+                return false;
+
+            value = source is RangeValue range
+                ? MapFormulaTextScalarRange(range, map)
+                : map(source);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaReptFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaTextScalarArgument(function.Arguments[0], rowOffset, colOffset, out var textSource))
+                return false;
+
+            if (textSource is ErrorValue textError)
+            {
+                value = textError;
+                return true;
+            }
+
+            if (!TryResolveFormulaTextScalarArgument(function.Arguments[1], rowOffset, colOffset, out var repeatSource))
+                return false;
+
+            if (repeatSource is ErrorValue repeatError)
+            {
+                value = repeatError;
+                return true;
+            }
+
+            value = MapFormulaTextScalarBinaryArguments(textSource, repeatSource, FormulaReptScalar);
+            return true;
+        }
+
+        private bool TryResolveFormulaTextScalarArgument(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (operand.Kind != ConditionalFormulaOperandKind.ReferenceRange)
+                return TryResolveFormulaOperand(operand, rowOffset, colOffset, out value);
+
+            if (!TryResolveFormulaReferenceRange(
+                    operand,
+                    rowOffset,
+                    colOffset,
+                    out var targetSheet,
+                    out var startRow,
+                    out var startCol,
+                    out var endRow,
+                    out var endCol))
+            {
+                value = ErrorValue.Ref;
+                return false;
+            }
+
+            var rowCount = endRow - startRow + 1;
+            var colCount = endCol - startCol + 1;
+            if ((ulong)rowCount * colCount > MaxFormulaAggregateRangeCells)
+                return false;
+
+            var rowCountInt = (int)rowCount;
+            var colCountInt = (int)colCount;
+            var cells = new ScalarValue[rowCountInt, colCountInt];
+            for (var row = 0; row < rowCountInt; row++)
+                for (var col = 0; col < colCountInt; col++)
+                    cells[row, col] = targetSheet.GetValue(startRow + (uint)row, startCol + (uint)col);
+
+            value = new RangeValue(cells);
+            return true;
+        }
+
+        private static RangeValue MapFormulaTextScalarRange(RangeValue range, Func<ScalarValue, ScalarValue> map)
+        {
+            var cells = new ScalarValue[range.RowCount, range.ColCount];
+            for (var row = 0; row < range.RowCount; row++)
+                for (var col = 0; col < range.ColCount; col++)
+                {
+                    var value = range.Cells[row, col];
+                    cells[row, col] = value is ErrorValue error ? error : map(value);
+                }
+
+            return new RangeValue(cells);
+        }
+
+        private static ScalarValue MapFormulaTextScalarBinaryArguments(
+            ScalarValue left,
+            ScalarValue right,
+            Func<ScalarValue, ScalarValue, ScalarValue> map)
+        {
+            if (left is RangeValue leftRange && right is RangeValue rightRange)
+            {
+                var shape = leftRange.RowCount == 1 && leftRange.ColCount == 1 ? rightRange : leftRange;
+                if (!CanBroadcastFormulaTextScalarRange(leftRange, shape.RowCount, shape.ColCount) ||
+                    !CanBroadcastFormulaTextScalarRange(rightRange, shape.RowCount, shape.ColCount))
+                {
+                    return ErrorValue.Value;
+                }
+
+                var cells = new ScalarValue[shape.RowCount, shape.ColCount];
+                for (var row = 0; row < shape.RowCount; row++)
+                    for (var col = 0; col < shape.ColCount; col++)
+                    {
+                        cells[row, col] = map(
+                            FormulaTextScalarRangeValueAt(leftRange, row, col),
+                            FormulaTextScalarRangeValueAt(rightRange, row, col));
+                    }
+
+                return new RangeValue(cells);
+            }
+
+            if (left is RangeValue leftOnlyRange)
+                return MapFormulaTextScalarRange(leftOnlyRange, value => map(value, right));
+
+            if (right is RangeValue rightOnlyRange)
+                return MapFormulaTextScalarRange(rightOnlyRange, value => map(left, value));
+
+            return map(left, right);
+        }
+
+        private static bool CanBroadcastFormulaTextScalarRange(RangeValue range, int rows, int cols) =>
+            (range.RowCount == rows && range.ColCount == cols) || (range.RowCount == 1 && range.ColCount == 1);
+
+        private static ScalarValue FormulaTextScalarRangeValueAt(RangeValue range, int row, int col) =>
+            range.RowCount == 1 && range.ColCount == 1 ? range.Cells[0, 0] : range.Cells[row, col];
+
+        private static ScalarValue FormulaCharScalar(ScalarValue value)
+        {
+            if (value is ErrorValue error)
+                return error;
+
+            if (!TryGetFormulaTextScalarNumber(value, out var number) || !double.IsFinite(number))
+                return ErrorValue.Value;
+
+            var code = (int)Math.Truncate(number);
+            return code is <= 0 or > 255
+                ? ErrorValue.Value
+                : new TextValue(FormulaExcelAnsiCodeToChar(code).ToString());
+        }
+
+        private static ScalarValue FormulaCodeScalar(ScalarValue value)
+        {
+            if (value is ErrorValue error)
+                return error;
+
+            if (!TryGetFormulaCoercedText(value, out var text) || text.Length == 0)
+                return ErrorValue.Value;
+
+            return new NumberValue(FormulaCharToExcelAnsiCode(text[0]));
+        }
+
+        private static ScalarValue FormulaProperScalar(ScalarValue value)
+        {
+            if (value is ErrorValue error)
+                return error;
+
+            if (!TryGetFormulaCoercedText(value, out var text))
+                return ErrorValue.Value;
+
+            if (text.Length == 0)
+                return new TextValue(string.Empty);
+
+            var builder = new System.Text.StringBuilder(text.Length);
+            var capitaliseNext = true;
+            foreach (var ch in text)
+            {
+                if (char.IsWhiteSpace(ch) || !char.IsLetter(ch))
+                {
+                    capitaliseNext = true;
+                    builder.Append(ch);
+                }
+                else if (capitaliseNext)
+                {
+                    builder.Append(char.ToUpperInvariant(ch));
+                    capitaliseNext = false;
+                }
+                else
+                {
+                    builder.Append(char.ToLowerInvariant(ch));
+                }
+            }
+
+            return FormulaTextScalarResult(builder.ToString());
+        }
+
+        private static ScalarValue FormulaReptScalar(ScalarValue value, ScalarValue timesValue)
+        {
+            if (value is ErrorValue valueError)
+                return valueError;
+
+            if (timesValue is ErrorValue timesError)
+                return timesError;
+
+            if (!TryGetFormulaCoercedText(value, out var text) ||
+                !TryGetFormulaTextScalarNumber(timesValue, out var timesNumber) ||
+                !double.IsFinite(timesNumber) ||
+                timesNumber < 0 ||
+                timesNumber > int.MaxValue)
+            {
+                return ErrorValue.Value;
+            }
+
+            var times = (int)timesNumber;
+            return FormulaReptText(text, times);
+        }
+
+        private static ScalarValue FormulaReptText(string text, int times)
+        {
+            var characterCount = FormulaTextScalarContainsSurrogatePair(text)
+                ? FormulaTextScalarCountTextElements(text)
+                : text.Length;
+            var outputCharacterCount = (long)characterCount * times;
+            if (outputCharacterCount > MaxFormulaTextSliceLength)
+                return ErrorValue.Value;
+
+            if (outputCharacterCount == 0)
+                return new TextValue(string.Empty);
+
+            var outputLength = (long)text.Length * times;
+            var repeated = string.Create((int)outputLength, (text, times), static (span, state) =>
+            {
+                var source = state.text.AsSpan();
+                for (var i = 0; i < state.times; i++)
+                {
+                    source.CopyTo(span);
+                    span = span[source.Length..];
+                }
+            });
+
+            return new TextValue(repeated);
+        }
+
+        private static ScalarValue FormulaCleanScalar(ScalarValue value)
+        {
+            if (value is ErrorValue error)
+                return error;
+
+            if (!TryGetFormulaCoercedText(value, out var text))
+                return ErrorValue.Value;
+
+            var builder = new System.Text.StringBuilder();
+            foreach (var ch in text)
+            {
+                if (ch >= 32)
+                    builder.Append(ch);
+            }
+
+            return FormulaTextScalarResult(builder.ToString());
+        }
+
+        private static ScalarValue FormulaTScalar(ScalarValue value) =>
+            value switch
+            {
+                ErrorValue error => error,
+                TextValue text => FormulaTextScalarResult(text.Value),
+                _ => new TextValue(string.Empty)
+            };
+
+        private static ScalarValue FormulaTextScalarResult(string text) =>
+            FormulaTextScalarExceedsExcelTextLimit(text) ? ErrorValue.Value : new TextValue(text);
+
+        private static bool FormulaTextScalarExceedsExcelTextLimit(string text) =>
+            (FormulaTextScalarContainsSurrogatePair(text)
+                ? FormulaTextScalarCountTextElements(text)
+                : text.Length) > MaxFormulaTextSliceLength;
+
+        private static bool FormulaTextScalarContainsSurrogatePair(string text)
+        {
+            for (var i = 0; i + 1 < text.Length; i++)
+            {
+                if (char.IsHighSurrogate(text[i]) && char.IsLowSurrogate(text[i + 1]))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static int FormulaTextScalarCountTextElements(string text)
+        {
+            var count = 0;
+            for (var index = 0; index < text.Length; count++)
+                index += FormulaTextScalarIsSurrogatePairAt(text, index) ? 2 : 1;
+
+            return count;
+        }
+
+        private static bool FormulaTextScalarIsSurrogatePairAt(string text, int index) =>
+            index + 1 < text.Length && char.IsHighSurrogate(text[index]) && char.IsLowSurrogate(text[index + 1]);
+
+        private static bool TryGetFormulaTextScalarNumber(ScalarValue value, out double number)
+        {
+            switch (value)
+            {
+                case NumberValue numeric:
+                    number = numeric.Value;
+                    return true;
+                case DateTimeValue dateTime:
+                    number = dateTime.Value;
+                    return true;
+                case BoolValue boolean:
+                    number = boolean.Value ? 1d : 0d;
+                    return true;
+                case BlankValue:
+                    number = 0d;
+                    return true;
+                case TextValue text:
+                    return TryParseFormulaTextScalarNumber(text.Value, out number);
+                default:
+                    number = 0d;
+                    return false;
+            }
+        }
+
+        private static bool TryParseFormulaTextScalarNumber(string text, out double number)
+        {
+            var candidate = text.Trim();
+            var percentCount = 0;
+            while (candidate.EndsWith('%'))
+            {
+                percentCount++;
+                candidate = candidate[..^1].TrimEnd();
+            }
+
+            if (percentCount > 0 &&
+                double.TryParse(candidate, NumberStyles.Any, FormulaTextScalarNumberCulture, out number))
+            {
+                for (var i = 0; i < percentCount; i++)
+                    number /= 100d;
+
+                return true;
+            }
+
+            if (double.TryParse(candidate, NumberStyles.Any, FormulaTextScalarNumberCulture, out number))
+                return true;
+
+            if (TryParseFormulaExcelFakeLeapDayValueText(candidate, out number))
+                return true;
+
+            if (DateTime.TryParse(candidate, FormulaTextScalarNumberCulture, DateTimeStyles.None, out var dateTime))
+            {
+                number = IsFormulaTextScalarTimeOnlyText(candidate)
+                    ? dateTime.TimeOfDay.TotalDays
+                    : FormulaDateToExcelSerial(dateTime);
+                return true;
+            }
+
+            number = 0d;
+            return false;
+        }
+
+        private static bool IsFormulaTextScalarTimeOnlyText(string text) =>
+            !text.Contains('/') &&
+            !text.Contains('-') &&
+            !FormulaDateTimeTextHasMonthNameRegex.IsMatch(text) &&
+            (text.Contains(':') || FormulaDateTimeTextHasAmPmRegex.IsMatch(text));
+
+        private static char FormulaExcelAnsiCodeToChar(int code) => code switch
+        {
+            128 => '\u20AC',
+            130 => '\u201A',
+            131 => '\u0192',
+            132 => '\u201E',
+            133 => '\u2026',
+            134 => '\u2020',
+            135 => '\u2021',
+            136 => '\u02C6',
+            137 => '\u2030',
+            138 => '\u0160',
+            139 => '\u2039',
+            140 => '\u0152',
+            142 => '\u017D',
+            145 => '\u2018',
+            146 => '\u2019',
+            147 => '\u201C',
+            148 => '\u201D',
+            149 => '\u2022',
+            150 => '\u2013',
+            151 => '\u2014',
+            152 => '\u02DC',
+            153 => '\u2122',
+            154 => '\u0161',
+            155 => '\u203A',
+            156 => '\u0153',
+            158 => '\u017E',
+            159 => '\u0178',
+            _ => (char)code
+        };
+
+        private static int FormulaCharToExcelAnsiCode(char ch) => ch switch
+        {
+            '\u20AC' => 128,
+            '\u201A' => 130,
+            '\u0192' => 131,
+            '\u201E' => 132,
+            '\u2026' => 133,
+            '\u2020' => 134,
+            '\u2021' => 135,
+            '\u02C6' => 136,
+            '\u2030' => 137,
+            '\u0160' => 138,
+            '\u2039' => 139,
+            '\u0152' => 140,
+            '\u017D' => 142,
+            '\u2018' => 145,
+            '\u2019' => 146,
+            '\u201C' => 147,
+            '\u201D' => 148,
+            '\u2022' => 149,
+            '\u2013' => 150,
+            '\u2014' => 151,
+            '\u02DC' => 152,
+            '\u2122' => 153,
+            '\u0161' => 154,
+            '\u203A' => 155,
+            '\u0153' => 156,
+            '\u017E' => 158,
+            '\u0178' => 159,
+            <= '\u00FF' => ch,
+            _ => 63
+        };
 
         private bool TryResolveFormulaRomanForm(
             ConditionalFormulaOperand operand,
@@ -8516,6 +8995,26 @@ public static partial class AccessibilityCheckerService
             ref int nonBlankCount,
             ref int blankCount)
         {
+            if (value is RangeValue range)
+            {
+                for (var row = 0; row < range.RowCount; row++)
+                    for (var col = 0; col < range.ColCount; col++)
+                    {
+                        if (!AppendFormulaAggregateValue(
+                                range.Cells[row, col],
+                                aggregateKind,
+                                isDirectArgument: false,
+                                numericValues,
+                                ref nonBlankCount,
+                                ref blankCount))
+                        {
+                            return false;
+                        }
+                    }
+
+                return true;
+            }
+
             if (value is ErrorValue)
                 return false;
 

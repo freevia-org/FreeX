@@ -3207,6 +3207,66 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTextScalarCharCodeOperands()
+    {
+        AssertFormulaTextFunctionContrastLocations("CHAR($A1)=\"K\"", "B1", "B3");
+        AssertFormulaTextFunctionContrastLocations("CHAR(65.9)=\"A\"", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("CHAR(128)=\"\u20AC\"", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("CODE($C1)=67", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("CODE(42)=52", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("CODE(TRUE)=84", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("CODE(\"\u20AC\")=128", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("CODE(\"\u0100\")=63", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("CODE(CHAR(128))=128", FormulaTextFunctionAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTextScalarProperReptCleanTOperands()
+    {
+        AssertFormulaTextFunctionContrastLocations("PROPER($C1)=\"Open\"", "B3", "B4");
+        AssertFormulaTextFunctionContrastLocations("PROPER(\"2-way street\")=\"2-Way Street\"", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("PROPER(42)=\"42\"", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("REPT(LEFT($C1,1),2)=\"CC\"", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("REPT(\"x\",0.9)=\"\"", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("REPT(\"ab\",3.9)=\"ababab\"", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("CLEAN(CHAR(1))=\"\"", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("CLEAN(TRUE)=\"TRUE\"", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("T($D1)=\"East\"", "B1");
+        AssertFormulaTextFunctionContrastLocations("T($D1)=\"\"", "B2", "B3");
+        AssertFormulaTextFunctionContrastLocations("T(42)=\"\"", FormulaTextFunctionAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTextScalarsInWrappersPredicatesAndAggregates()
+    {
+        AssertFormulaTextFunctionContrastLocations("AND(PROPER($C1)=\"Open\",$A1>=100)", "B4");
+        AssertFormulaTextFunctionContrastLocations("IF(T($D1)=\"\",TRUE,FALSE)", "B2", "B3");
+        AssertFormulaTextFunctionContrastLocations("ISTEXT(CHAR($A1))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISNUMBER(CODE($C1))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("CODE(CHAR($A1))+1=76", "B1", "B3");
+        AssertFormulaTextFunctionContrastLocations("SUM(CODE($C1),1)=68", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("SUM(CODE($C$1:$C$2))=134", FormulaTextFunctionAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTextScalarErrorPredicates()
+    {
+        AssertFormulaTextFunctionContrastLocations("ISERROR(CHAR(0))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISERROR(CHAR(256.9))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISERROR(CHAR(\"x\"))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISERROR(CODE(\"\"))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISERROR(REPT(\"x\",-0.5))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISERROR(REPT(\"x\",32768))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISERROR(REPT(\"\uD83D\uDE00\",32768))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISTEXT(REPT(\"\uD83D\uDE00\",32767))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISNA(CODE(NA()))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISNA(PROPER(NA()))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISNA(REPT(\"x\",NA()))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISNA(CLEAN(NA()))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISNA(T(NA()))", FormulaTextFunctionAllLocations);
+    }
+
+    [Fact]
     public void FindIssues_DoesNotMatchFormulaConditionalFormatTextFunctionUnsupportedOperands()
     {
         AssertFormulaTextFunctionContrastLocations("LEN($C1,1)>0");
@@ -3227,6 +3287,24 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaTextFunctionContrastLocations("CONCAT($C1,\"x\")=\"Openx\"");
         AssertFormulaTextFunctionContrastLocations("LEFT($C1&\"x\",1)=\"O\"");
         AssertFormulaTextFunctionContrastLocations("LEN(A0)>0");
+        AssertFormulaTextFunctionContrastLocations("CHAR()>0");
+        AssertFormulaTextFunctionContrastLocations("CHAR($A1,1)>0");
+        AssertFormulaTextFunctionContrastLocations("CHAR(0)>0");
+        AssertFormulaTextFunctionContrastLocations("CHAR(256)>0");
+        AssertFormulaTextFunctionContrastLocations("CHAR(FALSE)>0");
+        AssertFormulaTextFunctionContrastLocations("CODE()>0");
+        AssertFormulaTextFunctionContrastLocations("CODE($C1,1)>0");
+        AssertFormulaTextFunctionContrastLocations("CODE(\"\")>0");
+        AssertFormulaTextFunctionContrastLocations("PROPER()>0");
+        AssertFormulaTextFunctionContrastLocations("PROPER($C1,1)>0");
+        AssertFormulaTextFunctionContrastLocations("REPT(\"x\")=\"x\"");
+        AssertFormulaTextFunctionContrastLocations("REPT(\"x\",1,1)=\"x\"");
+        AssertFormulaTextFunctionContrastLocations("REPT(\"x\",-1)=\"\"");
+        AssertFormulaTextFunctionContrastLocations("REPT(\"x\",1E308*1E308)=\"\"");
+        AssertFormulaTextFunctionContrastLocations("CLEAN()>0");
+        AssertFormulaTextFunctionContrastLocations("CLEAN($C1,1)>0");
+        AssertFormulaTextFunctionContrastLocations("T()>0");
+        AssertFormulaTextFunctionContrastLocations("T($C1,1)>0");
     }
 
     [Fact]
@@ -5299,6 +5377,9 @@ public sealed partial class AccessibilityCheckerServiceTests
 
     private static string[] FormulaNumberValueAllLocations =>
         ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8"];
+
+    private static string[] FormulaTextFunctionAllLocations =>
+        ["B1", "B2", "B3", "B4"];
 
     private static string[] FormulaUnicodeAllLocations =>
         ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9"];
