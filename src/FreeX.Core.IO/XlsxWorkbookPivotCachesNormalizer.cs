@@ -53,7 +53,7 @@ internal static class XlsxWorkbookPivotCachesNormalizer
         HashSet<string> seenRelationshipIds)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(pivotCaches, allowCacheId: false, allowRelationshipId: false);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(pivotCaches, Array.Empty<XName>());
         changed |= RemoveUnexpectedChildElements(pivotCaches, WorkbookNs + "pivotCache");
 
         foreach (var pivotCache in pivotCaches.Elements(WorkbookNs + "pivotCache").ToList())
@@ -77,32 +77,13 @@ internal static class XlsxWorkbookPivotCachesNormalizer
     private static bool NormalizePivotCacheElement(XElement pivotCache)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(pivotCache, allowCacheId: true, allowRelationshipId: true);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(
+            pivotCache,
+            XName.Get("cacheId"),
+            RelationshipNs + "id");
         changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(pivotCache);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pivotCache, "cacheId", NormalizeNonNegativeIntTextOrNull);
         changed |= NormalizeRelationshipId(pivotCache);
-        return changed;
-    }
-
-    private static bool RemoveUnknownAttributes(
-        XElement element,
-        bool allowCacheId,
-        bool allowRelationshipId)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                (allowCacheId && attribute.Name.NamespaceName.Length == 0 && attribute.Name.LocalName == "cacheId") ||
-                (allowRelationshipId && attribute.Name == RelationshipNs + "id"))
-            {
-                continue;
-            }
-
-            attribute.Remove();
-            changed = true;
-        }
-
         return changed;
     }
 

@@ -130,7 +130,7 @@ internal static class XlsxWorksheetOleControlNormalizer
     private static bool NormalizeOleObjectsElement(XElement oleObjects)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(oleObjects, NoAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(oleObjects, NoAttributes, RelNs + "id");
         changed |= RemoveUnexpectedChildElements(oleObjects, WorksheetNs + "oleObject");
 
         foreach (var oleObject in oleObjects.Elements(WorksheetNs + "oleObject").ToList())
@@ -149,7 +149,7 @@ internal static class XlsxWorksheetOleControlNormalizer
     private static bool NormalizeControlsElement(XElement controls)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(controls, NoAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(controls, NoAttributes, RelNs + "id");
         changed |= RemoveUnexpectedChildElements(controls, WorksheetNs + "control");
 
         foreach (var control in controls.Elements(WorksheetNs + "control").ToList())
@@ -168,7 +168,7 @@ internal static class XlsxWorksheetOleControlNormalizer
     private static bool NormalizeOleObjectElement(XElement oleObject)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(oleObject, OleObjectAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(oleObject, OleObjectAttributes, RelNs + "id");
         changed |= RemoveUnexpectedChildElements(oleObject, WorksheetNs + "objectPr");
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "shapeId", NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "autoLoad", NormalizeBoolean);
@@ -182,7 +182,7 @@ internal static class XlsxWorksheetOleControlNormalizer
     private static bool NormalizeControlElement(XElement control)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(control, ControlAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(control, ControlAttributes, RelNs + "id");
         changed |= RemoveUnexpectedChildElements(control, WorksheetNs + "controlPr");
         changed |= NormalizeControlProperties(control);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(control, "shapeId", NormalizeUnsignedIntOrNull);
@@ -203,7 +203,7 @@ internal static class XlsxWorksheetOleControlNormalizer
                 continue;
             }
 
-            changed |= RemoveUnknownAttributes(controlProperties, ControlPropertiesAttributes);
+            changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(controlProperties, ControlPropertiesAttributes, RelNs + "id");
             changed |= RemoveUnexpectedChildElements(controlProperties, WorksheetNs + "anchor");
             changed |= NormalizeBooleanAttribute(controlProperties, "locked");
             changed |= NormalizeBooleanAttribute(controlProperties, "defaultSize");
@@ -236,25 +236,6 @@ internal static class XlsxWorksheetOleControlNormalizer
     private static bool ShouldRemoveRelationshipBackedElement(XElement element) =>
         element.Attribute(RelNs + "id") is null ||
         element.Attribute("shapeId") is null;
-
-    private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedNames)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                attribute.Name == RelNs + "id" ||
-                (attribute.Name.NamespaceName.Length == 0 && allowedNames.Contains(attribute.Name.LocalName)))
-            {
-                continue;
-            }
-
-            attribute.Remove();
-            changed = true;
-        }
-
-        return changed;
-    }
 
     private static bool RemoveUnexpectedChildElements(XElement element, XName allowedChildName)
     {
