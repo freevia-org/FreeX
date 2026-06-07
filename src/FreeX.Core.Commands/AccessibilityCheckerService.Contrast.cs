@@ -2295,6 +2295,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaAggregateKind.PercentRankInc or
             ConditionalFormulaAggregateKind.PercentRankExc => argumentCount is 2 or 3,
             ConditionalFormulaAggregateKind.Prob => argumentCount is 3 or 4,
+            ConditionalFormulaAggregateKind.TrimMean => argumentCount == 2,
             ConditionalFormulaAggregateKind.ModeSngl => argumentCount is >= 1 and <= MaxFormulaModeArgumentCount,
             _ => argumentCount > 0
         };
@@ -2356,6 +2357,18 @@ public static partial class AccessibilityCheckerService
                 return true;
             case "AVEDEV":
                 kind = ConditionalFormulaAggregateKind.AveDev;
+                return true;
+            case "KURT":
+                kind = ConditionalFormulaAggregateKind.Kurt;
+                return true;
+            case "SKEW":
+                kind = ConditionalFormulaAggregateKind.Skew;
+                return true;
+            case "SKEW.P":
+                kind = ConditionalFormulaAggregateKind.SkewP;
+                return true;
+            case "TRIMMEAN":
+                kind = ConditionalFormulaAggregateKind.TrimMean;
                 return true;
             case "GEOMEAN":
                 kind = ConditionalFormulaAggregateKind.GeoMean;
@@ -3266,6 +3279,10 @@ public static partial class AccessibilityCheckerService
         VarianceSample,
         VariancePopulation,
         AveDev,
+        Kurt,
+        Skew,
+        SkewP,
+        TrimMean,
         GeoMean,
         HarMean,
         Product,
@@ -19801,6 +19818,9 @@ public static partial class AccessibilityCheckerService
             if (IsFormulaPairwiseAggregate(operand.AggregateKind))
                 return TryEvaluateFormulaPairwiseAggregate(operand, rowOffset, colOffset, out value);
 
+            if (operand.AggregateKind == ConditionalFormulaAggregateKind.TrimMean)
+                return TryEvaluateFormulaTrimMeanAggregate(operand, rowOffset, colOffset, out value);
+
             if (operand.AggregateArguments is not { Count: > 0 } arguments)
                 return false;
 
@@ -19832,6 +19852,9 @@ public static partial class AccessibilityCheckerService
                 ConditionalFormulaAggregateKind.VarianceSample when numericValues.Count > 1 => new NumberValue(VarianceFormulaNumbers(numericValues, sample: true)),
                 ConditionalFormulaAggregateKind.VariancePopulation when numericValues.Count > 0 => new NumberValue(VarianceFormulaNumbers(numericValues, sample: false)),
                 ConditionalFormulaAggregateKind.AveDev when numericValues.Count > 0 => new NumberValue(AveDevFormulaNumbers(numericValues)),
+                ConditionalFormulaAggregateKind.Kurt => FormulaKurtAggregateResult(numericValues),
+                ConditionalFormulaAggregateKind.Skew => FormulaSkewAggregateResult(numericValues, population: false),
+                ConditionalFormulaAggregateKind.SkewP => FormulaSkewAggregateResult(numericValues, population: true),
                 ConditionalFormulaAggregateKind.GeoMean when AreFormulaNumbersPositive(numericValues) => new NumberValue(GeoMeanFormulaNumbers(numericValues)),
                 ConditionalFormulaAggregateKind.HarMean when AreFormulaNumbersPositive(numericValues) => new NumberValue(HarMeanFormulaNumbers(numericValues)),
                 ConditionalFormulaAggregateKind.Product => new NumberValue(numericValues.Aggregate(1d, (product, number) => product * number)),
@@ -19848,7 +19871,50 @@ public static partial class AccessibilityCheckerService
                 _ => ErrorValue.Value
             };
 
-            return value is not ErrorValue && TryGetNumber(value, out var number) && double.IsFinite(number);
+            return FormulaAggregateEvaluationSucceeded(operand.AggregateKind, value);
+        }
+
+        private static bool FormulaAggregateEvaluationSucceeded(
+            ConditionalFormulaAggregateKind aggregateKind,
+            ScalarValue value)
+        {
+            if (value is ErrorValue)
+                return IsFormulaShapeOrTrimAggregate(aggregateKind);
+
+            return TryGetNumber(value, out var number) && double.IsFinite(number);
+        }
+
+        private static bool IsFormulaShapeOrTrimAggregate(ConditionalFormulaAggregateKind aggregateKind) =>
+            aggregateKind is
+                ConditionalFormulaAggregateKind.Kurt or
+                ConditionalFormulaAggregateKind.Skew or
+                ConditionalFormulaAggregateKind.SkewP or
+                ConditionalFormulaAggregateKind.TrimMean;
+
+        private bool TryEvaluateFormulaTrimMeanAggregate(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (operand.AggregateArguments is not { Count: 2 } arguments ||
+                !TryResolveFormulaStatisticalArrayArgument(arguments[0], rowOffset, colOffset, out var range))
+            {
+                return false;
+            }
+
+            if (!TryCollectFormulaStatisticalArrayNumbers(range, out var numbers, out var rangeError))
+            {
+                value = rangeError ?? ErrorValue.Value;
+                return true;
+            }
+
+            if (!TryResolveFormulaAggregateControlNumber(arguments[1], rowOffset, colOffset, out var percent, out value))
+                return value is ErrorValue;
+
+            value = FormulaTrimMeanAggregateResult(numbers, percent);
+            return true;
         }
 
         private static double DevSqFormulaNumbers(List<double> numericValues)
@@ -19883,6 +19949,89 @@ public static partial class AccessibilityCheckerService
                 sum += Math.Abs(numericValues[i] - average);
 
             return sum / numericValues.Count;
+        }
+
+        private static ScalarValue FormulaKurtAggregateResult(List<double> numericValues)
+        {
+            var count = numericValues.Count;
+            if (count < 4)
+                return ErrorValue.DivByZero;
+
+            var mean = numericValues.Average();
+            if (!double.IsFinite(mean))
+                return ErrorValue.Num;
+
+            var sampleVariance = DevSqFormulaNumbers(numericValues) / (count - 1);
+            if (sampleVariance == 0d)
+                return ErrorValue.DivByZero;
+
+            if (!double.IsFinite(sampleVariance))
+                return ErrorValue.Num;
+
+            var sampleDeviation = Math.Sqrt(sampleVariance);
+            var fourthMoment = 0d;
+            for (var i = 0; i < numericValues.Count; i++)
+                fourthMoment += Math.Pow((numericValues[i] - mean) / sampleDeviation, 4d);
+
+            var result = count * (count + 1d) / ((count - 1d) * (count - 2d) * (count - 3d)) * fourthMoment -
+                3d * (count - 1d) * (count - 1d) / ((count - 2d) * (count - 3d));
+
+            return FormulaConditionalAggregateNumberResult(result);
+        }
+
+        private static ScalarValue FormulaSkewAggregateResult(List<double> numericValues, bool population)
+        {
+            var count = numericValues.Count;
+            if (count < (population ? 1 : 3))
+                return ErrorValue.DivByZero;
+
+            var mean = numericValues.Average();
+            if (!double.IsFinite(mean))
+                return ErrorValue.Num;
+
+            var variance = DevSqFormulaNumbers(numericValues) / (population ? count : count - 1);
+            if (variance == 0d)
+                return ErrorValue.DivByZero;
+
+            if (!double.IsFinite(variance))
+                return ErrorValue.Num;
+
+            var deviation = Math.Sqrt(variance);
+            var thirdMoment = 0d;
+            for (var i = 0; i < numericValues.Count; i++)
+                thirdMoment += Math.Pow((numericValues[i] - mean) / deviation, 3d);
+
+            var result = population
+                ? thirdMoment / count
+                : thirdMoment * count / ((count - 1d) * (count - 2d));
+
+            return FormulaConditionalAggregateNumberResult(result);
+        }
+
+        private static ScalarValue FormulaTrimMeanAggregateResult(List<double> numericValues, double percent)
+        {
+            if (!double.IsFinite(percent) || percent is < 0d or > 1d)
+                return ErrorValue.Num;
+
+            if (numericValues.Count == 0)
+                return ErrorValue.DivByZero;
+
+            var excludedCount = (int)Math.Floor(numericValues.Count * percent);
+            if (excludedCount % 2 != 0)
+                excludedCount--;
+
+            var remainingCount = numericValues.Count - excludedCount;
+            if (remainingCount <= 0)
+                return ErrorValue.DivByZero;
+
+            var trimCount = excludedCount / 2;
+            numericValues.Sort();
+
+            var total = 0d;
+            for (var i = trimCount; i < numericValues.Count - trimCount; i++)
+                total += numericValues[i];
+
+            return FormulaConditionalAggregateNumberResult(total / remainingCount);
         }
 
         private static bool AreFormulaNumbersPositive(List<double> numericValues)
@@ -20174,6 +20323,9 @@ public static partial class AccessibilityCheckerService
                 ConditionalFormulaAggregateKind.VarianceSample or
                 ConditionalFormulaAggregateKind.VariancePopulation or
                 ConditionalFormulaAggregateKind.AveDev or
+                ConditionalFormulaAggregateKind.Kurt or
+                ConditionalFormulaAggregateKind.Skew or
+                ConditionalFormulaAggregateKind.SkewP or
                 ConditionalFormulaAggregateKind.GeoMean or
                 ConditionalFormulaAggregateKind.HarMean or
                 ConditionalFormulaAggregateKind.Product or
