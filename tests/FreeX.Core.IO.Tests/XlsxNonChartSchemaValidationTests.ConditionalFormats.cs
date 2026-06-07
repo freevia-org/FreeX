@@ -226,6 +226,60 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void ConditionalFormat_DifferentialStyleNativeMetadata_SanitizesInvalidXmlForSchemaValidity()
+    {
+        var workbook = new Workbook("DifferentialStyleNativeMetadataCf");
+        var sheet = workbook.AddSheet("Data");
+        SeedNumericGrid(sheet);
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = Range(sheet, 2, 1, 5, 1),
+            Priority = 1,
+            RuleType = CfRuleType.Top10,
+            TopBottomRank = 2,
+            FormatIfTrue = new CellStyle
+            {
+                Bold = true,
+                FontColor = new CellColor(192, 0, 0),
+                NativeDifferentialAttributes = new Dictionary<string, string> { ["customAttr"] = "removed" },
+                NativeDifferentialChildXmls =
+                [
+                    "<extLst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ext uri=\"{FREEX-DXF-NATIVE}\" /></extLst>",
+                    "<nativeDxfChild xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" />"
+                ],
+                NativeDifferentialElementXmls = new Dictionary<string, string>
+                {
+                    ["font"] = "<font xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" customFontAttr=\"removed\"><scheme val=\"minor\" /><nativeFontChild xmlns=\"urn:freex:test\" /></font>"
+                }
+            }
+        });
+
+        using var stream = Save(workbook);
+
+        SchemaErrors(stream).Should().BeEmpty();
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexNs = "urn:freex:test";
+        var dxf = LoadPackageXml(archive.GetEntry("xl/styles.xml")!)
+            .Root!
+            .Element(workbookNs + "dxfs")!
+            .Elements(workbookNs + "dxf")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        dxf.Attribute("customAttr").Should().BeNull();
+        dxf.Element(workbookNs + "nativeDxfChild").Should().BeNull();
+        dxf.Element(workbookNs + "extLst").Should().NotBeNull();
+        var font = dxf.Element(workbookNs + "font");
+        font.Should().NotBeNull();
+        font!.Attribute("customFontAttr").Should().BeNull();
+        font.Element(freexNs + "nativeFontChild").Should().BeNull();
+        font.Element(workbookNs + "scheme")!.Attribute("val")!.Value.Should().Be("minor");
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithX14DataBarConditionalFormat_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreateX14DataBarConditionalFormatSourceWorkbook());

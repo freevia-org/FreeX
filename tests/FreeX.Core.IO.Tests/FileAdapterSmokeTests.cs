@@ -4901,13 +4901,15 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        var loadedStyle = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject.FormatIfTrue;
+        var loadedSheet = loaded.GetSheetAt(0);
+        var loadedStyle = loadedSheet.ConditionalFormats.Should().ContainSingle().Subject.FormatIfTrue;
         loadedStyle.Should().NotBeNull();
         loadedStyle!.NativeDifferentialAttributes.Should().ContainKey("customAttr").WhoseValue.Should().Be("dxf-native");
         loadedStyle.NativeDifferentialChildXmls.Should().ContainSingle()
             .Which.Should().Contain("{FREEX-DXF-NATIVE}");
         loadedStyle.NativeDifferentialElementXmls.Should().ContainKey("font")
             .WhoseValue.Should().Contain("customFontAttr=\"font-native\"");
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 1, 2), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -4915,8 +4917,8 @@ public partial class FileAdapterSmokeTests
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
         var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
-        stylesXml.Should().Contain("customAttr=\"dxf-native\"");
-        stylesXml.Should().Contain("customFontAttr=\"font-native\"");
+        stylesXml.Should().NotContain("customAttr=\"dxf-native\"");
+        stylesXml.Should().NotContain("customFontAttr=\"font-native\"");
         stylesXml.Should().Contain("scheme val=\"minor\"");
         stylesXml.Should().Contain("{FREEX-DXF-NATIVE}");
         stylesXml.Should().Contain("formatCode=\"0.00\"");
@@ -13658,10 +13660,10 @@ public partial class FileAdapterSmokeTests
             .Should().BeTrue();
         var differentialStyles = stylesXml.Root!.Element(workbookNs + "dxfs");
         differentialStyles.Should().NotBeNull();
-        differentialStyles!.Elements(workbookNs + "dxf").Should().ContainSingle()
-            .Which.Should().Match<XElement>(element =>
-                element.Attribute("nativePivotDxf")!.Value == "kept" &&
-                element.Element(freexNs + "pivotStyleDxfNativeChild")!.Attribute("value")!.Value == "kept");
+        var differentialStyle = differentialStyles!.Elements(workbookNs + "dxf").Should().ContainSingle().Subject;
+        differentialStyle.Attribute("nativePivotDxf").Should().BeNull();
+        differentialStyle.Element(freexNs + "pivotStyleDxfNativeChild").Should().BeNull();
+        differentialStyle.Element(workbookNs + "fill").Should().NotBeNull();
 
         var extensionList = stylesXml.Root!.Element(workbookNs + "extLst");
         extensionList.Should().NotBeNull();
