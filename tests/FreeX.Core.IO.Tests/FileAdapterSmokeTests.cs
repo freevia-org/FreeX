@@ -14394,6 +14394,71 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesEmbeddedOlePackageAndWorksheetReference()
+    {
+        var workbook = new Workbook("EmbeddedOleRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("embedded object"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddEmbeddedOlePackage(source);
+        var sourceBytes = source.ToArray();
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(loaded, out var prepareBlockReason)
+            .Should()
+            .BeTrue(prepareBlockReason);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        adapter.LastSaveDiagnostics.CellChangeCount.Should().Be(1);
+        ReadPackageEntry(savedBytes, "xl/embeddings/oleObject1.bin")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/embeddings/oleObject1.bin"));
+
+        using var archive = new ZipArchive(new MemoryStream(savedBytes, writable: false), ZipArchiveMode.Read, leaveOpen: false);
+        archive.GetEntry("xl/embeddings/oleObject1.bin").Should().NotBeNull();
+
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var oleObject = worksheetXml.Root!
+            .Element(worksheetNs + "oleObjects")!
+            .Element(worksheetNs + "oleObject");
+        oleObject.Should().NotBeNull();
+        var relId = oleObject!.Attribute(relNs + "id")!.Value;
+        relId.Should().Be("rIdEmbeddedOle1");
+        oleObject.Attribute("shapeId")!.Value.Should().Be("1025");
+
+        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var embeddedRelationship = worksheetRelsXml.Root!.Elements(packageRelNs + "Relationship")
+            .SingleOrDefault(rel =>
+                string.Equals((string?)rel.Attribute("Id"), relId, StringComparison.Ordinal) &&
+                string.Equals((string?)rel.Attribute("Type"), "http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject", StringComparison.Ordinal) &&
+                string.Equals((string?)rel.Attribute("Target"), "../embeddings/oleObject1.bin", StringComparison.Ordinal));
+        embeddedRelationship.Should().NotBeNull();
+        embeddedRelationship!.Attribute("TargetMode").Should().BeNull();
+
+        var contentTypesText = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!)
+            .ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        contentTypesText.Should().Contain("/xl/embeddings/oleObject1.bin");
+        contentTypesText.Should().Contain("application/vnd.openxmlformats-officedocument.oleObject");
+
+        using var reload = new MemoryStream(savedBytes, writable: false);
+        adapter.Load(reload).GetSheetAt(0).GetCell(2, 1)!.Value.Should().Be(new TextValue("edited"));
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesHeaderFooterLegacyDrawingReference()
     {
         var workbook = new Workbook("HeaderFooterDrawingRetentionTest");
