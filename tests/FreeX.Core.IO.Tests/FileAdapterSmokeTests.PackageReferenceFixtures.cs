@@ -181,6 +181,39 @@ public partial class FileAdapterSmokeTests
         packageStream.Position = 0;
     }
 
+    private static void AddStalePrinterSettingsRelationship(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(
+                contentTypesXml,
+                contentTypeNs,
+                "/xl/printerSettings/printerSettings2.bin",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+            var worksheetRelsXml = LoadPackageXml(archive.GetEntry(worksheetRelsPath)!);
+            worksheetRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdStalePrinterSettings"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings"),
+                new XAttribute("Target", "../printerSettings/printerSettings2.bin")));
+            ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+            archive.GetEntry("xl/printerSettings/printerSettings2.bin")?.Delete();
+            var settingsEntry = archive.CreateEntry("xl/printerSettings/printerSettings2.bin");
+            using var settingsStream = settingsEntry.Open();
+            settingsStream.Write([0x46, 0x58, 0x4C, 0x53, 0x54, 0x41, 0x4C, 0x45]);
+        }
+
+        packageStream.Position = 0;
+    }
+
     private static void AddEmbeddedOlePackage(MemoryStream packageStream)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))

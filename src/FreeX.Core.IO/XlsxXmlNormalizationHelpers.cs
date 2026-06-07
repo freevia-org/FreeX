@@ -78,6 +78,18 @@ internal static class XlsxXmlNormalizationHelpers
         return true;
     }
 
+    public static bool RemoveChildElementsExcept(XElement element, XName allowedChildName)
+    {
+        var changed = false;
+        foreach (var child in element.Elements().Where(child => child.Name != allowedChildName).ToList())
+        {
+            child.Remove();
+            changed = true;
+        }
+
+        return changed;
+    }
+
     public static bool NormalizeAttribute(
         XElement element,
         string attributeName,
