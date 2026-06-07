@@ -1,4 +1,5 @@
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Xml.Linq;
 using FluentAssertions;
@@ -60,6 +61,61 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceWorksheetRelationships.ToString(SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void LoadedWorkbookFullSave_WithSourceThreadedCommentsAtAlternatePaths_DropsStaleSourceParts()
+    {
+        using var source = Save(CreateThreadedCommentSourceWorkbook());
+        MovePackageEntry(source, "xl/threadedComments/threadedComment1.xml", "xl/threadedComments/threadedComment2.xml");
+        MovePackageEntry(source, "xl/persons/person.xml", "xl/persons/person2.xml");
+        PatchPackageRootElement(source, "[Content_Types].xml", root =>
+        {
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            root.Elements(contentTypeNs + "Override")
+                .Single(element => ThreadedAttributeValue(element, "PartName") == "/xl/threadedComments/threadedComment1.xml")
+                .SetAttributeValue("PartName", "/xl/threadedComments/threadedComment2.xml");
+            root.Elements(contentTypeNs + "Override")
+                .Single(element => ThreadedAttributeValue(element, "PartName") == "/xl/persons/person.xml")
+                .SetAttributeValue("PartName", "/xl/persons/person2.xml");
+        });
+        PatchPackageRootElement(source, "xl/_rels/workbook.xml.rels", root =>
+        {
+            XNamespace packageRelationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            root.Elements(packageRelationshipNs + "Relationship")
+                .Single(element => ThreadedAttributeValue(element, "Type") == "http://schemas.microsoft.com/office/2017/10/relationships/person")
+                .SetAttributeValue("Target", "persons/person2.xml");
+        });
+        PatchPackageRootElement(source, "xl/worksheets/_rels/sheet1.xml.rels", root =>
+        {
+            XNamespace packageRelationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            root.Elements(packageRelationshipNs + "Relationship")
+                .Single(element => ThreadedAttributeValue(element, "Type") == "http://schemas.microsoft.com/office/2017/10/relationships/threadedComment")
+                .SetAttributeValue("Target", "../threadedComments/threadedComment2.xml");
+        });
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(42));
+        workbook.RegisterStyle(new CellStyle { Bold = true });
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertThreadedCommentPackageGraph(saved);
+        ReadPackageEntryNames(saved)
+            .Should()
+            .Contain("xl/threadedComments/threadedComment1.xml")
+            .And.Contain("xl/persons/person.xml")
+            .And.NotContain("xl/threadedComments/threadedComment2.xml")
+            .And.NotContain("xl/persons/person2.xml");
     }
 
     private static Workbook CreateThreadedCommentSourceWorkbook()
@@ -132,6 +188,50 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Select(element => element.Attribute("displayName")?.Value)
             .Should()
             .BeEquivalentTo("Quinn", "Codex");
+    }
+
+    private static IReadOnlyList<string> ReadPackageEntryNames(Stream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        return archive.Entries.Select(entry => entry.FullName).ToList();
+    }
+
+    private static void MovePackageEntry(MemoryStream stream, string sourcePath, string targetPath)
+    {
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var sourceEntry = archive.GetEntry(sourcePath);
+            sourceEntry.Should().NotBeNull(sourcePath);
+            using var sourceContent = new MemoryStream();
+            using (var sourceEntryStream = sourceEntry!.Open())
+                sourceEntryStream.CopyTo(sourceContent);
+
+            sourceEntry.Delete();
+            var targetEntry = archive.CreateEntry(targetPath, CompressionLevel.Optimal);
+            sourceContent.Position = 0;
+            using var targetEntryStream = targetEntry.Open();
+            sourceContent.CopyTo(targetEntryStream);
+        }
+
+        stream.Position = 0;
+    }
+
+    private static void PatchPackageRootElement(MemoryStream stream, string path, Action<XElement> patchRoot)
+    {
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var document = XlsxPackageTestFixtures.LoadPackageXml(archive, path, path);
+            patchRoot(document.Root!);
+            archive.GetEntry(path)?.Delete();
+            var replacement = archive.CreateEntry(path, CompressionLevel.Optimal);
+            using var replacementStream = replacement.Open();
+            document.Save(replacementStream, SaveOptions.DisableFormatting);
+        }
+
+        stream.Position = 0;
     }
 
     private static string? ThreadedAttributeValue(XElement element, string name) =>
