@@ -68,6 +68,8 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     string? OpenedSourcePath,
     bool IsOpening,
     bool HasNewSheetButton,
+    bool HasFocusableSheetTab,
+    bool HasSheetTabContextKeyboardHelp,
     bool HasSheetTabContextRenameMenuItem,
     bool HasSheetTabContextTabColorMenuItem,
     bool HasSheetTabContextNoColorMenuItem,
@@ -181,6 +183,8 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         ViewportRowCount > 0 &&
         ViewportColumnCount > 0 &&
         HasNewSheetButton &&
+        HasFocusableSheetTab &&
+        HasSheetTabContextKeyboardHelp &&
         HasSheetTabContextRenameMenuItem &&
         HasSheetTabContextTabColorMenuItem &&
         HasSheetTabContextNoColorMenuItem &&
@@ -342,6 +346,8 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"opened_source_path={snapshot.OpenedSourcePath ?? ""}",
                 $"is_opening={FormatBool(snapshot.IsOpening)}",
                 $"new_sheet_button={FormatBool(snapshot.HasNewSheetButton)}",
+                $"focusable_sheet_tab={FormatBool(snapshot.HasFocusableSheetTab)}",
+                $"sheet_tab_context_keyboard_help={FormatBool(snapshot.HasSheetTabContextKeyboardHelp)}",
                 $"sheet_tab_context_rename_menu_item={FormatBool(snapshot.HasSheetTabContextRenameMenuItem)}",
                 $"sheet_tab_context_tab_color_menu_item={FormatBool(snapshot.HasSheetTabContextTabColorMenuItem)}",
                 $"sheet_tab_context_no_color_menu_item={FormatBool(snapshot.HasSheetTabContextNoColorMenuItem)}",

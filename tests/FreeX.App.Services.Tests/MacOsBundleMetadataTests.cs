@@ -134,6 +134,8 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"window_shown=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"opened_source_path=.*freex-$runtime-launch.csv\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"new_sheet_button=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"focusable_sheet_tab=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"sheet_tab_context_keyboard_help=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"sheet_tab_context_rename_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"sheet_tab_context_tab_color_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"sheet_tab_context_no_color_menu_item=true\" \"$launch_smoke_report\"");

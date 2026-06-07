@@ -64,6 +64,7 @@ public sealed class MainWindow : Window
     private const int ZoomStepPercent = 10;
     private const string NativeWorkbookExtension = ".fxl";
     private const string PlatformAboutSummary = "Built with .NET 10, Avalonia, ClosedXML.";
+    private const string SheetTabContextHelpText = "Selects this sheet. Right-click or press Shift+F10 for sheet tab options.";
     private static readonly IBrush WindowBackground = Brush(246, 247, 249);
     private static readonly IBrush HeaderBackground = Brush(241, 243, 246);
     private static readonly IBrush HeaderForeground = Brush(73, 80, 93);
@@ -1302,6 +1303,7 @@ public sealed class MainWindow : Window
                 MinWidth = 72,
                 MaxWidth = 180,
                 MinHeight = 28,
+                Focusable = true,
                 Padding = new Thickness(12, 4),
                 Background = tab.IsActive
                     ? SelectionHeaderBackground
@@ -1311,10 +1313,15 @@ public sealed class MainWindow : Window
                 BorderBrush = tab.IsActive || isGroupedTab ? SelectionBorder : ToolbarBorder,
                 BorderThickness = new Thickness(1),
                 Content = content,
+                Tag = tab.Id,
             };
             button.ContextMenu = CreateSheetTabContextMenu(tab);
             button.PointerPressed += (_, args) => SelectSheetFromPointer(tab.Id, args);
+            button.DoubleTapped += async (_, args) => await RenameSheetFromTabAsync(tab.Id, args);
+            button.KeyDown += (_, args) => OpenSheetTabContextMenuFromKeyboard(tab.Id, button, args);
             button.Click += (_, _) => SelectSheet(tab.Id);
+            AutomationProperties.SetName(button, tab.Name);
+            AutomationProperties.SetHelpText(button, SheetTabContextHelpText);
             panel.Children.Add(button);
         }
 
@@ -2591,6 +2598,60 @@ public sealed class MainWindow : Window
         args.Handled = true;
         SelectSheet(sheetId, selectRange, toggle);
     }
+
+    private async Task RenameSheetFromTabAsync(SheetId sheetId, TappedEventArgs args)
+    {
+        args.Handled = true;
+        if (!SelectSheetForContextCommand(sheetId))
+            return;
+
+        await RenameActiveSheetAsync();
+    }
+
+    private void OpenSheetTabContextMenuFromKeyboard(SheetId sheetId, Button button, KeyEventArgs args)
+    {
+        if (!IsSheetTabContextMenuKey(args))
+            return;
+
+        args.Handled = true;
+        if (!SelectSheetForContextCommand(sheetId))
+            return;
+
+        if (FindSheetTabButton(sheetId) is { } refreshedButton)
+            button = refreshedButton;
+
+        if (button.ContextMenu is { } contextMenu)
+        {
+            contextMenu.Opened -= SheetTabContextMenu_Opened;
+            contextMenu.Opened += SheetTabContextMenu_Opened;
+            contextMenu.Open(button);
+        }
+    }
+
+    private static bool IsSheetTabContextMenuKey(KeyEventArgs args) =>
+        args.Key == Key.Apps ||
+        args.Key == Key.F10 && args.KeyModifiers == KeyModifiers.Shift;
+
+    private static void SheetTabContextMenu_Opened(object? sender, RoutedEventArgs args)
+    {
+        if (sender is not ContextMenu contextMenu ||
+            contextMenu.ItemsSource is not IEnumerable<Control> items)
+        {
+            return;
+        }
+
+        items
+            .OfType<MenuItem>()
+            .FirstOrDefault(item => item.IsEnabled)?
+            .Focus();
+    }
+
+    private Button? FindSheetTabButton(SheetId sheetId) =>
+        _sheetTabsHost.Content is StackPanel panel
+            ? panel.Children
+                .OfType<Button>()
+                .FirstOrDefault(button => button.Tag is SheetId tag && tag == sheetId)
+            : null;
 
     private void SelectSheet(SheetId sheetId, bool selectRange, bool toggle)
     {
@@ -4343,6 +4404,9 @@ public sealed class MainWindow : Window
             OpenedSourcePath: _session.CurrentFilePath,
             IsOpening: _isOpening,
             HasNewSheetButton: _newSheetButton.Content?.ToString() == "+",
+            HasFocusableSheetTab: HasSheetTabButton(button => button.Focusable),
+            HasSheetTabContextKeyboardHelp: HasSheetTabButton(button =>
+                string.Equals(AutomationProperties.GetHelpText(button), SheetTabContextHelpText, StringComparison.Ordinal)),
             HasSheetTabContextRenameMenuItem: HasSheetTabContextMenuItem("Rename..."),
             HasSheetTabContextTabColorMenuItem: HasSheetTabContextMenuItem("Tab Color"),
             HasSheetTabContextNoColorMenuItem: HasSheetTabContextSubmenuItem("Tab Color", "No Color"),
@@ -4452,6 +4516,12 @@ public sealed class MainWindow : Window
     private static bool HasNativeMenuItem(NativeMenuItem item, string expectedHeader, bool requireGesture = true) =>
         string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal) &&
         (!requireGesture || item.Gesture is not null);
+
+    private bool HasSheetTabButton(Func<Button, bool> predicate) =>
+        _sheetTabsHost.Content is StackPanel panel &&
+        panel.Children
+            .OfType<Button>()
+            .Any(predicate);
 
     private bool HasSheetTabContextMenuItem(string expectedHeader) =>
         _sheetTabsHost.Content is StackPanel panel &&
