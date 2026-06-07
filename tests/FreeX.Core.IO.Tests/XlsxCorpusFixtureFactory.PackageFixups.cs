@@ -816,9 +816,7 @@ internal static partial class XlsxCorpusFixtureFactory
         var extensionNs = isSlicer ? slicerNs : timelineNs;
         var extensionPrefix = isSlicer ? "x14" : "x15";
 
-        XDocument contentTypes;
-        using (var stream = contentTypesEntry.Open())
-            contentTypes = XDocument.Load(stream);
+        var contentTypes = LoadPackageXml(contentTypesEntry);
         if (contentTypes.Root?.Elements(contentTypeNs + "Override").Any(element =>
                 string.Equals(element.Attribute("PartName")?.Value, "/xl/drawings/drawing1.xml", StringComparison.OrdinalIgnoreCase)) != true)
         {
@@ -857,9 +855,7 @@ internal static partial class XlsxCorpusFixtureFactory
         ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
 
         var drawingRelId = "rIdFreeXFloatingDrawing1";
-        XDocument worksheetXml;
-        using (var stream = worksheetEntry.Open())
-            worksheetXml = XDocument.Load(stream);
+        var worksheetXml = LoadPackageXml(worksheetEntry);
         var root = worksheetXml.Root;
         if (root is not null && root.Element(worksheetNs + "drawing") is null)
             root.Add(new XElement(worksheetNs + "drawing", new XAttribute(officeRelNs + "id", drawingRelId)));
