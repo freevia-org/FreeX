@@ -2488,6 +2488,81 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTDistributionFunctions()
+    {
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,TDIST($A1,$C1,2)>0.5)", "B1", "B4");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,T.DIST($A1,$C1,TRUE)>0.9)", "B2", "B3");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,T.DIST($A1,$C1,FALSE)>0.3)", "B1", "B4");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,T.DIST.RT($A1,$C1)>0.3)", "B1", "B4");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,T.DIST.2T($A1,$C1)<0.2)", "B2", "B3");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,TINV($E1,$C1)>0.7)", "B1", "B4");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,T.INV($E1,$C1)>1.5)", "B3");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,T.INV.2T($E1,$C1)>1)", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFDistributionFunctions()
+    {
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,FDIST($A1,$C1,$D1)>0.7)", "B1", "B4");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,F.DIST($A1,$C1,$D1,TRUE)>0.7)", "B2", "B3");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,F.DIST($A1,$C1,$D1,FALSE)>0.5)", "B1", "B4");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,F.DIST.RT($A1,$C1,$D1)<0.3)", "B2", "B3");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,FINV($E1,$C1,$D1)>2)", "B4");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,F.INV($E1,$C1,$D1)>2)", "B3");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,F.INV.RT($E1,$C1,$D1)<0.6)", "B2", "B3");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatChiSquareDistributionFunctions()
+    {
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,CHIDIST($A1,$C1)>0.995)", "B2", "B3");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,CHISQ.DIST($A1,$C1,TRUE)<0.005)", "B2", "B3");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,CHISQ.DIST($A1,$C1,FALSE)>0.05)", "B4");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,CHISQ.DIST.RT($A1,$C1)<0.995)", "B1", "B4");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,CHIINV($E1,$C1)>10)", "B3");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,CHISQ.INV($E1,$C1)>10)", "B2", "B3");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,CHISQ.INV.RT($E1,$C1)>10)", "B3");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTFChiSquareDistributionNestedScalars()
+    {
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,T.DIST(ABS($A1),$C1,TRUE)>0.9)", "B2", "B3");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,SUM(F.DIST.RT($A1,$C1,$D1),CHISQ.DIST($A1,$C1,TRUE))>0.77)", "B1", "B4");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("AND($G1,T.INV.2T($E1,ABS($C1))>1)", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTFChiSquareDistributionErrorPredicates()
+    {
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("ISERROR(T.DIST.RT($A1,$C1))", "B5", "B6", "B8", "B9");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("ISNA(T.DIST.RT($A1,$C1))", "B8");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("ISERR(T.DIST.RT($A1,$C1))", "B5", "B6", "B9");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("ISERROR(T.INV($E1,$C1))", "B6", "B7", "B8", "B9", "B10");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("ISERROR(F.DIST($A1,$C1,$D1,TRUE))", "B5", "B6", "B7", "B8", "B9");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("ISERROR(F.INV($E1,$C1,$D1))", "B6", "B7", "B8", "B9", "B10");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("ISERROR(CHISQ.DIST($A1,$C1,TRUE))", "B5", "B6", "B8", "B9");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("ISERROR(CHISQ.INV($E1,$C1))", "B6", "B8", "B9", "B10");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("ISERROR(CHISQ.INV.RT($E1,$C1))", "B6", "B7", "B8", "B9");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("ISNA(CHISQ.INV.RT($E1,$C1))", "B8");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatTFChiSquareDistributionUnsupportedShapes()
+    {
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("T.DIST($A$1:$A$2,$C1,TRUE)>0");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("T.DIST($A1,$C1)>0");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("TDIST($A1,$C1,3)>0");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("T.DIST(KURT($A1),$C1,TRUE)>0");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("T.DIST($A1,$C1,\"TRUE\")>0");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("F.DIST($A$1:$A$2,$C1,$D1,TRUE)>0");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("F.DIST($A1,$C1,$D1)>0");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("F.DIST($A1,$C1,$D1,\"TRUE\")>0");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("CHISQ.DIST($A$1:$A$2,$C1,TRUE)>0");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("CHISQ.DIST($A1,$C1)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatContinuousDistributionScalarFunctions()
     {
         AssertFormulaContinuousDistributionFunctionContrastLocations("AND($G1,BETA.DIST($A1,$C1,$D1,$F1,$H1,$I1)>0.49)", "B1");
@@ -5195,6 +5270,140 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 7), new BoolValue(active));
     }
 
+    private static Workbook CreateFormulaTFChiSquareDistributionFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 10, 2);
+
+        SetFormulaTFChiSquareDistributionFunctionContrastRow(
+            sheet,
+            1,
+            new NumberValue(0.5),
+            new NumberValue(5),
+            new NumberValue(10),
+            new NumberValue(0.5),
+            new BoolValue(true),
+            active: true,
+            "Moderate");
+        SetFormulaTFChiSquareDistributionFunctionContrastRow(
+            sheet,
+            2,
+            new NumberValue(1.5),
+            new NumberValue(10),
+            new NumberValue(12),
+            new NumberValue(0.8),
+            new BoolValue(false),
+            active: true,
+            "Upper");
+        SetFormulaTFChiSquareDistributionFunctionContrastRow(
+            sheet,
+            3,
+            new NumberValue(2.5),
+            new NumberValue(20),
+            new NumberValue(15),
+            new NumberValue(0.95),
+            new BoolValue(true),
+            active: true,
+            "Tail");
+        SetFormulaTFChiSquareDistributionFunctionContrastRow(
+            sheet,
+            4,
+            new NumberValue(0.1),
+            new NumberValue(3),
+            new NumberValue(5),
+            new NumberValue(0.2),
+            new BoolValue(false),
+            active: true,
+            "Near zero");
+        SetFormulaTFChiSquareDistributionFunctionContrastRow(
+            sheet,
+            5,
+            new NumberValue(-1),
+            new NumberValue(5),
+            new NumberValue(10),
+            new NumberValue(0.5),
+            new BoolValue(true),
+            active: false,
+            "Negative x");
+        SetFormulaTFChiSquareDistributionFunctionContrastRow(
+            sheet,
+            6,
+            new NumberValue(0.5),
+            new NumberValue(0),
+            new NumberValue(10),
+            new NumberValue(0.5),
+            new BoolValue(true),
+            active: false,
+            "Zero df");
+        SetFormulaTFChiSquareDistributionFunctionContrastRow(
+            sheet,
+            7,
+            new NumberValue(0.5),
+            new NumberValue(5),
+            new NumberValue(0),
+            new NumberValue(0),
+            new BoolValue(true),
+            active: false,
+            "Zero probability");
+        SetFormulaTFChiSquareDistributionFunctionContrastRow(
+            sheet,
+            8,
+            ErrorValue.NA,
+            new NumberValue(5),
+            new NumberValue(10),
+            ErrorValue.NA,
+            new BoolValue(true),
+            active: false,
+            "NA source");
+        SetFormulaTFChiSquareDistributionFunctionContrastRow(
+            sheet,
+            9,
+            new TextValue("Open"),
+            new TextValue("Open"),
+            new NumberValue(10),
+            new TextValue("Open"),
+            new BoolValue(true),
+            active: false,
+            "Value source");
+        SetFormulaTFChiSquareDistributionFunctionContrastRow(
+            sheet,
+            10,
+            new NumberValue(0.5),
+            new NumberValue(5),
+            new NumberValue(10),
+            new NumberValue(1),
+            new BoolValue(true),
+            active: false,
+            "One probability");
+
+        return workbook;
+    }
+
+    private static void SetFormulaTFChiSquareDistributionFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        ScalarValue x,
+        ScalarValue df1,
+        ScalarValue df2,
+        ScalarValue probability,
+        ScalarValue cumulative,
+        bool active,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), x);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), df1);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 4), df2);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 5), probability);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 6), cumulative);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 7), new BoolValue(active));
+    }
+
     private static Workbook CreateFormulaContinuousDistributionFunctionContrastWorkbook(
         out Sheet sheet,
         out CellAddress firstLabel,
@@ -5931,6 +6140,20 @@ public sealed partial class AccessibilityCheckerServiceTests
         params string[] expectedLocations)
     {
         var workbook = CreateFormulaNormalDistributionFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaTFChiSquareDistributionFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaTFChiSquareDistributionFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
 
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
 
