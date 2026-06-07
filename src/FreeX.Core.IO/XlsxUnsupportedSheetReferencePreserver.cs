@@ -100,12 +100,11 @@ internal static class XlsxUnsupportedSheetReferencePreserver
             changed = true;
         }
 
-        if (worksheetPathRebindings.Count != 0)
-            changed |= RebindUnsupportedSheetSidecarRelationships(
-                sourceArchive,
-                targetArchive,
-                worksheetPathRebindings,
-                packageRelNs);
+        changed |= RebindUnsupportedSheetSidecarRelationships(
+            sourceArchive,
+            targetArchive,
+            worksheetPathRebindings,
+            packageRelNs);
 
         if (!changed)
             return;
@@ -190,12 +189,94 @@ internal static class XlsxUnsupportedSheetReferencePreserver
                 relsChanged = true;
             }
 
+            var sheetChanged = RebindUnsupportedSheetRelationshipReferenceIds(
+                sourceArchive,
+                targetArchive,
+                sheetPath,
+                relsXml,
+                worksheetPathRebindings,
+                packageRelNs);
+
             if (!relsChanged)
+            {
+                changed |= sheetChanged;
                 continue;
+            }
 
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, relsPath, relsXml);
             changed = true;
         }
+
+        return changed;
+    }
+
+    private static bool RebindUnsupportedSheetRelationshipReferenceIds(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        string sheetPath,
+        XDocument targetRelsXml,
+        IReadOnlyDictionary<string, string> worksheetPathRebindings,
+        XNamespace packageRelNs)
+    {
+        var sourceRelsEntry = sourceArchive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(sheetPath));
+        var targetSheetEntry = targetArchive.GetEntry(sheetPath);
+        if (sourceRelsEntry is null || targetSheetEntry is null)
+            return false;
+
+        var targetRelationshipsBySignature = targetRelsXml.Root?
+            .Elements(packageRelNs + "Relationship")
+            .GroupBy(RelationshipSignature, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        if (targetRelationshipsBySignature is null || targetRelationshipsBySignature.Count == 0)
+            return false;
+
+        var sourceRelsXml = XlsxPackageXmlEditor.LoadXml(sourceRelsEntry);
+        Dictionary<string, string>? relationshipIdMap = null;
+        foreach (var sourceRelationship in sourceRelsXml.Root?.Elements(packageRelNs + "Relationship") ?? [])
+        {
+            var sourceId = sourceRelationship.Attribute("Id")?.Value;
+            if (string.IsNullOrWhiteSpace(sourceId))
+                continue;
+
+            var expectedRelationship = TryCreateReboundRelationship(
+                sourceRelationship,
+                targetArchive,
+                sheetPath,
+                worksheetPathRebindings);
+            if (expectedRelationship is null ||
+                !targetRelationshipsBySignature.TryGetValue(RelationshipSignature(expectedRelationship), out var targetRelationship))
+            {
+                continue;
+            }
+
+            var targetId = targetRelationship.Attribute("Id")?.Value;
+            if (string.IsNullOrWhiteSpace(targetId) ||
+                string.Equals(sourceId, targetId, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            relationshipIdMap ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            relationshipIdMap[sourceId] = targetId;
+        }
+
+        if (relationshipIdMap is null || relationshipIdMap.Count == 0)
+            return false;
+
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var sheetXml = XlsxPackageXmlEditor.LoadXml(targetSheetEntry);
+        var changed = false;
+        foreach (var attribute in sheetXml.Descendants().Attributes().Where(attribute => attribute.Name.Namespace == relNs))
+        {
+            if (!relationshipIdMap.TryGetValue(attribute.Value, out var replacementId))
+                continue;
+
+            attribute.Value = replacementId;
+            changed = true;
+        }
+
+        if (changed)
+            XlsxPackageXmlEditor.ReplaceXml(targetArchive, sheetPath, sheetXml);
 
         return changed;
     }
