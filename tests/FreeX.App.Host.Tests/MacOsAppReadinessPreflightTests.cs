@@ -307,6 +307,14 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("_session.ApplySelectedRangeCompactFormat(");
         script.Should().Contain("`\"FormatCellsCompactDialog`\"");
         script.Should().Contain("`\"FormatCellsNumberFormatBox`\"");
+        script.Should().Contain("`\"FormatCellsFillPatternStyleBox`\"");
+        script.Should().Contain("`\"FormatCellsFillPatternColorBox`\"");
+        script.Should().Contain("FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillPatternStyle, fillPatternStyleBox)");
+        script.Should().Contain("FillPatternColor: clearFill ? null : (fillPatternColorBox.SelectedItem as FormatCellsColorChoice)?.Color");
+        script.Should().Contain("CellFillPatternStyle? FillPatternStyle = null");
+        script.Should().Contain("CellColor? FillPatternColor = null");
+        script.Should().Contain("FillPatternStyle: request.ClearFill ? null : request.FillPatternStyle");
+        script.Should().Contain("FillPatternColor: request.ClearFill ? null : request.FillPatternColor");
         script.Should().Contain("private enum FindDialogAction");
         script.Should().Contain("private sealed record FindDialogResult(");
         script.Should().Contain("FindOptions Options,");
@@ -1582,9 +1590,26 @@ public sealed class MacOsAppReadinessPreflightTests
                     "FormatCellsFontSizeBox"
                     "FormatCellsFontColorBox"
                     "FormatCellsFillColorBox"
+                    "FormatCellsFillPatternStyleBox"
+                    "FormatCellsFillPatternColorBox"
                     "FormatCellsBorderPresetBox"
                     "FormatCellsBorderStyleBox"
                     "FormatCellsBorderColorBox"
+                    "FormatCellsDoubleUnderlineBox"
+                    "FormatCellsShrinkToFitBox"
+                    "FormatCellsIndentLevelBox"
+                    "FormatCellsTextRotationBox"
+                    "FormatCellsFontNameBox"
+                    "FormatCellsSuperscriptBox"
+                    "FormatCellsSubscriptBox"
+                    "FormatCellsLockedBox"
+                    "FormatCellsHiddenBox"
+                    FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillPatternStyle, fillPatternStyleBox)
+                    FillPatternColor: clearFill ? null : (fillPatternColorBox.SelectedItem as FormatCellsColorChoice)?.Color
+                    CreateFormatCellsField("Pattern style", fillPatternStyleBox)
+                    CreateFormatCellsField("Pattern color", fillPatternColorBox)
+                    private static IReadOnlyList<FormatCellsNullableChoice<CellFillPatternStyle>> CreateFormatCellsFillPatternStyleChoices()
+                    CellFillPatternStyle.DarkTrellis
                     HasFillCellsButton: _fillCellsButton.Content?.ToString() == "Fill Cells";
                     HasFillDownMenuItem: HasToolbarMenuItem(_fillDownFlyoutItem, "Down");
                     HasFillRightMenuItem: HasToolbarMenuItem(_fillRightFlyoutItem, "Right");
@@ -2466,6 +2491,45 @@ public sealed class MacOsAppReadinessPreflightTests
                 private static string? NormalizeAbsoluteA1Reference(string input)
                 private static bool TryParseAbsoluteR1C1CellReference(string input, SheetId sheetId, out CellAddress address)
                 */
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Services/FormatCellsCompactPlanner.cs",
+            """
+            namespace FreeX.App.Services;
+
+            public sealed record FormatCellsCompactRequest(
+                CellColor? FillColor = null,
+                bool ClearFill = false,
+                bool? DoubleUnderline = null,
+                bool? ShrinkToFit = null,
+                int? IndentLevel = null,
+                int? TextRotation = null,
+                string? FontName = null,
+                bool? Superscript = null,
+                bool? Subscript = null,
+                bool? Locked = null,
+                bool? Hidden = null,
+                CellFillPatternStyle? FillPatternStyle = null,
+                CellColor? FillPatternColor = null);
+
+            public static class FormatCellsCompactPlanner
+            {
+                public static StyleDiff Plan(FormatCellsCompactRequest request) =>
+                    new(
+                        DoubleUnderline: request.DoubleUnderline,
+                        ShrinkToFit: request.ShrinkToFit,
+                        IndentLevel: NormalizeIndentLevel(request.IndentLevel),
+                        TextRotation: NormalizeTextRotation(request.TextRotation),
+                        FontName: NormalizeFontName(request.FontName),
+                        Superscript: request.Superscript,
+                        Subscript: request.Subscript,
+                        Locked: request.Locked,
+                        Hidden: request.Hidden,
+                        FillPatternStyle: request.ClearFill ? null : request.FillPatternStyle,
+                        FillPatternColor: request.ClearFill ? null : request.FillPatternColor);
             }
             """);
 

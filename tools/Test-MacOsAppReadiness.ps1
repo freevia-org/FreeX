@@ -685,6 +685,8 @@ function Test-SourceWiring {
                 "`"FormatCellsFontSizeBox`"",
                 "`"FormatCellsFontColorBox`"",
                 "`"FormatCellsFillColorBox`"",
+                "`"FormatCellsFillPatternStyleBox`"",
+                "`"FormatCellsFillPatternColorBox`"",
                 "`"FormatCellsBorderPresetBox`"",
                 "`"FormatCellsBorderStyleBox`"",
                 "`"FormatCellsBorderColorBox`"",
@@ -697,6 +699,12 @@ function Test-SourceWiring {
                 "`"FormatCellsSubscriptBox`"",
                 "`"FormatCellsLockedBox`"",
                 "`"FormatCellsHiddenBox`"",
+                "FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillPatternStyle, fillPatternStyleBox)",
+                "FillPatternColor: clearFill ? null : (fillPatternColorBox.SelectedItem as FormatCellsColorChoice)?.Color",
+                "CreateFormatCellsField(`"Pattern style`", fillPatternStyleBox)",
+                "CreateFormatCellsField(`"Pattern color`", fillPatternColorBox)",
+                "private static IReadOnlyList<FormatCellsNullableChoice<CellFillPatternStyle>> CreateFormatCellsFillPatternStyleChoices()",
+                "CellFillPatternStyle.DarkTrellis",
                 "_autoSumButton.Content = `"AutoSum`";",
                 "_autoSumButton.Flyout = CreateAutoSumFlyout();",
                 "AutomationProperties.SetAutomationId(_autoSumButton, `"HomeAutoSumButton`");",
@@ -1871,6 +1879,8 @@ function Test-SourceWiring {
                 "bool? Subscript = null",
                 "bool? Locked = null",
                 "bool? Hidden = null",
+                "CellFillPatternStyle? FillPatternStyle = null",
+                "CellColor? FillPatternColor = null",
                 "DoubleUnderline: request.DoubleUnderline",
                 "ShrinkToFit: request.ShrinkToFit",
                 "IndentLevel: NormalizeIndentLevel(request.IndentLevel)",
@@ -1879,7 +1889,9 @@ function Test-SourceWiring {
                 "Superscript: request.Superscript",
                 "Subscript: request.Subscript",
                 "Locked: request.Locked",
-                "Hidden: request.Hidden"
+                "Hidden: request.Hidden",
+                "FillPatternStyle: request.ClearFill ? null : request.FillPatternStyle",
+                "FillPatternColor: request.ClearFill ? null : request.FillPatternColor"
             )
             OrderedPairs = @()
         },

@@ -26,7 +26,9 @@ public sealed record FormatCellsCompactRequest(
     bool? Locked = null,
     bool? Hidden = null,
     bool? Superscript = null,
-    bool? Subscript = null);
+    bool? Subscript = null,
+    CellFillPatternStyle? FillPatternStyle = null,
+    CellColor? FillPatternColor = null);
 
 public readonly record struct FormatCellsCompactBorderPresetMetadata(
     CellBorderPreset Preset,
@@ -74,6 +76,8 @@ public static class FormatCellsCompactPlanner
             FontSize: NormalizeFontSize(request.FontSize),
             FontColor: request.FontColor,
             FillColor: request.ClearFill ? null : request.FillColor,
+            FillPatternStyle: request.ClearFill ? null : request.FillPatternStyle,
+            FillPatternColor: request.ClearFill ? null : request.FillPatternColor,
             HAlign: request.HorizontalAlignment,
             VAlign: request.VerticalAlignment,
             WrapText: request.WrapText,

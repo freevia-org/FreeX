@@ -24,6 +24,8 @@ public sealed class FormatCellsCompactPlannerTests
             FontSize = 18,
             FontColor = new CellColor(12, 34, 56),
             FillColor = new CellColor(90, 91, 92),
+            FillPatternStyle = CellFillPatternStyle.DarkGrid,
+            FillPatternColor = new CellColor(111, 112, 113),
             NumberFormat = "$#,##0.00",
             HorizontalAlignment = CellHAlign.Right,
             VerticalAlignment = CellVAlign.Top,
@@ -49,6 +51,7 @@ public sealed class FormatCellsCompactPlannerTests
     public void Plan_ChosenFieldsMapToStyleDiff()
     {
         var fill = new CellColor(220, 240, 255);
+        var fillPattern = new CellColor(24, 120, 180);
         var font = new CellColor(64, 32, 16);
 
         var diff = FormatCellsCompactPlanner.Plan(new FormatCellsCompactRequest(
@@ -71,7 +74,9 @@ public sealed class FormatCellsCompactPlannerTests
             Locked: false,
             Hidden: true,
             Superscript: true,
-            Subscript: false));
+            Subscript: false,
+            FillPatternStyle: CellFillPatternStyle.DarkGrid,
+            FillPatternColor: fillPattern));
 
         diff.NumberFormat.Should().Be("#,##0.00");
         diff.HAlign.Should().Be(CellHAlign.Center);
@@ -88,6 +93,8 @@ public sealed class FormatCellsCompactPlannerTests
         diff.FontName.Should().Be("Aptos");
         diff.FontSize.Should().Be(13.5);
         diff.FillColor.Should().Be(fill);
+        diff.FillPatternStyle.Should().Be(CellFillPatternStyle.DarkGrid);
+        diff.FillPatternColor.Should().Be(fillPattern);
         diff.FontColor.Should().Be(font);
         diff.IndentLevel.Should().Be(4);
         diff.TextRotation.Should().Be(255);
@@ -119,15 +126,25 @@ public sealed class FormatCellsCompactPlannerTests
         var baseStyle = new CellStyle
         {
             FillColor = new CellColor(200, 210, 220),
+            FillPatternStyle = CellFillPatternStyle.DarkGrid,
+            FillPatternColor = new CellColor(100, 110, 120),
             FontColor = new CellColor(1, 2, 3)
         };
 
-        var diff = FormatCellsCompactPlanner.Plan(new FormatCellsCompactRequest(ClearFill: true));
+        var diff = FormatCellsCompactPlanner.Plan(new FormatCellsCompactRequest(
+            FillColor: new CellColor(10, 20, 30),
+            ClearFill: true,
+            FillPatternStyle: CellFillPatternStyle.LightTrellis,
+            FillPatternColor: new CellColor(40, 50, 60)));
         var result = diff.ApplyTo(baseStyle);
 
         diff.ClearFill.Should().BeTrue();
         diff.FillColor.Should().BeNull();
+        diff.FillPatternStyle.Should().BeNull();
+        diff.FillPatternColor.Should().BeNull();
         result.FillColor.Should().BeNull();
+        result.FillPatternStyle.Should().Be(CellFillPatternStyle.None);
+        result.FillPatternColor.Should().BeNull();
         result.FontColor.Should().Be(baseStyle.FontColor);
     }
 

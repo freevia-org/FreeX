@@ -2041,6 +2041,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"FormatCellsFontSizeBox\"");
         source.Should().Contain("\"FormatCellsFontColorBox\"");
         source.Should().Contain("\"FormatCellsFillColorBox\"");
+        source.Should().Contain("\"FormatCellsFillPatternStyleBox\"");
+        source.Should().Contain("\"FormatCellsFillPatternColorBox\"");
         source.Should().Contain("\"FormatCellsBorderPresetBox\"");
         source.Should().Contain("\"FormatCellsBorderStyleBox\"");
         source.Should().Contain("\"FormatCellsBorderColorBox\"");
@@ -2055,6 +2057,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"FormatCellsHiddenBox\"");
         source.Should().Contain("var currentUnderline = currentStyle.Underline ?? CellStyle.Default.Underline;");
         source.Should().Contain("Underline: ReadChangedFormatCellsBool(currentUnderline, underlineBox)");
+        source.Should().Contain("FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillPatternStyle, fillPatternStyleBox)");
+        source.Should().Contain("FillPatternColor: clearFill ? null : (fillPatternColorBox.SelectedItem as FormatCellsColorChoice)?.Color");
         source.Should().Contain("selection.BorderStyle");
         source.Should().Contain("selection.BorderColor");
 
@@ -2072,6 +2076,8 @@ public sealed class AvaloniaShellSourceTests
         plannerSource.Should().Contain("bool? Subscript = null");
         plannerSource.Should().Contain("bool? Locked = null");
         plannerSource.Should().Contain("bool? Hidden = null");
+        plannerSource.Should().Contain("CellFillPatternStyle? FillPatternStyle = null");
+        plannerSource.Should().Contain("CellColor? FillPatternColor = null");
         plannerSource.Should().Contain("DoubleUnderline: request.DoubleUnderline");
         plannerSource.Should().Contain("ShrinkToFit: request.ShrinkToFit");
         plannerSource.Should().Contain("IndentLevel: NormalizeIndentLevel(request.IndentLevel)");
@@ -2081,6 +2087,8 @@ public sealed class AvaloniaShellSourceTests
         plannerSource.Should().Contain("Subscript: request.Subscript");
         plannerSource.Should().Contain("Locked: request.Locked");
         plannerSource.Should().Contain("Hidden: request.Hidden");
+        plannerSource.Should().Contain("FillPatternStyle: request.ClearFill ? null : request.FillPatternStyle");
+        plannerSource.Should().Contain("FillPatternColor: request.ClearFill ? null : request.FillPatternColor");
     }
 
     [Fact]

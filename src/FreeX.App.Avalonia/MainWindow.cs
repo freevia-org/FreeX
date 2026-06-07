@@ -4741,6 +4741,7 @@ public sealed class MainWindow : Window
         var currentHidden = currentStyle.Hidden ?? CellStyle.Default.Hidden;
         var currentSuperscript = currentStyle.Superscript ?? CellStyle.Default.Superscript;
         var currentSubscript = currentStyle.Subscript ?? CellStyle.Default.Subscript;
+        var currentFillPatternStyle = currentStyle.FillPatternStyle ?? CellStyle.Default.FillPatternStyle;
 
         var dialog = new Window
         {
@@ -4883,6 +4884,18 @@ public sealed class MainWindow : Window
         };
         AutomationProperties.SetName(fillColorBox, "Fill color");
         AutomationProperties.SetAutomationId(fillColorBox, "FormatCellsFillColorBox");
+        var fillPatternStyleBox = CreateFormatCellsComboBox(
+            "FormatCellsFillPatternStyleBox",
+            CreateFormatCellsFillPatternStyleChoices(),
+            currentFillPatternStyle);
+        var fillPatternColorBox = new ComboBox
+        {
+            ItemsSource = CreateFormatCellsColorChoices(includeClear: false),
+            SelectedIndex = 0,
+            MinWidth = 180,
+        };
+        AutomationProperties.SetName(fillPatternColorBox, "Pattern color");
+        AutomationProperties.SetAutomationId(fillPatternColorBox, "FormatCellsFillPatternColorBox");
 
         var borderPresetBox = new ComboBox
         {
@@ -4953,6 +4966,7 @@ public sealed class MainWindow : Window
                     ? numberChoice.FormatCode
                     : null;
             var fillChoice = fillColorBox.SelectedItem as FormatCellsColorChoice;
+            var clearFill = fillChoice?.Clear == true;
             var borderChoice = borderPresetBox.SelectedItem as FormatCellsNullableChoice<CellBorderPreset>;
             var borderStyle = borderStyleBox.SelectedItem is FormatCellsNullableChoice<BorderStyle> { Value: { } selectedBorderStyle }
                 ? selectedBorderStyle
@@ -4973,7 +4987,9 @@ public sealed class MainWindow : Window
                 FontName: ReadChangedFormatCellsText(currentFontName, fontNameBox),
                 FontSize: fontSize,
                 FillColor: fillChoice?.Color,
-                ClearFill: fillChoice?.Clear == true,
+                ClearFill: clearFill,
+                FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillPatternStyle, fillPatternStyleBox),
+                FillPatternColor: clearFill ? null : (fillPatternColorBox.SelectedItem as FormatCellsColorChoice)?.Color,
                 FontColor: (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color,
                 ShrinkToFit: ReadChangedFormatCellsBool(currentShrinkToFit, shrinkToFitBox),
                 IndentLevel: indentLevel,
@@ -5082,6 +5098,8 @@ public sealed class MainWindow : Window
                 Children =
                 {
                     CreateFormatCellsField("Fill color", fillColorBox),
+                    CreateFormatCellsField("Pattern style", fillPatternStyleBox),
+                    CreateFormatCellsField("Pattern color", fillPatternColorBox),
                 },
             });
         var borderTab = CreateFormatCellsTab(
@@ -5281,6 +5299,29 @@ public sealed class MainWindow : Window
             .Select(swatch => new FormatCellsColorChoice(swatch.Hex, swatch.Color, Clear: false)));
         return choices;
     }
+
+    private static IReadOnlyList<FormatCellsNullableChoice<CellFillPatternStyle>> CreateFormatCellsFillPatternStyleChoices() =>
+    [
+        new("None", CellFillPatternStyle.None),
+        new("Solid", CellFillPatternStyle.Solid),
+        new("6.25% gray", CellFillPatternStyle.Gray0625),
+        new("12.5% gray", CellFillPatternStyle.Gray125),
+        new("Light gray", CellFillPatternStyle.LightGray),
+        new("Medium gray", CellFillPatternStyle.MediumGray),
+        new("Dark gray", CellFillPatternStyle.DarkGray),
+        new("Light horizontal", CellFillPatternStyle.LightHorizontal),
+        new("Light vertical", CellFillPatternStyle.LightVertical),
+        new("Light down", CellFillPatternStyle.LightDown),
+        new("Light up", CellFillPatternStyle.LightUp),
+        new("Light grid", CellFillPatternStyle.LightGrid),
+        new("Light trellis", CellFillPatternStyle.LightTrellis),
+        new("Dark horizontal", CellFillPatternStyle.DarkHorizontal),
+        new("Dark vertical", CellFillPatternStyle.DarkVertical),
+        new("Dark down", CellFillPatternStyle.DarkDown),
+        new("Dark up", CellFillPatternStyle.DarkUp),
+        new("Dark grid", CellFillPatternStyle.DarkGrid),
+        new("Dark trellis", CellFillPatternStyle.DarkTrellis),
+    ];
 
     private static IReadOnlyList<FormatCellsNullableChoice<CellBorderPreset>> CreateFormatCellsBorderPresetChoices() =>
     [
