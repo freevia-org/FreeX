@@ -17,6 +17,26 @@ public sealed class WorkbookStartupSmokeService
     private const uint SmokeEditRow = 2;
     private const uint SmokeEditColumn = 2;
     private const int LegacyPreviewObjectCount = 3;
+    private const string SmokeFormatCellsNumberFormat = "@";
+    private const double SmokeFormatCellsFontSize = 13;
+    private const CellBorderPreset SmokeFormatCellsBorderPreset = CellBorderPreset.All;
+    private const BorderStyle SmokeFormatCellsBorderStyle = BorderStyle.Medium;
+    private static readonly CellColor SmokeFormatCellsFillColor = new(226, 239, 218);
+    private static readonly CellColor SmokeFormatCellsFontColor = new(31, 78, 121);
+    private static readonly CellColor SmokeFormatCellsBorderColor = new(112, 48, 160);
+    private static readonly CellBorder SmokeFormatCellsBorder = new(
+        SmokeFormatCellsBorderStyle,
+        SmokeFormatCellsBorderColor);
+    private static readonly FormatCellsCompactRequest SmokeFormatCellsRequest = new(
+        NumberFormat: SmokeFormatCellsNumberFormat,
+        HorizontalAlignment: HorizontalAlignment.Center,
+        VerticalAlignment: VerticalAlignment.Center,
+        WrapText: true,
+        Bold: true,
+        FontSize: SmokeFormatCellsFontSize,
+        FillColor: SmokeFormatCellsFillColor,
+        FontColor: SmokeFormatCellsFontColor,
+        FillPatternStyle: CellFillPatternStyle.Solid);
 
     private readonly IReadOnlyList<IFileAdapter> _adapters;
     private readonly StartupWorkbookLoader _loader;
@@ -83,7 +103,7 @@ public sealed class WorkbookStartupSmokeService
             var roundTripDrawingObjectPreviewCount = roundTripDrawingObjectPreviewFacts.LegacyPreviewCount;
             return new WorkbookStartupSmokeResult(
                 true,
-                $"Packaging smoke opened {openedDisplayName} on {openedSheetName} with {openedRowCount} rows and {openedColumnCount} columns; drawing_object_previews={drawingObjectPreviewCount}; drawing_object_viewport_objects={drawingObjectPreviewFacts.ViewportObjectCount}; drawing_object_render_plans={drawingObjectPreviewFacts.RenderPlanCount}; cropped_image_render_plans={drawingObjectPreviewFacts.CroppedImagePlanCount}; cell_range_snapshot_render_plans={drawingObjectPreviewFacts.CellRangeSnapshotPlanCount}; edited, saved, and reopened a native workbook roundtrip; roundtrip_drawing_object_previews={roundTripDrawingObjectPreviewCount}; roundtrip_drawing_object_viewport_objects={roundTripDrawingObjectPreviewFacts.ViewportObjectCount}; roundtrip_drawing_object_render_plans={roundTripDrawingObjectPreviewFacts.RenderPlanCount}; roundtrip_cropped_image_render_plans={roundTripDrawingObjectPreviewFacts.CroppedImagePlanCount}; roundtrip_cell_range_snapshot_render_plans={roundTripDrawingObjectPreviewFacts.CellRangeSnapshotPlanCount}.");
+                $"Packaging smoke opened {openedDisplayName} on {openedSheetName} with {openedRowCount} rows and {openedColumnCount} columns; drawing_object_previews={drawingObjectPreviewCount}; drawing_object_viewport_objects={drawingObjectPreviewFacts.ViewportObjectCount}; drawing_object_render_plans={drawingObjectPreviewFacts.RenderPlanCount}; cropped_image_render_plans={drawingObjectPreviewFacts.CroppedImagePlanCount}; cell_range_snapshot_render_plans={drawingObjectPreviewFacts.CellRangeSnapshotPlanCount}; edited, saved, and reopened a native workbook roundtrip after applying compact Format Cells style to B2; format_cells_style_roundtrip=true; roundtrip_drawing_object_previews={roundTripDrawingObjectPreviewCount}; roundtrip_drawing_object_viewport_objects={roundTripDrawingObjectPreviewFacts.ViewportObjectCount}; roundtrip_drawing_object_render_plans={roundTripDrawingObjectPreviewFacts.RenderPlanCount}; roundtrip_cropped_image_render_plans={roundTripDrawingObjectPreviewFacts.CroppedImagePlanCount}; roundtrip_cell_range_snapshot_render_plans={roundTripDrawingObjectPreviewFacts.CellRangeSnapshotPlanCount}.");
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException or WorkbookTooLargeException)
         {
@@ -117,6 +137,10 @@ public sealed class WorkbookStartupSmokeService
         {
             return new WorkbookStartupSmokeResult(false, "Packaging smoke failed: edited marker was not stored.");
         }
+
+        var formatCellsResult = ApplyFormatCellsStartupSmokeStyle(session, editAddress);
+        if (formatCellsResult is not null)
+            return formatCellsResult;
 
         var saveAdapter = FileFormatResolver.FindSaveAdapter(_adapters, RoundTripExtension, out _);
         if (saveAdapter is null)
@@ -160,12 +184,24 @@ public sealed class WorkbookStartupSmokeService
             if (previewObjectResult is not null)
                 return previewObjectResult;
 
-            var reopenedCell = reopenedSession.Workbook.Sheets.FirstOrDefault()?.GetCell(SmokeEditRow, SmokeEditColumn);
+            var reopenedSheet = reopenedSession.Workbook.Sheets.FirstOrDefault();
+            if (reopenedSheet is null)
+                return new WorkbookStartupSmokeResult(false, "Packaging smoke failed: reopened roundtrip has no sheets.");
+
+            var reopenedCell = reopenedSheet.GetCell(SmokeEditRow, SmokeEditColumn);
             if (reopenedCell?.Value is not TextValue reopenedText ||
                 !string.Equals(reopenedText.Value, marker, StringComparison.Ordinal))
             {
                 return new WorkbookStartupSmokeResult(false, "Packaging smoke failed: saved edit marker was not reopened.");
             }
+
+            var reopenedFormatCellsResult = VerifyFormatCellsStartupSmokeStyle(
+                reopenedSession.Workbook,
+                reopenedSheet,
+                new CellAddress(reopenedSheet.Id, SmokeEditRow, SmokeEditColumn),
+                "reopened roundtrip");
+            if (reopenedFormatCellsResult is not null)
+                return reopenedFormatCellsResult;
         }
         finally
         {
@@ -174,6 +210,74 @@ public sealed class WorkbookStartupSmokeService
         }
 
         return null;
+    }
+
+    private static WorkbookStartupSmokeResult? ApplyFormatCellsStartupSmokeStyle(
+        WorkbookSession session,
+        CellAddress editAddress)
+    {
+        if (!FormatCellsCompactPlanner.TryPlan(SmokeFormatCellsRequest, out var diff, out var errorMessage))
+        {
+            return new WorkbookStartupSmokeResult(
+                false,
+                $"Packaging smoke failed: Format Cells style planning failed: {errorMessage}");
+        }
+
+        var result = session.ApplySelectedRangeCompactFormat(
+            diff,
+            SmokeFormatCellsBorderPreset,
+            SmokeFormatCellsBorderStyle,
+            SmokeFormatCellsBorderColor,
+            SmokeFormatCellsRequest.MergeCells);
+        if (!result.Success)
+        {
+            return new WorkbookStartupSmokeResult(
+                false,
+                $"Packaging smoke failed: Format Cells style application failed: {result.ErrorMessage ?? "unknown error"}");
+        }
+
+        return VerifyFormatCellsStartupSmokeStyle(
+            session.Workbook,
+            session.ActiveSheet,
+            editAddress,
+            "edited workbook");
+    }
+
+    private static WorkbookStartupSmokeResult? VerifyFormatCellsStartupSmokeStyle(
+        Workbook workbook,
+        Sheet sheet,
+        CellAddress address,
+        string stage)
+    {
+        var style = GetCellStyle(workbook, sheet, address);
+        if (style.NumberFormat != SmokeFormatCellsNumberFormat ||
+            style.HorizontalAlignment != HorizontalAlignment.Center ||
+            style.VerticalAlignment != VerticalAlignment.Center ||
+            !style.WrapText ||
+            !style.Bold ||
+            style.FontSize != SmokeFormatCellsFontSize ||
+            style.FillColor != SmokeFormatCellsFillColor ||
+            style.FontColor != SmokeFormatCellsFontColor ||
+            style.FillPatternStyle != CellFillPatternStyle.Solid ||
+            style.BorderTop != SmokeFormatCellsBorder ||
+            style.BorderRight != SmokeFormatCellsBorder ||
+            style.BorderBottom != SmokeFormatCellsBorder ||
+            style.BorderLeft != SmokeFormatCellsBorder)
+        {
+            return new WorkbookStartupSmokeResult(
+                false,
+                $"Packaging smoke failed: Format Cells style was not {(stage == "reopened roundtrip" ? "reopened" : "stored")} on B2.");
+        }
+
+        return null;
+    }
+
+    private static CellStyle GetCellStyle(Workbook workbook, Sheet sheet, CellAddress address)
+    {
+        var styleId = sheet.GetCell(address)?.StyleId ??
+            sheet.GetStyleOnly(address.Row, address.Col) ??
+            StyleId.Default;
+        return workbook.GetStyle(styleId);
     }
 
     private static WorkbookStartupSmokeResult? VerifyDrawingObjectPreviews(
