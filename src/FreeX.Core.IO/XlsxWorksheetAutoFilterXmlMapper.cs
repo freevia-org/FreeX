@@ -64,26 +64,35 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
             autoFilter.FilterColumns.Count > 0 ||
             autoFilter.NativeAttributes?.Count > 0 ||
             autoFilter.NativeChildXmls?.Count > 0;
-        if (!hasModeledMetadata && !string.IsNullOrWhiteSpace(autoFilter.NativeXml))
-        {
-            try
-            {
-                var element = XElement.Parse(autoFilter.NativeXml);
-                if (element.Name != worksheetNs + "autoFilter")
-                    return null;
-
-                XlsxWorksheetAutoFilterNormalizer.NormalizeElement(element);
-                return element;
-            }
-            catch
-            {
-                // Fall back to a range-only AutoFilter when legacy native JSON contains malformed XML.
-            }
-        }
+        if (!hasModeledMetadata && TryCreateNativeAutoFilter(autoFilter.NativeXml, worksheetNs, out var nativeAutoFilter))
+            return nativeAutoFilter;
 
         return string.IsNullOrWhiteSpace(autoFilter.Reference)
             ? null
             : ToModeledAutoFilterXml(autoFilter, worksheetNs);
+    }
+
+    private static bool TryCreateNativeAutoFilter(string? nativeXml, XNamespace worksheetNs, out XElement? autoFilter)
+    {
+        autoFilter = null;
+        if (string.IsNullOrWhiteSpace(nativeXml))
+            return false;
+
+        try
+        {
+            var element = XElement.Parse(nativeXml);
+            if (element.Name != worksheetNs + "autoFilter")
+                return true;
+
+            XlsxWorksheetAutoFilterNormalizer.NormalizeElement(element);
+            autoFilter = element;
+            return true;
+        }
+        catch
+        {
+            // Fall back to a range-only AutoFilter when legacy native JSON contains malformed XML.
+            return false;
+        }
     }
 
     private static XElement ToModeledAutoFilterXml(WorksheetAutoFilterModel autoFilter, XNamespace worksheetNs)
