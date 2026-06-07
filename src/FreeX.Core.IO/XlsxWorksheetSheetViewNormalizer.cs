@@ -125,14 +125,14 @@ internal static class XlsxWorksheetSheetViewNormalizer
     {
         var changed = XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(sheetView, SheetViewAttributes);
 
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetView, "workbookViewId", NormalizeRequiredUnsignedInt);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetView, "view", value => NormalizeToken(value, ValidViewModes));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetView, "workbookViewId", XlsxXmlNormalizationHelpers.NormalizeRequiredUnsignedInt);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetView, "view", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, ValidViewModes));
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetView, "topLeftCell", NormalizeCellReference);
 
         foreach (var attributeName in SheetViewBooleanAttributes)
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetView, attributeName, NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetView, attributeName, XlsxXmlNormalizationHelpers.NormalizeBoolean);
         foreach (var attributeName in SheetViewUnsignedIntAttributes)
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetView, attributeName, NormalizeUnsignedIntOrNull);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetView, attributeName, XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
 
         foreach (var pane in sheetView.Elements(WorksheetNs + "pane"))
             changed |= NormalizePaneElement(pane);
@@ -148,30 +148,19 @@ internal static class XlsxWorksheetSheetViewNormalizer
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pane, "xSplit", NormalizeDouble);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pane, "ySplit", NormalizeDouble);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pane, "topLeftCell", NormalizeCellReference);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pane, "activePane", value => NormalizeToken(value, ValidPaneValues));
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pane, "state", value => NormalizeToken(value, ValidPaneStates));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pane, "activePane", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, ValidPaneValues));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pane, "state", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, ValidPaneStates));
         return changed;
     }
 
     private static bool NormalizeSelectionElement(XElement selection)
     {
         var changed = XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(selection, SelectionAttributes);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(selection, "pane", value => NormalizeToken(value, ValidPaneValues));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(selection, "pane", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, ValidPaneValues));
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(selection, "activeCell", NormalizeCellReference);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(selection, "activeCellId", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(selection, "activeCellId", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(selection, "sqref", NormalizeSqref);
         return changed;
-    }
-
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed switch
-        {
-            "0" or "1" => trimmed,
-            "true" or "false" => trimmed,
-            _ => null
-        };
     }
 
     private static string? NormalizeCellReference(string? value)
@@ -194,9 +183,6 @@ internal static class XlsxWorksheetSheetViewNormalizer
         return parsed.ToString("G17", CultureInfo.InvariantCulture);
     }
 
-    private static string? NormalizeRequiredUnsignedInt(string? value) =>
-        NormalizeUnsignedIntOrNull(value) ?? "0";
-
     private static string? NormalizeSqref(string? value)
     {
         var trimmed = value?.Trim();
@@ -206,20 +192,6 @@ internal static class XlsxWorksheetSheetViewNormalizer
         var tokens = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         return tokens.Length > 0 && tokens.All(IsCellOrRangeReference)
             ? string.Join(' ', tokens)
-            : null;
-    }
-
-    private static string? NormalizeToken(string? value, IReadOnlySet<string> allowedValues)
-    {
-        var trimmed = value?.Trim();
-        return trimmed is not null && allowedValues.Contains(trimmed) ? trimmed : null;
-    }
-
-    private static string? NormalizeUnsignedIntOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed.ToString(CultureInfo.InvariantCulture)
             : null;
     }
 

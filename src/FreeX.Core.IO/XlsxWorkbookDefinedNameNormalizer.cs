@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
@@ -86,9 +85,9 @@ internal static class XlsxWorkbookDefinedNameNormalizer
         foreach (var attributeName in TextAttributes)
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(definedName, attributeName, NormalizeOptionalText);
         foreach (var attributeName in BooleanAttributes)
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(definedName, attributeName, NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(definedName, attributeName, XlsxXmlNormalizationHelpers.NormalizeBoolean);
         foreach (var attributeName in UnsignedIntAttributes)
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(definedName, attributeName, NormalizeUnsignedIntOrNull);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(definedName, attributeName, XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
 
         return changed;
     }
@@ -108,28 +107,9 @@ internal static class XlsxWorkbookDefinedNameNormalizer
         return changed;
     }
 
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed switch
-        {
-            "0" or "1" => trimmed,
-            "true" or "false" => trimmed,
-            _ => null
-        };
-    }
-
     private static string? NormalizeOptionalText(string? value)
     {
         var trimmed = value?.Trim();
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
-    }
-
-    private static string? NormalizeUnsignedIntOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed.ToString(CultureInfo.InvariantCulture)
-            : null;
     }
 }

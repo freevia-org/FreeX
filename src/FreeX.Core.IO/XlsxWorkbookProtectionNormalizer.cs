@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
@@ -44,34 +43,15 @@ internal static class XlsxWorkbookProtectionNormalizer
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookProtection, "workbookPassword", NormalizeLegacyPasswordHashOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookProtection, "revisionsPassword", NormalizeLegacyPasswordHashOrNull);
         foreach (var attributeName in BooleanAttributes)
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookProtection, attributeName, NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookProtection, attributeName, XlsxXmlNormalizationHelpers.NormalizeBoolean);
         foreach (var attributeName in UnsignedIntAttributes)
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookProtection, attributeName, NormalizeUnsignedIntOrNull);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookProtection, attributeName, XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookProtection, "revisionsHashValue", NormalizeBase64BinaryOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookProtection, "revisionsSaltValue", NormalizeBase64BinaryOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookProtection, "workbookHashValue", NormalizeBase64BinaryOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookProtection, "workbookSaltValue", NormalizeBase64BinaryOrNull);
 
         return changed;
-    }
-
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed switch
-        {
-            "0" or "1" => trimmed,
-            "true" or "false" => trimmed,
-            _ => null
-        };
-    }
-
-    private static string? NormalizeUnsignedIntOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed.ToString(CultureInfo.InvariantCulture)
-            : null;
     }
 
     private static string? NormalizeBase64BinaryOrNull(string? value)

@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
@@ -66,40 +65,13 @@ internal static class XlsxWorkbookPropertiesNormalizer
         changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(workbookPr);
 
         foreach (var attributeName in BooleanAttributes)
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookPr, attributeName, NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookPr, attributeName, XlsxXmlNormalizationHelpers.NormalizeBoolean);
 
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookPr, "showObjects", value => NormalizeKnownValue(value, ShowObjectsValues));
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookPr, "updateLinks", value => NormalizeKnownValue(value, UpdateLinksValues));
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookPr, "defaultThemeVersion", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookPr, "showObjects", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, ShowObjectsValues));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookPr, "updateLinks", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, UpdateLinksValues));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookPr, "defaultThemeVersion", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookPr, "codeName", NormalizeOptionalText);
         return changed;
-    }
-
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed switch
-        {
-            "0" or "1" => trimmed,
-            "true" or "false" => trimmed,
-            _ => null
-        };
-    }
-
-    private static string? NormalizeKnownValue(string? value, HashSet<string> knownValues)
-    {
-        var trimmed = value?.Trim();
-        return trimmed is not null && knownValues.Contains(trimmed)
-            ? trimmed
-            : null;
-    }
-
-    private static string? NormalizeUnsignedIntOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed.ToString(CultureInfo.InvariantCulture)
-            : null;
     }
 
     private static string? NormalizeOptionalText(string? value)

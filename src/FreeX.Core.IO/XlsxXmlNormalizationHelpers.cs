@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
@@ -115,5 +116,33 @@ internal static class XlsxXmlNormalizationHelpers
 
         element.SetAttributeValue(attributeName, value);
         return true;
+    }
+
+    public static string? NormalizeBoolean(string? value)
+    {
+        var trimmed = value?.Trim();
+        return trimmed switch
+        {
+            "0" or "1" => trimmed,
+            "true" or "false" => trimmed,
+            _ => null
+        };
+    }
+
+    public static string? NormalizeRequiredUnsignedInt(string? value) =>
+        NormalizeUnsignedIntOrNull(value) ?? "0";
+
+    public static string? NormalizeUnsignedIntOrNull(string? value)
+    {
+        var trimmed = value?.Trim();
+        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed.ToString(CultureInfo.InvariantCulture)
+            : null;
+    }
+
+    public static string? NormalizeToken(string? value, IReadOnlySet<string> allowedValues)
+    {
+        var trimmed = value?.Trim();
+        return trimmed is not null && allowedValues.Contains(trimmed) ? trimmed : null;
     }
 }
