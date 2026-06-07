@@ -2690,6 +2690,42 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatBaseToBaseFunctions()
+    {
+        AssertFormulaBaseConversionFunctionContrastLocations("BIN2HEX($A1)=\"A\"", "B1", "B4");
+        AssertFormulaBaseConversionFunctionContrastLocations("BIN2OCT($A1)=\"12\"", "B1", "B4");
+        AssertFormulaBaseConversionFunctionContrastLocations("HEX2BIN($C1)=\"1111\"", "B2");
+        AssertFormulaBaseConversionFunctionContrastLocations("HEX2OCT($C1)=\"17\"", "B2");
+        AssertFormulaBaseConversionFunctionContrastLocations("OCT2BIN($D1)=\"1111\"", "B2");
+        AssertFormulaBaseConversionFunctionContrastLocations("OCT2HEX($D1)=\"FF\"", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatBaseToBaseOptionalPlacesAndCoercion()
+    {
+        AssertFormulaBaseConversionFunctionContrastLocations("EXACT(BIN2HEX($A1,$F1),\"0000000A\")", "B1");
+        AssertFormulaBaseConversionFunctionContrastLocations("EXACT(BIN2OCT($A1,$F1),\"0012\")", "B4");
+        AssertFormulaBaseConversionFunctionContrastLocations("EXACT(HEX2BIN($C1,$F1),\"00001010\")", "B1");
+        AssertFormulaBaseConversionFunctionContrastLocations("EXACT(HEX2OCT($C1,$F1),\"0017\")", "B2");
+        AssertFormulaBaseConversionFunctionContrastLocations("EXACT(OCT2BIN($D1,$F1),\"00001010\")", "B1");
+        AssertFormulaBaseConversionFunctionContrastLocations("EXACT(OCT2HEX($D1,$F1),\"000F\")", "B2");
+        AssertFormulaBaseConversionFunctionContrastLocations("EXACT(BIN2HEX($A1,$H1),\"A\")", "B1", "B4");
+        AssertFormulaBaseConversionFunctionContrastLocations("EXACT(BIN2HEX(\"101\",\"4.9\"),\"0005\")", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("EXACT(HEX2BIN(\"1\",TRUE),\"1\")", FormulaBaseConversionAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatBaseToBaseNegativeTwosComplement()
+    {
+        AssertFormulaBaseConversionFunctionContrastLocations("EXACT(BIN2HEX($A1,$F1),\"FFFFFFFFFF\")", "B3");
+        AssertFormulaBaseConversionFunctionContrastLocations("EXACT(BIN2OCT($A1,$F1),\"7777777777\")", "B3");
+        AssertFormulaBaseConversionFunctionContrastLocations("EXACT(HEX2BIN($C1,$F1),\"1111111111\")", "B3");
+        AssertFormulaBaseConversionFunctionContrastLocations("EXACT(HEX2OCT($C1,$F1),\"7777777777\")", "B3");
+        AssertFormulaBaseConversionFunctionContrastLocations("EXACT(OCT2BIN($D1,$F1),\"1111111111\")", "B3");
+        AssertFormulaBaseConversionFunctionContrastLocations("EXACT(OCT2HEX($D1,$F1),\"FFFFFFFFFF\")", "B3");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatBaseFunctionOperands()
     {
         AssertFormulaBaseConversionFunctionContrastLocations("BASE($E1,2)=\"1010\"", "B1");
@@ -2789,6 +2825,9 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaBaseConversionFunctionContrastLocations("EXACT(DEC2HEX($E1,$F1),\"001F\")", "B4");
         AssertFormulaBaseConversionFunctionContrastLocations("AND(EXACT(DEC2BIN($E1,$F1),\"00001010\"),$G1=\"Open\")", "B1");
         AssertFormulaBaseConversionFunctionContrastLocations("IF(EXACT(DEC2OCT($E1,$F1),\"0017\"),TRUE,FALSE)", "B2");
+        AssertFormulaBaseConversionFunctionContrastLocations("AND(EXACT(BIN2HEX($A1,$F1),\"0000000A\"),$G1=\"Open\")", "B1");
+        AssertFormulaBaseConversionFunctionContrastLocations("IF(EXACT(HEX2OCT($C1),\"377\"),TRUE,FALSE)", "B4");
+        AssertFormulaBaseConversionFunctionContrastLocations("ISTEXT(OCT2BIN($D1))", "B1", "B2", "B3", "B4", "B5");
     }
 
     [Fact]
@@ -2796,9 +2835,15 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         AssertFormulaBaseConversionFunctionContrastLocations("BIN2DEC()>0");
         AssertFormulaBaseConversionFunctionContrastLocations("DEC2BIN($E1,$F1,1)=\"0\"");
+        AssertFormulaBaseConversionFunctionContrastLocations("BIN2HEX()=\"0\"");
+        AssertFormulaBaseConversionFunctionContrastLocations("OCT2HEX($D1,$F1,1)=\"0\"");
         AssertFormulaBaseConversionFunctionContrastLocations("BIN2DEC(\"102\")>0");
         AssertFormulaBaseConversionFunctionContrastLocations("HEX2DEC(\"10000000000\")>0");
         AssertFormulaBaseConversionFunctionContrastLocations("OCT2DEC(\"8\")>0");
+        AssertFormulaBaseConversionFunctionContrastLocations("BIN2HEX(\"102\")=\"2\"");
+        AssertFormulaBaseConversionFunctionContrastLocations("HEX2BIN(\"F\",2)=\"1111\"");
+        AssertFormulaBaseConversionFunctionContrastLocations("OCT2HEX(\"17\",-1)=\"F\"");
+        AssertFormulaBaseConversionFunctionContrastLocations("HEX2OCT(\"10000000000\")=\"0\"");
         AssertFormulaBaseConversionFunctionContrastLocations("DEC2BIN(512)=\"1000000000\"");
         AssertFormulaBaseConversionFunctionContrastLocations("DEC2BIN(10,2)=\"10\"");
         AssertFormulaBaseConversionFunctionContrastLocations("DEC2HEX(255,-1)=\"FF\"");
@@ -2806,8 +2851,15 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaBaseConversionFunctionContrastLocations("DEC2HEX(549755813888)=\"80000000000\"");
         AssertFormulaBaseConversionFunctionContrastLocations("DEC2OCT(536870912)=\"4000000000\"");
         AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(BIN2DEC(\"102\"))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(BIN2HEX(\"102\"))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(HEX2BIN(\"F\",2))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(OCT2HEX(TRUE))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(BIN2OCT($H1))", FormulaBaseConversionAllLocations);
         AssertFormulaBaseConversionFunctionContrastLocations("ISNA(DEC2BIN(NA()))", FormulaBaseConversionAllLocations);
         AssertFormulaBaseConversionFunctionContrastLocations("ISNA(DEC2BIN(-1,NA()))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISNA(HEX2BIN(NA()))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISNA(BIN2HEX(\"102\",NA()))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISNA(OCT2HEX(\"17\",NA()))", FormulaBaseConversionAllLocations);
     }
 
     [Fact]
