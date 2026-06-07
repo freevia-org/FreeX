@@ -3619,7 +3619,7 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void XlsxAdapter_LoadedWorkbookSave_PreservesHyperlinkNativeMetadata()
+    public void XlsxAdapter_LoadedWorkbookSave_SanitizesHyperlinkNativeMetadata()
     {
         var workbook = new Workbook("HyperlinkNativeMetadata");
         var sheet = workbook.AddSheet("S1");
@@ -3653,19 +3653,12 @@ public partial class FileAdapterSmokeTests
             .Element(worksheetNs + "hyperlinks")!
             .Attribute("nativeHyperlinksAttr")
             .Should()
-            .NotBeNull();
-        worksheetXml.Root!
-            .Element(worksheetNs + "hyperlinks")!
-            .Attribute("nativeHyperlinksAttr")!
-            .Value
-            .Should()
-            .Be("kept");
+            .BeNull();
         hyperlink.Attribute("tooltip").Should().NotBeNull();
         hyperlink.Attribute("tooltip")!.Value.Should().Be("Open documentation");
         hyperlink.Attribute("display").Should().NotBeNull();
         hyperlink.Attribute("display")!.Value.Should().Be("FreeX docs");
-        hyperlink.Attribute("customAttr").Should().NotBeNull();
-        hyperlink.Attribute("customAttr")!.Value.Should().Be("hyperlink-native");
+        hyperlink.Attribute("customAttr").Should().BeNull();
     }
 
     [Fact]

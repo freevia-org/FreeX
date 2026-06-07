@@ -75,6 +75,7 @@ public sealed partial class XlsxFileAdapter
         XlsxWorksheetCellWatchesNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxWorksheetCustomPropertiesNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxWorksheetIgnoredErrorsNormalizer.NormalizeWorksheets(generatedArchive);
+        XlsxWorksheetHyperlinkNormalizer.NormalizeWorksheets(generatedArchive);
         return sourceParts;
     }
 
