@@ -21,6 +21,7 @@ public sealed partial class XlsxFileAdapter
         var removedWorksheetPackageParts = GetExcludedWorksheetPackagePartPaths(sourceArchive, context, workbook);
         var excludedSourceParts = removedWorksheetPackageParts
             .Concat(XlsxWorksheetThreadedCommentMapper.GetSourcePackagePartExclusions(sourceArchive, workbook))
+            .Concat(XlsxDigitalSignaturePackagePolicy.GetEditedSaveExclusions(sourceArchive))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(
             sourceArchive,
