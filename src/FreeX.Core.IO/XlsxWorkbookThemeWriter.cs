@@ -35,19 +35,8 @@ internal static class XlsxWorkbookThemeWriter
 
     private static XElement CreateColorSchemeElement(WorkbookTheme theme, XNamespace drawingNs)
     {
-        if (!string.IsNullOrWhiteSpace(theme.NativeColorSchemeXml))
-        {
-            try
-            {
-                var colorScheme = XElement.Parse(theme.NativeColorSchemeXml);
-                if (colorScheme.Name == drawingNs + "clrScheme")
-                    return new XElement(colorScheme);
-            }
-            catch
-            {
-                // Fall back to modeled colors when native theme XML is malformed.
-            }
-        }
+        if (TryCreateNativeThemeElement(theme.NativeColorSchemeXml, drawingNs + "clrScheme") is { } colorScheme)
+            return colorScheme;
 
         return new XElement(drawingNs + "clrScheme",
             new XAttribute("name", $"{theme.Name} Colors"),
@@ -59,22 +48,12 @@ internal static class XlsxWorkbookThemeWriter
 
     private static XElement CreateFontSchemeElement(WorkbookTheme theme, XNamespace drawingNs)
     {
-        if (!string.IsNullOrWhiteSpace(theme.NativeFontSchemeXml))
+        if (TryCreateNativeThemeElement(
+                theme.NativeFontSchemeXml,
+                drawingNs + "fontScheme",
+                XlsxThemeTypefaceNormalizer.SanitizeNonEmptyTypefaceAttributes) is { } fontScheme)
         {
-            try
-            {
-                var fontScheme = XElement.Parse(theme.NativeFontSchemeXml);
-                if (fontScheme.Name == drawingNs + "fontScheme")
-                {
-                    var sanitizedFontScheme = new XElement(fontScheme);
-                    XlsxThemeTypefaceNormalizer.SanitizeNonEmptyTypefaceAttributes(sanitizedFontScheme);
-                    return sanitizedFontScheme;
-                }
-            }
-            catch
-            {
-                // Fall back to modeled fonts when native theme XML is malformed.
-            }
+            return fontScheme;
         }
 
         return new XElement(drawingNs + "fontScheme",
@@ -94,19 +73,8 @@ internal static class XlsxWorkbookThemeWriter
 
     private static XElement CreateFormatSchemeElement(WorkbookTheme theme, XNamespace drawingNs)
     {
-        if (!string.IsNullOrWhiteSpace(theme.NativeFormatSchemeXml))
-        {
-            try
-            {
-                var formatScheme = XElement.Parse(theme.NativeFormatSchemeXml);
-                if (formatScheme.Name == drawingNs + "fmtScheme")
-                    return new XElement(formatScheme);
-            }
-            catch
-            {
-                // Fall back to the modeled effect name when native theme XML is malformed.
-            }
-        }
+        if (TryCreateNativeThemeElement(theme.NativeFormatSchemeXml, drawingNs + "fmtScheme") is { } formatScheme)
+            return formatScheme;
 
         // CT_StyleMatrix (fmtScheme) requires fillStyleLst, lnStyleLst, effectStyleLst and
         // bgFillStyleLst, each with at least three entries. An empty fmtScheme is schema-invalid and
@@ -203,19 +171,8 @@ internal static class XlsxWorkbookThemeWriter
         WorkbookThemeAlternateColorScheme scheme,
         XNamespace drawingNs)
     {
-        if (!string.IsNullOrWhiteSpace(scheme.NativeColorSchemeXml))
-        {
-            try
-            {
-                var colorScheme = XElement.Parse(scheme.NativeColorSchemeXml);
-                if (colorScheme.Name == drawingNs + "clrScheme")
-                    return new XElement(colorScheme);
-            }
-            catch
-            {
-                // Fall back to the parsed alternate colors when native XML is malformed.
-            }
-        }
+        if (TryCreateNativeThemeElement(scheme.NativeColorSchemeXml, drawingNs + "clrScheme") is { } colorScheme)
+            return colorScheme;
 
         return new XElement(drawingNs + "clrScheme",
             new XAttribute("name", string.IsNullOrWhiteSpace(scheme.Name) ? "Alternate Colors" : scheme.Name),
@@ -236,19 +193,12 @@ internal static class XlsxWorkbookThemeWriter
 
         if (!string.IsNullOrWhiteSpace(defaults.NativeObjectDefaultsXml))
         {
-            try
+            if (TryCreateNativeThemeElement(
+                    defaults.NativeObjectDefaultsXml,
+                    drawingNs + "objectDefaults",
+                    XlsxThemeTypefaceNormalizer.SanitizeNonEmptyTypefaceAttributes) is { } objectDefaults)
             {
-                var objectDefaults = XElement.Parse(defaults.NativeObjectDefaultsXml);
-                if (objectDefaults.Name == drawingNs + "objectDefaults")
-                {
-                    var sanitizedObjectDefaults = new XElement(objectDefaults);
-                    XlsxThemeTypefaceNormalizer.SanitizeNonEmptyTypefaceAttributes(sanitizedObjectDefaults);
-                    return [sanitizedObjectDefaults];
-                }
-            }
-            catch
-            {
-                // Fall back to modeled defaults when native object defaults XML is malformed.
+                return [objectDefaults];
             }
         }
 
@@ -262,6 +212,30 @@ internal static class XlsxWorkbookThemeWriter
                 CreateLineDefaultElement(defaults.Line, drawingNs),
                 CreateTextDefaultElement(defaults.Text, drawingNs))
         ];
+    }
+
+    private static XElement? TryCreateNativeThemeElement(
+        string? xml,
+        XName expectedName,
+        Func<XElement, bool>? sanitize = null)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
+            return null;
+
+        try
+        {
+            var element = XElement.Parse(xml);
+            if (element.Name != expectedName)
+                return null;
+
+            var clone = new XElement(element);
+            _ = sanitize?.Invoke(clone);
+            return clone;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static XElement? CreateShapeDefaultElement(
