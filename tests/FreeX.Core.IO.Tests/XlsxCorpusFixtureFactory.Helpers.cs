@@ -37,8 +37,7 @@ internal static partial class XlsxCorpusFixtureFactory
 
     private static XDocument LoadPackageXml(ZipArchiveEntry entry)
     {
-        using var stream = entry.Open();
-        return XDocument.Load(stream);
+        return XlsxPackageTestFixtures.LoadPackageXml(entry);
     }
 
     private static void ReplacePackageXml(ZipArchive archive, string entryName, XDocument document)
