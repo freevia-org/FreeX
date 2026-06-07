@@ -138,7 +138,7 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
                 if (string.IsNullOrWhiteSpace(attribute.Key))
                     continue;
 
-                TrySetNativeAttribute(ignoredErrors, attribute.Key, attribute.Value);
+                XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(ignoredErrors, attribute.Key, attribute.Value);
             }
 
             foreach (var run in ignoredErrorRuns)
@@ -157,7 +157,7 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
                         if (ShouldSkipIgnoredErrorNativeAttribute(attribute.Key))
                             continue;
 
-                        TrySetNativeAttribute(ignoredError, attribute.Key, attribute.Value);
+                        XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(ignoredError, attribute.Key, attribute.Value);
                     }
                 }
 

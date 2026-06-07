@@ -115,7 +115,7 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
                 if (string.IsNullOrWhiteSpace(attribute.Key))
                     continue;
 
-                TrySetNativeAttribute(cellWatches, attribute.Key, attribute.Value);
+                XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(cellWatches, attribute.Key, attribute.Value);
             }
 
             foreach (var address in watchedCells)
@@ -132,7 +132,7 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
                             continue;
                         }
 
-                        TrySetNativeAttribute(cellWatch, attribute.Key, attribute.Value);
+                        XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(cellWatch, attribute.Key, attribute.Value);
                     }
                 }
 
