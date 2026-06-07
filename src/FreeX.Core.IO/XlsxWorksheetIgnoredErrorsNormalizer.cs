@@ -50,7 +50,7 @@ internal static class XlsxWorksheetIgnoredErrorsNormalizer
     public static bool NormalizeElement(XElement ignoredErrors)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(ignoredErrors, EmptyAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(ignoredErrors, EmptyAttributes);
         changed |= RemoveUnexpectedChildren(ignoredErrors, WorksheetNs + "ignoredError");
 
         var seenSqrefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -64,7 +64,7 @@ internal static class XlsxWorksheetIgnoredErrorsNormalizer
                 continue;
             }
 
-            changed |= RemoveUnknownAttributes(ignoredError, IgnoredErrorAttributes);
+            changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(ignoredError, IgnoredErrorAttributes);
             changed |= NormalizeBooleanAttributes(ignoredError);
             if (!HasTruthyFlag(ignoredError) || !seenSqrefs.Add(normalizedSqref))
             {
@@ -73,8 +73,8 @@ internal static class XlsxWorksheetIgnoredErrorsNormalizer
                 continue;
             }
 
-            changed |= SetAttributeIfChanged(ignoredError, "sqref", normalizedSqref);
-            changed |= RemoveAllNodes(ignoredError);
+            changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(ignoredError, "sqref", normalizedSqref);
+            changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(ignoredError);
         }
 
         return changed;
@@ -205,43 +205,6 @@ internal static class XlsxWorksheetIgnoredErrorsNormalizer
         }
 
         return changed;
-    }
-
-    private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedNames)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                (attribute.Name.NamespaceName.Length == 0 && allowedNames.Contains(attribute.Name.LocalName)))
-            {
-                continue;
-            }
-
-            attribute.Remove();
-            changed = true;
-        }
-
-        return changed;
-    }
-
-    private static bool SetAttributeIfChanged(XElement element, string attributeName, string value)
-    {
-        var attribute = element.Attribute(attributeName);
-        if (attribute is not null && string.Equals(attribute.Value, value, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(attributeName, value);
-        return true;
-    }
-
-    private static bool RemoveAllNodes(XElement element)
-    {
-        if (!element.Nodes().Any())
-            return false;
-
-        element.RemoveNodes();
-        return true;
     }
 
     private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
