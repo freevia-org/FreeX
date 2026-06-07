@@ -1463,45 +1463,12 @@ public sealed partial class XlsxFileAdapter
 
         private static void NormalizePatchSharedStrings(ZipArchive archive)
         {
-            var sharedStringsEntry = archive.GetEntry("xl/sharedStrings.xml");
-            if (sharedStringsEntry is null)
-                return;
-
-            var sharedStringsXml = XlsxPackageXmlEditor.LoadXml(sharedStringsEntry);
-            var root = sharedStringsXml.Root;
-            if (root is null)
-                return;
-
-            var changed = false;
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            foreach (var richTextFont in root.Descendants(workbookNs + "rFont"))
-                changed |= XlsxFontNameSanitizer.SanitizeValAttribute(richTextFont);
-
-            if (changed)
-                XlsxPackageXmlEditor.ReplaceXml(archive, "xl/sharedStrings.xml", sharedStringsXml);
+            XlsxRichTextFontNormalizer.NormalizeSharedStrings(archive);
         }
 
         private static void NormalizePatchInlineStringFonts(ZipArchive archive)
         {
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
-            {
-                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-                var root = worksheetXml.Root;
-                if (root is null)
-                    continue;
-
-                var changed = false;
-                foreach (var inlineStringFont in root
-                             .Descendants(workbookNs + "is")
-                             .Descendants(workbookNs + "rFont"))
-                {
-                    changed |= XlsxFontNameSanitizer.SanitizeValAttribute(inlineStringFont);
-                }
-
-                if (changed)
-                    XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
-            }
+            XlsxRichTextFontNormalizer.NormalizeWorksheetInlineStrings(archive);
         }
 
         private static void NormalizePatchThemeTypefaces(ZipArchive archive)
