@@ -51,7 +51,7 @@ internal static class XlsxWorksheetIgnoredErrorsNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(ignoredErrors, EmptyAttributes);
-        changed |= RemoveUnexpectedChildren(ignoredErrors, WorksheetNs + "ignoredError");
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(ignoredErrors, WorksheetNs + "ignoredError");
 
         var seenSqrefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var ignoredError in ignoredErrors.Elements(WorksheetNs + "ignoredError").ToList())
@@ -190,21 +190,6 @@ internal static class XlsxWorksheetIgnoredErrorsNormalizer
         }
 
         return null;
-    }
-
-    private static bool RemoveUnexpectedChildren(XElement element, XName allowedChildName)
-    {
-        var changed = false;
-        foreach (var child in element.Elements().ToList())
-        {
-            if (child.Name == allowedChildName)
-                continue;
-
-            child.Remove();
-            changed = true;
-        }
-
-        return changed;
     }
 
     private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
