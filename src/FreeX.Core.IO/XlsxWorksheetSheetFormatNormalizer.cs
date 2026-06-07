@@ -53,17 +53,17 @@ internal static class XlsxWorksheetSheetFormatNormalizer
     {
         var changed = false;
         changed |= RemoveUnknownAttributes(sheetFormat);
-        changed |= NormalizeAttribute(sheetFormat, "baseColWidth", NormalizeUnsignedInt);
-        changed |= NormalizeAttribute(sheetFormat, "defaultColWidth", NormalizeNonNegativeDouble);
-        changed |= NormalizeAttribute(sheetFormat, "defaultRowHeight", NormalizeNonNegativeDouble);
-        changed |= NormalizeAttribute(sheetFormat, "outlineLevelRow", NormalizeOutlineLevel);
-        changed |= NormalizeAttribute(sheetFormat, "outlineLevelCol", NormalizeOutlineLevel);
-        changed |= NormalizeAttribute(sheetFormat, X14AcNs + "dyDescent", NormalizeNonNegativeDouble);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetFormat, "baseColWidth", NormalizeUnsignedInt);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetFormat, "defaultColWidth", NormalizeNonNegativeDouble);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetFormat, "defaultRowHeight", NormalizeNonNegativeDouble);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetFormat, "outlineLevelRow", NormalizeOutlineLevel);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetFormat, "outlineLevelCol", NormalizeOutlineLevel);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetFormat, X14AcNs + "dyDescent", NormalizeNonNegativeDouble);
 
         foreach (var attributeName in BooleanAttributes)
-            changed |= NormalizeAttribute(sheetFormat, attributeName, NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetFormat, attributeName, NormalizeBoolean);
 
-        changed |= RemoveAllNodes(sheetFormat);
+        changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(sheetFormat);
         return changed;
     }
 
@@ -79,29 +79,6 @@ internal static class XlsxWorksheetSheetFormatNormalizer
             if (NormalizeWorksheetRoot(root))
                 XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
         }
-    }
-
-    private static bool NormalizeAttribute(
-        XElement element,
-        XName attributeName,
-        Func<string?, string?> normalize)
-    {
-        var attribute = element.Attribute(attributeName);
-        var normalized = normalize(attribute?.Value);
-        if (normalized is null)
-        {
-            if (attribute is null)
-                return false;
-
-            attribute.Remove();
-            return true;
-        }
-
-        if (attribute is not null && string.Equals(attribute.Value, normalized, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(attributeName, normalized);
-        return true;
     }
 
     private static string? NormalizeBoolean(string? value)
@@ -169,15 +146,6 @@ internal static class XlsxWorksheetSheetFormatNormalizer
         }
 
         return changed;
-    }
-
-    private static bool RemoveAllNodes(XElement element)
-    {
-        if (!element.Nodes().Any())
-            return false;
-
-        element.RemoveNodes();
-        return true;
     }
 
     private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
