@@ -966,11 +966,7 @@ public sealed class WorkbookSession
         var destination = ActiveCell;
         var rows = ClipboardSerializer.Deserialize(text);
         var columnCount = rows.Length == 0 ? 0 : rows.Max(static row => row.Length);
-        var command = PasteCommandFactory.CreateExternalTextPasteCommand(
-            ActiveSheet.Id,
-            destination,
-            rows,
-            preserveText);
+        var command = CreateExternalTextPasteCommand(destination, rows, preserveText);
         var result = _cellEditService.ExecuteEditCommand(Workbook, command);
         if (!result.Success)
             return result;
@@ -1404,6 +1400,61 @@ public sealed class WorkbookSession
         return ToCommand("Set Font Size", commands);
     }
 
+    private IWorkbookCommand CreateExternalTextPasteCommand(
+        CellAddress destination,
+        IReadOnlyList<IReadOnlyList<string>> rows,
+        bool preserveText)
+    {
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        var commands = targetSheetIds
+            .Select(sheetId => PasteCommandFactory.CreateExternalTextPasteCommand(
+                sheetId,
+                RemapAddressToSheet(destination, sheetId),
+                rows,
+                preserveText))
+            .ToList();
+        return ToCommand("Paste", commands);
+    }
+
+    private IWorkbookCommand CreateInternalPasteCommand(
+        InternalClipboard clipboard,
+        CellAddress destination,
+        PasteCellsMode mode,
+        PasteSpecialOptions options,
+        bool keepSourceColumnWidths)
+    {
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        var commands = new List<IWorkbookCommand>(targetSheetIds.Count);
+        foreach (var sheetId in targetSheetIds)
+        {
+            var sheetDestination = RemapAddressToSheet(destination, sheetId);
+            var command = PasteCommandFactory.CreateInternalPasteCommand(
+                Workbook,
+                sheetId,
+                clipboard.SourceRange,
+                clipboard.Cells,
+                sheetDestination,
+                mode,
+                options);
+            if (keepSourceColumnWidths)
+            {
+                command = new CompositeWorkbookCommand(
+                    "Paste Special",
+                    [
+                        command,
+                        new PasteColumnWidthsCommand(sheetId, clipboard.SourceRange, sheetDestination.Col)
+                    ]);
+            }
+
+            commands.Add(command);
+        }
+
+        var label = mode == PasteCellsMode.All && options == default && !keepSourceColumnWidths
+            ? "Paste"
+            : "Paste Special";
+        return ToCommand(label, commands);
+    }
+
     private IWorkbookCommand CreateRangeCommand(
         GridRange range,
         string title,
@@ -1436,8 +1487,11 @@ public sealed class WorkbookSession
 
     private static GridRange RemapRangeToSheet(GridRange range, SheetId sheetId) =>
         new(
-            new CellAddress(sheetId, range.Start.Row, range.Start.Col),
-            new CellAddress(sheetId, range.End.Row, range.End.Col));
+            RemapAddressToSheet(range.Start, sheetId),
+            RemapAddressToSheet(range.End, sheetId));
+
+    private static CellAddress RemapAddressToSheet(CellAddress address, SheetId sheetId) =>
+        new(sheetId, address.Row, address.Col);
 
     private void ApplySuccessfulWorkbookStructureResult(SheetId preferredSheetId)
     {
@@ -1553,23 +1607,12 @@ public sealed class WorkbookSession
         bool keepSourceColumnWidths = false)
     {
         var destination = ActiveCell;
-        var command = PasteCommandFactory.CreateInternalPasteCommand(
-            Workbook,
-            ActiveSheet.Id,
-            clipboard.SourceRange,
-            clipboard.Cells,
+        var command = CreateInternalPasteCommand(
+            clipboard,
             destination,
             mode,
-            options);
-        if (keepSourceColumnWidths)
-        {
-            command = new CompositeWorkbookCommand(
-                "Paste Special",
-                [
-                    command,
-                    new PasteColumnWidthsCommand(ActiveSheet.Id, clipboard.SourceRange, destination.Col)
-                ]);
-        }
+            options,
+            keepSourceColumnWidths);
 
         if (ShouldClearCutSourceAfterPaste(clipboard, destination, mode, options, keepSourceColumnWidths))
         {
