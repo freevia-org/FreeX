@@ -21,7 +21,7 @@ internal static class XlsxXmlAttributeReader
         if (value is null)
             return defaultValue;
 
-        return IsTruthyAttributeValue(value);
+        return XlsxWorksheetXmlValueParser.IsTruthy(value);
     }
 
     public static bool? ReadNullableBoolAttribute(XElement? element, string name)
@@ -30,9 +30,6 @@ internal static class XlsxXmlAttributeReader
         if (value is null)
             return null;
 
-        return IsTruthyAttributeValue(value);
+        return XlsxWorksheetXmlValueParser.IsTruthy(value);
     }
-
-    private static bool IsTruthyAttributeValue(string value) =>
-        value is "1" || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
 }
