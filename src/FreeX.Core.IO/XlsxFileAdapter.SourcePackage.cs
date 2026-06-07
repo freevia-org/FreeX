@@ -19,18 +19,21 @@ public sealed partial class XlsxFileAdapter
         var context = XlsxSourcePackagePreservationContext.TryCreate(sourceArchive, generatedArchive);
         var sourceParts = InspectSourcePackageParts(sourceArchive);
         var removedWorksheetPackageParts = GetExcludedWorksheetPackagePartPaths(sourceArchive, context, workbook);
+        var excludedSourceParts = removedWorksheetPackageParts
+            .Concat(XlsxWorksheetThreadedCommentMapper.GetSourcePackagePartExclusions(sourceArchive, workbook))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(
             sourceArchive,
             generatedArchive,
-            removedWorksheetPackageParts);
+            excludedSourceParts);
 
-        XlsxPackageMetadataMerger.MergeContentTypes(sourceArchive, generatedArchive, removedWorksheetPackageParts);
+        XlsxPackageMetadataMerger.MergeContentTypes(sourceArchive, generatedArchive, excludedSourceParts);
         PreserveSourceChartExParts(workbook, sourceArchive, generatedArchive, generatedEntriesBeforeMerge);
         XlsxPackageMetadataMerger.MergeRelationshipParts(
             sourceArchive,
             generatedArchive,
             generatedEntriesBeforeMerge,
-            removedWorksheetPackageParts);
+            excludedSourceParts);
         XlsxDocumentPropertiesPreserver.Preserve(sourceArchive, generatedArchive);
         XlsxWorkbookMetadataPreserver.Preserve(sourceArchive, generatedArchive, workbook);
         XlsxStylesheetMetadataPreserver.Preserve(sourceArchive, generatedArchive);
