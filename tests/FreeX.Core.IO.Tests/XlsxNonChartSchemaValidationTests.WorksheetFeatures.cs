@@ -2452,7 +2452,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!);
+        var tableXml = LoadPackageXml(archive, "xl/tables/table1.xml");
         var autoFilter = tableXml.Root!.Element(workbookNs + "autoFilter")!;
         autoFilter.SetAttributeValue("customAttr", "removed");
         autoFilter.Add(
@@ -2494,7 +2494,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!);
+        var tableXml = LoadPackageXml(archive, "xl/tables/table1.xml");
         var sortState = new XElement(
             workbookNs + "sortState",
             new XAttribute("ref", "A1:B3"),
@@ -2520,7 +2520,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!);
+        var tableXml = LoadPackageXml(archive, "xl/tables/table1.xml");
         var root = tableXml.Root!;
         root.SetAttributeValue("tableType", "invalid");
         root.SetAttributeValue("headerRowDxfId", "not-a-number");
@@ -2548,7 +2548,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var autoFilter = worksheetXml.Root!.Element(workbookNs + "autoFilter")!;
         var firstColumn = autoFilter.Elements(workbookNs + "filterColumn").First();
         firstColumn.SetAttributeValue("hiddenButton", "maybe");
@@ -2585,7 +2585,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var sortState = worksheetXml.Root!.Element(workbookNs + "sortState")!;
         sortState.SetAttributeValue("sortMethod", "invalid");
         var condition = sortState.Element(workbookNs + "sortCondition")!;
@@ -2600,7 +2600,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var dataConsolidate = worksheetXml.Root!.Element(workbookNs + "dataConsolidate")!;
         dataConsolidate.SetAttributeValue("function", "invalid");
         dataConsolidate.SetAttributeValue("leftLabels", "maybe");
@@ -2663,7 +2663,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var customProperties = worksheetXml.Root!.Element(worksheetNs + "customProperties")!;
         customProperties.SetAttributeValue("nativeContainer", "kept");
         customProperties.Add(
@@ -2689,7 +2689,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var customProperties = worksheetXml.Root!
             .Elements(worksheetNs + "customProperties")
             .Should()
@@ -2729,7 +2729,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var cellWatches = worksheetXml.Root!.Element(worksheetNs + "cellWatches")!;
         cellWatches.SetAttributeValue("nativeContainer", "kept");
         cellWatches.Element(worksheetNs + "cellWatch")!.SetAttributeValue("nativeWatch", "kept");
@@ -2764,7 +2764,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var ignoredErrors = worksheetXml.Root!.Element(worksheetNs + "ignoredErrors")!;
         ignoredErrors.SetAttributeValue("nativeContainer", "kept");
         ignoredErrors.Add(
@@ -2791,7 +2791,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var ignoredErrors = worksheetXml.Root!
             .Elements(worksheetNs + "ignoredErrors")
             .Should()
@@ -2863,7 +2863,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var sheetCalcPr = worksheetXml.Root!.Element(worksheetNs + "sheetCalcPr")!;
         sheetCalcPr.SetAttributeValue("calcId", "999");
         sheetCalcPr.Add(new XElement(worksheetNs + "nativeSheetCalcPrChild"));
@@ -2909,7 +2909,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var customWorkbookViews = workbookXml.Root!.Element(workbookNs + "customWorkbookViews")!;
         customWorkbookViews.SetAttributeValue("customCustomWorkbookViewsFlag", "removed");
         customWorkbookViews.Add(new XElement(workbookNs + "nativeCustomWorkbookViewsChild"));
@@ -3015,7 +3015,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var sheetView = worksheetXml.Root!
             .Element(workbookNs + "sheetViews")!
             .Elements(workbookNs + "sheetView")
@@ -3051,7 +3051,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var sheetViews = worksheetXml.Root!.Element(workbookNs + "sheetViews")!;
         sheetViews.SetAttributeValue("nativeSheetViewsAttr", "kept");
         foreach (var sheetView in sheetViews.Elements(workbookNs + "sheetView"))
@@ -3086,7 +3086,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var phoneticPr = worksheetXml.Root!.Element(workbookNs + "phoneticPr")!;
         phoneticPr.SetAttributeValue("fontId", fontId);
         phoneticPr.SetAttributeValue("type", type);
@@ -3099,7 +3099,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var phoneticPr = worksheetXml.Root!.Element(workbookNs + "phoneticPr")!;
         phoneticPr.SetAttributeValue("nativeOnly", "kept");
         phoneticPr.Add(new XElement(workbookNs + "nativePhoneticPrChild"));
@@ -3122,7 +3122,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace freexNs = "urn:freex:test";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var sheetFormat = worksheetXml.Root!.Element(workbookNs + "sheetFormatPr")!;
         sheetFormat.SetAttributeValue("nativeSheetFormatAttr", "kept");
         sheetFormat.SetAttributeValue("invalidSheetFormatAttr", "removed");
@@ -3195,7 +3195,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace freexNs = "urn:freex:test";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var root = worksheetXml.Root!;
 
         var columns = root.Element(worksheetNs + "cols")!;
@@ -3251,7 +3251,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace freexNs = "urn:freex:test";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var root = worksheetXml.Root!;
 
         var columns = root.Element(worksheetNs + "cols")!;
@@ -3323,7 +3323,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var dimension = worksheetXml.Root!.Element(worksheetNs + "dimension")!;
         dimension.SetAttributeValue("nativeDimensionAttr", "kept");
         dimension.Add(new XElement(worksheetNs + "nativeDimensionChild"));
@@ -3407,7 +3407,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var root = worksheetXml.Root!;
 
         var printOptions = root.Element(worksheetNs + "printOptions")!;
@@ -3564,7 +3564,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         SetInvalidPageBreakAttributes(worksheetXml.Root!.Element(worksheetNs + "rowBreaks")!, worksheetNs, "20", "row-native");
         SetInvalidPageBreakAttributes(worksheetXml.Root!.Element(worksheetNs + "colBreaks")!, worksheetNs, "4", "col-native");
         ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
@@ -3632,7 +3632,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var mergeCells = worksheetXml.Root!.Element(worksheetNs + "mergeCells")!;
         mergeCells.SetAttributeValue("count", "not-a-number");
         mergeCells.SetAttributeValue("nativeMergeContainerAttr", "kept");
@@ -3806,7 +3806,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var commentsXml = LoadPackageXml(archive.GetEntry("xl/comments1.xml")!);
+        var commentsXml = LoadPackageXml(archive, "xl/comments1.xml");
         var text = commentsXml.Root!
             .Element(workbookNs + "commentList")!
             .Elements(workbookNs + "comment")
@@ -3842,7 +3842,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     {
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
-        return new XElement(LoadPackageXml(archive.GetEntry(entryName)!).Root!);
+        return new XElement(LoadPackageXml(archive, entryName).Root!);
     }
 
     private static XElement ReadWorksheetSingleCellTableRootElement(Stream stream)
@@ -3853,12 +3853,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         const string relationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableSingleCells";
         const string worksheetPath = "xl/worksheets/sheet1.xml";
 
-        var relsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var relsXml = LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
         var relationship = relsXml.Root!
             .Elements(packageRelNs + "Relationship")
             .Single(element => element.Attribute("Type")?.Value == relationshipType);
         var partPath = XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, relationship.Attribute("Target")!.Value);
-        return new XElement(LoadPackageXml(archive.GetEntry(partPath)!).Root!);
+        return new XElement(LoadPackageXml(archive, partPath).Root!);
     }
 
     private static byte[] ReadWorksheetCustomPropertyPartBytes(Stream stream)
@@ -3869,7 +3869,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         const string relationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customProperty";
         const string worksheetPath = "xl/worksheets/sheet1.xml";
 
-        var relsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var relsXml = LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
         var relationship = relsXml.Root!
             .Elements(packageRelNs + "Relationship")
             .Single(element => element.Attribute("Type")?.Value == relationshipType);
@@ -3885,7 +3885,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         return new XElement(worksheetXml.Root!
             .Element(worksheetNs + "sheetData")!
             .Elements(worksheetNs + "row")
