@@ -1179,6 +1179,49 @@ public static partial class AccessibilityCheckerService
             case "STANDARDIZE":
                 kind = ConditionalFormulaScalarFunctionKind.Standardize;
                 return true;
+            case "BETA.DIST":
+                kind = ConditionalFormulaScalarFunctionKind.BetaDist;
+                return true;
+            case "BETADIST":
+                kind = ConditionalFormulaScalarFunctionKind.BetaDistCompat;
+                return true;
+            case "BETA.INV":
+            case "BETAINV":
+                kind = ConditionalFormulaScalarFunctionKind.BetaInv;
+                return true;
+            case "GAMMA":
+                kind = ConditionalFormulaScalarFunctionKind.Gamma;
+                return true;
+            case "GAMMA.DIST":
+            case "GAMMADIST":
+                kind = ConditionalFormulaScalarFunctionKind.GammaDist;
+                return true;
+            case "GAMMA.INV":
+            case "GAMMAINV":
+                kind = ConditionalFormulaScalarFunctionKind.GammaInv;
+                return true;
+            case "GAMMALN":
+            case "GAMMALN.PRECISE":
+                kind = ConditionalFormulaScalarFunctionKind.GammaLn;
+                return true;
+            case "LOGNORM.DIST":
+                kind = ConditionalFormulaScalarFunctionKind.LogNormDist;
+                return true;
+            case "LOGNORMDIST":
+                kind = ConditionalFormulaScalarFunctionKind.LogNormDistCompat;
+                return true;
+            case "LOGNORM.INV":
+            case "LOGINV":
+                kind = ConditionalFormulaScalarFunctionKind.LogNormInv;
+                return true;
+            case "EXPON.DIST":
+            case "EXPONDIST":
+                kind = ConditionalFormulaScalarFunctionKind.ExponDist;
+                return true;
+            case "WEIBULL":
+            case "WEIBULL.DIST":
+                kind = ConditionalFormulaScalarFunctionKind.WeibullDist;
+                return true;
             case "PI":
                 kind = ConditionalFormulaScalarFunctionKind.Pi;
                 return true;
@@ -1591,6 +1634,8 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.NormSInv or
             ConditionalFormulaScalarFunctionKind.Phi or
             ConditionalFormulaScalarFunctionKind.Gauss or
+            ConditionalFormulaScalarFunctionKind.Gamma or
+            ConditionalFormulaScalarFunctionKind.GammaLn or
             ConditionalFormulaScalarFunctionKind.Arabic or
             ConditionalFormulaScalarFunctionKind.ErfPrecise or
             ConditionalFormulaScalarFunctionKind.Erfc or
@@ -1723,9 +1768,19 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Time or
             ConditionalFormulaScalarFunctionKind.Datedif or
             ConditionalFormulaScalarFunctionKind.NormInv or
+            ConditionalFormulaScalarFunctionKind.ExponDist or
+            ConditionalFormulaScalarFunctionKind.GammaInv or
+            ConditionalFormulaScalarFunctionKind.LogNormDistCompat or
+            ConditionalFormulaScalarFunctionKind.LogNormInv or
             ConditionalFormulaScalarFunctionKind.Standardize or
             ConditionalFormulaScalarFunctionKind.Convert => argumentCount == 3,
-            ConditionalFormulaScalarFunctionKind.NormDist => argumentCount == 4,
+            ConditionalFormulaScalarFunctionKind.NormDist or
+            ConditionalFormulaScalarFunctionKind.GammaDist or
+            ConditionalFormulaScalarFunctionKind.LogNormDist or
+            ConditionalFormulaScalarFunctionKind.WeibullDist => argumentCount == 4,
+            ConditionalFormulaScalarFunctionKind.BetaDist => argumentCount is >= 4 and <= 6,
+            ConditionalFormulaScalarFunctionKind.BetaDistCompat or
+            ConditionalFormulaScalarFunctionKind.BetaInv => argumentCount is >= 3 and <= 5,
             ConditionalFormulaScalarFunctionKind.NormSDist => argumentCount == 2,
             ConditionalFormulaScalarFunctionKind.Multinomial => argumentCount is >= 1 and <= MaxFormulaMultinomialArgumentCount,
             ConditionalFormulaScalarFunctionKind.Gcd or
@@ -2425,6 +2480,18 @@ public static partial class AccessibilityCheckerService
         Phi,
         Gauss,
         Standardize,
+        BetaDist,
+        BetaDistCompat,
+        BetaInv,
+        Gamma,
+        GammaDist,
+        GammaInv,
+        GammaLn,
+        LogNormDist,
+        LogNormDistCompat,
+        LogNormInv,
+        ExponDist,
+        WeibullDist,
         Pi,
         Arabic,
         Roman,
@@ -3140,6 +3207,19 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Gauss:
                 case ConditionalFormulaScalarFunctionKind.Standardize:
                     return TryEvaluateFormulaNormalDistributionFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.BetaDist:
+                case ConditionalFormulaScalarFunctionKind.BetaDistCompat:
+                case ConditionalFormulaScalarFunctionKind.BetaInv:
+                case ConditionalFormulaScalarFunctionKind.Gamma:
+                case ConditionalFormulaScalarFunctionKind.GammaDist:
+                case ConditionalFormulaScalarFunctionKind.GammaInv:
+                case ConditionalFormulaScalarFunctionKind.GammaLn:
+                case ConditionalFormulaScalarFunctionKind.LogNormDist:
+                case ConditionalFormulaScalarFunctionKind.LogNormDistCompat:
+                case ConditionalFormulaScalarFunctionKind.LogNormInv:
+                case ConditionalFormulaScalarFunctionKind.ExponDist:
+                case ConditionalFormulaScalarFunctionKind.WeibullDist:
+                    return TryEvaluateFormulaContinuousDistributionFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Pi:
                     value = new NumberValue(Math.PI);
                     return true;
@@ -6904,6 +6984,545 @@ public static partial class AccessibilityCheckerService
                     break;
 
                 x -= (FormulaNormSCdf(x) - probability) / pdf;
+            }
+
+            return x;
+        }
+
+        private bool TryEvaluateFormulaContinuousDistributionFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            var arguments = new ScalarValue[function.Arguments.Count];
+            for (var i = 0; i < function.Arguments.Count; i++)
+            {
+                if (function.Arguments[i].Kind == ConditionalFormulaOperandKind.ReferenceRange ||
+                    !TryResolveFormulaOperand(function.Arguments[i], rowOffset, colOffset, out arguments[i]))
+                {
+                    return false;
+                }
+            }
+
+            for (var i = 0; i < arguments.Length; i++)
+            {
+                if (arguments[i] is ErrorValue error)
+                {
+                    value = error;
+                    return true;
+                }
+            }
+
+            if (arguments.Any(static argument => argument is RangeValue))
+                return false;
+
+            switch (function.Kind)
+            {
+                case ConditionalFormulaScalarFunctionKind.BetaDist:
+                    if (!TryGetFormulaDistributionNumber(arguments[0], out var betaDistX) ||
+                        !TryGetFormulaDistributionNumber(arguments[1], out var betaDistAlpha) ||
+                        !TryGetFormulaDistributionNumber(arguments[2], out var betaDistBeta) ||
+                        !TryGetFormulaDistributionBoolean(arguments[3], out var betaDistCumulative) ||
+                        !TryGetFormulaDistributionOptionalNumber(
+                            function.Arguments.Count >= 5 ? arguments[4] : BlankValue.Instance,
+                            0d,
+                            out var betaDistLower) ||
+                        !TryGetFormulaDistributionOptionalNumber(
+                            function.Arguments.Count >= 6 ? arguments[5] : BlankValue.Instance,
+                            1d,
+                            out var betaDistUpper))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaBetaDistScalar(betaDistX, betaDistAlpha, betaDistBeta, betaDistCumulative, betaDistLower, betaDistUpper);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.BetaDistCompat:
+                    if (!TryGetFormulaDistributionNumber(arguments[0], out var betaDistCompatX) ||
+                        !TryGetFormulaDistributionNumber(arguments[1], out var betaDistCompatAlpha) ||
+                        !TryGetFormulaDistributionNumber(arguments[2], out var betaDistCompatBeta) ||
+                        !TryGetFormulaDistributionOptionalNumber(
+                            function.Arguments.Count >= 4 ? arguments[3] : BlankValue.Instance,
+                            0d,
+                            out var betaDistCompatLower) ||
+                        !TryGetFormulaDistributionOptionalNumber(
+                            function.Arguments.Count >= 5 ? arguments[4] : BlankValue.Instance,
+                            1d,
+                            out var betaDistCompatUpper))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaBetaDistScalar(betaDistCompatX, betaDistCompatAlpha, betaDistCompatBeta, true, betaDistCompatLower, betaDistCompatUpper);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.BetaInv:
+                    if (!TryGetFormulaDistributionNumber(arguments[0], out var betaInvProbability) ||
+                        !TryGetFormulaDistributionNumber(arguments[1], out var betaInvAlpha) ||
+                        !TryGetFormulaDistributionNumber(arguments[2], out var betaInvBeta) ||
+                        !TryGetFormulaDistributionOptionalNumber(
+                            function.Arguments.Count >= 4 ? arguments[3] : BlankValue.Instance,
+                            0d,
+                            out var betaInvLower) ||
+                        !TryGetFormulaDistributionOptionalNumber(
+                            function.Arguments.Count >= 5 ? arguments[4] : BlankValue.Instance,
+                            1d,
+                            out var betaInvUpper))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaBetaInvScalar(betaInvProbability, betaInvAlpha, betaInvBeta, betaInvLower, betaInvUpper);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Gamma:
+                    if (!TryGetFormulaDistributionNumber(arguments[0], out var gammaX))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaGammaScalar(gammaX);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.GammaDist:
+                    if (!TryGetFormulaDistributionNumber(arguments[0], out var gammaDistX) ||
+                        !TryGetFormulaDistributionNumber(arguments[1], out var gammaDistAlpha) ||
+                        !TryGetFormulaDistributionNumber(arguments[2], out var gammaDistBeta) ||
+                        !TryGetFormulaDistributionBoolean(arguments[3], out var gammaDistCumulative))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaGammaDistScalar(gammaDistX, gammaDistAlpha, gammaDistBeta, gammaDistCumulative);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.GammaInv:
+                    if (!TryGetFormulaDistributionNumber(arguments[0], out var gammaInvProbability) ||
+                        !TryGetFormulaDistributionNumber(arguments[1], out var gammaInvAlpha) ||
+                        !TryGetFormulaDistributionNumber(arguments[2], out var gammaInvBeta))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaGammaInvScalar(gammaInvProbability, gammaInvAlpha, gammaInvBeta);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.GammaLn:
+                    if (!TryGetFormulaDistributionNumber(arguments[0], out var gammaLnX))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaGammaLnScalar(gammaLnX);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.LogNormDist:
+                    if (!TryGetFormulaDistributionNumber(arguments[0], out var logNormDistX) ||
+                        !TryGetFormulaDistributionNumber(arguments[1], out var logNormDistMean) ||
+                        !TryGetFormulaDistributionNumber(arguments[2], out var logNormDistStdev) ||
+                        !TryGetFormulaDistributionBoolean(arguments[3], out var logNormDistCumulative))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaLogNormDistScalar(logNormDistX, logNormDistMean, logNormDistStdev, logNormDistCumulative);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.LogNormDistCompat:
+                    if (!TryGetFormulaDistributionNumber(arguments[0], out var logNormDistCompatX) ||
+                        !TryGetFormulaDistributionNumber(arguments[1], out var logNormDistCompatMean) ||
+                        !TryGetFormulaDistributionNumber(arguments[2], out var logNormDistCompatStdev))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaLogNormDistScalar(logNormDistCompatX, logNormDistCompatMean, logNormDistCompatStdev, true);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.LogNormInv:
+                    if (!TryGetFormulaDistributionNumber(arguments[0], out var logNormInvProbability) ||
+                        !TryGetFormulaDistributionNumber(arguments[1], out var logNormInvMean) ||
+                        !TryGetFormulaDistributionNumber(arguments[2], out var logNormInvStdev))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaLogNormInvScalar(logNormInvProbability, logNormInvMean, logNormInvStdev);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.ExponDist:
+                    if (!TryGetFormulaDistributionNumber(arguments[0], out var exponDistX) ||
+                        !TryGetFormulaDistributionNumber(arguments[1], out var exponDistLambda) ||
+                        !TryGetFormulaDistributionBoolean(arguments[2], out var exponDistCumulative))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaExponDistScalar(exponDistX, exponDistLambda, exponDistCumulative);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.WeibullDist:
+                    if (!TryGetFormulaDistributionNumber(arguments[0], out var weibullDistX) ||
+                        !TryGetFormulaDistributionNumber(arguments[1], out var weibullDistAlpha) ||
+                        !TryGetFormulaDistributionNumber(arguments[2], out var weibullDistBeta) ||
+                        !TryGetFormulaDistributionBoolean(arguments[3], out var weibullDistCumulative))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaWeibullDistScalar(weibullDistX, weibullDistAlpha, weibullDistBeta, weibullDistCumulative);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static bool TryGetFormulaDistributionNumber(ScalarValue value, out double number) =>
+            TryGetFormulaNormalNumber(value, out number);
+
+        private static bool TryGetFormulaDistributionBoolean(ScalarValue value, out bool boolean) =>
+            TryGetFormulaNormalBoolean(value, out boolean);
+
+        private static bool TryGetFormulaDistributionOptionalNumber(
+            ScalarValue value,
+            double defaultValue,
+            out double number)
+        {
+            if (value is BlankValue)
+            {
+                number = defaultValue;
+                return true;
+            }
+
+            return TryGetFormulaDistributionNumber(value, out number);
+        }
+
+        private static ScalarValue FormulaExponDistScalar(double x, double lambda, bool cumulative)
+        {
+            if (x < 0d || lambda <= 0d)
+                return ErrorValue.Num;
+
+            return FormulaDistributionNumberResult(cumulative
+                ? 1.0d - Math.Exp(-lambda * x)
+                : lambda * Math.Exp(-lambda * x));
+        }
+
+        private static ScalarValue FormulaWeibullDistScalar(double x, double alpha, double beta, bool cumulative)
+        {
+            if (x < 0d || alpha <= 0d || beta <= 0d)
+                return ErrorValue.Num;
+
+            var scaled = x / beta;
+            var powered = Math.Pow(scaled, alpha);
+            return FormulaDistributionNumberResult(cumulative
+                ? 1.0d - Math.Exp(-powered)
+                : (alpha / beta) * Math.Pow(scaled, alpha - 1d) * Math.Exp(-powered));
+        }
+
+        private static ScalarValue FormulaGammaDistScalar(double x, double alpha, double beta, bool cumulative)
+        {
+            if (x < 0d || alpha <= 0d || beta <= 0d)
+                return ErrorValue.Num;
+
+            if (cumulative)
+                return FormulaDistributionNumberResult(FormulaGammaInc(alpha, x / beta));
+
+            var pdf = Math.Exp((alpha - 1d) * Math.Log(x) - x / beta - alpha * Math.Log(beta) - FormulaLogGamma(alpha));
+            return FormulaDistributionNumberResult(pdf);
+        }
+
+        private static ScalarValue FormulaGammaInvScalar(double probability, double alpha, double beta)
+        {
+            if (probability < 0d || probability >= 1d || alpha <= 0d || beta <= 0d)
+                return ErrorValue.Num;
+
+            return FormulaDistributionNumberResult(FormulaGammaInv(probability, alpha) * beta);
+        }
+
+        private static ScalarValue FormulaGammaLnScalar(double x)
+        {
+            if (x <= 0d)
+                return ErrorValue.Num;
+
+            return FormulaDistributionNumberResult(FormulaLogGamma(x));
+        }
+
+        private static ScalarValue FormulaGammaScalar(double x)
+        {
+            if (x == 0d || x < 0d && x == Math.Floor(x))
+                return ErrorValue.Num;
+
+            var gamma = FormulaGammaValue(x);
+            return double.IsFinite(gamma) ? FormulaDistributionNumberResult(gamma) : ErrorValue.Num;
+        }
+
+        private static ScalarValue FormulaBetaDistScalar(double x, double alpha, double beta, bool cumulative, double lower, double upper)
+        {
+            if (alpha <= 0d || beta <= 0d || lower >= upper)
+                return ErrorValue.Num;
+
+            if (x < lower || x > upper)
+                return ErrorValue.Num;
+
+            var t = (x - lower) / (upper - lower);
+            if (cumulative)
+                return FormulaDistributionNumberResult(FormulaBetaInc(alpha, beta, t));
+
+            var logBeta = FormulaLogGamma(alpha) + FormulaLogGamma(beta) - FormulaLogGamma(alpha + beta);
+            var pdf = Math.Exp((alpha - 1d) * Math.Log(t) + (beta - 1d) * Math.Log(1d - t) - logBeta) / (upper - lower);
+            return FormulaDistributionNumberResult(pdf);
+        }
+
+        private static ScalarValue FormulaBetaInvScalar(double probability, double alpha, double beta, double lower, double upper)
+        {
+            if (probability < 0d || probability > 1d || alpha <= 0d || beta <= 0d || lower >= upper)
+                return ErrorValue.Num;
+
+            return FormulaDistributionNumberResult(FormulaBetaInv(probability, alpha, beta) * (upper - lower) + lower);
+        }
+
+        private static ScalarValue FormulaLogNormDistScalar(double x, double mean, double stdev, bool cumulative)
+        {
+            if (x <= 0d || stdev <= 0d)
+                return ErrorValue.Num;
+
+            var z = (Math.Log(x) - mean) / stdev;
+            return FormulaDistributionNumberResult(cumulative
+                ? FormulaNormSCdf(z)
+                : FormulaNormSPdf(z) / (x * stdev));
+        }
+
+        private static ScalarValue FormulaLogNormInvScalar(double probability, double mean, double stdev)
+        {
+            if (probability <= 0d || probability >= 1d || stdev <= 0d)
+                return ErrorValue.Num;
+
+            return FormulaDistributionNumberResult(Math.Exp(FormulaNormSInv(probability) * stdev + mean));
+        }
+
+        private static ScalarValue FormulaDistributionNumberResult(double result) =>
+            double.IsFinite(result) ? new NumberValue(result) : ErrorValue.Num;
+
+        private static double FormulaLogGamma(double x)
+        {
+            ReadOnlySpan<double> coefficients =
+            [
+                76.18009172947146d,
+                -86.50532032941677d,
+                24.01409824083091d,
+                -1.231739572450155d,
+                0.1208650973866179e-2d,
+                -0.5395239384953e-5d
+            ];
+
+            var y = x;
+            var tmp = x + 5.5d;
+            tmp -= (x + 0.5d) * Math.Log(tmp);
+            var ser = 1.000000000190015d;
+            for (var j = 0; j < coefficients.Length; j++)
+                ser += coefficients[j] / ++y;
+
+            return -tmp + Math.Log(2.5066282746310005d * ser / x);
+        }
+
+        private static double FormulaGammaValue(double x)
+        {
+            if (x <= 0d)
+            {
+                if (x == Math.Floor(x))
+                    return double.NaN;
+
+                return Math.PI / (Math.Sin(Math.PI * x) * FormulaGammaValue(1.0d - x));
+            }
+
+            return Math.Exp(FormulaLogGamma(x));
+        }
+
+        private static double FormulaGammaInc(double a, double x)
+        {
+            if (x < 0d || a <= 0d)
+                return double.NaN;
+
+            if (x == 0d)
+                return 0d;
+
+            return x < a + 1.0d
+                ? FormulaGammaIncSeries(a, x)
+                : 1.0d - FormulaGammaIncCf(a, x);
+        }
+
+        private static double FormulaGammaIncSeries(double a, double x)
+        {
+            var ap = a;
+            var delta = 1.0d / a;
+            var sum = delta;
+            for (var n = 1; n <= 300; n++)
+            {
+                ap++;
+                delta *= x / ap;
+                sum += delta;
+                if (Math.Abs(delta) < Math.Abs(sum) * 1e-12d)
+                    break;
+            }
+
+            return sum * Math.Exp(-x + a * Math.Log(x) - FormulaLogGamma(a));
+        }
+
+        private static double FormulaGammaIncCf(double a, double x)
+        {
+            var b = x + 1.0d - a;
+            var c = 1.0d / 1e-30d;
+            var d = 1.0d / b;
+            var h = d;
+            if (Math.Abs(d) < 1e-30d)
+                d = 1e-30d;
+
+            for (var i = 1; i <= 300; i++)
+            {
+                var an = -i * (i - a);
+                b += 2.0d;
+                d = an * d + b;
+                if (Math.Abs(d) < 1e-30d)
+                    d = 1e-30d;
+
+                c = b + an / c;
+                if (Math.Abs(c) < 1e-30d)
+                    c = 1e-30d;
+
+                d = 1.0d / d;
+                var delta = d * c;
+                h *= delta;
+                if (Math.Abs(delta - 1.0d) < 1e-12d)
+                    break;
+            }
+
+            return Math.Exp(-x + a * Math.Log(x) - FormulaLogGamma(a)) * h;
+        }
+
+        private static double FormulaGammaInv(double probability, double alpha)
+        {
+            if (probability <= 0d)
+                return 0d;
+
+            if (probability >= 1d)
+                return double.PositiveInfinity;
+
+            var x = alpha * Math.Pow(FormulaNormSInv(probability) / Math.Sqrt(9d * alpha) + 1d - 1.0d / (9d * alpha), 3d);
+            if (x <= 0d)
+                x = 0.01d;
+
+            for (var i = 0; i < 200; i++)
+            {
+                var f = FormulaGammaInc(alpha, x) - probability;
+                var df = Math.Exp((alpha - 1d) * Math.Log(x) - x - FormulaLogGamma(alpha));
+                if (df == 0d)
+                    break;
+
+                var dx = f / df;
+                x -= dx;
+                if (x <= 0d)
+                    x = 1e-10d;
+
+                if (Math.Abs(dx) < x * 1e-10d)
+                    break;
+            }
+
+            return x;
+        }
+
+        private static double FormulaBetaInc(double a, double b, double x)
+        {
+            if (x < 0d || x > 1d)
+                return double.NaN;
+
+            if (x == 0d)
+                return 0d;
+
+            if (x == 1d)
+                return 1d;
+
+            if (x > (a + 1d) / (a + b + 2d))
+                return 1.0d - FormulaBetaInc(b, a, 1.0d - x);
+
+            var logBeta = FormulaLogGamma(a) + FormulaLogGamma(b) - FormulaLogGamma(a + b);
+            var front = Math.Exp(Math.Log(x) * a + Math.Log(1d - x) * b - logBeta) / a;
+            return front * FormulaBetaCf(a, b, x);
+        }
+
+        private static double FormulaBetaCf(double a, double b, double x)
+        {
+            const int maxIterations = 300;
+            const double epsilon = 3e-12d;
+
+            var qab = a + b;
+            var qap = a + 1d;
+            var qam = a - 1d;
+            var c = 1d;
+            var d = 1d - qab * x / qap;
+            if (Math.Abs(d) < 1e-30d)
+                d = 1e-30d;
+
+            d = 1d / d;
+            var h = d;
+            for (var m = 1; m <= maxIterations; m++)
+            {
+                var m2 = 2 * m;
+                var aa = m * (b - m) * x / ((qam + m2) * (a + m2));
+                d = 1d + aa * d;
+                if (Math.Abs(d) < 1e-30d)
+                    d = 1e-30d;
+
+                c = 1d + aa / c;
+                if (Math.Abs(c) < 1e-30d)
+                    c = 1e-30d;
+
+                d = 1d / d;
+                h *= d * c;
+                aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2));
+                d = 1d + aa * d;
+                if (Math.Abs(d) < 1e-30d)
+                    d = 1e-30d;
+
+                c = 1d + aa / c;
+                if (Math.Abs(c) < 1e-30d)
+                    c = 1e-30d;
+
+                d = 1d / d;
+                var delta = d * c;
+                h *= delta;
+                if (Math.Abs(delta - 1d) < epsilon)
+                    break;
+            }
+
+            return h;
+        }
+
+        private static double FormulaBetaInv(double probability, double alpha, double beta)
+        {
+            if (probability <= 0d)
+                return 0d;
+
+            if (probability >= 1d)
+                return 1d;
+
+            var x = alpha / (alpha + beta);
+            for (var i = 0; i < 200; i++)
+            {
+                var f = FormulaBetaInc(alpha, beta, x) - probability;
+                var logBeta = FormulaLogGamma(alpha) + FormulaLogGamma(beta) - FormulaLogGamma(alpha + beta);
+                var df = Math.Exp((alpha - 1d) * Math.Log(x) + (beta - 1d) * Math.Log(1d - x) - logBeta);
+                if (df == 0d)
+                    break;
+
+                var dx = f / df;
+                x -= dx;
+                x = Math.Clamp(x, 1e-10d, 1.0d - 1e-10d);
+                if (Math.Abs(dx) < 1e-10d)
+                    break;
             }
 
             return x;
