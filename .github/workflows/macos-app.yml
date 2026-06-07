@@ -43,6 +43,33 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Capture runner toolchain evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          runtime="${{ matrix.runtime }}"
+          artifact_root="$GITHUB_WORKSPACE/artifacts"
+          evidence_path="$artifact_root/freex-$runtime-macos-evidence.txt"
+
+          mkdir -p "$artifact_root"
+          {
+            echo "runtime=$runtime"
+            echo "runner_label=${{ matrix.runner }}"
+            echo "runner_os=${RUNNER_OS:-unknown}"
+            echo "runner_arch=${RUNNER_ARCH:-unknown}"
+            echo "image_os=${ImageOS:-unknown}"
+            echo "image_version=${ImageVersion:-unknown}"
+            echo "[sw_vers]"
+            sw_vers
+            echo "[uname -m]"
+            uname -m
+            echo "[dotnet --info]"
+            dotnet --info
+            echo "[xcodebuild -version]"
+            xcodebuild -version
+          } | tee "$evidence_path"
+
       - name: Build app project
         shell: pwsh
         run: dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release
@@ -209,6 +236,8 @@ jobs:
           codesign --verify --deep --strict "$unzip_root/FreeX.app"
           host_arch="$(uname -m)"
           {
+            echo ""
+            echo "[bundle]"
             echo "runtime=$runtime"
             echo "host_arch=$host_arch"
             echo "binary_archs=$binary_archs"
@@ -226,7 +255,7 @@ jobs:
             echo "notarization_status=$notarization_status"
             echo "stapler_validated=$stapler_validated"
             echo "zip_sha256=$zip_sha256"
-          } > "$evidence_path"
+          } >> "$evidence_path"
           if [[ ("$runtime" == "osx-arm64" && "$host_arch" == "arm64") || ("$runtime" == "osx-x64" && "$host_arch" == "x86_64") ]]; then
             "$unzip_root/FreeX.app/Contents/MacOS/FreeX" --packaging-smoke | tee "$smoke_log"
             grep -q "Packaging smoke opened" "$smoke_log"

@@ -139,6 +139,35 @@ foreach ($workflow in $workflows) {
         }
     }
 
+    if ($workflow.Name -eq "macos-app.yml") {
+        $requiredMacOsEvidenceMarkers = @(
+            "- name: Capture runner toolchain evidence",
+            'evidence_path="$artifact_root/freex-$runtime-macos-evidence.txt"',
+            'echo "runner_label=${{ matrix.runner }}"',
+            'echo "runner_os=${RUNNER_OS:-unknown}"',
+            'echo "runner_arch=${RUNNER_ARCH:-unknown}"',
+            'echo "image_os=${ImageOS:-unknown}"',
+            'echo "image_version=${ImageVersion:-unknown}"',
+            'echo "[sw_vers]"',
+            "sw_vers",
+            'echo "[uname -m]"',
+            "uname -m",
+            'echo "[dotnet --info]"',
+            "dotnet --info",
+            'echo "[xcodebuild -version]"',
+            "xcodebuild -version",
+            '} | tee "$evidence_path"',
+            'echo "[bundle]"',
+            '} >> "$evidence_path"'
+        )
+
+        foreach ($marker in $requiredMacOsEvidenceMarkers) {
+            if (-not $content.Contains($marker)) {
+                $errors.Add("$($workflow.Name): macOS app workflow is missing hosted runner/toolchain evidence marker: $marker")
+            }
+        }
+    }
+
     foreach ($match in [regex]::Matches($content, "(?m)^\s*(?:-\s*)?uses:\s+([^\s#]+)")) {
         $actionRef = $match.Groups[1].Value.Trim("`"", "'")
         if ($actionRef -match "^\.[\\/]") {

@@ -75,7 +75,22 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeExtensions:0'");
         workflow.Should().Contain("PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeExtensions:0'");
         workflow.Should().Contain("lipo -archs");
+        workflow.Should().Contain("- name: Capture runner toolchain evidence");
         workflow.Should().Contain("evidence_path=\"$artifact_root/freex-$runtime-macos-evidence.txt\"");
+        workflow.Should().Contain("echo \"runner_label=${{ matrix.runner }}\"");
+        workflow.Should().Contain("echo \"runner_os=${RUNNER_OS:-unknown}\"");
+        workflow.Should().Contain("echo \"runner_arch=${RUNNER_ARCH:-unknown}\"");
+        workflow.Should().Contain("echo \"image_os=${ImageOS:-unknown}\"");
+        workflow.Should().Contain("echo \"image_version=${ImageVersion:-unknown}\"");
+        workflow.Should().Contain("echo \"[sw_vers]\"");
+        workflow.Should().Contain("sw_vers");
+        workflow.Should().Contain("echo \"[uname -m]\"");
+        workflow.Should().Contain("uname -m");
+        workflow.Should().Contain("echo \"[dotnet --info]\"");
+        workflow.Should().Contain("dotnet --info");
+        workflow.Should().Contain("echo \"[xcodebuild -version]\"");
+        workflow.Should().Contain("xcodebuild -version");
+        workflow.Should().Contain("} | tee \"$evidence_path\"");
         workflow.Should().Contain("smoke_log=\"$artifact_root/freex-$runtime-macos-packaging-smoke.log\"");
         workflow.Should().Contain("launch_smoke_report=\"$artifact_root/freex-$runtime-macos-launch-smoke.txt\"");
         workflow.Should().Contain("notary_log=\"$artifact_root/freex-$runtime-macos-notarization.log\"");
@@ -100,6 +115,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("stapler_validated=\"true\"");
         workflow.Should().Contain("notarization_status=\"accepted\"");
         workflow.Should().Contain("notarization_status=\"skipped_missing_credentials\"");
+        workflow.Should().Contain("echo \"[bundle]\"");
         workflow.Should().Contain("echo \"binary_archs=$binary_archs\"");
         workflow.Should().Contain("echo \"bundle_icon=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' \"$app/Contents/Info.plist\")\"");
         workflow.Should().Contain("echo \"codesign_verified=true\"");
@@ -107,6 +123,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("echo \"notarization_status=$notarization_status\"");
         workflow.Should().Contain("echo \"stapler_validated=$stapler_validated\"");
         workflow.Should().Contain("echo \"zip_sha256=$zip_sha256\"");
+        workflow.Should().Contain("} >> \"$evidence_path\"");
         workflow.Should().Contain("echo \"smoke_status=passed\" >> \"$evidence_path\"");
         workflow.Should().Contain("echo \"smoke_status=skipped_host_arch_mismatch\" >> \"$evidence_path\"");
         workflow.Should().Contain("codesign --verify --deep --strict");
