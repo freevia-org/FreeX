@@ -35,8 +35,11 @@ internal static class XlsxWorksheetNativeMetadataHelpers
 
     public static bool ApplyNativeAttributesIfMissing(
         XElement element,
-        IReadOnlyDictionary<string, string> attributes)
+        IReadOnlyDictionary<string, string>? attributes)
     {
+        if (attributes is null)
+            return false;
+
         var changed = false;
         foreach (var (name, value) in attributes)
         {

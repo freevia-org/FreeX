@@ -135,7 +135,7 @@ internal static class XlsxStructuredTableWriter
             root.SetAttributeValue("published", published ? "1" : "0");
         if (!string.IsNullOrWhiteSpace(table.Comment))
             root.SetAttributeValue("comment", table.Comment);
-        ApplyNativeAttributesIfMissing(root, table.NativeAttributes);
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(root, table.NativeAttributes);
 
         if (table.HasAutoFilter)
             root.Add(ToAutoFilterXml(table, workbookNs));
@@ -192,7 +192,7 @@ internal static class XlsxStructuredTableWriter
                 ? null
                 : new XElement(workbookNs + "totalsRowFormula", column.TotalsRowFormula));
 
-        ApplyNativeAttributesIfMissing(element, column.NativeAttributes);
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, column.NativeAttributes);
 
         foreach (var nativeChildXml in column.NativeChildXmls ?? [])
         {
@@ -213,7 +213,7 @@ internal static class XlsxStructuredTableWriter
         if (!string.IsNullOrWhiteSpace(table.StyleName))
             element.SetAttributeValue("name", table.StyleName);
 
-        ApplyNativeAttributesIfMissing(element, table.NativeStyleInfoAttributes);
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, table.NativeStyleInfoAttributes);
 
         foreach (var nativeChildXml in table.NativeStyleInfoChildXmls ?? [])
         {
@@ -249,7 +249,7 @@ internal static class XlsxStructuredTableWriter
         StructuredTableModel table,
         XNamespace workbookNs)
     {
-        ApplyNativeAttributesIfMissing(element, table.NativeAutoFilterAttributes);
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, table.NativeAutoFilterAttributes);
 
         foreach (var nativeChildXml in table.NativeAutoFilterChildXmls ?? [])
         {
@@ -264,7 +264,7 @@ internal static class XlsxStructuredTableWriter
         var element = new XElement(
             workbookNs + "filterColumn",
             new XAttribute("colId", filterColumn.ColumnId.ToString(CultureInfo.InvariantCulture)));
-        ApplyNativeAttributesIfMissing(element, filterColumn.NativeAttributes);
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, filterColumn.NativeAttributes);
 
         var hasCustomFilters = filterColumn.CustomFilters.Count > 0;
         if (!hasCustomFilters && (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank))
@@ -285,7 +285,7 @@ internal static class XlsxStructuredTableWriter
             else if (filterColumn.CustomFiltersAnd)
                 customFilters.SetAttributeValue("and", "1");
 
-            ApplyNativeAttributesIfMissing(customFilters, filterColumn.NativeCustomFiltersAttributes);
+            XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(customFilters, filterColumn.NativeCustomFiltersAttributes);
 
             element.Add(customFilters);
         }
@@ -306,7 +306,7 @@ internal static class XlsxStructuredTableWriter
         if (filter.Value is not null)
             element.SetAttributeValue("val", filter.Value);
 
-        ApplyNativeAttributesIfMissing(element, filter.NativeAttributes);
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, filter.NativeAttributes);
 
         return element;
     }
@@ -357,16 +357,4 @@ internal static class XlsxStructuredTableWriter
         }
     }
 
-    private static void ApplyNativeAttributesIfMissing(
-        XElement element,
-        IReadOnlyDictionary<string, string>? attributes)
-    {
-        if (attributes is null)
-            return;
-
-        foreach (var (name, value) in attributes)
-        {
-            XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttributeIfMissing(element, name, value);
-        }
-    }
 }
