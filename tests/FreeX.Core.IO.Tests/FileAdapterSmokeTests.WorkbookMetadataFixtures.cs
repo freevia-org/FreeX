@@ -68,7 +68,9 @@ public partial class FileAdapterSmokeTests
                 new XAttribute("vml", "1"),
                 new XAttribute("allowPng", "1"),
                 new XAttribute("targetScreenSize", "800x600"),
-                new XAttribute("dpi", "96")));
+                new XAttribute("dpi", " 96 "),
+                new XAttribute("customWebPublishingFlag", "removed"),
+                new XElement(workbookNs + "nativeWebPublishingChild")));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
