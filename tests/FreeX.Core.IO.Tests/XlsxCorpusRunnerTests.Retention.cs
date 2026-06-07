@@ -411,6 +411,12 @@ public partial class XlsxCorpusRunnerTests
                 relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle" &&
                 relationship.Attribute("Target")?.Value == "../diagrams/quickStyle1.xml")
             .Should().ContainSingle();
+        drawingRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors" &&
+                relationship.Attribute("Target")?.Value == "../diagrams/colors1.xml")
+            .Should().ContainSingle();
     }
 
     [Fact]

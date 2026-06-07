@@ -1086,6 +1086,62 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void Save_LoadedWorkbookWithSmartArtDiagramAndOutsideCellEdit_PreservesDiagramPackageGraph()
+    {
+        var sourceBytes = CreateSmartArtDiagramSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new TextValue("smartart outside patched"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        adapter.LastSaveDiagnostics.CellChangeCount.Should().Be(1);
+        ReadPackageEntry(savedBytes, "xl/drawings/drawing1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/drawings/drawing1.xml"));
+        ReadPackageEntry(savedBytes, "xl/drawings/_rels/drawing1.xml.rels")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/drawings/_rels/drawing1.xml.rels"));
+        ReadPackageEntry(savedBytes, "xl/diagrams/data1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/diagrams/data1.xml"));
+        ReadPackageEntry(savedBytes, "xl/diagrams/layout1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/diagrams/layout1.xml"));
+        ReadPackageEntry(savedBytes, "xl/diagrams/quickStyle1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/diagrams/quickStyle1.xml"));
+        ReadPackageEntry(savedBytes, "xl/diagrams/colors1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/diagrams/colors1.xml"));
+        ReadContentTypeOverrides(savedBytes).Should().Contain([
+            "/xl/diagrams/data1.xml",
+            "/xl/diagrams/layout1.xml",
+            "/xl/diagrams/quickStyle1.xml",
+            "/xl/diagrams/colors1.xml"]);
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "D4")
+            .Should()
+            .Be("smartart outside patched");
+
+        using var reloadStream = new MemoryStream(savedBytes, writable: false);
+        adapter.Load(reloadStream)
+            .GetSheetAt(0)
+            .GetCell(4, 4)!
+            .Value
+            .Should()
+            .Be(new TextValue("smartart outside patched"));
+    }
+
+    [Fact]
     public void Save_LoadedWorkbookWithChartExAndOutsideCellEdit_PatchesSourcePackage()
     {
         var sourceBytes = CreateChartExSourcePackage();
@@ -2954,6 +3010,138 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
                   </c:chart>
                 </c:chartSpace>
                 """));
+
+        return package.ToArray();
+    }
+
+    private static byte[] CreateSmartArtDiagramSourcePackage()
+    {
+        using var package = XlsxPackageTestFixtures.CreatePackage(
+            (
+                "[Content_Types].xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+                  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+                  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+                  <Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>
+                  <Override PartName="/xl/diagrams/data1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml"/>
+                  <Override PartName="/xl/diagrams/layout1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml"/>
+                  <Override PartName="/xl/diagrams/quickStyle1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml"/>
+                  <Override PartName="/xl/diagrams/colors1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml"/>
+                </Types>
+                """),
+            (
+                "_rels/.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+                </Relationships>
+                """),
+            (
+                "xl/workbook.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheets>
+                    <sheet name="Data" sheetId="1" r:id="rId1"/>
+                  </sheets>
+                </workbook>
+                """),
+            (
+                "xl/_rels/workbook.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+                  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+                </Relationships>
+                """),
+            (
+                "xl/styles.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <fonts count="1"><font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/><scheme val="minor"/></font></fonts>
+                  <fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>
+                  <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+                  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+                  <cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>
+                  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+                  <dxfs count="0"/>
+                  <tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/>
+                </styleSheet>
+                """),
+            (
+                "xl/worksheets/sheet1.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <dimension ref="A1:D4"/>
+                  <sheetData>
+                    <row r="1"><c r="A1" t="inlineStr"><is><t>original value</t></is></c></row>
+                    <row r="4"><c r="D4" t="inlineStr"><is><t>outside</t></is></c></row>
+                  </sheetData>
+                  <drawing r:id="rId1"/>
+                </worksheet>
+                """),
+            (
+                "xl/worksheets/_rels/sheet1.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>
+                </Relationships>
+                """),
+            (
+                "xl/drawings/drawing1.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                          xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"
+                          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <xdr:absoluteAnchor>
+                    <xdr:pos x="0" y="0"/>
+                    <xdr:ext cx="1828800" cy="914400"/>
+                    <xdr:graphicFrame macro="">
+                      <xdr:nvGraphicFramePr>
+                        <xdr:cNvPr id="2" name="FreeX SmartArt"/>
+                        <xdr:cNvGraphicFramePr/>
+                      </xdr:nvGraphicFramePr>
+                      <xdr:xfrm>
+                        <a:off x="0" y="0"/>
+                        <a:ext cx="1828800" cy="914400"/>
+                      </xdr:xfrm>
+                      <a:graphic>
+                        <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/diagram">
+                          <dgm:relIds r:dm="rIdDiagramData1" r:lo="rIdDiagramLayout1" r:qs="rIdDiagramQuickStyle1" r:cs="rIdDiagramColors1"/>
+                        </a:graphicData>
+                      </a:graphic>
+                    </xdr:graphicFrame>
+                    <xdr:clientData/>
+                  </xdr:absoluteAnchor>
+                </xdr:wsDr>
+                """),
+            (
+                "xl/drawings/_rels/drawing1.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdDiagramData1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData" Target="../diagrams/data1.xml"/>
+                  <Relationship Id="rIdDiagramLayout1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout" Target="../diagrams/layout1.xml"/>
+                  <Relationship Id="rIdDiagramQuickStyle1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle" Target="../diagrams/quickStyle1.xml"/>
+                  <Relationship Id="rIdDiagramColors1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors" Target="../diagrams/colors1.xml"/>
+                </Relationships>
+                """),
+            ("xl/diagrams/data1.xml", """<dgm:dataModel xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"/>"""),
+            ("xl/diagrams/layout1.xml", """<dgm:layoutDef xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"/>"""),
+            ("xl/diagrams/quickStyle1.xml", """<dgm:styleDef xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"/>"""),
+            ("xl/diagrams/colors1.xml", """<dgm:colorsDef xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"/>"""));
 
         return package.ToArray();
     }
