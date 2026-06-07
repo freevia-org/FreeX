@@ -33,6 +33,7 @@ internal static class XlsxWorkbookSchemaNormalizer
         XlsxWorksheetConditionalFormatNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetDataValidationNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetExtensionListNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetWebPublishItemsNormalizer.NormalizePackage(archive);
         NormalizeWorksheets(archive, workbookNs);
 
         var workbookEntry = archive.GetEntry("xl/workbook.xml");

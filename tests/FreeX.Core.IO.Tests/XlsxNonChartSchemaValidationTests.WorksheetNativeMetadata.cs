@@ -82,6 +82,51 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         ReadPackageEntryText(saved, "xl/embeddings/oleObject1.bin").Should().Be(sourceOleObjectText);
     }
 
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidWorksheetWebPublishItemsForSchemaValidity()
+    {
+        using var source = CreateWorksheetNativeMetadataSourcePackage();
+        SetWorksheetWebPublishItemsInvalidMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetWebPublishItemsSanitized(saved);
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorksheetWebPublishItemsForSchemaValidity()
+    {
+        using var source = CreateWorksheetNativeMetadataSourcePackage();
+        SetWorksheetWebPublishItemsInvalidMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetWebPublishItemsSanitized(saved);
+    }
+
     private static MemoryStream CreateWorksheetNativeMetadataSourcePackage()
     {
         var workbook = new Workbook("WorksheetNativeMetadataPatchSave");
@@ -209,6 +254,47 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             new XAttribute("Target", target)));
     }
 
+    private static void SetWorksheetWebPublishItemsInvalidMetadata(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        var worksheetWebPublishItems = worksheetXml.Root!.Element(worksheetNs + "webPublishItems")!;
+        SetInvalidWebPublishItemsPayload(worksheetWebPublishItems, worksheetNs);
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+        var partXml = LoadPackageXml(archive, "xl/webPublishItems.xml");
+        SetInvalidWebPublishItemsPayload(partXml.Root!, worksheetNs);
+        ReplacePackageXml(archive, "xl/webPublishItems.xml", partXml);
+    }
+
+    private static void SetInvalidWebPublishItemsPayload(XElement webPublishItems, XNamespace worksheetNs)
+    {
+        webPublishItems.RemoveNodes();
+        webPublishItems.SetAttributeValue("count", "not-a-number");
+        webPublishItems.SetAttributeValue("customWebPublishItemsFlag", "removed");
+        webPublishItems.Add(
+            new XElement(worksheetNs + "nativeWebPublishItemsChild"),
+            new XElement(
+                worksheetNs + "webPublishItem",
+                new XAttribute("id", " 1 "),
+                new XAttribute("divId", " FreeXWebPublishItems "),
+                new XAttribute("sourceType", " sheet "),
+                new XAttribute("sourceRef", " A1:B2 "),
+                new XAttribute("destinationFile", " https://example.invalid/sheet.htm "),
+                new XAttribute("autoRepublish", "true"),
+                new XAttribute("customWebPublishItemFlag", "removed"),
+                new XElement(worksheetNs + "nativeWebPublishItemChild")),
+            new XElement(
+                worksheetNs + "webPublishItem",
+                new XAttribute("id", "not-a-number"),
+                new XAttribute("divId", "RemovedWebPublishItem"),
+                new XAttribute("sourceType", "invalid"),
+                new XAttribute("destinationFile", "https://example.invalid/removed.htm")));
+    }
+
     private static void AssertWorksheetNativeMetadataPackage(Stream stream)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -269,6 +355,33 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         ReadPackageEntryText(stream, "xl/embeddings/oleObject1.bin")
             .Should()
             .Be("FreeX generated OLE placeholder");
+    }
+
+    private static void AssertWorksheetWebPublishItemsSanitized(Stream stream)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        AssertWebPublishItemsSanitized(ReadWorksheetChildElement(stream, "webPublishItems"), worksheetNs);
+        AssertWebPublishItemsSanitized(ReadPackageRootElement(stream, "xl/webPublishItems.xml"), worksheetNs);
+    }
+
+    private static void AssertWebPublishItemsSanitized(XElement webPublishItems, XNamespace worksheetNs)
+    {
+        webPublishItems.Attribute("count")!.Value.Should().Be("1");
+        webPublishItems.Attribute("customWebPublishItemsFlag").Should().BeNull();
+        webPublishItems.Element(worksheetNs + "nativeWebPublishItemsChild").Should().BeNull();
+
+        var webPublishItem = webPublishItems.Elements(worksheetNs + "webPublishItem")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        webPublishItem.Attribute("id")!.Value.Should().Be("1");
+        webPublishItem.Attribute("divId")!.Value.Should().Be("FreeXWebPublishItems");
+        webPublishItem.Attribute("sourceType")!.Value.Should().Be("sheet");
+        webPublishItem.Attribute("sourceRef")!.Value.Should().Be("A1:B2");
+        webPublishItem.Attribute("destinationFile")!.Value.Should().Be("https://example.invalid/sheet.htm");
+        webPublishItem.Attribute("autoRepublish")!.Value.Should().Be("true");
+        webPublishItem.Attribute("customWebPublishItemFlag").Should().BeNull();
+        webPublishItem.Elements().Should().BeEmpty();
     }
 
     private static void AssertWorksheetNativeMetadataOrder(XElement worksheetRoot)
