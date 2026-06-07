@@ -141,7 +141,7 @@ internal static class XlsxConnectionQueryTableSchemaNormalizer
 
     private static void NormalizeWorksheetQueryTableParts(ZipArchive archive)
     {
-        foreach (var entry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
+        foreach (var entry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry).ToList())
         {
             var document = XlsxPackageXmlEditor.LoadXml(entry);
             var root = document.Root;
@@ -236,21 +236,8 @@ internal static class XlsxConnectionQueryTableSchemaNormalizer
         return XlsxXmlNormalizationHelpers.SetAttributeIfChanged(element, attributeName, normalized);
     }
 
-    private static bool IsQueryTableXmlEntry(ZipArchiveEntry entry)
-    {
-        var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
-        return path.StartsWith("xl/queryTables/", StringComparison.OrdinalIgnoreCase) &&
-               path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
-               !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
-    {
-        var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
-        return path.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
-               path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
-               !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool IsQueryTableXmlEntry(ZipArchiveEntry entry) =>
+        XlsxPackagePath.IsXmlEntryInDirectory(entry, "xl/queryTables/");
 
     private static bool IsQueryTablePartPath(string path) =>
         path.StartsWith("xl/queryTables/", StringComparison.OrdinalIgnoreCase) &&

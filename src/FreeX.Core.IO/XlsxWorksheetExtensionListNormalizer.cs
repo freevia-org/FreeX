@@ -49,7 +49,7 @@ internal static class XlsxWorksheetExtensionListNormalizer
 
     public static void NormalizeWorksheets(ZipArchive archive)
     {
-        foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
+        foreach (var worksheetEntry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry).ToList())
         {
             var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
             var root = worksheetXml.Root;
@@ -109,8 +109,4 @@ internal static class XlsxWorksheetExtensionListNormalizer
         return true;
     }
 
-    private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry) =>
-        entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
-        entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
-        !entry.FullName.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
 }

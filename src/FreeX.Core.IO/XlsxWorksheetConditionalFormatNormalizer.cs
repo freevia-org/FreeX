@@ -28,7 +28,7 @@ internal static class XlsxWorksheetConditionalFormatNormalizer
 
     public static void NormalizeWorksheets(ZipArchive archive)
     {
-        foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
+        foreach (var worksheetEntry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry).ToList())
         {
             var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
             if (!NormalizeWorksheet(worksheetXml))
@@ -166,11 +166,4 @@ internal static class XlsxWorksheetConditionalFormatNormalizer
         child.Name == WorksheetNs + "extLst" ? 100 :
         90;
 
-    private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
-    {
-        var path = entry.FullName;
-        return path.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
-            path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
-            !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
-    }
 }

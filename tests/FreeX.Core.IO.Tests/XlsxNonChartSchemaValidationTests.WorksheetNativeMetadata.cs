@@ -220,6 +220,57 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         AssertWorksheetControlPropertiesRelationshipRebound(saved);
     }
 
+    [Fact]
+    public void WorksheetOleControlNormalizer_RebindsOleObjectAndObjectPropertiesRelationshipIdCollision()
+    {
+        using var saved = CreateWorksheetNativeMetadataSourcePackage();
+        CreateWorksheetOleObjectRelationshipIdCollision(saved);
+
+        saved.Position = 0;
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XlsxWorksheetOleControlNormalizer.NormalizePackage(archive);
+        }
+
+        saved.Position = 0;
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetOleObjectRelationshipRebound(saved);
+    }
+
+    [Fact]
+    public void WorksheetOleControlNormalizer_RebindsControlPropertiesFromValidControlWhenControlPrIsDangling()
+    {
+        using var saved = CreateWorksheetNativeMetadataSourcePackage();
+        CreateWorksheetControlPropertiesDanglingControlPrRelationship(saved);
+
+        saved.Position = 0;
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XlsxWorksheetOleControlNormalizer.NormalizePackage(archive);
+        }
+
+        saved.Position = 0;
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetControlPropertiesDanglingControlPrRebound(saved);
+    }
+
+    [Fact]
+    public void WorksheetOleControlNormalizer_PrunesOleAndControlElementsWhenSidecarPartsAreMissing()
+    {
+        using var saved = CreateWorksheetNativeMetadataSourcePackage();
+        RemoveWorksheetOleControlSidecarParts(saved);
+
+        saved.Position = 0;
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XlsxWorksheetOleControlNormalizer.NormalizePackage(archive);
+        }
+
+        saved.Position = 0;
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetOleControlSidecarsPruned(saved);
+    }
+
     private static MemoryStream CreateWorksheetNativeMetadataSourcePackage()
     {
         var workbook = new Workbook("WorksheetNativeMetadataPatchSave");
@@ -493,6 +544,98 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
     }
 
+    private static void CreateWorksheetOleObjectRelationshipIdCollision(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        var oleObject = worksheetXml.Root!
+            .Element(worksheetNs + "oleObjects")!
+            .Element(worksheetNs + "oleObject")!;
+        oleObject.SetAttributeValue(relNs + "id", "rId1");
+        oleObject.Add(new XElement(
+            worksheetNs + "objectPr",
+            new XAttribute(relNs + "id", "rId1"),
+            new XAttribute("defaultSize", " true "),
+            CreateControlAnchor(worksheetNs)));
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+        var relationshipsXml = LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
+        relationshipsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Single(relationship => relationship.Attribute("Target")?.Value == "../embeddings/oleObject1.bin")
+            .SetAttributeValue("Id", "rId3");
+        relationshipsXml.Root!.Add(new XElement(
+            packageRelNs + "Relationship",
+            new XAttribute("Id", "rId1"),
+            new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing"),
+            new XAttribute("Target", "../drawings/vmlDrawing1.vml")));
+        relationshipsXml.Root!.Add(new XElement(
+            packageRelNs + "Relationship",
+            new XAttribute("Id", "rId4"),
+            new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing"),
+            new XAttribute("Target", "../drawings/drawing1.xml")));
+        ReplacePackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels", relationshipsXml);
+
+        WritePackageEntry(archive, "xl/drawings/vmlDrawing1.vml", "<xml/>");
+        ReplacePackageXml(archive, "xl/drawings/drawing1.xml", new XDocument(new XElement(
+            XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing") + "wsDr")));
+        AddPackageContentTypeOverride(
+            archive,
+            "/xl/drawings/vmlDrawing1.vml",
+            "application/vnd.openxmlformats-officedocument.vmlDrawing");
+        AddPackageContentTypeOverride(
+            archive,
+            "/xl/drawings/drawing1.xml",
+            "application/vnd.openxmlformats-officedocument.drawing+xml");
+
+        var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+        contentTypesXml.Root!
+            .Elements(contentTypeNs + "Override")
+            .Where(overrideElement => overrideElement.Attribute("PartName")?.Value == "/xl/embeddings/oleObject1.bin")
+            .Remove();
+        ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+    }
+
+    private static void CreateWorksheetControlPropertiesDanglingControlPrRelationship(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        worksheetXml.Root!
+            .Element(worksheetNs + "controls")!
+            .Element(worksheetNs + "control")!
+            .Element(worksheetNs + "controlPr")!
+            .SetAttributeValue(relNs + "id", "rIdDanglingControlProperties");
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+        var relationshipsXml = LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
+        relationshipsXml.Root!.Add(new XElement(
+            packageRelNs + "Relationship",
+            new XAttribute("Id", "rIdDanglingControlProperties"),
+            new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/ctrlProp"),
+            new XAttribute("Target", "../ctrlProps/missingCtrlProp.xml")));
+        ReplacePackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels", relationshipsXml);
+    }
+
+    private static void RemoveWorksheetOleControlSidecarParts(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+
+        archive.GetEntry("xl/embeddings/oleObject1.bin")?.Delete();
+        archive.GetEntry("xl/ctrlProps/ctrlProp1.xml")?.Delete();
+    }
+
     private static void SetInvalidWebPublishItemsPayload(XElement webPublishItems, XNamespace worksheetNs)
     {
         webPublishItems.RemoveNodes();
@@ -719,6 +862,106 @@ public sealed partial class XlsxNonChartSchemaValidationTests
                 overrideElement.Attribute("ContentType")?.Value == "application/vnd.ms-excel.controlproperties+xml")
             .Should()
             .ContainSingle();
+    }
+
+    private static void AssertWorksheetOleObjectRelationshipRebound(Stream stream)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+        var oleObject = ReadWorksheetChildElement(stream, "oleObjects")
+            .Element(worksheetNs + "oleObject")!;
+        var oleRelationshipId = oleObject.Attribute(relNs + "id")!.Value;
+        oleRelationshipId.Should().Be("rId3", "rId1 is claimed by the generated VML sidecar relationship");
+        var objectProperties = oleObject.Element(worksheetNs + "objectPr");
+        objectProperties.Should().NotBeNull();
+        objectProperties!
+            .Attribute(relNs + "id")!
+            .Value
+            .Should()
+            .Be("rId4", "objectPr relationships point at the drawing part, not the embedded OLE object");
+        objectProperties
+            .Attribute("defaultSize")!
+            .Value
+            .Should()
+            .Be("true");
+
+        var relationships = ReadPackageRootElement(stream, "xl/worksheets/_rels/sheet1.xml.rels")
+            .Elements(packageRelNs + "Relationship")
+            .ToList();
+        relationships.Where(relationship =>
+                relationship.Attribute("Id")?.Value == "rId1" &&
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing" &&
+                relationship.Attribute("Target")?.Value == "../drawings/vmlDrawing1.vml")
+            .Should()
+            .ContainSingle();
+        relationships.Where(relationship =>
+                relationship.Attribute("Id")?.Value == oleRelationshipId &&
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject" &&
+                relationship.Attribute("Target")?.Value == "../embeddings/oleObject1.bin")
+            .Should()
+            .ContainSingle();
+        relationships.Where(relationship =>
+                relationship.Attribute("Id")?.Value == "rId4" &&
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" &&
+                relationship.Attribute("Target")?.Value == "../drawings/drawing1.xml")
+            .Should()
+            .ContainSingle();
+
+        ReadPackageRootElement(stream, "[Content_Types].xml")
+            .Elements(contentTypeNs + "Override")
+            .Where(overrideElement =>
+                overrideElement.Attribute("PartName")?.Value == "/xl/embeddings/oleObject1.bin" &&
+                overrideElement.Attribute("ContentType")?.Value == "application/vnd.openxmlformats-officedocument.oleObject")
+            .Should()
+            .ContainSingle();
+    }
+
+    private static void AssertWorksheetControlPropertiesDanglingControlPrRebound(Stream stream)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var control = ReadWorksheetChildElement(stream, "controls")
+            .Element(worksheetNs + "control")!;
+        control.Attribute(relNs + "id")!.Value.Should().Be("rIdFreeXControl");
+        control.Element(worksheetNs + "controlPr")!
+            .Attribute(relNs + "id")!
+            .Value
+            .Should()
+            .Be("rIdFreeXControl");
+
+        ReadPackageRootElement(stream, "xl/worksheets/_rels/sheet1.xml.rels")
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship => relationship.Attribute("Id")?.Value == "rIdDanglingControlProperties")
+            .Should()
+            .BeEmpty();
+    }
+
+    private static void AssertWorksheetOleControlSidecarsPruned(Stream stream)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var worksheetRoot = ReadPackageRootElement(stream, "xl/worksheets/sheet1.xml");
+        worksheetRoot.Element(worksheetRoot.Name.Namespace + "oleObjects").Should().BeNull();
+        worksheetRoot.Element(worksheetRoot.Name.Namespace + "controls").Should().BeNull();
+
+        ReadPackageRootElement(stream, "xl/worksheets/_rels/sheet1.xml.rels")
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject" ||
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/ctrlProp" ||
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/control")
+            .Should()
+            .BeEmpty();
+
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        archive.GetEntry("xl/embeddings/oleObject1.bin").Should().BeNull();
+        archive.GetEntry("xl/ctrlProps/ctrlProp1.xml").Should().BeNull();
     }
 
     private static XElement CreateControlAnchor(XNamespace worksheetNs)
