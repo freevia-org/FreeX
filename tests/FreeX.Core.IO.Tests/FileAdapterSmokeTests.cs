@@ -4612,8 +4612,8 @@ public partial class FileAdapterSmokeTests
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
-        worksheetXml.Should().Contain("customBlockAttr=\"cf-container\"");
-        worksheetXml.Should().Contain("customAttr=\"cf-native\"");
+        worksheetXml.Should().NotContain("customBlockAttr=\"cf-container\"");
+        worksheetXml.Should().NotContain("customAttr=\"cf-native\"");
         worksheetXml.Should().NotContain("invalid conditionalFormatting attr");
         worksheetXml.Should().NotContain("invalid cfRule attr");
         worksheetXml.Should().Contain("extLst");
