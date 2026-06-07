@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO.Compression;
 using System.Xml.Linq;
 
 using FreeX.Core.Model;
@@ -270,6 +271,140 @@ internal static partial class XlsxWorksheetMetadataPreserver
         }
 
         return changed;
+    }
+
+    private static bool RebindWorksheetCustomPropertyRelationships(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        XElement sourceCustomProperties,
+        XElement targetRoot,
+        string sourceWorksheetPath,
+        string targetWorksheetPath,
+        XNamespace workbookNs,
+        XNamespace relNs,
+        XNamespace packageRelNs)
+    {
+        const string customPropertyRelationshipType =
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customProperty";
+
+        var targetCustomProperties = targetRoot.Element(workbookNs + "customProperties");
+        if (targetCustomProperties is null)
+            return false;
+
+        var sourcePropertiesByName = sourceCustomProperties
+            .Elements(workbookNs + "customPr")
+            .Select(property => new
+            {
+                Name = property.Attribute("name")?.Value,
+                RelationshipId = property.Attribute(relNs + "id")?.Value
+            })
+            .Where(property =>
+                !string.IsNullOrWhiteSpace(property.Name) &&
+                !string.IsNullOrWhiteSpace(property.RelationshipId))
+            .GroupBy(property => property.Name!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.First().RelationshipId!,
+                StringComparer.OrdinalIgnoreCase);
+        if (sourcePropertiesByName.Count == 0)
+            return false;
+
+        var sourceRelationshipTargets = XlsxRelationshipReader.LoadTargets(
+            sourceArchive,
+            XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath),
+            sourceWorksheetPath,
+            packageRelNs);
+        if (sourceRelationshipTargets.Count == 0)
+            return false;
+
+        var targetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
+        var targetRelsEntry = targetArchive.GetEntry(targetRelsPath);
+        var targetRelsXml = targetRelsEntry is null
+            ? new XDocument(new XElement(packageRelNs + "Relationships"))
+            : XlsxPackageXmlEditor.LoadXml(targetRelsEntry);
+
+        var changed = false;
+        var relsChanged = targetRelsEntry is null;
+        foreach (var targetProperty in targetCustomProperties.Elements(workbookNs + "customPr"))
+        {
+            var name = targetProperty.Attribute("name")?.Value;
+            if (string.IsNullOrWhiteSpace(name) ||
+                !sourcePropertiesByName.TryGetValue(name, out var sourceRelId) ||
+                !sourceRelationshipTargets.TryGetValue(sourceRelId, out var sourceTargetPath) ||
+                !sourceTargetPath.StartsWith("xl/customProperty/", StringComparison.OrdinalIgnoreCase) ||
+                targetArchive.GetEntry(sourceTargetPath) is null)
+            {
+                continue;
+            }
+
+            var targetRelId = XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
+                targetRelsXml,
+                packageRelNs,
+                targetWorksheetPath,
+                sourceTargetPath,
+                customPropertyRelationshipType);
+            if (string.IsNullOrWhiteSpace(targetRelId))
+                continue;
+
+            relsChanged = true;
+            if (!string.Equals(targetProperty.Attribute(relNs + "id")?.Value, targetRelId, StringComparison.Ordinal))
+            {
+                targetRoot.SetAttributeValue(XNamespace.Xmlns + "r", relNs.NamespaceName);
+                targetProperty.SetAttributeValue(relNs + "id", targetRelId);
+                changed = true;
+            }
+        }
+
+        if (relsChanged)
+            XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetRelsPath, targetRelsXml);
+
+        return changed;
+    }
+
+    private static void RebindWorksheetCustomPropertyRelationships(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        XlsxSourcePackagePreservationContext context,
+        IReadOnlySet<string>? worksheetsWithPreservableSourceMetadata)
+    {
+        foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
+        {
+            if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
+                continue;
+            if (worksheetsWithPreservableSourceMetadata is not null &&
+                !worksheetsWithPreservableSourceMetadata.Contains(sheetName))
+            {
+                continue;
+            }
+
+            var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceArchive, sourceWorksheetPath);
+            var sourceCustomProperties = sourceWorksheetXml?.Root?.Element(context.WorkbookNs + "customProperties");
+            if (sourceCustomProperties is null)
+                continue;
+
+            var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
+            if (targetWorksheetEntry is null)
+                continue;
+
+            var targetWorksheetXml = XlsxPackageXmlEditor.LoadXml(targetWorksheetEntry);
+            var targetRoot = targetWorksheetXml.Root;
+            if (targetRoot is null)
+                continue;
+
+            if (RebindWorksheetCustomPropertyRelationships(
+                sourceArchive,
+                targetArchive,
+                sourceCustomProperties,
+                targetRoot,
+                sourceWorksheetPath,
+                targetWorksheetPath,
+                context.WorkbookNs,
+                context.RelNs,
+                context.PackageRelNs))
+            {
+                XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
+            }
+        }
     }
 
     private static bool IsSupportedWorksheetCustomProperty(XElement customProperty)
