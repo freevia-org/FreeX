@@ -89,11 +89,7 @@ public sealed class XlsxScatterChartWriterTests
 
     private static XElement LoadScatterChart(ZipArchive archive)
     {
-        var entry = archive.GetEntry("xl/charts/chart1.xml");
-        entry.Should().NotBeNull();
-
-        using var stream = entry!.Open();
-        var chartXml = XDocument.Load(stream);
+        var chartXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/charts/chart1.xml", "xl/charts/chart1.xml");
         return chartXml.Descendants(ChartNs + "scatterChart").Should().ContainSingle().Subject;
     }
 }
