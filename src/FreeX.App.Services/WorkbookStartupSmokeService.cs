@@ -1,3 +1,4 @@
+using FreeX.Core.Calc;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 
@@ -15,6 +16,7 @@ public sealed class WorkbookStartupSmokeService
     private const string RoundTripExtension = ".fxl";
     private const uint SmokeEditRow = 2;
     private const uint SmokeEditColumn = 2;
+    private const int LegacyPreviewObjectCount = 3;
 
     private readonly IReadOnlyList<IFileAdapter> _adapters;
     private readonly StartupWorkbookLoader _loader;
@@ -62,7 +64,7 @@ public sealed class WorkbookStartupSmokeService
                 session,
                 requiresPreviewObjects,
                 "preview workbook",
-                out var drawingObjectPreviewCount);
+                out var drawingObjectPreviewFacts);
             if (previewObjectResult is not null)
                 return previewObjectResult;
 
@@ -73,13 +75,15 @@ public sealed class WorkbookStartupSmokeService
             var roundTripResult = VerifyEditSaveReopen(
                 session,
                 requiresPreviewObjects,
-                out var roundTripDrawingObjectPreviewCount);
+                out var roundTripDrawingObjectPreviewFacts);
             if (roundTripResult is not null)
                 return roundTripResult;
 
+            var drawingObjectPreviewCount = drawingObjectPreviewFacts.LegacyPreviewCount;
+            var roundTripDrawingObjectPreviewCount = roundTripDrawingObjectPreviewFacts.LegacyPreviewCount;
             return new WorkbookStartupSmokeResult(
                 true,
-                $"Packaging smoke opened {openedDisplayName} on {openedSheetName} with {openedRowCount} rows and {openedColumnCount} columns; drawing_object_previews={drawingObjectPreviewCount}; edited, saved, and reopened a native workbook roundtrip; roundtrip_drawing_object_previews={roundTripDrawingObjectPreviewCount}.");
+                $"Packaging smoke opened {openedDisplayName} on {openedSheetName} with {openedRowCount} rows and {openedColumnCount} columns; drawing_object_previews={drawingObjectPreviewCount}; drawing_object_viewport_objects={drawingObjectPreviewFacts.ViewportObjectCount}; drawing_object_render_plans={drawingObjectPreviewFacts.RenderPlanCount}; cropped_image_render_plans={drawingObjectPreviewFacts.CroppedImagePlanCount}; cell_range_snapshot_render_plans={drawingObjectPreviewFacts.CellRangeSnapshotPlanCount}; edited, saved, and reopened a native workbook roundtrip; roundtrip_drawing_object_previews={roundTripDrawingObjectPreviewCount}; roundtrip_drawing_object_viewport_objects={roundTripDrawingObjectPreviewFacts.ViewportObjectCount}; roundtrip_drawing_object_render_plans={roundTripDrawingObjectPreviewFacts.RenderPlanCount}; roundtrip_cropped_image_render_plans={roundTripDrawingObjectPreviewFacts.CroppedImagePlanCount}; roundtrip_cell_range_snapshot_render_plans={roundTripDrawingObjectPreviewFacts.CellRangeSnapshotPlanCount}.");
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException or WorkbookTooLargeException)
         {
@@ -90,9 +94,9 @@ public sealed class WorkbookStartupSmokeService
     private WorkbookStartupSmokeResult? VerifyEditSaveReopen(
         WorkbookSession session,
         bool requireDrawingObjectPreviews,
-        out int roundTripDrawingObjectPreviewCount)
+        out DrawingObjectPreviewSmokeFacts roundTripDrawingObjectPreviewFacts)
     {
-        roundTripDrawingObjectPreviewCount = 0;
+        roundTripDrawingObjectPreviewFacts = DrawingObjectPreviewSmokeFacts.Empty;
         session.SelectCell(new CellAddress(session.ActiveSheet.Id, 1, 1));
         session.MoveActiveCell(1, 1);
         var editAddress = session.ActiveCell;
@@ -152,7 +156,7 @@ public sealed class WorkbookStartupSmokeService
                 reopenedSession,
                 requireDrawingObjectPreviews,
                 "reopened roundtrip",
-                out roundTripDrawingObjectPreviewCount);
+                out roundTripDrawingObjectPreviewFacts);
             if (previewObjectResult is not null)
                 return previewObjectResult;
 
@@ -176,9 +180,15 @@ public sealed class WorkbookStartupSmokeService
         WorkbookSession session,
         bool required,
         string stage,
-        out int count)
+        out DrawingObjectPreviewSmokeFacts facts)
     {
-        count = session.Viewport.DrawingObjects.Count;
+        var renderPlans = DrawingObjectRenderPlanner.Plan(session.Viewport);
+        facts = new DrawingObjectPreviewSmokeFacts(
+            required ? LegacyPreviewObjectCount : session.Viewport.DrawingObjects.Count,
+            session.Viewport.DrawingObjects.Count,
+            renderPlans.Count,
+            renderPlans.Count(plan => plan.IsReady && plan.PrimitiveKind == DrawingObjectRenderPrimitiveKind.CroppedImage),
+            renderPlans.Count(plan => plan.IsReady && plan.PrimitiveKind == DrawingObjectRenderPrimitiveKind.CellRangeSnapshot));
         if (!required)
             return null;
 
@@ -202,8 +212,38 @@ public sealed class WorkbookStartupSmokeService
             }
         }
 
+        if (!renderPlans.Any(IsPreviewCroppedImagePlan))
+        {
+            return new WorkbookStartupSmokeResult(
+                false,
+                $"Packaging smoke failed: {stage} is missing cropped image render plan for '{PortPreviewWorkbookFactory.PreviewPictureName}'.");
+        }
+
+        if (!renderPlans.Any(IsPreviewCellRangeSnapshotPlan))
+        {
+            return new WorkbookStartupSmokeResult(
+                false,
+                $"Packaging smoke failed: {stage} is missing cell-range snapshot render plan for '{PortPreviewWorkbookFactory.PreviewCellRangeSnapshotName}'.");
+        }
+
         return null;
     }
+
+    private static bool IsPreviewCroppedImagePlan(DrawingObjectRenderPlan plan) =>
+        plan.IsReady &&
+        plan.PrimitiveKind == DrawingObjectRenderPrimitiveKind.CroppedImage &&
+        string.Equals(plan.Bounds.DisplayName, PortPreviewWorkbookFactory.PreviewPictureName, StringComparison.Ordinal) &&
+        plan.Crop is { } crop &&
+        (crop.Left > 0 || crop.Top > 0 || crop.Right > 0 || crop.Bottom > 0);
+
+    private static bool IsPreviewCellRangeSnapshotPlan(DrawingObjectRenderPlan plan) =>
+        plan.IsReady &&
+        plan.PrimitiveKind == DrawingObjectRenderPrimitiveKind.CellRangeSnapshot &&
+        string.Equals(plan.Bounds.DisplayName, PortPreviewWorkbookFactory.PreviewCellRangeSnapshotName, StringComparison.Ordinal) &&
+        plan.PictureGrid is { } grid &&
+        grid.RowCount >= 2 &&
+        grid.ColumnCount >= 3 &&
+        grid.Cells.Count > 0;
 
     private static bool PathsMatch(string expectedPath, string actualPath)
     {
@@ -218,6 +258,16 @@ public sealed class WorkbookStartupSmokeService
         {
             return false;
         }
+    }
+
+    private sealed record DrawingObjectPreviewSmokeFacts(
+        int LegacyPreviewCount,
+        int ViewportObjectCount,
+        int RenderPlanCount,
+        int CroppedImagePlanCount,
+        int CellRangeSnapshotPlanCount)
+    {
+        public static DrawingObjectPreviewSmokeFacts Empty { get; } = new(0, 0, 0, 0, 0);
     }
 }
 

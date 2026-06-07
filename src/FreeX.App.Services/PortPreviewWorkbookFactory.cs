@@ -7,10 +7,12 @@ public static class PortPreviewWorkbookFactory
     public const string PreviewShapeName = "Port readiness shape";
     public const string PreviewTextBoxName = "Port preview note";
     public const string PreviewPictureName = "Port preview logo";
+    public const string PreviewCellRangeSnapshotName = "Port preview cell snapshot";
 
     private static readonly Guid PreviewShapeId = Guid.Parse("9f5c4fe4-7d85-4ea1-a74b-9463e1f4be41");
     private static readonly Guid PreviewTextBoxId = Guid.Parse("5c82f7de-cf4e-4a30-bb96-8fd6f258b6f8");
     private static readonly Guid PreviewPictureId = Guid.Parse("ce0512d4-9455-4e11-a569-76da291e2c3a");
+    private static readonly Guid PreviewCellRangeSnapshotId = Guid.Parse("afca9121-b098-45f6-9300-fb6920647169");
     private static readonly byte[] PreviewPictureBytes = Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=");
 
@@ -128,18 +130,46 @@ public static class PortPreviewWorkbookFactory
             ContentType = "image/png",
             Width = 96,
             Height = 56,
+            CropLeft = 0.08,
+            CropTop = 0.12,
+            CropRight = 0.18,
+            CropBottom = 0.1,
             Title = "macOS preview logo",
-            AltText = "Small image preview object used by the macOS packaging smoke."
+            AltText = "Small cropped image preview object used by the macOS packaging smoke."
         };
+        var snapshot = new PictureModel
+        {
+            Id = PreviewCellRangeSnapshotId,
+            Anchor = new CellAddress(sheet.Id, 8, 3),
+            Name = PreviewCellRangeSnapshotName,
+            Kind = PictureKind.CellRangeSnapshot,
+            SourceRowCount = 2,
+            SourceColumnCount = 3,
+            Width = 132,
+            Height = 64,
+            Title = "macOS preview cell snapshot",
+            AltText = "Cell-range snapshot preview object used by the macOS packaging smoke."
+        };
+        snapshot.Cells.AddRange(
+        [
+            new PictureCellSnapshot(0, 0, "Area"),
+            new PictureCellSnapshot(0, 1, "macOS"),
+            new PictureCellSnapshot(0, 2, "Priority"),
+            new PictureCellSnapshot(1, 0, "Grid"),
+            new PictureCellSnapshot(1, 1, "Read-only viewport"),
+            new PictureCellSnapshot(1, 2, "1"),
+        ]);
 
         sheet.DrawingShapes.Add(shape);
         sheet.TextBoxes.Add(textBox);
         sheet.Pictures.Add(picture);
+        sheet.Pictures.Add(snapshot);
         sheet.DrawingObjectZOrder.AddRange(
         [
             new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, shape.Id),
             new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, textBox.Id),
             new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, picture.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, snapshot.Id),
         ]);
     }
 
