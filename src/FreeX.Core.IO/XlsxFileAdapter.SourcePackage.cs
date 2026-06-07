@@ -83,6 +83,8 @@ public sealed partial class XlsxFileAdapter
         XlsxWorksheetIgnoredErrorsNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxWorksheetHyperlinkNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxWorksheetConditionalFormatNormalizer.NormalizeWorksheets(generatedArchive);
+        XlsxWorksheetDataValidationNormalizer.NormalizeWorksheets(generatedArchive);
+        XlsxWorksheetExtensionListNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxWorksheetWebPublishItemsNormalizer.NormalizePackage(generatedArchive);
         XlsxWorksheetOleControlNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxWorksheetRelationshipMarkerNormalizer.NormalizeWorksheets(generatedArchive);
