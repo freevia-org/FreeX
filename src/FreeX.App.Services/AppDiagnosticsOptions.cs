@@ -3,9 +3,9 @@ namespace FreeX.App.Services;
 public sealed record AppDiagnosticsOptions(string DiagnosticsDirectory, bool IsEnabled)
 {
     public static AppDiagnosticsOptions CreateDefault() =>
-        CreateDefault(PlatformApplicationDataPathProvider.LocalInstance);
+        CreateDefault(PlatformAppDiagnosticsPathProvider.Instance);
 
-    public static AppDiagnosticsOptions CreateDefault(IApplicationDataPathProvider pathProvider)
+    public static AppDiagnosticsOptions CreateDefault(IAppDiagnosticsPathProvider pathProvider)
     {
         ArgumentNullException.ThrowIfNull(pathProvider);
 

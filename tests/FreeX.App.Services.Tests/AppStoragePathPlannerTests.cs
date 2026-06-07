@@ -6,10 +6,10 @@ namespace FreeX.App.Services.Tests;
 public sealed class AppStoragePathPlannerTests
 {
     [Fact]
-    public void GetDiagnosticsDirectory_UsesApplicationDataPathProvider()
+    public void GetDiagnosticsDirectory_UsesDiagnosticsPathProvider()
     {
         using var temp = new TestTemporaryDirectory();
-        var provider = new TestApplicationDataPathProvider(temp.Path);
+        var provider = new TestDiagnosticsPathProvider(Path.Combine(temp.Path, "FreeX", "Diagnostics"));
 
         var path = AppStoragePathPlanner.GetDiagnosticsDirectory(provider);
 
@@ -57,7 +57,7 @@ public sealed class AppStoragePathPlannerTests
     public void AppDiagnosticsOptions_CreateDefault_UsesPlannedDiagnosticsDirectory()
     {
         using var temp = new TestTemporaryDirectory();
-        var provider = new TestApplicationDataPathProvider(temp.Path);
+        var provider = new TestDiagnosticsPathProvider(Path.Combine(temp.Path, "FreeX", "Diagnostics"));
 
         var options = AppDiagnosticsOptions.CreateDefault(provider);
 
@@ -66,30 +66,34 @@ public sealed class AppStoragePathPlannerTests
     }
 
     [Fact]
-    public void PlatformProvider_PlansMacOsDiagnosticsAndOptionsUnderApplicationSupport()
+    public void PlatformProvider_PlansMacOsDiagnosticsUnderLogsAndOptionsUnderApplicationSupport()
     {
         var home = Path.Combine("Users", "quinn");
-        var provider = new PlatformApplicationDataPathProvider(
+        var applicationDataProvider = new PlatformApplicationDataPathProvider(
             isMacOsProvider: () => true,
             userProfilePathProvider: () => home,
             applicationDataPathProvider: () => "ignored");
+        var diagnosticsPathProvider = new PlatformAppDiagnosticsPathProvider(
+            isMacOsProvider: () => true,
+            userProfilePathProvider: () => home,
+            localApplicationDataPathProvider: () => "ignored");
 
-        AppStoragePathPlanner.GetDiagnosticsDirectory(provider)
+        AppStoragePathPlanner.GetDiagnosticsDirectory(diagnosticsPathProvider)
             .Should()
-            .Be(Path.Combine(home, "Library", "Application Support", "FreeX", "Diagnostics"));
-        AppStoragePathPlanner.GetOptionsFilePath(provider)
+            .Be(Path.Combine(home, "Library", "Logs", "FreeX"));
+        AppStoragePathPlanner.GetOptionsFilePath(applicationDataProvider)
             .Should()
             .Be(Path.Combine(home, "Library", "Application Support", "FreeX", "options.json"));
     }
 
     [Fact]
-    public void PlatformProvider_CanUseLocalApplicationDataOutsideMacOs()
+    public void PlatformDiagnosticsProvider_UsesLocalApplicationDataOutsideMacOs()
     {
         using var temp = new TestTemporaryDirectory();
-        var provider = new PlatformApplicationDataPathProvider(
+        var provider = new PlatformAppDiagnosticsPathProvider(
             isMacOsProvider: () => false,
             userProfilePathProvider: () => "ignored",
-            applicationDataPathProvider: () => temp.Path);
+            localApplicationDataPathProvider: () => temp.Path);
 
         AppStoragePathPlanner.GetDiagnosticsDirectory(provider)
             .Should()
@@ -99,5 +103,10 @@ public sealed class AppStoragePathPlannerTests
     private sealed class TestApplicationDataPathProvider(string path) : IApplicationDataPathProvider
     {
         public string GetApplicationDataDirectory() => path;
+    }
+
+    private sealed class TestDiagnosticsPathProvider(string path) : IAppDiagnosticsPathProvider
+    {
+        public string GetDiagnosticsDirectory() => path;
     }
 }

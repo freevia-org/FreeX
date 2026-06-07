@@ -9,11 +9,12 @@ namespace FreeX.App.Host.Tests;
 public sealed class AppDiagnosticsTests
 {
     [Fact]
-    public void Options_CreateDefault_UsesApplicationDataPathProviderDiagnosticsFolder()
+    public void Options_CreateDefault_UsesDiagnosticsPathProviderFolder()
     {
         using var temp = new TestTemporaryDirectory();
 
-        var options = AppDiagnosticsOptions.CreateDefault(new TestApplicationDataPathProvider(temp.Path));
+        var options = AppDiagnosticsOptions.CreateDefault(
+            new TestDiagnosticsPathProvider(Path.Combine(temp.Path, "FreeX", "Diagnostics")));
 
         options.IsEnabled.Should().BeTrue();
         options.DiagnosticsDirectory.Should().Be(Path.Combine(temp.Path, "FreeX", "Diagnostics"));
@@ -143,8 +144,8 @@ public sealed class AppDiagnosticsTests
         recordCrash.Should().NotThrow().Which.Should().BeEmpty();
     }
 
-    private sealed class TestApplicationDataPathProvider(string path) : IApplicationDataPathProvider
+    private sealed class TestDiagnosticsPathProvider(string path) : IAppDiagnosticsPathProvider
     {
-        public string GetApplicationDataDirectory() => path;
+        public string GetDiagnosticsDirectory() => path;
     }
 }

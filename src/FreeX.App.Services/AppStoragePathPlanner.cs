@@ -7,14 +7,11 @@ public static class AppStoragePathPlanner
     public const string OptionsFileName = "options.json";
     public const string DisableDiagnosticsEnvironmentVariable = "FREEX_DIAGNOSTICS";
 
-    public static string GetDiagnosticsDirectory(IApplicationDataPathProvider pathProvider)
+    public static string GetDiagnosticsDirectory(IAppDiagnosticsPathProvider pathProvider)
     {
         ArgumentNullException.ThrowIfNull(pathProvider);
 
-        return Path.Combine(
-            pathProvider.GetApplicationDataDirectory(),
-            ProductDirectoryName,
-            DiagnosticsDirectoryName);
+        return pathProvider.GetDiagnosticsDirectory();
     }
 
     public static string GetOptionsFilePath(IApplicationDataPathProvider pathProvider)
@@ -37,7 +34,7 @@ public static class AppStoragePathPlanner
         return GetOptionsFilePath(pathProvider);
     }
 
-    public static string BuildLocalDiagnosticsNotice(IApplicationDataPathProvider pathProvider) =>
+    public static string BuildLocalDiagnosticsNotice(IAppDiagnosticsPathProvider pathProvider) =>
         BuildLocalDiagnosticsNotice(GetDiagnosticsDirectory(pathProvider));
 
     public static string BuildLocalDiagnosticsNotice(string diagnosticsDirectory)
