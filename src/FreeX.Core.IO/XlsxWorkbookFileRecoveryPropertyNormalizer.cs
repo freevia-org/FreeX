@@ -4,7 +4,7 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxWorkbookFileRecoveryPropertyNormalizer
 {
-    private static readonly string[] BooleanAttributes =
+    private static readonly HashSet<string> BooleanAttributes =
     [
         "autoRecover",
         "crashSave",
@@ -15,10 +15,39 @@ internal static class XlsxWorkbookFileRecoveryPropertyNormalizer
     public static bool NormalizeElement(XElement fileRecoveryPr)
     {
         var changed = false;
+        changed |= RemoveUnknownAttributes(fileRecoveryPr);
+        changed |= RemoveAllNodes(fileRecoveryPr);
         foreach (var attributeName in BooleanAttributes)
             changed |= NormalizeAttribute(fileRecoveryPr, attributeName, NormalizeBoolean);
 
         return changed;
+    }
+
+    private static bool RemoveUnknownAttributes(XElement element)
+    {
+        var changed = false;
+        foreach (var attribute in element.Attributes().ToList())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                (attribute.Name.NamespaceName.Length == 0 && BooleanAttributes.Contains(attribute.Name.LocalName)))
+            {
+                continue;
+            }
+
+            attribute.Remove();
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool RemoveAllNodes(XElement element)
+    {
+        if (!element.Nodes().Any())
+            return false;
+
+        element.RemoveNodes();
+        return true;
     }
 
     private static bool NormalizeAttribute(

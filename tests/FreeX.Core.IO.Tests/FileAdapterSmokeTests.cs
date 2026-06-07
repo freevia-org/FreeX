@@ -13271,7 +13271,7 @@ public partial class FileAdapterSmokeTests
         var xml = workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
         xml.Should().Contain("validWorkbookPrAttr=\"keep\"");
         xml.Should().Contain("validFileVersionAttr=\"keep\"");
-        xml.Should().Contain("validRecoveryAttr=\"keep\"");
+        xml.Should().NotContain("validRecoveryAttr=\"keep\"");
         xml.Should().Contain("validFunctionGroupsAttr=\"keep\"");
         xml.Should().Contain("validFunctionGroupAttr=\"keep\"");
         xml.Should().Contain("validSmartTagPrAttr=\"keep\"");
@@ -13352,7 +13352,7 @@ public partial class FileAdapterSmokeTests
         recovery.Should().NotBeNull();
         recovery!.Attribute("autoRecover")!.Value.Should().Be("1");
         recovery.Attribute("crashSave")!.Value.Should().Be("1");
-        recovery.Attribute("customRecoveryFlag")!.Value.Should().Be("keep");
+        recovery.Attribute("customRecoveryFlag").Should().BeNull();
     }
 
     [Fact]
