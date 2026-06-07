@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
@@ -75,25 +74,14 @@ internal static class XlsxWorkbookWebPublishingNormalizer
         changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(webPublishing);
 
         foreach (var attributeName in BooleanAttributes)
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishing, attributeName, NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishing, attributeName, XlsxXmlNormalizationHelpers.NormalizeBoolean);
         foreach (var attributeName in UnsignedIntAttributes)
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishing, attributeName, NormalizeUnsignedIntOrNull);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishing, attributeName, XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
 
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishing, "targetScreenSize", NormalizeTargetScreenSize);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishing, "targetScreenSize", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, TargetScreenSizeValues));
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishing, "characterSet", NormalizeOptionalText);
 
         return changed;
-    }
-
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed switch
-        {
-            "0" or "1" => trimmed,
-            "true" or "false" => trimmed,
-            _ => null
-        };
     }
 
     private static string? NormalizeOptionalText(string? value)
@@ -102,17 +90,4 @@ internal static class XlsxWorkbookWebPublishingNormalizer
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 
-    private static string? NormalizeTargetScreenSize(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed is not null && TargetScreenSizeValues.Contains(trimmed) ? trimmed : null;
-    }
-
-    private static string? NormalizeUnsignedIntOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed.ToString(CultureInfo.InvariantCulture)
-            : null;
-    }
 }

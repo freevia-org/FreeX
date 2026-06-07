@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
@@ -21,31 +20,12 @@ internal static class XlsxWorkbookFileSharingNormalizer
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(fileSharing, FileSharingAttributes);
         changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(fileSharing);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(fileSharing, "readOnlyRecommended", NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(fileSharing, "readOnlyRecommended", XlsxXmlNormalizationHelpers.NormalizeBoolean);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(fileSharing, "reservationPassword", NormalizeLegacyPasswordHashOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(fileSharing, "hashValue", NormalizeBase64BinaryOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(fileSharing, "saltValue", NormalizeBase64BinaryOrNull);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(fileSharing, "spinCount", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(fileSharing, "spinCount", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         return changed;
-    }
-
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed switch
-        {
-            "0" or "1" => trimmed,
-            "true" or "false" => trimmed,
-            _ => null
-        };
-    }
-
-    private static string? NormalizeUnsignedIntOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed.ToString(CultureInfo.InvariantCulture)
-            : null;
     }
 
     private static string? NormalizeBase64BinaryOrNull(string? value)
