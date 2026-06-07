@@ -108,6 +108,7 @@ internal static class XlsxWorkbookMetadataWriter
         }
 
         workbookProperties.SetAttributeValue("date1904", workbook.Uses1904DateSystem ? "1" : null);
+        XlsxWorkbookPropertiesNormalizer.NormalizeElement(workbookProperties);
         return true;
     }
 
@@ -364,11 +365,17 @@ internal static class XlsxWorkbookMetadataWriter
             smartTagTypes.Add(element);
         }
 
+        XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagPropertiesElement(smartTagProperties);
+        XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagTypesElement(smartTagTypes);
+
         var extensionList = root.Element(WorkbookNs + "extLst");
+        XElement[] elements = XlsxWorkbookSmartTagNormalizer.ShouldRemoveSmartTagTypesElement(smartTagTypes)
+            ? [smartTagProperties]
+            : [smartTagProperties, smartTagTypes];
         if (extensionList is not null)
-            extensionList.AddBeforeSelf(smartTagProperties, smartTagTypes);
+            extensionList.AddBeforeSelf(elements);
         else
-            root.Add(smartTagProperties, smartTagTypes);
+            root.Add(elements);
 
         return true;
     }
