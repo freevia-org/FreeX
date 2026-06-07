@@ -1888,6 +1888,8 @@ public sealed class MainWindow : Window
         yield return CreatePasteSpecialMenuItem("Values and Source Formatting", PasteCellsMode.All, new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.ValuesAndSourceFormatting));
         yield return CreatePasteSpecialMenuItem("Keep Source Column Widths", PasteCellsMode.All, default, keepSourceColumnWidths: true);
         yield return CreatePasteLinkMenuItem("Paste Link");
+        yield return CreatePasteSpecialTextMenuItem("Text");
+        yield return CreatePasteSpecialTextMenuItem("Unicode Text");
         yield return CreatePasteSpecialMenuItem("Transpose", PasteCellsMode.All, new PasteSpecialOptions(Transpose: true));
         yield return CreatePasteSpecialMenuItem("Skip Blanks", PasteCellsMode.All, new PasteSpecialOptions(SkipBlanks: true));
         yield return CreatePasteSpecialMenuItem("Add", PasteCellsMode.All, new PasteSpecialOptions(Operation: PasteSpecialOperation.Add));
@@ -1936,6 +1938,13 @@ public sealed class MainWindow : Window
         return menuItem;
     }
 
+    private MenuItem CreatePasteSpecialTextMenuItem(string header)
+    {
+        var menuItem = new MenuItem { Header = header };
+        menuItem.Click += async (_, _) => await PasteSpecialExternalTextFromClipboardAsync(header);
+        return menuItem;
+    }
+
     private NativeMenu CreateNativePasteSpecialMenu()
     {
         var menu = new NativeMenu();
@@ -1952,6 +1961,8 @@ public sealed class MainWindow : Window
         menu.Items.Add(CreateNativePasteSpecialMenuItem("Values and Source Formatting", PasteCellsMode.All, new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.ValuesAndSourceFormatting)));
         menu.Items.Add(CreateNativePasteSpecialMenuItem("Keep Source Column Widths", PasteCellsMode.All, default, keepSourceColumnWidths: true));
         menu.Items.Add(CreateNativePasteLinkMenuItem("Paste Link"));
+        menu.Items.Add(CreateNativePasteSpecialTextMenuItem("Text"));
+        menu.Items.Add(CreateNativePasteSpecialTextMenuItem("Unicode Text"));
         menu.Items.Add(CreateNativePasteSpecialMenuItem("Transpose", PasteCellsMode.All, new PasteSpecialOptions(Transpose: true)));
         menu.Items.Add(CreateNativePasteSpecialMenuItem("Skip Blanks", PasteCellsMode.All, new PasteSpecialOptions(SkipBlanks: true)));
         menu.Items.Add(new NativeMenuItemSeparator());
@@ -1999,6 +2010,13 @@ public sealed class MainWindow : Window
     {
         var menuItem = new NativeMenuItem { Header = header };
         menuItem.Click += async (_, _) => await PasteLinkFromClipboardAsync(header);
+        return menuItem;
+    }
+
+    private NativeMenuItem CreateNativePasteSpecialTextMenuItem(string header)
+    {
+        var menuItem = new NativeMenuItem { Header = header };
+        menuItem.Click += async (_, _) => await PasteSpecialExternalTextFromClipboardAsync(header);
         return menuItem;
     }
 
@@ -3162,6 +3180,33 @@ public sealed class MainWindow : Window
         RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
     }
 
+    private async Task PasteSpecialExternalTextFromClipboardAsync(string label)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard is null)
+        {
+            ShowEditIssue("Clipboard unavailable on this platform.");
+            return;
+        }
+
+        var text = await clipboard.TryGetTextAsync();
+        var destination = _session.ActiveCell;
+        var result = _session.PasteClipboardTextAtActiveCell(text, preserveText: true);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Paste Special Text failed.");
+            return;
+        }
+
+        RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
+    }
+
     private void ClearSelectedRangeContents()
     {
         if (_isOpening || _isSaving)
@@ -3736,6 +3781,8 @@ public sealed class MainWindow : Window
             HasNativePasteSpecialValuesAndSourceFormattingMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Values and Source Formatting"),
             HasNativePasteSpecialKeepSourceColumnWidthsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Keep Source Column Widths"),
             HasNativePasteSpecialPasteLinkMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Paste Link"),
+            HasNativePasteSpecialTextMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Text"),
+            HasNativePasteSpecialUnicodeTextMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Unicode Text"),
             HasNativeSelectAllMenuItem: HasNativeMenuItem(_selectAllMenuItem, "Select All"),
             HasNativeClearContentsMenuItem: HasNativeMenuItem(_clearContentsMenuItem, "Clear Contents"),
             HasNativeBoldMenuItem: HasNativeMenuItem(_boldMenuItem, "Bold"),

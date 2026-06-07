@@ -61,6 +61,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("OpenActivatedFilesAsync");
         script.Should().Contain("CreateNativePasteSpecialMenu()");
         script.Should().Contain("PasteSpecialClipboardAtActiveCell(text, mode, options)");
+        script.Should().Contain("CreatePasteSpecialTextMenuItem(`\"Text`\")");
+        script.Should().Contain("CreateNativePasteSpecialTextMenuItem(`\"Unicode Text`\")");
+        script.Should().Contain("_session.PasteClipboardTextAtActiveCell(text, preserveText: true)");
+        script.Should().Contain("native_paste_special_text_menu_item=true");
+        script.Should().Contain("native_paste_special_unicode_text_menu_item=true");
         script.Should().Contain("AddStyledCellBorderOverlay(content, style);");
         script.Should().Contain("CreateSelectableDrawingObjectVisual(drawingObject, width, height)");
         script.Should().Contain("AutomationProperties.SetItemStatus(container, selected ? `\"Selected`\" : `\"Not selected`\")");
@@ -376,16 +381,33 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_edit_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_close_workbook_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_format_menu=true" "$artifact_root/launch.txt"
+                      grep -q "native_view_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_sheet_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_help_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_new_sheet_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_rename_sheet_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_duplicate_sheet_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_move_sheet_left_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_move_sheet_right_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_hide_sheet_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_unhide_sheet_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_delete_sheet_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_cut_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_copy_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_paste_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_paste_special_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_paste_special_comments_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_paste_special_validation_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_paste_special_all_except_borders_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_paste_special_all_merging_conditional_formats_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_paste_special_column_widths_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_paste_special_formulas_and_number_formats_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_paste_special_values_and_number_formats_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_paste_special_values_and_source_formatting_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_paste_special_keep_source_column_widths_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_paste_special_paste_link_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_paste_special_text_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_paste_special_unicode_text_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_select_all_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_clear_contents_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_bold_menu_item=true" "$artifact_root/launch.txt"
@@ -401,6 +423,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_vertical_text_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_rotate_text_up_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_rotate_text_down_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_show_formulas_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_help_online_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_send_feedback_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_check_for_updates_menu_item=true" "$artifact_root/launch.txt"
@@ -471,6 +494,54 @@ public sealed class MacOsAppReadinessPreflightTests
                     CreateColorPaletteFlyout(ColorPaletteTarget.Fill, includeClearFill: true);
                     CreateNativePasteSpecialMenu();
                     PasteSpecialClipboardAtActiveCell(text, mode, options);
+                    /*
+                    CreatePasteCommentsMenuItem("Comments and Notes")
+                    CreatePasteDataValidationMenuItem("Validation")
+                    CreatePasteSpecialMenuItem("All Except Borders", PasteCellsMode.All, new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.AllExceptBorders))
+                    CreatePasteSpecialMenuItem("All Merging Conditional Formats", PasteCellsMode.All, new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.AllMergingConditionalFormats))
+                    CreatePasteColumnWidthsMenuItem("Column Widths")
+                    CreatePasteSpecialMenuItem("Formulas and Number Formats", PasteCellsMode.All, new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.FormulasAndNumberFormats))
+                    CreatePasteSpecialMenuItem("Values and Number Formats", PasteCellsMode.All, new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.ValuesAndNumberFormats))
+                    CreatePasteSpecialMenuItem("Values and Source Formatting", PasteCellsMode.All, new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.ValuesAndSourceFormatting))
+                    CreatePasteSpecialMenuItem("Keep Source Column Widths", PasteCellsMode.All, default, keepSourceColumnWidths: true)
+                    CreatePasteLinkMenuItem("Paste Link")
+                    CreateNativePasteCommentsMenuItem("Comments and Notes")
+                    CreateNativePasteDataValidationMenuItem("Validation")
+                    CreateNativePasteSpecialMenuItem("All Except Borders", PasteCellsMode.All, new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.AllExceptBorders))
+                    CreateNativePasteSpecialMenuItem("All Merging Conditional Formats", PasteCellsMode.All, new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.AllMergingConditionalFormats))
+                    CreateNativePasteColumnWidthsMenuItem("Column Widths")
+                    CreateNativePasteSpecialMenuItem("Formulas and Number Formats", PasteCellsMode.All, new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.FormulasAndNumberFormats))
+                    CreateNativePasteSpecialMenuItem("Values and Number Formats", PasteCellsMode.All, new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.ValuesAndNumberFormats))
+                    CreateNativePasteSpecialMenuItem("Values and Source Formatting", PasteCellsMode.All, new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.ValuesAndSourceFormatting))
+                    CreateNativePasteSpecialMenuItem("Keep Source Column Widths", PasteCellsMode.All, default, keepSourceColumnWidths: true)
+                    CreateNativePasteLinkMenuItem("Paste Link")
+                    private async Task PasteColumnWidthsFromClipboardAsync(string label)
+                    _session.PasteColumnWidthsFromClipboardAtActiveCell(text)
+                    private async Task PasteCommentsFromClipboardAsync(string label)
+                    _session.PasteCommentsFromClipboardAtActiveCell(text)
+                    private async Task PasteDataValidationFromClipboardAsync(string label)
+                    _session.PasteDataValidationFromClipboardAtActiveCell(text)
+                    private async Task PasteLinkFromClipboardAsync(string label)
+                    _session.PasteLinkFromClipboardAtActiveCell(text)
+                    HasNativePasteSpecialCommentsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Comments and Notes")
+                    HasNativePasteSpecialValidationMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Validation")
+                    HasNativePasteSpecialAllExceptBordersMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "All Except Borders")
+                    HasNativePasteSpecialAllMergingConditionalFormatsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "All Merging Conditional Formats")
+                    HasNativePasteSpecialColumnWidthsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Column Widths")
+                    HasNativePasteSpecialFormulasAndNumberFormatsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Formulas and Number Formats")
+                    HasNativePasteSpecialValuesAndNumberFormatsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Values and Number Formats")
+                    HasNativePasteSpecialValuesAndSourceFormattingMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Values and Source Formatting")
+                    HasNativePasteSpecialKeepSourceColumnWidthsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Keep Source Column Widths")
+                    HasNativePasteSpecialPasteLinkMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Paste Link")
+                    private static bool HasNativeSubmenuItem(NativeMenu? menu, string expectedHeader)
+                    */
+                    CreatePasteSpecialTextMenuItem("Text");
+                    CreatePasteSpecialTextMenuItem("Unicode Text");
+                    CreateNativePasteSpecialTextMenuItem("Text");
+                    CreateNativePasteSpecialTextMenuItem("Unicode Text");
+                    _session.PasteClipboardTextAtActiveCell(text, preserveText: true);
+                    HasNativePasteSpecialTextMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Text");
+                    HasNativePasteSpecialUnicodeTextMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Unicode Text");
                     CellColorPalettePlanner.BuildDefaultSwatches();
                     CreateSelectableDrawingObjectVisual(drawingObject, width, height);
                     AutomationProperties.SetAutomationId(container, $"DrawingObject{drawingObject.Kind}{drawingObject.Id:N}");
@@ -519,7 +590,14 @@ public sealed class MacOsAppReadinessPreflightTests
                     _newSheetMenuItem.Click += (_, _) => AddNewSheet();
                     _renameSheetMenuItem.Click += async (_, _) => await RenameActiveSheetAsync();
                     _duplicateSheetMenuItem.Click += (_, _) => DuplicateActiveSheet();
+                    _moveSheetLeftMenuItem.Click += (_, _) => MoveActiveSheetLeft();
+                    _moveSheetRightMenuItem.Click += (_, _) => MoveActiveSheetRight();
+                    _hideSheetMenuItem.Click += (_, _) => HideActiveSheet();
+                    _unhideSheetMenuItem.Click += async (_, _) => await UnhideSheetAsync();
                     _deleteSheetMenuItem.Click += (_, _) => DeleteActiveSheet();
+                    _showFormulasMenuItem.ToggleType = MenuItemToggleType.CheckBox;
+                    _showFormulasMenuItem.Click += (_, _) => ToggleShowFormulas();
+                    Header = "View";
                     var sheetItem = new NativeMenuItem { Header = "Sheet" };
                     var result = _session.AddSheet();
                     var result = _session.RenameActiveSheet(newName);
@@ -527,7 +605,16 @@ public sealed class MacOsAppReadinessPreflightTests
                     AutomationProperties.SetAutomationId(nameBox, "RenameSheetNameBox");
                     var validationError = _session.Workbook.ValidateSheetName(proposedName, _session.ActiveSheet.Id);
                     var result = _session.DuplicateActiveSheet();
+                    var result = _session.MoveActiveSheetLeft();
+                    var result = _session.MoveActiveSheetRight();
+                    var result = _session.HideActiveSheet();
+                    UnhideSheetAsync().ToString();
+                    ShowUnhideSheetDialogAsync(_session.HiddenSheets).ToString();
+                    AutomationProperties.SetAutomationId(sheetBox, "UnhideSheetList");
+                    var result = _session.UnhideSheet(sheet.Id);
                     var result = _session.DeleteActiveSheet();
+                    ToggleShowFormulas();
+                    var result = _session.SetShowFormulas(showFormulas);
                     if (e.Key == Key.F11 && e.KeyModifiers == KeyModifiers.Shift) { }
                     _helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, "Help Online");
                     _sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, "Send Feedback");
@@ -560,6 +647,10 @@ public sealed class MacOsAppReadinessPreflightTests
                 private async Task SaveCurrentWorkbookAsync() => await Task.CompletedTask;
                 private async Task RenameActiveSheetAsync() => await Task.CompletedTask;
                 private async Task<string?> ShowRenameSheetDialogAsync(string currentName) => await Task.FromResult<string?>(currentName);
+                private async Task PasteSpecialExternalTextFromClipboardAsync(string label) => await Task.CompletedTask;
+                private async Task UnhideSheetAsync() => await Task.CompletedTask;
+                private async Task<WorkbookHiddenSheet?> ShowUnhideSheetDialogAsync(IReadOnlyList<WorkbookHiddenSheet> hiddenSheets) => await Task.FromResult<WorkbookHiddenSheet?>(null);
+                private void ToggleShowFormulas() { }
                 internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot() => new();
             }
             """);
@@ -581,10 +672,43 @@ public sealed class MacOsAppReadinessPreflightTests
 
             internal sealed class MacOsLaunchSmokeSnapshot
             {
-                public bool IsPassed => HasNativeFileMenu && HasNativeEditMenu && HasNativeFormatMenu && HasNativeSheetMenu && HasNativeHelpMenu && HasNativeNewWorkbookMenuItem && HasNativeOpenRecentMenuItem && NativeOpenRecentItemCount > 0 && HasNativeSelectAllMenuItem && HasNativeCloseWorkbookMenuItem && HasNativeRenameSheetMenuItem && HasNativeDeleteSheetMenuItem && HasNativeCellStylesMenuItem && HasNativeCopyMenuItem;
+                public bool IsPassed =>
+                    HasNativeFileMenu &&
+                    HasNativeEditMenu &&
+                    HasNativeFormatMenu &&
+                    HasNativeViewMenu &&
+                    HasNativeSheetMenu &&
+                    HasNativeHelpMenu &&
+                    HasNativeNewWorkbookMenuItem &&
+                    HasNativeOpenRecentMenuItem &&
+                    NativeOpenRecentItemCount > 0 &&
+                    HasNativeSelectAllMenuItem &&
+                    HasNativeCloseWorkbookMenuItem &&
+                    HasNativeRenameSheetMenuItem &&
+                    HasNativeMoveSheetLeftMenuItem &&
+                    HasNativeMoveSheetRightMenuItem &&
+                    HasNativeHideSheetMenuItem &&
+                    HasNativeUnhideSheetMenuItem &&
+                    HasNativeDeleteSheetMenuItem &&
+                    HasNativeShowFormulasMenuItem &&
+                    HasNativePasteSpecialCommentsMenuItem &&
+                    HasNativePasteSpecialValidationMenuItem &&
+                    HasNativePasteSpecialAllExceptBordersMenuItem &&
+                    HasNativePasteSpecialAllMergingConditionalFormatsMenuItem &&
+                    HasNativePasteSpecialColumnWidthsMenuItem &&
+                    HasNativePasteSpecialFormulasAndNumberFormatsMenuItem &&
+                    HasNativePasteSpecialValuesAndNumberFormatsMenuItem &&
+                    HasNativePasteSpecialValuesAndSourceFormattingMenuItem &&
+                    HasNativePasteSpecialKeepSourceColumnWidthsMenuItem &&
+                    HasNativePasteSpecialPasteLinkMenuItem &&
+                    HasNativePasteSpecialTextMenuItem &&
+                    HasNativePasteSpecialUnicodeTextMenuItem &&
+                    HasNativeCellStylesMenuItem &&
+                    HasNativeCopyMenuItem;
                 private bool HasNativeFileMenu { get; }
                 private bool HasNativeEditMenu { get; }
                 private bool HasNativeFormatMenu { get; }
+                private bool HasNativeViewMenu { get; }
                 private bool HasNativeSheetMenu { get; }
                 private bool HasNativeHelpMenu { get; }
                 private bool HasNativeNewWorkbookMenuItem { get; }
@@ -593,11 +717,28 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativeSelectAllMenuItem { get; }
                 private bool HasNativeCloseWorkbookMenuItem { get; }
                 private bool HasNativeRenameSheetMenuItem { get; }
+                private bool HasNativeMoveSheetLeftMenuItem { get; }
+                private bool HasNativeMoveSheetRightMenuItem { get; }
+                private bool HasNativeHideSheetMenuItem { get; }
+                private bool HasNativeUnhideSheetMenuItem { get; }
                 private bool HasNativeDeleteSheetMenuItem { get; }
+                private bool HasNativeShowFormulasMenuItem { get; }
+                private bool HasNativePasteSpecialCommentsMenuItem { get; }
+                private bool HasNativePasteSpecialValidationMenuItem { get; }
+                private bool HasNativePasteSpecialAllExceptBordersMenuItem { get; }
+                private bool HasNativePasteSpecialAllMergingConditionalFormatsMenuItem { get; }
+                private bool HasNativePasteSpecialColumnWidthsMenuItem { get; }
+                private bool HasNativePasteSpecialFormulasAndNumberFormatsMenuItem { get; }
+                private bool HasNativePasteSpecialValuesAndNumberFormatsMenuItem { get; }
+                private bool HasNativePasteSpecialValuesAndSourceFormattingMenuItem { get; }
+                private bool HasNativePasteSpecialKeepSourceColumnWidthsMenuItem { get; }
+                private bool HasNativePasteSpecialPasteLinkMenuItem { get; }
                 private bool HasNativeCellStylesMenuItem { get; }
                 private bool HasNativeCopyMenuItem { get; }
+                private bool HasNativePasteSpecialTextMenuItem { get; }
+                private bool HasNativePasteSpecialUnicodeTextMenuItem { get; }
                 public int NativeCellStylesPresetCount { get; }
-                public string Report => "native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_select_all_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_delete_sheet_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+                public string Report => "native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_select_all_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
             }
             """);
 
@@ -667,6 +808,28 @@ public sealed class MacOsAppReadinessPreflightTests
 
             public sealed class WorkbookSession
             {
+                /*
+                public IReadOnlyList<WorkbookHiddenSheet> HiddenSheets =>
+                public bool CanHideActiveSheet =>
+                public WorkbookCellEditResult HideActiveSheet()
+                new SetSheetHiddenCommand(sheetId, hidden: true)
+                public WorkbookCellEditResult UnhideSheet(SheetId sheetId)
+                new SetSheetHiddenCommand(sheetId, hidden: false)
+                public bool IsShowingFormulas => ActiveSheet.ShowFormulas;
+                public WorkbookCellEditResult SetShowFormulas(bool showFormulas)
+                new SetWorksheetShowFormulasCommand(ActiveSheet.Id, showFormulas)
+                public WorkbookCellEditResult PasteColumnWidthsFromClipboardAtActiveCell(string? text)
+                public WorkbookCellEditResult PasteCommentsFromClipboardAtActiveCell(string? text, bool transpose = false)
+                new PasteCommentsCommand(
+                public WorkbookCellEditResult PasteDataValidationFromClipboardAtActiveCell(string? text, bool transpose = false)
+                new PasteDataValidationCommand(
+                public WorkbookCellEditResult PasteLinkFromClipboardAtActiveCell(
+                PasteLinkService.CreateLinkedCells(
+                new PasteColumnWidthsCommand(
+                new EditCellsCommand(ActiveSheet.Id, linkedCells)
+                bool keepSourceColumnWidths = false
+                if (keepSourceColumnWidths)
+                */
                 public WorkbookCellEditResult AddSheet()
                 {
                     var result = _cellEditService.ExecuteEditCommand(

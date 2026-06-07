@@ -520,6 +520,32 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void PasteClipboardTextAtActiveCell_PreserveTextPastesChangedExternalTextAsLiteralText()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(a1, new TextValue("source"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+        session.CutSelectedRangeText();
+        session.SelectCell(c1);
+
+        var result = session.PasteClipboardTextAtActiveCell("00123", preserveText: true);
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().ContainSingle().Which.Should().Be(c1);
+        sheet.GetValue(a1).Should().Be(new TextValue("source"));
+        sheet.GetValue(c1).Should().Be(new TextValue("00123"));
+        session.SelectedRange.Should().Be(new GridRange(c1, c1));
+    }
+
+    [Fact]
     public void PasteSpecialClipboardAtActiveCell_ValuesModePreservesDestinationStyleAndUndo()
     {
         var workbook = CreateWorkbook();

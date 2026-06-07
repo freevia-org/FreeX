@@ -154,6 +154,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("CreateNativePasteSpecialMenuItem(\"Values and Source Formatting\", PasteCellsMode.All, new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.ValuesAndSourceFormatting))");
         source.Should().Contain("CreateNativePasteSpecialMenuItem(\"Keep Source Column Widths\", PasteCellsMode.All, default, keepSourceColumnWidths: true)");
         source.Should().Contain("CreateNativePasteLinkMenuItem(\"Paste Link\")");
+        source.Should().Contain("CreateNativePasteSpecialTextMenuItem(\"Text\")");
+        source.Should().Contain("CreateNativePasteSpecialTextMenuItem(\"Unicode Text\")");
         source.Should().Contain("_selectAllMenuItem.Header = \"Select All\";");
         source.Should().Contain("_selectAllMenuItem.Gesture = new KeyGesture(Key.A, KeyModifiers.Meta);");
         source.Should().Contain("_selectAllMenuItem.Click += (_, _) => SelectCurrentRegionOrAll();");
@@ -427,6 +429,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("HasNativePasteSpecialValuesAndSourceFormattingMenuItem &&");
         smokeSource.Should().Contain("HasNativePasteSpecialKeepSourceColumnWidthsMenuItem &&");
         smokeSource.Should().Contain("HasNativePasteSpecialPasteLinkMenuItem &&");
+        smokeSource.Should().Contain("HasNativePasteSpecialTextMenuItem &&");
+        smokeSource.Should().Contain("HasNativePasteSpecialUnicodeTextMenuItem &&");
         smokeSource.Should().Contain("opened_source_path={snapshot.OpenedSourcePath ?? \"\"}");
         smokeSource.Should().Contain("native_file_menu={FormatBool(snapshot.HasNativeFileMenu)}");
         smokeSource.Should().Contain("native_new_workbook_menu_item={FormatBool(snapshot.HasNativeNewWorkbookMenuItem)}");
@@ -453,6 +457,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_paste_special_values_and_source_formatting_menu_item={FormatBool(snapshot.HasNativePasteSpecialValuesAndSourceFormattingMenuItem)}");
         smokeSource.Should().Contain("native_paste_special_keep_source_column_widths_menu_item={FormatBool(snapshot.HasNativePasteSpecialKeepSourceColumnWidthsMenuItem)}");
         smokeSource.Should().Contain("native_paste_special_paste_link_menu_item={FormatBool(snapshot.HasNativePasteSpecialPasteLinkMenuItem)}");
+        smokeSource.Should().Contain("native_paste_special_text_menu_item={FormatBool(snapshot.HasNativePasteSpecialTextMenuItem)}");
+        smokeSource.Should().Contain("native_paste_special_unicode_text_menu_item={FormatBool(snapshot.HasNativePasteSpecialUnicodeTextMenuItem)}");
         smokeSource.Should().Contain("native_select_all_menu_item={FormatBool(snapshot.HasNativeSelectAllMenuItem)}");
         smokeSource.Should().Contain("native_clear_contents_menu_item={FormatBool(snapshot.HasNativeClearContentsMenuItem)}");
         smokeSource.Should().Contain("native_bold_menu_item={FormatBool(snapshot.HasNativeBoldMenuItem)}");
@@ -527,6 +533,8 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativePasteSpecialValuesAndSourceFormattingMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, \"Values and Source Formatting\")");
         windowSource.Should().Contain("HasNativePasteSpecialKeepSourceColumnWidthsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, \"Keep Source Column Widths\")");
         windowSource.Should().Contain("HasNativePasteSpecialPasteLinkMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, \"Paste Link\")");
+        windowSource.Should().Contain("HasNativePasteSpecialTextMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, \"Text\")");
+        windowSource.Should().Contain("HasNativePasteSpecialUnicodeTextMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, \"Unicode Text\")");
         windowSource.Should().Contain("private static bool HasNativeSubmenuItem(NativeMenu? menu, string expectedHeader)");
         windowSource.Should().Contain("HasNativeSelectAllMenuItem: HasNativeMenuItem(_selectAllMenuItem, \"Select All\")");
         windowSource.Should().Contain("HasNativeClearContentsMenuItem: HasNativeMenuItem(_clearContentsMenuItem, \"Clear Contents\")");
@@ -754,6 +762,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("CreatePasteSpecialMenuItem(\"Values and Source Formatting\", PasteCellsMode.All, new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.ValuesAndSourceFormatting))");
         source.Should().Contain("CreatePasteSpecialMenuItem(\"Keep Source Column Widths\", PasteCellsMode.All, default, keepSourceColumnWidths: true)");
         source.Should().Contain("CreatePasteLinkMenuItem(\"Paste Link\")");
+        source.Should().Contain("CreatePasteSpecialTextMenuItem(\"Text\")");
+        source.Should().Contain("CreatePasteSpecialTextMenuItem(\"Unicode Text\")");
         source.Should().Contain("CreateNativePasteCommentsMenuItem(\"Comments and Notes\")");
         source.Should().Contain("CreateNativePasteDataValidationMenuItem(\"Validation\")");
         source.Should().Contain("CreateNativePasteSpecialMenuItem(\"All Except Borders\", PasteCellsMode.All, new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.AllExceptBorders))");
@@ -764,6 +774,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("CreateNativePasteSpecialMenuItem(\"Values and Source Formatting\", PasteCellsMode.All, new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.ValuesAndSourceFormatting))");
         source.Should().Contain("CreateNativePasteSpecialMenuItem(\"Keep Source Column Widths\", PasteCellsMode.All, default, keepSourceColumnWidths: true)");
         source.Should().Contain("CreateNativePasteLinkMenuItem(\"Paste Link\")");
+        source.Should().Contain("CreateNativePasteSpecialTextMenuItem(\"Text\")");
+        source.Should().Contain("CreateNativePasteSpecialTextMenuItem(\"Unicode Text\")");
         source.Should().Contain("CreatePasteSpecialMenuItem(\"Transpose\", PasteCellsMode.All, new PasteSpecialOptions(Transpose: true))");
         source.Should().Contain("CreatePasteSpecialMenuItem(\"Skip Blanks\", PasteCellsMode.All, new PasteSpecialOptions(SkipBlanks: true))");
         source.Should().Contain("new PasteSpecialOptions(Operation: PasteSpecialOperation.Add)");
@@ -784,6 +796,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_session.PasteDataValidationFromClipboardAtActiveCell(text)");
         source.Should().Contain("private async Task PasteLinkFromClipboardAsync(string label)");
         source.Should().Contain("_session.PasteLinkFromClipboardAtActiveCell(text)");
+        source.Should().Contain("private async Task PasteSpecialExternalTextFromClipboardAsync(string label)");
+        source.Should().Contain("_session.PasteClipboardTextAtActiveCell(text, preserveText: true)");
         source.Should().Contain("_session.SelectedRange.Contains(address)");
         source.Should().Contain("private bool IsSelectedColumn(uint col)");
         source.Should().Contain("private bool IsSelectedRow(uint row)");
