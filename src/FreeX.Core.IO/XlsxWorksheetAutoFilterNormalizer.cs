@@ -132,7 +132,7 @@ internal static class XlsxWorksheetAutoFilterNormalizer
     {
         var changed = false;
         changed |= RemoveUnknownAttributes(autoFilter, AutoFilterAttributes);
-        changed |= RemoveUnexpectedChildren(autoFilter, AutoFilterChildren);
+        changed |= RemoveChildElementsExcept(autoFilter, WorksheetNs, AutoFilterChildren);
         changed |= RemoveDuplicateChildren(autoFilter, "sortState");
         changed |= NormalizeExtensionLists(autoFilter);
         changed |= NormalizeAttribute(autoFilter, "ref", NormalizeCellOrRangeReference);
@@ -177,7 +177,7 @@ internal static class XlsxWorksheetAutoFilterNormalizer
 
         var changed = false;
         changed |= RemoveUnknownAttributes(filterColumn, FilterColumnAttributes);
-        changed |= RemoveUnexpectedChildren(filterColumn, FilterColumnChildren);
+        changed |= RemoveChildElementsExcept(filterColumn, WorksheetNs, FilterColumnChildren);
         changed |= RemoveDuplicateChildren(filterColumn, "filters");
         changed |= RemoveDuplicateChildren(filterColumn, "top10");
         changed |= RemoveDuplicateChildren(filterColumn, "customFilters");
@@ -349,21 +349,6 @@ internal static class XlsxWorksheetAutoFilterNormalizer
         return changed;
     }
 
-    private static bool RemoveUnexpectedChildren(XElement element, IReadOnlySet<string> allowedLocalNames)
-    {
-        var changed = false;
-        foreach (var child in element.Elements().ToList())
-        {
-            if (child.Name.Namespace == WorksheetNs && allowedLocalNames.Contains(child.Name.LocalName))
-                continue;
-
-            child.Remove();
-            changed = true;
-        }
-
-        return changed;
-    }
-
     private static bool RemoveDuplicateChildren(XElement element, string localName)
     {
         var changed = false;
@@ -381,21 +366,6 @@ internal static class XlsxWorksheetAutoFilterNormalizer
         }
 
         return changed;
-    }
-
-    private static bool NormalizeChildOrder(XElement element, Func<XElement, int> orderSelector)
-    {
-        var children = element.Elements()
-            .Select((child, index) => new { Child = child, Index = index })
-            .OrderBy(item => orderSelector(item.Child))
-            .ThenBy(item => item.Index)
-            .Select(item => item.Child)
-            .ToList();
-        if (children.Count == 0 || element.Elements().SequenceEqual(children))
-            return false;
-
-        element.ReplaceNodes(children);
-        return true;
     }
 
     private static int AutoFilterChildOrder(XElement child) =>

@@ -55,13 +55,16 @@ internal static class XlsxWorksheetConditionalFormatNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(conditionalFormatting, ConditionalFormattingAttributes);
-        changed |= RemoveUnexpectedChildren(conditionalFormatting, ConditionalFormattingChildren);
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(
+            conditionalFormatting,
+            WorksheetNs,
+            ConditionalFormattingChildren);
         changed |= NormalizeExtensionLists(conditionalFormatting);
 
         foreach (var rule in conditionalFormatting.Elements(WorksheetNs + "cfRule").ToList())
             changed |= NormalizeCfRule(rule);
 
-        changed |= NormalizeChildOrder(conditionalFormatting, ConditionalFormattingChildOrder);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeChildOrder(conditionalFormatting, ConditionalFormattingChildOrder);
         return changed;
     }
 
@@ -69,13 +72,13 @@ internal static class XlsxWorksheetConditionalFormatNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(rule, CfRuleAttributes);
-        changed |= RemoveUnexpectedChildren(rule, CfRuleChildren);
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(rule, WorksheetNs, CfRuleChildren);
         changed |= RemoveDuplicateChildren(rule, "colorScale");
         changed |= RemoveDuplicateChildren(rule, "dataBar");
         changed |= RemoveDuplicateChildren(rule, "iconSet");
         changed |= RemovePayloadExtensionLists(rule);
         changed |= NormalizeExtensionLists(rule);
-        changed |= NormalizeChildOrder(rule, CfRuleChildOrder);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeChildOrder(rule, CfRuleChildOrder);
         return changed;
     }
 
@@ -131,21 +134,6 @@ internal static class XlsxWorksheetConditionalFormatNormalizer
         return changed;
     }
 
-    private static bool RemoveUnexpectedChildren(XElement element, IReadOnlySet<string> allowedLocalNames)
-    {
-        var changed = false;
-        foreach (var child in element.Elements().ToList())
-        {
-            if (child.Name.Namespace == WorksheetNs && allowedLocalNames.Contains(child.Name.LocalName))
-                continue;
-
-            child.Remove();
-            changed = true;
-        }
-
-        return changed;
-    }
-
     private static bool RemoveDuplicateChildren(XElement element, string localName)
     {
         var changed = false;
@@ -163,21 +151,6 @@ internal static class XlsxWorksheetConditionalFormatNormalizer
         }
 
         return changed;
-    }
-
-    private static bool NormalizeChildOrder(XElement element, Func<XElement, int> orderSelector)
-    {
-        var children = element.Elements()
-            .Select((child, index) => new { Child = child, Index = index })
-            .OrderBy(item => orderSelector(item.Child))
-            .ThenBy(item => item.Index)
-            .Select(item => item.Child)
-            .ToList();
-        if (children.Count == 0 || element.Elements().SequenceEqual(children))
-            return false;
-
-        element.ReplaceNodes(children);
-        return true;
     }
 
     private static int ConditionalFormattingChildOrder(XElement child) =>
