@@ -1043,6 +1043,22 @@ public sealed class WorkbookSession
         return ApplySelectedRangeStyle(diff);
     }
 
+    public WorkbookCellEditResult SetSelectedRangeBorderPreset(CellBorderPreset preset)
+    {
+        var range = SelectedRange;
+        if (!HasBorderPresetChanges(range, preset))
+            return new WorkbookCellEditResult(true, null, [], RecalcReport: null);
+
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            CreateBorderPresetCommand(range, preset));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
     public WorkbookCellEditResult IncreaseSelectedRangeDecimalPlaces() =>
         SetSelectedRangeNumberFormat(NumberFormatDecimalAdjuster.AddDecimalPlace(SelectedRangeStartNumberFormat));
 
@@ -1388,6 +1404,31 @@ public sealed class WorkbookSession
             : new ApplyStyleCommand(ActiveSheet.Id, range, diff);
     }
 
+    private IWorkbookCommand CreateBorderPresetCommand(GridRange range, CellBorderPreset preset)
+    {
+        if (!CellBorderPresetPlanner.RequiresPerCellPlanning(preset))
+            return CreateApplyStyleCommand(range, CellBorderPresetPlanner.Plan(preset, range, range.Start));
+
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        var commands = new List<IWorkbookCommand>();
+        foreach (var address in range.AllCells())
+        {
+            var diff = CellBorderPresetPlanner.Plan(preset, range, address);
+            if (!BorderShortcutService.HasBorderChanges(diff))
+                continue;
+
+            var sourceRange = new GridRange(address, address);
+            commands.Add(targetSheetIds.Count > 1
+                ? new GroupedApplyStyleCommand(targetSheetIds, sourceRange, diff)
+                : new ApplyStyleCommand(
+                    ActiveSheet.Id,
+                    RemapRangeToSheet(sourceRange, ActiveSheet.Id),
+                    diff));
+        }
+
+        return ToCommand(CellBorderPresetPlanner.GetDisplayName(preset), commands);
+    }
+
     private IWorkbookCommand CreateSetFontSizeCommand(GridRange range, double fontSize, double rowHeight)
     {
         var targetSheetIds = CurrentGroupedEditSheetIds();
@@ -1531,6 +1572,16 @@ public sealed class WorkbookSession
         commands.Count == 1
             ? commands[0]
             : new CompositeWorkbookCommand(title, commands);
+
+    private static bool HasBorderPresetChanges(GridRange range, CellBorderPreset preset)
+    {
+        if (!CellBorderPresetPlanner.RequiresPerCellPlanning(preset))
+            return true;
+
+        return range
+            .AllCells()
+            .Any(address => BorderShortcutService.HasBorderChanges(CellBorderPresetPlanner.Plan(preset, range, address)));
+    }
 
     private static GridRange RemapRangeToSheet(GridRange range, SheetId sheetId) =>
         new(

@@ -80,6 +80,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     string? OpenedSourcePath,
     bool IsOpening,
     bool HasNewSheetButton,
+    bool HasBordersButton,
     bool HasFocusableSheetTab,
     bool HasFocusableActiveSheetTab,
     bool HasShellFocusCycleTargets,
@@ -149,6 +150,8 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeFontColorMenuItem,
     int NativeFillColorSwatchCount,
     int NativeFontColorSwatchCount,
+    bool HasNativeBordersMenuItem,
+    int NativeBordersPresetCount,
     bool HasNativeCellStylesMenuItem,
     int NativeCellStylesPresetCount,
     bool HasNativeHorizontalTextMenuItem,
@@ -197,6 +200,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         ViewportRowCount > 0 &&
         ViewportColumnCount > 0 &&
         HasNewSheetButton &&
+        HasBordersButton &&
         HasFocusableSheetTab &&
         HasFocusableActiveSheetTab &&
         HasShellFocusCycleTargets &&
@@ -266,6 +270,8 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeFontColorMenuItem &&
         NativeFillColorSwatchCount == CellColorPalettePlanner.BuildDefaultSwatches().Count &&
         NativeFontColorSwatchCount == CellColorPalettePlanner.BuildDefaultSwatches().Count &&
+        HasNativeBordersMenuItem &&
+        NativeBordersPresetCount == Enum.GetValues<CellBorderPreset>().Length &&
         HasNativeCellStylesMenuItem &&
         NativeCellStylesPresetCount == Enum.GetValues<CellStylePreset>().Length &&
         HasNativeHorizontalTextMenuItem &&
@@ -402,6 +408,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"opened_source_path={snapshot.OpenedSourcePath ?? ""}",
                 $"is_opening={FormatBool(snapshot.IsOpening)}",
                 $"new_sheet_button={FormatBool(snapshot.HasNewSheetButton)}",
+                $"toolbar_borders_button={FormatBool(snapshot.HasBordersButton)}",
                 $"focusable_sheet_tab={FormatBool(snapshot.HasFocusableSheetTab)}",
                 $"focusable_active_sheet_tab={FormatBool(snapshot.HasFocusableActiveSheetTab)}",
                 $"shell_focus_cycle_targets={FormatBool(snapshot.HasShellFocusCycleTargets)}",
@@ -471,6 +478,8 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_font_color_menu_item={FormatBool(snapshot.HasNativeFontColorMenuItem)}",
                 $"native_fill_color_swatch_count={snapshot.NativeFillColorSwatchCount}",
                 $"native_font_color_swatch_count={snapshot.NativeFontColorSwatchCount}",
+                $"native_borders_menu_item={FormatBool(snapshot.HasNativeBordersMenuItem)}",
+                $"native_borders_preset_count={snapshot.NativeBordersPresetCount}",
                 $"native_cell_styles_menu_item={FormatBool(snapshot.HasNativeCellStylesMenuItem)}",
                 $"native_cell_styles_preset_count={snapshot.NativeCellStylesPresetCount}",
                 $"native_horizontal_text_menu_item={FormatBool(snapshot.HasNativeHorizontalTextMenuItem)}",

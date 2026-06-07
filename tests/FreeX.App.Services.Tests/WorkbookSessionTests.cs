@@ -3336,6 +3336,125 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SetSelectedRangeBorderPreset_AppliesOutsideBordersPreservesSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        sheet.SetCell(a1, new TextValue("value"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b2));
+
+        var result = session.SetSelectedRangeBorderPreset(CellBorderPreset.Outside);
+
+        result.Success.Should().BeTrue();
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveCell.Should().Be(a1);
+        session.SelectedRange.Should().Be(new GridRange(a1, b2));
+        var expected = new CellBorder(BorderStyle.Thin, CellColor.Black);
+        var a1Style = GetStyle(workbook, sheet, a1);
+        a1Style.BorderTop.Should().Be(expected);
+        a1Style.BorderLeft.Should().Be(expected);
+        a1Style.BorderRight.Should().Be(new CellBorder());
+        a1Style.BorderBottom.Should().Be(new CellBorder());
+        var b2Style = GetStyle(workbook, sheet, b2);
+        b2Style.BorderRight.Should().Be(expected);
+        b2Style.BorderBottom.Should().Be(expected);
+        sheet.GetStyleOnly(b2.Row, b2.Col).Should().NotBeNull();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        GetStyle(workbook, sheet, a1).BorderTop.Should().Be(new CellBorder());
+        sheet.GetStyleOnly(b2.Row, b2.Col).Should().BeNull();
+    }
+
+    [Fact]
+    public void SetSelectedRangeBorderPreset_InsideAppliesInteriorBorders()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetCell(a1, new TextValue("value"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b2));
+
+        var result = session.SetSelectedRangeBorderPreset(CellBorderPreset.Inside);
+
+        result.Success.Should().BeTrue();
+        var expected = new CellBorder(BorderStyle.Thin, CellColor.Black);
+        var a1Style = GetStyle(workbook, sheet, a1);
+        a1Style.BorderRight.Should().Be(expected);
+        a1Style.BorderBottom.Should().Be(expected);
+        a1Style.BorderTop.Should().Be(new CellBorder());
+        a1Style.BorderLeft.Should().Be(new CellBorder());
+        var a2Style = GetStyle(workbook, sheet, a2);
+        a2Style.BorderTop.Should().Be(expected);
+        a2Style.BorderRight.Should().Be(expected);
+        a2Style.BorderBottom.Should().Be(new CellBorder());
+        a2Style.BorderLeft.Should().Be(new CellBorder());
+    }
+
+    [Fact]
+    public void SetSelectedRangeBorderPreset_InsideSingleCellSucceedsWithoutDirtyingWorkbook()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("value"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.SetSelectedRangeBorderPreset(CellBorderPreset.Inside);
+
+        result.Success.Should().BeTrue();
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+        GetStyle(workbook, sheet, a1).BorderTop.Should().Be(new CellBorder());
+        sheet.GetStyleOnly(a1.Row, a1.Col).Should().BeNull();
+    }
+
+    [Fact]
+    public void SetSelectedRangeBorderPreset_RejectsProtectedSheetWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("locked"));
+        sheet.IsProtected = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.SetSelectedRangeBorderPreset(CellBorderPreset.All);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("protected");
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+        GetStyle(workbook, sheet, a1).BorderBottom.Should().Be(new CellBorder());
+    }
+
+    [Fact]
     public void PasteClipboardTextAtActiveCell_FallsBackToExternalTextWhenClipboardTextChanges()
     {
         var workbook = CreateWorkbook();
@@ -4534,6 +4653,46 @@ public sealed class WorkbookSessionTests
         summary.GetStyleOnly(summaryB1.Row, summaryB1.Col).Should().BeNull();
         GetStyle(workbook, details, detailsA1).Bold.Should().BeFalse();
         details.GetStyleOnly(detailsB1.Row, detailsB1.Col).Should().BeNull();
+    }
+
+    [Fact]
+    public void SetSelectedRangeBorderPreset_PropagatesAcrossGroupedSheetsAndUndoRestores()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var summaryA1 = new CellAddress(summary.Id, 1, 1);
+        var summaryB2 = new CellAddress(summary.Id, 2, 2);
+        var detailsA1 = new CellAddress(details.Id, 1, 1);
+        var detailsB2 = new CellAddress(details.Id, 2, 2);
+        summary.SetCell(summaryA1, new TextValue("summary"));
+        details.SetCell(detailsA1, new TextValue("details"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectAllVisibleSheets();
+        session.SelectRange(new GridRange(summaryA1, summaryB2));
+
+        var result = session.SetSelectedRangeBorderPreset(CellBorderPreset.Outside);
+
+        result.Success.Should().BeTrue();
+        var expected = new CellBorder(BorderStyle.Thin, CellColor.Black);
+        GetStyle(workbook, summary, summaryA1).BorderTop.Should().Be(expected);
+        GetStyle(workbook, summary, summaryB2).BorderBottom.Should().Be(expected);
+        GetStyle(workbook, details, detailsA1).BorderTop.Should().Be(expected);
+        GetStyle(workbook, details, detailsB2).BorderBottom.Should().Be(expected);
+        session.SelectedRange.Should().Be(new GridRange(summaryA1, summaryB2));
+        session.IsWorkbookGrouped.Should().BeTrue();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        GetStyle(workbook, summary, summaryA1).BorderTop.Should().Be(new CellBorder());
+        summary.GetStyleOnly(summaryB2.Row, summaryB2.Col).Should().BeNull();
+        GetStyle(workbook, details, detailsA1).BorderTop.Should().Be(new CellBorder());
+        details.GetStyleOnly(detailsB2.Row, detailsB2.Col).Should().BeNull();
     }
 
     [Fact]

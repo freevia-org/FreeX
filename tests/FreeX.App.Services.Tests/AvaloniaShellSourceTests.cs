@@ -550,9 +550,12 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("HasNativePasteSpecialUnicodeTextMenuItem &&");
         smokeSource.Should().Contain("HasNativePasteSpecialPictureMenuItem &&");
         smokeSource.Should().Contain("HasNativePasteSpecialLinkedPictureMenuItem &&");
+        smokeSource.Should().Contain("HasNativeBordersMenuItem &&");
+        smokeSource.Should().Contain("NativeBordersPresetCount == Enum.GetValues<CellBorderPreset>().Length");
         smokeSource.Should().Contain("HasNativeTabColorMenuItem &&");
         smokeSource.Should().Contain("HasNativeClearTabColorMenuItem &&");
         smokeSource.Should().Contain("NativeTabColorSwatchCount == CellColorPalettePlanner.BuildDefaultSwatches().Count");
+        smokeSource.Should().Contain("HasBordersButton &&");
         smokeSource.Should().Contain("HasFocusableSheetTab &&");
         smokeSource.Should().Contain("HasFocusableActiveSheetTab &&");
         smokeSource.Should().Contain("HasShellFocusCycleTargets &&");
@@ -623,6 +626,9 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_font_color_menu_item={FormatBool(snapshot.HasNativeFontColorMenuItem)}");
         smokeSource.Should().Contain("native_fill_color_swatch_count={snapshot.NativeFillColorSwatchCount}");
         smokeSource.Should().Contain("native_font_color_swatch_count={snapshot.NativeFontColorSwatchCount}");
+        smokeSource.Should().Contain("toolbar_borders_button={FormatBool(snapshot.HasBordersButton)}");
+        smokeSource.Should().Contain("native_borders_menu_item={FormatBool(snapshot.HasNativeBordersMenuItem)}");
+        smokeSource.Should().Contain("native_borders_preset_count={snapshot.NativeBordersPresetCount}");
         smokeSource.Should().Contain("native_cell_styles_menu_item={FormatBool(snapshot.HasNativeCellStylesMenuItem)}");
         smokeSource.Should().Contain("native_cell_styles_preset_count={snapshot.NativeCellStylesPresetCount}");
         smokeSource.Should().Contain("native_horizontal_text_menu_item={FormatBool(snapshot.HasNativeHorizontalTextMenuItem)}");
@@ -742,6 +748,9 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeFontColorMenuItem: HasNativeMenuItem(_fontColorMenuItem, \"Font Color\", requireGesture: false)");
         windowSource.Should().Contain("NativeFillColorSwatchCount: nativeFillColorSwatchCount");
         windowSource.Should().Contain("NativeFontColorSwatchCount: nativeFontColorSwatchCount");
+        windowSource.Should().Contain("HasBordersButton: _bordersButton.Content?.ToString() == \"Borders\"");
+        windowSource.Should().Contain("HasNativeBordersMenuItem: HasNativeMenuItem(_bordersMenuItem, \"Borders\", requireGesture: false)");
+        windowSource.Should().Contain("NativeBordersPresetCount: nativeBordersPresetCount");
         windowSource.Should().Contain("HasNativeCellStylesMenuItem: HasNativeMenuItem(_cellStylesMenuItem, \"Cell Styles\", requireGesture: false)");
         windowSource.Should().Contain("NativeCellStylesPresetCount: nativeCellStylesPresetCount");
         windowSource.Should().Contain("HasNativeHorizontalTextMenuItem: HasNativeMenuItem(_horizontalTextMenuItem, \"Horizontal\", requireGesture: false)");
@@ -1260,6 +1269,54 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private static int CountNativeColorPaletteSwatches(NativeMenu? menu)");
         source.Should().Contain("var background = style?.ResolveFillColor(_session.Workbook.Theme) is { } fillColor");
         source.Should().Contain(": Brush(style.ResolveFontColor(_session.Workbook.Theme));");
+    }
+
+    [Fact]
+    public void MainWindow_WiresBordersThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+
+        source.Should().Contain("private readonly DropDownButton _bordersButton = new();");
+        source.Should().Contain("private readonly NativeMenuItem _bordersMenuItem = new();");
+        source.Should().Contain("_bordersButton.Content = \"Borders\";");
+        source.Should().Contain("_bordersButton.Flyout = CreateBorderPresetFlyout();");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_bordersButton, \"HomeBordersButton\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_bordersButton, \"Apply or change borders on the selected cells.\");");
+        source.Should().Contain("_bordersMenuItem.Header = \"Borders\";");
+        source.Should().Contain("_bordersMenuItem.Menu = CreateNativeBorderPresetMenu();");
+        source.Should().Contain("formatMenu.Items.Add(_bordersMenuItem);");
+        source.Should().Contain("_bordersButton.IsEnabled = isIdle;");
+        source.Should().Contain("_bordersMenuItem.IsEnabled = _bordersButton.IsEnabled;");
+        source.Should().Contain("_bordersButton,");
+        source.Should().Contain("private MenuFlyout CreateBorderPresetFlyout()");
+        source.Should().Contain(".GetValues<CellBorderPreset>()");
+        source.Should().Contain(".Select(CreateBorderPresetMenuItem)");
+        source.Should().Contain("private MenuItem CreateBorderPresetMenuItem(CellBorderPreset preset)");
+        source.Should().Contain("CellBorderPresetPlanner.GetDisplayName(preset)");
+        source.Should().Contain("AutomationProperties.SetAutomationId(menuItem, $\"HomeBorders{preset}MenuItem\");");
+        source.Should().Contain("private NativeMenu CreateNativeBorderPresetMenu()");
+        source.Should().Contain("menu.Items.Add(CreateNativeBorderPresetMenuItem(preset));");
+        source.Should().Contain("private NativeMenuItem CreateNativeBorderPresetMenuItem(CellBorderPreset preset)");
+        source.Should().Contain("ApplySelectedRangeBorderPreset(preset);");
+        source.Should().Contain("private void ApplySelectedRangeBorderPreset(CellBorderPreset preset)");
+        source.Should().Contain("var result = _session.SetSelectedRangeBorderPreset(preset);");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Borders failed.\");");
+        source.Should().Contain("RefreshShell($\"Applied {presetName} to {rangeReference}\");");
+        source.Should().Contain("var nativeBordersPresetCount = _bordersMenuItem.Menu?");
+        source.Should().Contain("HasBordersButton: _bordersButton.Content?.ToString() == \"Borders\"");
+        source.Should().Contain("HasNativeBordersMenuItem: HasNativeMenuItem(_bordersMenuItem, \"Borders\", requireGesture: false)");
+        source.Should().Contain("NativeBordersPresetCount: nativeBordersPresetCount");
+
+        smokeSource.Should().Contain("bool HasBordersButton,");
+        smokeSource.Should().Contain("bool HasNativeBordersMenuItem,");
+        smokeSource.Should().Contain("int NativeBordersPresetCount,");
+        smokeSource.Should().Contain("HasBordersButton &&");
+        smokeSource.Should().Contain("HasNativeBordersMenuItem &&");
+        smokeSource.Should().Contain("NativeBordersPresetCount == Enum.GetValues<CellBorderPreset>().Length");
+        smokeSource.Should().Contain("toolbar_borders_button={FormatBool(snapshot.HasBordersButton)}");
+        smokeSource.Should().Contain("native_borders_menu_item={FormatBool(snapshot.HasNativeBordersMenuItem)}");
+        smokeSource.Should().Contain("native_borders_preset_count={snapshot.NativeBordersPresetCount}");
     }
 
     [Fact]

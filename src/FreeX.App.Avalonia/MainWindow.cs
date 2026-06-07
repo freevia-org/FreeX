@@ -131,6 +131,7 @@ public sealed class MainWindow : Window
     private readonly Button _decreaseFontSizeButton = new();
     private readonly DropDownButton _fillColorButton = new();
     private readonly DropDownButton _fontColorButton = new();
+    private readonly DropDownButton _bordersButton = new();
     private readonly DropDownButton _cellStylesButton = new();
     private readonly DropDownButton _orientationButton = new();
     private readonly Button _currencyFormatButton = new();
@@ -182,6 +183,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _fillColorMenuItem = new();
     private readonly NativeMenuItem _clearFillMenuItem = new();
     private readonly NativeMenuItem _fontColorMenuItem = new();
+    private readonly NativeMenuItem _bordersMenuItem = new();
     private readonly NativeMenuItem _cellStylesMenuItem = new();
     private readonly NativeMenuItem _horizontalTextMenuItem = new();
     private readonly NativeMenuItem _angleCounterclockwiseMenuItem = new();
@@ -487,6 +489,9 @@ public sealed class MainWindow : Window
         _fontColorMenuItem.Header = "Font Color";
         _fontColorMenuItem.Menu = CreateNativeColorPaletteMenu(ColorPaletteTarget.Font, includeClearFill: false);
 
+        _bordersMenuItem.Header = "Borders";
+        _bordersMenuItem.Menu = CreateNativeBorderPresetMenu();
+
         _cellStylesMenuItem.Header = "Cell Styles";
         _cellStylesMenuItem.Menu = CreateNativeCellStylesMenu();
 
@@ -650,6 +655,7 @@ public sealed class MainWindow : Window
         formatMenu.Items.Add(_fillColorMenuItem);
         formatMenu.Items.Add(_clearFillMenuItem);
         formatMenu.Items.Add(_fontColorMenuItem);
+        formatMenu.Items.Add(_bordersMenuItem);
         formatMenu.Items.Add(_cellStylesMenuItem);
         formatMenu.Items.Add(new NativeMenuItemSeparator());
         formatMenu.Items.Add(_horizontalTextMenuItem);
@@ -921,6 +927,14 @@ public sealed class MainWindow : Window
         _fontColorButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _fontColorButton.Flyout = CreateColorPaletteFlyout(ColorPaletteTarget.Font, includeClearFill: false);
 
+        _bordersButton.Content = "Borders";
+        _bordersButton.Padding = new Thickness(10, 4);
+        _bordersButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _bordersButton.Flyout = CreateBorderPresetFlyout();
+        AutomationProperties.SetAutomationId(_bordersButton, "HomeBordersButton");
+        AutomationProperties.SetName(_bordersButton, "Borders");
+        AutomationProperties.SetHelpText(_bordersButton, "Apply or change borders on the selected cells.");
+
         _cellStylesButton.Content = "Styles";
         _cellStylesButton.Padding = new Thickness(10, 4);
         _cellStylesButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -1048,6 +1062,7 @@ public sealed class MainWindow : Window
                     _decreaseFontSizeButton,
                     _fillColorButton,
                     _fontColorButton,
+                    _bordersButton,
                     _cellStylesButton,
                     _orientationButton,
                     _currencyFormatButton,
@@ -1175,6 +1190,7 @@ public sealed class MainWindow : Window
         _decreaseFontSizeButton.IsEnabled = isIdle;
         _fillColorButton.IsEnabled = isIdle;
         _fontColorButton.IsEnabled = isIdle;
+        _bordersButton.IsEnabled = isIdle;
         _cellStylesButton.IsEnabled = isIdle;
         _orientationButton.IsEnabled = isIdle;
         _currencyFormatButton.IsEnabled = isIdle;
@@ -1232,6 +1248,7 @@ public sealed class MainWindow : Window
         _fillColorMenuItem.IsEnabled = _fillColorButton.IsEnabled;
         _clearFillMenuItem.IsEnabled = _fillColorButton.IsEnabled;
         _fontColorMenuItem.IsEnabled = _fontColorButton.IsEnabled;
+        _bordersMenuItem.IsEnabled = _bordersButton.IsEnabled;
         _cellStylesMenuItem.IsEnabled = _cellStylesButton.IsEnabled;
         _horizontalTextMenuItem.IsEnabled = isIdle;
         _angleCounterclockwiseMenuItem.IsEnabled = isIdle;
@@ -2555,6 +2572,44 @@ public sealed class MainWindow : Window
     {
         var menuItem = new MenuItem { Header = CellStyleDiffPlanner.GetCellStylePresetDisplayName(preset) };
         menuItem.Click += (_, _) => ApplySelectedRangeCellStylePreset(preset);
+        return menuItem;
+    }
+
+    private MenuFlyout CreateBorderPresetFlyout() =>
+        new()
+        {
+            ItemsSource = Enum
+                .GetValues<CellBorderPreset>()
+                .Select(CreateBorderPresetMenuItem)
+                .ToArray(),
+        };
+
+    private MenuItem CreateBorderPresetMenuItem(CellBorderPreset preset)
+    {
+        var displayName = CellBorderPresetPlanner.GetDisplayName(preset);
+        var menuItem = new MenuItem { Header = displayName };
+        AutomationProperties.SetAutomationId(menuItem, $"HomeBorders{preset}MenuItem");
+        AutomationProperties.SetName(menuItem, displayName);
+        menuItem.Click += (_, _) => ApplySelectedRangeBorderPreset(preset);
+        return menuItem;
+    }
+
+    private NativeMenu CreateNativeBorderPresetMenu()
+    {
+        var menu = new NativeMenu();
+        foreach (var preset in Enum.GetValues<CellBorderPreset>())
+            menu.Items.Add(CreateNativeBorderPresetMenuItem(preset));
+
+        return menu;
+    }
+
+    private NativeMenuItem CreateNativeBorderPresetMenuItem(CellBorderPreset preset)
+    {
+        var menuItem = new NativeMenuItem
+        {
+            Header = CellBorderPresetPlanner.GetDisplayName(preset),
+        };
+        menuItem.Click += (_, _) => ApplySelectedRangeBorderPreset(preset);
         return menuItem;
     }
 
@@ -4357,6 +4412,27 @@ public sealed class MainWindow : Window
         RefreshShell($"Applied {presetName} style to {rangeReference}");
     }
 
+    private void ApplySelectedRangeBorderPreset(CellBorderPreset preset)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var presetName = CellBorderPresetPlanner.GetDisplayName(preset);
+        var result = _session.SetSelectedRangeBorderPreset(preset);
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "Borders failed.");
+            return;
+        }
+
+        RefreshShell($"Applied {presetName} to {rangeReference}");
+    }
+
     private void ApplySelectedRangeCurrencyFormat()
     {
         ApplySelectedRangeNumberFormat(CurrencyNumberFormat, "Applied currency format to", "Currency format failed.");
@@ -4612,6 +4688,10 @@ public sealed class MainWindow : Window
         var nativeOpenRecentItemCount = CountNativeOpenRecentItems(_openRecentMenuItem.Menu);
         var nativeFillColorSwatchCount = CountNativeColorPaletteSwatches(_fillColorMenuItem.Menu);
         var nativeFontColorSwatchCount = CountNativeColorPaletteSwatches(_fontColorMenuItem.Menu);
+        var nativeBordersPresetCount = _bordersMenuItem.Menu?
+            .Items
+            .OfType<NativeMenuItem>()
+            .Count(item => item.Header is not null) ?? 0;
         var nativeTabColorSwatchCount = CountNativeColorPaletteSwatches(_tabColorMenuItem.Menu);
         var externalImageClipboardPictures = _session.ActiveSheet.Pictures
             .Where(static picture =>
@@ -4633,6 +4713,9 @@ public sealed class MainWindow : Window
             OpenedSourcePath: _session.CurrentFilePath,
             IsOpening: _isOpening,
             HasNewSheetButton: _newSheetButton.Content?.ToString() == "+",
+            HasBordersButton: _bordersButton.Content?.ToString() == "Borders" &&
+                string.Equals(AutomationProperties.GetAutomationId(_bordersButton), "HomeBordersButton", StringComparison.Ordinal) &&
+                string.Equals(AutomationProperties.GetHelpText(_bordersButton), "Apply or change borders on the selected cells.", StringComparison.Ordinal),
             HasFocusableSheetTab: HasSheetTabButton(button => button.Focusable),
             HasFocusableActiveSheetTab: FindSheetTabButton(_session.ActiveSheet.Id)?.Focusable == true,
             HasShellFocusCycleTargets: _sheetGridHost.Focusable &&
@@ -4707,6 +4790,8 @@ public sealed class MainWindow : Window
             HasNativeFontColorMenuItem: HasNativeMenuItem(_fontColorMenuItem, "Font Color", requireGesture: false),
             NativeFillColorSwatchCount: nativeFillColorSwatchCount,
             NativeFontColorSwatchCount: nativeFontColorSwatchCount,
+            HasNativeBordersMenuItem: HasNativeMenuItem(_bordersMenuItem, "Borders", requireGesture: false),
+            NativeBordersPresetCount: nativeBordersPresetCount,
             HasNativeCellStylesMenuItem: HasNativeMenuItem(_cellStylesMenuItem, "Cell Styles", requireGesture: false),
             NativeCellStylesPresetCount: nativeCellStylesPresetCount,
             HasNativeHorizontalTextMenuItem: HasNativeMenuItem(_horizontalTextMenuItem, "Horizontal", requireGesture: false),
@@ -5147,6 +5232,7 @@ public sealed class MainWindow : Window
         _decreaseFontSizeButton,
         _fillColorButton,
         _fontColorButton,
+        _bordersButton,
         _cellStylesButton,
         _orientationButton,
         _currencyFormatButton,
