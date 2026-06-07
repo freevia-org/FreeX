@@ -517,10 +517,7 @@ internal static class XlsxDataValidationNativeMetadataMapper
     {
         var changed = false;
         if (source.NativeContainerAttributes is { Count: > 0 } attributes)
-        {
-            foreach (var (name, value) in attributes)
-                changed |= TrySetNativeAttributeIfMissing(dataValidations, name, value);
-        }
+            changed |= ApplyNativeAttributesIfMissing(dataValidations, attributes);
 
         if (source.NativeContainerChildXmls is { Count: > 0 } childXmls)
         {
@@ -544,10 +541,7 @@ internal static class XlsxDataValidationNativeMetadataMapper
     {
         var changed = false;
         if (source.NativeAttributes is { Count: > 0 } attributes)
-        {
-            foreach (var (name, value) in attributes)
-                changed |= TrySetNativeAttributeIfMissing(validationElement, name, value);
-        }
+            changed |= ApplyNativeAttributesIfMissing(validationElement, attributes);
 
         if (source.NativeChildXmls is { Count: > 0 } childXmls)
         {
@@ -583,6 +577,19 @@ internal static class XlsxDataValidationNativeMetadataMapper
             // Ignore malformed native data-validation payloads from older saves.
             return false;
         }
+    }
+
+    private static bool ApplyNativeAttributesIfMissing(
+        XElement element,
+        IReadOnlyDictionary<string, string> attributes)
+    {
+        var changed = false;
+        foreach (var (name, value) in attributes)
+        {
+            changed |= TrySetNativeAttributeIfMissing(element, name, value);
+        }
+
+        return changed;
     }
 
     private static bool TrySetNativeAttributeIfMissing(XElement element, string name, string value)
