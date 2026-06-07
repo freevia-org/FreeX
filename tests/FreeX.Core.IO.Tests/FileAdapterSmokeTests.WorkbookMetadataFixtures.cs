@@ -138,7 +138,9 @@ public partial class FileAdapterSmokeTests
             var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
             workbookXml.Root!.Add(new XElement(
                 workbookNs + "oleSize",
-                new XAttribute("ref", "A1:D12")));
+                new XAttribute("ref", " a1:d12 "),
+                new XAttribute("customOleSizeFlag", "removed"),
+                new XElement(workbookNs + "nativeOleSizeChild")));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
