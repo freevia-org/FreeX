@@ -11,6 +11,9 @@ internal static class XlsxPackageMetadataMerger
     private const string PackageRelationshipType = SpreadsheetRelationshipPrefix + "package";
     private const string PivotCacheDefinitionRelationshipType = SpreadsheetRelationshipPrefix + "pivotCacheDefinition";
     private const string PivotCacheRecordsRelationshipType = SpreadsheetRelationshipPrefix + "pivotCacheRecords";
+    private const string CustomXmlRelationshipType = SpreadsheetRelationshipPrefix + "customXml";
+    private const string CustomXmlPropertiesRelationshipType = SpreadsheetRelationshipPrefix + "customXmlProps";
+    private const string CustomXmlPropertiesContentType = "application/vnd.openxmlformats-officedocument.customXmlProperties+xml";
     private const string ChartExStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartStyle";
     private const string ChartExColorStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartColorStyle";
     private const string SlicerRelationshipType = "http://schemas.microsoft.com/office/2007/relationships/slicer";
@@ -246,20 +249,39 @@ internal static class XlsxPackageMetadataMerger
     public static void NormalizeCustomXmlPackageGraph(ZipArchive archive)
     {
         var targetIndex = ArchiveEntryIndex.Create(archive);
-        var invalidPropertiesParts = targetIndex.EntryNames()
-            .Where(IsCustomXmlPropertiesPart)
+        var removedPartNames = targetIndex.EntryNames()
+            .Where(entryName => IsCustomXmlItemPart(entryName) || IsCustomXmlPropertiesPart(entryName))
             .Where(entryName =>
                 targetIndex.Get(entryName) is { } entry &&
                 IsInvalidCustomXmlSidecar(entryName, entry))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (invalidPropertiesParts.Count == 0)
-            return;
 
-        foreach (var entryName in invalidPropertiesParts)
+        foreach (var entryName in removedPartNames)
             targetIndex.Delete(entryName);
 
-        RemoveContentTypeOverrides(targetIndex, invalidPropertiesParts);
-        RemoveRelationshipsTargetingParts(targetIndex, invalidPropertiesParts);
+        RemoveOrphanCustomXmlItemRelationshipParts(targetIndex);
+        RemoveDanglingCustomXmlPackageRelationships(targetIndex);
+
+        var referencedPropertiesParts = NormalizeCustomXmlItemPropertyRelationships(targetIndex);
+        var orphanPropertiesParts = targetIndex.EntryNames()
+            .Where(IsCustomXmlPropertiesPart)
+            .Where(entryName => !referencedPropertiesParts.Contains(entryName))
+            .ToList();
+        foreach (var entryName in orphanPropertiesParts)
+        {
+            targetIndex.Delete(entryName);
+            removedPartNames.Add(entryName);
+        }
+
+        if (removedPartNames.Count != 0)
+        {
+            RemoveContentTypeOverrides(targetIndex, removedPartNames);
+            RemoveRelationshipsTargetingParts(targetIndex, removedPartNames);
+            RemoveOrphanCustomXmlItemRelationshipParts(targetIndex);
+            RemoveDanglingCustomXmlPackageRelationships(targetIndex);
+        }
+
+        EnsureCustomXmlPropertiesContentTypeOverrides(targetIndex, referencedPropertiesParts);
     }
 
     private static XDocument? CreateFilteredRelationshipPart(
@@ -365,6 +387,11 @@ internal static class XlsxPackageMetadataMerger
         entryName.StartsWith("customXml/itemProps", StringComparison.OrdinalIgnoreCase) &&
         entryName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
 
+    private static bool IsCustomXmlItemRelationshipPart(string entryName) =>
+        entryName.StartsWith("customXml/_rels/", StringComparison.OrdinalIgnoreCase) &&
+        entryName.EndsWith(".xml.rels", StringComparison.OrdinalIgnoreCase) &&
+        IsCustomXmlItemPart(RelationshipPartToSourcePart(entryName));
+
     private static bool IsValidCustomXmlProperties(XDocument xml)
     {
         XNamespace customXmlNs = "http://schemas.openxmlformats.org/officeDocument/2006/customXml";
@@ -373,6 +400,246 @@ internal static class XlsxPackageMetadataMerger
                      root?.Attribute("itemID")?.Value;
         return root?.Name == customXmlNs + "datastoreItem" &&
                !string.IsNullOrWhiteSpace(itemId);
+    }
+
+    private static void RemoveOrphanCustomXmlItemRelationshipParts(ArchiveEntryIndex targetIndex)
+    {
+        foreach (var relationshipPartPath in targetIndex.EntryNames()
+                     .Where(IsCustomXmlItemRelationshipPart)
+                     .ToList())
+        {
+            if (!targetIndex.Contains(RelationshipPartToSourcePart(relationshipPartPath)))
+                targetIndex.Delete(relationshipPartPath);
+        }
+    }
+
+    private static void RemoveDanglingCustomXmlPackageRelationships(ArchiveEntryIndex targetIndex)
+    {
+        var rootRelationshipsEntry = targetIndex.Get("_rels/.rels");
+        if (rootRelationshipsEntry is null)
+            return;
+
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationshipsXml = XlsxPackageXmlEditor.LoadXml(rootRelationshipsEntry);
+        var root = relationshipsXml.Root;
+        if (root is null)
+            return;
+
+        var existingIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var customXmlTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var changed = false;
+        foreach (var relationship in root.Elements(relationshipNs + "Relationship").ToList())
+        {
+            var id = relationship.Attribute("Id")?.Value;
+            if (!string.Equals(NormalizeRelationshipType(relationship), CustomXmlRelationshipType, StringComparison.OrdinalIgnoreCase))
+            {
+                if (!string.IsNullOrWhiteSpace(id))
+                    existingIds.Add(id);
+                continue;
+            }
+
+            if (IsExternalRelationship(relationship))
+            {
+                relationship.Remove();
+                changed = true;
+                continue;
+            }
+
+            var targetPart = XlsxPackagePath.ResolveRelationshipTarget("", NormalizeRelationshipTarget(relationship));
+            if (!IsCustomXmlItemPart(targetPart) ||
+                !targetIndex.Contains(targetPart) ||
+                !customXmlTargets.Add(targetPart))
+            {
+                relationship.Remove();
+                changed = true;
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(id) || !existingIds.Add(id))
+            {
+                relationship.SetAttributeValue("Id", XlsxPackageXmlEditor.NextRelationshipId(relationshipsXml, relationshipNs));
+                existingIds.Add(relationship.Attribute("Id")!.Value);
+                changed = true;
+            }
+        }
+
+        if (changed)
+            WriteXml(targetIndex, "_rels/.rels", relationshipsXml, rootRelationshipsEntry.LastWriteTime, SaveOptions.DisableFormatting);
+    }
+
+    private static HashSet<string> NormalizeCustomXmlItemPropertyRelationships(ArchiveEntryIndex targetIndex)
+    {
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var referencedPropertiesParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var itemPart in targetIndex.EntryNames()
+                     .Where(IsCustomXmlItemPart)
+                     .ToList())
+        {
+            var relationshipPartPath = XlsxPackagePath.GetRelationshipPartPath(itemPart);
+            var relationshipEntry = targetIndex.Get(relationshipPartPath);
+            XDocument relationshipXml;
+            if (relationshipEntry is null)
+            {
+                relationshipXml = new XDocument(new XElement(relationshipNs + "Relationships"));
+            }
+            else
+            {
+                try
+                {
+                    relationshipXml = XlsxPackageXmlEditor.LoadXml(relationshipEntry);
+                }
+                catch
+                {
+                    relationshipXml = new XDocument(new XElement(relationshipNs + "Relationships"));
+                }
+            }
+
+            var root = relationshipXml.Root;
+            if (root is null)
+            {
+                targetIndex.Delete(relationshipPartPath);
+                continue;
+            }
+
+            var customXmlPropertiesRelationships = root
+                .Elements(relationshipNs + "Relationship")
+                .Where(relationship => string.Equals(
+                    NormalizeRelationshipType(relationship),
+                    CustomXmlPropertiesRelationshipType,
+                    StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            var pairedPropertiesPart = GetPairedCustomXmlPropertiesPart(itemPart);
+            var selectedPropertiesPart = "";
+            var selectedRelationship = customXmlPropertiesRelationships.FirstOrDefault(relationship =>
+                !IsExternalRelationship(relationship) &&
+                IsCustomXmlPropertiesPart(ResolveRelationshipTarget(itemPart, relationship)) &&
+                targetIndex.Contains(ResolveRelationshipTarget(itemPart, relationship)));
+
+            if (!string.IsNullOrWhiteSpace(pairedPropertiesPart) && targetIndex.Contains(pairedPropertiesPart))
+            {
+                selectedPropertiesPart = pairedPropertiesPart;
+                selectedRelationship = customXmlPropertiesRelationships.FirstOrDefault(relationship =>
+                    string.Equals(
+                        ResolveRelationshipTarget(itemPart, relationship),
+                        pairedPropertiesPart,
+                        StringComparison.OrdinalIgnoreCase)) ?? selectedRelationship;
+            }
+            else if (selectedRelationship is not null)
+            {
+                selectedPropertiesPart = ResolveRelationshipTarget(itemPart, selectedRelationship);
+            }
+
+            if (string.IsNullOrWhiteSpace(selectedPropertiesPart))
+            {
+                targetIndex.Delete(relationshipPartPath);
+                continue;
+            }
+
+            var selectedId = selectedRelationship?.Attribute("Id")?.Value;
+            var normalizedRelationship = new XElement(
+                relationshipNs + "Relationship",
+                new XAttribute("Id", string.IsNullOrWhiteSpace(selectedId) ? "rIdFreeXItemProps" : selectedId),
+                new XAttribute("Type", CustomXmlPropertiesRelationshipType),
+                new XAttribute("Target", GetCustomXmlPropertiesRelationshipTarget(selectedPropertiesPart)));
+
+            root.RemoveNodes();
+            root.Add(normalizedRelationship);
+            referencedPropertiesParts.Add(selectedPropertiesPart);
+
+            var lastWriteTime = relationshipEntry?.LastWriteTime ?? DateTimeOffset.Now;
+            WriteXml(targetIndex, relationshipPartPath, relationshipXml, lastWriteTime, SaveOptions.DisableFormatting);
+        }
+
+        return referencedPropertiesParts;
+    }
+
+    private static string ResolveRelationshipTarget(string sourcePart, XElement relationship)
+    {
+        var target = NormalizeRelationshipTarget(relationship);
+        return string.IsNullOrWhiteSpace(target)
+            ? ""
+            : XlsxPackagePath.ResolveRelationshipTarget(sourcePart, target);
+    }
+
+    private static string GetPairedCustomXmlPropertiesPart(string itemPart)
+    {
+        const string itemPrefix = "customXml/item";
+        const string itemSuffix = ".xml";
+        if (!IsCustomXmlItemPart(itemPart) ||
+            itemPart.Length <= itemPrefix.Length + itemSuffix.Length)
+        {
+            return "";
+        }
+
+        var itemNumber = itemPart[itemPrefix.Length..^itemSuffix.Length];
+        return string.IsNullOrWhiteSpace(itemNumber)
+            ? ""
+            : $"customXml/itemProps{itemNumber}.xml";
+    }
+
+    private static string GetCustomXmlPropertiesRelationshipTarget(string propertiesPart)
+    {
+        var slash = propertiesPart.LastIndexOf('/');
+        return slash >= 0 ? propertiesPart[(slash + 1)..] : propertiesPart;
+    }
+
+    private static void EnsureCustomXmlPropertiesContentTypeOverrides(
+        ArchiveEntryIndex targetIndex,
+        IReadOnlySet<string> propertiesParts)
+    {
+        if (propertiesParts.Count == 0)
+            return;
+
+        var contentTypesEntry = targetIndex.Get("[Content_Types].xml");
+        if (contentTypesEntry is null)
+            return;
+
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        var contentTypesXml = XlsxPackageXmlEditor.LoadXml(contentTypesEntry);
+        var root = contentTypesXml.Root;
+        if (root is null)
+            return;
+
+        var changed = false;
+        var existingOverrides = new Dictionary<string, XElement>(StringComparer.OrdinalIgnoreCase);
+        foreach (var element in root.Elements(contentTypeNs + "Override").ToList())
+        {
+            if (!TryNormalizeContentTypePartName(element.Attribute("PartName")?.Value, out var partName) ||
+                !propertiesParts.Contains(partName))
+            {
+                continue;
+            }
+
+            if (existingOverrides.TryAdd(partName, element))
+                continue;
+
+            element.Remove();
+            changed = true;
+        }
+
+        foreach (var propertiesPart in propertiesParts)
+        {
+            if (existingOverrides.TryGetValue(propertiesPart, out var existingOverride))
+            {
+                if (!string.Equals(existingOverride.Attribute("ContentType")?.Value, CustomXmlPropertiesContentType, StringComparison.OrdinalIgnoreCase))
+                {
+                    existingOverride.SetAttributeValue("ContentType", CustomXmlPropertiesContentType);
+                    changed = true;
+                }
+
+                continue;
+            }
+
+            root.Add(new XElement(
+                contentTypeNs + "Override",
+                new XAttribute("PartName", $"/{propertiesPart}"),
+                new XAttribute("ContentType", CustomXmlPropertiesContentType)));
+            changed = true;
+        }
+
+        if (changed)
+            WriteXml(targetIndex, "[Content_Types].xml", contentTypesXml, contentTypesEntry.LastWriteTime, SaveOptions.DisableFormatting);
     }
 
     private static void RemoveContentTypeOverrides(
@@ -708,7 +975,7 @@ internal static class XlsxPackageMetadataMerger
             return IsCustomXmlItemPart(targetPart) &&
                    string.Equals(
                        relationshipType,
-                       SpreadsheetRelationshipPrefix + "customXml",
+                       CustomXmlRelationshipType,
                        StringComparison.OrdinalIgnoreCase);
         }
 
@@ -716,7 +983,7 @@ internal static class XlsxPackageMetadataMerger
                IsCustomXmlPropertiesPart(targetPart) &&
                string.Equals(
                    relationshipType,
-                   SpreadsheetRelationshipPrefix + "customXmlProps",
+                   CustomXmlPropertiesRelationshipType,
                    StringComparison.OrdinalIgnoreCase);
     }
 
