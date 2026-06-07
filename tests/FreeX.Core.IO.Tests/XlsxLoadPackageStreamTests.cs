@@ -1104,8 +1104,7 @@ public sealed class XlsxLoadPackageStreamTests
     {
         package.Position = 0;
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        using var worksheetStream = archive.GetEntry(worksheetPath)!.Open();
-        var worksheet = XDocument.Load(worksheetStream);
+        var worksheet = XlsxPackageTestFixtures.LoadPackageXml(archive, worksheetPath, worksheetPath);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var references = worksheet.Descendants(worksheetNs + "c")
             .Select(cell => cell.Attribute("r")!.Value)
