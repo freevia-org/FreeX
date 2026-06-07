@@ -49,17 +49,7 @@ internal static class XlsxWorksheetPrintOptionsMetadataWriter
                 printOptions.Elements().Remove();
                 foreach (var childXml in poChildren)
                 {
-                    if (string.IsNullOrWhiteSpace(childXml))
-                        continue;
-
-                    try
-                    {
-                        printOptions.Add(XElement.Parse(childXml));
-                    }
-                    catch
-                    {
-                        // Skip malformed native payloads in authored native JSON files.
-                    }
+                    XlsxWorksheetNativeMetadataHelpers.TryAddNativeChildElement(printOptions, childXml);
                 }
             }
 

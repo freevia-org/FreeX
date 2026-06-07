@@ -50,6 +50,29 @@ internal static class XlsxWorksheetNativeMetadataHelpers
         }
     }
 
+    public static bool TryAddNativeChildElement(
+        XElement target,
+        string? childXml,
+        IReadOnlyCollection<string>? excludedLocalNames = null)
+    {
+        if (string.IsNullOrWhiteSpace(childXml))
+            return false;
+
+        try
+        {
+            var child = XElement.Parse(childXml);
+            if (excludedLocalNames?.Contains(child.Name.LocalName) == true)
+                return false;
+
+            target.Add(child);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public static string? ToBoolAttribute(bool? value) =>
         value is { } boolValue ? boolValue ? "1" : "0" : null;
 

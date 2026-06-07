@@ -46,19 +46,10 @@ internal static class XlsxWorksheetHeaderFooterMetadataWriter
 
             foreach (var childXml in hhChildren)
             {
-                if (string.IsNullOrWhiteSpace(childXml))
-                    continue;
-
-                try
-                {
-                    var child = XElement.Parse(childXml);
-                    if (!IsModeledHeaderFooterElement(child.Name.LocalName))
-                        headerFooter.Add(child);
-                }
-                catch
-                {
-                    // Skip malformed native payloads in authored native JSON files.
-                }
+                XlsxWorksheetNativeMetadataHelpers.TryAddNativeChildElement(
+                    headerFooter,
+                    childXml,
+                    ["oddHeader", "oddFooter", "evenHeader", "evenFooter", "firstHeader", "firstFooter"]);
             }
 
             XlsxWorksheetPageLayoutNormalizer.NormalizeHeaderFooter(headerFooter);
@@ -68,8 +59,5 @@ internal static class XlsxWorksheetHeaderFooterMetadataWriter
 
     private static bool IsModeledHeaderFooterAttribute(string name) =>
         name is "differentOddEven" or "differentFirst" or "scaleWithDoc" or "alignWithMargins";
-
-    private static bool IsModeledHeaderFooterElement(string name) =>
-        name is "oddHeader" or "oddFooter" or "evenHeader" or "evenFooter" or "firstHeader" or "firstFooter";
 
 }

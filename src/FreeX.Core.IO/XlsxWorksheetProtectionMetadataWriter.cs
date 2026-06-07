@@ -70,17 +70,7 @@ internal static class XlsxWorksheetProtectionMetadataWriter
                 protection.Elements().Remove();
                 foreach (var childXml in protChildren)
                 {
-                    if (string.IsNullOrWhiteSpace(childXml))
-                        continue;
-
-                    try
-                    {
-                        protection.Add(XElement.Parse(childXml));
-                    }
-                    catch
-                    {
-                        // Skip malformed native payloads in authored native JSON files.
-                    }
+                    XlsxWorksheetNativeMetadataHelpers.TryAddNativeChildElement(protection, childXml);
                 }
             }
 
