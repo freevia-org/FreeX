@@ -7822,7 +7822,8 @@ internal static class ExcelOpenSmoke
         string autoFilterDescription,
         WorksheetAutoFilterColumnReference filterColumnReference,
         HashSet<int> seenFilterColumns,
-        List<string> issues)
+        List<string> issues,
+        bool allowExtensionList = true)
     {
         var filterColumn = filterColumnReference.Element;
         var description = $"{autoFilterDescription} filterColumn #{filterColumnReference.Ordinal}";
@@ -7845,12 +7846,14 @@ internal static class ExcelOpenSmoke
         AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "showButton", filterColumn.Attribute("showButton")?.Value, issues);
         AddWorksheetAutoFilterColumnChildOrderingIssues(worksheetPart, description, filterColumn, issues);
 
-        foreach (var unexpectedFilterChild in filterColumn.Elements().Where(element => !IsKnownWorksheetAutoFilterColumnChild(element)))
+        foreach (var unexpectedFilterChild in filterColumn.Elements().Where(element =>
+                     !IsKnownWorksheetAutoFilterColumnChild(element) ||
+                     (!allowExtensionList && element.Name == SpreadsheetNs + "extLst")))
         {
             issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedFilterChild.Name.LocalName}");
         }
 
-        AddWorksheetAutoFilterColumnChildCountIssues(worksheetPart, description, filterColumn, issues);
+        AddWorksheetAutoFilterColumnChildCountIssues(worksheetPart, description, filterColumn, issues, allowExtensionList);
 
         foreach (var filters in filterColumn.Elements(SpreadsheetNs + "filters").Select((element, index) => (Ordinal: index + 1, Element: element)))
         {
@@ -7882,13 +7885,16 @@ internal static class ExcelOpenSmoke
             AddWorksheetAutoFilterIconFilterIssues(worksheetPart, description, iconFilter.Ordinal, iconFilter.Element, issues);
         }
 
-        var extensionLists = filterColumn.Elements(SpreadsheetNs + "extLst").ToArray();
-        if (extensionLists.Length > 1)
-            issues.Add($"{worksheetPart} {description} has {extensionLists.Length} extLst elements; expected at most one");
-
-        foreach (var extensionList in extensionLists.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        if (allowExtensionList)
         {
-            AddWorksheetNestedExtensionListIssues(worksheetPart, description, extensionList.Ordinal, extensionList.Element, issues);
+            var extensionLists = filterColumn.Elements(SpreadsheetNs + "extLst").ToArray();
+            if (extensionLists.Length > 1)
+                issues.Add($"{worksheetPart} {description} has {extensionLists.Length} extLst elements; expected at most one");
+
+            foreach (var extensionList in extensionLists.Select((element, index) => (Ordinal: index + 1, Element: element)))
+            {
+                AddWorksheetNestedExtensionListIssues(worksheetPart, description, extensionList.Ordinal, extensionList.Element, issues);
+            }
         }
     }
 
@@ -7896,9 +7902,11 @@ internal static class ExcelOpenSmoke
         string worksheetPart,
         string filterColumnDescription,
         XElement filterColumn,
-        List<string> issues)
+        List<string> issues,
+        bool allowExtensionList = true)
     {
-        string[] childNames =
+        string[] childNames = allowExtensionList
+            ?
         [
             "filters",
             "top10",
@@ -7907,6 +7915,15 @@ internal static class ExcelOpenSmoke
             "colorFilter",
             "iconFilter",
             "extLst"
+        ]
+            :
+        [
+            "filters",
+            "top10",
+            "customFilters",
+            "dynamicFilter",
+            "colorFilter",
+            "iconFilter"
         ];
 
         foreach (var childName in childNames)
@@ -13063,19 +13080,9 @@ internal static class ExcelOpenSmoke
         AddWorksheetTableColumnsChildOrderingIssues(tablePart, description, tableColumns, issues);
 
         foreach (var unexpectedChild in tableColumns.Elements().Where(child =>
-                     child.Name != SpreadsheetNs + "tableColumn" &&
-                     child.Name != SpreadsheetNs + "extLst"))
+                     child.Name != SpreadsheetNs + "tableColumn"))
         {
             issues.Add($"{tablePart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
-        }
-
-        var extensionLists = tableColumns.Elements(SpreadsheetNs + "extLst").ToArray();
-        if (extensionLists.Length > 1)
-            issues.Add($"{tablePart} {description} has {extensionLists.Length} extLst elements; expected at most one");
-
-        foreach (var extensionList in extensionLists.Select((element, index) => (Ordinal: index + 1, Element: element)))
-        {
-            AddWorksheetNestedExtensionListIssues(tablePart, description, extensionList.Ordinal, extensionList.Element, issues);
         }
 
         var seenColumnIds = new HashSet<int>();
@@ -13109,7 +13116,7 @@ internal static class ExcelOpenSmoke
         var seenFilterColumns = new HashSet<int>();
         foreach (var filterColumn in autoFilter.Elements(SpreadsheetNs + "filterColumn").Select((element, index) => new WorksheetAutoFilterColumnReference(index + 1, element)))
         {
-            AddWorksheetAutoFilterColumnIssues(tablePart, description, filterColumn, seenFilterColumns, issues);
+            AddWorksheetAutoFilterColumnIssues(tablePart, description, filterColumn, seenFilterColumns, issues, allowExtensionList: false);
         }
 
         var nestedSortStates = autoFilter.Elements(SpreadsheetNs + "sortState").ToArray();

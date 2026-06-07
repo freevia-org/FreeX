@@ -71,6 +71,14 @@ internal static class XlsxStructuredTableSchemaNormalizer
         foreach (var attributeName in TableBooleanAttributes)
             changed |= NormalizeAttribute(table, attributeName, NormalizeBoolean);
 
+        var autoFilter = table.Element(WorksheetNs + "autoFilter");
+        if (autoFilter is not null)
+            changed |= NormalizeAutoFilterExtensionLists(autoFilter);
+
+        var sortState = table.Element(WorksheetNs + "sortState");
+        if (sortState is not null)
+            changed |= NormalizeSortStateExtensionLists(sortState);
+
         var tableColumns = table.Element(WorksheetNs + "tableColumns");
         if (tableColumns is not null)
             changed |= NormalizeTableColumnsElement(tableColumns);
@@ -79,6 +87,8 @@ internal static class XlsxStructuredTableSchemaNormalizer
         if (tableStyleInfo is not null)
             changed |= NormalizeTableStyleInfoElement(tableStyleInfo);
 
+        changed |= NormalizeExtensionLists(table);
+        changed |= NormalizeChildOrder(table, TableChildOrder);
         return changed;
     }
 
@@ -94,6 +104,8 @@ internal static class XlsxStructuredTableSchemaNormalizer
         for (var index = 0; index < columns.Length; index++)
             changed |= NormalizeTableColumnElement(columns[index], index + 1);
 
+        changed |= RemoveExtensionLists(tableColumns);
+        changed |= NormalizeChildOrder(tableColumns, TableColumnsChildOrder);
         return changed;
     }
 
@@ -114,6 +126,8 @@ internal static class XlsxStructuredTableSchemaNormalizer
         foreach (var formula in tableColumn.Elements(WorksheetNs + "totalsRowFormula"))
             changed |= NormalizeAttribute(formula, "array", NormalizeBoolean);
 
+        changed |= NormalizeExtensionLists(tableColumn);
+        changed |= NormalizeChildOrder(tableColumn, TableColumnChildOrder);
         return changed;
     }
 
@@ -125,6 +139,108 @@ internal static class XlsxStructuredTableSchemaNormalizer
 
         return changed;
     }
+
+    private static bool NormalizeAutoFilterExtensionLists(XElement autoFilter)
+    {
+        var changed = NormalizeExtensionLists(autoFilter);
+
+        foreach (var filterColumn in autoFilter.Elements(WorksheetNs + "filterColumn"))
+            changed |= RemoveExtensionLists(filterColumn);
+
+        foreach (var sortState in autoFilter.Elements(WorksheetNs + "sortState"))
+            changed |= NormalizeSortStateExtensionLists(sortState);
+
+        return changed;
+    }
+
+    private static bool NormalizeSortStateExtensionLists(XElement sortState)
+    {
+        var changed = NormalizeExtensionLists(sortState);
+
+        foreach (var sortCondition in sortState.Elements(WorksheetNs + "sortCondition"))
+            changed |= NormalizeExtensionLists(sortCondition);
+
+        changed |= NormalizeChildOrder(sortState, SortStateChildOrder);
+        return changed;
+    }
+
+    private static bool NormalizeExtensionLists(XElement parent)
+    {
+        var changed = false;
+        var keptExtensionList = false;
+        foreach (var extensionList in parent.Elements(WorksheetNs + "extLst").ToList())
+        {
+            if (keptExtensionList)
+            {
+                extensionList.Remove();
+                changed = true;
+                continue;
+            }
+
+            changed |= XlsxWorksheetExtensionListNormalizer.NormalizeExtensionListElement(extensionList);
+            if (XlsxWorksheetExtensionListNormalizer.ShouldRemoveExtensionListElement(extensionList))
+            {
+                extensionList.Remove();
+                changed = true;
+                continue;
+            }
+
+            keptExtensionList = true;
+        }
+
+        return changed;
+    }
+
+    private static bool RemoveExtensionLists(XElement parent)
+    {
+        var extensionLists = parent.Elements(WorksheetNs + "extLst").ToList();
+        if (extensionLists.Count == 0)
+            return false;
+
+        foreach (var extensionList in extensionLists)
+            extensionList.Remove();
+        return true;
+    }
+
+    private static bool NormalizeChildOrder(XElement parent, Func<XElement, int> orderSelector)
+    {
+        var orderedChildren = parent.Elements()
+            .Select((element, index) => new { Element = element, Index = index })
+            .OrderBy(item => orderSelector(item.Element))
+            .ThenBy(item => item.Index)
+            .Select(item => item.Element)
+            .ToList();
+        if (orderedChildren.Count == 0 || parent.Elements().SequenceEqual(orderedChildren))
+            return false;
+
+        parent.ReplaceNodes(orderedChildren);
+        return true;
+    }
+
+    private static int TableChildOrder(XElement child) =>
+        child.Name == WorksheetNs + "autoFilter" ? 0 :
+        child.Name == WorksheetNs + "sortState" ? 1 :
+        child.Name == WorksheetNs + "tableColumns" ? 2 :
+        child.Name == WorksheetNs + "tableStyleInfo" ? 3 :
+        child.Name == WorksheetNs + "extLst" ? 100 :
+        90;
+
+    private static int TableColumnsChildOrder(XElement child) =>
+        child.Name == WorksheetNs + "tableColumn" ? 0 :
+        child.Name == WorksheetNs + "extLst" ? 100 :
+        90;
+
+    private static int TableColumnChildOrder(XElement child) =>
+        child.Name == WorksheetNs + "calculatedColumnFormula" ? 0 :
+        child.Name == WorksheetNs + "totalsRowFormula" ? 1 :
+        child.Name == WorksheetNs + "xmlColumnPr" ? 2 :
+        child.Name == WorksheetNs + "extLst" ? 100 :
+        90;
+
+    private static int SortStateChildOrder(XElement child) =>
+        child.Name == WorksheetNs + "sortCondition" ? 0 :
+        child.Name == WorksheetNs + "extLst" ? 100 :
+        90;
 
     private static bool NormalizeRequiredUnsignedIntAttribute(
         XElement element,

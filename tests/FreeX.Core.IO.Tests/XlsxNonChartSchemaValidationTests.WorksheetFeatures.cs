@@ -112,6 +112,15 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void StructuredTableExtensionLists_SanitizesInvalidNativeMetadataForSchemaValidity()
+    {
+        using var saved = Save(CreateInvalidStructuredTableExtensionListSourceWorkbook());
+
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertStructuredTableExtensionListsSanitized(saved);
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithStructuredTable_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreateStructuredTableSourceWorkbook());
@@ -250,6 +259,30 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         AssertStructuredTableMetadataSanitized(saved);
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidStructuredTableExtensionListsForSchemaValidity()
+    {
+        using var source = Save(CreateStructuredTableSourceWorkbook());
+        SetStructuredTableExtensionListsInvalidNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 5), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertStructuredTableExtensionListsSanitized(saved);
     }
 
 
@@ -2049,6 +2082,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SchemaErrors(workbook).Should().BeEmpty();
     }
 
+    private const string StructuredTableRootExtensionUri = "{FREEX-TABLE-EXT}";
+    private const string StructuredTableColumnsExtensionUri = "{FREEX-TABLE-COLUMNS-EXT}";
+    private const string StructuredTableColumnExtensionUri = "{FREEX-TABLE-COLUMN-EXT}";
+    private const string StructuredTableAutoFilterExtensionUri = "{FREEX-TABLE-AUTOFILTER-EXTLIST}";
+    private const string StructuredTableFilterColumnExtensionUri = "{FREEX-TABLE-FILTER-COLUMN-EXT}";
+    private const string StructuredTableSortStateExtensionUri = "{FREEX-TABLE-SORTSTATE-EXT}";
+
     private static Workbook CreateStructuredTableSourceWorkbook()
     {
         var workbook = new Workbook("StructuredTablePatchSave");
@@ -2080,6 +2120,60 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         table.Columns.Add(new StructuredTableColumnModel(2, "Value"));
         sheet.StructuredTables.Add(table);
 
+        return workbook;
+    }
+
+    private static Workbook CreateInvalidStructuredTableExtensionListSourceWorkbook()
+    {
+        var workbook = new Workbook("StructuredTableExtensionListInvalidSchema");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Name"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Value"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(2));
+
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = Range(sheet, 1, 1, 3, 2),
+            HasAutoFilter = true,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = true,
+            NativeSortStateXml = CreateInvalidStructuredTableSortStateXml(),
+            NativeChildXmls =
+            [
+                CreateInvalidExtensionListXml(StructuredTableRootExtensionUri, "FreeXTableExtension", "customTableExtLstFlag", "customTableExtFlag", "nativeTableExtLstChild"),
+                CreateDuplicateExtensionListXml("{FREEX-DUPLICATE-TABLE-EXTLST}")
+            ],
+            NativeAutoFilterChildXmls =
+            [
+                CreateInvalidExtensionListXml(StructuredTableAutoFilterExtensionUri, "FreeXTableAutoFilterExtension", "customAutoFilterExtLstFlag", "customAutoFilterExtFlag", "nativeAutoFilterExtLstChild"),
+                CreateDuplicateExtensionListXml("{FREEX-DUPLICATE-TABLE-AUTOFILTER-EXTLST}")
+            ]
+        };
+        table.Columns.Add(new StructuredTableColumnModel(
+            1,
+            "Name",
+            NativeChildXmls:
+            [
+                CreateInvalidExtensionListXml(StructuredTableColumnExtensionUri, "FreeXTableColumnExtension", "customColumnExtLstFlag", "customColumnExtFlag", "nativeColumnExtLstChild"),
+                CreateDuplicateExtensionListXml("{FREEX-DUPLICATE-TABLE-COLUMN-EXTLST}")
+            ]));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Value"));
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(
+            0,
+            ["A"],
+            IncludeBlank: false,
+            NativeFilterXmls:
+            [
+                CreateInvalidExtensionListXml(StructuredTableFilterColumnExtensionUri, "FreeXTableFilterColumnExtension", "customFilterColumnExtLstFlag", "customFilterColumnExtFlag", "nativeFilterColumnExtLstChild"),
+                CreateDuplicateExtensionListXml("{FREEX-DUPLICATE-TABLE-FILTER-COLUMN-EXTLST}")
+            ]));
+        sheet.StructuredTables.Add(table);
         return workbook;
     }
 
@@ -2246,6 +2340,171 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var styleInfo = table.Element(workbookNs + "tableStyleInfo")!;
         styleInfo.Attribute("showFirstColumn")?.Value.Should().NotBe("maybe");
         styleInfo.Attribute("showRowStripes")?.Value.Should().NotBe("maybe");
+    }
+
+    private static void AssertStructuredTableExtensionListsSanitized(MemoryStream stream)
+    {
+        var table = ReadPackageRootElement(stream, "xl/tables/table1.xml");
+        var workbookNs = table.Name.Namespace;
+
+        AssertExtensionListSanitized(
+            table,
+            workbookNs,
+            StructuredTableRootExtensionUri,
+            "FreeXTableExtension",
+            "customTableExtLstFlag",
+            "customTableExtFlag",
+            "nativeTableExtLstChild");
+
+        var tableChildren = table.Elements().Select(element => element.Name.LocalName).ToList();
+        AssertChildPrecedes(tableChildren, "autoFilter", "sortState");
+        AssertChildPrecedes(tableChildren, "sortState", "tableColumns");
+        AssertChildPrecedes(tableChildren, "tableColumns", "tableStyleInfo");
+        AssertChildPrecedes(tableChildren, "tableStyleInfo", "extLst");
+
+        var autoFilter = table.Element(workbookNs + "autoFilter");
+        autoFilter.Should().NotBeNull();
+        AssertExtensionListSanitized(
+            autoFilter!,
+            workbookNs,
+            StructuredTableAutoFilterExtensionUri,
+            "FreeXTableAutoFilterExtension",
+            "customAutoFilterExtLstFlag",
+            "customAutoFilterExtFlag",
+            "nativeAutoFilterExtLstChild");
+
+        var filterColumn = autoFilter!.Element(workbookNs + "filterColumn");
+        filterColumn.Should().NotBeNull();
+        filterColumn!.Elements(workbookNs + "extLst").Should().BeEmpty();
+
+        var sortState = table.Element(workbookNs + "sortState");
+        sortState.Should().NotBeNull();
+        AssertExtensionListSanitized(
+            sortState!,
+            workbookNs,
+            StructuredTableSortStateExtensionUri,
+            "FreeXTableSortStateExtension",
+            "customSortStateExtLstFlag",
+            "customSortStateExtFlag",
+            "nativeSortStateExtLstChild");
+        sortState!.Elements().Select(element => element.Name.LocalName).Should().ContainInOrder("sortCondition", "extLst");
+
+        var tableColumns = table.Element(workbookNs + "tableColumns");
+        tableColumns.Should().NotBeNull();
+        tableColumns!.Elements(workbookNs + "extLst").Should().BeEmpty();
+
+        var firstColumn = tableColumns!.Elements(workbookNs + "tableColumn").First();
+        AssertExtensionListSanitized(
+            firstColumn,
+            workbookNs,
+            StructuredTableColumnExtensionUri,
+            "FreeXTableColumnExtension",
+            "customColumnExtLstFlag",
+            "customColumnExtFlag",
+            "nativeColumnExtLstChild");
+    }
+
+    private static void AssertExtensionListSanitized(
+        XElement parent,
+        XNamespace workbookNs,
+        string expectedUri,
+        string expectedPayloadName,
+        string listAttributeName,
+        string extensionAttributeName,
+        string unexpectedChildName)
+    {
+        var extensionList = parent.Elements(workbookNs + "extLst").Should().ContainSingle().Subject;
+        extensionList.Attribute(listAttributeName).Should().BeNull();
+        extensionList.Element(workbookNs + unexpectedChildName).Should().BeNull();
+
+        var extension = extensionList.Elements(workbookNs + "ext").Should().ContainSingle().Subject;
+        extension.Attribute("uri")!.Value.Should().Be(expectedUri);
+        extension.Attribute(extensionAttributeName).Should().BeNull();
+        extension.ToString(SaveOptions.DisableFormatting).Should().Contain(expectedPayloadName);
+    }
+
+    private static string CreateInvalidExtensionListXml(
+        string uri,
+        string payloadName,
+        string listAttributeName,
+        string extensionAttributeName,
+        string unexpectedChildName)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        return CreateInvalidExtensionList(
+                workbookNs,
+                uri,
+                payloadName,
+                listAttributeName,
+                extensionAttributeName,
+                unexpectedChildName)
+            .ToString(SaveOptions.DisableFormatting);
+    }
+
+    private static string CreateDuplicateExtensionListXml(string uri)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        return new XElement(
+                workbookNs + "extLst",
+                new XElement(workbookNs + "ext", new XAttribute("uri", uri)))
+            .ToString(SaveOptions.DisableFormatting);
+    }
+
+    private static string CreateInvalidStructuredTableSortStateXml()
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        return CreateInvalidStructuredTableSortStateElement(workbookNs).ToString(SaveOptions.DisableFormatting);
+    }
+
+    private static XElement CreateInvalidStructuredTableSortStateElement(XNamespace workbookNs) =>
+        new(
+            workbookNs + "sortState",
+            new XAttribute("ref", "A1:B3"),
+            CreateInvalidExtensionList(
+                workbookNs,
+                StructuredTableSortStateExtensionUri,
+                "FreeXTableSortStateExtension",
+                "customSortStateExtLstFlag",
+                "customSortStateExtFlag",
+                "nativeSortStateExtLstChild"),
+            new XElement(
+                workbookNs + "sortCondition",
+                new XAttribute("ref", "A2:A3")),
+            new XElement(
+                workbookNs + "extLst",
+                new XElement(workbookNs + "ext", new XAttribute("uri", "{FREEX-DUPLICATE-TABLE-SORTSTATE-EXTLST}"))));
+
+    private static XElement CreateInvalidExtensionList(
+        XNamespace workbookNs,
+        string uri,
+        string payloadName,
+        string listAttributeName,
+        string extensionAttributeName,
+        string unexpectedChildName)
+    {
+        XNamespace x15Ns = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
+        return new XElement(
+            workbookNs + "extLst",
+            new XAttribute(listAttributeName, "removed"),
+            new XElement(
+                workbookNs + "ext",
+                new XAttribute("uri", $" {uri} "),
+                new XAttribute(extensionAttributeName, "removed"),
+                new XElement(
+                    x15Ns + "futureMetadata",
+                    new XAttribute(XNamespace.Xmlns + "x15", x15Ns),
+                    new XAttribute("name", payloadName))),
+            new XElement(workbookNs + unexpectedChildName),
+            new XElement(workbookNs + "ext", new XAttribute("uri", " ")),
+            new XElement(workbookNs + "ext", new XAttribute("uri", uri)));
+    }
+
+    private static void AssertChildPrecedes(List<string> childNames, string firstName, string secondName)
+    {
+        var firstIndex = childNames.IndexOf(firstName);
+        var secondIndex = childNames.IndexOf(secondName);
+        if (firstIndex >= 0 && secondIndex >= 0)
+            firstIndex.Should().BeLessThan(secondIndex);
     }
 
     private static Workbook CreateAutoFilterSourceWorkbook()
@@ -2540,6 +2799,44 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var styleInfo = root.Element(workbookNs + "tableStyleInfo")!;
         styleInfo.SetAttributeValue("showFirstColumn", "maybe");
         styleInfo.SetAttributeValue("showRowStripes", "maybe");
+        ReplacePackageXml(archive, "xl/tables/table1.xml", tableXml);
+    }
+
+    private static void SetStructuredTableExtensionListsInvalidNativeMetadata(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var tableXml = LoadPackageXml(archive, "xl/tables/table1.xml");
+        var root = tableXml.Root!;
+        root.Elements(workbookNs + "extLst").Remove();
+        root.Add(
+            CreateInvalidExtensionList(workbookNs, StructuredTableRootExtensionUri, "FreeXTableExtension", "customTableExtLstFlag", "customTableExtFlag", "nativeTableExtLstChild"),
+            new XElement(workbookNs + "extLst", new XElement(workbookNs + "ext", new XAttribute("uri", "{FREEX-DUPLICATE-TABLE-EXTLST}"))));
+
+        var autoFilter = root.Element(workbookNs + "autoFilter")!;
+        autoFilter.Elements(workbookNs + "extLst").Remove();
+        autoFilter.Add(
+            CreateInvalidExtensionList(workbookNs, StructuredTableAutoFilterExtensionUri, "FreeXTableAutoFilterExtension", "customAutoFilterExtLstFlag", "customAutoFilterExtFlag", "nativeAutoFilterExtLstChild"),
+            new XElement(
+                workbookNs + "filterColumn",
+                new XAttribute("colId", "0"),
+                CreateInvalidExtensionList(workbookNs, StructuredTableFilterColumnExtensionUri, "FreeXTableFilterColumnExtension", "customFilterColumnExtLstFlag", "customFilterColumnExtFlag", "nativeFilterColumnExtLstChild"),
+                new XElement(workbookNs + "extLst", new XElement(workbookNs + "ext", new XAttribute("uri", "{FREEX-DUPLICATE-TABLE-FILTER-COLUMN-EXTLST}")))),
+            new XElement(workbookNs + "extLst", new XElement(workbookNs + "ext", new XAttribute("uri", "{FREEX-DUPLICATE-TABLE-AUTOFILTER-EXTLST}"))));
+
+        autoFilter.AddAfterSelf(CreateInvalidStructuredTableSortStateElement(workbookNs));
+
+        var tableColumns = root.Element(workbookNs + "tableColumns")!;
+        tableColumns.Add(
+            CreateInvalidExtensionList(workbookNs, StructuredTableColumnsExtensionUri, "FreeXTableColumnsExtension", "customTableColumnsExtLstFlag", "customTableColumnsExtFlag", "nativeTableColumnsExtLstChild"),
+            new XElement(workbookNs + "extLst", new XElement(workbookNs + "ext", new XAttribute("uri", "{FREEX-DUPLICATE-TABLE-COLUMNS-EXTLST}"))));
+
+        var firstColumn = tableColumns.Elements(workbookNs + "tableColumn").First();
+        firstColumn.Add(
+            CreateInvalidExtensionList(workbookNs, StructuredTableColumnExtensionUri, "FreeXTableColumnExtension", "customColumnExtLstFlag", "customColumnExtFlag", "nativeColumnExtLstChild"),
+            new XElement(workbookNs + "extLst", new XElement(workbookNs + "ext", new XAttribute("uri", "{FREEX-DUPLICATE-TABLE-COLUMN-EXTLST}"))));
+
         ReplacePackageXml(archive, "xl/tables/table1.xml", tableXml);
     }
 
