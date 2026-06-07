@@ -170,6 +170,7 @@ internal static class XlsxSlicerTimelineWriter
                 "xl/workbook.xml",
                 cachePath,
                 SlicerCacheRelationshipType);
+            EnsurePartRelationship(archive, slicerPath, cachePath, SlicerCacheRelationshipType);
             EnsureWorkbookExtensionRef(
                 workbookXml,
                 SlicerNs,
@@ -231,6 +232,7 @@ internal static class XlsxSlicerTimelineWriter
                 "xl/workbook.xml",
                 cachePath,
                 TimelineCacheRelationshipType);
+            EnsurePartRelationship(archive, timelinePath, cachePath, TimelineCacheRelationshipType);
             EnsureWorkbookExtensionRef(
                 workbookXml,
                 TimelineNs,
@@ -279,6 +281,25 @@ internal static class XlsxSlicerTimelineWriter
         }
 
         return workbook.Sheets.Count == 0 ? "" : "xl/worksheets/sheet1.xml";
+    }
+
+    private static void EnsurePartRelationship(
+        ZipArchive archive,
+        string sourcePart,
+        string targetPart,
+        string relationshipType)
+    {
+        var relationshipPath = XlsxPackagePath.GetRelationshipPartPath(sourcePart);
+        var relsXml = archive.GetEntry(relationshipPath) is { } relsEntry
+            ? XlsxPackageXmlEditor.LoadXml(relsEntry)
+            : new XDocument(new XElement(PackageRelNs + "Relationships"));
+        XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
+            relsXml,
+            PackageRelNs,
+            sourcePart,
+            targetPart,
+            relationshipType);
+        XlsxPackageXmlEditor.ReplaceXml(archive, relationshipPath, relsXml);
     }
 
     private static string EnsureWorksheetRelationship(
