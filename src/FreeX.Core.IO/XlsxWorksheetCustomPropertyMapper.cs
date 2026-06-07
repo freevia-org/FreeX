@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
 using System.Text;
-using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -289,21 +288,4 @@ internal static class XlsxWorksheetCustomPropertyMapper
 
     private static bool IsModeledAttribute(string name) =>
         name is "name" or "id";
-
-    private static bool TrySetNativeAttribute(XElement element, string name, string value)
-    {
-        try
-        {
-            element.SetAttributeValue(XName.Get(name), value);
-            return true;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (XmlException)
-        {
-            return false;
-        }
-    }
 }
