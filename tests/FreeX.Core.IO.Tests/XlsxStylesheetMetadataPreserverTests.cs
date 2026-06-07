@@ -89,8 +89,7 @@ public sealed class XlsxStylesheetMetadataPreserverTests
     {
         package.Position = 0;
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        using var stream = archive.GetEntry("xl/styles.xml")!.Open();
-        return XDocument.Load(stream);
+        return XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/styles.xml", "xl/styles.xml");
     }
 
     private static string StyleSheet(string dxfXml) =>
