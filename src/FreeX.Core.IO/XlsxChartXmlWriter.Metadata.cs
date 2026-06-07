@@ -339,8 +339,7 @@ internal static partial class XlsxChartXmlWriter
 
     private static void AddOptionalBoolAttribute(XElement element, string name, bool? value)
     {
-        if (value is { } boolValue)
-            element.SetAttributeValue(name, boolValue ? "1" : "0");
+        AddOptionalAttribute(element, name, value is { } boolValue ? boolValue ? "1" : "0" : null);
     }
 
     private static void AddOptionalBoolElement(XElement element, XNamespace chartNs, string name, bool? value)
@@ -357,14 +356,24 @@ internal static partial class XlsxChartXmlWriter
 
     private static void AddOptionalIntAttribute(XElement element, string name, int? value)
     {
-        if (value is { } intValue)
-            element.SetAttributeValue(name, intValue.ToString(CultureInfo.InvariantCulture));
+        AddOptionalAttribute(
+            element,
+            name,
+            value is { } intValue ? intValue.ToString(CultureInfo.InvariantCulture) : null);
     }
 
     private static void AddOptionalDoubleAttribute(XElement element, string name, double? value)
     {
-        if (value is { } doubleValue)
-            element.SetAttributeValue(name, doubleValue.ToString("G15", CultureInfo.InvariantCulture));
+        AddOptionalAttribute(
+            element,
+            name,
+            value is { } doubleValue ? doubleValue.ToString("G15", CultureInfo.InvariantCulture) : null);
+    }
+
+    private static void AddOptionalAttribute(XElement element, string name, string? value)
+    {
+        if (value is not null)
+            element.SetAttributeValue(name, value);
     }
 
     private static XElement? ToPivotSourceXml(ChartModel chart, Sheet sheet, XNamespace chartNs)
