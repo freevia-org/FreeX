@@ -1639,6 +1639,38 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void SheetProtection_SanitizesInvalidNativeMetadataForSchemaValidity()
+    {
+        using var saved = Save(CreateInvalidSheetProtectionSourceWorkbook());
+
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetProtectionSanitized(saved);
+    }
+
+    [Fact]
+    public void SheetProtection_DropsInvalidAdvancedHashMetadataForSchemaValidity()
+    {
+        var workbook = CreateSheetProtectionSourceWorkbook();
+        workbook.Name = "SheetProtectionInvalidHash";
+        var sheet = workbook.GetSheetAt(0);
+        sheet.ProtectionMetadata = new NativeXmlPreserveBag();
+        sheet.ProtectionMetadata.Set(
+            "sheetProtection",
+            """
+            <e algorithmName="SHA-512" hashValue="not-base64" saltValue="also-not-base64" spinCount="not-a-number" />
+            """);
+
+        using var saved = Save(workbook);
+
+        SchemaErrors(saved).Should().BeEmpty();
+        var protection = ReadWorksheetChildElement(saved, "sheetProtection");
+        protection.Attribute("hashValue").Should().BeNull();
+        protection.Attribute("saltValue").Should().BeNull();
+        protection.Attribute("spinCount").Should().BeNull();
+        protection.Attribute("password").Should().NotBeNull();
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithSheetProtection_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreateSheetProtectionSourceWorkbook());
@@ -1664,6 +1696,51 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceSheetProtection.ToString(SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidSheetProtectionForSchemaValidity()
+    {
+        using var source = Save(CreateSheetProtectionSourceWorkbook());
+        SetWorksheetProtectionInvalidNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetProtectionSanitized(saved);
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidSheetProtectionForSchemaValidity()
+    {
+        using var source = Save(CreateSheetProtectionSourceWorkbook());
+        SetWorksheetProtectionInvalidNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetProtectionSanitized(saved);
     }
 
 
@@ -4056,6 +4133,24 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         return workbook;
     }
 
+    private static Workbook CreateInvalidSheetProtectionSourceWorkbook()
+    {
+        var workbook = CreateSheetProtectionSourceWorkbook();
+        workbook.Name = "SheetProtectionInvalidSchema";
+        var sheet = workbook.GetSheetAt(0);
+        sheet.ProtectionMetadata = new NativeXmlPreserveBag();
+        sheet.ProtectionMetadata.Set(
+            "sheetProtection",
+            """
+            <e algorithmName=" SHA-512 " hashValue="AQIDBA==" saltValue="BQYHCA==" spinCount="100000"
+               objects="maybe" scenarios="true" customAttr="protection-native">
+              <nativeSheetProtectionChild />
+              <fx:sheetProtectionNativeChild xmlns:fx="urn:freex:test" id="authored" />
+            </e>
+            """);
+        return workbook;
+    }
+
     private static Workbook CreateFreezePaneSourceWorkbook()
     {
         var workbook = new Workbook("FreezePanePatchSave");
@@ -4064,6 +4159,56 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.FrozenRows = 1;
         sheet.FrozenCols = 1;
         return workbook;
+    }
+
+    private static void SetWorksheetProtectionInvalidNativeMetadata(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexNs = "urn:freex:test";
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        var root = worksheetXml.Root!;
+
+        var protection = root.Element(worksheetNs + "sheetProtection");
+        if (protection is null)
+        {
+            protection = new XElement(worksheetNs + "sheetProtection");
+            root.Add(protection);
+        }
+
+        protection.SetAttributeValue("algorithmName", " SHA-512 ");
+        protection.SetAttributeValue("hashValue", "AQIDBA==");
+        protection.SetAttributeValue("saltValue", "BQYHCA==");
+        protection.SetAttributeValue("spinCount", "100000");
+        protection.SetAttributeValue("objects", "maybe");
+        protection.SetAttributeValue("scenarios", "true");
+        protection.SetAttributeValue("customAttr", "protection-native");
+        protection.Add(
+            new XElement(worksheetNs + "nativeSheetProtectionChild"),
+            new XElement(freexNs + "sheetProtectionNativeChild", new XAttribute("id", "source")));
+
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void AssertWorksheetProtectionSanitized(MemoryStream stream)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexNs = "urn:freex:test";
+        var protection = ReadWorksheetChildElement(stream, "sheetProtection");
+
+        protection.Attribute("sheet")!.Value.Should().Be("1");
+        protection.Attribute("password").Should().BeNull();
+        protection.Attribute("algorithmName")!.Value.Should().Be("SHA-512");
+        protection.Attribute("hashValue")!.Value.Should().Be("AQIDBA==");
+        protection.Attribute("saltValue")!.Value.Should().Be("BQYHCA==");
+        protection.Attribute("spinCount")!.Value.Should().Be("100000");
+        protection.Attribute("scenarios")!.Value.Should().Be("1");
+        protection.Attribute("objects").Should().BeNull();
+        protection.Attribute("customAttr").Should().BeNull();
+        protection.Element(worksheetNs + "nativeSheetProtectionChild").Should().BeNull();
+        protection.Elements(freexNs + "sheetProtectionNativeChild").Should().BeEmpty();
+        protection.HasElements.Should().BeFalse();
     }
 
     private static Workbook CreateSplitPaneSourceWorkbook()

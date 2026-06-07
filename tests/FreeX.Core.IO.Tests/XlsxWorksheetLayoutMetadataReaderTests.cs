@@ -60,10 +60,10 @@ public sealed class XlsxWorksheetLayoutMetadataReaderTests
     }
 
     [Fact]
-    public void ReadWorksheetProtectionMetadata_PreservesHashAttributesAndChildren()
+    public void ReadWorksheetProtectionMetadata_PreservesOnlySchemaNativeAttributes()
     {
         var protection = XElement.Parse("""
-            <sheetProtection sheet="1" password="ABCD" algorithmName="SHA-512">
+            <sheetProtection sheet="1" password="ABCD" algorithmName="SHA-512" customAttr="dropped">
               <extLst custom="kept" />
             </sheetProtection>
             """);
@@ -72,9 +72,10 @@ public sealed class XlsxWorksheetLayoutMetadataReaderTests
 
         metadata.Should().NotBeNull();
         BagAttr(metadata, "sheetProtection", "algorithmName").Should().Be("SHA-512");
+        BagAttr(metadata, "sheetProtection", "customAttr").Should().BeNull();
         BagAttr(metadata, "sheetProtection", "sheet").Should().BeNull("sheet is modeled separately");
         BagAttr(metadata, "sheetProtection", "password").Should().BeNull("password is modeled separately");
-        BagChildren(metadata, "sheetProtection").Should().ContainSingle(xml => xml.Contains("extLst", StringComparison.Ordinal));
+        BagChildren(metadata, "sheetProtection").Should().BeEmpty();
     }
 
     // ── NativeXmlPreserveBag test helpers ────────────────────────────────────

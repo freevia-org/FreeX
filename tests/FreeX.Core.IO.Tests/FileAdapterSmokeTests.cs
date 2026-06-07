@@ -3719,7 +3719,7 @@ public partial class FileAdapterSmokeTests
         source.Position = 0;
         AddAdvancedSheetProtectionMetadata(source);
         var sourceHashValue = ReadSheetProtectionAttribute(source, "hashValue");
-        sourceHashValue.Should().Be("abc123");
+        sourceHashValue.Should().Be("AQIDBA==");
 
         source.Position = 0;
         var loaded = adapter.Load(source);
@@ -3734,7 +3734,7 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void XlsxAdapter_LoadedWorkbookSave_PreservesAdvancedSheetProtectionMetadata()
+    public void XlsxAdapter_LoadedWorkbookSave_DropsInvalidAdvancedSheetProtectionChildren()
     {
         var workbook = new Workbook("AdvancedSheetProtectionRetentionTest");
         var sheet = workbook.AddSheet("S1");
@@ -3751,12 +3751,12 @@ public partial class FileAdapterSmokeTests
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.ProtectionMetadata.Should().NotBeNull();
         BagAttr(loadedSheet.ProtectionMetadata, "sheetProtection", "algorithmName").Should().Be("SHA-512");
-        BagAttr(loadedSheet.ProtectionMetadata, "sheetProtection", "hashValue").Should().Be("abc123");
-        BagAttr(loadedSheet.ProtectionMetadata, "sheetProtection", "saltValue").Should().Be("salt123");
+        BagAttr(loadedSheet.ProtectionMetadata, "sheetProtection", "hashValue").Should().Be("AQIDBA==");
+        BagAttr(loadedSheet.ProtectionMetadata, "sheetProtection", "saltValue").Should().Be("BQYHCA==");
         BagAttr(loadedSheet.ProtectionMetadata, "sheetProtection", "spinCount").Should().Be("100000");
         BagAttr(loadedSheet.ProtectionMetadata, "sheetProtection", "objects").Should().Be("1");
         BagAttr(loadedSheet.ProtectionMetadata, "sheetProtection", "scenarios").Should().Be("1");
-        BagChildren(loadedSheet.ProtectionMetadata, "sheetProtection").Should().HaveCount(2);
+        BagChildren(loadedSheet.ProtectionMetadata, "sheetProtection").Should().BeEmpty();
         AddBagAttr(loadedSheet.ProtectionMetadata!, "sheetProtection", "invalid protection attr", "skip");
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
@@ -3772,16 +3772,15 @@ public partial class FileAdapterSmokeTests
         var protection = worksheetXml.Root!.Element(worksheetNs + "sheetProtection");
         protection.Should().NotBeNull();
         (protection!.Attribute("algorithmName")?.Value).Should().Be("SHA-512");
-        (protection.Attribute("hashValue")?.Value).Should().Be("abc123");
-        (protection.Attribute("saltValue")?.Value).Should().Be("salt123");
+        (protection.Attribute("hashValue")?.Value).Should().Be("AQIDBA==");
+        (protection.Attribute("saltValue")?.Value).Should().Be("BQYHCA==");
         (protection.Attribute("spinCount")?.Value).Should().Be("100000");
         (protection.Attribute("objects")?.Value).Should().Be("1");
         (protection.Attribute("scenarios")?.Value).Should().Be("1");
         protection.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
         protection.Elements(XName.Get("sheetProtectionNativeChild", "urn:freex:test"))
-            .Select(element => element.Attribute("id")?.Value)
             .Should()
-            .BeEquivalentTo("first", "second");
+            .BeEmpty();
     }
 
     [Fact]
@@ -6466,8 +6465,8 @@ public partial class FileAdapterSmokeTests
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["algorithmName"] = "SHA-512",
-                ["hashValue"] = "abc123",
-                ["saltValue"] = "salt123",
+                ["hashValue"] = "AQIDBA==",
+                ["saltValue"] = "BQYHCA==",
                 ["spinCount"] = "100000",
                 ["objects"] = "1"
             },
@@ -15225,8 +15224,8 @@ public partial class FileAdapterSmokeTests
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["algorithmName"] = "SHA-512",
-                ["hashValue"] = "abc123",
-                ["saltValue"] = "salt123",
+                ["hashValue"] = "AQIDBA==",
+                ["saltValue"] = "BQYHCA==",
                 ["spinCount"] = "100000"
             },
             ["<fx:sheetProtectionNativeChild xmlns:fx=\"urn:freex:test\" id=\"batch\" />"]);
@@ -23782,8 +23781,8 @@ public partial class FileAdapterSmokeTests
                 worksheetNs + "sheetProtection",
                 new XAttribute("sheet", "1"),
                 new XAttribute("algorithmName", "SHA-512"),
-                new XAttribute("hashValue", "abc123"),
-                new XAttribute("saltValue", "salt123"),
+                new XAttribute("hashValue", "AQIDBA=="),
+                new XAttribute("saltValue", "BQYHCA=="),
                 new XAttribute("spinCount", "100000"),
                 new XAttribute("objects", "1"),
                 new XAttribute("scenarios", "1"),
