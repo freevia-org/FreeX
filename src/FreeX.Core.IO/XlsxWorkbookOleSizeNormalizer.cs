@@ -41,52 +41,14 @@ internal static class XlsxWorkbookOleSizeNormalizer
     public static bool NormalizeElement(XElement oleSize)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(oleSize, OleSizeAttributes);
-        changed |= NormalizeReference(oleSize);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(oleSize, OleSizeAttributes);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleSize, "ref", NormalizeCellRange);
         changed |= RemoveAllNodes(oleSize);
         return changed;
     }
 
     public static bool ShouldRemoveElement(XElement oleSize) =>
         NormalizeCellRange(oleSize.Attribute("ref")?.Value) is null;
-
-    private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedNames)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                (attribute.Name.NamespaceName.Length == 0 && allowedNames.Contains(attribute.Name.LocalName)))
-            {
-                continue;
-            }
-
-            attribute.Remove();
-            changed = true;
-        }
-
-        return changed;
-    }
-
-    private static bool NormalizeReference(XElement oleSize)
-    {
-        var attribute = oleSize.Attribute("ref");
-        var normalizedReference = NormalizeCellRange(attribute?.Value);
-        if (normalizedReference is null)
-        {
-            if (attribute is null)
-                return false;
-
-            attribute.Remove();
-            return true;
-        }
-
-        if (attribute is not null && string.Equals(attribute.Value, normalizedReference, StringComparison.Ordinal))
-            return false;
-
-        oleSize.SetAttributeValue("ref", normalizedReference);
-        return true;
-    }
 
     private static bool RemoveAllNodes(XElement element)
     {
