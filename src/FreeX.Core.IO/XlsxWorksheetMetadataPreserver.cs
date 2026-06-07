@@ -326,7 +326,17 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 changed = true;
             }
 
-            if (XlsxNativeXmlMerger.MergeExtensionList(sourceExtensionList, targetRoot, workbookNs))
+            var extensionRelationshipIdMap =
+                XlsxExtensionListPackageRelationshipRebinder.BuildRelationshipIdMap(
+                    sourceArchive,
+                    targetArchive,
+                    sourceWorksheetPath,
+                    targetWorksheetPath);
+            if (XlsxNativeXmlMerger.MergeExtensionList(
+                    sourceExtensionList,
+                    targetRoot,
+                    workbookNs,
+                    extensionRelationshipIdMap))
                 changed = true;
 
             if (changed)
@@ -633,7 +643,17 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 changed = true;
             }
 
-            if (XlsxNativeXmlMerger.MergeExtensionList(sourceExtensionList, targetRoot, workbookNs))
+            var extensionRelationshipIdMap =
+                XlsxExtensionListPackageRelationshipRebinder.BuildRelationshipIdMap(
+                    sourceArchive,
+                    targetArchive,
+                    sourceWorksheetPath,
+                    targetWorksheetPath);
+            if (XlsxNativeXmlMerger.MergeExtensionList(
+                    sourceExtensionList,
+                    targetRoot,
+                    workbookNs,
+                    extensionRelationshipIdMap))
                 changed = true;
 
             if (changed)
