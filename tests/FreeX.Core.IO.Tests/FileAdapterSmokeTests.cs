@@ -24767,11 +24767,8 @@ public partial class FileAdapterSmokeTests
                     new XAttribute("uri", "http://schemas.openxmlformats.org/drawingml/2006/chart"),
                     new XElement(chartNs + "chart", new XAttribute(relNs + "id", "rIdFreeXChart")))));
 
-    private static XDocument LoadPackageXml(ZipArchiveEntry entry)
-    {
-        using var stream = entry.Open();
-        return XDocument.Load(stream);
-    }
+    private static XDocument LoadPackageXml(ZipArchiveEntry entry) =>
+        XlsxPackageTestFixtures.LoadPackageXml(entry);
 
     private static XElement? ReadWorksheetSingleCellTableRootElement(ZipArchive archive)
     {

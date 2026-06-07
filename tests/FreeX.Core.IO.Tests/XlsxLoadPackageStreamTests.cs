@@ -1114,11 +1114,8 @@ public sealed class XlsxLoadPackageStreamTests
         return references;
     }
 
-    private static XDocument LoadPackageXml(ZipArchive archive, string path)
-    {
-        using var stream = archive.GetEntry(path)!.Open();
-        return XDocument.Load(stream);
-    }
+    private static XDocument LoadPackageXml(ZipArchive archive, string path) =>
+        XlsxPackageTestFixtures.LoadPackageXml(archive, path);
 
     private sealed class NonMemoryReadStream(byte[] buffer) : Stream
     {
