@@ -1333,8 +1333,26 @@ public static partial class AccessibilityCheckerService
             case "IMABS":
                 kind = ConditionalFormulaScalarFunctionKind.ImAbs;
                 return true;
+            case "IMARGUMENT":
+                kind = ConditionalFormulaScalarFunctionKind.ImArgument;
+                return true;
             case "IMCONJUGATE":
                 kind = ConditionalFormulaScalarFunctionKind.ImConjugate;
+                return true;
+            case "IMEXP":
+                kind = ConditionalFormulaScalarFunctionKind.ImExp;
+                return true;
+            case "IMLN":
+                kind = ConditionalFormulaScalarFunctionKind.ImLn;
+                return true;
+            case "IMLOG10":
+                kind = ConditionalFormulaScalarFunctionKind.ImLog10;
+                return true;
+            case "IMLOG2":
+                kind = ConditionalFormulaScalarFunctionKind.ImLog2;
+                return true;
+            case "IMSQRT":
+                kind = ConditionalFormulaScalarFunctionKind.ImSqrt;
                 return true;
             case "DELTA":
                 kind = ConditionalFormulaScalarFunctionKind.Delta;
@@ -1440,7 +1458,13 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.ImReal or
             ConditionalFormulaScalarFunctionKind.Imaginary or
             ConditionalFormulaScalarFunctionKind.ImAbs or
-            ConditionalFormulaScalarFunctionKind.ImConjugate => argumentCount == 1,
+            ConditionalFormulaScalarFunctionKind.ImArgument or
+            ConditionalFormulaScalarFunctionKind.ImConjugate or
+            ConditionalFormulaScalarFunctionKind.ImExp or
+            ConditionalFormulaScalarFunctionKind.ImLn or
+            ConditionalFormulaScalarFunctionKind.ImLog10 or
+            ConditionalFormulaScalarFunctionKind.ImLog2 or
+            ConditionalFormulaScalarFunctionKind.ImSqrt => argumentCount == 1,
             ConditionalFormulaScalarFunctionKind.NumberValue => argumentCount is >= 1 and <= 3,
             ConditionalFormulaScalarFunctionKind.Log or
             ConditionalFormulaScalarFunctionKind.Roman or
@@ -2189,7 +2213,13 @@ public static partial class AccessibilityCheckerService
         ImReal,
         Imaginary,
         ImAbs,
+        ImArgument,
         ImConjugate,
+        ImExp,
+        ImLn,
+        ImLog10,
+        ImLog2,
+        ImSqrt,
         Delta,
         Erf,
         ErfPrecise,
@@ -2885,7 +2915,13 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.ImReal:
                 case ConditionalFormulaScalarFunctionKind.Imaginary:
                 case ConditionalFormulaScalarFunctionKind.ImAbs:
+                case ConditionalFormulaScalarFunctionKind.ImArgument:
                 case ConditionalFormulaScalarFunctionKind.ImConjugate:
+                case ConditionalFormulaScalarFunctionKind.ImExp:
+                case ConditionalFormulaScalarFunctionKind.ImLn:
+                case ConditionalFormulaScalarFunctionKind.ImLog10:
+                case ConditionalFormulaScalarFunctionKind.ImLog2:
+                case ConditionalFormulaScalarFunctionKind.ImSqrt:
                     return TryEvaluateFormulaComplexFunction(function, rowOffset, colOffset, out value);
                 default:
                     return false;
@@ -3407,8 +3443,14 @@ public static partial class AccessibilityCheckerService
                 ConditionalFormulaScalarFunctionKind.Imaginary => new NumberValue(parsed.Imaginary),
                 ConditionalFormulaScalarFunctionKind.ImAbs => FormulaComplexNumberResult(
                     Math.Sqrt(parsed.Real * parsed.Real + parsed.Imaginary * parsed.Imaginary)),
+                ConditionalFormulaScalarFunctionKind.ImArgument => EvaluateFormulaComplexArgument(parsed),
                 ConditionalFormulaScalarFunctionKind.ImConjugate =>
                     FormulaComplexTextResult(parsed.Real, -parsed.Imaginary, parsed.Suffix),
+                ConditionalFormulaScalarFunctionKind.ImExp => EvaluateFormulaComplexExp(parsed),
+                ConditionalFormulaScalarFunctionKind.ImLn => EvaluateFormulaComplexLog(parsed, 1.0),
+                ConditionalFormulaScalarFunctionKind.ImLog10 => EvaluateFormulaComplexLog(parsed, Math.Log(10.0)),
+                ConditionalFormulaScalarFunctionKind.ImLog2 => EvaluateFormulaComplexLog(parsed, Math.Log(2.0)),
+                ConditionalFormulaScalarFunctionKind.ImSqrt => EvaluateFormulaComplexSqrt(parsed),
                 _ => ErrorValue.Value
             };
             return true;
@@ -3479,6 +3521,48 @@ public static partial class AccessibilityCheckerService
 
         private static ScalarValue FormulaComplexNumberResult(double value) =>
             double.IsFinite(value) ? new NumberValue(value) : ErrorValue.Num;
+
+        private static ScalarValue EvaluateFormulaComplexArgument(
+            (double Real, double Imaginary, string Suffix, ErrorValue? Error) parsed)
+        {
+            if (parsed.Real == 0 && parsed.Imaginary == 0)
+                return ErrorValue.DivByZero;
+
+            return FormulaComplexNumberResult(Math.Atan2(parsed.Imaginary, parsed.Real));
+        }
+
+        private static ScalarValue EvaluateFormulaComplexExp(
+            (double Real, double Imaginary, string Suffix, ErrorValue? Error) parsed)
+        {
+            var magnitude = Math.Exp(parsed.Real);
+            return FormulaComplexTextResult(
+                magnitude * Math.Cos(parsed.Imaginary),
+                magnitude * Math.Sin(parsed.Imaginary),
+                parsed.Suffix);
+        }
+
+        private static ScalarValue EvaluateFormulaComplexLog(
+            (double Real, double Imaginary, string Suffix, ErrorValue? Error) parsed,
+            double divisor)
+        {
+            var modulus = Math.Sqrt(parsed.Real * parsed.Real + parsed.Imaginary * parsed.Imaginary);
+            if (modulus == 0)
+                return ErrorValue.Num;
+
+            var angle = Math.Atan2(parsed.Imaginary, parsed.Real);
+            return FormulaComplexTextResult(Math.Log(modulus) / divisor, angle / divisor, parsed.Suffix);
+        }
+
+        private static ScalarValue EvaluateFormulaComplexSqrt(
+            (double Real, double Imaginary, string Suffix, ErrorValue? Error) parsed)
+        {
+            var modulus = Math.Sqrt(parsed.Real * parsed.Real + parsed.Imaginary * parsed.Imaginary);
+            var real = Math.Sqrt((modulus + parsed.Real) / 2.0);
+            var imaginary = Math.CopySign(
+                Math.Sqrt(Math.Max(0.0, (modulus - parsed.Real) / 2.0)),
+                parsed.Imaginary);
+            return FormulaComplexTextResult(real, imaginary, parsed.Suffix);
+        }
 
         private static (double Real, double Imaginary, string Suffix, ErrorValue? Error) ParseFormulaComplexArgument(
             ScalarValue value)
