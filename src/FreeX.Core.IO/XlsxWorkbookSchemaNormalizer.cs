@@ -42,6 +42,7 @@ internal static class XlsxWorkbookSchemaNormalizer
         XlsxWorksheetPageLayoutNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetPageBreakNormalizer.NormalizeWorksheets(archive);
         XlsxThemeTypefaceNormalizer.NormalizePackage(archive);
+        XlsxLegacyCommentFontNormalizer.NormalizePackage(archive);
         XlsxStructuredTableSchemaNormalizer.NormalizePackage(archive);
         XlsxWorksheetSingleXmlCellMapper.NormalizePackage(archive);
         NormalizeWorksheets(archive, workbookNs);
