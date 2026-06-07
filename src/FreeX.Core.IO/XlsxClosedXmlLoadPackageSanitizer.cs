@@ -29,6 +29,7 @@ internal readonly record struct XlsxClosedXmlLoadSanitizationHints(
     bool? HasWorkbookSmartTagSchemaIssues,
     bool? HasWorkbookNativeMetadataSchemaIssues,
     bool? HasWorksheetRelationshipMarkerSchemaIssues,
+    bool? HasWorksheetNativeMetadataSchemaIssues,
     IReadOnlySet<string>? MergeCellWorksheetPathsToStrip);
 
 internal static class XlsxClosedXmlLoadPackageSanitizer
@@ -126,6 +127,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 NormalizeWorkbookNativeMetadata(archive);
             if (requirements.HasWorksheetRelationshipMarkerSchemaIssues)
                 NormalizeWorksheetRelationshipMarkers(archive);
+            if (requirements.HasWorksheetNativeMetadataSchemaIssues)
+                NormalizeWorksheetNativeMetadata(archive);
             if (requirements.MergeCellWorksheetPathsToStrip is { Count: > 0 } mergeCellWorksheetPaths)
                 RemoveWorksheetMergeCells(archive, mergeCellWorksheetPaths);
             if (requirements.HasDocumentPropertiesPackageGraphIssues)
@@ -251,11 +254,12 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 ResolveKnownOrScan(knownHints.HasWorkbookSmartTagSchemaIssues, archive, HasWorkbookSmartTagSchemaIssues),
                 ResolveKnownOrScan(knownHints.HasWorkbookNativeMetadataSchemaIssues, archive, HasWorkbookNativeMetadataSchemaIssues),
                 ResolveKnownOrScan(knownHints.HasWorksheetRelationshipMarkerSchemaIssues, archive, HasWorksheetRelationshipMarkerSchemaIssues),
+                ResolveKnownOrScan(knownHints.HasWorksheetNativeMetadataSchemaIssues, archive, HasWorksheetNativeMetadataSchemaIssues),
                 knownHints.MergeCellWorksheetPathsToStrip);
         }
         catch
         {
-            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, null);
+            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, null);
         }
         finally
         {
@@ -292,7 +296,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             hints.HasWorkbookWebPublishingSchemaIssues is not { } hasWorkbookWebPublishingSchemaIssues ||
             hints.HasWorkbookSmartTagSchemaIssues is not { } hasWorkbookSmartTagSchemaIssues ||
             hints.HasWorkbookNativeMetadataSchemaIssues is not { } hasWorkbookNativeMetadataSchemaIssues ||
-            hints.HasWorksheetRelationshipMarkerSchemaIssues is not { } hasWorksheetRelationshipMarkerSchemaIssues)
+            hints.HasWorksheetRelationshipMarkerSchemaIssues is not { } hasWorksheetRelationshipMarkerSchemaIssues ||
+            hints.HasWorksheetNativeMetadataSchemaIssues is not { } hasWorksheetNativeMetadataSchemaIssues)
         {
             return false;
         }
@@ -334,6 +339,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             hasWorkbookSmartTagSchemaIssues,
             hasWorkbookNativeMetadataSchemaIssues,
             hasWorksheetRelationshipMarkerSchemaIssues,
+            hasWorksheetNativeMetadataSchemaIssues,
             hints.MergeCellWorksheetPathsToStrip);
         return true;
     }
@@ -462,6 +468,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         bool HasWorkbookSmartTagSchemaIssues,
         bool HasWorkbookNativeMetadataSchemaIssues,
         bool HasWorksheetRelationshipMarkerSchemaIssues,
+        bool HasWorksheetNativeMetadataSchemaIssues,
         IReadOnlySet<string>? MergeCellWorksheetPathsToStrip)
     {
         public bool RequiresAny =>
@@ -489,6 +496,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             HasWorkbookSmartTagSchemaIssues ||
             HasWorkbookNativeMetadataSchemaIssues ||
             HasWorksheetRelationshipMarkerSchemaIssues ||
+            HasWorksheetNativeMetadataSchemaIssues ||
             MergeCellWorksheetPathsToStrip is { Count: > 0 };
     }
 
@@ -673,6 +681,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         requirements.HasWorksheetAutoFilterSchemaIssues ||
         requirements.HasWorksheetSheetViewSchemaIssues ||
         requirements.HasWorksheetRelationshipMarkerSchemaIssues ||
+        requirements.HasWorksheetNativeMetadataSchemaIssues ||
         ShouldStripMergeCells(requirements, normalizedPath);
 
     private static bool ShouldTransformRelationshipEntry(
@@ -899,6 +908,11 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         if (requirements.HasWorksheetRelationshipMarkerSchemaIssues)
         {
             changed |= XlsxWorksheetRelationshipMarkerNormalizer.NormalizeWorksheetRoot(root);
+        }
+
+        if (requirements.HasWorksheetNativeMetadataSchemaIssues)
+        {
+            changed |= NormalizeWorksheetNativeMetadataRoot(root);
         }
 
         if (ShouldStripMergeCells(requirements, normalizedPath))
@@ -2093,6 +2107,70 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
 
     private static void NormalizeWorksheetRelationshipMarkers(ZipArchive archive) =>
         XlsxWorksheetRelationshipMarkerNormalizer.NormalizeWorksheets(archive);
+
+    private static bool HasWorksheetNativeMetadataSchemaIssues(ZipArchive archive)
+    {
+        foreach (var worksheetEntry in archive.Entries
+                     .Where(XlsxConditionalFormatRuleSupport.IsWorksheetEntry)
+                     .ToList())
+        {
+            try
+            {
+                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+                var root = worksheetXml.Root;
+                if (root is not null &&
+                    NormalizeWorksheetNativeMetadataRoot(new XElement(root)))
+                {
+                    return true;
+                }
+            }
+            catch
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static void NormalizeWorksheetNativeMetadata(ZipArchive archive)
+    {
+        foreach (var worksheetEntry in archive.Entries
+                     .Where(XlsxConditionalFormatRuleSupport.IsWorksheetEntry)
+                     .ToList())
+        {
+            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+            var root = worksheetXml.Root;
+            if (root is not null &&
+                NormalizeWorksheetNativeMetadataRoot(root))
+            {
+                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+            }
+        }
+    }
+
+    private static bool NormalizeWorksheetNativeMetadataRoot(XElement root)
+    {
+        var changed = false;
+        changed |= XlsxWorksheetProtectionNormalizer.NormalizeWorksheetRoot(root);
+        changed |= XlsxWorksheetProtectedRangeNormalizer.NormalizeWorksheetRoot(root);
+        changed |= XlsxWorksheetScenarioNormalizer.NormalizeWorksheetRoot(root);
+        changed |= XlsxWorksheetSmartTagNormalizer.NormalizeWorksheetRoot(root);
+        changed |= XlsxWorksheetCustomSheetViewExtensionListNormalizer.NormalizeWorksheetRoot(root);
+        changed |= XlsxWorksheetPhoneticPropertyNormalizer.NormalizeWorksheetRoot(root);
+        changed |= XlsxWorksheetCellWatchesNormalizer.NormalizeWorksheetRoot(root);
+        changed |= XlsxWorksheetCustomPropertiesNormalizer.NormalizeWorksheetRoot(root);
+        changed |= XlsxWorksheetIgnoredErrorsNormalizer.NormalizeWorksheetRoot(root);
+        changed |= XlsxWorksheetHyperlinkNormalizer.NormalizeWorksheetRoot(root);
+        changed |= XlsxWorksheetExtensionListNormalizer.NormalizeWorksheetRoot(root);
+        changed |= XlsxWorksheetWebPublishItemsNormalizer.NormalizeWorksheetRoot(root);
+        changed |= XlsxWorksheetOleControlNormalizer.NormalizeWorksheetRoot(root);
+
+        foreach (var dataValidations in root.Elements(root.Name.Namespace + "dataValidations").ToList())
+            changed |= XlsxWorksheetDataValidationNormalizer.NormalizeElement(dataValidations);
+
+        return changed;
+    }
 
     private static void RemoveWorksheetDynamicFilters(ZipArchive archive)
     {
