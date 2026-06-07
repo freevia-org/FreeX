@@ -36,13 +36,7 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
             return null;
 
         var model = new WorksheetCellWatchesMetadataModel();
-        foreach (var attribute in cellWatches.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration)
-                continue;
-
-            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
-        }
+        XlsxWorksheetNativeMetadataHelpers.ReadNativeAttributes(cellWatches, model.NativeAttributes, []);
 
         foreach (var cellWatch in cellWatches.Elements(worksheetNs + "cellWatch"))
         {
@@ -51,16 +45,7 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
                 continue;
 
             var attributes = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var attribute in cellWatch.Attributes())
-            {
-                if (attribute.IsNamespaceDeclaration ||
-                    string.Equals(attribute.Name.LocalName, "r", StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                attributes[attribute.Name.ToString()] = attribute.Value;
-            }
+            XlsxWorksheetNativeMetadataHelpers.ReadNativeAttributes(cellWatch, attributes, ["r"]);
 
             if (attributes.Count > 0)
                 model.WatchNativeAttributes[reference!] = attributes;
@@ -110,13 +95,8 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
 
             root.Element(workbookNs + "cellWatches")?.Remove();
             var cellWatches = new XElement(workbookNs + "cellWatches");
-            foreach (var attribute in sheet.CellWatchesMetadata?.NativeAttributes ?? [])
-            {
-                if (string.IsNullOrWhiteSpace(attribute.Key))
-                    continue;
-
-                XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(cellWatches, attribute.Key, attribute.Value);
-            }
+            if (sheet.CellWatchesMetadata is not null)
+                XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(cellWatches, sheet.CellWatchesMetadata.NativeAttributes, []);
 
             foreach (var address in watchedCells)
             {
@@ -124,16 +104,7 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
                 var cellWatch = new XElement(workbookNs + "cellWatch", new XAttribute("r", reference));
                 if (sheet.CellWatchesMetadata?.WatchNativeAttributes.TryGetValue(reference, out var attributes) == true)
                 {
-                    foreach (var attribute in attributes)
-                    {
-                        if (string.IsNullOrWhiteSpace(attribute.Key) ||
-                            string.Equals(attribute.Key, "r", StringComparison.Ordinal))
-                        {
-                            continue;
-                        }
-
-                        XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(cellWatch, attribute.Key, attribute.Value);
-                    }
+                    XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(cellWatch, attributes, ["r"]);
                 }
 
                 cellWatches.Add(cellWatch);
