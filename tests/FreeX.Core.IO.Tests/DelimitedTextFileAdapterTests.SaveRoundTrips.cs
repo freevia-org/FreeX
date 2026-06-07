@@ -3,6 +3,7 @@ using System.Text;
 using FluentAssertions;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using static FreeX.Core.IO.Tests.TextFileAdapterTestHelper;
 
 namespace FreeX.Core.IO.Tests;
 
@@ -11,34 +12,26 @@ public sealed partial class DelimitedTextFileAdapterTests
     [Fact]
     public void Save_WritesTabDelimitedRowsAndQuotesTabs()
     {
-        var workbook = new Workbook("Book1");
-        var sheet = workbook.AddSheet("Sheet1");
+        var (workbook, sheet) = CreateWorkbookWithSheet();
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Name"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Note"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Alice"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("a\tb"));
 
-        using var stream = new MemoryStream();
-        new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t').Save(workbook, stream);
-
-        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("Name\tNote\r\nAlice\t\"a\tb\"\r\n");
+        SaveToUtf8Text(new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t'), workbook)
+            .Should().Be("Name\tNote\r\nAlice\t\"a\tb\"\r\n");
     }
 
     [Fact]
     public void Save_RoundTripsQuotedFieldsWithEmbeddedCrLfAndQuotes()
     {
         var text = "line 1\r\n\"quoted\"\r\nline 3";
-        var workbook = new Workbook("Book1");
-        var sheet = workbook.AddSheet("Sheet1");
+        var (workbook, sheet) = CreateWorkbookWithSheet();
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(text));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("tail"));
 
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
-        using var stream = new MemoryStream();
-        adapter.Save(workbook, stream);
-        stream.Position = 0;
-
-        var roundTripped = adapter.Load(stream);
+        var roundTripped = SaveAndLoad(adapter, workbook);
         var loadedSheet = roundTripped.Sheets.Single();
 
         loadedSheet.GetValue(new CellAddress(loadedSheet.Id, 1, 1)).Should().Be(new TextValue(text));
@@ -48,18 +41,13 @@ public sealed partial class DelimitedTextFileAdapterTests
     [Fact]
     public void Save_RoundTripsExplicitEmptyTextFields()
     {
-        var workbook = new Workbook("Book1");
-        var sheet = workbook.AddSheet("Sheet1");
+        var (workbook, sheet) = CreateWorkbookWithSheet();
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(""));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("tail"));
 
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
-        using var stream = new MemoryStream();
-        adapter.Save(workbook, stream);
-        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("\"\"\ttail\r\n");
-        stream.Position = 0;
-
-        var roundTripped = adapter.Load(stream);
+        var (savedText, roundTripped) = SaveTextAndLoad(adapter, workbook);
+        savedText.Should().Be("\"\"\ttail\r\n");
         var loadedSheet = roundTripped.Sheets.Single();
 
         loadedSheet.GetValue(new CellAddress(loadedSheet.Id, 1, 1)).Should().Be(new TextValue(""));
@@ -69,20 +57,15 @@ public sealed partial class DelimitedTextFileAdapterTests
     [Fact]
     public void Save_WritesNonFiniteDateTimeValuesAsText()
     {
-        var workbook = new Workbook("Book1");
-        var sheet = workbook.AddSheet("Sheet1");
+        var (workbook, sheet) = CreateWorkbookWithSheet();
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new DateTimeValue(double.NaN));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new DateTimeValue(double.PositiveInfinity));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new DateTimeValue(double.NegativeInfinity));
 
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
-        using var stream = new MemoryStream();
-        adapter.Save(workbook, stream);
-
-        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("NaN\tInfinity\t-Infinity\r\n");
-        stream.Position = 0;
-
-        var loaded = adapter.Load(stream).GetSheetAt(0);
+        var (savedText, roundTripped) = SaveTextAndLoad(adapter, workbook);
+        savedText.Should().Be("NaN\tInfinity\t-Infinity\r\n");
+        var loaded = roundTripped.GetSheetAt(0);
         loaded.GetCell(1, 1)!.Value.Should().Be(new TextValue("NaN"));
         loaded.GetCell(1, 2)!.Value.Should().Be(new TextValue("Infinity"));
         loaded.GetCell(1, 3)!.Value.Should().Be(new TextValue("-Infinity"));
@@ -112,21 +95,17 @@ public sealed partial class DelimitedTextFileAdapterTests
     [Fact]
     public void Save_WritesOutOfRangeDateTimeValuesAsText()
     {
-        var workbook = new Workbook("Book1");
-        var sheet = workbook.AddSheet("Sheet1");
+        var (workbook, sheet) = CreateWorkbookWithSheet();
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new DateTimeValue(double.MaxValue));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new DateTimeValue(double.MinValue));
 
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
-        using var stream = new MemoryStream();
-        adapter.Save(workbook, stream);
-
         var max = double.MaxValue.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
         var min = double.MinValue.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
-        Encoding.UTF8.GetString(stream.ToArray()).Should().Be($"\"'{max}\"\t\"'{min}\"\r\n");
-        stream.Position = 0;
+        var (savedText, roundTripped) = SaveTextAndLoad(adapter, workbook);
+        savedText.Should().Be($"\"'{max}\"\t\"'{min}\"\r\n");
 
-        var loaded = adapter.Load(stream).GetSheetAt(0);
+        var loaded = roundTripped.GetSheetAt(0);
         loaded.GetCell(1, 1)!.Value.Should().Be(new TextValue(max));
         loaded.GetCell(1, 2)!.Value.Should().Be(new TextValue(min));
     }
@@ -134,17 +113,12 @@ public sealed partial class DelimitedTextFileAdapterTests
     [Fact]
     public void Save_RoundTripsFormulaLikeTextFieldsAsLiteralText()
     {
-        var workbook = new Workbook("Book1");
-        var sheet = workbook.AddSheet("Sheet1");
+        var (workbook, sheet) = CreateWorkbookWithSheet();
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("=A1*2"));
 
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
-        using var stream = new MemoryStream();
-        adapter.Save(workbook, stream);
-        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("\"'=A1*2\"\r\n");
-        stream.Position = 0;
-
-        var roundTripped = adapter.Load(stream);
+        var (savedText, roundTripped) = SaveTextAndLoad(adapter, workbook);
+        savedText.Should().Be("\"'=A1*2\"\r\n");
         var cell = roundTripped.Sheets.Single().GetCell(1, 1);
 
         cell.Should().NotBeNull();
@@ -159,17 +133,12 @@ public sealed partial class DelimitedTextFileAdapterTests
     [InlineData("@SUM(A1)", "\"'@SUM(A1)\"\r\n")]
     public void Save_RoundTripsFormulaPrefixTextFieldsAsLiteralText(string text, string expected)
     {
-        var workbook = new Workbook("Book1");
-        var sheet = workbook.AddSheet("Sheet1");
+        var (workbook, sheet) = CreateWorkbookWithSheet();
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(text));
 
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
-        using var stream = new MemoryStream();
-        adapter.Save(workbook, stream);
-        Encoding.UTF8.GetString(stream.ToArray()).Should().Be(expected);
-        stream.Position = 0;
-
-        var roundTripped = adapter.Load(stream);
+        var (savedText, roundTripped) = SaveTextAndLoad(adapter, workbook);
+        savedText.Should().Be(expected);
         var cell = roundTripped.Sheets.Single().GetCell(1, 1);
 
         cell.Should().NotBeNull();
@@ -180,17 +149,12 @@ public sealed partial class DelimitedTextFileAdapterTests
     [Fact]
     public void Save_RoundTripsSeparatorDirectivePrefixTextBeforeBlankCell()
     {
-        var workbook = new Workbook("Book1");
-        var sheet = workbook.AddSheet("Sheet1");
+        var (workbook, sheet) = CreateWorkbookWithSheet();
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("sep="));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue(""));
 
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
-        using var stream = new MemoryStream();
-        adapter.Save(workbook, stream);
-        stream.Position = 0;
-
-        var roundTripped = adapter.Load(stream);
+        var roundTripped = SaveAndLoad(adapter, workbook);
         var cell = roundTripped.Sheets.Single().GetCell(1, 1);
 
         cell.Should().NotBeNull();
@@ -215,16 +179,11 @@ public sealed partial class DelimitedTextFileAdapterTests
     [InlineData("#BLOCKED!")]
     public void Save_RoundTripsCoercionLikeTextFieldsAsLiteralText(string text)
     {
-        var workbook = new Workbook("Book1");
-        var sheet = workbook.AddSheet("Sheet1");
+        var (workbook, sheet) = CreateWorkbookWithSheet();
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(text));
 
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
-        using var stream = new MemoryStream();
-        adapter.Save(workbook, stream);
-        stream.Position = 0;
-
-        var roundTripped = adapter.Load(stream);
+        var roundTripped = SaveAndLoad(adapter, workbook);
         var cell = roundTripped.Sheets.Single().GetCell(1, 1);
 
         cell.Should().NotBeNull();
