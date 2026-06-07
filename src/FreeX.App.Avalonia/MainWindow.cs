@@ -116,6 +116,7 @@ public sealed class MainWindow : Window
     private readonly ToggleButton _wrapTextButton = new();
     private readonly Button _decreaseIndentButton = new();
     private readonly Button _increaseIndentButton = new();
+    private readonly NativeMenuItem _newWorkbookMenuItem = new();
     private readonly NativeMenuItem _openMenuItem = new();
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
@@ -303,6 +304,10 @@ public sealed class MainWindow : Window
 
     private void ConfigureNativeMenu()
     {
+        _newWorkbookMenuItem.Header = "New Workbook";
+        _newWorkbookMenuItem.Gesture = new KeyGesture(Key.N, KeyModifiers.Meta);
+        _newWorkbookMenuItem.Click += (_, _) => CreateNewWorkbook();
+
         _openMenuItem.Header = "Open...";
         _openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);
         _openMenuItem.Click += async (_, _) => await OpenWorkbookAsync();
@@ -480,6 +485,7 @@ public sealed class MainWindow : Window
         _quitMenuItem.Click += (_, _) => TryQuitApplication();
 
         var fileMenu = new NativeMenu();
+        fileMenu.Items.Add(_newWorkbookMenuItem);
         fileMenu.Items.Add(_openMenuItem);
         fileMenu.Items.Add(_saveMenuItem);
         fileMenu.Items.Add(_saveAsMenuItem);
@@ -1003,6 +1009,7 @@ public sealed class MainWindow : Window
         _decreaseIndentButton.IsEnabled = isIdle;
         _increaseIndentButton.IsEnabled = isIdle;
 
+        _newWorkbookMenuItem.IsEnabled = isIdle;
         _openMenuItem.IsEnabled = _openButton.IsEnabled;
         _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
         _saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;
@@ -2062,6 +2069,26 @@ public sealed class MainWindow : Window
         }
 
         RefreshShell($"Inserted {_session.ActiveSheet.Name}");
+    }
+
+    private void CreateNewWorkbook()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        if (_session.IsDirty)
+        {
+            ShowOpenIssue("Save changes before creating a new workbook.");
+            return;
+        }
+
+        var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
+        _session = _sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true);
+        ClearSelectedDrawingObject();
+        RefreshShell(_session.StartupStatus);
     }
 
     private async Task RenameActiveSheetAsync()
@@ -3153,6 +3180,7 @@ public sealed class MainWindow : Window
             HasNativeFormatMenu: hasNativeFormatMenu,
             HasNativeSheetMenu: hasNativeSheetMenu,
             HasNativeHelpMenu: hasNativeHelpMenu,
+            HasNativeNewWorkbookMenuItem: HasNativeMenuItem(_newWorkbookMenuItem, "New Workbook"),
             HasNativeOpenMenuItem: HasNativeMenuItem(_openMenuItem, "Open..."),
             HasNativeSaveMenuItem: HasNativeMenuItem(_saveMenuItem, "Save"),
             HasNativeSaveAsMenuItem: HasNativeMenuItem(_saveAsMenuItem, "Save As..."),
@@ -3332,6 +3360,11 @@ public sealed class MainWindow : Window
         {
             e.Handled = true;
             await SaveCurrentWorkbookAsync();
+        }
+        else if (e.Key == Key.N)
+        {
+            e.Handled = true;
+            CreateNewWorkbook();
         }
         else if (e.Key == Key.O)
         {

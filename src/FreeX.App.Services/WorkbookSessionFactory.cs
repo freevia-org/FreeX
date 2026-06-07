@@ -38,6 +38,30 @@ public sealed class WorkbookSessionFactory
             includeObjects);
     }
 
+    public WorkbookSession CreateNew(
+        double viewportHeight,
+        double viewportWidth,
+        bool includeObjects = false,
+        WorkbookCreationOptions? options = null,
+        IEnumerable<IFileAdapter>? adapters = null,
+        IViewportService? viewportService = null)
+    {
+        var workbook = WorkbookFactory.Create(options);
+        var source = new StartupWorkbookLoadResult(
+            workbook,
+            workbook.Name,
+            "Created new workbook.",
+            IsFallback: false);
+
+        return Create(
+            source,
+            viewportHeight,
+            viewportWidth,
+            includeObjects,
+            adapters,
+            viewportService);
+    }
+
     public WorkbookSession CreateOpened(
         WorkbookOpenTarget target,
         WorkbookOpenResult result,

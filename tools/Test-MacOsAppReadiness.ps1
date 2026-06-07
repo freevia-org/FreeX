@@ -429,6 +429,7 @@ function Test-MacOsWorkflow {
         "native_format_menu=true",
         "native_sheet_menu=true",
         "native_help_menu=true",
+        "native_new_workbook_menu_item=true",
         "native_new_sheet_menu_item=true",
         "native_rename_sheet_menu_item=true",
         "native_duplicate_sheet_menu_item=true",
@@ -513,6 +514,9 @@ function Test-SourceWiring {
                 "TryCreateDrawingBitmap(imageBytes, out var bitmap)",
                 "AddStyledCellBorderOverlay(content, style);",
                 "private static bool HasVisibleCellBorder(CellStyle? style)",
+                "_newWorkbookMenuItem.Click += (_, _) => CreateNewWorkbook();",
+                "fileMenu.Items.Add(_newWorkbookMenuItem);",
+                "_sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true)",
                 "_newSheetButton.Click += (_, _) => AddNewSheet();",
                 "_newSheetMenuItem.Click += (_, _) => AddNewSheet();",
                 "_renameSheetMenuItem.Click += async (_, _) => await RenameActiveSheetAsync();",
@@ -550,8 +554,10 @@ function Test-SourceWiring {
                 "HasNativeFormatMenu &&",
                 "HasNativeSheetMenu &&",
                 "HasNativeHelpMenu &&",
+                "HasNativeNewWorkbookMenuItem &&",
                 "HasNativeRenameSheetMenuItem &&",
                 "HasNativeDeleteSheetMenuItem &&",
+                "native_new_workbook_menu_item=",
                 "new_sheet_button=",
                 "native_sheet_menu=",
                 "native_new_sheet_menu_item=",
@@ -579,6 +585,17 @@ function Test-SourceWiring {
                 "native_check_for_updates_menu_item=",
                 "native_about_menu_item=",
                 "native_legal_notices_menu_item="
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "src\FreeX.App.Services\WorkbookSessionFactory.cs"
+            Markers = @(
+                "public WorkbookSession CreateNew(",
+                "WorkbookFactory.Create(options)",
+                "var source = new StartupWorkbookLoadResult(",
+                "`"Created new workbook.`"",
+                "return Create("
             )
             OrderedPairs = @()
         },

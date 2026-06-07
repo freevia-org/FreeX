@@ -25,12 +25,14 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_font_color_swatch_count=69");
         script.Should().Contain("native_cell_styles_menu_item=true");
         script.Should().Contain("native_cell_styles_preset_count=33");
+        script.Should().Contain("native_new_workbook_menu_item=true");
         script.Should().Contain("new_sheet_button=true");
         script.Should().Contain("native_sheet_menu=true");
         script.Should().Contain("native_new_sheet_menu_item=true");
         script.Should().Contain("native_rename_sheet_menu_item=true");
         script.Should().Contain("native_duplicate_sheet_menu_item=true");
         script.Should().Contain("native_delete_sheet_menu_item=true");
+        script.Should().Contain("HasNativeNewWorkbookMenuItem &&");
         script.Should().Contain("HasNativeRenameSheetMenuItem &&");
         script.Should().Contain("HasNativeDeleteSheetMenuItem &&");
         script.Should().Contain("native_help_menu=true");
@@ -57,6 +59,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("CreateDrawingObjectVisual(drawingObject, width, height)");
         script.Should().Contain("TryCreateDrawingBitmap(imageBytes, out var bitmap)");
         script.Should().Contain("private static bool HasVisibleCellBorder(CellStyle? style)");
+        script.Should().Contain("_newWorkbookMenuItem.Click += (_, _) => CreateNewWorkbook();");
+        script.Should().Contain("_sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true)");
+        script.Should().Contain("public WorkbookSession CreateNew(");
+        script.Should().Contain("WorkbookFactory.Create(options)");
+        script.Should().Contain("`\"Created new workbook.`\"");
         script.Should().Contain("var result = _session.AddSheet();");
         script.Should().Contain("var result = _session.RenameActiveSheet(newName);");
         script.Should().Contain("private async Task<string?> ShowRenameSheetDialogAsync(string currentName)");
@@ -342,6 +349,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       osascript -e 'tell application id "io.github.tony-xmelon.freex" to quit' || true
                       grep -q "new_sheet_button=true" "$artifact_root/launch.txt"
                       grep -q "native_file_menu=true" "$artifact_root/launch.txt"
+                      grep -q "native_new_workbook_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_edit_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_format_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_sheet_menu=true" "$artifact_root/launch.txt"
@@ -450,6 +458,9 @@ public sealed class MacOsAppReadinessPreflightTests
                     CreateDrawingObjectVisual(drawingObject, width, height);
                     TryCreateDrawingBitmap(imageBytes, out var bitmap);
                     AddStyledCellBorderOverlay(content, style);
+                    _newWorkbookMenuItem.Click += (_, _) => CreateNewWorkbook();
+                    fileMenu.Items.Add(_newWorkbookMenuItem);
+                    _sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true);
                     _newSheetButton.Click += (_, _) => AddNewSheet();
                     _newSheetMenuItem.Click += (_, _) => AddNewSheet();
                     _renameSheetMenuItem.Click += async (_, _) => await RenameActiveSheetAsync();
@@ -475,6 +486,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     LegalNoticeProvider.GetDocuments().Select(document => document.Title);
                 }
                 private static bool HasVisibleCellBorder(CellStyle? style) => true;
+                private void CreateNewWorkbook() { }
                 private async Task RenameActiveSheetAsync() => await Task.CompletedTask;
                 private async Task<string?> ShowRenameSheetDialogAsync(string currentName) => await Task.FromResult<string?>(currentName);
                 internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot() => new();
@@ -498,18 +510,40 @@ public sealed class MacOsAppReadinessPreflightTests
 
             internal sealed class MacOsLaunchSmokeSnapshot
             {
-                public bool IsPassed => HasNativeFileMenu && HasNativeEditMenu && HasNativeFormatMenu && HasNativeSheetMenu && HasNativeHelpMenu && HasNativeRenameSheetMenuItem && HasNativeDeleteSheetMenuItem && HasNativeCellStylesMenuItem && HasNativeCopyMenuItem;
+                public bool IsPassed => HasNativeFileMenu && HasNativeEditMenu && HasNativeFormatMenu && HasNativeSheetMenu && HasNativeHelpMenu && HasNativeNewWorkbookMenuItem && HasNativeRenameSheetMenuItem && HasNativeDeleteSheetMenuItem && HasNativeCellStylesMenuItem && HasNativeCopyMenuItem;
                 private bool HasNativeFileMenu { get; }
                 private bool HasNativeEditMenu { get; }
                 private bool HasNativeFormatMenu { get; }
                 private bool HasNativeSheetMenu { get; }
                 private bool HasNativeHelpMenu { get; }
+                private bool HasNativeNewWorkbookMenuItem { get; }
                 private bool HasNativeRenameSheetMenuItem { get; }
                 private bool HasNativeDeleteSheetMenuItem { get; }
                 private bool HasNativeCellStylesMenuItem { get; }
                 private bool HasNativeCopyMenuItem { get; }
                 public int NativeCellStylesPresetCount { get; }
-                public string Report => "new_sheet_button= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_delete_sheet_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+                public string Report => "native_new_workbook_menu_item= new_sheet_button= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_delete_sheet_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Services/WorkbookSessionFactory.cs",
+            """
+            namespace FreeX.App.Services;
+
+            public sealed class WorkbookSessionFactory
+            {
+                public WorkbookSession CreateNew()
+                {
+                    var workbook = WorkbookFactory.Create(options);
+                    var source = new StartupWorkbookLoadResult(
+                        workbook,
+                        workbook.Name,
+                        "Created new workbook.",
+                        IsFallback: false);
+                    return Create(source);
+                }
             }
             """);
 

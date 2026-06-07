@@ -8,6 +8,25 @@ namespace FreeX.App.Services.Tests;
 public sealed class WorkbookSessionTests
 {
     [Fact]
+    public void CreateNew_CreatesCleanUnsavedDefaultWorkbookSession()
+    {
+        var session = new WorkbookSessionFactory().CreateNew(viewportHeight: 240, viewportWidth: 320);
+
+        session.DisplayName.Should().Be(WorkbookFactory.DefaultWorkbookName);
+        session.Workbook.Name.Should().Be(WorkbookFactory.DefaultWorkbookName);
+        session.StartupStatus.Should().Be("Created new workbook.");
+        session.CurrentFilePath.Should().BeNull();
+        session.IsDirty.Should().BeFalse();
+        session.CanSaveCurrentSource(out _).Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+        session.CanRedo.Should().BeFalse();
+        session.SheetTabs.Should().ContainSingle();
+        session.ActiveSheet.Name.Should().Be("Sheet1");
+        session.Viewport.RowMetrics.Should().NotBeEmpty();
+        session.Viewport.ColMetrics.Should().NotBeEmpty();
+    }
+
+    [Fact]
     public void Create_TemplateSourceClearsDirectSaveTarget()
     {
         var workbook = CreateWorkbook();

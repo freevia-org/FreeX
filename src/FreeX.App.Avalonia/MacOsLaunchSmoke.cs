@@ -73,6 +73,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeFormatMenu,
     bool HasNativeSheetMenu,
     bool HasNativeHelpMenu,
+    bool HasNativeNewWorkbookMenuItem,
     bool HasNativeOpenMenuItem,
     bool HasNativeSaveMenuItem,
     bool HasNativeSaveAsMenuItem,
@@ -141,6 +142,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeFormatMenu &&
         HasNativeSheetMenu &&
         HasNativeHelpMenu &&
+        HasNativeNewWorkbookMenuItem &&
         HasNativeOpenMenuItem &&
         HasNativeSaveMenuItem &&
         HasNativeSaveAsMenuItem &&
@@ -257,6 +259,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_format_menu={FormatBool(snapshot.HasNativeFormatMenu)}",
                 $"native_sheet_menu={FormatBool(snapshot.HasNativeSheetMenu)}",
                 $"native_help_menu={FormatBool(snapshot.HasNativeHelpMenu)}",
+                $"native_new_workbook_menu_item={FormatBool(snapshot.HasNativeNewWorkbookMenuItem)}",
                 $"native_open_menu_item={FormatBool(snapshot.HasNativeOpenMenuItem)}",
                 $"native_save_menu_item={FormatBool(snapshot.HasNativeSaveMenuItem)}",
                 $"native_save_as_menu_item={FormatBool(snapshot.HasNativeSaveAsMenuItem)}",
