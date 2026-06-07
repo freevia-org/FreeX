@@ -8,6 +8,54 @@ namespace FreeX.Core.IO.Tests;
 public sealed partial class XlsxPackageMetadataMergerTests
 {
     [Fact]
+    public void MergeRelationshipParts_PreservesQueryTableWorksheetGraphToGeneratedQueryTablePart()
+    {
+        using var sourcePackage = XlsxPackageTestFixtures.CreatePackage(
+            ("xl/worksheets/_rels/sheet1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdQueryTable"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/queryTable"
+                                Target="../queryTables/queryTable1.xml"/>
+                </Relationships>
+                """),
+            ("xl/queryTables/queryTable1.xml", """
+                <queryTable xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                            name="FreeXQueryTable"
+                            connectionId="1"/>
+                """));
+        using var targetPackage = XlsxPackageTestFixtures.CreatePackage(
+            ("xl/worksheets/sheet1.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <sheetData/>
+                </worksheet>
+                """),
+            ("xl/worksheets/_rels/sheet1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>
+                """),
+            ("xl/queryTables/queryTable1.xml", """
+                <queryTable xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                            name="GeneratedQueryTable"
+                            connectionId="1"/>
+                """));
+        using var source = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var target = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(source, target);
+        XlsxPackageMetadataMerger.MergeRelationshipParts(source, target, generatedEntriesBeforeMerge);
+
+        var relationshipsXml = LoadWorksheetRelationshipsXml(target);
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        relationshipsXml.Root!
+            .Elements(relationshipNs + "Relationship")
+            .Where(element =>
+                element.Attribute("Id")?.Value == "rIdQueryTable" &&
+                element.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/queryTable" &&
+                element.Attribute("Target")?.Value == "../queryTables/queryTable1.xml")
+            .Should()
+            .ContainSingle();
+    }
+
+    [Fact]
     public void MergeRelationshipParts_PreservesPercentEncodedInternalTargetsForCopiedParts()
     {
         using var sourcePackage = CreatePackageWithPercentEncodedMediaRelationship();
@@ -264,6 +312,90 @@ public sealed partial class XlsxPackageMetadataMergerTests
             .Elements(chartNs + "externalData")
             .Should()
             .NotContain(element => (string?)element.Attribute(relNs + "id") == "rIdPivotCache");
+    }
+
+    [Fact]
+    public void MergeRelationshipParts_PreservesChartExStyleColorRelationshipsToGeneratedSidecarsAndRemapsIds()
+    {
+        using var sourcePackage = XlsxPackageTestFixtures.CreatePackage(
+            ("[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/charts/chart1.xml" ContentType="application/vnd.ms-office.chartex+xml"/>
+                  <Override PartName="/xl/charts/style1.xml" ContentType="application/vnd.ms-office.chartstyle+xml"/>
+                  <Override PartName="/xl/charts/colors1.xml" ContentType="application/vnd.ms-office.chartcolorstyle+xml"/>
+                </Types>
+                """),
+            ("xl/charts/chart1.xml", """
+                <cx:chartSpace xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex"/>
+                """),
+            ("xl/charts/style1.xml", """
+                <cs:chartStyle xmlns:cs="http://schemas.microsoft.com/office/drawing/2012/chartStyle" id="201"/>
+                """),
+            ("xl/charts/colors1.xml", """
+                <cs:colorStyle xmlns:cs="http://schemas.microsoft.com/office/drawing/2012/chartStyle" id="10"/>
+                """),
+            ("xl/charts/_rels/chart1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1"
+                                Type="http://schemas.microsoft.com/office/2011/relationships/chartStyle"
+                                Target="style1.xml"/>
+                  <Relationship Id="rId2"
+                                Type="http://schemas.microsoft.com/office/2011/relationships/chartColorStyle"
+                                Target="colors1.xml"/>
+                </Relationships>
+                """));
+        using var targetPackage = XlsxPackageTestFixtures.CreatePackage(
+            ("[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/charts/chart1.xml" ContentType="application/vnd.ms-office.chartex+xml"/>
+                  <Override PartName="/xl/charts/style1.xml" ContentType="application/vnd.ms-office.chartstyle+xml"/>
+                  <Override PartName="/xl/charts/colors1.xml" ContentType="application/vnd.ms-office.chartcolorstyle+xml"/>
+                </Types>
+                """),
+            ("xl/charts/chart1.xml", """
+                <cx:chartSpace xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex"/>
+                """),
+            ("xl/charts/style1.xml", """
+                <cs:chartStyle xmlns:cs="http://schemas.microsoft.com/office/drawing/2012/chartStyle" id="201"/>
+                """),
+            ("xl/charts/colors1.xml", """
+                <cs:colorStyle xmlns:cs="http://schemas.microsoft.com/office/drawing/2012/chartStyle" id="10"/>
+                """),
+            ("xl/charts/_rels/chart1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
+                                Target="https://example.com/chart"
+                                TargetMode="External"/>
+                </Relationships>
+                """));
+        using var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var targetArchive = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, targetArchive);
+        generatedEntriesBeforeMerge.Should().Contain(["xl/charts/style1.xml", "xl/charts/colors1.xml"]);
+
+        XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, targetArchive, generatedEntriesBeforeMerge);
+
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationshipsXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "xl/charts/_rels/chart1.xml.rels");
+        var relationships = relationshipsXml.Root!.Elements(relationshipNs + "Relationship").ToList();
+        relationships
+            .Select(element => element.Attribute("Id")?.Value)
+            .OfType<string>()
+            .Should()
+            .OnlyHaveUniqueItems();
+        relationships.Should().ContainSingle(element =>
+            (string?)element.Attribute("Type") == "http://schemas.microsoft.com/office/2011/relationships/chartStyle" &&
+            (string?)element.Attribute("Target") == "style1.xml" &&
+            (string?)element.Attribute("Id") != "rId1");
+        relationships.Should().ContainSingle(element =>
+            (string?)element.Attribute("Type") == "http://schemas.microsoft.com/office/2011/relationships/chartColorStyle" &&
+            (string?)element.Attribute("Target") == "colors1.xml");
     }
 
     [Fact]

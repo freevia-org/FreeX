@@ -7,6 +7,9 @@ namespace FreeX.Core.IO;
 
 public sealed partial class XlsxFileAdapter
 {
+    private const string ChartExStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartStyle";
+    private const string ChartExColorStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartColorStyle";
+
     // Source package snapshot and native package-part preservation for loaded workbook saves.
     private static SourcePackagePartSummary PreserveSourcePackageParts(Workbook workbook, Stream generatedPackage)
     {
@@ -374,8 +377,118 @@ public sealed partial class XlsxFileAdapter
                 generatedArchive.GetEntry(chartExPartPath)?.Delete();
                 XlsxPackageMetadataMerger.CopyEntry(sourceEntry, generatedArchive);
             }
+
+            PreserveSourceChartExStyleColorPackageGraph(sourceArchive, generatedArchive, chartExPartPath);
         }
     }
+
+    private static void PreserveSourceChartExStyleColorPackageGraph(
+        ZipArchive sourceArchive,
+        ZipArchive generatedArchive,
+        string chartExPartPath)
+    {
+        var sourceRelationshipsPath = XlsxPackagePath.GetRelationshipPartPath(chartExPartPath);
+        var sourceRelationshipsEntry = sourceArchive.GetEntry(sourceRelationshipsPath);
+        if (sourceRelationshipsEntry is null)
+            return;
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var sourceRelationshipsXml = XlsxPackageXmlEditor.LoadXml(sourceRelationshipsEntry);
+        var sourceStyleRelationships = sourceRelationshipsXml.Root?
+            .Elements(packageRelNs + "Relationship")
+            .Where(IsChartExStyleOrColorStyleRelationship)
+            .ToList();
+        if (sourceStyleRelationships is null || sourceStyleRelationships.Count == 0)
+            return;
+
+        var styleRelationshipCount = 0;
+        var colorStyleRelationshipCount = 0;
+        var sourceSidecarEntries = new List<ZipArchiveEntry>();
+        foreach (var relationship in sourceStyleRelationships)
+        {
+            var relationshipType = relationship.Attribute("Type")?.Value.Trim();
+            var target = relationship.Attribute("Target")?.Value;
+            if (string.IsNullOrWhiteSpace(target) ||
+                relationship.Attribute("TargetMode") is not null)
+            {
+                return;
+            }
+
+            var expectedRootName = XName.Get("chartStyle", "http://schemas.microsoft.com/office/drawing/2012/chartStyle");
+            if (string.Equals(relationshipType, ChartExStyleRelationshipType, StringComparison.OrdinalIgnoreCase))
+            {
+                styleRelationshipCount++;
+            }
+            else
+            {
+                colorStyleRelationshipCount++;
+                expectedRootName = XName.Get("colorStyle", "http://schemas.microsoft.com/office/drawing/2012/chartStyle");
+            }
+
+            var sidecarPath = XlsxPackagePath.ResolveRelationshipTarget(chartExPartPath, target.Trim());
+            if (!IsChartExStyleSidecarPath(sidecarPath) ||
+                sourceArchive.GetEntry(sidecarPath) is not { } sourceSidecarEntry)
+            {
+                return;
+            }
+
+            var sourceSidecarXml = XlsxPackageXmlEditor.LoadXml(sourceSidecarEntry);
+            if (sourceSidecarXml.Root?.Name != expectedRootName)
+                return;
+
+            sourceSidecarEntries.Add(sourceSidecarEntry);
+        }
+
+        if (styleRelationshipCount != 1 || colorStyleRelationshipCount != 1)
+            return;
+
+        foreach (var sourceSidecarEntry in sourceSidecarEntries)
+            XlsxPackageMetadataMerger.CopyEntry(sourceSidecarEntry, generatedArchive);
+
+        var generatedRelationshipsPath = XlsxPackagePath.GetRelationshipPartPath(chartExPartPath);
+        var generatedRelationshipsXml = generatedArchive.GetEntry(generatedRelationshipsPath) is { } generatedRelationshipsEntry
+            ? XlsxPackageXmlEditor.LoadXml(generatedRelationshipsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        var generatedRoot = generatedRelationshipsXml.Root;
+        if (generatedRoot is null)
+            return;
+
+        generatedRoot
+            .Elements(packageRelNs + "Relationship")
+            .Where(IsChartExStyleOrColorStyleRelationship)
+            .Remove();
+
+        var existingIds = generatedRoot
+            .Elements(packageRelNs + "Relationship")
+            .Select(element => element.Attribute("Id")?.Value)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sourceRelationship in sourceStyleRelationships)
+        {
+            var copy = new XElement(sourceRelationship);
+            var id = copy.Attribute("Id")?.Value;
+            if (string.IsNullOrWhiteSpace(id) || existingIds.Contains(id))
+                copy.SetAttributeValue("Id", XlsxPackageXmlEditor.NextRelationshipId(generatedRelationshipsXml, packageRelNs));
+
+            generatedRoot.Add(copy);
+            existingIds.Add(copy.Attribute("Id")!.Value);
+        }
+
+        XlsxPackageXmlEditor.ReplaceXml(generatedArchive, generatedRelationshipsPath, generatedRelationshipsXml);
+    }
+
+    private static bool IsChartExStyleOrColorStyleRelationship(XElement relationship)
+    {
+        var type = relationship.Attribute("Type")?.Value.Trim();
+        return string.Equals(type, ChartExStyleRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(type, ChartExColorStyleRelationshipType, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsChartExStyleSidecarPath(string path) =>
+        path.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase) &&
+        path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+        !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
 
     private static bool WorkbookStillContainsSourceChartModel(Workbook workbook, ZipArchiveEntry sourceEntry)
     {

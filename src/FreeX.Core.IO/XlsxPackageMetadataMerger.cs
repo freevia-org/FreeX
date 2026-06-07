@@ -10,6 +10,8 @@ internal static class XlsxPackageMetadataMerger
     private const string ImageRelationshipType = SpreadsheetRelationshipPrefix + "image";
     private const string PackageRelationshipType = SpreadsheetRelationshipPrefix + "package";
     private const string PivotCacheDefinitionRelationshipType = SpreadsheetRelationshipPrefix + "pivotCacheDefinition";
+    private const string ChartExStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartStyle";
+    private const string ChartExColorStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartColorStyle";
 
     public static IReadOnlySet<string> CopyUnknownPackageParts(
         ZipArchive sourceArchive,
@@ -455,9 +457,50 @@ internal static class XlsxPackageMetadataMerger
         return !string.IsNullOrWhiteSpace(targetPart) &&
                targetIndex.Contains(targetPart) &&
                (!generatedEntriesBeforeMerge.Contains(targetPart) ||
+                IsChartExStyleColorPackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
                 IsDataModelPackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
+                IsQueryTablePackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
                 IsXmlMapsPackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
                 IsCustomXmlPackageGraphRelationship(relationshipPartPath, relationship, targetPart));
+    }
+
+    private static bool IsQueryTablePackageGraphRelationship(
+        string relationshipPartPath,
+        XElement relationship,
+        string targetPart)
+    {
+        if (!targetPart.StartsWith("xl/queryTables/", StringComparison.OrdinalIgnoreCase) ||
+            !targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var sourcePart = RelationshipPartToSourcePart(relationshipPartPath);
+        return sourcePart.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+               sourcePart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(
+                   NormalizeRelationshipType(relationship),
+                   SpreadsheetRelationshipPrefix + "queryTable",
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsChartExStyleColorPackageGraphRelationship(
+        string relationshipPartPath,
+        XElement relationship,
+        string targetPart)
+    {
+        var sourcePart = RelationshipPartToSourcePart(relationshipPartPath);
+        if (!sourcePart.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase) ||
+            !sourcePart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ||
+            !targetPart.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase) ||
+            !targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var relationshipType = NormalizeRelationshipType(relationship);
+        return string.Equals(relationshipType, ChartExStyleRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(relationshipType, ChartExColorStyleRelationshipType, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsXmlMapsPackageGraphRelationship(

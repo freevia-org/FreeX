@@ -85,8 +85,8 @@ internal static class XlsxWorkbookWebPublishObjectsNormalizer
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(webPublishObject, WebPublishObjectAttributes);
         changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(webPublishObject);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishObject, "id", NormalizeUnsignedIntOrNull);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishObject, "autoRepublish", NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishObject, "id", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishObject, "autoRepublish", XlsxXmlNormalizationHelpers.NormalizeBoolean);
 
         foreach (var attributeName in TextAttributes)
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishObject, attributeName, NormalizeOptionalText);
@@ -118,28 +118,10 @@ internal static class XlsxWorkbookWebPublishObjectsNormalizer
         return changed;
     }
 
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed switch
-        {
-            "0" or "1" => trimmed,
-            "true" or "false" => trimmed,
-            _ => null
-        };
-    }
-
     private static string? NormalizeOptionalText(string? value)
     {
         var trimmed = value?.Trim();
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 
-    private static string? NormalizeUnsignedIntOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed.ToString(CultureInfo.InvariantCulture)
-            : null;
-    }
 }
