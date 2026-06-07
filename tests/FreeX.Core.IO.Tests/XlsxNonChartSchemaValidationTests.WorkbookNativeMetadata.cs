@@ -151,7 +151,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace x15Ns = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
 
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var root = workbookXml.Root!;
         ReplaceWorkbookChildInOrder(root, new XElement(
             workbookNs + "oleSize",
@@ -200,7 +200,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var oleSize = workbookXml.Root!.Element(workbookNs + "oleSize")!;
         oleSize.SetAttributeValue("ref", " a1:d12 ");
         oleSize.SetAttributeValue("customOleSizeFlag", "removed");
