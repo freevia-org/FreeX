@@ -3619,7 +3619,7 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void XlsxAdapter_LoadedWorkbookSave_PreservesHyperlinkNativeMetadata()
+    public void XlsxAdapter_LoadedWorkbookSave_SanitizesHyperlinkNativeMetadata()
     {
         var workbook = new Workbook("HyperlinkNativeMetadata");
         var sheet = workbook.AddSheet("S1");
@@ -3653,19 +3653,12 @@ public partial class FileAdapterSmokeTests
             .Element(worksheetNs + "hyperlinks")!
             .Attribute("nativeHyperlinksAttr")
             .Should()
-            .NotBeNull();
-        worksheetXml.Root!
-            .Element(worksheetNs + "hyperlinks")!
-            .Attribute("nativeHyperlinksAttr")!
-            .Value
-            .Should()
-            .Be("kept");
+            .BeNull();
         hyperlink.Attribute("tooltip").Should().NotBeNull();
         hyperlink.Attribute("tooltip")!.Value.Should().Be("Open documentation");
         hyperlink.Attribute("display").Should().NotBeNull();
         hyperlink.Attribute("display")!.Value.Should().Be("FreeX docs");
-        hyperlink.Attribute("customAttr").Should().NotBeNull();
-        hyperlink.Attribute("customAttr")!.Value.Should().Be("hyperlink-native");
+        hyperlink.Attribute("customAttr").Should().BeNull();
     }
 
     [Fact]
@@ -14940,7 +14933,7 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetSheetFormatMetadata()
+    public void XlsxAdapter_LoadedWorkbookSave_SanitizesWorksheetSheetFormatMetadata()
     {
         var workbook = new Workbook("WorksheetSheetFormatMetadata");
         var sheet = workbook.AddSheet("Sheet1");
@@ -14960,6 +14953,7 @@ public partial class FileAdapterSmokeTests
         BagAttr(loadedSheet.SheetFormatMetadata, "sheetFormatPr", "zeroHeight").Should().Be("1");
         BagAttr(loadedSheet.SheetFormatMetadata, "sheetFormatPr", "thickTop").Should().Be("1");
         BagAttr(loadedSheet.SheetFormatMetadata, "sheetFormatPr", "outlineLevelRow").Should().Be("3");
+        BagAttr(loadedSheet.SheetFormatMetadata, "sheetFormatPr", "customSheetFormatAttr").Should().Be("kept");
         BagChildren(loadedSheet.SheetFormatMetadata, "sheetFormatPr").Should().ContainSingle(xml => xml.Contains("nativeSheetFormatChild", StringComparison.Ordinal));
         AddBagAttr(loadedSheet.SheetFormatMetadata!, "sheetFormatPr", "invalid sheetFormat attr", "skip");
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
@@ -14980,12 +14974,8 @@ public partial class FileAdapterSmokeTests
         sheetFormat.Attribute("thickTop")!.Value.Should().Be("1");
         sheetFormat.Attribute("outlineLevelRow")!.Value.Should().Be("3");
         worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
-        sheetFormat.Element(worksheetNs + "nativeSheetFormatChild").Should().NotBeNull();
-        sheetFormat.Element(worksheetNs + "nativeSheetFormatChild")!
-            .Attribute("value")!
-            .Value
-            .Should()
-            .Be("kept");
+        sheetFormat.Attribute("customSheetFormatAttr").Should().BeNull();
+        sheetFormat.Element(worksheetNs + "nativeSheetFormatChild").Should().BeNull();
     }
 
     [Fact]
@@ -22563,6 +22553,7 @@ public partial class FileAdapterSmokeTests
             sheetFormat.SetAttributeValue("zeroHeight", "1");
             sheetFormat.SetAttributeValue("thickTop", "1");
             sheetFormat.SetAttributeValue("outlineLevelRow", "3");
+            sheetFormat.SetAttributeValue("customSheetFormatAttr", "kept");
             sheetFormat.Add(new XElement(
                 worksheetNs + "nativeSheetFormatChild",
                 new XAttribute("value", "kept")));

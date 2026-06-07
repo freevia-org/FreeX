@@ -850,11 +850,13 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchWorksheetMergeCells(archive);
                 NormalizePatchWorksheetDimension(archive);
                 NormalizePatchWorksheetCalculationProperties(archive);
+                NormalizePatchWorksheetSheetFormat(archive);
                 NormalizePatchWorksheetSheetViews(archive);
                 NormalizePatchWorksheetPhoneticProperties(archive);
                 NormalizePatchWorksheetCellWatches(archive);
                 NormalizePatchWorksheetCustomProperties(archive);
                 NormalizePatchWorksheetIgnoredErrors(archive);
+                NormalizePatchWorksheetHyperlinks(archive);
                 NormalizePatchWorksheetPageLayout(archive);
                 NormalizePatchWorksheetPageBreaks(archive);
                 NormalizePatchWorksheetSingleXmlCells(archive);
@@ -1256,6 +1258,9 @@ public sealed partial class XlsxFileAdapter
         private static void NormalizePatchWorksheetIgnoredErrors(ZipArchive archive)
             => XlsxWorksheetIgnoredErrorsNormalizer.NormalizeWorksheets(archive);
 
+        private static void NormalizePatchWorksheetHyperlinks(ZipArchive archive)
+            => XlsxWorksheetHyperlinkNormalizer.NormalizeWorksheets(archive);
+
         private static void NormalizePatchWorksheetSingleXmlCells(ZipArchive archive)
         {
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -1304,6 +1309,9 @@ public sealed partial class XlsxFileAdapter
 
         private static void NormalizePatchWorksheetCalculationProperties(ZipArchive archive) =>
             XlsxWorksheetCalculationPropertyNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetSheetFormat(ZipArchive archive) =>
+            XlsxWorksheetSheetFormatNormalizer.NormalizeWorksheets(archive);
 
         private static void NormalizePatchWorksheetPageBreaks(ZipArchive archive)
         {

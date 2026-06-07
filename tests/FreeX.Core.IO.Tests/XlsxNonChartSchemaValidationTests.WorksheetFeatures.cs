@@ -1607,6 +1607,51 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidWorksheetSheetFormatForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetOutlineAndFormatSourceWorkbook());
+        SetWorksheetSheetFormatInvalidNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetSheetFormatSanitized(saved);
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorksheetSheetFormatForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetOutlineAndFormatSourceWorkbook());
+        SetWorksheetSheetFormatInvalidNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetSheetFormatSanitized(saved);
+    }
+
+    [Fact]
     public void LoadedWorkbookFullSave_SanitizesInvalidWorksheetGridXmlForSchemaValidity()
     {
         using var source = Save(CreateWorksheetGridXmlSourceWorkbook());
@@ -2886,6 +2931,36 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         phoneticPr.Attribute("alignment")!.Value.Should().Be("center");
         phoneticPr.Attribute("nativeOnly").Should().BeNull();
         phoneticPr.Elements().Should().BeEmpty();
+    }
+
+    private static void SetWorksheetSheetFormatInvalidNativeMetadata(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexNs = "urn:freex:test";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var sheetFormat = worksheetXml.Root!.Element(workbookNs + "sheetFormatPr")!;
+        sheetFormat.SetAttributeValue("nativeSheetFormatAttr", "kept");
+        sheetFormat.SetAttributeValue("invalidSheetFormatAttr", "removed");
+        sheetFormat.Add(new XElement(
+            freexNs + "sheetFormatNativeChild",
+            new XAttribute("id", "sheet-format")));
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void AssertWorksheetSheetFormatSanitized(MemoryStream stream)
+    {
+        var sheetFormat = ReadWorksheetChildElement(stream, "sheetFormatPr");
+        sheetFormat.Attribute("baseColWidth")!.Value.Should().Be("12");
+        sheetFormat.Attribute("zeroHeight")!.Value.Should().Be("0");
+        sheetFormat.Attribute("thickTop")!.Value.Should().Be("1");
+        sheetFormat.Attribute("thickBottom")!.Value.Should().Be("0");
+        sheetFormat.Attribute("outlineLevelRow")!.Value.Should().Be("2");
+        sheetFormat.Attribute("outlineLevelCol")!.Value.Should().Be("2");
+        sheetFormat.Attribute("nativeSheetFormatAttr").Should().BeNull();
+        sheetFormat.Attribute("invalidSheetFormatAttr").Should().BeNull();
+        sheetFormat.Elements().Should().BeEmpty();
     }
 
     private static Workbook CreateWorksheetOutlineAndFormatSourceWorkbook()
