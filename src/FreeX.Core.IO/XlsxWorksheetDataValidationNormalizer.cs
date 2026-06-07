@@ -49,7 +49,7 @@ internal static class XlsxWorksheetDataValidationNormalizer
     {
         var changed = false;
         changed |= RemoveUnexpectedWorksheetChildren(validation, DataValidationChildren);
-        changed |= NormalizeChildOrder(validation, DataValidationChildOrder);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeChildOrder(validation, DataValidationChildOrder);
         return changed;
     }
 
@@ -69,21 +69,6 @@ internal static class XlsxWorksheetDataValidationNormalizer
         }
 
         return changed;
-    }
-
-    private static bool NormalizeChildOrder(XElement element, Func<XElement, int> orderSelector)
-    {
-        var children = element.Elements()
-            .Select((child, index) => new { Child = child, Index = index })
-            .OrderBy(item => orderSelector(item.Child))
-            .ThenBy(item => item.Index)
-            .Select(item => item.Child)
-            .ToList();
-        if (children.Count == 0 || element.Elements().SequenceEqual(children))
-            return false;
-
-        element.ReplaceNodes(children);
-        return true;
     }
 
     private static int DataValidationChildOrder(XElement child) =>

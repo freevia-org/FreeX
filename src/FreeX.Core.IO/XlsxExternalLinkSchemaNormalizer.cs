@@ -76,7 +76,7 @@ internal static class XlsxExternalLinkSchemaNormalizer
             changed = true;
         }
 
-        changed |= NormalizeChildOrder(externalLink, ExternalLinkChildOrder);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeChildOrder(externalLink, ExternalLinkChildOrder);
         return changed;
     }
 
@@ -126,7 +126,7 @@ internal static class XlsxExternalLinkSchemaNormalizer
             changed = true;
         }
 
-        changed |= NormalizeChildOrder(externalBook, ExternalBookChildOrder);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeChildOrder(externalBook, ExternalBookChildOrder);
         return changed;
     }
 
@@ -236,21 +236,6 @@ internal static class XlsxExternalLinkSchemaNormalizer
         }
 
         return XlsxXmlNormalizationHelpers.SetAttributeIfChanged(element, attributeName, trimmed);
-    }
-
-    private static bool NormalizeChildOrder(XElement parent, Func<XElement, int> orderSelector)
-    {
-        var orderedChildren = parent.Elements()
-            .Select((element, index) => new { Element = element, Index = index })
-            .OrderBy(item => orderSelector(item.Element))
-            .ThenBy(item => item.Index)
-            .Select(item => item.Element)
-            .ToList();
-        if (orderedChildren.Count == 0 || parent.Elements().SequenceEqual(orderedChildren))
-            return false;
-
-        parent.ReplaceNodes(orderedChildren);
-        return true;
     }
 
     private static int ExternalLinkChildOrder(XElement child) =>

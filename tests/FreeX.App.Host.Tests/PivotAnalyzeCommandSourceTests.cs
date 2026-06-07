@@ -24,6 +24,8 @@ public sealed class PivotAnalyzeCommandSourceTests
     [InlineData("Change Chart Type", "Change Chart", "CT", "PivotChartChangeTypeBtn_Click")]
     [InlineData("PivotChart Options", "Chart Options", "CO", "PivotChartOptionsBtn_Click")]
     [InlineData("Field List", "Field List", "FL", "PivotFieldListBtn_Click")]
+    [InlineData("+/- Buttons", "+/- Buttons", "PB", "PivotExpandCollapseButtonsBtn_Click")]
+    [InlineData("Field Headers", "Field Headers", "FH", "PivotFieldHeadersBtn_Click")]
     public void PivotAnalyzeCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
         string title,
         string content,
@@ -93,6 +95,12 @@ public sealed class PivotAnalyzeCommandSourceTests
         pivotSource.Should().Contain("new InsertTimelineDialog(headers, fieldName)");
         pivotSource.Should().Contain("new AddTimelineCommand(dialog.Result.TimelineName, pivotTable.Name, dialog.Result.DateFieldName)");
         pivotSource.Should().Contain("new PivotValueFieldSettingsDialog(current, headers)");
+
+        var designSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotDesignCommands.cs");
+        designSource.Should().Contain("private void PivotExpandCollapseButtonsBtn_Click(object sender, RoutedEventArgs e)");
+        designSource.Should().Contain("showExpandCollapseButtons: !pivotTable.ShowExpandCollapseButtons");
+        designSource.Should().Contain("private void PivotFieldHeadersBtn_Click(object sender, RoutedEventArgs e)");
+        designSource.Should().Contain("showFieldHeaders: !pivotTable.ShowFieldHeaders");
 
         advancedSource.Should().Contain("new PivotFieldGroupingDialog(headers, currentField)");
         advancedSource.Should().Contain("PivotFieldGroupingDialog.CreateResult(");
