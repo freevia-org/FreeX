@@ -10,10 +10,13 @@ internal static class XlsxWorksheetSortStateNormalizer
     private static readonly HashSet<string> ValidSortMethods = ["stroke", "pinYin"];
 
     private static readonly HashSet<string> ValidSortByValues = ["value", "cellColor", "fontColor", "icon"];
+    private static readonly HashSet<string> SortStateChildren = ["sortCondition", "extLst"];
 
     public static bool NormalizeElement(XElement sortState)
     {
         var changed = false;
+        changed |= RemoveUnexpectedChildren(sortState, SortStateChildren);
+        changed |= NormalizeExtensionLists(sortState);
         changed |= NormalizeAttribute(sortState, "columnSort", NormalizeBoolean);
         changed |= NormalizeAttribute(sortState, "caseSensitive", NormalizeBoolean);
         changed |= NormalizeAttribute(sortState, "sortMethod", value => NormalizeToken(value, ValidSortMethods));
@@ -31,9 +34,82 @@ internal static class XlsxWorksheetSortStateNormalizer
             changed |= NormalizeAttribute(condition, "sortBy", value => NormalizeToken(value, ValidSortByValues));
             changed |= NormalizeAttribute(condition, "dxfId", NormalizeUnsignedIntOrNull);
             changed |= NormalizeAttribute(condition, "iconId", NormalizeUnsignedIntOrNull);
+            changed |= RemoveAllNodes(condition);
+        }
+
+        changed |= NormalizeChildOrder(sortState, SortStateChildOrder);
+        return changed;
+    }
+
+    private static bool NormalizeExtensionLists(XElement parent)
+    {
+        var changed = false;
+        var keptExtensionList = false;
+        foreach (var extensionList in parent.Elements(WorksheetNs + "extLst").ToList())
+        {
+            if (keptExtensionList)
+            {
+                extensionList.Remove();
+                changed = true;
+                continue;
+            }
+
+            changed |= XlsxWorksheetExtensionListNormalizer.NormalizeExtensionListElement(extensionList);
+            if (XlsxWorksheetExtensionListNormalizer.ShouldRemoveExtensionListElement(extensionList))
+            {
+                extensionList.Remove();
+                changed = true;
+                continue;
+            }
+
+            keptExtensionList = true;
         }
 
         return changed;
+    }
+
+    private static bool RemoveUnexpectedChildren(XElement element, IReadOnlySet<string> allowedLocalNames)
+    {
+        var changed = false;
+        foreach (var child in element.Elements().ToList())
+        {
+            if (child.Name.Namespace == WorksheetNs && allowedLocalNames.Contains(child.Name.LocalName))
+                continue;
+
+            child.Remove();
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool NormalizeChildOrder(XElement element, Func<XElement, int> orderSelector)
+    {
+        var children = element.Elements()
+            .Select((child, index) => new { Child = child, Index = index })
+            .OrderBy(item => orderSelector(item.Child))
+            .ThenBy(item => item.Index)
+            .Select(item => item.Child)
+            .ToList();
+        if (children.Count == 0 || element.Elements().SequenceEqual(children))
+            return false;
+
+        element.ReplaceNodes(children);
+        return true;
+    }
+
+    private static int SortStateChildOrder(XElement child) =>
+        child.Name == WorksheetNs + "sortCondition" ? 0 :
+        child.Name == WorksheetNs + "extLst" ? 100 :
+        90;
+
+    private static bool RemoveAllNodes(XElement element)
+    {
+        if (!element.Nodes().Any())
+            return false;
+
+        element.RemoveNodes();
+        return true;
     }
 
     private static bool NormalizeAttribute(

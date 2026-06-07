@@ -340,6 +340,15 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void AutoFilterAndSortStateExtensionLists_SanitizesInvalidNativeMetadataForSchemaValidity()
+    {
+        using var saved = Save(CreateInvalidWorksheetFilterSortExtensionListSourceWorkbook());
+
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetFilterSortExtensionListsSanitized(saved);
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithAutoFilter_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreateAutoFilterSourceWorkbook());
@@ -524,6 +533,30 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         condition.Attribute("sortBy").Should().BeNull();
         condition.Attribute("dxfId").Should().BeNull();
         condition.Attribute("iconId").Should().BeNull();
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidAutoFilterAndSortStateExtensionListsForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetFilterSortExtensionListBaseWorkbook());
+        SetWorksheetFilterSortExtensionListsInvalidNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 6, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetFilterSortExtensionListsSanitized(saved);
     }
 
     [Fact]
@@ -2088,6 +2121,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     private const string StructuredTableAutoFilterExtensionUri = "{FREEX-TABLE-AUTOFILTER-EXTLIST}";
     private const string StructuredTableFilterColumnExtensionUri = "{FREEX-TABLE-FILTER-COLUMN-EXT}";
     private const string StructuredTableSortStateExtensionUri = "{FREEX-TABLE-SORTSTATE-EXT}";
+    private const string WorksheetAutoFilterExtensionUri = "{FREEX-WORKSHEET-AUTOFILTER-EXT}";
+    private const string WorksheetFilterColumnExtensionUri = "{FREEX-WORKSHEET-FILTER-COLUMN-EXT}";
+    private const string WorksheetSortStateExtensionUri = "{FREEX-WORKSHEET-SORTSTATE-EXT}";
+    private const string WorksheetSortConditionExtensionUri = "{FREEX-WORKSHEET-SORT-CONDITION-EXT}";
 
     private static Workbook CreateStructuredTableSourceWorkbook()
     {
@@ -2538,6 +2575,134 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         return workbook;
     }
 
+    private static Workbook CreateWorksheetFilterSortExtensionListBaseWorkbook()
+    {
+        var workbook = new Workbook("WorksheetFilterSortExtensionList");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(12));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("South"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(8));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new BlankValue());
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(16));
+
+        sheet.AutoFilter = new WorksheetAutoFilterModel("A1:B5", null);
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            0,
+            ["North"],
+            IncludeBlank: true));
+        sheet.SortState = new WorksheetSortStateModel
+        {
+            Reference = "A1:B5",
+            Conditions =
+            [
+                new WorksheetSortConditionModel
+                {
+                    Reference = "A2:A5"
+                }
+            ]
+        };
+        return workbook;
+    }
+
+    private static Workbook CreateInvalidWorksheetFilterSortExtensionListSourceWorkbook()
+    {
+        var workbook = CreateWorksheetFilterSortExtensionListBaseWorkbook();
+        var sheet = workbook.GetSheetAt(0);
+        sheet.AutoFilter = new WorksheetAutoFilterModel("A1:B5", null)
+        {
+            NativeChildXmls =
+            [
+                CreateInvalidExtensionListXml(WorksheetAutoFilterExtensionUri, "FreeXWorksheetAutoFilterExtension", "customAutoFilterExtLstFlag", "customAutoFilterExtFlag", "nativeAutoFilterExtLstChild"),
+                CreateDuplicateExtensionListXml("{FREEX-DUPLICATE-WORKSHEET-AUTOFILTER-EXTLST}")
+            ]
+        };
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            0,
+            ["North"],
+            IncludeBlank: true,
+            NativeFilterXmls:
+            [
+                CreateInvalidExtensionListXml(WorksheetFilterColumnExtensionUri, "FreeXWorksheetFilterColumnExtension", "customFilterColumnExtLstFlag", "customFilterColumnExtFlag", "nativeFilterColumnExtLstChild"),
+                CreateDuplicateExtensionListXml("{FREEX-DUPLICATE-WORKSHEET-FILTER-COLUMN-EXTLST}")
+            ]));
+        sheet.SortState = new WorksheetSortStateModel
+        {
+            NativeXml = CreateInvalidWorksheetSortStateXml()
+        };
+        return workbook;
+    }
+
+    private static void AssertWorksheetFilterSortExtensionListsSanitized(MemoryStream stream)
+    {
+        var autoFilter = ReadWorksheetChildElement(stream, "autoFilter");
+        var worksheetNs = autoFilter.Name.Namespace;
+        AssertExtensionListSanitized(
+            autoFilter,
+            worksheetNs,
+            WorksheetAutoFilterExtensionUri,
+            "FreeXWorksheetAutoFilterExtension",
+            "customAutoFilterExtLstFlag",
+            "customAutoFilterExtFlag",
+            "nativeAutoFilterExtLstChild");
+
+        var filterColumn = autoFilter.Elements(worksheetNs + "filterColumn").First();
+        filterColumn.Elements(worksheetNs + "extLst").Should().BeEmpty();
+
+        var sortState = ReadWorksheetChildElement(stream, "sortState");
+        AssertExtensionListSanitized(
+            sortState,
+            worksheetNs,
+            WorksheetSortStateExtensionUri,
+            "FreeXWorksheetSortStateExtension",
+            "customSortStateExtLstFlag",
+            "customSortStateExtFlag",
+            "nativeSortStateExtLstChild");
+        sortState.Elements().Select(element => element.Name.LocalName).Should().ContainInOrder("sortCondition", "extLst");
+
+        var sortCondition = sortState.Element(worksheetNs + "sortCondition");
+        sortCondition.Should().NotBeNull();
+        sortCondition!.Elements().Should().BeEmpty();
+    }
+
+    private static string CreateInvalidWorksheetSortStateXml()
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        return CreateInvalidWorksheetSortStateElement(workbookNs).ToString(SaveOptions.DisableFormatting);
+    }
+
+    private static XElement CreateInvalidWorksheetSortStateElement(XNamespace workbookNs) =>
+        new(
+            workbookNs + "sortState",
+            new XAttribute("ref", "A1:B5"),
+            CreateInvalidExtensionList(
+                workbookNs,
+                WorksheetSortStateExtensionUri,
+                "FreeXWorksheetSortStateExtension",
+                "customSortStateExtLstFlag",
+                "customSortStateExtFlag",
+                "nativeSortStateExtLstChild"),
+            new XElement(
+                workbookNs + "sortCondition",
+                new XAttribute("ref", "A2:A5"),
+                CreateInvalidExtensionList(
+                    workbookNs,
+                    WorksheetSortConditionExtensionUri,
+                    "FreeXWorksheetSortConditionExtension",
+                    "customSortConditionExtLstFlag",
+                    "customSortConditionExtFlag",
+                    "nativeSortConditionExtLstChild"),
+                new XElement(
+                    workbookNs + "extLst",
+                    new XElement(workbookNs + "ext", new XAttribute("uri", "{FREEX-DUPLICATE-WORKSHEET-SORT-CONDITION-EXTLST}")))),
+            new XElement(
+                workbookNs + "extLst",
+                new XElement(workbookNs + "ext", new XAttribute("uri", "{FREEX-DUPLICATE-WORKSHEET-SORTSTATE-EXTLST}"))));
+
     private static Workbook CreateInvalidAutoFilterSourceWorkbook()
     {
         var workbook = new Workbook("AutoFilterInvalidSchema");
@@ -2889,6 +3054,31 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         condition.SetAttributeValue("sortBy", "invalid");
         condition.SetAttributeValue("dxfId", "not-a-number");
         condition.SetAttributeValue("iconId", "not-a-number");
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void SetWorksheetFilterSortExtensionListsInvalidNativeMetadata(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        var root = worksheetXml.Root!;
+
+        var autoFilter = root.Element(workbookNs + "autoFilter")!;
+        autoFilter.Elements(workbookNs + "extLst").Remove();
+        autoFilter.Add(
+            CreateInvalidExtensionList(workbookNs, WorksheetAutoFilterExtensionUri, "FreeXWorksheetAutoFilterExtension", "customAutoFilterExtLstFlag", "customAutoFilterExtFlag", "nativeAutoFilterExtLstChild"),
+            new XElement(workbookNs + "extLst", new XElement(workbookNs + "ext", new XAttribute("uri", "{FREEX-DUPLICATE-WORKSHEET-AUTOFILTER-EXTLST}"))));
+
+        var filterColumn = autoFilter.Element(workbookNs + "filterColumn")!;
+        filterColumn.Elements(workbookNs + "extLst").Remove();
+        filterColumn.Add(
+            CreateInvalidExtensionList(workbookNs, WorksheetFilterColumnExtensionUri, "FreeXWorksheetFilterColumnExtension", "customFilterColumnExtLstFlag", "customFilterColumnExtFlag", "nativeFilterColumnExtLstChild"),
+            new XElement(workbookNs + "extLst", new XElement(workbookNs + "ext", new XAttribute("uri", "{FREEX-DUPLICATE-WORKSHEET-FILTER-COLUMN-EXTLST}"))));
+
+        root.Elements(workbookNs + "sortState").Remove();
+        autoFilter.AddAfterSelf(CreateInvalidWorksheetSortStateElement(workbookNs));
         ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
     }
 

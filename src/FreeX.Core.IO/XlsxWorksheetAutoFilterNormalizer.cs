@@ -17,8 +17,7 @@ internal static class XlsxWorksheetAutoFilterNormalizer
         "customFilters",
         "dynamicFilter",
         "colorFilter",
-        "iconFilter",
-        "extLst"
+        "iconFilter"
     ];
     private static readonly HashSet<string> FiltersAttributes = ["blank", "calendarType"];
     private static readonly HashSet<string> FilterAttributes = ["val"];
@@ -133,11 +132,13 @@ internal static class XlsxWorksheetAutoFilterNormalizer
         changed |= RemoveUnknownAttributes(autoFilter, AutoFilterAttributes);
         changed |= RemoveUnexpectedChildren(autoFilter, AutoFilterChildren);
         changed |= RemoveDuplicateChildren(autoFilter, "sortState");
-        changed |= RemoveDuplicateChildren(autoFilter, "extLst");
+        changed |= NormalizeExtensionLists(autoFilter);
         changed |= NormalizeAttribute(autoFilter, "ref", NormalizeCellOrRangeReference);
 
         foreach (var filterColumn in autoFilter.Elements(WorksheetNs + "filterColumn").ToList())
             changed |= NormalizeFilterColumnElement(filterColumn);
+        foreach (var sortState in autoFilter.Elements(WorksheetNs + "sortState").ToList())
+            changed |= XlsxWorksheetSortStateNormalizer.NormalizeElement(sortState);
 
         changed |= NormalizeChildOrder(autoFilter, AutoFilterChildOrder);
         return changed;
@@ -161,7 +162,6 @@ internal static class XlsxWorksheetAutoFilterNormalizer
         changed |= RemoveDuplicateChildren(filterColumn, "dynamicFilter");
         changed |= RemoveDuplicateChildren(filterColumn, "colorFilter");
         changed |= RemoveDuplicateChildren(filterColumn, "iconFilter");
-        changed |= RemoveDuplicateChildren(filterColumn, "extLst");
         changed |= SetAttributeIfChanged(filterColumn, "colId", normalizedColumnId);
         changed |= NormalizeAttribute(filterColumn, "hiddenButton", NormalizeBoolean);
         changed |= NormalizeAttribute(filterColumn, "showButton", NormalizeBoolean);
@@ -297,6 +297,33 @@ internal static class XlsxWorksheetAutoFilterNormalizer
         changed |= RemoveUnknownAttributes(iconFilter, IconFilterAttributes);
         changed |= SetAttributeIfChanged(iconFilter, "iconSet", normalizedIconSet);
         changed |= SetAttributeIfChanged(iconFilter, "iconId", normalizedIconId);
+        return changed;
+    }
+
+    private static bool NormalizeExtensionLists(XElement parent)
+    {
+        var changed = false;
+        var keptExtensionList = false;
+        foreach (var extensionList in parent.Elements(WorksheetNs + "extLst").ToList())
+        {
+            if (keptExtensionList)
+            {
+                extensionList.Remove();
+                changed = true;
+                continue;
+            }
+
+            changed |= XlsxWorksheetExtensionListNormalizer.NormalizeExtensionListElement(extensionList);
+            if (XlsxWorksheetExtensionListNormalizer.ShouldRemoveExtensionListElement(extensionList))
+            {
+                extensionList.Remove();
+                changed = true;
+                continue;
+            }
+
+            keptExtensionList = true;
+        }
+
         return changed;
     }
 
