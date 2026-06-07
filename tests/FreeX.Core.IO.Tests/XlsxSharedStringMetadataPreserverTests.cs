@@ -47,8 +47,7 @@ public sealed class XlsxSharedStringMetadataPreserverTests
 
         targetPackage.Position = 0;
         using var verifyArchive = new ZipArchive(targetPackage, ZipArchiveMode.Read, leaveOpen: true);
-        using var entryStream = verifyArchive.GetEntry("xl/sharedStrings.xml")!.Open();
-        var xml = XDocument.Load(entryStream);
+        var xml = XlsxPackageTestFixtures.LoadPackageXml(verifyArchive, "xl/sharedStrings.xml", "xl/sharedStrings.xml");
         var sharedString = xml.Root!.Element(WorkbookNs + "si")!;
 
         sharedString.Elements(WorkbookNs + "r").Should().HaveCount(2);
@@ -81,8 +80,7 @@ public sealed class XlsxSharedStringMetadataPreserverTests
 
         targetPackage.Position = 0;
         using var verifyArchive = new ZipArchive(targetPackage, ZipArchiveMode.Read, leaveOpen: true);
-        using var entryStream = verifyArchive.GetEntry("xl/sharedStrings.xml")!.Open();
-        var xml = XDocument.Load(entryStream);
+        var xml = XlsxPackageTestFixtures.LoadPackageXml(verifyArchive, "xl/sharedStrings.xml", "xl/sharedStrings.xml");
 
         xml.Root!
             .Element(WorkbookNs + "si")!
