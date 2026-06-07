@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Services.Tests;
 
@@ -14,7 +15,45 @@ public sealed class WorkbookStartupSmokeServiceTests
         result.Message.Should().Contain("Packaging smoke opened");
         result.Message.Should().Contain("macOS Preview Workbook");
         result.Message.Should().Contain("Port Plan");
+        result.Message.Should().Contain("drawing_object_previews=3");
+        result.Message.Should().Contain("roundtrip_drawing_object_previews=3");
         result.Message.Should().Contain("edited, saved, and reopened");
+    }
+
+    [Fact]
+    public void Run_WithoutArguments_UsesObjectBackedPreviewWorkbook()
+    {
+        var source = PortPreviewWorkbookFactory.Create("Preview", isFallback: false);
+        var sheet = source.Workbook.Sheets.Should().ContainSingle().Subject;
+
+        sheet.DrawingShapes.Should().ContainSingle(shape =>
+            shape.Id != Guid.Empty &&
+            shape.Name == PortPreviewWorkbookFactory.PreviewShapeName &&
+            shape.Kind == DrawingShapeKind.Rectangle);
+        sheet.TextBoxes.Should().ContainSingle(textBox =>
+            textBox.Id != Guid.Empty &&
+            textBox.Name == PortPreviewWorkbookFactory.PreviewTextBoxName &&
+            textBox.Text.Contains("Avalonia preview", StringComparison.Ordinal));
+        sheet.Pictures.Should().ContainSingle(picture =>
+            picture.Id != Guid.Empty &&
+            picture.Name == PortPreviewWorkbookFactory.PreviewPictureName &&
+            picture.Kind == PictureKind.Image &&
+            picture.ImageBytes != null &&
+            picture.ImageBytes.Length > 0 &&
+            picture.ContentType == "image/png");
+        sheet.DrawingObjectZOrder.Select(entry => entry.Kind)
+            .Should().Equal(SelectionPaneObjectKind.Shape, SelectionPaneObjectKind.TextBox, SelectionPaneObjectKind.Picture);
+
+        var session = new WorkbookSessionFactory().Create(source, 240, 320, includeObjects: true);
+
+        session.Viewport.DrawingObjects.Select(drawingObject => drawingObject.DisplayName)
+            .Should().Equal(
+                PortPreviewWorkbookFactory.PreviewShapeName,
+                PortPreviewWorkbookFactory.PreviewTextBoxName,
+                PortPreviewWorkbookFactory.PreviewPictureName);
+        session.Viewport.DrawingObjects.Should().OnlyContain(drawingObject =>
+            drawingObject.Width > 0 &&
+            drawingObject.Height > 0);
     }
 
     [Fact]
@@ -29,6 +68,8 @@ public sealed class WorkbookStartupSmokeServiceTests
         result.Success.Should().BeTrue();
         result.Message.Should().Contain("Smoke.csv");
         result.Message.Should().Contain("Smoke");
+        result.Message.Should().Contain("drawing_object_previews=0");
+        result.Message.Should().Contain("roundtrip_drawing_object_previews=0");
         result.Message.Should().Contain("edited, saved, and reopened");
     }
 

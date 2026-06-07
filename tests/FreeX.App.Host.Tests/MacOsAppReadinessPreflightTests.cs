@@ -25,12 +25,16 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_font_color_swatch_count=69");
         script.Should().Contain("native_cell_styles_menu_item=true");
         script.Should().Contain("native_cell_styles_preset_count=33");
+        script.Should().Contain("drawing_object_previews=3");
+        script.Should().Contain("roundtrip_drawing_object_previews=3");
         script.Should().Contain("shasum -a 256 -c \"$zip_name.sha256\"");
         script.Should().Contain("zip_sha256=$zip_sha256");
         script.Should().Contain("freex-$runtime-macos-tester-instructions.md");
         script.Should().Contain("native_horizontal_text_menu_item=true");
         script.Should().Contain("native_rotate_text_down_menu_item=");
         script.Should().Contain("PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode)");
+        script.Should().Contain("PortPreviewWorkbookFactory.PreviewShapeName");
+        script.Should().Contain("_sessionFactory.Create(source, SmokeViewportHeight, SmokeViewportWidth, includeObjects: true)");
         script.Should().Contain("StartWithClassicDesktopLifetime(startupArguments)");
         script.Should().Contain("IActivatableLifetime");
         script.Should().Contain("OpenActivatedFilesAsync");
@@ -298,7 +302,11 @@ public sealed class MacOsAppReadinessPreflightTests
                       Unzip the GitHub Actions artifact wrapper first; these files are inside it.
                       Ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing.
                       EOF
-                      "$unzip_root/FreeX.app/Contents/MacOS/FreeX" --packaging-smoke "$RUNNER_TEMP/smoke.csv"
+                      "$unzip_root/FreeX.app/Contents/MacOS/FreeX" --packaging-smoke | tee "$artifact_root/smoke.log"
+                      grep -q "macOS Preview Workbook" "$artifact_root/smoke.log"
+                      grep -q "drawing_object_previews=3" "$artifact_root/smoke.log"
+                      grep -q "roundtrip_drawing_object_previews=3" "$artifact_root/smoke.log"
+                      "$unzip_root/FreeX.app/Contents/MacOS/FreeX" --packaging-smoke "$RUNNER_TEMP/smoke.csv" | tee -a "$artifact_root/smoke.log"
                       grep -q "Packaging smoke opened" "$artifact_root/smoke.log"
                       grep -q "edited, saved, and reopened" "$artifact_root/smoke.log"
                       /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$unzip_root/FreeX.app"
@@ -438,6 +446,29 @@ public sealed class MacOsAppReadinessPreflightTests
 
         WriteFile(
             root,
+            "src/FreeX.App.Services/PortPreviewWorkbookFactory.cs",
+            """
+            namespace FreeX.App.Services;
+
+            public static class PortPreviewWorkbookFactory
+            {
+                public const string PreviewShapeName = "Port readiness shape";
+                public const string PreviewTextBoxName = "Port preview note";
+                public const string PreviewPictureName = "Port preview logo";
+
+                private static void CreatePreview()
+                {
+                    AddPreviewDrawingObjects(sheet);
+                    sheet.DrawingShapes.Add(shape);
+                    sheet.TextBoxes.Add(textBox);
+                    sheet.Pictures.Add(picture);
+                    sheet.DrawingObjectZOrder.AddRange();
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
             "src/FreeX.App.Services/WorkbookStartupSmokeService.cs",
             """
             namespace FreeX.App.Services;
@@ -445,7 +476,13 @@ public sealed class MacOsAppReadinessPreflightTests
             internal sealed class WorkbookStartupSmokeService
             {
                 private const string RoundTripExtension = ".fxl";
-                private const string Result = "Packaging smoke opened and edited, saved, and reopened";
+                private void Smoke()
+                {
+                    _sessionFactory.Create(source, SmokeViewportHeight, SmokeViewportWidth, includeObjects: true);
+                    VerifyDrawingObjectPreviews();
+                    PortPreviewWorkbookFactory.PreviewShapeName.ToString();
+                    var result = $"Packaging smoke opened; drawing_object_previews={drawingObjectPreviewCount}; edited, saved, and reopened; roundtrip_drawing_object_previews={roundTripDrawingObjectPreviewCount}.";
+                }
             }
 
             public static class PackagingSmokeCommand

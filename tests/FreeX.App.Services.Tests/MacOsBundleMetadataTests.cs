@@ -120,7 +120,11 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("Unzip the GitHub Actions artifact wrapper first; these files are inside it.");
         workflow.Should().Contain("Ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing.");
         workflow.Should().Contain("codesign --verify --deep --strict \"$unzip_root/FreeX.app\"");
-        workflow.Should().Contain("\"$unzip_root/FreeX.app/Contents/MacOS/FreeX\" --packaging-smoke \"$smoke_file\"");
+        workflow.Should().Contain("\"$unzip_root/FreeX.app/Contents/MacOS/FreeX\" --packaging-smoke | tee \"$smoke_log\"");
+        workflow.Should().Contain("grep -q \"macOS Preview Workbook\" \"$smoke_log\"");
+        workflow.Should().Contain("grep -q \"drawing_object_previews=3\" \"$smoke_log\"");
+        workflow.Should().Contain("grep -q \"roundtrip_drawing_object_previews=3\" \"$smoke_log\"");
+        workflow.Should().Contain("\"$unzip_root/FreeX.app/Contents/MacOS/FreeX\" --packaging-smoke \"$smoke_file\" | tee -a \"$smoke_log\"");
         workflow.Should().Contain("grep -q \"Packaging smoke opened\" \"$smoke_log\"");
         workflow.Should().Contain("grep -q \"edited, saved, and reopened\" \"$smoke_log\"");
         workflow.Should().Contain("lsregister -f \"$unzip_root/FreeX.app\"");

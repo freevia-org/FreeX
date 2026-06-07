@@ -415,6 +415,9 @@ function Test-MacOsWorkflow {
         "Ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing.",
         "--packaging-smoke",
         "Packaging smoke opened",
+        "macOS Preview Workbook",
+        "drawing_object_previews=3",
+        "roundtrip_drawing_object_previews=3",
         "edited, saved, and reopened",
         "lsregister -f",
         "open -W -n -b io.github.tony-xmelon.freex",
@@ -532,10 +535,29 @@ function Test-SourceWiring {
             Path = "src\FreeX.App.Services\WorkbookStartupSmokeService.cs"
             Markers = @(
                 "private const string RoundTripExtension = `".fxl`";",
+                "_sessionFactory.Create(source, SmokeViewportHeight, SmokeViewportWidth, includeObjects: true)",
+                "VerifyDrawingObjectPreviews(",
+                "drawing_object_previews={drawingObjectPreviewCount}",
+                "roundtrip_drawing_object_previews={roundTripDrawingObjectPreviewCount}",
+                "PortPreviewWorkbookFactory.PreviewShapeName",
                 "public static class PackagingSmokeCommand",
                 "public const string Argument = `"--packaging-smoke`";",
                 "Packaging smoke opened",
                 "edited, saved, and reopened"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "src\FreeX.App.Services\PortPreviewWorkbookFactory.cs"
+            Markers = @(
+                "public const string PreviewShapeName = `"Port readiness shape`";",
+                "public const string PreviewTextBoxName = `"Port preview note`";",
+                "public const string PreviewPictureName = `"Port preview logo`";",
+                "AddPreviewDrawingObjects(sheet);",
+                "sheet.DrawingShapes.Add(shape);",
+                "sheet.TextBoxes.Add(textBox);",
+                "sheet.Pictures.Add(picture);",
+                "sheet.DrawingObjectZOrder.AddRange("
             )
             OrderedPairs = @()
         },

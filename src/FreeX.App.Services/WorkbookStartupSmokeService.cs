@@ -50,24 +50,36 @@ public sealed class WorkbookStartupSmokeService
                 return new WorkbookStartupSmokeResult(false, $"Packaging smoke failed: requested file was not opened: {expectedPath}");
             }
 
-            var session = _sessionFactory.Create(source, SmokeViewportHeight, SmokeViewportWidth);
+            var session = _sessionFactory.Create(source, SmokeViewportHeight, SmokeViewportWidth, includeObjects: true);
 
             if (session.Workbook.Sheets.Count == 0)
                 return new WorkbookStartupSmokeResult(false, "Packaging smoke failed: workbook has no sheets.");
             if (session.Viewport.RowMetrics.Count == 0 || session.Viewport.ColMetrics.Count == 0)
                 return new WorkbookStartupSmokeResult(false, "Packaging smoke failed: viewport is empty.");
 
+            var requiresPreviewObjects = expectedPath is null;
+            var previewObjectResult = VerifyDrawingObjectPreviews(
+                session,
+                requiresPreviewObjects,
+                "preview workbook",
+                out var drawingObjectPreviewCount);
+            if (previewObjectResult is not null)
+                return previewObjectResult;
+
             var openedDisplayName = session.DisplayName;
             var openedSheetName = session.ActiveSheet.Name;
             var openedRowCount = session.Viewport.RowMetrics.Count;
             var openedColumnCount = session.Viewport.ColMetrics.Count;
-            var roundTripResult = VerifyEditSaveReopen(session);
+            var roundTripResult = VerifyEditSaveReopen(
+                session,
+                requiresPreviewObjects,
+                out var roundTripDrawingObjectPreviewCount);
             if (roundTripResult is not null)
                 return roundTripResult;
 
             return new WorkbookStartupSmokeResult(
                 true,
-                $"Packaging smoke opened {openedDisplayName} on {openedSheetName} with {openedRowCount} rows and {openedColumnCount} columns; edited, saved, and reopened a native workbook roundtrip.");
+                $"Packaging smoke opened {openedDisplayName} on {openedSheetName} with {openedRowCount} rows and {openedColumnCount} columns; drawing_object_previews={drawingObjectPreviewCount}; edited, saved, and reopened a native workbook roundtrip; roundtrip_drawing_object_previews={roundTripDrawingObjectPreviewCount}.");
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException or WorkbookTooLargeException)
         {
@@ -75,8 +87,12 @@ public sealed class WorkbookStartupSmokeService
         }
     }
 
-    private WorkbookStartupSmokeResult? VerifyEditSaveReopen(WorkbookSession session)
+    private WorkbookStartupSmokeResult? VerifyEditSaveReopen(
+        WorkbookSession session,
+        bool requireDrawingObjectPreviews,
+        out int roundTripDrawingObjectPreviewCount)
     {
+        roundTripDrawingObjectPreviewCount = 0;
         session.SelectCell(new CellAddress(session.ActiveSheet.Id, 1, 1));
         session.MoveActiveCell(1, 1);
         var editAddress = session.ActiveCell;
@@ -127,9 +143,18 @@ public sealed class WorkbookStartupSmokeService
                 reopenedSource,
                 SmokeViewportHeight,
                 SmokeViewportWidth,
+                includeObjects: true,
                 adapters: _adapters);
             if (reopenedSession.Viewport.RowMetrics.Count == 0 || reopenedSession.Viewport.ColMetrics.Count == 0)
                 return new WorkbookStartupSmokeResult(false, "Packaging smoke failed: reopened roundtrip viewport is empty.");
+
+            var previewObjectResult = VerifyDrawingObjectPreviews(
+                reopenedSession,
+                requireDrawingObjectPreviews,
+                "reopened roundtrip",
+                out roundTripDrawingObjectPreviewCount);
+            if (previewObjectResult is not null)
+                return previewObjectResult;
 
             var reopenedCell = reopenedSession.Workbook.Sheets.FirstOrDefault()?.GetCell(SmokeEditRow, SmokeEditColumn);
             if (reopenedCell?.Value is not TextValue reopenedText ||
@@ -142,6 +167,39 @@ public sealed class WorkbookStartupSmokeService
         {
             if (File.Exists(roundTripPath))
                 File.Delete(roundTripPath);
+        }
+
+        return null;
+    }
+
+    private static WorkbookStartupSmokeResult? VerifyDrawingObjectPreviews(
+        WorkbookSession session,
+        bool required,
+        string stage,
+        out int count)
+    {
+        count = session.Viewport.DrawingObjects.Count;
+        if (!required)
+            return null;
+
+        var expected = new[]
+        {
+            (SelectionPaneObjectKind.Shape, PortPreviewWorkbookFactory.PreviewShapeName),
+            (SelectionPaneObjectKind.TextBox, PortPreviewWorkbookFactory.PreviewTextBoxName),
+            (SelectionPaneObjectKind.Picture, PortPreviewWorkbookFactory.PreviewPictureName)
+        };
+        foreach (var (kind, name) in expected)
+        {
+            if (!session.Viewport.DrawingObjects.Any(drawingObject =>
+                    drawingObject.Kind == kind &&
+                    string.Equals(drawingObject.DisplayName, name, StringComparison.Ordinal) &&
+                    drawingObject.Width > 0 &&
+                    drawingObject.Height > 0))
+            {
+                return new WorkbookStartupSmokeResult(
+                    false,
+                    $"Packaging smoke failed: {stage} is missing drawing object preview {kind} '{name}'.");
+            }
         }
 
         return null;

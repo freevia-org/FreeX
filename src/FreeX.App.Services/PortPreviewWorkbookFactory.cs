@@ -4,6 +4,16 @@ namespace FreeX.App.Services;
 
 public static class PortPreviewWorkbookFactory
 {
+    public const string PreviewShapeName = "Port readiness shape";
+    public const string PreviewTextBoxName = "Port preview note";
+    public const string PreviewPictureName = "Port preview logo";
+
+    private static readonly Guid PreviewShapeId = Guid.Parse("9f5c4fe4-7d85-4ea1-a74b-9463e1f4be41");
+    private static readonly Guid PreviewTextBoxId = Guid.Parse("5c82f7de-cf4e-4a30-bb96-8fd6f258b6f8");
+    private static readonly Guid PreviewPictureId = Guid.Parse("ce0512d4-9455-4e11-a569-76da291e2c3a");
+    private static readonly byte[] PreviewPictureBytes = Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=");
+
     public static StartupWorkbookLoadResult Create(string status, bool isFallback)
     {
         var workbook = new Workbook("macOS Preview Workbook");
@@ -75,8 +85,62 @@ public static class PortPreviewWorkbookFactory
         Set(sheet, 7, 3, ".app artifact", amberStyle);
         Set(sheet, 7, 4, "Add Developer ID signing and notarization later", null);
         Set(sheet, 7, 5, 3, null);
+        AddPreviewDrawingObjects(sheet);
 
         return new StartupWorkbookLoadResult(workbook, workbook.Name, status, isFallback);
+    }
+
+    private static void AddPreviewDrawingObjects(Sheet sheet)
+    {
+        var shape = new DrawingShapeModel
+        {
+            Id = PreviewShapeId,
+            Anchor = new CellAddress(sheet.Id, 2, 1),
+            Name = PreviewShapeName,
+            Kind = DrawingShapeKind.Rectangle,
+            Width = 152,
+            Height = 48,
+            FillColor = CellColor.FromArgb(225, 244, 242),
+            OutlineColor = CellColor.FromArgb(11, 112, 116),
+            Title = "macOS readiness shape",
+            AltText = "Decorative preview object used by the macOS packaging smoke."
+        };
+        var textBox = new TextBoxModel
+        {
+            Id = PreviewTextBoxId,
+            Anchor = new CellAddress(sheet.Id, 5, 1),
+            Name = PreviewTextBoxName,
+            Text = "Avalonia preview renders object bounds.",
+            Width = 188,
+            Height = 56,
+            FillColor = CellColor.FromArgb(255, 255, 204),
+            OutlineColor = CellColor.FromArgb(170, 136, 0),
+            Title = "macOS preview note",
+            AltText = "Text box preview object used by the macOS packaging smoke."
+        };
+        var picture = new PictureModel
+        {
+            Id = PreviewPictureId,
+            Anchor = new CellAddress(sheet.Id, 8, 1),
+            Name = PreviewPictureName,
+            Kind = PictureKind.Image,
+            ImageBytes = PreviewPictureBytes,
+            ContentType = "image/png",
+            Width = 96,
+            Height = 56,
+            Title = "macOS preview logo",
+            AltText = "Small image preview object used by the macOS packaging smoke."
+        };
+
+        sheet.DrawingShapes.Add(shape);
+        sheet.TextBoxes.Add(textBox);
+        sheet.Pictures.Add(picture);
+        sheet.DrawingObjectZOrder.AddRange(
+        [
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, shape.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, textBox.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, picture.Id),
+        ]);
     }
 
     private static void Set(Sheet sheet, uint row, uint col, string value, StyleId? styleId) =>
