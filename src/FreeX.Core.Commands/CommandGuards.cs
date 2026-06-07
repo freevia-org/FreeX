@@ -32,6 +32,12 @@ internal static class CommandGuards
             : null;
     }
 
+    public static string CannotInsertColumnsPastLastColumn(uint count) =>
+        $"Cannot insert {count} column(s): data would be pushed past the last column ({CellAddress.MaxCol}).";
+
+    public static string CannotInsertRowsPastLastRow(uint count) =>
+        $"Cannot insert {count} row(s): data would be pushed past the last row ({CellAddress.MaxRow}).";
+
     public static bool CanEditCell(Workbook workbook, Sheet sheet, CellAddress address)
     {
         if (!sheet.IsProtected)
