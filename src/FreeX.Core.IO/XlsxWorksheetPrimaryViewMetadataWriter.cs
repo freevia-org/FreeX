@@ -62,24 +62,7 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
 
                 foreach (var childXml in pvChildren)
                 {
-                    if (string.IsNullOrWhiteSpace(childXml))
-                        continue;
-
-                    try
-                    {
-                        var nativeChild = XElement.Parse(childXml);
-                        if (nativeChild.Name == WorksheetNs + "selection")
-                        {
-                            MergeMatchingSelectionNativeAttributes(sheetView, nativeChild);
-                            continue;
-                        }
-
-                        sheetView.Add(nativeChild);
-                    }
-                    catch
-                    {
-                        // Skip malformed native payloads in authored native JSON files.
-                    }
+                    TryApplyNativePrimaryViewChild(sheetView, childXml);
                 }
             }
 
@@ -94,6 +77,28 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
 
     private static bool IsModeledPrimaryViewElement(string name) =>
         name is "pane" or "selection";
+
+    private static void TryApplyNativePrimaryViewChild(XElement sheetView, string? childXml)
+    {
+        if (string.IsNullOrWhiteSpace(childXml))
+            return;
+
+        try
+        {
+            var nativeChild = XElement.Parse(childXml);
+            if (nativeChild.Name == WorksheetNs + "selection")
+            {
+                MergeMatchingSelectionNativeAttributes(sheetView, nativeChild);
+                return;
+            }
+
+            sheetView.Add(nativeChild);
+        }
+        catch
+        {
+            // Skip malformed native payloads in authored native JSON files.
+        }
+    }
 
     private static void PruneSelectionsForModeledActiveCell(XElement sheetView, Sheet sheet)
     {
