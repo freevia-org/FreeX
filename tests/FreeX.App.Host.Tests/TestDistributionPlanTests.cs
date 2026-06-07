@@ -121,6 +121,11 @@ public sealed class TestDistributionPlanTests
         readme.Should().Contain("[release/macos-signing-notarization.md](release/macos-signing-notarization.md)");
         source.Should().Contain("macOS Signing And Notarization Runbook");
         source.Should().Contain("Artifact Retrieval");
+        source.Should().Contain("Quick retrieval checklist");
+        source.Should().Contain("Pick `osx-arm64` for Apple Silicon Macs or `osx-x64` for Intel Macs.");
+        source.Should().Contain("Download the matching Actions artifact wrapper from the completed workflow run.");
+        source.Should().Contain("Unzip the wrapper, then verify the inner `freex-<runtime>-macos-app.zip` with its `.sha256` file.");
+        source.Should().Contain("Keep `freex-<runtime>-macos-evidence.txt` and the smoke/notarization logs with any tester report.");
         source.Should().Contain("workflow_dispatch");
         source.Should().Contain("pull request events intentionally fall back to ad-hoc signing");
         source.Should().Contain("gh run download <run-id>");
