@@ -59,17 +59,28 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         columns[0].Attribute("hiddenButton").Should().BeNull();
         columns[0].Attribute("showButton").Should().BeNull();
-        columns[0].Element(workbookNs + "filters")!.Attribute("blank").Should().BeNull();
+        columns[0].Attribute("customFilterColumnFlag").Should().BeNull();
+        var filters = columns[0].Element(workbookNs + "filters")!;
+        filters.Attribute("blank").Should().BeNull();
+        filters.Attribute("filtersFlag").Should().BeNull();
+        var filter = filters.Element(workbookNs + "filter")!;
+        filter.Attribute("filterFlag").Should().BeNull();
+        filter.Elements().Should().BeEmpty();
 
         var customFilters = columns[1].Element(workbookNs + "customFilters")!;
         customFilters.Attribute("and").Should().BeNull();
-        customFilters.Element(workbookNs + "customFilter")!.Attribute("operator").Should().BeNull();
+        customFilters.Attribute("customFiltersFlag").Should().BeNull();
+        var customFilter = customFilters.Element(workbookNs + "customFilter")!;
+        customFilter.Attribute("operator").Should().BeNull();
+        customFilter.Attribute("customFilterFlag").Should().BeNull();
+        customFilter.Elements().Should().BeEmpty();
 
         var top10 = columns[2].Element(workbookNs + "top10")!;
         top10.Attribute("top").Should().BeNull();
         top10.Attribute("percent").Should().BeNull();
         top10.Attribute("val")!.Value.Should().Be("10");
         top10.Attribute("filterVal").Should().BeNull();
+        top10.Attribute("customTop10Flag").Should().BeNull();
     }
 
     [Fact]
@@ -163,7 +174,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var firstColumn = autoFilter.Elements(workbookNs + "filterColumn").First();
         firstColumn.Attribute("hiddenButton").Should().BeNull();
         firstColumn.Attribute("showButton").Should().BeNull();
-        firstColumn.Element(workbookNs + "filters")!.Attribute("blank").Should().BeNull();
+        firstColumn.Attribute("customFilterColumnFlag").Should().BeNull();
+        var filters = firstColumn.Element(workbookNs + "filters")!;
+        filters.Attribute("blank").Should().BeNull();
+        filters.Attribute("filtersFlag").Should().BeNull();
+        filters.Element(workbookNs + "filter")!.Attribute("filterFlag").Should().BeNull();
+        filters.Element(workbookNs + "filter")!.Elements().Should().BeEmpty();
 
         var customFilters = autoFilter
             .Elements(workbookNs + "filterColumn")
@@ -171,7 +187,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .First()
             .Element(workbookNs + "customFilters")!;
         customFilters.Attribute("and").Should().BeNull();
-        customFilters.Element(workbookNs + "customFilter")!.Attribute("operator").Should().BeNull();
+        customFilters.Attribute("customFiltersFlag").Should().BeNull();
+        var customFilter = customFilters.Element(workbookNs + "customFilter")!;
+        customFilter.Attribute("operator").Should().BeNull();
+        customFilter.Attribute("customFilterFlag").Should().BeNull();
+        customFilter.Elements().Should().BeEmpty();
     }
 
     [Fact]
@@ -252,25 +272,35 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         columns[0].Attribute("hiddenButton").Should().BeNull();
         columns[0].Attribute("showButton").Should().BeNull();
+        columns[0].Attribute("customFilterColumnFlag").Should().BeNull();
         var filters = columns[0].Element(worksheetNs + "filters")!;
         filters.Attribute("blank").Should().BeNull();
         filters.Attribute("calendarType").Should().BeNull();
+        filters.Attribute("filtersFlag").Should().BeNull();
+        filters.Element(worksheetNs + "filter")!.Attribute("filterFlag").Should().BeNull();
+        filters.Element(worksheetNs + "filter")!.Elements().Should().BeEmpty();
         filters.Elements(worksheetNs + "dateGroupItem").Should().BeEmpty();
 
         var customFilters = columns[1].Element(worksheetNs + "customFilters")!;
         customFilters.Attribute("and").Should().BeNull();
-        customFilters.Element(worksheetNs + "customFilter")!.Attribute("operator").Should().BeNull();
+        customFilters.Attribute("customFiltersFlag").Should().BeNull();
+        var customFilter = customFilters.Element(worksheetNs + "customFilter")!;
+        customFilter.Attribute("operator").Should().BeNull();
+        customFilter.Attribute("customFilterFlag").Should().BeNull();
+        customFilter.Elements().Should().BeEmpty();
 
         var top10 = columns[2].Element(worksheetNs + "top10")!;
         top10.Attribute("top").Should().BeNull();
         top10.Attribute("percent").Should().BeNull();
         top10.Attribute("val")!.Value.Should().Be("10");
         top10.Attribute("filterVal").Should().BeNull();
+        top10.Attribute("customTop10Flag").Should().BeNull();
 
         var dynamicFilter = columns[3].Element(worksheetNs + "dynamicFilter")!;
         dynamicFilter.Attribute("type")!.Value.Should().Be("aboveAverage");
         dynamicFilter.Attribute("val").Should().BeNull();
         dynamicFilter.Attribute("maxVal").Should().BeNull();
+        dynamicFilter.Attribute("customDynamicFilterFlag").Should().BeNull();
 
         columns[4].Element(worksheetNs + "colorFilter").Should().BeNull();
         columns[5].Element(worksheetNs + "iconFilter").Should().BeNull();
@@ -330,9 +360,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var firstColumn = autoFilter.Elements(worksheetNs + "filterColumn").First();
         firstColumn.Attribute("hiddenButton").Should().BeNull();
         firstColumn.Attribute("showButton").Should().BeNull();
+        firstColumn.Attribute("customFilterColumnFlag").Should().BeNull();
         var filters = firstColumn.Element(worksheetNs + "filters")!;
         filters.Attribute("blank").Should().BeNull();
         filters.Attribute("calendarType").Should().BeNull();
+        filters.Attribute("filtersFlag").Should().BeNull();
+        filters.Element(worksheetNs + "filter")!.Attribute("filterFlag").Should().BeNull();
+        filters.Element(worksheetNs + "filter")!.Elements().Should().BeEmpty();
         filters.Elements(worksheetNs + "dateGroupItem").Should().BeEmpty();
 
         var customFilters = autoFilter
@@ -341,7 +375,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .First()
             .Element(worksheetNs + "customFilters")!;
         customFilters.Attribute("and").Should().BeNull();
-        customFilters.Element(worksheetNs + "customFilter")!.Attribute("operator").Should().BeNull();
+        customFilters.Attribute("customFiltersFlag").Should().BeNull();
+        var customFilter = customFilters.Element(worksheetNs + "customFilter")!;
+        customFilter.Attribute("operator").Should().BeNull();
+        customFilter.Attribute("customFilterFlag").Should().BeNull();
+        customFilter.Elements().Should().BeEmpty();
     }
 
 
@@ -2027,6 +2065,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             HasAutoFilter = true,
             StyleName = "TableStyleMedium2",
             ShowRowStripes = true,
+            NativeAutoFilterAttributes = new Dictionary<string, string> { ["customAttr"] = "removed" },
+            NativeAutoFilterChildXmls =
+            [
+                "<extLst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ext uri=\"{FREEX-TABLE-AUTOFILTER-EXT}\" /></extLst>",
+                "<nativeAutoFilterChild xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" />"
+            ]
         };
         table.Columns.Add(new StructuredTableColumnModel(1, "Name"));
         table.Columns.Add(new StructuredTableColumnModel(2, "Value"));
@@ -2039,16 +2083,17 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             NativeAttributes: new Dictionary<string, string>
             {
                 ["hiddenButton"] = "maybe",
-                ["showButton"] = "maybe"
+                ["showButton"] = "maybe",
+                ["customFilterColumnFlag"] = "removed"
             }));
         table.FilterColumns.Add(new StructuredTableFilterColumnModel(
             1,
             [],
             IncludeBlank: false,
-            CustomFilters: [new StructuredTableCustomFilterModel("invalid", "1")],
+            CustomFilters: [new StructuredTableCustomFilterModel("invalid", "1", new Dictionary<string, string> { ["customFilterFlag"] = "removed" })],
             CustomFiltersAnd: false,
             CustomFiltersAndRaw: "maybe",
-            NativeCustomFiltersAttributes: null,
+            NativeCustomFiltersAttributes: new Dictionary<string, string> { ["customFiltersFlag"] = "removed" },
             NativeFilterXmls: []));
         table.FilterColumns.Add(new StructuredTableFilterColumnModel(
             2,
@@ -2057,7 +2102,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             NativeFilterXmls:
             [
                 """
-                <top10 xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" top="maybe" percent="maybe" val="not-a-number" filterVal="not-a-number" />
+                <top10 xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" top="maybe" percent="maybe" val="not-a-number" filterVal="not-a-number" customTop10Flag="removed" />
                 """
             ]));
         sheet.StructuredTables.Add(table);
@@ -2226,22 +2271,24 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             NativeFiltersAttributes: new Dictionary<string, string>
             {
                 ["blank"] = "maybe",
-                ["calendarType"] = "invalid"
+                ["calendarType"] = "invalid",
+                ["filtersFlag"] = "removed"
             },
             NativeFilterXmls: [],
             NativeAttributes: new Dictionary<string, string>
             {
                 ["hiddenButton"] = "maybe",
-                ["showButton"] = "maybe"
+                ["showButton"] = "maybe",
+                ["customFilterColumnFlag"] = "removed"
             }));
         sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
             1,
             [],
             IncludeBlank: false,
-            CustomFilters: [new WorksheetAutoFilterCustomFilterModel("invalid", "A")],
+            CustomFilters: [new WorksheetAutoFilterCustomFilterModel("invalid", "A", new Dictionary<string, string> { ["customFilterFlag"] = "removed" })],
             CustomFiltersAnd: false,
             CustomFiltersAndRaw: "maybe",
-            NativeCustomFiltersAttributes: null,
+            NativeCustomFiltersAttributes: new Dictionary<string, string> { ["customFiltersFlag"] = "removed" },
             Top10: null,
             DynamicFilter: null,
             ColorFilter: null,
@@ -2259,7 +2306,8 @@ public sealed partial class XlsxNonChartSchemaValidationTests
                 TopRaw: "maybe",
                 PercentRaw: "maybe",
                 ValueRaw: "not-a-number",
-                FilterValueRaw: "not-a-number"),
+                FilterValueRaw: "not-a-number",
+                NativeAttributes: new Dictionary<string, string> { ["customTop10Flag"] = "removed" }),
             DynamicFilter: null,
             NativeFilterXmls: []));
         sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
@@ -2274,7 +2322,8 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             DynamicFilter: new WorksheetAutoFilterDynamicFilterModel(
                 Type: "invalid",
                 ValueRaw: "not-a-number",
-                MaxValueRaw: "not-a-number"),
+                MaxValueRaw: "not-a-number",
+                NativeAttributes: new Dictionary<string, string> { ["customDynamicFilterFlag"] = "removed" }),
             NativeFilterXmls: []));
         sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
             4,
@@ -2373,20 +2422,29 @@ public sealed partial class XlsxNonChartSchemaValidationTests
                 new XAttribute("colId", "0"),
                 new XAttribute("hiddenButton", "maybe"),
                 new XAttribute("showButton", "maybe"),
+                new XAttribute("customFilterColumnFlag", "removed"),
                 new XElement(
                     workbookNs + "filters",
                     new XAttribute("blank", "maybe"),
-                    new XElement(workbookNs + "filter", new XAttribute("val", "A")))),
+                    new XAttribute("filtersFlag", "removed"),
+                    new XElement(
+                        workbookNs + "filter",
+                        new XAttribute("val", "A"),
+                        new XAttribute("filterFlag", "removed"),
+                        new XElement(workbookNs + "nativeFilterChild")))),
             new XElement(
                 workbookNs + "filterColumn",
                 new XAttribute("colId", "1"),
                 new XElement(
                     workbookNs + "customFilters",
                     new XAttribute("and", "maybe"),
+                    new XAttribute("customFiltersFlag", "removed"),
                     new XElement(
                         workbookNs + "customFilter",
                         new XAttribute("operator", "invalid"),
-                        new XAttribute("val", "1")))));
+                        new XAttribute("val", "1"),
+                        new XAttribute("customFilterFlag", "removed"),
+                        new XElement(workbookNs + "nativeCustomFilterChild")))));
         ReplacePackageXml(archive, "xl/tables/table1.xml", tableXml);
     }
 
@@ -2454,9 +2512,14 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var firstColumn = autoFilter.Elements(workbookNs + "filterColumn").First();
         firstColumn.SetAttributeValue("hiddenButton", "maybe");
         firstColumn.SetAttributeValue("showButton", "maybe");
+        firstColumn.SetAttributeValue("customFilterColumnFlag", "removed");
         var filters = firstColumn.Element(workbookNs + "filters")!;
         filters.SetAttributeValue("blank", "maybe");
         filters.SetAttributeValue("calendarType", "invalid");
+        filters.SetAttributeValue("filtersFlag", "removed");
+        var filter = filters.Element(workbookNs + "filter")!;
+        filter.SetAttributeValue("filterFlag", "removed");
+        filter.Add(new XElement(workbookNs + "nativeFilterChild"));
         filters.Add(new XElement(
             workbookNs + "dateGroupItem",
             new XAttribute("year", "not-a-number"),
@@ -2468,7 +2531,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .First()
             .Element(workbookNs + "customFilters")!;
         customFilters.SetAttributeValue("and", "maybe");
-        customFilters.Element(workbookNs + "customFilter")!.SetAttributeValue("operator", "invalid");
+        customFilters.SetAttributeValue("customFiltersFlag", "removed");
+        var customFilter = customFilters.Element(workbookNs + "customFilter")!;
+        customFilter.SetAttributeValue("operator", "invalid");
+        customFilter.SetAttributeValue("customFilterFlag", "removed");
+        customFilter.Add(new XElement(workbookNs + "nativeCustomFilterChild"));
         ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
     }
 
