@@ -31,8 +31,8 @@ internal static class XlsxWorkbookSmartTagNormalizer
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(smartTagPr, SmartTagPropertyAttributes);
         changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(smartTagPr);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(smartTagPr, "embed", NormalizeBoolean);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(smartTagPr, "show", NormalizeShow);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(smartTagPr, "embed", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(smartTagPr, "show", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, SmartTagShowValues));
         return changed;
     }
 
@@ -76,25 +76,6 @@ internal static class XlsxWorkbookSmartTagNormalizer
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(smartTagType, "name", NormalizeNonEmptyText);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(smartTagType, "url", NormalizeOptionalText);
         return changed;
-    }
-
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed switch
-        {
-            "0" or "1" => trimmed,
-            "true" or "false" => trimmed,
-            _ => null
-        };
-    }
-
-    private static string? NormalizeShow(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed is not null && SmartTagShowValues.Contains(trimmed)
-            ? trimmed
-            : null;
     }
 
     private static string? NormalizeNonEmptyText(string? value)

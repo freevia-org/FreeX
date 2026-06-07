@@ -18,19 +18,8 @@ internal static class XlsxWorkbookFileRecoveryPropertyNormalizer
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(fileRecoveryPr, BooleanAttributes);
         changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(fileRecoveryPr);
         foreach (var attributeName in BooleanAttributes)
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(fileRecoveryPr, attributeName, NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(fileRecoveryPr, attributeName, XlsxXmlNormalizationHelpers.NormalizeBoolean);
 
         return changed;
-    }
-
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed switch
-        {
-            "0" or "1" => trimmed,
-            "true" or "false" => trimmed,
-            _ => null
-        };
     }
 }
