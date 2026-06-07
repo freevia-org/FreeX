@@ -176,14 +176,11 @@ public sealed class XlsxClassicChartDefaultTests
         new XlsxFileAdapter().Save(workbook, stream);
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
-        return LoadPackageXml(archive, "xl/charts/chart1.xml");
-    }
-
-    private static XDocument LoadPackageXml(ZipArchive archive, string entryName)
-        => XlsxPackageTestFixtures.LoadPackageXml(
+        return XlsxPackageTestFixtures.LoadPackageXml(
             archive,
-            entryName,
-            $"the XLSX package should contain {entryName}");
+            "xl/charts/chart1.xml",
+            "the XLSX package should contain xl/charts/chart1.xml");
+    }
 
     private static void AssertDefault3DView(
         XDocument chartXml,
