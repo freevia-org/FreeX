@@ -205,12 +205,8 @@ public sealed class XlsxThreadedCommentMapperTests
         return workbook;
     }
 
-    private static XDocument LoadXml(ZipArchive archive, string path)
-    {
-        var entry = archive.GetEntry(path);
-        entry.Should().NotBeNull(path);
-        return XlsxPackageXmlEditor.LoadXml(entry!);
-    }
+    private static XDocument LoadXml(ZipArchive archive, string path) =>
+        XlsxPackageTestFixtures.LoadPackageXml(archive, path, path);
 
     private static string? AttributeValue(XElement element, string name) =>
         element.Attribute(name)?.Value;
