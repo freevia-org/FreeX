@@ -519,10 +519,7 @@ public sealed class XlsxChartSchemaOrderingTests
     {
         using var stream = new MemoryStream(package, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
-        var entry = archive.GetEntry("xl/charts/chart1.xml");
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        return XDocument.Load(entryStream);
+        return XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/charts/chart1.xml", "xl/charts/chart1.xml");
     }
 
     private static void AssertAllChartTextPropertiesStartWithBodyProperties(XDocument chartXml)
