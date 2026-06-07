@@ -192,12 +192,12 @@ public sealed class XlsxLoadPackageStreamTests
             archive.GetEntry("xl/media/image1.png").Should().NotBeNull();
 
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+            var worksheetXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
             worksheetXml.Root!.Elements(worksheetNs + "drawing").Should().BeEmpty();
             worksheetXml.Root!.Elements(worksheetNs + "legacyDrawing").Should().ContainSingle();
 
             XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-            var relsXml = LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
+            var relsXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
             relsXml.Root!.Elements(packageRelNs + "Relationship")
                 .Select(relationship => relationship.Attribute("Target")?.Value)
                 .Should()
@@ -208,7 +208,7 @@ public sealed class XlsxLoadPackageStreamTests
                 .Contain("../drawings/vmlDrawing1.vml");
 
             XNamespace contentTypesNs = "http://schemas.openxmlformats.org/package/2006/content-types";
-            var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+            var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "[Content_Types].xml");
             contentTypesXml.Root!.Elements(contentTypesNs + "Override")
                 .Select(element => element.Attribute("PartName")?.Value)
                 .Should()
@@ -354,12 +354,12 @@ public sealed class XlsxLoadPackageStreamTests
         archive.GetEntry("xl/media/image1.png").Should().NotBeNull();
 
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        var worksheetXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         worksheetXml.Root!.Elements(worksheetNs + "drawing").Should().BeEmpty();
         worksheetXml.Root!.Elements(worksheetNs + "legacyDrawing").Should().ContainSingle();
 
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-        var relsXml = LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
+        var relsXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
         relsXml.Root!.Elements(packageRelNs + "Relationship")
             .Select(relationship => relationship.Attribute("Target")?.Value)
             .Should()
@@ -370,7 +370,7 @@ public sealed class XlsxLoadPackageStreamTests
             .Contain("../drawings/vmlDrawing1.vml");
 
         XNamespace contentTypesNs = "http://schemas.openxmlformats.org/package/2006/content-types";
-        var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+        var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "[Content_Types].xml");
         contentTypesXml.Root!.Elements(contentTypesNs + "Override")
             .Select(element => element.Attribute("PartName")?.Value)
             .Should()
@@ -430,7 +430,7 @@ public sealed class XlsxLoadPackageStreamTests
         sanitized.Should().NotBeSameAs(package);
         using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: false);
         XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-        var relationships = LoadPackageXml(archive, "_rels/.rels")
+        var relationships = XlsxPackageTestFixtures.LoadPackageXml(archive, "_rels/.rels")
             .Root!
             .Elements(relationshipNs + "Relationship")
             .Where(relationship => string.Equals(
@@ -504,12 +504,12 @@ public sealed class XlsxLoadPackageStreamTests
             sanitized.Should().NotBeSameAs(package);
             using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: true);
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            LoadPackageXml(archive, "xl/worksheets/sheet1.xml")
+            XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/sheet1.xml")
                 .Root!
                 .Element(worksheetNs + "mergeCells")
                 .Should()
                 .BeNull();
-            LoadPackageXml(archive, "xl/worksheets/sheet2.xml")
+            XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/sheet2.xml")
                 .Root!
                 .Element(worksheetNs + "mergeCells")
                 .Should()
@@ -997,18 +997,18 @@ public sealed class XlsxLoadPackageStreamTests
         archive.GetEntry("xl/charts/chart1.xml").Should().BeNull();
 
         XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var chartsheetXml = LoadPackageXml(archive, "xl/chartsheets/sheet1.xml");
+        var chartsheetXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/chartsheets/sheet1.xml");
         chartsheetXml.Root!.Elements(sheetNs + "drawing").Should().BeEmpty();
 
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-        var relsXml = LoadPackageXml(archive, "xl/chartsheets/_rels/sheet1.xml.rels");
+        var relsXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/chartsheets/_rels/sheet1.xml.rels");
         relsXml.Root!.Elements(packageRelNs + "Relationship")
             .Select(relationship => relationship.Attribute("Target")?.Value)
             .Should()
             .NotContain("../drawings/drawing1.xml");
 
         XNamespace contentTypesNs = "http://schemas.openxmlformats.org/package/2006/content-types";
-        var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+        var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "[Content_Types].xml");
         contentTypesXml.Root!.Elements(contentTypesNs + "Override")
             .Select(element => element.Attribute("PartName")?.Value)
             .Should()
@@ -1113,9 +1113,6 @@ public sealed class XlsxLoadPackageStreamTests
         package.Position = 0;
         return references;
     }
-
-    private static XDocument LoadPackageXml(ZipArchive archive, string path) =>
-        XlsxPackageTestFixtures.LoadPackageXml(archive, path);
 
     private sealed class NonMemoryReadStream(byte[] buffer) : Stream
     {
