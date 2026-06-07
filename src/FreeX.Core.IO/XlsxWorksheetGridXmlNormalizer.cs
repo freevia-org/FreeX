@@ -162,14 +162,14 @@ internal static class XlsxWorksheetGridXmlNormalizer
 
         var changed = false;
         changed |= RemoveUnknownAttributes(column, ColumnAttributes);
-        changed |= SetAttributeIfChanged(column, "min", normalizedMin);
-        changed |= SetAttributeIfChanged(column, "max", normalizedMax);
-        changed |= NormalizeAttribute(column, "width", NormalizeNonNegativeDouble);
-        changed |= NormalizeAttribute(column, "style", NormalizeUnsignedIntOrNull);
-        changed |= NormalizeAttribute(column, "outlineLevel", NormalizeOutlineLevel);
+        changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(column, "min", normalizedMin);
+        changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(column, "max", normalizedMax);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(column, "width", NormalizeNonNegativeDouble);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(column, "style", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(column, "outlineLevel", NormalizeOutlineLevel);
         foreach (var attributeName in new[] { "hidden", "bestFit", "customWidth", "phonetic", "collapsed" })
-            changed |= NormalizeAttribute(column, attributeName, NormalizeBoolean);
-        changed |= RemoveAllChildren(column);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(column, attributeName, NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElements(column);
         return changed;
     }
 
@@ -177,13 +177,13 @@ internal static class XlsxWorksheetGridXmlNormalizer
     {
         var changed = false;
         changed |= RemoveUnknownAttributes(row, RowAttributes);
-        changed |= NormalizeAttribute(row, "r", NormalizeUnsignedIntOrNull);
-        changed |= NormalizeAttribute(row, "spans", NormalizeCellSpans);
-        changed |= NormalizeAttribute(row, "s", NormalizeUnsignedIntOrNull);
-        changed |= NormalizeAttribute(row, "ht", NormalizeNonNegativeDouble);
-        changed |= NormalizeAttribute(row, "outlineLevel", NormalizeOutlineLevel);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(row, "r", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(row, "spans", NormalizeCellSpans);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(row, "s", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(row, "ht", NormalizeNonNegativeDouble);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(row, "outlineLevel", NormalizeOutlineLevel);
         foreach (var attributeName in new[] { "customFormat", "hidden", "customHeight", "collapsed", "thickTop", "thickBot", "ph" })
-            changed |= NormalizeAttribute(row, attributeName, NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(row, attributeName, NormalizeBoolean);
 
         changed |= NormalizeRowChildren(row);
         foreach (var cell in row.Elements(WorksheetNs + "c").ToList())
@@ -196,12 +196,12 @@ internal static class XlsxWorksheetGridXmlNormalizer
     {
         var changed = false;
         changed |= RemoveUnknownAttributes(cell, CellAttributes);
-        changed |= NormalizeAttribute(cell, "r", NormalizeCellReference);
-        changed |= NormalizeAttribute(cell, "s", NormalizeUnsignedIntOrNull);
-        changed |= NormalizeAttribute(cell, "t", value => NormalizeToken(value, CellTypeValues));
-        changed |= NormalizeAttribute(cell, "cm", NormalizeUnsignedIntOrNull);
-        changed |= NormalizeAttribute(cell, "vm", NormalizeUnsignedIntOrNull);
-        changed |= NormalizeAttribute(cell, "ph", NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(cell, "r", NormalizeCellReference);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(cell, "s", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(cell, "t", value => NormalizeToken(value, CellTypeValues));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(cell, "cm", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(cell, "vm", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(cell, "ph", NormalizeBoolean);
 
         changed |= NormalizeCellChildren(cell);
         foreach (var formula in cell.Elements(WorksheetNs + "f").ToList())
@@ -214,14 +214,14 @@ internal static class XlsxWorksheetGridXmlNormalizer
     {
         var changed = false;
         changed |= RemoveUnknownAttributes(formula, FormulaAttributes);
-        changed |= NormalizeAttribute(formula, "t", value => NormalizeToken(value, FormulaTypeValues));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(formula, "t", value => NormalizeToken(value, FormulaTypeValues));
         foreach (var attributeName in new[] { "aca", "dt2D", "dtr", "del1", "del2", "ca", "bx" })
-            changed |= NormalizeAttribute(formula, attributeName, NormalizeBoolean);
-        changed |= NormalizeAttribute(formula, "ref", NormalizeCellRange);
-        changed |= NormalizeAttribute(formula, "r1", NormalizeCellReference);
-        changed |= NormalizeAttribute(formula, "r2", NormalizeCellReference);
-        changed |= NormalizeAttribute(formula, "si", NormalizeUnsignedIntOrNull);
-        changed |= RemoveAllChildren(formula);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(formula, attributeName, NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(formula, "ref", NormalizeCellRange);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(formula, "r1", NormalizeCellReference);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(formula, "r2", NormalizeCellReference);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(formula, "si", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElements(formula);
         return changed;
     }
 
@@ -267,7 +267,7 @@ internal static class XlsxWorksheetGridXmlNormalizer
             {
                 seenValue = true;
                 changed |= RemoveUnknownAttributes(child, EmptyAttributes);
-                changed |= RemoveAllChildren(child);
+                changed |= XlsxXmlNormalizationHelpers.RemoveChildElements(child);
                 continue;
             }
 
@@ -341,44 +341,6 @@ internal static class XlsxWorksheetGridXmlNormalizer
         }
 
         return changed;
-    }
-
-    private static bool RemoveAllChildren(XElement element)
-    {
-        if (!element.HasElements)
-            return false;
-
-        element.Elements().Remove();
-        return true;
-    }
-
-    private static bool NormalizeAttribute(
-        XElement element,
-        string attributeName,
-        Func<string?, string?> normalize)
-    {
-        var attribute = element.Attribute(attributeName);
-        var normalized = normalize(attribute?.Value);
-        if (normalized is null)
-        {
-            if (attribute is null)
-                return false;
-
-            attribute.Remove();
-            return true;
-        }
-
-        return SetAttributeIfChanged(element, attributeName, normalized);
-    }
-
-    private static bool SetAttributeIfChanged(XElement element, string attributeName, string value)
-    {
-        var attribute = element.Attribute(attributeName);
-        if (attribute is not null && string.Equals(attribute.Value, value, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(attributeName, value);
-        return true;
     }
 
     private static string? NormalizeBoolean(string? value)
