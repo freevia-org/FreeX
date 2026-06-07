@@ -27,6 +27,24 @@ internal static class XlsxWorksheetOleControlNormalizer
         "name"
     ];
 
+    private static readonly HashSet<string> ControlPropertiesAttributes =
+    [
+        "locked",
+        "defaultSize",
+        "print",
+        "disabled",
+        "recalcAlways",
+        "uiObject",
+        "autoFill",
+        "autoLine",
+        "autoPict",
+        "macro",
+        "altText",
+        "linkedCell",
+        "listFillRange",
+        "cf"
+    ];
+
     private static readonly HashSet<string> OleUpdateValues =
     [
         "OLEUPDATE_ALWAYS",
@@ -166,8 +184,52 @@ internal static class XlsxWorksheetOleControlNormalizer
         var changed = false;
         changed |= RemoveUnknownAttributes(control, ControlAttributes);
         changed |= RemoveUnexpectedChildElements(control, WorksheetNs + "controlPr");
+        changed |= NormalizeControlProperties(control);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(control, "shapeId", NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(control, "name", NormalizeOptionalText);
+        return changed;
+    }
+
+    private static bool NormalizeControlProperties(XElement control)
+    {
+        var changed = false;
+        var keptControlProperties = false;
+        foreach (var controlProperties in control.Elements(WorksheetNs + "controlPr").ToList())
+        {
+            if (keptControlProperties)
+            {
+                controlProperties.Remove();
+                changed = true;
+                continue;
+            }
+
+            changed |= RemoveUnknownAttributes(controlProperties, ControlPropertiesAttributes);
+            changed |= RemoveUnexpectedChildElements(controlProperties, WorksheetNs + "anchor");
+            changed |= NormalizeBooleanAttribute(controlProperties, "locked");
+            changed |= NormalizeBooleanAttribute(controlProperties, "defaultSize");
+            changed |= NormalizeBooleanAttribute(controlProperties, "print");
+            changed |= NormalizeBooleanAttribute(controlProperties, "disabled");
+            changed |= NormalizeBooleanAttribute(controlProperties, "recalcAlways");
+            changed |= NormalizeBooleanAttribute(controlProperties, "uiObject");
+            changed |= NormalizeBooleanAttribute(controlProperties, "autoFill");
+            changed |= NormalizeBooleanAttribute(controlProperties, "autoLine");
+            changed |= NormalizeBooleanAttribute(controlProperties, "autoPict");
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "macro", NormalizeOptionalText);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "altText", NormalizeOptionalText);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "linkedCell", NormalizeOptionalText);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "listFillRange", NormalizeOptionalText);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "cf", NormalizeOptionalText);
+
+            if (controlProperties.Attribute(RelNs + "id") is null && !controlProperties.HasAttributes && !controlProperties.HasElements)
+            {
+                controlProperties.Remove();
+                changed = true;
+                continue;
+            }
+
+            keptControlProperties = true;
+        }
+
         return changed;
     }
 
@@ -216,6 +278,9 @@ internal static class XlsxWorksheetOleControlNormalizer
             _ => null
         };
     }
+
+    private static bool NormalizeBooleanAttribute(XElement element, string attributeName) =>
+        XlsxXmlNormalizationHelpers.NormalizeAttribute(element, attributeName, NormalizeBoolean);
 
     private static string? NormalizeOleUpdate(string? value)
     {
