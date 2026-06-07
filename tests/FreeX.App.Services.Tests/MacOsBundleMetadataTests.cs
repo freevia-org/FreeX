@@ -259,6 +259,10 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-notarization.log");
         workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-tester-instructions.md");
         workflow.Should().Contain("if-no-files-found: error");
+        workflow.Should().Contain("- name: Upload app diagnostics");
+        workflow.Should().Contain("if: always()");
+        workflow.Should().Contain("name: freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-macos-diagnostics");
+        workflow.Should().Contain("if-no-files-found: warn");
     }
 
     [Fact]

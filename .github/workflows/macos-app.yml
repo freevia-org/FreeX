@@ -467,3 +467,18 @@ jobs:
             artifacts/freex-${{ matrix.runtime }}-macos-notarization.log
             artifacts/freex-${{ matrix.runtime }}-macos-tester-instructions.md
           if-no-files-found: error
+
+      - name: Upload app diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-macos-diagnostics
+          path: |
+            artifacts/freex-${{ matrix.runtime }}-macos-evidence.txt
+            artifacts/freex-${{ matrix.runtime }}-macos-packaging-smoke.log
+            artifacts/freex-${{ matrix.runtime }}-macos-launch-smoke.txt
+            artifacts/freex-${{ matrix.runtime }}-macos-notarization.log
+            artifacts/freex-${{ matrix.runtime }}-macos-tester-instructions.md
+            artifacts/freex-${{ matrix.runtime }}-macos-app.zip
+            artifacts/freex-${{ matrix.runtime }}-macos-app.zip.sha256
+          if-no-files-found: warn

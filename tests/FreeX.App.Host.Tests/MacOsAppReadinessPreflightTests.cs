@@ -85,6 +85,10 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("shasum -a 256 -c \"$zip_name.sha256\"");
         script.Should().Contain("zip_sha256=$zip_sha256");
         script.Should().Contain("freex-$runtime-macos-tester-instructions.md");
+        script.Should().Contain("Upload app diagnostics");
+        script.Should().Contain("if: always()");
+        script.Should().Contain("freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-macos-diagnostics");
+        script.Should().Contain("if-no-files-found: warn");
         script.Should().Contain("native_horizontal_text_menu_item=true");
         script.Should().Contain("native_rotate_text_down_menu_item=");
         script.Should().Contain("native_show_gridlines_menu_item=true");
@@ -596,10 +600,18 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_about_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_legal_notices_menu_item=true" "$artifact_root/launch.txt"
                       echo "bundle_icon=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app/Contents/Info.plist")"
-                  - uses: actions/upload-artifact@v7
+                  - name: Upload app artifact
+                    uses: actions/upload-artifact@v7
                     with:
                       if-no-files-found: error
                       path: artifacts/freex-osx-arm64-macos-tester-instructions.md
+                  - name: Upload app diagnostics
+                    if: always()
+                    uses: actions/upload-artifact@v7
+                    with:
+                      name: freex-${"{{"} github.run_id {"}}"}-${"{{"} github.run_attempt {"}}"}-${"{{"} matrix.runtime {"}}"}-macos-diagnostics
+                      if-no-files-found: warn
+                      path: artifacts/freex-osx-arm64-macos-evidence.txt
             """);
 
         WriteMinimalIcns(root, "src/FreeX.App.Avalonia/Packaging/macos/FreeX.icns");
