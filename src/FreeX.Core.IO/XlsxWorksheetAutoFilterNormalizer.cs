@@ -407,17 +407,6 @@ internal static class XlsxWorksheetAutoFilterNormalizer
     private static int FilterColumnChildOrder(XElement child) =>
         child.Name == WorksheetNs + "extLst" ? 100 : 0;
 
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed switch
-        {
-            "0" or "1" => trimmed,
-            "true" or "false" => trimmed,
-            _ => null
-        };
-    }
-
     private static string? NormalizeCellOrRangeReference(string? value)
     {
         var trimmed = value?.Trim();
@@ -445,20 +434,6 @@ internal static class XlsxWorksheetAutoFilterNormalizer
         }
 
         return parsed.ToString("G17", CultureInfo.InvariantCulture);
-    }
-
-    private static string? NormalizeToken(string? value, IReadOnlySet<string> allowedValues)
-    {
-        var trimmed = value?.Trim();
-        return trimmed is not null && allowedValues.Contains(trimmed) ? trimmed : null;
-    }
-
-    private static string? NormalizeUnsignedIntOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed.ToString(CultureInfo.InvariantCulture)
-            : null;
     }
 
     private static string? NormalizeUnsignedShortOrNull(string? value)
