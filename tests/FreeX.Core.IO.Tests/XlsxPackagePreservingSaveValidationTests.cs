@@ -124,6 +124,76 @@ public sealed class XlsxPackagePreservingSaveValidationTests
         relationshipTargets.Should().NotContain("xl/customPayload/removed-child.freexbin");
     }
 
+    [Fact]
+    public void LoadEditSave_PreservesUnsupportedSheetSidecarsContentTypesAndRelationships()
+    {
+        var sourceBytes = CreatePackageWithUnsupportedSheetSidecars();
+
+        var savedBytes = SaveAfterLoadingAndEditing(sourceBytes, workbook =>
+        {
+            var sheet = workbook.GetSheet("Data");
+            sheet.Should().NotBeNull();
+            sheet!.SetCell(new CellAddress(sheet.Id, 4, 2), new TextValue("sidecars retained"));
+        });
+
+        AssertRoundTripCellValue(savedBytes, "Data", 4, 2, new TextValue("sidecars retained"));
+
+        using var savedPackage = new MemoryStream(savedBytes);
+        using var savedArchive = new ZipArchive(savedPackage, ZipArchiveMode.Read);
+
+        AssertEntryBytesPreserved(sourceBytes, savedBytes, "xl/chartsheets/sheet1.xml");
+        AssertEntryBytesPreserved(sourceBytes, savedBytes, "xl/dialogSheets/sheet2.xml");
+        AssertEntryBytesPreserved(sourceBytes, savedBytes, "xl/macroSheets/sheet3.xml");
+
+        AssertContentTypeOverride(
+            savedArchive,
+            "/xl/chartsheets/sheet1.xml",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml");
+        AssertContentTypeOverride(
+            savedArchive,
+            "/xl/dialogSheets/sheet2.xml",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.dialogsheet+xml");
+        AssertContentTypeOverride(
+            savedArchive,
+            "/xl/macroSheets/sheet3.xml",
+            "application/vnd.ms-excel.macrosheet+xml");
+
+        AssertWorkbookSheet(
+            savedArchive,
+            "Chart Sidecar",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet",
+            "chartsheets/sheet1.xml");
+        AssertWorkbookSheet(
+            savedArchive,
+            "Dialog Sidecar",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/dialogsheet",
+            "dialogSheets/sheet2.xml");
+        AssertWorkbookSheet(
+            savedArchive,
+            "Macro Sidecar",
+            "http://schemas.microsoft.com/office/2006/relationships/xlMacrosheet",
+            "macroSheets/sheet3.xml");
+
+        AssertRelationship(
+            savedArchive,
+            "xl/chartsheets/_rels/sheet1.xml.rels",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+            "https://example.com/chart-sidecar",
+            "External");
+        AssertRelationship(
+            savedArchive,
+            "xl/dialogSheets/_rels/sheet2.xml.rels",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+            "https://example.com/dialog-sidecar",
+            "External");
+        AssertRelationship(
+            savedArchive,
+            "xl/macroSheets/_rels/sheet3.xml.rels",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+            "https://example.com/macro-sidecar",
+            "External");
+    }
+
     private static byte[] CreatePackageWithUnknownPackageGraph(string sheetName)
     {
         var packageBytes = CreateClosedXmlWorkbook(sheetName);
@@ -254,6 +324,118 @@ public sealed class XlsxPackagePreservingSaveValidationTests
         return package.ToArray();
     }
 
+    private static byte[] CreatePackageWithUnsupportedSheetSidecars()
+    {
+        var packageBytes = CreateClosedXmlWorkbook("Data");
+        using var package = CreateExpandablePackage(packageBytes);
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(
+                archive,
+                "[Content_Types].xml",
+                "[Content_Types].xml");
+            AddContentTypeOverride(
+                contentTypesXml,
+                "/xl/chartsheets/sheet1.xml",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml");
+            AddContentTypeOverride(
+                contentTypesXml,
+                "/xl/dialogSheets/sheet2.xml",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.dialogsheet+xml");
+            AddContentTypeOverride(
+                contentTypesXml,
+                "/xl/macroSheets/sheet3.xml",
+                "application/vnd.ms-excel.macrosheet+xml");
+            ReplaceXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            AppendWorkbookSheet(archive, "Chart Sidecar", "42", "rIdChartSidecar");
+            AppendWorkbookSheet(archive, "Dialog Sidecar", "43", "rIdDialogSidecar");
+            AppendWorkbookSheet(archive, "Macro Sidecar", "44", "rIdMacroSidecar");
+            AppendRelationship(
+                archive,
+                "xl/_rels/workbook.xml.rels",
+                "rIdChartSidecar",
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet",
+                "chartsheets/sheet1.xml");
+            AppendRelationship(
+                archive,
+                "xl/_rels/workbook.xml.rels",
+                "rIdDialogSidecar",
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/dialogsheet",
+                "dialogSheets/sheet2.xml");
+            AppendRelationship(
+                archive,
+                "xl/_rels/workbook.xml.rels",
+                "rIdMacroSidecar",
+                "http://schemas.microsoft.com/office/2006/relationships/xlMacrosheet",
+                "macroSheets/sheet3.xml");
+
+            WriteTextEntry(
+                archive,
+                "xl/chartsheets/sheet1.xml",
+                """
+                <chartsheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheetViews>
+                    <sheetView workbookViewId="0"/>
+                  </sheetViews>
+                  <hyperlinks>
+                    <hyperlink r:id="rIdChartSidecarLink"/>
+                  </hyperlinks>
+                </chartsheet>
+                """);
+            WriteTextEntry(
+                archive,
+                "xl/dialogSheets/sheet2.xml",
+                """
+                <dialogsheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheetViews>
+                    <sheetView workbookViewId="0"/>
+                  </sheetViews>
+                  <hyperlinks>
+                    <hyperlink r:id="rIdDialogSidecarLink"/>
+                  </hyperlinks>
+                </dialogsheet>
+                """);
+            WriteTextEntry(
+                archive,
+                "xl/macroSheets/sheet3.xml",
+                """
+                <macrosheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheetData/>
+                  <hyperlinks>
+                    <hyperlink r:id="rIdMacroSidecarLink"/>
+                  </hyperlinks>
+                </macrosheet>
+                """);
+            AppendRelationship(
+                archive,
+                "xl/chartsheets/_rels/sheet1.xml.rels",
+                "rIdChartSidecarLink",
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+                "https://example.com/chart-sidecar",
+                "External");
+            AppendRelationship(
+                archive,
+                "xl/dialogSheets/_rels/sheet2.xml.rels",
+                "rIdDialogSidecarLink",
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+                "https://example.com/dialog-sidecar",
+                "External");
+            AppendRelationship(
+                archive,
+                "xl/macroSheets/_rels/sheet3.xml.rels",
+                "rIdMacroSidecarLink",
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+                "https://example.com/macro-sidecar",
+                "External");
+        }
+
+        return package.ToArray();
+    }
+
     private static MemoryStream CreateExpandablePackage(byte[] packageBytes)
     {
         var package = new MemoryStream(packageBytes.Length + 4096);
@@ -351,6 +533,36 @@ public sealed class XlsxPackagePreservingSaveValidationTests
         relationshipsXml.Root!
             .Elements(PackageRelNs + "Relationship")
             .Where(element => RelationshipMatches(element, type, target, targetMode))
+            .Should()
+            .ContainSingle();
+    }
+
+    private static void AssertWorkbookSheet(ZipArchive archive, string sheetName, string relationshipType, string target)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+        var workbookXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/workbook.xml", "xl/workbook.xml");
+        var sheetRelId = workbookXml.Root!
+            .Element(workbookNs + "sheets")!
+            .Elements(workbookNs + "sheet")
+            .Where(element => string.Equals((string?)element.Attribute("name"), sheetName, StringComparison.Ordinal))
+            .Should()
+            .ContainSingle()
+            .Subject
+            .Attribute(relNs + "id")!
+            .Value;
+
+        var relationshipsXml = XlsxPackageTestFixtures.LoadPackageXml(
+            archive,
+            "xl/_rels/workbook.xml.rels",
+            "xl/_rels/workbook.xml.rels");
+        relationshipsXml.Root!
+            .Elements(PackageRelNs + "Relationship")
+            .Where(element =>
+                string.Equals((string?)element.Attribute("Id"), sheetRelId, StringComparison.Ordinal) &&
+                string.Equals((string?)element.Attribute("Type"), relationshipType, StringComparison.Ordinal) &&
+                string.Equals((string?)element.Attribute("Target"), target, StringComparison.Ordinal))
             .Should()
             .ContainSingle();
     }
@@ -464,6 +676,22 @@ public sealed class XlsxPackagePreservingSaveValidationTests
 
         relationshipsXml.Root!.Add(relationship);
         ReplaceXml(archive, relationshipPartPath, relationshipsXml);
+    }
+
+    private static void AppendWorkbookSheet(ZipArchive archive, string name, string sheetId, string relationshipId)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+        var workbookXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/workbook.xml", "xl/workbook.xml");
+        workbookXml.Root!
+            .Element(workbookNs + "sheets")!
+            .Add(new XElement(
+                workbookNs + "sheet",
+                new XAttribute("name", name),
+                new XAttribute("sheetId", sheetId),
+                new XAttribute(relNs + "id", relationshipId)));
+        ReplaceXml(archive, "xl/workbook.xml", workbookXml);
     }
 
     private static void ReplaceXml(ZipArchive archive, string path, XDocument xml)
