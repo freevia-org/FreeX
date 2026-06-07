@@ -3150,6 +3150,42 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTextScalarConcatAndReplaceOperands()
+    {
+        AssertFormulaTextFunctionContrastLocations("CONCAT($C1,\"x\")=\"Openx\"", "B3", "B4");
+        AssertFormulaTextFunctionContrastLocations("CONCAT(LEFT($C1,1),RIGHTB($C1,1))=\"Cd\"", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("CONCATENATE($C1,\"!\")=\"Closed!\"", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("TEXTJOIN(\"-\",TRUE,$C1,$D1)=\"Closed-East\"", "B1");
+        AssertFormulaTextFunctionContrastLocations("SUBSTITUTE($C1,\"Closed\",\"Done\")=\"Done\"", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("SUBSTITUTE(\"open open\",\"open\",\"shut\",2)=\"open shut\"", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("REPLACE($C1,1,1,\"X\")=\"Xlosed\"", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("REPLACEB($C1,1,1,\"X\")=\"Xlosed\"", "B1", "B2");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTextScalarByteOperands()
+    {
+        AssertFormulaTextFunctionContrastLocations("LENB($C1)=6", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("LEFTB($C1,1)=\"C\"", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("LEFTB($C1)=\"O\"", "B3", "B4");
+        AssertFormulaTextFunctionContrastLocations("RIGHTB($C1,1)=\"n\"", "B3", "B4");
+        AssertFormulaTextFunctionContrastLocations("MIDB($C1,2,3)=\"los\"", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("FINDB(\"los\",$C1)>1", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("FINDB(\"\",$C1,2)=2", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("SEARCHB(\"op*\",$C1)=1", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTextScalarRangeOperands()
+    {
+        AssertFormulaTextFunctionContrastLocations("CONCAT($C$3:$C$4)=\"OpenOpen\"", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("COUNTA(CONCATENATE($C$1:$C$2,\"!\"))=2", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("TEXTJOIN(\"\",TRUE,$C$3:$C$4)=\"OpenOpen\"", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("SUM(LENB($C$3:$C$4))=8", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("SUM(FINDB(\"o\",$C$1:$C$2))=6", FormulaTextFunctionAllLocations);
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTrimTextFunctionOperand()
     {
         AssertFormulaPaddedTextFunctionContrastLocations("TRIM($C1)=\"Open\"", "B1", "B3");
@@ -3264,6 +3300,17 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaTextFunctionContrastLocations("ISNA(REPT(\"x\",NA()))", FormulaTextFunctionAllLocations);
         AssertFormulaTextFunctionContrastLocations("ISNA(CLEAN(NA()))", FormulaTextFunctionAllLocations);
         AssertFormulaTextFunctionContrastLocations("ISNA(T(NA()))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISNA(CONCAT(NA(),\"x\"))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISNA(TEXTJOIN(\"\",TRUE,NA()))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISERROR(SUBSTITUTE($C1,\"C\",\"x\",0))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISERROR(REPLACE($C1,99,1,\"x\"))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISERROR(REPLACEB($C1,99,1,\"x\"))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISNA(LENB(NA()))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISERROR(LEFTB($C1,-1))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISERROR(RIGHTB($C1,-1))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISERROR(MIDB($C1,0,1))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISERROR(FINDB(\"x\",$C1))", FormulaTextFunctionAllLocations);
+        AssertFormulaTextFunctionContrastLocations("ISERROR(SEARCHB(\"z\",$C1))", FormulaTextFunctionAllLocations);
     }
 
     [Fact]
@@ -3284,7 +3331,6 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaTextFunctionContrastLocations("MID($C1&\"x\",1,1)=\"O\"");
         AssertFormulaTextFunctionContrastLocations("MID($C1,1)=\"C\"");
         AssertFormulaTextFunctionContrastLocations("LEN($A1)>0");
-        AssertFormulaTextFunctionContrastLocations("CONCAT($C1,\"x\")=\"Openx\"");
         AssertFormulaTextFunctionContrastLocations("LEFT($C1&\"x\",1)=\"O\"");
         AssertFormulaTextFunctionContrastLocations("LEN(A0)>0");
         AssertFormulaTextFunctionContrastLocations("CHAR()>0");
