@@ -1878,6 +1878,8 @@ public sealed class MainWindow : Window
         yield return CreatePasteSpecialMenuItem("Values", PasteCellsMode.Values, default);
         yield return CreatePasteSpecialMenuItem("Formulas", PasteCellsMode.Formulas, default);
         yield return CreatePasteSpecialMenuItem("Formats", PasteCellsMode.Formats, default);
+        yield return CreatePasteCommentsMenuItem("Comments and Notes");
+        yield return CreatePasteDataValidationMenuItem("Validation");
         yield return CreatePasteColumnWidthsMenuItem("Column Widths");
         yield return CreatePasteSpecialMenuItem("Keep Source Column Widths", PasteCellsMode.All, default, keepSourceColumnWidths: true);
         yield return CreatePasteLinkMenuItem("Paste Link");
@@ -1908,6 +1910,20 @@ public sealed class MainWindow : Window
         return menuItem;
     }
 
+    private MenuItem CreatePasteCommentsMenuItem(string header)
+    {
+        var menuItem = new MenuItem { Header = header };
+        menuItem.Click += async (_, _) => await PasteCommentsFromClipboardAsync(header);
+        return menuItem;
+    }
+
+    private MenuItem CreatePasteDataValidationMenuItem(string header)
+    {
+        var menuItem = new MenuItem { Header = header };
+        menuItem.Click += async (_, _) => await PasteDataValidationFromClipboardAsync(header);
+        return menuItem;
+    }
+
     private MenuItem CreatePasteLinkMenuItem(string header)
     {
         var menuItem = new MenuItem { Header = header };
@@ -1921,6 +1937,8 @@ public sealed class MainWindow : Window
         menu.Items.Add(CreateNativePasteSpecialMenuItem("Values", PasteCellsMode.Values, default));
         menu.Items.Add(CreateNativePasteSpecialMenuItem("Formulas", PasteCellsMode.Formulas, default));
         menu.Items.Add(CreateNativePasteSpecialMenuItem("Formats", PasteCellsMode.Formats, default));
+        menu.Items.Add(CreateNativePasteCommentsMenuItem("Comments and Notes"));
+        menu.Items.Add(CreateNativePasteDataValidationMenuItem("Validation"));
         menu.Items.Add(CreateNativePasteColumnWidthsMenuItem("Column Widths"));
         menu.Items.Add(CreateNativePasteSpecialMenuItem("Keep Source Column Widths", PasteCellsMode.All, default, keepSourceColumnWidths: true));
         menu.Items.Add(CreateNativePasteLinkMenuItem("Paste Link"));
@@ -1950,6 +1968,20 @@ public sealed class MainWindow : Window
     {
         var menuItem = new NativeMenuItem { Header = header };
         menuItem.Click += async (_, _) => await PasteColumnWidthsFromClipboardAsync(header);
+        return menuItem;
+    }
+
+    private NativeMenuItem CreateNativePasteCommentsMenuItem(string header)
+    {
+        var menuItem = new NativeMenuItem { Header = header };
+        menuItem.Click += async (_, _) => await PasteCommentsFromClipboardAsync(header);
+        return menuItem;
+    }
+
+    private NativeMenuItem CreateNativePasteDataValidationMenuItem(string header)
+    {
+        var menuItem = new NativeMenuItem { Header = header };
+        menuItem.Click += async (_, _) => await PasteDataValidationFromClipboardAsync(header);
         return menuItem;
     }
 
@@ -3039,6 +3071,60 @@ public sealed class MainWindow : Window
         RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
     }
 
+    private async Task PasteCommentsFromClipboardAsync(string label)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard is null)
+        {
+            ShowEditIssue("Clipboard unavailable on this platform.");
+            return;
+        }
+
+        var text = await clipboard.TryGetTextAsync();
+        var destination = _session.ActiveCell;
+        var result = _session.PasteCommentsFromClipboardAtActiveCell(text);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Paste Comments failed.");
+            return;
+        }
+
+        RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
+    }
+
+    private async Task PasteDataValidationFromClipboardAsync(string label)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard is null)
+        {
+            ShowEditIssue("Clipboard unavailable on this platform.");
+            return;
+        }
+
+        var text = await clipboard.TryGetTextAsync();
+        var destination = _session.ActiveCell;
+        var result = _session.PasteDataValidationFromClipboardAtActiveCell(text);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Paste Validation failed.");
+            return;
+        }
+
+        RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
+    }
+
     private async Task PasteLinkFromClipboardAsync(string label)
     {
         if (_isOpening || _isSaving)
@@ -3630,6 +3716,8 @@ public sealed class MainWindow : Window
             HasNativeCopyMenuItem: HasNativeMenuItem(_copyMenuItem, "Copy"),
             HasNativePasteMenuItem: HasNativeMenuItem(_pasteMenuItem, "Paste"),
             HasNativePasteSpecialMenuItem: HasNativeMenuItem(_pasteSpecialMenuItem, "Paste Special"),
+            HasNativePasteSpecialCommentsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Comments and Notes"),
+            HasNativePasteSpecialValidationMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Validation"),
             HasNativePasteSpecialColumnWidthsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Column Widths"),
             HasNativePasteSpecialKeepSourceColumnWidthsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Keep Source Column Widths"),
             HasNativePasteSpecialPasteLinkMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Paste Link"),

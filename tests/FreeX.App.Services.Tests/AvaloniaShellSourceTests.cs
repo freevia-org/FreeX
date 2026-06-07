@@ -144,6 +144,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_pasteSpecialMenuItem.Header = \"Paste Special\";");
         source.Should().Contain("_pasteSpecialMenuItem.Gesture = new KeyGesture(Key.V, KeyModifiers.Meta | KeyModifiers.Alt);");
         source.Should().Contain("_pasteSpecialMenuItem.Menu = CreateNativePasteSpecialMenu();");
+        source.Should().Contain("CreateNativePasteCommentsMenuItem(\"Comments and Notes\")");
+        source.Should().Contain("CreateNativePasteDataValidationMenuItem(\"Validation\")");
         source.Should().Contain("CreateNativePasteColumnWidthsMenuItem(\"Column Widths\")");
         source.Should().Contain("CreateNativePasteSpecialMenuItem(\"Keep Source Column Widths\", PasteCellsMode.All, default, keepSourceColumnWidths: true)");
         source.Should().Contain("CreateNativePasteLinkMenuItem(\"Paste Link\")");
@@ -410,6 +412,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("mainWindow.Opened += async (_, _) => await RunAsync(mainWindow, options);");
         smokeSource.Should().Contain("mainWindow.CreateLaunchSmokeSnapshot()");
         smokeSource.Should().Contain("macos_launch_smoke={(snapshot.IsPassed ? \"passed\" : \"failed\")}");
+        smokeSource.Should().Contain("HasNativePasteSpecialCommentsMenuItem &&");
+        smokeSource.Should().Contain("HasNativePasteSpecialValidationMenuItem &&");
         smokeSource.Should().Contain("HasNativePasteSpecialColumnWidthsMenuItem &&");
         smokeSource.Should().Contain("HasNativePasteSpecialKeepSourceColumnWidthsMenuItem &&");
         smokeSource.Should().Contain("HasNativePasteSpecialPasteLinkMenuItem &&");
@@ -429,6 +433,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_copy_menu_item={FormatBool(snapshot.HasNativeCopyMenuItem)}");
         smokeSource.Should().Contain("native_paste_menu_item={FormatBool(snapshot.HasNativePasteMenuItem)}");
         smokeSource.Should().Contain("native_paste_special_menu_item={FormatBool(snapshot.HasNativePasteSpecialMenuItem)}");
+        smokeSource.Should().Contain("native_paste_special_comments_menu_item={FormatBool(snapshot.HasNativePasteSpecialCommentsMenuItem)}");
+        smokeSource.Should().Contain("native_paste_special_validation_menu_item={FormatBool(snapshot.HasNativePasteSpecialValidationMenuItem)}");
         smokeSource.Should().Contain("native_paste_special_column_widths_menu_item={FormatBool(snapshot.HasNativePasteSpecialColumnWidthsMenuItem)}");
         smokeSource.Should().Contain("native_paste_special_keep_source_column_widths_menu_item={FormatBool(snapshot.HasNativePasteSpecialKeepSourceColumnWidthsMenuItem)}");
         smokeSource.Should().Contain("native_paste_special_paste_link_menu_item={FormatBool(snapshot.HasNativePasteSpecialPasteLinkMenuItem)}");
@@ -496,6 +502,8 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeCopyMenuItem: HasNativeMenuItem(_copyMenuItem, \"Copy\")");
         windowSource.Should().Contain("HasNativePasteMenuItem: HasNativeMenuItem(_pasteMenuItem, \"Paste\")");
         windowSource.Should().Contain("HasNativePasteSpecialMenuItem: HasNativeMenuItem(_pasteSpecialMenuItem, \"Paste Special\")");
+        windowSource.Should().Contain("HasNativePasteSpecialCommentsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, \"Comments and Notes\")");
+        windowSource.Should().Contain("HasNativePasteSpecialValidationMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, \"Validation\")");
         windowSource.Should().Contain("HasNativePasteSpecialColumnWidthsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, \"Column Widths\")");
         windowSource.Should().Contain("HasNativePasteSpecialKeepSourceColumnWidthsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, \"Keep Source Column Widths\")");
         windowSource.Should().Contain("HasNativePasteSpecialPasteLinkMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, \"Paste Link\")");
@@ -716,9 +724,13 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("CreatePasteSpecialMenuItem(\"Values\", PasteCellsMode.Values, default)");
         source.Should().Contain("CreatePasteSpecialMenuItem(\"Formulas\", PasteCellsMode.Formulas, default)");
         source.Should().Contain("CreatePasteSpecialMenuItem(\"Formats\", PasteCellsMode.Formats, default)");
+        source.Should().Contain("CreatePasteCommentsMenuItem(\"Comments and Notes\")");
+        source.Should().Contain("CreatePasteDataValidationMenuItem(\"Validation\")");
         source.Should().Contain("CreatePasteColumnWidthsMenuItem(\"Column Widths\")");
         source.Should().Contain("CreatePasteSpecialMenuItem(\"Keep Source Column Widths\", PasteCellsMode.All, default, keepSourceColumnWidths: true)");
         source.Should().Contain("CreatePasteLinkMenuItem(\"Paste Link\")");
+        source.Should().Contain("CreateNativePasteCommentsMenuItem(\"Comments and Notes\")");
+        source.Should().Contain("CreateNativePasteDataValidationMenuItem(\"Validation\")");
         source.Should().Contain("CreateNativePasteColumnWidthsMenuItem(\"Column Widths\")");
         source.Should().Contain("CreateNativePasteSpecialMenuItem(\"Keep Source Column Widths\", PasteCellsMode.All, default, keepSourceColumnWidths: true)");
         source.Should().Contain("CreateNativePasteLinkMenuItem(\"Paste Link\")");
@@ -736,6 +748,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_session.PasteSpecialClipboardAtActiveCell(text, mode, options, keepSourceColumnWidths: true)");
         source.Should().Contain("private async Task PasteColumnWidthsFromClipboardAsync(string label)");
         source.Should().Contain("_session.PasteColumnWidthsFromClipboardAtActiveCell(text)");
+        source.Should().Contain("private async Task PasteCommentsFromClipboardAsync(string label)");
+        source.Should().Contain("_session.PasteCommentsFromClipboardAtActiveCell(text)");
+        source.Should().Contain("private async Task PasteDataValidationFromClipboardAsync(string label)");
+        source.Should().Contain("_session.PasteDataValidationFromClipboardAtActiveCell(text)");
         source.Should().Contain("private async Task PasteLinkFromClipboardAsync(string label)");
         source.Should().Contain("_session.PasteLinkFromClipboardAtActiveCell(text)");
         source.Should().Contain("_session.SelectedRange.Contains(address)");

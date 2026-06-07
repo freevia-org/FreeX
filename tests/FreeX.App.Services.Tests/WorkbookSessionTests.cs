@@ -731,6 +731,158 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void PasteCommentsFromClipboardAtActiveCell_CopiesNotesAndThreadedCommentsPreservesSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var d3 = new CellAddress(sheet.Id, 3, 4);
+        var e3 = new CellAddress(sheet.Id, 3, 5);
+        sheet.SetCell(a1, new TextValue("note source"));
+        sheet.SetCell(b1, new TextValue("thread source"));
+        sheet.Comments[a1] = "plain note";
+        sheet.ThreadedComments[b1] = new ThreadedComment("thread note", "Quinn")
+        {
+            Replies = [new CommentReply("reply", "Codex")],
+            IsResolved = true
+        };
+        sheet.Comments[d3] = "old note";
+        sheet.ThreadedComments[e3] = new ThreadedComment("old thread", "FreeX");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b1));
+        var clipboardText = session.CutSelectedRangeText();
+        session.SelectCell(d3);
+
+        var result = session.PasteCommentsFromClipboardAtActiveCell(clipboardText);
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().Equal(d3, e3);
+        session.SelectedRange.Should().Be(new GridRange(d3, e3));
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        sheet.GetValue(a1).Should().Be(new TextValue("note source"));
+        sheet.GetValue(b1).Should().Be(new TextValue("thread source"));
+        sheet.Comments[d3].Should().Be("plain note");
+        sheet.ThreadedComments[e3].Text.Should().Be("thread note");
+        sheet.ThreadedComments[e3].Replies.Should().Equal(new CommentReply("reply", "Codex"));
+        sheet.ThreadedComments[e3].IsResolved.Should().BeTrue();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.Comments[d3].Should().Be("old note");
+        sheet.ThreadedComments[e3].Text.Should().Be("old thread");
+    }
+
+    [Fact]
+    public void PasteDataValidationFromClipboardAtActiveCell_TransposesRebasesRulesPreservesSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var d3 = new CellAddress(sheet.Id, 3, 4);
+        sheet.SetCell(a1, new TextValue("first"));
+        sheet.SetCell(b1, new TextValue("second"));
+        var sourceRange = new GridRange(a1, b1);
+        var oldDestinationRule = new DataValidation
+        {
+            AppliesTo = new GridRange(d3, d3),
+            Type = DvType.WholeNumber,
+            Formula1 = "1",
+            Formula2 = "9"
+        };
+        sheet.DataValidations.Add(oldDestinationRule);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = sourceRange,
+            Type = DvType.Custom,
+            Formula1 = "=C1>0",
+            ErrorTitle = "Source rule"
+        });
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(sourceRange);
+        var clipboardText = session.CopySelectedRangeText();
+        session.SelectCell(d3);
+
+        var result = session.PasteDataValidationFromClipboardAtActiveCell(clipboardText, transpose: true);
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().BeEmpty();
+        session.SelectedRange.Should().Be(new GridRange(d3, new CellAddress(sheet.Id, 4, 4)));
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        sheet.DataValidations.Should().NotContain(rule => ReferenceEquals(rule, oldDestinationRule));
+        sheet.DataValidations.Should().Contain(rule =>
+            rule.AppliesTo == sourceRange &&
+            rule.Formula1 == "=C1>0");
+        sheet.DataValidations.Should().ContainSingle(rule =>
+            rule.AppliesTo == new GridRange(d3, new CellAddress(sheet.Id, 4, 4)) &&
+            rule.Formula1 == "=F3>0" &&
+            rule.ErrorTitle == "Source rule");
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.DataValidations.Should().ContainSingle(rule =>
+            rule.AppliesTo == oldDestinationRule.AppliesTo &&
+            rule.Type == DvType.WholeNumber &&
+            rule.Formula1 == "1" &&
+            rule.Formula2 == "9");
+        sheet.DataValidations.Should().ContainSingle(rule => rule.AppliesTo == sourceRange && rule.Formula1 == "=C1>0");
+    }
+
+    [Fact]
+    public void PasteCommentsAndValidationFromClipboardAtActiveCell_RejectChangedPlatformClipboardText()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var d1 = new CellAddress(sheet.Id, 1, 4);
+        sheet.SetCell(a1, new TextValue("source"));
+        sheet.Comments[a1] = "note";
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(a1, a1),
+            Type = DvType.List,
+            Formula1 = "Yes,No"
+        });
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+        session.CopySelectedRangeText();
+        session.SelectCell(d1);
+
+        var commentsResult = session.PasteCommentsFromClipboardAtActiveCell("external");
+
+        commentsResult.Success.Should().BeFalse();
+        commentsResult.ErrorMessage.Should().Be("Paste Comments requires copied FreeX cells.");
+        sheet.Comments.Should().NotContainKey(d1);
+
+        session.SelectCell(a1);
+        session.CopySelectedRangeText();
+        session.SelectCell(d1);
+
+        var validationResult = session.PasteDataValidationFromClipboardAtActiveCell("external");
+
+        validationResult.Success.Should().BeFalse();
+        validationResult.ErrorMessage.Should().Be("Paste Validation requires copied FreeX cells.");
+        sheet.DataValidations.Should().NotContain(rule => rule.AppliesTo.Contains(d1));
+    }
+
+    [Fact]
     public void PasteLinkFromClipboardAtActiveCell_CreatesFormulasPreservesDestinationStyleAndUndo()
     {
         var workbook = CreateWorkbook();

@@ -601,6 +601,84 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public WorkbookCellEditResult PasteCommentsFromClipboardAtActiveCell(string? text, bool transpose = false)
+    {
+        if (_internalClipboard is not { } internalClipboard ||
+            (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
+        {
+            _internalClipboard = null;
+            return new WorkbookCellEditResult(
+                false,
+                "Paste Comments requires copied FreeX cells.",
+                [],
+                RecalcReport: null);
+        }
+
+        var destination = ActiveCell;
+        var pasteSize = GetPasteDimensions(internalClipboard.SourceRange, transpose);
+        if (!TryGetRectangleEnd(destination, pasteSize.RowCount, pasteSize.ColCount, out _))
+        {
+            return new WorkbookCellEditResult(
+                false,
+                "Paste destination range is outside the worksheet bounds.",
+                [],
+                RecalcReport: null);
+        }
+
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new PasteCommentsCommand(
+                ActiveSheet.Id,
+                internalClipboard.SourceRange,
+                destination,
+                transpose));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulEditResult(result, destination);
+        SelectPastedRange(destination, pasteSize.RowCount, pasteSize.ColCount);
+        return result;
+    }
+
+    public WorkbookCellEditResult PasteDataValidationFromClipboardAtActiveCell(string? text, bool transpose = false)
+    {
+        if (_internalClipboard is not { } internalClipboard ||
+            (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
+        {
+            _internalClipboard = null;
+            return new WorkbookCellEditResult(
+                false,
+                "Paste Validation requires copied FreeX cells.",
+                [],
+                RecalcReport: null);
+        }
+
+        var destination = ActiveCell;
+        var pasteSize = GetPasteDimensions(internalClipboard.SourceRange, transpose);
+        if (!TryGetRectangleEnd(destination, pasteSize.RowCount, pasteSize.ColCount, out _))
+        {
+            return new WorkbookCellEditResult(
+                false,
+                "Paste destination range is outside the worksheet bounds.",
+                [],
+                RecalcReport: null);
+        }
+
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new PasteDataValidationCommand(
+                ActiveSheet.Id,
+                internalClipboard.SourceRange,
+                destination,
+                transpose));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulEditResult(result, destination);
+        SelectPastedRange(destination, pasteSize.RowCount, pasteSize.ColCount);
+        return result;
+    }
+
     public WorkbookCellEditResult PasteLinkFromClipboardAtActiveCell(
         string? text,
         bool transpose = false,
