@@ -3648,6 +3648,140 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void CaptureFormatPainterSource_StoresSourceWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var range = new GridRange(a1, b2);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(range);
+
+        var captured = session.CaptureFormatPainterSource();
+
+        captured.Should().BeTrue();
+        session.IsFormatPainterActive.Should().BeTrue();
+        session.IsFormatPainterPersistent.Should().BeFalse();
+        session.SelectedRange.Should().Be(range);
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ApplyFormatPainterToSelectedRange_AppliesStylePreservesValuesSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var target = new CellAddress(sheet.Id, 3, 2);
+        var sourceStyle = workbook.RegisterStyle(new CellStyle
+        {
+            Bold = true,
+            FillColor = new CellColor(255, 242, 204),
+            NumberFormat = "$#,##0.00",
+            HorizontalAlignment = HorizontalAlignment.Center
+        });
+        sheet.SetStyleOnly(source.Row, source.Col, sourceStyle);
+        sheet.SetCell(target, new NumberValue(123));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(source);
+        session.CaptureFormatPainterSource();
+        session.SelectCell(target);
+
+        var result = session.ApplyFormatPainterToSelectedRange();
+
+        result.Success.Should().BeTrue();
+        session.IsFormatPainterActive.Should().BeFalse();
+        sheet.GetValue(target).Should().Be(new NumberValue(123));
+        GetStyle(workbook, sheet, target).Should().Be(workbook.GetStyle(sourceStyle));
+        session.SelectedRange.Should().Be(new GridRange(target, target));
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.GetValue(target).Should().Be(new NumberValue(123));
+        GetStyle(workbook, sheet, target).Should().Be(CellStyle.Default);
+        session.SelectedRange.Should().Be(new GridRange(target, target));
+    }
+
+    [Fact]
+    public void ApplyFormatPainterToSelectedRange_SingleUseClearsAndPersistentStaysActiveUntilCancel()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var firstTarget = new CellAddress(sheet.Id, 2, 1);
+        var secondTarget = new CellAddress(sheet.Id, 3, 1);
+        var sourceStyle = workbook.RegisterStyle(new CellStyle { Italic = true });
+        sheet.SetStyleOnly(source.Row, source.Col, sourceStyle);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(source);
+        session.CaptureFormatPainterSource(persistent: true);
+        session.SelectCell(firstTarget);
+
+        session.ApplyFormatPainterToSelectedRange().Success.Should().BeTrue();
+
+        session.IsFormatPainterActive.Should().BeTrue();
+        session.IsFormatPainterPersistent.Should().BeTrue();
+        GetStyle(workbook, sheet, firstTarget).Should().Be(workbook.GetStyle(sourceStyle));
+
+        session.SelectCell(secondTarget);
+        session.ApplyFormatPainterToSelectedRange().Success.Should().BeTrue();
+
+        session.IsFormatPainterActive.Should().BeTrue();
+        GetStyle(workbook, sheet, secondTarget).Should().Be(workbook.GetStyle(sourceStyle));
+
+        session.CancelFormatPainter();
+
+        session.IsFormatPainterActive.Should().BeFalse();
+        session.IsFormatPainterPersistent.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ApplyFormatPainterToSelectedRange_RejectsProtectedSheetWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var target = new CellAddress(sheet.Id, 2, 1);
+        var sourceStyle = workbook.RegisterStyle(new CellStyle { Bold = true });
+        sheet.SetStyleOnly(source.Row, source.Col, sourceStyle);
+        sheet.IsProtected = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(source);
+        session.CaptureFormatPainterSource();
+        session.SelectCell(target);
+
+        var result = session.ApplyFormatPainterToSelectedRange();
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("protected");
+        session.IsFormatPainterActive.Should().BeFalse();
+        GetStyle(workbook, sheet, target).Should().Be(CellStyle.Default);
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void PasteClipboardTextAtActiveCell_FallsBackToExternalTextWhenClipboardTextChanges()
     {
         var workbook = CreateWorkbook();
@@ -4927,6 +5061,52 @@ public sealed class WorkbookSessionTests
         details.MergedRegions.Should().BeEmpty();
         GetStyle(workbook, summary, summaryA1).HorizontalAlignment.Should().Be(HorizontalAlignment.General);
         GetStyle(workbook, details, detailsA1).HorizontalAlignment.Should().Be(HorizontalAlignment.General);
+    }
+
+    [Fact]
+    public void ApplyFormatPainterToSelectedRange_PropagatesAcrossGroupedSheetsAndUndoRestores()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var summarySource = new CellAddress(summary.Id, 1, 1);
+        var summaryTarget = new CellAddress(summary.Id, 2, 2);
+        var detailsTarget = new CellAddress(details.Id, 2, 2);
+        var sourceStyle = workbook.RegisterStyle(new CellStyle
+        {
+            Bold = true,
+            FontColor = new CellColor(192, 0, 0),
+            FillColor = new CellColor(255, 242, 204)
+        });
+        summary.SetStyleOnly(summarySource.Row, summarySource.Col, sourceStyle);
+        summary.SetCell(summaryTarget, new TextValue("summary"));
+        details.SetCell(detailsTarget, new TextValue("details"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectAllVisibleSheets();
+        session.SelectCell(summarySource);
+        session.CaptureFormatPainterSource();
+        session.SelectCell(summaryTarget);
+
+        var result = session.ApplyFormatPainterToSelectedRange();
+
+        result.Success.Should().BeTrue();
+        GetStyle(workbook, summary, summaryTarget).Should().Be(workbook.GetStyle(sourceStyle));
+        GetStyle(workbook, details, detailsTarget).Should().Be(workbook.GetStyle(sourceStyle));
+        summary.GetValue(summaryTarget).Should().Be(new TextValue("summary"));
+        details.GetValue(detailsTarget).Should().Be(new TextValue("details"));
+        session.SelectedRange.Should().Be(new GridRange(summaryTarget, summaryTarget));
+        session.IsWorkbookGrouped.Should().BeTrue();
+        session.IsFormatPainterActive.Should().BeFalse();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        GetStyle(workbook, summary, summaryTarget).Should().Be(CellStyle.Default);
+        GetStyle(workbook, details, detailsTarget).Should().Be(CellStyle.Default);
     }
 
     [Fact]

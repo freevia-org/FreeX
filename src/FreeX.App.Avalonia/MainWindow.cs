@@ -121,6 +121,7 @@ public sealed class MainWindow : Window
     private readonly Button _copyButton = new();
     private readonly Button _pasteButton = new();
     private readonly DropDownButton _pasteSpecialButton = new();
+    private readonly Button _formatPainterButton = new();
     private readonly Button _clearContentsButton = new();
     private readonly ToggleButton _boldButton = new();
     private readonly ToggleButton _italicButton = new();
@@ -172,6 +173,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _copyMenuItem = new();
     private readonly NativeMenuItem _pasteMenuItem = new();
     private readonly NativeMenuItem _pasteSpecialMenuItem = new();
+    private readonly NativeMenuItem _formatPainterMenuItem = new();
     private readonly NativeMenuItem _selectAllMenuItem = new();
     private readonly NativeMenuItem _clearContentsMenuItem = new();
     private readonly NativeMenuItem _boldMenuItem = new();
@@ -450,6 +452,9 @@ public sealed class MainWindow : Window
         _pasteSpecialMenuItem.Gesture = new KeyGesture(Key.V, KeyModifiers.Meta | KeyModifiers.Alt);
         _pasteSpecialMenuItem.Menu = CreateNativePasteSpecialMenu();
 
+        _formatPainterMenuItem.Header = "Format Painter";
+        _formatPainterMenuItem.Click += (_, _) => CaptureFormatPainterSource(persistent: false);
+
         _selectAllMenuItem.Header = "Select All";
         _selectAllMenuItem.Gesture = new KeyGesture(Key.A, KeyModifiers.Meta);
         _selectAllMenuItem.Click += (_, _) => SelectCurrentRegionOrAll();
@@ -649,6 +654,7 @@ public sealed class MainWindow : Window
         editMenu.Items.Add(_copyMenuItem);
         editMenu.Items.Add(_pasteMenuItem);
         editMenu.Items.Add(_pasteSpecialMenuItem);
+        editMenu.Items.Add(_formatPainterMenuItem);
         editMenu.Items.Add(new NativeMenuItemSeparator());
         editMenu.Items.Add(_selectAllMenuItem);
         editMenu.Items.Add(_clearContentsMenuItem);
@@ -854,6 +860,19 @@ public sealed class MainWindow : Window
         _pasteSpecialButton.Padding = new Thickness(10, 4);
         _pasteSpecialButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _pasteSpecialButton.Flyout = CreatePasteSpecialFlyout();
+
+        _formatPainterButton.Content = "Format Painter";
+        _formatPainterButton.Padding = new Thickness(10, 4);
+        _formatPainterButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _formatPainterButton.Click += FormatPainterButton_Click;
+        _formatPainterButton.DoubleTapped += (_, args) =>
+        {
+            CaptureFormatPainterSource(persistent: true);
+            args.Handled = true;
+        };
+        AutomationProperties.SetAutomationId(_formatPainterButton, "HomeFormatPainterButton");
+        AutomationProperties.SetName(_formatPainterButton, "Format Painter");
+        AutomationProperties.SetHelpText(_formatPainterButton, "Copy formatting from the selection and apply it to another range.");
 
         _clearContentsButton.Content = "Clear";
         _clearContentsButton.Padding = new Thickness(10, 4);
@@ -1071,6 +1090,7 @@ public sealed class MainWindow : Window
                     _copyButton,
                     _pasteButton,
                     _pasteSpecialButton,
+                    _formatPainterButton,
                     _clearContentsButton,
                     _boldButton,
                     _italicButton,
@@ -1200,6 +1220,7 @@ public sealed class MainWindow : Window
         _copyButton.IsEnabled = isIdle;
         _pasteButton.IsEnabled = isIdle;
         _pasteSpecialButton.IsEnabled = isIdle;
+        _formatPainterButton.IsEnabled = isIdle;
         _clearContentsButton.IsEnabled = isIdle;
         _boldButton.IsEnabled = isIdle;
         _italicButton.IsEnabled = isIdle;
@@ -1257,6 +1278,7 @@ public sealed class MainWindow : Window
         _copyMenuItem.IsEnabled = _copyButton.IsEnabled;
         _pasteMenuItem.IsEnabled = _pasteButton.IsEnabled;
         _pasteSpecialMenuItem.IsEnabled = _pasteSpecialButton.IsEnabled;
+        _formatPainterMenuItem.IsEnabled = _formatPainterButton.IsEnabled;
         _selectAllMenuItem.IsEnabled = isIdle;
         _clearContentsMenuItem.IsEnabled = _clearContentsButton.IsEnabled;
         _boldMenuItem.IsEnabled = _boldButton.IsEnabled;
@@ -2741,7 +2763,7 @@ public sealed class MainWindow : Window
 
         ClearSelectedDrawingObject();
         _session.SelectCell(address);
-        RefreshShell("Ready");
+        ApplyFormatPainterAfterTargetSelection();
     }
 
     private void SelectRange(CellAddress address)
@@ -2751,7 +2773,7 @@ public sealed class MainWindow : Window
 
         ClearSelectedDrawingObject();
         _session.SelectRange(new GridRange(_session.ActiveCell, address));
-        RefreshShell("Ready");
+        ApplyFormatPainterAfterTargetSelection();
     }
 
     private void SelectSheet(SheetId sheetId)
@@ -3648,6 +3670,11 @@ public sealed class MainWindow : Window
         await PasteClipboardTextAsync();
     }
 
+    private void FormatPainterButton_Click(object? sender, RoutedEventArgs e)
+    {
+        CaptureFormatPainterSource(persistent: false);
+    }
+
     private void ClearContentsButton_Click(object? sender, RoutedEventArgs e)
     {
         ClearSelectedRangeContents();
@@ -4147,6 +4174,50 @@ public sealed class MainWindow : Window
         }
 
         RefreshShell($"Cleared {rangeReference}");
+    }
+
+    private void CaptureFormatPainterSource(bool persistent)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        _session.CaptureFormatPainterSource(persistent);
+        RefreshShell(persistent
+            ? $"Format Painter locked on {rangeReference}"
+            : $"Format Painter copied {rangeReference}");
+    }
+
+    private void CancelFormatPainter()
+    {
+        if (!_session.IsFormatPainterActive)
+            return;
+
+        _session.CancelFormatPainter();
+        RefreshShell("Format Painter canceled");
+    }
+
+    private void ApplyFormatPainterAfterTargetSelection()
+    {
+        if (!_session.IsFormatPainterActive)
+        {
+            RefreshShell("Ready");
+            return;
+        }
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.ApplyFormatPainterToSelectedRange();
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "Format Painter failed.");
+            return;
+        }
+
+        RefreshShell($"Applied Format Painter to {rangeReference}");
     }
 
     private void ToggleSelectedRangeBold()
@@ -4781,6 +4852,9 @@ public sealed class MainWindow : Window
             OpenedSourcePath: _session.CurrentFilePath,
             IsOpening: _isOpening,
             HasNewSheetButton: _newSheetButton.Content?.ToString() == "+",
+            HasFormatPainterButton: _formatPainterButton.Content?.ToString() == "Format Painter" &&
+                string.Equals(AutomationProperties.GetAutomationId(_formatPainterButton), "HomeFormatPainterButton", StringComparison.Ordinal) &&
+                string.Equals(AutomationProperties.GetHelpText(_formatPainterButton), "Copy formatting from the selection and apply it to another range.", StringComparison.Ordinal),
             HasBordersButton: _bordersButton.Content?.ToString() == "Borders" &&
                 string.Equals(AutomationProperties.GetAutomationId(_bordersButton), "HomeBordersButton", StringComparison.Ordinal) &&
                 string.Equals(AutomationProperties.GetHelpText(_bordersButton), "Apply or change borders on the selected cells.", StringComparison.Ordinal),
@@ -4833,6 +4907,7 @@ public sealed class MainWindow : Window
             HasNativeCopyMenuItem: HasNativeMenuItem(_copyMenuItem, "Copy"),
             HasNativePasteMenuItem: HasNativeMenuItem(_pasteMenuItem, "Paste"),
             HasNativePasteSpecialMenuItem: HasNativeMenuItem(_pasteSpecialMenuItem, "Paste Special"),
+            HasNativeFormatPainterMenuItem: HasNativeMenuItem(_formatPainterMenuItem, "Format Painter", requireGesture: false),
             HasNativePasteSpecialCommentsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Comments and Notes"),
             HasNativePasteSpecialValidationMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Validation"),
             HasNativePasteSpecialAllExceptBordersMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "All Except Borders"),
@@ -5111,6 +5186,13 @@ public sealed class MainWindow : Window
                 return;
             }
 
+            if (e.Key == Key.Escape && _session.IsFormatPainterActive)
+            {
+                e.Handled = true;
+                CancelFormatPainter();
+                return;
+            }
+
             NavigateActiveCell(e);
             return;
         }
@@ -5295,6 +5377,7 @@ public sealed class MainWindow : Window
         _copyButton,
         _pasteButton,
         _pasteSpecialButton,
+        _formatPainterButton,
         _clearContentsButton,
         _boldButton,
         _italicButton,

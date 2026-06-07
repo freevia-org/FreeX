@@ -1051,6 +1051,48 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_WiresFormatPainterThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+
+        source.Should().Contain("private readonly Button _formatPainterButton = new();");
+        source.Should().Contain("private readonly NativeMenuItem _formatPainterMenuItem = new();");
+        source.Should().Contain("_formatPainterButton.Content = \"Format Painter\";");
+        source.Should().Contain("_formatPainterButton.Click += FormatPainterButton_Click;");
+        source.Should().Contain("_formatPainterButton.DoubleTapped += (_, args) =>");
+        source.Should().Contain("CaptureFormatPainterSource(persistent: true);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_formatPainterButton, \"HomeFormatPainterButton\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_formatPainterButton, \"Copy formatting from the selection and apply it to another range.\");");
+        source.Should().Contain("_formatPainterMenuItem.Header = \"Format Painter\";");
+        source.Should().Contain("_formatPainterMenuItem.Click += (_, _) => CaptureFormatPainterSource(persistent: false);");
+        source.Should().Contain("editMenu.Items.Add(_formatPainterMenuItem);");
+        source.Should().Contain("_formatPainterButton.IsEnabled = isIdle;");
+        source.Should().Contain("_formatPainterMenuItem.IsEnabled = _formatPainterButton.IsEnabled;");
+        source.Should().Contain("_formatPainterButton,");
+        source.Should().Contain("private void FormatPainterButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("private void CaptureFormatPainterSource(bool persistent)");
+        source.Should().Contain("_session.CaptureFormatPainterSource(persistent)");
+        source.Should().Contain("private void ApplyFormatPainterAfterTargetSelection()");
+        source.Should().Contain("_session.ApplyFormatPainterToSelectedRange()");
+        source.Should().Contain("private void CancelFormatPainter()");
+        source.Should().Contain("_session.CancelFormatPainter();");
+        source.Should().Contain("e.Key == Key.Escape && _session.IsFormatPainterActive");
+        source.Should().Contain("ApplyFormatPainterAfterTargetSelection();");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Format Painter failed.\");");
+        source.Should().Contain("HasFormatPainterButton: _formatPainterButton.Content?.ToString() == \"Format Painter\"");
+        source.Should().Contain("HomeFormatPainterButton");
+        source.Should().Contain("HasNativeFormatPainterMenuItem: HasNativeMenuItem(_formatPainterMenuItem, \"Format Painter\", requireGesture: false)");
+
+        smokeSource.Should().Contain("bool HasFormatPainterButton,");
+        smokeSource.Should().Contain("bool HasNativeFormatPainterMenuItem,");
+        smokeSource.Should().Contain("HasFormatPainterButton &&");
+        smokeSource.Should().Contain("HasNativeFormatPainterMenuItem &&");
+        smokeSource.Should().Contain("toolbar_format_painter_button={FormatBool(snapshot.HasFormatPainterButton)}");
+        smokeSource.Should().Contain("native_format_painter_menu_item={FormatBool(snapshot.HasNativeFormatPainterMenuItem)}");
+    }
+
+    [Fact]
     public void MainWindow_WiresClearContentsThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));

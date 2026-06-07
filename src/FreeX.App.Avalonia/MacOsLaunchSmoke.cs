@@ -80,6 +80,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     string? OpenedSourcePath,
     bool IsOpening,
     bool HasNewSheetButton,
+    bool HasFormatPainterButton,
     bool HasBordersButton,
     bool HasMergeAndCenterButton,
     bool HasFocusableSheetTab,
@@ -123,6 +124,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeCopyMenuItem,
     bool HasNativePasteMenuItem,
     bool HasNativePasteSpecialMenuItem,
+    bool HasNativeFormatPainterMenuItem,
     bool HasNativePasteSpecialCommentsMenuItem,
     bool HasNativePasteSpecialValidationMenuItem,
     bool HasNativePasteSpecialAllExceptBordersMenuItem,
@@ -203,6 +205,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         ViewportRowCount > 0 &&
         ViewportColumnCount > 0 &&
         HasNewSheetButton &&
+        HasFormatPainterButton &&
         HasBordersButton &&
         HasMergeAndCenterButton &&
         HasFocusableSheetTab &&
@@ -246,6 +249,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeCopyMenuItem &&
         HasNativePasteMenuItem &&
         HasNativePasteSpecialMenuItem &&
+        HasNativeFormatPainterMenuItem &&
         HasNativePasteSpecialCommentsMenuItem &&
         HasNativePasteSpecialValidationMenuItem &&
         HasNativePasteSpecialAllExceptBordersMenuItem &&
@@ -414,6 +418,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"opened_source_path={snapshot.OpenedSourcePath ?? ""}",
                 $"is_opening={FormatBool(snapshot.IsOpening)}",
                 $"new_sheet_button={FormatBool(snapshot.HasNewSheetButton)}",
+                $"toolbar_format_painter_button={FormatBool(snapshot.HasFormatPainterButton)}",
                 $"toolbar_borders_button={FormatBool(snapshot.HasBordersButton)}",
                 $"toolbar_merge_and_center_button={FormatBool(snapshot.HasMergeAndCenterButton)}",
                 $"focusable_sheet_tab={FormatBool(snapshot.HasFocusableSheetTab)}",
@@ -457,6 +462,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_copy_menu_item={FormatBool(snapshot.HasNativeCopyMenuItem)}",
                 $"native_paste_menu_item={FormatBool(snapshot.HasNativePasteMenuItem)}",
                 $"native_paste_special_menu_item={FormatBool(snapshot.HasNativePasteSpecialMenuItem)}",
+                $"native_format_painter_menu_item={FormatBool(snapshot.HasNativeFormatPainterMenuItem)}",
                 $"native_paste_special_comments_menu_item={FormatBool(snapshot.HasNativePasteSpecialCommentsMenuItem)}",
                 $"native_paste_special_validation_menu_item={FormatBool(snapshot.HasNativePasteSpecialValidationMenuItem)}",
                 $"native_paste_special_all_except_borders_menu_item={FormatBool(snapshot.HasNativePasteSpecialAllExceptBordersMenuItem)}",

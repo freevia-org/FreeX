@@ -25,6 +25,9 @@ public sealed class WorkbookSession
     private readonly HashSet<SheetId> _groupedSheetIds = [];
     private SheetId? _sheetGroupAnchor;
     private InternalClipboard? _internalClipboard;
+    private SheetId? _formatPainterSourceSheetId;
+    private GridRange? _formatPainterSourceRange;
+    private bool _formatPainterPersistent;
     private double _viewportHeight;
     private double _viewportWidth;
     private ulong _selectionStatsRevision;
@@ -99,6 +102,12 @@ public sealed class WorkbookSession
     public bool IsShowingFormulas => ActiveSheet.ShowFormulas;
 
     public int ZoomPercent => ActiveSheet.ZoomPercent;
+
+    public bool IsFormatPainterActive =>
+        _formatPainterSourceSheetId is not null &&
+        _formatPainterSourceRange is not null;
+
+    public bool IsFormatPainterPersistent => IsFormatPainterActive && _formatPainterPersistent;
 
     public IReadOnlyList<WorkbookHiddenSheet> HiddenSheets =>
         Workbook.Sheets
@@ -996,6 +1005,53 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public bool CaptureFormatPainterSource(bool persistent = false)
+    {
+        _formatPainterSourceSheetId = ActiveSheet.Id;
+        _formatPainterSourceRange = SelectedRange;
+        _formatPainterPersistent = persistent;
+        return true;
+    }
+
+    public void CancelFormatPainter()
+    {
+        _formatPainterSourceSheetId = null;
+        _formatPainterSourceRange = null;
+        _formatPainterPersistent = false;
+    }
+
+    public WorkbookCellEditResult ApplyFormatPainterToSelectedRange()
+    {
+        if (_formatPainterSourceSheetId is not { } sourceSheetId ||
+            _formatPainterSourceRange is not { } sourceRange)
+        {
+            return new WorkbookCellEditResult(true, null, [], RecalcReport: null);
+        }
+
+        var sourceSheet = Workbook.GetSheet(sourceSheetId);
+        if (sourceSheet is null)
+        {
+            CancelFormatPainter();
+            return new WorkbookCellEditResult(true, null, [], RecalcReport: null);
+        }
+
+        var targetRange = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            CreateFormatPainterCommand(sourceSheet, sourceRange, targetRange));
+        if (!result.Success)
+        {
+            if (!_formatPainterPersistent)
+                CancelFormatPainter();
+            return result;
+        }
+
+        ApplySuccessfulRangeEditResult(result, targetRange);
+        if (!_formatPainterPersistent)
+            CancelFormatPainter();
+        return result;
+    }
+
     public WorkbookCellEditResult SetSelectedRangeBold(bool enabled) =>
         ApplySelectedRangeStyle(new StyleDiff(Bold: enabled));
 
@@ -1472,6 +1528,22 @@ public sealed class WorkbookSession
         }
 
         return ToCommand("Merge & Center", commands);
+    }
+
+    private IWorkbookCommand CreateFormatPainterCommand(Sheet sourceSheet, GridRange sourceRange, GridRange targetRange)
+    {
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        var commands = new List<IWorkbookCommand>(targetSheetIds.Count);
+        foreach (var sheetId in targetSheetIds)
+        {
+            commands.Add(FormatPainterCommandFactory.Create(
+                Workbook,
+                sourceSheet,
+                sourceRange,
+                RemapRangeToSheet(targetRange, sheetId)));
+        }
+
+        return ToCommand("Format Painter", commands);
     }
 
     private IReadOnlyList<IWorkbookCommand> CreateUnmergeCommands(GridRange range)

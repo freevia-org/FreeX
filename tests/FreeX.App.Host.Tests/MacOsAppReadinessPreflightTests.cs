@@ -23,8 +23,10 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("--output \"$app/Contents/MacOS\"");
         script.Should().Contain("native_fill_color_swatch_count=69");
         script.Should().Contain("native_font_color_swatch_count=69");
+        script.Should().Contain("toolbar_format_painter_button=true");
         script.Should().Contain("toolbar_borders_button=true");
         script.Should().Contain("toolbar_merge_and_center_button=true");
+        script.Should().Contain("native_format_painter_menu_item=true");
         script.Should().Contain("native_borders_menu_item=true");
         script.Should().Contain("native_borders_preset_count=8");
         script.Should().Contain("native_merge_and_center_menu_item=true");
@@ -71,6 +73,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("HasNativeCloseWorkbookMenuItem &&");
         script.Should().Contain("HasNativeRenameSheetMenuItem &&");
         script.Should().Contain("HasNativeTabColorMenuItem &&");
+        script.Should().Contain("HasFormatPainterButton &&");
         script.Should().Contain("HasBordersButton &&");
         script.Should().Contain("HasMergeAndCenterButton &&");
         script.Should().Contain("HasFocusableSheetTab &&");
@@ -85,12 +88,15 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("HasNativeSelectAllSheetsMenuItem &&");
         script.Should().Contain("HasNativeUngroupSheetsMenuItem &&");
         script.Should().Contain("HasNativeDeleteSheetMenuItem &&");
+        script.Should().Contain("HasNativeFormatPainterMenuItem &&");
         script.Should().Contain("HasNativeBordersMenuItem &&");
         script.Should().Contain("NativeBordersPresetCount == Enum.GetValues<CellBorderPreset>().Length");
         script.Should().Contain("HasNativeMergeAndCenterMenuItem &&");
         script.Should().Contain("HasNativeUnmergeCellsMenuItem &&");
+        script.Should().Contain("toolbar_format_painter_button=");
         script.Should().Contain("toolbar_borders_button=");
         script.Should().Contain("toolbar_merge_and_center_button=");
+        script.Should().Contain("native_format_painter_menu_item=");
         script.Should().Contain("native_borders_menu_item=");
         script.Should().Contain("native_borders_preset_count=");
         script.Should().Contain("native_merge_and_center_menu_item=");
@@ -551,6 +557,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "external_image_clipboard_picture_count=[1-9]" "$artifact_root/launch.txt"
                       grep -q "external_image_clipboard_picture_png_bytes=[1-9]" "$artifact_root/launch.txt"
                       grep -q "new_sheet_button=true" "$artifact_root/launch.txt"
+                      grep -q "toolbar_format_painter_button=true" "$artifact_root/launch.txt"
                       grep -q "toolbar_borders_button=true" "$artifact_root/launch.txt"
                       grep -q "toolbar_merge_and_center_button=true" "$artifact_root/launch.txt"
                       grep -q "native_file_menu=true" "$artifact_root/launch.txt"
@@ -589,6 +596,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_copy_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_paste_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_paste_special_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_format_painter_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_paste_special_comments_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_paste_special_validation_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_paste_special_all_except_borders_menu_item=true" "$artifact_root/launch.txt"
@@ -720,6 +728,14 @@ public sealed class MacOsAppReadinessPreflightTests
                 private static void RenderCell(CellStyle? style)
                 {
                     CreateColorPaletteFlyout(ColorPaletteTarget.Fill, includeClearFill: true);
+                    _formatPainterButton.Content = "Format Painter";
+                    AutomationProperties.SetAutomationId(_formatPainterButton, "HomeFormatPainterButton");
+                    AutomationProperties.SetHelpText(_formatPainterButton, "Copy formatting from the selection and apply it to another range.");
+                    _formatPainterMenuItem.Header = "Format Painter";
+                    _formatPainterMenuItem.Click += (_, _) => CaptureFormatPainterSource(persistent: false);
+                    editMenu.Items.Add(_formatPainterMenuItem);
+                    _formatPainterButton.IsEnabled = isIdle;
+                    _formatPainterMenuItem.IsEnabled = _formatPainterButton.IsEnabled;
                     _bordersButton.Flyout = CreateBorderPresetFlyout();
                     AutomationProperties.SetAutomationId(_bordersButton, "HomeBordersButton");
                     AutomationProperties.SetHelpText(_bordersButton, "Apply or change borders on the selected cells.");
@@ -1023,6 +1039,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     GetToolbarFocusTargets().Any(control => control.Focusable) &&;
                     _formulaBox.Focusable &&;
                     _zoomText.Focusable;
+                    HasFormatPainterButton: _formatPainterButton.Content?.ToString() == "Format Painter";
+                    HasNativeFormatPainterMenuItem: HasNativeMenuItem(_formatPainterMenuItem, "Format Painter", requireGesture: false);
                     HasBordersButton: _bordersButton.Content?.ToString() == "Borders";
                     HasNativeBordersMenuItem: HasNativeMenuItem(_bordersMenuItem, "Borders", requireGesture: false);
                     NativeBordersPresetCount: nativeBordersPresetCount;
@@ -1057,6 +1075,18 @@ public sealed class MacOsAppReadinessPreflightTests
                 }
                 private NativeMenu CreateNativeBorderPresetMenu() => new();
                 private NativeMenuItem CreateNativeBorderPresetMenuItem(CellBorderPreset preset) => new();
+                private void CaptureFormatPainterSource(bool persistent)
+                {
+                    _session.CaptureFormatPainterSource(persistent);
+                }
+                private void ApplyFormatPainterAfterTargetSelection()
+                {
+                    _session.ApplyFormatPainterToSelectedRange();
+                }
+                private void CancelFormatPainter()
+                {
+                    _session.CancelFormatPainter();
+                }
                 private void ApplySelectedRangeBorderPreset(CellBorderPreset preset)
                 {
                     var result = _session.SetSelectedRangeBorderPreset(preset);
@@ -1224,6 +1254,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativeTabColorMenuItem &&
                     HasNativeClearTabColorMenuItem &&
                     NativeTabColorSwatchCount == CellColorPalettePlanner.BuildDefaultSwatches().Count &&
+                    HasFormatPainterButton &&
                     HasBordersButton &&
                     HasMergeAndCenterButton &&
                     HasFocusableSheetTab &&
@@ -1251,6 +1282,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativeFreezeFirstColumnMenuItem &&
                     HasNativeUnfreezePanesMenuItem &&
                     HasNativeShowFormulasMenuItem &&
+                    HasNativeFormatPainterMenuItem &&
                     HasNativePasteSpecialCommentsMenuItem &&
                     HasNativePasteSpecialValidationMenuItem &&
                     HasNativePasteSpecialAllExceptBordersMenuItem &&
@@ -1288,6 +1320,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativeTabColorMenuItem { get; }
                 private bool HasNativeClearTabColorMenuItem { get; }
                 private int NativeTabColorSwatchCount { get; }
+                private bool HasFormatPainterButton { get; }
                 private bool HasBordersButton { get; }
                 private bool HasMergeAndCenterButton { get; }
                 private bool HasFocusableSheetTab { get; }
@@ -1331,6 +1364,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativePasteSpecialUnicodeTextMenuItem { get; }
                 private bool HasNativePasteSpecialPictureMenuItem { get; }
                 private bool HasNativePasteSpecialLinkedPictureMenuItem { get; }
+                private bool HasNativeFormatPainterMenuItem { get; }
                 private bool HasNativeBordersMenuItem { get; }
                 private bool HasNativeMergeAndCenterMenuItem { get; }
                 private bool HasNativeUnmergeCellsMenuItem { get; }
@@ -1338,7 +1372,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 public int ExternalImageClipboardPicturePngByteCount { get; }
                 public int NativeBordersPresetCount { get; }
                 public int NativeCellStylesPresetCount { get; }
-                public string Report => "external_image_clipboard_paste_required= external_image_clipboard_paste= external_image_clipboard_picture_count= external_image_clipboard_picture_png_bytes= native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= toolbar_borders_button= toolbar_merge_and_center_button= focusable_sheet_tab= focusable_active_sheet_tab= shell_focus_cycle_targets= sheet_tab_context_keyboard_help= sheet_tab_context_rename_menu_item= sheet_tab_context_tab_color_menu_item= sheet_tab_context_no_color_menu_item= sheet_tab_context_select_all_sheets_menu_item= sheet_tab_context_ungroup_sheets_menu_item= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_select_all_sheets_menu_item= native_ungroup_sheets_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_borders_menu_item= native_borders_preset_count= native_merge_and_center_menu_item= native_unmerge_cells_menu_item= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+                public string Report => "external_image_clipboard_paste_required= external_image_clipboard_paste= external_image_clipboard_picture_count= external_image_clipboard_picture_png_bytes= native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= toolbar_format_painter_button= toolbar_borders_button= toolbar_merge_and_center_button= focusable_sheet_tab= focusable_active_sheet_tab= shell_focus_cycle_targets= sheet_tab_context_keyboard_help= sheet_tab_context_rename_menu_item= sheet_tab_context_tab_color_menu_item= sheet_tab_context_no_color_menu_item= sheet_tab_context_select_all_sheets_menu_item= sheet_tab_context_ungroup_sheets_menu_item= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_select_all_sheets_menu_item= native_ungroup_sheets_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_format_painter_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_borders_menu_item= native_borders_preset_count= native_merge_and_center_menu_item= native_unmerge_cells_menu_item= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
             }
 
             internal sealed class MacOsLaunchSmokeCoordinator
@@ -1496,6 +1530,13 @@ public sealed class MacOsAppReadinessPreflightTests
                 public bool IsWorkbookGrouped =>
                 public WorkbookCellEditResult SetActiveSheetTabColor(CellColor? color)
                 new SetSheetTabColorCommand(ActiveSheet.Id, color)
+                public bool IsFormatPainterActive =>
+                public bool CaptureFormatPainterSource(bool persistent = false)
+                public void CancelFormatPainter()
+                public WorkbookCellEditResult ApplyFormatPainterToSelectedRange()
+                CreateFormatPainterCommand(sourceSheet, sourceRange, targetRange)
+                private IWorkbookCommand CreateFormatPainterCommand(Sheet sourceSheet, GridRange sourceRange, GridRange targetRange)
+                FormatPainterCommandFactory.Create(
                 public WorkbookCellEditResult SetSelectedRangeBorderPreset(CellBorderPreset preset)
                 CreateBorderPresetCommand(range, preset)
                 CellBorderPresetPlanner.Plan(preset, range, range.Start)

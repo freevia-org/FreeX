@@ -145,6 +145,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"external_image_clipboard_picture_count=[1-9]\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"external_image_clipboard_picture_png_bytes=[1-9]\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"new_sheet_button=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"toolbar_format_painter_button=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"toolbar_borders_button=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"focusable_sheet_tab=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"focusable_active_sheet_tab=true\" \"$launch_smoke_report\"");
@@ -188,6 +189,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"native_copy_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_paste_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_paste_special_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_format_painter_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_paste_special_comments_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_paste_special_validation_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_paste_special_all_except_borders_menu_item=true\" \"$launch_smoke_report\"");
