@@ -718,6 +718,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             null,
             packageParts.HasInspected ? packageParts.HasWorkbookWebPublishingSchemaIssues : null,
             packageParts.HasInspected ? packageParts.HasWorkbookSmartTagSchemaIssues : null,
+            packageParts.HasInspected ? packageParts.HasWorkbookNativeMetadataSchemaIssues : null,
             hasWorksheetRelationshipMarkerSchemaIssues,
             mergeCellWorksheetPathsToStrip);
     }
@@ -850,7 +851,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             bool hasExternalLinks,
             bool hasStructuredTables,
             bool? hasWorkbookWebPublishingSchemaIssues,
-            bool? hasWorkbookSmartTagSchemaIssues)
+            bool? hasWorkbookSmartTagSchemaIssues,
+            bool? hasWorkbookNativeMetadataSchemaIssues)
         {
             HasInspected = hasInspected;
             HasWorkbook = hasWorkbook;
@@ -864,6 +866,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             HasStructuredTables = hasStructuredTables;
             HasWorkbookWebPublishingSchemaIssues = hasWorkbookWebPublishingSchemaIssues;
             HasWorkbookSmartTagSchemaIssues = hasWorkbookSmartTagSchemaIssues;
+            HasWorkbookNativeMetadataSchemaIssues = hasWorkbookNativeMetadataSchemaIssues;
         }
 
         public static XlsxLoadPackageParts Empty => default;
@@ -879,6 +882,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         public bool HasStructuredTables { get; }
         public bool? HasWorkbookWebPublishingSchemaIssues { get; }
         public bool? HasWorkbookSmartTagSchemaIssues { get; }
+        public bool? HasWorkbookNativeMetadataSchemaIssues { get; }
 
         public static XlsxLoadPackageParts Inspect(ZipArchive archive)
         {
@@ -937,7 +941,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 hasExternalLinks,
                 hasStructuredTables,
                 InspectWorkbookWebPublishingSchemaIssues(archive),
-                InspectWorkbookSmartTagSchemaIssues(archive));
+                InspectWorkbookSmartTagSchemaIssues(archive),
+                InspectWorkbookNativeMetadataSchemaIssues(archive));
         }
 
         private static bool? InspectWorkbookWebPublishingSchemaIssues(ZipArchive archive)
@@ -983,6 +988,50 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     changed |= XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagTypesElement(smartTagTypes);
                     changed |= XlsxWorkbookSmartTagNormalizer.ShouldRemoveSmartTagTypesElement(smartTagTypes);
                 }
+
+                return changed;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static bool? InspectWorkbookNativeMetadataSchemaIssues(ZipArchive archive)
+        {
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return false;
+
+            try
+            {
+                XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+                var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+                var root = workbookXml.Root;
+                if (root is null)
+                    return false;
+
+                var changed = false;
+                if (root.Element(workbookNs + "workbookPr") is { } workbookPr)
+                    changed |= XlsxWorkbookPropertiesNormalizer.NormalizeElement(workbookPr);
+                foreach (var customWorkbookViews in root.Elements(workbookNs + "customWorkbookViews").ToList())
+                {
+                    changed |= XlsxWorkbookCustomViewNormalizer.NormalizeCustomWorkbookViewsElement(customWorkbookViews);
+                    changed |= XlsxWorkbookCustomViewNormalizer.ShouldRemoveCustomWorkbookViewsElement(customWorkbookViews);
+                }
+                changed |= XlsxWorkbookExternalReferencesNormalizer.NormalizeWorkbookRoot(root, workbookNs);
+                foreach (var definedNames in root.Elements(workbookNs + "definedNames").ToList())
+                {
+                    changed |= XlsxWorkbookDefinedNameNormalizer.NormalizeDefinedNamesElement(definedNames);
+                    changed |= XlsxWorkbookDefinedNameNormalizer.ShouldRemoveDefinedNamesElement(definedNames);
+                }
+                changed |= XlsxWorkbookOleSizeNormalizer.NormalizeWorkbookRoot(root, workbookNs);
+                changed |= XlsxWorkbookPivotCachesNormalizer.NormalizeWorkbookRoot(root, workbookNs);
+                changed |= XlsxWorkbookExtensionListNormalizer.NormalizeWorkbookRoot(root, workbookNs);
+                if (root.Element(workbookNs + "fileVersion") is { } fileVersion)
+                    changed |= XlsxWorkbookFileVersionNormalizer.NormalizeElement(fileVersion);
+                if (root.Element(workbookNs + "functionGroups") is { } functionGroups)
+                    changed |= XlsxWorkbookFunctionGroupsNormalizer.NormalizeElement(functionGroups);
 
                 return changed;
             }
