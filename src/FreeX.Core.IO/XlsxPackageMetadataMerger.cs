@@ -556,9 +556,14 @@ internal static class XlsxPackageMetadataMerger
 
         var sourcePart = RelationshipPartToSourcePart(relationshipPartPath);
         if (string.IsNullOrWhiteSpace(sourcePart) ||
-            generatedEntriesBeforeMerge.Contains(sourcePart) ||
             !sourcePart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
         {
+            return;
+        }
+
+        if (generatedEntriesBeforeMerge.Contains(sourcePart))
+        {
+            RebindGeneratedWorksheetPictureRelationshipReference(targetIndex, sourcePart, relationshipIdMap);
             return;
         }
 
@@ -584,6 +589,48 @@ internal static class XlsxPackageMetadataMerger
                 continue;
 
             attribute.Value = replacementId;
+            changed = true;
+        }
+
+        if (changed)
+            WriteXml(targetIndex, sourcePart, xml, targetEntry.LastWriteTime, SaveOptions.DisableFormatting);
+    }
+
+    private static void RebindGeneratedWorksheetPictureRelationshipReference(
+        ArchiveEntryIndex targetIndex,
+        string sourcePart,
+        IReadOnlyDictionary<string, string> relationshipIdMap)
+    {
+        if (!sourcePart.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var targetEntry = targetIndex.Get(sourcePart);
+        if (targetEntry is null)
+            return;
+
+        XDocument xml;
+        try
+        {
+            xml = XlsxPackageXmlEditor.LoadXml(targetEntry);
+        }
+        catch
+        {
+            return;
+        }
+
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var changed = false;
+        foreach (var picture in xml.Root?.Elements(worksheetNs + "picture") ?? [])
+        {
+            var idAttribute = picture.Attribute(relNs + "id");
+            if (idAttribute is null ||
+                !relationshipIdMap.TryGetValue(idAttribute.Value, out var replacementId))
+            {
+                continue;
+            }
+
+            idAttribute.Value = replacementId;
             changed = true;
         }
 
