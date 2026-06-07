@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -165,22 +164,6 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
 
         element.SetAttributeValue(name, value);
         return true;
-    }
-
-    private static bool TrySetNativeAttributeIfDifferent(XElement element, string name, string value)
-    {
-        try
-        {
-            return SetAttributeIfDifferent(element, XName.Get(name), value);
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (XmlException)
-        {
-            return false;
-        }
     }
 
     private static bool RemoveAttributeIfPresent(XElement element, XName name)
