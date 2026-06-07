@@ -50,6 +50,12 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_unmerge_cells_menu_item=true");
         script.Should().Contain("native_cell_styles_menu_item=true");
         script.Should().Contain("native_cell_styles_preset_count=33");
+        script.Should().Contain("open_with_report=\"$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt\"");
+        script.Should().Contain("open_with_smoke_file=\"$RUNNER_TEMP/freex-$runtime-open-with.csv\"");
+        script.Should().Contain("app_path=\"$unzip_root/FreeX.app\"");
+        script.Should().Contain("open -W -n -a \"$app_path\" \"$open_with_smoke_file\" --args --macos-launch-smoke \"$open_with_report\"");
+        script.Should().Contain("opened_source_path=.*freex-$runtime-open-with.csv");
+        script.Should().Contain("freex-${{ matrix.runtime }}-macos-open-with-launch-smoke.txt");
         script.Should().Contain("--macos-launch-smoke-verify-image-clipboard");
         script.Should().Contain("launch_clipboard_image=\"$RUNNER_TEMP/freex-$runtime-clipboard.png\"");
         script.Should().Contain("/usr/bin/swift - \"$launch_clipboard_image\"");
@@ -810,6 +816,8 @@ public sealed class MacOsAppReadinessPreflightTests
                       zip_name="freex-$runtime-macos-app.zip"
                       zip_path="$artifact_root/$zip_name"
                       unzip_root="$RUNNER_TEMP/freex-$runtime-unzip"
+                      app_path="$unzip_root/FreeX.app"
+                      open_with_report="$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt"
                       distribution_candidate="${"{{"} github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true {"}}"}"
                       artifact_channel="internal-preview"
                       distribution_contract="internal_preview_not_for_distribution_notarization_optional"
@@ -879,6 +887,15 @@ public sealed class MacOsAppReadinessPreflightTests
                       SWIFT
                       open -W -n -b io.github.tony-xmelon.freex "$RUNNER_TEMP/launch.csv" --args --macos-launch-smoke "$artifact_root/launch.txt" --macos-launch-smoke-verify-image-clipboard
                       osascript -e 'tell application id "io.github.tony-xmelon.freex" to quit' || true
+                      open_with_smoke_file="$RUNNER_TEMP/freex-$runtime-open-with.csv"
+                      open -W -n -a "$app_path" "$open_with_smoke_file" --args --macos-launch-smoke "$open_with_report"
+                      grep -q "macos_launch_smoke=passed" "$open_with_report"
+                      grep -q "window_shown=true" "$open_with_report"
+                      grep -q "opened_source_path=.*freex-$runtime-open-with.csv" "$open_with_report"
+                      grep -q "viewport_rows=[1-9]" "$open_with_report"
+                      grep -q "viewport_columns=[1-9]" "$open_with_report"
+                      grep -q "native_open_recent_menu_item=true" "$open_with_report"
+                      grep -q "native_open_recent_item_count=[1-9]" "$open_with_report"
                       grep -q "external_image_clipboard_paste_required=true" "$artifact_root/launch.txt"
                       grep -q "external_image_clipboard_paste=true" "$artifact_root/launch.txt"
                       grep -q "external_image_clipboard_picture_count=[1-9]" "$artifact_root/launch.txt"
@@ -1058,14 +1075,18 @@ public sealed class MacOsAppReadinessPreflightTests
                     uses: actions/upload-artifact@v7
                     with:
                       if-no-files-found: error
-                      path: artifacts/freex-osx-arm64-macos-tester-instructions.md
+                      path: |
+                        artifacts/freex-osx-arm64-macos-tester-instructions.md
+                        artifacts/freex-${"{{"} matrix.runtime {"}}"}-macos-open-with-launch-smoke.txt
                   - name: Upload app diagnostics
                     if: always()
                     uses: actions/upload-artifact@v7
                     with:
                       name: freex-${"{{"} github.run_id {"}}"}-${"{{"} github.run_attempt {"}}"}-${"{{"} matrix.runtime {"}}"}-macos-diagnostics
                       if-no-files-found: warn
-                      path: artifacts/freex-osx-arm64-macos-evidence.txt
+                      path: |
+                        artifacts/freex-osx-arm64-macos-evidence.txt
+                        artifacts/freex-${"{{"} matrix.runtime {"}}"}-macos-open-with-launch-smoke.txt
             """);
 
         WriteMinimalIcns(root, "src/FreeX.App.Avalonia/Packaging/macos/FreeX.icns");
