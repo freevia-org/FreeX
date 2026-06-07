@@ -6,6 +6,9 @@ namespace FreeX.Core.IO;
 internal static class XlsxPackageMetadataMerger
 {
     private const string SpreadsheetRelationshipPrefix = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/";
+    private const string ImageRelationshipType = SpreadsheetRelationshipPrefix + "image";
+    private const string PackageRelationshipType = SpreadsheetRelationshipPrefix + "package";
+
     public static IReadOnlySet<string> CopyUnknownPackageParts(
         ZipArchive sourceArchive,
         ZipArchive targetArchive,
@@ -184,6 +187,7 @@ internal static class XlsxPackageMetadataMerger
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             var changed = false;
+            Dictionary<string, string>? copiedPartRelationshipIdMap = null;
             foreach (var sourceRelationship in sourceRoot.Elements(relationshipNs + "Relationship"))
             {
                 if (!IsStructurallyValidPackageRelationship(sourceRelationship) ||
@@ -201,7 +205,16 @@ internal static class XlsxPackageMetadataMerger
                 var copy = new XElement(sourceRelationship);
                 var id = copy.Attribute("Id")?.Value;
                 if (!string.IsNullOrWhiteSpace(id) && existingIds.Contains(id))
+                {
                     copy.SetAttributeValue("Id", XlsxPackageXmlEditor.NextRelationshipId(targetXml, relationshipNs));
+                    var remappedId = copy.Attribute("Id")?.Value;
+                    if (!string.IsNullOrWhiteSpace(remappedId) &&
+                        ShouldRebindRelationshipReferenceOnCopiedPart(sourceRelationship))
+                    {
+                        copiedPartRelationshipIdMap ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                        copiedPartRelationshipIdMap[id] = remappedId;
+                    }
+                }
                 targetRoot.Add(copy);
                 var copiedId = copy.Attribute("Id")?.Value;
                 if (!string.IsNullOrWhiteSpace(copiedId))
@@ -210,7 +223,14 @@ internal static class XlsxPackageMetadataMerger
             }
 
             if (changed)
+            {
                 WriteXml(targetIndex, targetEntry.FullName, targetXml, targetEntry.LastWriteTime, SaveOptions.DisableFormatting);
+                RebindCopiedPartRelationshipReferences(
+                    targetIndex,
+                    sourceEntry.FullName,
+                    generatedEntriesBeforeMerge,
+                    copiedPartRelationshipIdMap);
+            }
         }
     }
 
@@ -466,6 +486,59 @@ internal static class XlsxPackageMetadataMerger
             return false;
 
         return true;
+    }
+
+    private static bool ShouldRebindRelationshipReferenceOnCopiedPart(XElement relationship)
+    {
+        var relationshipType = NormalizeRelationshipType(relationship);
+        return string.Equals(relationshipType, ImageRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(relationshipType, PackageRelationshipType, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void RebindCopiedPartRelationshipReferences(
+        ArchiveEntryIndex targetIndex,
+        string relationshipPartPath,
+        IReadOnlySet<string> generatedEntriesBeforeMerge,
+        IReadOnlyDictionary<string, string>? relationshipIdMap)
+    {
+        if (relationshipIdMap is null || relationshipIdMap.Count == 0)
+            return;
+
+        var sourcePart = RelationshipPartToSourcePart(relationshipPartPath);
+        if (string.IsNullOrWhiteSpace(sourcePart) ||
+            generatedEntriesBeforeMerge.Contains(sourcePart) ||
+            !sourcePart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var targetEntry = targetIndex.Get(sourcePart);
+        if (targetEntry is null)
+            return;
+
+        XDocument xml;
+        try
+        {
+            xml = XlsxPackageXmlEditor.LoadXml(targetEntry);
+        }
+        catch
+        {
+            return;
+        }
+
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var changed = false;
+        foreach (var attribute in xml.Descendants().Attributes().Where(attribute => attribute.Name.Namespace == relNs))
+        {
+            if (!relationshipIdMap.TryGetValue(attribute.Value, out var replacementId))
+                continue;
+
+            attribute.Value = replacementId;
+            changed = true;
+        }
+
+        if (changed)
+            WriteXml(targetIndex, sourcePart, xml, targetEntry.LastWriteTime, SaveOptions.DisableFormatting);
     }
 
     private static bool IsStructurallyValidPackageRelationship(XElement relationship)

@@ -52,7 +52,7 @@ internal static class XlsxWorksheetSheetFormatNormalizer
     public static bool NormalizeElement(XElement sheetFormat)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(sheetFormat);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(sheetFormat, SheetFormatAttributes, X14AcNs + "dyDescent");
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetFormat, "baseColWidth", NormalizeUnsignedInt);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetFormat, "defaultColWidth", NormalizeNonNegativeDouble);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetFormat, "defaultRowHeight", NormalizeNonNegativeDouble);
@@ -127,25 +127,6 @@ internal static class XlsxWorksheetSheetFormatNormalizer
         return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
             ? parsed.ToString(CultureInfo.InvariantCulture)
             : null;
-    }
-
-    private static bool RemoveUnknownAttributes(XElement element)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                (attribute.Name.NamespaceName.Length == 0 && SheetFormatAttributes.Contains(attribute.Name.LocalName)) ||
-                attribute.Name == X14AcNs + "dyDescent")
-            {
-                continue;
-            }
-
-            attribute.Remove();
-            changed = true;
-        }
-
-        return changed;
     }
 
     private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
