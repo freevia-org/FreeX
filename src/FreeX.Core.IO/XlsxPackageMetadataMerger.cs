@@ -459,8 +459,29 @@ internal static class XlsxPackageMetadataMerger
                (!generatedEntriesBeforeMerge.Contains(targetPart) ||
                 IsChartExStyleColorPackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
                 IsDataModelPackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
+                IsQueryTablePackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
                 IsXmlMapsPackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
                 IsCustomXmlPackageGraphRelationship(relationshipPartPath, relationship, targetPart));
+    }
+
+    private static bool IsQueryTablePackageGraphRelationship(
+        string relationshipPartPath,
+        XElement relationship,
+        string targetPart)
+    {
+        if (!targetPart.StartsWith("xl/queryTables/", StringComparison.OrdinalIgnoreCase) ||
+            !targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var sourcePart = RelationshipPartToSourcePart(relationshipPartPath);
+        return sourcePart.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+               sourcePart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(
+                   NormalizeRelationshipType(relationship),
+                   SpreadsheetRelationshipPrefix + "queryTable",
+                   StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsChartExStyleColorPackageGraphRelationship(
