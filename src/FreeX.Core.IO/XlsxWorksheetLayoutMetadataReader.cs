@@ -268,9 +268,7 @@ internal static class XlsxWorksheetLayoutMetadataReader
         var attrs = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var attribute in protection.Attributes())
         {
-            if (attribute.IsNamespaceDeclaration ||
-                string.Equals(attribute.Name.LocalName, "sheet", StringComparison.Ordinal) ||
-                string.Equals(attribute.Name.LocalName, "password", StringComparison.Ordinal))
+            if (attribute.IsNamespaceDeclaration || !IsPreservableProtectionAttribute(attribute))
             {
                 continue;
             }
@@ -278,9 +276,7 @@ internal static class XlsxWorksheetLayoutMetadataReader
             attrs[attribute.Name.ToString()] = attribute.Value;
         }
 
-        var children = protection.Elements()
-            .Select(element => element.ToString(SaveOptions.DisableFormatting))
-            .ToList();
+        var children = new List<string>();
 
         var serialized = XmlNativeBagSerializer.Serialize(attrs, children);
         if (serialized is null)
@@ -290,4 +286,27 @@ internal static class XlsxWorksheetLayoutMetadataReader
         bag.Set("sheetProtection", serialized);
         return bag;
     }
+
+    private static bool IsPreservableProtectionAttribute(XAttribute attribute) =>
+        attribute.Name.NamespaceName.Length == 0 &&
+        attribute.Name.LocalName is not "sheet" and not "password" &&
+        attribute.Name.LocalName is "algorithmName" or
+            "hashValue" or
+            "saltValue" or
+            "spinCount" or
+            "objects" or
+            "scenarios" or
+            "formatCells" or
+            "formatColumns" or
+            "formatRows" or
+            "insertColumns" or
+            "insertRows" or
+            "insertHyperlinks" or
+            "deleteColumns" or
+            "deleteRows" or
+            "selectLockedCells" or
+            "sort" or
+            "autoFilter" or
+            "pivotTables" or
+            "selectUnlockedCells";
 }
