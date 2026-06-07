@@ -262,6 +262,7 @@ internal static class XlsxWorkbookMetadataWriter
         fileVersion.SetAttributeValue("lowestEdited", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(workbook.FileVersion.LowestEdited));
         fileVersion.SetAttributeValue("rupBuild", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(workbook.FileVersion.RupBuild));
         fileVersion.SetAttributeValue("codeName", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(workbook.FileVersion.CodeName));
+        XlsxWorkbookFileVersionNormalizer.NormalizeElement(fileVersion);
 
         root.AddFirst(fileVersion);
         return true;

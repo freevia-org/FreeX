@@ -16,6 +16,20 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void WorkbookFileVersion_SanitizesInvalidAttributesForSchemaValidity()
+    {
+        var workbook = CreateWorkbookFileVersionSourceWorkbook();
+        workbook.FileVersion!.NativeAttributes["customVersionFlag"] = "removed";
+
+        using var saved = Save(workbook);
+
+        SchemaErrors(saved).Should().BeEmpty();
+        var fileVersion = ReadWorkbookChildElement(saved, "fileVersion");
+        fileVersion.Attribute("appName")!.Value.Should().Be("xl");
+        fileVersion.Attribute("customVersionFlag").Should().BeNull();
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithWorkbookFileVersion_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreateWorkbookFileVersionSourceWorkbook());
@@ -41,6 +55,33 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceFileVersion.ToString(SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorkbookFileVersionForSchemaValidity()
+    {
+        using var source = Save(CreateWorkbookFileVersionSourceWorkbook());
+        SetWorkbookFileVersionInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var fileVersion = ReadWorkbookChildElement(saved, "fileVersion");
+        fileVersion.Attribute("appName")!.Value.Should().Be("xl");
+        fileVersion.Attribute("customVersionFlag").Should().BeNull();
+        fileVersion.Element(fileVersion.Name.Namespace + "nativeFileVersionChild").Should().BeNull();
     }
 
     [Fact]
@@ -492,6 +533,18 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("version"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
         return workbook;
+    }
+
+    private static void SetWorkbookFileVersionInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var fileVersion = workbookXml.Root!.Element(workbookNs + "fileVersion")!;
+        fileVersion.SetAttributeValue("customVersionFlag", "removed");
+        fileVersion.Add(new XElement(workbookNs + "nativeFileVersionChild"));
+        ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
     }
 
     private static Workbook CreateWorkbookFileSharingSourceWorkbook()
