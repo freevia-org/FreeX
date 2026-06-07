@@ -21008,10 +21008,12 @@ public partial class FileAdapterSmokeTests
         source.Position = 0;
         var loaded = adapter.Load(source);
 
-        var table = loaded.GetSheetAt(0).StructuredTables.Should().ContainSingle().Subject;
+        var loadedSheet = loaded.GetSheetAt(0);
+        var table = loadedSheet.StructuredTables.Should().ContainSingle().Subject;
         table.NativeAutoFilterAttributes.Should().ContainKey("customAttr").WhoseValue.Should().Be("auto-filter-native");
         table.NativeAutoFilterChildXmls.Should().ContainSingle()
             .Which.Should().Contain("{FREEX-TABLE-AUTOFILTER-EXT}");
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 5, 5), new NumberValue(42));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -21019,7 +21021,7 @@ public partial class FileAdapterSmokeTests
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
         var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
-        tableXml.Should().Contain("customAttr=\"auto-filter-native\"");
+        tableXml.Should().NotContain("customAttr=\"auto-filter-native\"");
         tableXml.Should().Contain("extLst");
         tableXml.Should().Contain("{FREEX-TABLE-AUTOFILTER-EXT}");
     }

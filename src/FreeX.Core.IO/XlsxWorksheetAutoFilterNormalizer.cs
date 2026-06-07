@@ -7,6 +7,19 @@ namespace FreeX.Core.IO;
 internal static class XlsxWorksheetAutoFilterNormalizer
 {
     private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    private static readonly HashSet<string> AutoFilterAttributes = ["ref"];
+    private static readonly HashSet<string> AutoFilterChildren = ["filterColumn", "sortState", "extLst"];
+    private static readonly HashSet<string> FilterColumnAttributes = ["colId", "hiddenButton", "showButton"];
+    private static readonly HashSet<string> FilterColumnChildren =
+    [
+        "filters",
+        "top10",
+        "customFilters",
+        "dynamicFilter",
+        "colorFilter",
+        "iconFilter",
+        "extLst"
+    ];
 
     private static readonly HashSet<string> ValidCalendarTypes =
     [
@@ -108,11 +121,16 @@ internal static class XlsxWorksheetAutoFilterNormalizer
     public static bool NormalizeElement(XElement autoFilter)
     {
         var changed = false;
+        changed |= RemoveUnknownAttributes(autoFilter, AutoFilterAttributes);
+        changed |= RemoveUnexpectedChildren(autoFilter, AutoFilterChildren);
+        changed |= RemoveDuplicateChildren(autoFilter, "sortState");
+        changed |= RemoveDuplicateChildren(autoFilter, "extLst");
         changed |= NormalizeAttribute(autoFilter, "ref", NormalizeCellOrRangeReference);
 
         foreach (var filterColumn in autoFilter.Elements(WorksheetNs + "filterColumn").ToList())
             changed |= NormalizeFilterColumnElement(filterColumn);
 
+        changed |= NormalizeChildOrder(autoFilter, AutoFilterChildOrder);
         return changed;
     }
 
@@ -126,6 +144,15 @@ internal static class XlsxWorksheetAutoFilterNormalizer
         }
 
         var changed = false;
+        changed |= RemoveUnknownAttributes(filterColumn, FilterColumnAttributes);
+        changed |= RemoveUnexpectedChildren(filterColumn, FilterColumnChildren);
+        changed |= RemoveDuplicateChildren(filterColumn, "filters");
+        changed |= RemoveDuplicateChildren(filterColumn, "top10");
+        changed |= RemoveDuplicateChildren(filterColumn, "customFilters");
+        changed |= RemoveDuplicateChildren(filterColumn, "dynamicFilter");
+        changed |= RemoveDuplicateChildren(filterColumn, "colorFilter");
+        changed |= RemoveDuplicateChildren(filterColumn, "iconFilter");
+        changed |= RemoveDuplicateChildren(filterColumn, "extLst");
         changed |= SetAttributeIfChanged(filterColumn, "colId", normalizedColumnId);
         changed |= NormalizeAttribute(filterColumn, "hiddenButton", NormalizeBoolean);
         changed |= NormalizeAttribute(filterColumn, "showButton", NormalizeBoolean);
@@ -143,6 +170,7 @@ internal static class XlsxWorksheetAutoFilterNormalizer
         foreach (var iconFilter in filterColumn.Elements(WorksheetNs + "iconFilter").ToList())
             changed |= NormalizeIconFilterElement(iconFilter);
 
+        changed |= NormalizeChildOrder(filterColumn, FilterColumnChildOrder);
         return changed;
     }
 
@@ -247,6 +275,82 @@ internal static class XlsxWorksheetAutoFilterNormalizer
         changed |= SetAttributeIfChanged(iconFilter, "iconId", normalizedIconId);
         return changed;
     }
+
+    private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedNames)
+    {
+        var changed = false;
+        foreach (var attribute in element.Attributes().ToList())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                (attribute.Name.NamespaceName.Length == 0 && allowedNames.Contains(attribute.Name.LocalName)))
+            {
+                continue;
+            }
+
+            attribute.Remove();
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool RemoveUnexpectedChildren(XElement element, IReadOnlySet<string> allowedLocalNames)
+    {
+        var changed = false;
+        foreach (var child in element.Elements().ToList())
+        {
+            if (child.Name.Namespace == WorksheetNs && allowedLocalNames.Contains(child.Name.LocalName))
+                continue;
+
+            child.Remove();
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool RemoveDuplicateChildren(XElement element, string localName)
+    {
+        var changed = false;
+        var seen = false;
+        foreach (var child in element.Elements(WorksheetNs + localName).ToList())
+        {
+            if (!seen)
+            {
+                seen = true;
+                continue;
+            }
+
+            child.Remove();
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool NormalizeChildOrder(XElement element, Func<XElement, int> orderSelector)
+    {
+        var children = element.Elements()
+            .Select((child, index) => new { Child = child, Index = index })
+            .OrderBy(item => orderSelector(item.Child))
+            .ThenBy(item => item.Index)
+            .Select(item => item.Child)
+            .ToList();
+        if (children.Count == 0 || element.Elements().SequenceEqual(children))
+            return false;
+
+        element.ReplaceNodes(children);
+        return true;
+    }
+
+    private static int AutoFilterChildOrder(XElement child) =>
+        child.Name == WorksheetNs + "filterColumn" ? 0 :
+        child.Name == WorksheetNs + "sortState" ? 10 :
+        child.Name == WorksheetNs + "extLst" ? 100 :
+        90;
+
+    private static int FilterColumnChildOrder(XElement child) =>
+        child.Name == WorksheetNs + "extLst" ? 100 : 0;
 
     private static bool NormalizeAttribute(
         XElement element,
