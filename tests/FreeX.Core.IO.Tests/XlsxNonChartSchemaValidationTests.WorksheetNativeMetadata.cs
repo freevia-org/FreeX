@@ -127,6 +127,37 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         AssertWorksheetWebPublishItemsSanitized(saved);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LoadedWorkbookSave_RepairsWorksheetWebPublishItemsPackageMetadata(bool usePatchSave)
+    {
+        using var source = CreateWorksheetNativeMetadataSourcePackage();
+        RemoveWorksheetWebPublishItemsPackageMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        if (usePatchSave)
+        {
+            XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+                .Should()
+                .BeTrue(blockReason);
+        }
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(
+            usePatchSave ? XlsxSavePath.SourcePatch : XlsxSavePath.FullSave,
+            adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetWebPublishItemsPackageMetadata(saved);
+    }
+
     [Fact]
     public void LoadedWorkbookFullSave_SanitizesInvalidWorksheetOleControlsForSchemaValidity()
     {
@@ -321,6 +352,36 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         ReplacePackageXml(archive, "xl/webPublishItems.xml", partXml);
     }
 
+    private static void RemoveWorksheetWebPublishItemsPackageMetadata(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+        var relationshipsXml = LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
+        relationshipsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                string.Equals(
+                    relationship.Attribute("Type")?.Value,
+                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/webPublishItems",
+                    StringComparison.OrdinalIgnoreCase))
+            .Remove();
+        ReplacePackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels", relationshipsXml);
+
+        var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+        contentTypesXml.Root!
+            .Elements(contentTypeNs + "Override")
+            .Where(overrideElement =>
+                string.Equals(
+                    overrideElement.Attribute("PartName")?.Value,
+                    "/xl/webPublishItems.xml",
+                    StringComparison.OrdinalIgnoreCase))
+            .Remove();
+        ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+    }
+
     private static void SetWorksheetOleControlInvalidMetadata(MemoryStream stream)
     {
         stream.Position = 0;
@@ -471,6 +532,28 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         AssertWebPublishItemsSanitized(ReadWorksheetChildElement(stream, "webPublishItems"), worksheetNs);
         AssertWebPublishItemsSanitized(ReadPackageRootElement(stream, "xl/webPublishItems.xml"), worksheetNs);
+    }
+
+    private static void AssertWorksheetWebPublishItemsPackageMetadata(Stream stream)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+        ReadPackageRootElement(stream, "xl/worksheets/_rels/sheet1.xml.rels")
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/webPublishItems" &&
+                relationship.Attribute("Target")?.Value == "../webPublishItems.xml")
+            .Should()
+            .ContainSingle();
+
+        ReadPackageRootElement(stream, "[Content_Types].xml")
+            .Elements(contentTypeNs + "Override")
+            .Where(overrideElement =>
+                overrideElement.Attribute("PartName")?.Value == "/xl/webPublishItems.xml" &&
+                overrideElement.Attribute("ContentType")?.Value == "application/vnd.openxmlformats-officedocument.spreadsheetml.webPublishItems+xml")
+            .Should()
+            .ContainSingle();
     }
 
     private static void AssertWebPublishItemsSanitized(XElement webPublishItems, XNamespace worksheetNs)
