@@ -107,7 +107,7 @@ internal static class XlsxWorksheetWebPublishItemsNormalizer
     public static bool NormalizeElement(XElement webPublishItems)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(webPublishItems, WebPublishItemsAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(webPublishItems, WebPublishItemsAttributes, RelNs + "id");
         changed |= RemoveUnexpectedChildElements(webPublishItems, WorksheetNs + "webPublishItem");
 
         foreach (var webPublishItem in webPublishItems.Elements(WorksheetNs + "webPublishItem").ToList())
@@ -127,7 +127,7 @@ internal static class XlsxWorksheetWebPublishItemsNormalizer
     private static bool NormalizeWebPublishItemElement(XElement webPublishItem)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(webPublishItem, WebPublishItemAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(webPublishItem, WebPublishItemAttributes, RelNs + "id");
         changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(webPublishItem);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishItem, "id", NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishItem, "sourceType", NormalizeSourceType);
@@ -148,25 +148,6 @@ internal static class XlsxWorksheetWebPublishItemsNormalizer
     {
         var count = webPublishItems.Elements(WorksheetNs + "webPublishItem").Count().ToString(CultureInfo.InvariantCulture);
         return XlsxXmlNormalizationHelpers.SetAttributeIfChanged(webPublishItems, "count", count);
-    }
-
-    private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedNames)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                attribute.Name == RelNs + "id" ||
-                (attribute.Name.NamespaceName.Length == 0 && allowedNames.Contains(attribute.Name.LocalName)))
-            {
-                continue;
-            }
-
-            attribute.Remove();
-            changed = true;
-        }
-
-        return changed;
     }
 
     private static bool RemoveUnexpectedChildElements(XElement element, XName allowedChildName)
