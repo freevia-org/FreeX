@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO.Compression;
 using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
@@ -39,6 +40,26 @@ internal static class XlsxWorksheetSortStateNormalizer
 
         changed |= NormalizeChildOrder(sortState, SortStateChildOrder);
         return changed;
+    }
+
+    public static bool NormalizeWorksheetRoot(XElement worksheetRoot)
+    {
+        var sortState = worksheetRoot.Element(WorksheetNs + "sortState");
+        return sortState is not null && NormalizeElement(sortState);
+    }
+
+    public static void NormalizeWorksheets(ZipArchive archive)
+    {
+        foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
+        {
+            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+            var root = worksheetXml.Root;
+            if (root is not null &&
+                NormalizeWorksheetRoot(root))
+            {
+                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+            }
+        }
     }
 
     private static bool NormalizeExtensionLists(XElement parent)
@@ -158,5 +179,13 @@ internal static class XlsxWorksheetSortStateNormalizer
     {
         var trimmed = value?.Trim();
         return trimmed is not null && allowedValues.Contains(trimmed) ? trimmed : null;
+    }
+
+    private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
+    {
+        var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+        return path.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+               path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+               !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
     }
 }
