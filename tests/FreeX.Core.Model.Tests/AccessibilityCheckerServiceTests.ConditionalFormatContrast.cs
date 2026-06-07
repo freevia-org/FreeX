@@ -2433,6 +2433,96 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatBaseFunctionOperands()
+    {
+        AssertFormulaBaseConversionFunctionContrastLocations("BASE($E1,2)=\"1010\"", "B1");
+        AssertFormulaBaseConversionFunctionContrastLocations("BASE($E1,2,$F1)=\"00001010\"", "B1");
+        AssertFormulaBaseConversionFunctionContrastLocations("BASE($E1,16,$F1)=\"001F\"", "B4");
+        AssertFormulaBaseConversionFunctionContrastLocations("BASE($E1,2,$F1)=\"0000\"", "B5");
+        AssertFormulaBaseConversionFunctionContrastLocations("BASE(45745,36)=\"ZAP\"", FormulaBaseConversionAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatBaseFunctionTruncationAndPadding()
+    {
+        AssertFormulaBaseConversionFunctionContrastLocations("BASE($E1,2,1)=\"1111\"", "B2");
+        AssertFormulaBaseConversionFunctionContrastLocations("BASE(15,2.9,8.9)=\"00001111\"", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("BASE(35,36.9)=\"Z\"", FormulaBaseConversionAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDecimalFunctionOperands()
+    {
+        AssertFormulaBaseConversionFunctionContrastLocations("DECIMAL($A1,2)=10", "B1", "B4");
+        AssertFormulaBaseConversionFunctionContrastLocations("DECIMAL($A1,2)=15", "B2");
+        AssertFormulaBaseConversionFunctionContrastLocations("DECIMAL($C1,16)=255", "B4");
+        AssertFormulaBaseConversionFunctionContrastLocations("DECIMAL(111,2)=7", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("DECIMAL(\"zap\",36)=45745", FormulaBaseConversionAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDecimalFunctionTruncatesRadix()
+    {
+        AssertFormulaBaseConversionFunctionContrastLocations("DECIMAL($A1,2.9)=10", "B1", "B4");
+        AssertFormulaBaseConversionFunctionContrastLocations("DECIMAL(\"11\",2.9)=3", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("DECIMAL(\"Z\",36.9)=35", FormulaBaseConversionAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatBaseDecimalWrappersPredicatesTextComparisonsAndAggregates()
+    {
+        AssertFormulaBaseConversionFunctionContrastLocations("IF(BASE($E1,2)=\"1010\",TRUE,FALSE)", "B1");
+        AssertFormulaBaseConversionFunctionContrastLocations("EXACT(BASE($E1,16,$F1),\"001F\")", "B4");
+        AssertFormulaBaseConversionFunctionContrastLocations("ISTEXT(BASE($E1,16))", "B1", "B2", "B4", "B5", "B6");
+        AssertFormulaBaseConversionFunctionContrastLocations("IF(DECIMAL($A1,2)>10,TRUE,FALSE)", "B2", "B3");
+        AssertFormulaBaseConversionFunctionContrastLocations("AND(DECIMAL($C1,16)>10,$G1=\"Closed\")", "B2", "B4");
+        AssertFormulaBaseConversionFunctionContrastLocations("ISNUMBER(DECIMAL($A1,2))", "B1", "B2", "B3", "B4", "B5");
+        AssertFormulaBaseConversionFunctionContrastLocations("DECIMAL($A1,2)+1=11", "B1", "B4");
+        AssertFormulaBaseConversionFunctionContrastLocations("SUM(DECIMAL($A1,2),1)>100", "B3");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatBaseDecimalErrorPredicates()
+    {
+        AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(BASE(-1,2))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(BASE(7,1))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(BASE(7,37))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(BASE(7,2,-1))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(BASE(7,2,256))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(BASE(9007199254740992,2))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(DECIMAL(\"\",16))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(DECIMAL(\"2\",2))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(DECIMAL(\"FF\",1))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(DECIMAL(\"FF\",37))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(DECIMAL(\"ZZZZZZZZZZZ\",36))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(BASE($E1,2))", "B3", "B7");
+        AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(DECIMAL($A1,2))", "B6", "B7");
+        AssertFormulaBaseConversionFunctionContrastLocations("ISNA(BASE(NA(),2))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISNA(BASE(7,NA()))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISNA(BASE(7,2,NA()))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISNA(DECIMAL(NA(),16))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISNA(DECIMAL(\"FF\",NA()))", FormulaBaseConversionAllLocations);
+        AssertFormulaBaseConversionFunctionContrastLocations("ISNA(BASE($E1,2))", "B7");
+        AssertFormulaBaseConversionFunctionContrastLocations("ISNA(DECIMAL($A1,2))", "B7");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatBaseDecimalUnsupportedOperandsOrErrorComparisons()
+    {
+        AssertFormulaBaseConversionFunctionContrastLocations("BASE($E1)=\"1010\"");
+        AssertFormulaBaseConversionFunctionContrastLocations("BASE($E1,2,$F1,1)=\"1010\"");
+        AssertFormulaBaseConversionFunctionContrastLocations("DECIMAL($A1)>0");
+        AssertFormulaBaseConversionFunctionContrastLocations("DECIMAL($A1,2,1)>0");
+        AssertFormulaBaseConversionFunctionContrastLocations("BASE(-1,2)=\"\"");
+        AssertFormulaBaseConversionFunctionContrastLocations("BASE(7,1)=\"111\"");
+        AssertFormulaBaseConversionFunctionContrastLocations("BASE(7,2,-1)=\"111\"");
+        AssertFormulaBaseConversionFunctionContrastLocations("BASE(NA(),2)=\"\"");
+        AssertFormulaBaseConversionFunctionContrastLocations("DECIMAL(\"2\",2)>0");
+        AssertFormulaBaseConversionFunctionContrastLocations("DECIMAL(\"\",16)>0");
+        AssertFormulaBaseConversionFunctionContrastLocations("DECIMAL(NA(),16)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatBaseConversionWrappersPredicatesAndTextComparisons()
     {
         AssertFormulaBaseConversionFunctionContrastLocations("IF(BIN2DEC($A1)=10,TRUE,FALSE)", "B1", "B4");
