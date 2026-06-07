@@ -1066,7 +1066,7 @@ public sealed partial class XlsxFileAdapter
                 return;
 
             var changed = workbook.CustomViews.Count > 0
-                ? NormalizePatchCustomWorkbookViews(archive)
+                ? NormalizePatchCustomWorkbookViews(archive) | NormalizePatchWorksheetCustomSheetViewExtensionLists(archive)
                 : RemovePatchWorkbookCustomViews(archive) | RemovePatchWorksheetCustomViews(archive);
             if (changed)
                 XlsxExcelCompatibilityNormalizer.RemoveCalcChain(archive);
@@ -1100,6 +1100,26 @@ public sealed partial class XlsxFileAdapter
 
             XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
             return true;
+        }
+
+        private static bool NormalizePatchWorksheetCustomSheetViewExtensionLists(ZipArchive archive)
+        {
+            var changed = false;
+            foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
+            {
+                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+                var root = worksheetXml.Root;
+                if (root is null ||
+                    !XlsxWorksheetCustomSheetViewExtensionListNormalizer.NormalizeWorksheetRoot(root))
+                {
+                    continue;
+                }
+
+                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+                changed = true;
+            }
+
+            return changed;
         }
 
         private static bool RemovePatchWorkbookCustomViews(ZipArchive archive)
