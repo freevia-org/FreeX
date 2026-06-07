@@ -383,6 +383,31 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void WorkbookProtection_SanitizesInvalidAttributesForSchemaValidity()
+    {
+        var workbook = CreateWorkbookProtectionSourceWorkbook();
+        workbook.ProtectionMetadata = CreateWorkbookProtectionMetadataWithInvalidXml();
+
+        using var saved = Save(workbook);
+
+        SchemaErrors(saved).Should().BeEmpty();
+        var protection = ReadWorkbookChildElement(saved, "workbookProtection");
+        protection.Attribute("lockStructure")!.Value.Should().Be("1");
+        protection.Attribute("workbookPassword")!.Value.Should().Be("83AF");
+        protection.Attribute("lockWindows")!.Value.Should().Be("1");
+        protection.Attribute("workbookAlgorithmName")!.Value.Should().Be("SHA-512");
+        protection.Attribute("workbookHashValue")!.Value.Should().Be("AQIDBA==");
+        protection.Attribute("workbookSaltValue")!.Value.Should().Be("BQYHCA==");
+        protection.Attribute("workbookSpinCount")!.Value.Should().Be("100000");
+        protection.Attribute("algorithmName").Should().BeNull();
+        protection.Attribute("hashValue").Should().BeNull();
+        protection.Attribute("saltValue").Should().BeNull();
+        protection.Attribute("spinCount").Should().BeNull();
+        protection.Attribute("customWorkbookProtectionFlag").Should().BeNull();
+        protection.Element(protection.Name.Namespace + "nativeWorkbookProtectionChild").Should().BeNull();
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithWorkbookProtection_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreateWorkbookProtectionSourceWorkbook());
@@ -437,6 +462,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         protection.Attribute("lockRevision").Should().BeNull();
         protection.Attribute("workbookSpinCount").Should().BeNull();
         protection.Attribute("revisionsSpinCount").Should().BeNull();
+        protection.Attribute("algorithmName").Should().BeNull();
+        protection.Attribute("hashValue").Should().BeNull();
+        protection.Attribute("saltValue").Should().BeNull();
+        protection.Attribute("spinCount").Should().BeNull();
+        protection.Attribute("customWorkbookProtectionFlag").Should().BeNull();
+        protection.Element(protection.Name.Namespace + "nativeWorkbookProtectionChild").Should().BeNull();
     }
 
     [Fact]
@@ -805,6 +836,26 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         return workbook;
     }
 
+    private static NativeXmlPreserveBag CreateWorkbookProtectionMetadataWithInvalidXml()
+    {
+        var bag = new NativeXmlPreserveBag();
+        bag.Set("workbookProtection", """
+            <e lockWindows="1"
+               workbookAlgorithmName="SHA-512"
+               workbookHashValue="AQIDBA=="
+               workbookSaltValue="BQYHCA=="
+               workbookSpinCount="100000"
+               algorithmName="removed"
+               hashValue="removed"
+               saltValue="removed"
+               spinCount="removed"
+               customWorkbookProtectionFlag="removed">
+              <nativeWorkbookProtectionChild xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" />
+            </e>
+            """);
+        return bag;
+    }
+
     private static void SetWorkbookProtectionInvalidAttributes(MemoryStream stream)
     {
         stream.Position = 0;
@@ -817,6 +868,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         protection.SetAttributeValue("lockRevision", "maybe");
         protection.SetAttributeValue("workbookSpinCount", "not-a-number");
         protection.SetAttributeValue("revisionsSpinCount", "not-a-number");
+        protection.SetAttributeValue("algorithmName", "removed");
+        protection.SetAttributeValue("hashValue", "removed");
+        protection.SetAttributeValue("saltValue", "removed");
+        protection.SetAttributeValue("spinCount", "removed");
+        protection.SetAttributeValue("customWorkbookProtectionFlag", "removed");
+        protection.Add(new XElement(workbookNs + "nativeWorkbookProtectionChild"));
         ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
     }
 

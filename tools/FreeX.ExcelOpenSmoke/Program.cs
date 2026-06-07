@@ -4900,11 +4900,46 @@ internal static class ExcelOpenSmoke
             AddOptionalWorkbookMetadataBooleanIssue(description, attribute.Name.LocalName, attribute.Value, issues);
         }
 
-        AddOptionalWorkbookMetadataUnsignedIntIssue(description, "spinCount", workbookProtection.Attribute("spinCount")?.Value, issues);
+        foreach (var attribute in workbookProtection.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                (attribute.Name.NamespaceName.Length == 0 && IsKnownWorkbookProtectionAttribute(attribute.Name.LocalName)))
+            {
+                continue;
+            }
+
+            issues.Add($"{WorkbookPart} {description} has unsupported attribute {attribute.Name}");
+        }
+
+        AddOptionalWorkbookMetadataUnsignedIntIssue(description, "workbookSpinCount", workbookProtection.Attribute("workbookSpinCount")?.Value, issues);
+        AddOptionalWorkbookMetadataUnsignedIntIssue(description, "revisionsSpinCount", workbookProtection.Attribute("revisionsSpinCount")?.Value, issues);
+        AddOptionalWorkbookMetadataNonEmptyAttributeIssue(description, "workbookPassword", workbookProtection.Attribute("workbookPassword")?.Value, issues);
+        AddOptionalWorkbookMetadataNonEmptyAttributeIssue(description, "revisionsPassword", workbookProtection.Attribute("revisionsPassword")?.Value, issues);
+        AddOptionalWorkbookMetadataNonEmptyAttributeIssue(description, "workbookAlgorithmName", workbookProtection.Attribute("workbookAlgorithmName")?.Value, issues);
+        AddOptionalWorkbookMetadataNonEmptyAttributeIssue(description, "workbookHashValue", workbookProtection.Attribute("workbookHashValue")?.Value, issues);
+        AddOptionalWorkbookMetadataNonEmptyAttributeIssue(description, "workbookSaltValue", workbookProtection.Attribute("workbookSaltValue")?.Value, issues);
+        AddOptionalWorkbookMetadataNonEmptyAttributeIssue(description, "revisionsAlgorithmName", workbookProtection.Attribute("revisionsAlgorithmName")?.Value, issues);
+        AddOptionalWorkbookMetadataNonEmptyAttributeIssue(description, "revisionsHashValue", workbookProtection.Attribute("revisionsHashValue")?.Value, issues);
+        AddOptionalWorkbookMetadataNonEmptyAttributeIssue(description, "revisionsSaltValue", workbookProtection.Attribute("revisionsSaltValue")?.Value, issues);
 
         if (workbookProtection.Elements().Any())
             issues.Add($"{WorkbookPart} {description} has child elements; expected attributes only");
     }
+
+    private static bool IsKnownWorkbookProtectionAttribute(string name) =>
+        name is "workbookPassword" or
+            "revisionsPassword" or
+            "lockStructure" or
+            "lockWindows" or
+            "lockRevision" or
+            "revisionsAlgorithmName" or
+            "revisionsHashValue" or
+            "revisionsSaltValue" or
+            "revisionsSpinCount" or
+            "workbookAlgorithmName" or
+            "workbookHashValue" or
+            "workbookSaltValue" or
+            "workbookSpinCount";
 
     private static bool IsKnownWorkbookProtectionBooleanAttribute(string name) =>
         name is "lockStructure" or "lockWindows" or "lockRevision";

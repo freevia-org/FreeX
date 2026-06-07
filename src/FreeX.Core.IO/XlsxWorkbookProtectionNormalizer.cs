@@ -5,6 +5,23 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxWorkbookProtectionNormalizer
 {
+    private static readonly HashSet<string> WorkbookProtectionAttributes =
+    [
+        "workbookPassword",
+        "revisionsPassword",
+        "lockStructure",
+        "lockWindows",
+        "lockRevision",
+        "revisionsAlgorithmName",
+        "revisionsHashValue",
+        "revisionsSaltValue",
+        "revisionsSpinCount",
+        "workbookAlgorithmName",
+        "workbookHashValue",
+        "workbookSaltValue",
+        "workbookSpinCount"
+    ];
+
     private static readonly string[] BooleanAttributes =
     [
         "lockStructure",
@@ -21,12 +38,42 @@ internal static class XlsxWorkbookProtectionNormalizer
     public static bool NormalizeElement(XElement workbookProtection)
     {
         var changed = false;
+        changed |= RemoveUnknownAttributes(workbookProtection);
+        changed |= RemoveAllNodes(workbookProtection);
+
         foreach (var attributeName in BooleanAttributes)
             changed |= NormalizeAttribute(workbookProtection, attributeName, NormalizeBoolean);
         foreach (var attributeName in UnsignedIntAttributes)
             changed |= NormalizeAttribute(workbookProtection, attributeName, NormalizeUnsignedIntOrNull);
 
         return changed;
+    }
+
+    private static bool RemoveUnknownAttributes(XElement element)
+    {
+        var changed = false;
+        foreach (var attribute in element.Attributes().ToList())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                (attribute.Name.NamespaceName.Length == 0 && WorkbookProtectionAttributes.Contains(attribute.Name.LocalName)))
+            {
+                continue;
+            }
+
+            attribute.Remove();
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool RemoveAllNodes(XElement element)
+    {
+        if (!element.Nodes().Any())
+            return false;
+
+        element.RemoveNodes();
+        return true;
     }
 
     private static bool NormalizeAttribute(
