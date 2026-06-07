@@ -134,6 +134,11 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"window_shown=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"opened_source_path=.*freex-$runtime-launch.csv\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"new_sheet_button=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"sheet_tab_context_rename_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"sheet_tab_context_tab_color_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"sheet_tab_context_no_color_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"sheet_tab_context_select_all_sheets_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"sheet_tab_context_ungroup_sheets_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_file_menu=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_new_workbook_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_open_menu_item=true\" \"$launch_smoke_report\"");

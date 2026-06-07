@@ -1244,10 +1244,13 @@ public sealed class MainWindow : Window
     }
 
     private int FindActiveSheetTabIndex()
+        => FindSheetTabIndex(_session.ActiveSheet.Id);
+
+    private int FindSheetTabIndex(SheetId sheetId)
     {
         for (var index = 0; index < _session.SheetTabs.Count; index++)
         {
-            if (_session.SheetTabs[index].IsActive)
+            if (_session.SheetTabs[index].Id == sheetId)
                 return index;
         }
 
@@ -1309,12 +1312,117 @@ public sealed class MainWindow : Window
                 BorderThickness = new Thickness(1),
                 Content = content,
             };
+            button.ContextMenu = CreateSheetTabContextMenu(tab);
             button.PointerPressed += (_, args) => SelectSheetFromPointer(tab.Id, args);
             button.Click += (_, _) => SelectSheet(tab.Id);
             panel.Children.Add(button);
         }
 
         return panel;
+    }
+
+    private ContextMenu CreateSheetTabContextMenu(WorkbookSheetTab tab)
+    {
+        var isIdle = !_isOpening && !_isSaving;
+        var sheetTabIndex = FindSheetTabIndex(tab.Id);
+        var menu = new ContextMenu
+        {
+            ItemsSource = CreateSheetTabContextMenuItems(tab, isIdle, sheetTabIndex).ToArray(),
+        };
+        return menu;
+    }
+
+    private IEnumerable<Control> CreateSheetTabContextMenuItems(WorkbookSheetTab tab, bool isIdle, int sheetTabIndex)
+    {
+        yield return CreateSheetTabContextMenuItem(tab, "Rename...", async () => await RenameActiveSheetAsync(), isIdle);
+        yield return CreateSheetTabContextMenuItem(tab, "Insert Sheet", AddNewSheet, isIdle);
+        yield return CreateSheetTabContextMenuItem(tab, "Duplicate", DuplicateActiveSheet, isIdle);
+        yield return CreateSheetTabContextMenuItem(tab, "Delete Sheet", DeleteActiveSheet, isIdle);
+        yield return new Separator();
+        yield return CreateSheetTabContextMenuItem(tab, "Hide", HideActiveSheet, isIdle && _session.SheetTabs.Count > 1);
+        yield return CreateSheetTabContextMenuItem(tab, "Unhide...", async () => await UnhideSheetAsync(), isIdle && _session.HiddenSheets.Count > 0);
+        yield return CreateSheetTabColorContextMenuItem(tab, isIdle);
+        yield return new Separator();
+        yield return CreateSheetTabContextMenuItem(tab, "Select All Sheets", SelectAllVisibleSheets, isIdle && _session.SheetTabs.Count > 1);
+        yield return CreateSheetTabContextMenuItem(tab, "Ungroup Sheets", UngroupSheets, isIdle && _session.IsWorkbookGrouped);
+        yield return new Separator();
+        yield return CreateSheetTabContextMenuItem(tab, "Move Left", MoveActiveSheetLeft, isIdle && sheetTabIndex > 0);
+        yield return CreateSheetTabContextMenuItem(
+            tab,
+            "Move Right",
+            MoveActiveSheetRight,
+            isIdle && sheetTabIndex >= 0 && sheetTabIndex < _session.SheetTabs.Count - 1);
+    }
+
+    private MenuItem CreateSheetTabContextMenuItem(WorkbookSheetTab tab, string header, Action action, bool isEnabled)
+    {
+        var menuItem = new MenuItem
+        {
+            Header = header,
+            IsEnabled = isEnabled,
+        };
+        menuItem.Click += (_, _) =>
+        {
+            if (!SelectSheetForContextCommand(tab.Id))
+                return;
+
+            action();
+        };
+        return menuItem;
+    }
+
+    private MenuItem CreateSheetTabContextMenuItem(WorkbookSheetTab tab, string header, Func<Task> action, bool isEnabled)
+    {
+        var menuItem = new MenuItem
+        {
+            Header = header,
+            IsEnabled = isEnabled,
+        };
+        menuItem.Click += async (_, _) =>
+        {
+            if (!SelectSheetForContextCommand(tab.Id))
+                return;
+
+            await action();
+        };
+        return menuItem;
+    }
+
+    private MenuItem CreateSheetTabColorContextMenuItem(WorkbookSheetTab tab, bool isEnabled)
+    {
+        var menuItem = new MenuItem
+        {
+            Header = "Tab Color",
+            IsEnabled = isEnabled,
+            ItemsSource = CreateSheetTabColorContextMenuItems(tab).ToArray(),
+        };
+        return menuItem;
+    }
+
+    private IEnumerable<MenuItem> CreateSheetTabColorContextMenuItems(WorkbookSheetTab tab)
+    {
+        var clearColorItem = new MenuItem { Header = "No Color" };
+        clearColorItem.Click += (_, _) =>
+        {
+            if (SelectSheetForContextCommand(tab.Id))
+                ApplyActiveSheetTabColor(null);
+        };
+        yield return clearColorItem;
+
+        foreach (var swatch in CellColorPalettePlanner.BuildDefaultSwatches())
+        {
+            var menuItem = new MenuItem
+            {
+                Header = swatch.Hex,
+                Icon = CreateColorSwatchIcon(swatch.Color),
+            };
+            menuItem.Click += (_, _) =>
+            {
+                if (SelectSheetForContextCommand(tab.Id))
+                    ApplyActiveSheetTabColor(swatch.Color);
+            };
+            yield return menuItem;
+        }
     }
 
     private Control BuildSheetGrid()
@@ -2454,6 +2562,20 @@ public sealed class MainWindow : Window
 
     private void SelectSheet(SheetId sheetId)
         => SelectSheet(sheetId, selectRange: false, toggle: false);
+
+    private bool SelectSheetForContextCommand(SheetId sheetId)
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return false;
+
+        if (_session.SelectSheet(sheetId))
+        {
+            ClearSelectedDrawingObject();
+            RefreshShell($"Selected {_session.ActiveSheet.Name}");
+        }
+
+        return true;
+    }
 
     private void SelectSheetFromPointer(SheetId sheetId, PointerPressedEventArgs args)
     {
@@ -4221,6 +4343,11 @@ public sealed class MainWindow : Window
             OpenedSourcePath: _session.CurrentFilePath,
             IsOpening: _isOpening,
             HasNewSheetButton: _newSheetButton.Content?.ToString() == "+",
+            HasSheetTabContextRenameMenuItem: HasSheetTabContextMenuItem("Rename..."),
+            HasSheetTabContextTabColorMenuItem: HasSheetTabContextMenuItem("Tab Color"),
+            HasSheetTabContextNoColorMenuItem: HasSheetTabContextSubmenuItem("Tab Color", "No Color"),
+            HasSheetTabContextSelectAllSheetsMenuItem: HasSheetTabContextMenuItem("Select All Sheets"),
+            HasSheetTabContextUngroupSheetsMenuItem: HasSheetTabContextMenuItem("Ungroup Sheets"),
             HasNativeFileMenu: hasNativeFileMenu,
             HasNativeEditMenu: hasNativeEditMenu,
             HasNativeFormatMenu: hasNativeFormatMenu,
@@ -4325,6 +4452,29 @@ public sealed class MainWindow : Window
     private static bool HasNativeMenuItem(NativeMenuItem item, string expectedHeader, bool requireGesture = true) =>
         string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal) &&
         (!requireGesture || item.Gesture is not null);
+
+    private bool HasSheetTabContextMenuItem(string expectedHeader) =>
+        _sheetTabsHost.Content is StackPanel panel &&
+        panel.Children
+            .OfType<Button>()
+            .Any(button =>
+                button.ContextMenu?.ItemsSource is IEnumerable<Control> items &&
+                items
+                    .OfType<MenuItem>()
+                    .Any(item => string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal)));
+
+    private bool HasSheetTabContextSubmenuItem(string parentHeader, string expectedHeader) =>
+        _sheetTabsHost.Content is StackPanel panel &&
+        panel.Children
+            .OfType<Button>()
+            .Any(button =>
+                button.ContextMenu?.ItemsSource is IEnumerable<Control> items &&
+                items
+                    .OfType<MenuItem>()
+                    .Where(item => string.Equals(item.Header?.ToString(), parentHeader, StringComparison.Ordinal))
+                    .Any(item =>
+                        item.ItemsSource is IEnumerable<MenuItem> submenuItems &&
+                        submenuItems.Any(submenuItem => string.Equals(submenuItem.Header?.ToString(), expectedHeader, StringComparison.Ordinal))));
 
     private static bool HasNativeSubmenuItem(NativeMenu? menu, string expectedHeader) =>
         menu?

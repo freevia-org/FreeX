@@ -38,6 +38,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_tab_color_menu_item=true");
         script.Should().Contain("native_tab_color_clear_item=true");
         script.Should().Contain("native_tab_color_swatch_count=69");
+        script.Should().Contain("sheet_tab_context_rename_menu_item=true");
+        script.Should().Contain("sheet_tab_context_tab_color_menu_item=true");
+        script.Should().Contain("sheet_tab_context_no_color_menu_item=true");
+        script.Should().Contain("sheet_tab_context_select_all_sheets_menu_item=true");
+        script.Should().Contain("sheet_tab_context_ungroup_sheets_menu_item=true");
         script.Should().Contain("native_select_all_sheets_menu_item=true");
         script.Should().Contain("native_ungroup_sheets_menu_item=true");
         script.Should().Contain("native_delete_sheet_menu_item=true");
@@ -48,6 +53,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("HasNativeCloseWorkbookMenuItem &&");
         script.Should().Contain("HasNativeRenameSheetMenuItem &&");
         script.Should().Contain("HasNativeTabColorMenuItem &&");
+        script.Should().Contain("HasSheetTabContextRenameMenuItem &&");
+        script.Should().Contain("HasSheetTabContextTabColorMenuItem &&");
+        script.Should().Contain("HasSheetTabContextNoColorMenuItem &&");
+        script.Should().Contain("HasSheetTabContextSelectAllSheetsMenuItem &&");
+        script.Should().Contain("HasSheetTabContextUngroupSheetsMenuItem &&");
         script.Should().Contain("HasNativeSelectAllSheetsMenuItem &&");
         script.Should().Contain("HasNativeUngroupSheetsMenuItem &&");
         script.Should().Contain("HasNativeDeleteSheetMenuItem &&");
@@ -464,6 +474,11 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_tab_color_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_tab_color_clear_item=true" "$artifact_root/launch.txt"
                       grep -q "native_tab_color_swatch_count=69" "$artifact_root/launch.txt"
+                      grep -q "sheet_tab_context_rename_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "sheet_tab_context_tab_color_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "sheet_tab_context_no_color_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "sheet_tab_context_select_all_sheets_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "sheet_tab_context_ungroup_sheets_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_select_all_sheets_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_ungroup_sheets_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_hide_sheet_menu_item=true" "$artifact_root/launch.txt"
@@ -758,6 +773,18 @@ public sealed class MacOsAppReadinessPreflightTests
                     ShowRenameSheetDialogAsync(currentName).ToString();
                     AutomationProperties.SetAutomationId(nameBox, "RenameSheetNameBox");
                     var validationError = _session.Workbook.ValidateSheetName(proposedName, _session.ActiveSheet.Id);
+                    button.ContextMenu = CreateSheetTabContextMenu(tab);
+                    ItemsSource = CreateSheetTabContextMenuItems(tab, isIdle, sheetTabIndex).ToArray();
+                    CreateSheetTabContextMenuItem(tab, "Rename...", async () => await RenameActiveSheetAsync(), isIdle);
+                    CreateSheetTabContextMenuItem(tab, "Insert Sheet", AddNewSheet, isIdle);
+                    CreateSheetTabContextMenuItem(tab, "Duplicate", DuplicateActiveSheet, isIdle);
+                    CreateSheetTabContextMenuItem(tab, "Delete Sheet", DeleteActiveSheet, isIdle);
+                    CreateSheetTabContextMenuItem(tab, "Hide", HideActiveSheet, isIdle && _session.SheetTabs.Count > 1);
+                    CreateSheetTabContextMenuItem(tab, "Unhide...", async () => await UnhideSheetAsync(), isIdle && _session.HiddenSheets.Count > 0);
+                    CreateSheetTabColorContextMenuItem(tab, isIdle);
+                    CreateSheetTabContextMenuItem(tab, "Select All Sheets", SelectAllVisibleSheets, isIdle && _session.SheetTabs.Count > 1);
+                    CreateSheetTabContextMenuItem(tab, "Ungroup Sheets", UngroupSheets, isIdle && _session.IsWorkbookGrouped);
+                    CreateSheetTabContextMenuItem(tab, "Move Left", MoveActiveSheetLeft, isIdle && sheetTabIndex > 0);
                     button.PointerPressed += (_, args) => SelectSheetFromPointer(tab.Id, args);
                     if (!args.GetCurrentPoint(this).Properties.IsLeftButtonPressed);
                     var selectRange = modifiers.HasFlag(KeyModifiers.Shift);
@@ -812,6 +839,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     TopLevel.GetTopLevel(this)?.Launcher.ToString();
                     AppHelpInfo.BuildAboutText(versionText, PlatformAboutSummary);
                     LegalNoticeProvider.GetDocuments().Select(document => document.Title);
+                    HasSheetTabContextRenameMenuItem: HasSheetTabContextMenuItem("Rename...");
+                    HasSheetTabContextTabColorMenuItem: HasSheetTabContextMenuItem("Tab Color");
+                    HasSheetTabContextNoColorMenuItem: HasSheetTabContextSubmenuItem("Tab Color", "No Color");
+                    HasSheetTabContextSelectAllSheetsMenuItem: HasSheetTabContextMenuItem("Select All Sheets");
+                    HasSheetTabContextUngroupSheetsMenuItem: HasSheetTabContextMenuItem("Ungroup Sheets");
                 }
                 private static bool HasVisibleCellBorder(CellStyle? style) => true;
                 private NativeMenu CreateNativeOpenRecentMenu(bool isIdle) => new();
@@ -837,6 +869,10 @@ public sealed class MacOsAppReadinessPreflightTests
                 private async Task PasteSpecialExternalTextFromClipboardAsync(string label) => await Task.CompletedTask;
                 private async Task UnhideSheetAsync() => await Task.CompletedTask;
                 private async Task<WorkbookHiddenSheet?> ShowUnhideSheetDialogAsync(IReadOnlyList<WorkbookHiddenSheet> hiddenSheets) => await Task.FromResult<WorkbookHiddenSheet?>(null);
+                private ContextMenu CreateSheetTabContextMenu(WorkbookSheetTab tab) => new();
+                private IEnumerable<Control> CreateSheetTabContextMenuItems(WorkbookSheetTab tab, bool isIdle, int sheetTabIndex) => [];
+                private MenuItem CreateSheetTabContextMenuItem(WorkbookSheetTab tab, string header, Action action, bool isEnabled) => new();
+                private bool SelectSheetForContextCommand(SheetId sheetId) => true;
                 private void SelectSheetFromPointer(SheetId sheetId, PointerPressedEventArgs args) { }
                 private NativeMenu CreateNativeSheetTabColorMenu() => new();
                 private NativeMenuItem CreateNativeSheetTabColorSwatchMenuItem(CellColorSwatch swatch) => new();
@@ -897,6 +933,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativeTabColorMenuItem &&
                     HasNativeClearTabColorMenuItem &&
                     NativeTabColorSwatchCount == CellColorPalettePlanner.BuildDefaultSwatches().Count &&
+                    HasSheetTabContextRenameMenuItem &&
+                    HasSheetTabContextTabColorMenuItem &&
+                    HasSheetTabContextNoColorMenuItem &&
+                    HasSheetTabContextSelectAllSheetsMenuItem &&
+                    HasSheetTabContextUngroupSheetsMenuItem &&
                     HasNativeSelectAllSheetsMenuItem &&
                     HasNativeUngroupSheetsMenuItem &&
                     HasNativeHideSheetMenuItem &&
@@ -946,6 +987,11 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativeTabColorMenuItem { get; }
                 private bool HasNativeClearTabColorMenuItem { get; }
                 private int NativeTabColorSwatchCount { get; }
+                private bool HasSheetTabContextRenameMenuItem { get; }
+                private bool HasSheetTabContextTabColorMenuItem { get; }
+                private bool HasSheetTabContextNoColorMenuItem { get; }
+                private bool HasSheetTabContextSelectAllSheetsMenuItem { get; }
+                private bool HasSheetTabContextUngroupSheetsMenuItem { get; }
                 private bool HasNativeSelectAllSheetsMenuItem { get; }
                 private bool HasNativeUngroupSheetsMenuItem { get; }
                 private bool HasNativeHideSheetMenuItem { get; }
@@ -979,7 +1025,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativePasteSpecialPictureMenuItem { get; }
                 private bool HasNativePasteSpecialLinkedPictureMenuItem { get; }
                 public int NativeCellStylesPresetCount { get; }
-                public string Report => "native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_select_all_sheets_menu_item= native_ungroup_sheets_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+                public string Report => "native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= sheet_tab_context_rename_menu_item= sheet_tab_context_tab_color_menu_item= sheet_tab_context_no_color_menu_item= sheet_tab_context_select_all_sheets_menu_item= sheet_tab_context_ungroup_sheets_menu_item= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_select_all_sheets_menu_item= native_ungroup_sheets_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
             }
             """);
 

@@ -68,6 +68,11 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     string? OpenedSourcePath,
     bool IsOpening,
     bool HasNewSheetButton,
+    bool HasSheetTabContextRenameMenuItem,
+    bool HasSheetTabContextTabColorMenuItem,
+    bool HasSheetTabContextNoColorMenuItem,
+    bool HasSheetTabContextSelectAllSheetsMenuItem,
+    bool HasSheetTabContextUngroupSheetsMenuItem,
     bool HasNativeFileMenu,
     bool HasNativeEditMenu,
     bool HasNativeFormatMenu,
@@ -176,6 +181,11 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         ViewportRowCount > 0 &&
         ViewportColumnCount > 0 &&
         HasNewSheetButton &&
+        HasSheetTabContextRenameMenuItem &&
+        HasSheetTabContextTabColorMenuItem &&
+        HasSheetTabContextNoColorMenuItem &&
+        HasSheetTabContextSelectAllSheetsMenuItem &&
+        HasSheetTabContextUngroupSheetsMenuItem &&
         HasNativeFileMenu &&
         HasNativeEditMenu &&
         HasNativeFormatMenu &&
@@ -332,6 +342,11 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"opened_source_path={snapshot.OpenedSourcePath ?? ""}",
                 $"is_opening={FormatBool(snapshot.IsOpening)}",
                 $"new_sheet_button={FormatBool(snapshot.HasNewSheetButton)}",
+                $"sheet_tab_context_rename_menu_item={FormatBool(snapshot.HasSheetTabContextRenameMenuItem)}",
+                $"sheet_tab_context_tab_color_menu_item={FormatBool(snapshot.HasSheetTabContextTabColorMenuItem)}",
+                $"sheet_tab_context_no_color_menu_item={FormatBool(snapshot.HasSheetTabContextNoColorMenuItem)}",
+                $"sheet_tab_context_select_all_sheets_menu_item={FormatBool(snapshot.HasSheetTabContextSelectAllSheetsMenuItem)}",
+                $"sheet_tab_context_ungroup_sheets_menu_item={FormatBool(snapshot.HasSheetTabContextUngroupSheetsMenuItem)}",
                 $"native_file_menu={FormatBool(snapshot.HasNativeFileMenu)}",
                 $"native_edit_menu={FormatBool(snapshot.HasNativeEditMenu)}",
                 $"native_format_menu={FormatBool(snapshot.HasNativeFormatMenu)}",
