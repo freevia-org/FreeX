@@ -1,4 +1,3 @@
-using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -11,7 +10,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_ReadsScatterAxisTitlesByChartAxisIdOrder()
     {
         var sheetId = new SheetId(Guid.NewGuid());
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
                           xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
               <c:chart>
@@ -51,7 +50,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_UsesBubbleSeriesIndexForSeriesFormatting()
     {
         var sheetId = new SheetId(Guid.NewGuid());
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
                           xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
               <c:chart>
@@ -82,7 +81,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_ReadsBubbleChartOptions()
     {
         var sheetId = new SheetId(Guid.NewGuid());
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
               <c:chart>
                 <c:plotArea>
