@@ -1184,6 +1184,51 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_WiresSheetLifecycleThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+
+        source.Should().Contain("private readonly Button _newSheetButton = new();");
+        source.Should().Contain("private readonly NativeMenuItem _newSheetMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _duplicateSheetMenuItem = new();");
+        source.Should().Contain("_newSheetButton.Content = \"+\";");
+        source.Should().Contain("_newSheetButton.Click += (_, _) => AddNewSheet();");
+        source.Should().Contain("AutomationProperties.SetName(_newSheetButton, \"New Sheet\");");
+        source.Should().Contain("_newSheetMenuItem.Header = \"New Sheet\";");
+        source.Should().Contain("_newSheetMenuItem.Gesture = new KeyGesture(Key.F11, KeyModifiers.Shift);");
+        source.Should().Contain("_newSheetMenuItem.Click += (_, _) => AddNewSheet();");
+        source.Should().Contain("_duplicateSheetMenuItem.Header = \"Duplicate Sheet\";");
+        source.Should().Contain("_duplicateSheetMenuItem.Click += (_, _) => DuplicateActiveSheet();");
+        source.Should().Contain("sheetMenu.Items.Add(_newSheetMenuItem);");
+        source.Should().Contain("sheetMenu.Items.Add(_duplicateSheetMenuItem);");
+        source.Should().Contain("Header = \"Sheet\"");
+        source.Should().Contain("_newSheetButton.IsEnabled = isIdle;");
+        source.Should().Contain("_newSheetMenuItem.IsEnabled = _newSheetButton.IsEnabled;");
+        source.Should().Contain("_duplicateSheetMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("private void AddNewSheet()");
+        source.Should().Contain("var result = _session.AddSheet();");
+        source.Should().Contain("RefreshShell($\"Inserted {_session.ActiveSheet.Name}\");");
+        source.Should().Contain("private void DuplicateActiveSheet()");
+        source.Should().Contain("var result = _session.DuplicateActiveSheet();");
+        source.Should().Contain("RefreshShell($\"Duplicated {sourceName}\");");
+        source.Should().Contain("e.Key == Key.F11 && e.KeyModifiers == KeyModifiers.Shift");
+        source.Should().Contain("HasNewSheetButton: _newSheetButton.Content?.ToString() == \"+\"");
+        source.Should().Contain("HasNativeSheetMenu: hasNativeSheetMenu");
+        source.Should().Contain("HasNativeNewSheetMenuItem: HasNativeMenuItem(_newSheetMenuItem, \"New Sheet\")");
+        source.Should().Contain("HasNativeDuplicateSheetMenuItem: HasNativeMenuItem(_duplicateSheetMenuItem, \"Duplicate Sheet\", requireGesture: false)");
+        smokeSource.Should().Contain("SheetTabCount > 0");
+        smokeSource.Should().Contain("HasNewSheetButton &&");
+        smokeSource.Should().Contain("HasNativeSheetMenu &&");
+        smokeSource.Should().Contain("HasNativeNewSheetMenuItem &&");
+        smokeSource.Should().Contain("HasNativeDuplicateSheetMenuItem &&");
+        smokeSource.Should().Contain("new_sheet_button={FormatBool(snapshot.HasNewSheetButton)}");
+        smokeSource.Should().Contain("native_sheet_menu={FormatBool(snapshot.HasNativeSheetMenu)}");
+        smokeSource.Should().Contain("native_new_sheet_menu_item={FormatBool(snapshot.HasNativeNewSheetMenuItem)}");
+        smokeSource.Should().Contain("native_duplicate_sheet_menu_item={FormatBool(snapshot.HasNativeDuplicateSheetMenuItem)}");
+    }
+
+    [Fact]
     public void MainWindow_RendersSelectedRangeStatsThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));

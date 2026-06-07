@@ -133,13 +133,17 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"macos_launch_smoke=passed\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"window_shown=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"opened_source_path=.*freex-$runtime-launch.csv\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"new_sheet_button=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_file_menu=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_open_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_save_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_save_as_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_edit_menu=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_format_menu=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_sheet_menu=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_help_menu=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_new_sheet_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_duplicate_sheet_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_undo_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_redo_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_cut_menu_item=true\" \"$launch_smoke_report\"");

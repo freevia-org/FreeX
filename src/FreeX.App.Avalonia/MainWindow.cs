@@ -83,6 +83,7 @@ public sealed class MainWindow : Window
     private readonly Button _openButton = new();
     private readonly Button _saveButton = new();
     private readonly Button _saveAsButton = new();
+    private readonly Button _newSheetButton = new();
     private readonly Button _undoButton = new();
     private readonly Button _redoButton = new();
     private readonly Button _cutButton = new();
@@ -118,6 +119,8 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _openMenuItem = new();
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
+    private readonly NativeMenuItem _newSheetMenuItem = new();
+    private readonly NativeMenuItem _duplicateSheetMenuItem = new();
     private readonly NativeMenuItem _undoMenuItem = new();
     private readonly NativeMenuItem _redoMenuItem = new();
     private readonly NativeMenuItem _cutMenuItem = new();
@@ -262,18 +265,37 @@ public sealed class MainWindow : Window
     private Control BuildSheetTabsChrome()
     {
         _sheetTabsHost.Content = BuildSheetTabs();
+        _newSheetButton.Content = "+";
+        _newSheetButton.Width = 32;
+        _newSheetButton.Height = 28;
+        _newSheetButton.MinWidth = 32;
+        _newSheetButton.Padding = new Thickness(0);
+        _newSheetButton.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+        _newSheetButton.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        _newSheetButton.Click += (_, _) => AddNewSheet();
+        AutomationProperties.SetName(_newSheetButton, "New Sheet");
+        AutomationProperties.SetHelpText(_newSheetButton, "Adds a worksheet to the current workbook.");
+
+        var chrome = new DockPanel
+        {
+            LastChildFill = true,
+        };
+        DockPanel.SetDock(_newSheetButton, Dock.Right);
+        chrome.Children.Add(_newSheetButton);
+        chrome.Children.Add(new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = _sheetTabsHost,
+        });
+
         return new Border
         {
             Background = Brush(249, 250, 252),
             BorderBrush = ToolbarBorder,
             BorderThickness = new Thickness(0, 1, 0, 0),
             Padding = new Thickness(12, 6),
-            Child = new ScrollViewer
-            {
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                Content = _sheetTabsHost,
-            },
+            Child = chrome,
         };
     }
 
@@ -290,6 +312,13 @@ public sealed class MainWindow : Window
         _saveAsMenuItem.Header = "Save As...";
         _saveAsMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Shift);
         _saveAsMenuItem.Click += async (_, _) => await SaveWorkbookAsAsync();
+
+        _newSheetMenuItem.Header = "New Sheet";
+        _newSheetMenuItem.Gesture = new KeyGesture(Key.F11, KeyModifiers.Shift);
+        _newSheetMenuItem.Click += (_, _) => AddNewSheet();
+
+        _duplicateSheetMenuItem.Header = "Duplicate Sheet";
+        _duplicateSheetMenuItem.Click += (_, _) => DuplicateActiveSheet();
 
         _undoMenuItem.Header = "Undo";
         _undoMenuItem.Gesture = new KeyGesture(Key.Z, KeyModifiers.Meta);
@@ -496,6 +525,10 @@ public sealed class MainWindow : Window
         formatMenu.Items.Add(_alignCenterMenuItem);
         formatMenu.Items.Add(_alignRightMenuItem);
 
+        var sheetMenu = new NativeMenu();
+        sheetMenu.Items.Add(_newSheetMenuItem);
+        sheetMenu.Items.Add(_duplicateSheetMenuItem);
+
         var helpMenu = new NativeMenu();
         helpMenu.Items.Add(_helpOnlineMenuItem);
         helpMenu.Items.Add(_sendFeedbackMenuItem);
@@ -519,6 +552,11 @@ public sealed class MainWindow : Window
         {
             Header = "Format",
             Menu = formatMenu,
+        });
+        _nativeMenu.Items.Add(new NativeMenuItem
+        {
+            Header = "Sheet",
+            Menu = sheetMenu,
         });
         _nativeMenu.Items.Add(new NativeMenuItem
         {
@@ -921,6 +959,7 @@ public sealed class MainWindow : Window
         _saveButton.IsEnabled = isIdle && _session.CanSaveCurrentSource(out _);
         _saveButton.Content = _session.IsDirty ? "Save*" : "Save";
         _saveAsButton.IsEnabled = isIdle && StorageProvider.CanSave;
+        _newSheetButton.IsEnabled = isIdle;
         _undoButton.IsEnabled = isIdle && _session.CanUndo;
         _redoButton.IsEnabled = isIdle && _session.CanRedo;
         _cutButton.IsEnabled = isIdle;
@@ -957,6 +996,8 @@ public sealed class MainWindow : Window
         _openMenuItem.IsEnabled = _openButton.IsEnabled;
         _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
         _saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;
+        _newSheetMenuItem.IsEnabled = _newSheetButton.IsEnabled;
+        _duplicateSheetMenuItem.IsEnabled = isIdle;
         _undoMenuItem.IsEnabled = _undoButton.IsEnabled;
         _redoMenuItem.IsEnabled = _redoButton.IsEnabled;
         _cutMenuItem.IsEnabled = _cutButton.IsEnabled;
@@ -1992,6 +2033,45 @@ public sealed class MainWindow : Window
         RefreshShell($"Selected {_session.ActiveSheet.Name}");
     }
 
+    private void AddNewSheet()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        ClearSelectedDrawingObject();
+        var result = _session.AddSheet();
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "New Sheet failed.");
+            return;
+        }
+
+        RefreshShell($"Inserted {_session.ActiveSheet.Name}");
+    }
+
+    private void DuplicateActiveSheet()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var sourceName = _session.ActiveSheet.Name;
+        ClearSelectedDrawingObject();
+        var result = _session.DuplicateActiveSheet();
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Duplicate Sheet failed.");
+            return;
+        }
+
+        RefreshShell($"Duplicated {sourceName}");
+    }
+
     private void BeginFormulaEdit(CellAddress address, string? initialText = null)
     {
         ClearSelectedDrawingObject();
@@ -2876,6 +2956,9 @@ public sealed class MainWindow : Window
         var hasNativeFormatMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
             string.Equals(item.Header?.ToString(), "Format", StringComparison.Ordinal) &&
             item.Menu is not null) == true;
+        var hasNativeSheetMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
+            string.Equals(item.Header?.ToString(), "Sheet", StringComparison.Ordinal) &&
+            item.Menu is not null) == true;
         var hasNativeHelpMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
             string.Equals(item.Header?.ToString(), "Help", StringComparison.Ordinal) &&
             item.Menu is not null) == true;
@@ -2891,17 +2974,22 @@ public sealed class MainWindow : Window
             WindowTitle: Title ?? "",
             DisplayName: _session.DisplayName,
             ActiveSheetName: _session.ActiveSheet.Name,
+            SheetTabCount: _session.SheetTabs.Count,
             ViewportRowCount: _session.Viewport.RowMetrics.Count,
             ViewportColumnCount: _session.Viewport.ColMetrics.Count,
             OpenedSourcePath: _session.CurrentFilePath,
             IsOpening: _isOpening,
+            HasNewSheetButton: _newSheetButton.Content?.ToString() == "+",
             HasNativeFileMenu: hasNativeFileMenu,
             HasNativeEditMenu: hasNativeEditMenu,
             HasNativeFormatMenu: hasNativeFormatMenu,
+            HasNativeSheetMenu: hasNativeSheetMenu,
             HasNativeHelpMenu: hasNativeHelpMenu,
             HasNativeOpenMenuItem: HasNativeMenuItem(_openMenuItem, "Open..."),
             HasNativeSaveMenuItem: HasNativeMenuItem(_saveMenuItem, "Save"),
             HasNativeSaveAsMenuItem: HasNativeMenuItem(_saveAsMenuItem, "Save As..."),
+            HasNativeNewSheetMenuItem: HasNativeMenuItem(_newSheetMenuItem, "New Sheet"),
+            HasNativeDuplicateSheetMenuItem: HasNativeMenuItem(_duplicateSheetMenuItem, "Duplicate Sheet", requireGesture: false),
             HasNativeUndoMenuItem: HasNativeMenuItem(_undoMenuItem, "Undo"),
             HasNativeRedoMenuItem: HasNativeMenuItem(_redoMenuItem, "Redo"),
             HasNativeCutMenuItem: HasNativeMenuItem(_cutMenuItem, "Cut"),
@@ -2978,6 +3066,13 @@ public sealed class MainWindow : Window
         {
             if (_formulaBox.IsFocused)
                 return;
+
+            if (e.Key == Key.F11 && e.KeyModifiers == KeyModifiers.Shift)
+            {
+                e.Handled = true;
+                AddNewSheet();
+                return;
+            }
 
             if (e.Key == Key.F1)
             {

@@ -240,6 +240,42 @@ public sealed class WorkbookSession
         return true;
     }
 
+    public WorkbookCellEditResult AddSheet()
+    {
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new AddSheetCommand(WorkbookSheetNameGenerator.GenerateUniqueSheetName(Workbook)));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulWorkbookStructureResult(Workbook.Sheets[^1].Id);
+        return result;
+    }
+
+    public WorkbookCellEditResult DuplicateActiveSheet()
+    {
+        var sourceSheetId = ActiveSheet.Id;
+        var sourceIndex = Workbook.Sheets.ToList().FindIndex(sheet => sheet.Id == sourceSheetId);
+        if (sourceIndex < 0)
+        {
+            return new WorkbookCellEditResult(
+                false,
+                "Active sheet was not found.",
+                [],
+                RecalcReport: null);
+        }
+
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new DuplicateSheetCommand(sourceSheetId));
+        if (!result.Success)
+            return result;
+
+        var copyIndex = Math.Min(sourceIndex + 1, Workbook.Sheets.Count - 1);
+        ApplySuccessfulWorkbookStructureResult(Workbook.Sheets[copyIndex].Id);
+        return result;
+    }
+
     public void BeginFormulaEdit(CellAddress address)
     {
         ActiveCell = address;
@@ -615,21 +651,23 @@ public sealed class WorkbookSession
 
     public WorkbookCellEditResult UndoLastEdit()
     {
+        var sheetIdsBefore = CaptureSheetIds();
         var result = _cellEditService.UndoLastEdit(Workbook);
         if (!result.Success)
             return result;
 
-        ApplySuccessfulEditResult(result, ActiveCell);
+        ApplySuccessfulHistoryResult(result, sheetIdsBefore);
         return result;
     }
 
     public WorkbookCellEditResult RedoLastEdit()
     {
+        var sheetIdsBefore = CaptureSheetIds();
         var result = _cellEditService.RedoLastEdit(Workbook);
         if (!result.Success)
             return result;
 
-        ApplySuccessfulEditResult(result, ActiveCell);
+        ApplySuccessfulHistoryResult(result, sheetIdsBefore);
         return result;
     }
 
@@ -736,6 +774,50 @@ public sealed class WorkbookSession
     private void RefreshViewport()
     {
         Viewport = BuildViewport();
+    }
+
+    private HashSet<SheetId> CaptureSheetIds() =>
+        Workbook.Sheets.Select(sheet => sheet.Id).ToHashSet();
+
+    private void ApplySuccessfulHistoryResult(
+        WorkbookCellEditResult result,
+        IReadOnlySet<SheetId> sheetIdsBefore)
+    {
+        if (result.AffectedCells.Count > 0)
+        {
+            ApplySuccessfulEditResult(result, ActiveCell);
+            return;
+        }
+
+        ApplySuccessfulWorkbookStructureResult(
+            FindNewSheetId(sheetIdsBefore) ?? ActiveSheet.Id);
+    }
+
+    private SheetId? FindNewSheetId(IReadOnlySet<SheetId> sheetIdsBefore)
+    {
+        foreach (var sheet in Workbook.Sheets)
+        {
+            if (!sheetIdsBefore.Contains(sheet.Id))
+                return sheet.Id;
+        }
+
+        return null;
+    }
+
+    private void ApplySuccessfulWorkbookStructureResult(SheetId preferredSheetId)
+    {
+        var selection = _sheetSelectionService.SelectSheet(Workbook, preferredSheetId);
+        ActiveSheet = selection.Sheet;
+        SheetTabs = selection.Tabs;
+        ActiveCell = GetInitialActiveCell(ActiveSheet);
+        ActiveSheet.ActiveRow = ActiveCell.Row;
+        ActiveSheet.ActiveCol = ActiveCell.Col;
+        SelectedRange = new GridRange(ActiveCell, ActiveCell);
+        FormulaEditAddress = null;
+        IsDirty = true;
+        _selectionStatsRevision++;
+        RefreshViewport();
+        EnsureActiveCellVisible();
     }
 
     private void ApplySuccessfulEditResult(WorkbookCellEditResult result, CellAddress fallbackAddress)

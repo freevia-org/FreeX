@@ -2223,6 +2223,138 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void AddSheet_AppendsSelectsNewSheetAndKeepsUndoRedoCoherent()
+    {
+        var workbook = CreateWorkbook();
+        var original = workbook.Sheets.Single();
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var result = session.AddSheet();
+
+        result.Success.Should().BeTrue();
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Sheet1", "Sheet2");
+        session.ActiveSheet.Name.Should().Be("Sheet2");
+        workbook.ActiveSheetIndex.Should().Be(1);
+        session.ActiveCell.Should().Be(new CellAddress(session.ActiveSheet.Id, 1, 1));
+        session.SelectedRange.Should().Be(new GridRange(session.ActiveCell, session.ActiveCell));
+        session.SheetTabs.Should().Equal(
+            new WorkbookSheetTab(original.Id, "Sheet1", IsActive: false),
+            new WorkbookSheetTab(session.ActiveSheet.Id, "Sheet2", IsActive: true));
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        workbook.Sheets.Should().ContainSingle().Which.Id.Should().Be(original.Id);
+        session.ActiveSheet.Should().BeSameAs(original);
+        session.ActiveCell.Should().Be(new CellAddress(original.Id, 1, 1));
+        session.CanRedo.Should().BeTrue();
+
+        var redo = session.RedoLastEdit();
+
+        redo.Success.Should().BeTrue();
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Sheet1", "Sheet2");
+        session.ActiveSheet.Name.Should().Be("Sheet2");
+        workbook.ActiveSheetIndex.Should().Be(1);
+    }
+
+    [Fact]
+    public void DuplicateActiveSheet_CopiesSheetContentSelectsCopyAndKeepsUndoRedoCoherent()
+    {
+        var workbook = CreateWorkbook();
+        var source = workbook.Sheets.Single();
+        source.SetCell(new CellAddress(source.Id, 2, 3), new TextValue("copied"));
+        source.TabColor = new CellColor(255, 192, 0);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var result = session.DuplicateActiveSheet();
+
+        result.Success.Should().BeTrue();
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Sheet1", "Sheet1 (2)");
+        var copy = workbook.Sheets[1];
+        copy.Id.Should().NotBe(source.Id);
+        copy.GetValue(new CellAddress(copy.Id, 2, 3)).Should().Be(new TextValue("copied"));
+        copy.TabColor.Should().Be(new CellColor(255, 192, 0));
+        session.ActiveSheet.Should().BeSameAs(copy);
+        workbook.ActiveSheetIndex.Should().Be(1);
+        session.SheetTabs.Should().Equal(
+            new WorkbookSheetTab(source.Id, "Sheet1", IsActive: false),
+            new WorkbookSheetTab(copy.Id, "Sheet1 (2)", IsActive: true));
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        workbook.Sheets.Should().ContainSingle().Which.Id.Should().Be(source.Id);
+        session.ActiveSheet.Should().BeSameAs(source);
+        session.CanRedo.Should().BeTrue();
+
+        var redo = session.RedoLastEdit();
+
+        redo.Success.Should().BeTrue();
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Sheet1", "Sheet1 (2)");
+        session.ActiveSheet.Name.Should().Be("Sheet1 (2)");
+        workbook.ActiveSheetIndex.Should().Be(1);
+    }
+
+    [Fact]
+    public void DuplicateActiveSheet_CopiesDrawingObjectsIntoPreviewViewport()
+    {
+        var source = PortPreviewWorkbookFactory.Create("Opened preview.", isFallback: false);
+        var session = new WorkbookSessionFactory().Create(
+            source,
+            viewportHeight: 240,
+            viewportWidth: 320,
+            includeObjects: true);
+
+        var result = session.DuplicateActiveSheet();
+
+        result.Success.Should().BeTrue();
+        session.ActiveSheet.Name.Should().Be("Port Plan (2)");
+        session.ActiveSheet.DrawingShapes.Should().ContainSingle(shape => shape.Name == PortPreviewWorkbookFactory.PreviewShapeName);
+        session.ActiveSheet.TextBoxes.Should().ContainSingle(textBox => textBox.Name == PortPreviewWorkbookFactory.PreviewTextBoxName);
+        session.ActiveSheet.Pictures.Should().ContainSingle(picture => picture.Name == PortPreviewWorkbookFactory.PreviewPictureName);
+        var drawingObjectNames = session.Viewport.DrawingObjects.Select(drawingObject => drawingObject.DisplayName);
+        drawingObjectNames.Should().Contain(PortPreviewWorkbookFactory.PreviewShapeName);
+        drawingObjectNames.Should().Contain(PortPreviewWorkbookFactory.PreviewTextBoxName);
+        drawingObjectNames.Should().Contain(PortPreviewWorkbookFactory.PreviewPictureName);
+    }
+
+    [Fact]
+    public void SheetLifecycleCommands_RejectProtectedWorkbookWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        workbook.IsStructureProtected = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var add = session.AddSheet();
+        var duplicate = session.DuplicateActiveSheet();
+
+        add.Success.Should().BeFalse();
+        duplicate.Success.Should().BeFalse();
+        add.ErrorMessage.Should().Contain("protected");
+        duplicate.ErrorMessage.Should().Contain("protected");
+        workbook.Sheets.Should().ContainSingle().Which.Name.Should().Be("Sheet1");
+        session.ActiveSheet.Name.Should().Be("Sheet1");
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void MoveActiveCell_PansViewportWhenSelectionMovesPastVisibleRange()
     {
         var session = new WorkbookSessionFactory().Create(

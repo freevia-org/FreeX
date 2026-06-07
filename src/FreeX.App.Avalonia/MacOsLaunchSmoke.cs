@@ -62,17 +62,22 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     string WindowTitle,
     string DisplayName,
     string ActiveSheetName,
+    int SheetTabCount,
     int ViewportRowCount,
     int ViewportColumnCount,
     string? OpenedSourcePath,
     bool IsOpening,
+    bool HasNewSheetButton,
     bool HasNativeFileMenu,
     bool HasNativeEditMenu,
     bool HasNativeFormatMenu,
+    bool HasNativeSheetMenu,
     bool HasNativeHelpMenu,
     bool HasNativeOpenMenuItem,
     bool HasNativeSaveMenuItem,
     bool HasNativeSaveAsMenuItem,
+    bool HasNativeNewSheetMenuItem,
+    bool HasNativeDuplicateSheetMenuItem,
     bool HasNativeUndoMenuItem,
     bool HasNativeRedoMenuItem,
     bool HasNativeCutMenuItem,
@@ -125,15 +130,20 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         WindowShown &&
         !IsOpening &&
         !string.IsNullOrWhiteSpace(OpenedSourcePath) &&
+        SheetTabCount > 0 &&
         ViewportRowCount > 0 &&
         ViewportColumnCount > 0 &&
+        HasNewSheetButton &&
         HasNativeFileMenu &&
         HasNativeEditMenu &&
         HasNativeFormatMenu &&
+        HasNativeSheetMenu &&
         HasNativeHelpMenu &&
         HasNativeOpenMenuItem &&
         HasNativeSaveMenuItem &&
         HasNativeSaveAsMenuItem &&
+        HasNativeNewSheetMenuItem &&
+        HasNativeDuplicateSheetMenuItem &&
         HasNativeUndoMenuItem &&
         HasNativeRedoMenuItem &&
         HasNativeCutMenuItem &&
@@ -232,17 +242,22 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"window_title={snapshot.WindowTitle}",
                 $"display_name={snapshot.DisplayName}",
                 $"active_sheet={snapshot.ActiveSheetName}",
+                $"sheet_tab_count={snapshot.SheetTabCount}",
                 $"viewport_rows={snapshot.ViewportRowCount}",
                 $"viewport_columns={snapshot.ViewportColumnCount}",
                 $"opened_source_path={snapshot.OpenedSourcePath ?? ""}",
                 $"is_opening={FormatBool(snapshot.IsOpening)}",
+                $"new_sheet_button={FormatBool(snapshot.HasNewSheetButton)}",
                 $"native_file_menu={FormatBool(snapshot.HasNativeFileMenu)}",
                 $"native_edit_menu={FormatBool(snapshot.HasNativeEditMenu)}",
                 $"native_format_menu={FormatBool(snapshot.HasNativeFormatMenu)}",
+                $"native_sheet_menu={FormatBool(snapshot.HasNativeSheetMenu)}",
                 $"native_help_menu={FormatBool(snapshot.HasNativeHelpMenu)}",
                 $"native_open_menu_item={FormatBool(snapshot.HasNativeOpenMenuItem)}",
                 $"native_save_menu_item={FormatBool(snapshot.HasNativeSaveMenuItem)}",
                 $"native_save_as_menu_item={FormatBool(snapshot.HasNativeSaveAsMenuItem)}",
+                $"native_new_sheet_menu_item={FormatBool(snapshot.HasNativeNewSheetMenuItem)}",
+                $"native_duplicate_sheet_menu_item={FormatBool(snapshot.HasNativeDuplicateSheetMenuItem)}",
                 $"native_undo_menu_item={FormatBool(snapshot.HasNativeUndoMenuItem)}",
                 $"native_redo_menu_item={FormatBool(snapshot.HasNativeRedoMenuItem)}",
                 $"native_cut_menu_item={FormatBool(snapshot.HasNativeCutMenuItem)}",

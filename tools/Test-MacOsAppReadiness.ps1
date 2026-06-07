@@ -423,10 +423,14 @@ function Test-MacOsWorkflow {
         "open -W -n -b io.github.tony-xmelon.freex",
         "osascript -e 'tell application id `"io.github.tony-xmelon.freex`" to quit' || true",
         "--macos-launch-smoke",
+        "new_sheet_button=true",
         "native_file_menu=true",
         "native_edit_menu=true",
         "native_format_menu=true",
+        "native_sheet_menu=true",
         "native_help_menu=true",
+        "native_new_sheet_menu_item=true",
+        "native_duplicate_sheet_menu_item=true",
         "native_cut_menu_item=true",
         "native_copy_menu_item=true",
         "native_paste_menu_item=true",
@@ -507,6 +511,13 @@ function Test-SourceWiring {
                 "TryCreateDrawingBitmap(imageBytes, out var bitmap)",
                 "AddStyledCellBorderOverlay(content, style);",
                 "private static bool HasVisibleCellBorder(CellStyle? style)",
+                "_newSheetButton.Click += (_, _) => AddNewSheet();",
+                "_newSheetMenuItem.Click += (_, _) => AddNewSheet();",
+                "_duplicateSheetMenuItem.Click += (_, _) => DuplicateActiveSheet();",
+                "Header = `"Sheet`"",
+                "var result = _session.AddSheet();",
+                "var result = _session.DuplicateActiveSheet();",
+                "e.Key == Key.F11 && e.KeyModifiers == KeyModifiers.Shift",
                 "_helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, `"Help Online`");",
                 "_sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, `"Send Feedback`");",
                 "_checkForUpdatesMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, `"Check for Updates`");",
@@ -528,7 +539,12 @@ function Test-SourceWiring {
                 "HasNativeFileMenu &&",
                 "HasNativeEditMenu &&",
                 "HasNativeFormatMenu &&",
+                "HasNativeSheetMenu &&",
                 "HasNativeHelpMenu &&",
+                "new_sheet_button=",
+                "native_sheet_menu=",
+                "native_new_sheet_menu_item=",
+                "native_duplicate_sheet_menu_item=",
                 "native_cut_menu_item=",
                 "native_copy_menu_item=",
                 "native_paste_special_menu_item=",
@@ -550,6 +566,19 @@ function Test-SourceWiring {
                 "native_check_for_updates_menu_item=",
                 "native_about_menu_item=",
                 "native_legal_notices_menu_item="
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "src\FreeX.App.Services\WorkbookSession.cs"
+            Markers = @(
+                "public WorkbookCellEditResult AddSheet()",
+                "new AddSheetCommand(WorkbookSheetNameGenerator.GenerateUniqueSheetName(Workbook))",
+                "public WorkbookCellEditResult DuplicateActiveSheet()",
+                "new DuplicateSheetCommand(sourceSheetId)",
+                "ApplySuccessfulWorkbookStructureResult(Workbook.Sheets[^1].Id)",
+                "ApplySuccessfulHistoryResult(result, sheetIdsBefore)",
+                "private void ApplySuccessfulWorkbookStructureResult(SheetId preferredSheetId)"
             )
             OrderedPairs = @()
         },
