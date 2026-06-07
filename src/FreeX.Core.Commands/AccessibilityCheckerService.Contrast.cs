@@ -1349,6 +1349,12 @@ public static partial class AccessibilityCheckerService
             case "GAUSS":
                 kind = ConditionalFormulaScalarFunctionKind.Gauss;
                 return true;
+            case "FISHER":
+                kind = ConditionalFormulaScalarFunctionKind.Fisher;
+                return true;
+            case "FISHERINV":
+                kind = ConditionalFormulaScalarFunctionKind.FisherInv;
+                return true;
             case "STANDARDIZE":
                 kind = ConditionalFormulaScalarFunctionKind.Standardize;
                 return true;
@@ -1451,6 +1457,36 @@ public static partial class AccessibilityCheckerService
             case "WEIBULL":
             case "WEIBULL.DIST":
                 kind = ConditionalFormulaScalarFunctionKind.WeibullDist;
+                return true;
+            case "BINOM.DIST":
+            case "BINOMDIST":
+                kind = ConditionalFormulaScalarFunctionKind.BinomDist;
+                return true;
+            case "BINOM.DIST.RANGE":
+                kind = ConditionalFormulaScalarFunctionKind.BinomDistRange;
+                return true;
+            case "BINOM.INV":
+            case "CRITBINOM":
+                kind = ConditionalFormulaScalarFunctionKind.BinomInv;
+                return true;
+            case "HYPERGEOM.DIST":
+                kind = ConditionalFormulaScalarFunctionKind.HypergeomDist;
+                return true;
+            case "HYPGEOMDIST":
+                kind = ConditionalFormulaScalarFunctionKind.HypergeomDistCompat;
+                return true;
+            case "NEGBINOM.DIST":
+                kind = ConditionalFormulaScalarFunctionKind.NegBinomDist;
+                return true;
+            case "NEGBINOMDIST":
+                kind = ConditionalFormulaScalarFunctionKind.NegBinomDistCompat;
+                return true;
+            case "POISSON":
+            case "POISSON.DIST":
+                kind = ConditionalFormulaScalarFunctionKind.PoissonDist;
+                return true;
+            case "SERIESSUM":
+                kind = ConditionalFormulaScalarFunctionKind.SeriesSum;
                 return true;
             case "PMT":
                 kind = ConditionalFormulaScalarFunctionKind.Pmt;
@@ -2065,6 +2101,8 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.NormSInv or
             ConditionalFormulaScalarFunctionKind.Phi or
             ConditionalFormulaScalarFunctionKind.Gauss or
+            ConditionalFormulaScalarFunctionKind.Fisher or
+            ConditionalFormulaScalarFunctionKind.FisherInv or
             ConditionalFormulaScalarFunctionKind.Gamma or
             ConditionalFormulaScalarFunctionKind.GammaLn or
             ConditionalFormulaScalarFunctionKind.Arabic or
@@ -2225,6 +2263,9 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.GammaInv or
             ConditionalFormulaScalarFunctionKind.LogNormDistCompat or
             ConditionalFormulaScalarFunctionKind.LogNormInv or
+            ConditionalFormulaScalarFunctionKind.BinomInv or
+            ConditionalFormulaScalarFunctionKind.NegBinomDistCompat or
+            ConditionalFormulaScalarFunctionKind.PoissonDist or
             ConditionalFormulaScalarFunctionKind.Standardize or
             ConditionalFormulaScalarFunctionKind.Sln or
             ConditionalFormulaScalarFunctionKind.Rri or
@@ -2236,7 +2277,13 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.GammaDist or
             ConditionalFormulaScalarFunctionKind.LogNormDist or
             ConditionalFormulaScalarFunctionKind.WeibullDist or
+            ConditionalFormulaScalarFunctionKind.BinomDist or
+            ConditionalFormulaScalarFunctionKind.HypergeomDistCompat or
+            ConditionalFormulaScalarFunctionKind.NegBinomDist or
+            ConditionalFormulaScalarFunctionKind.SeriesSum or
             ConditionalFormulaScalarFunctionKind.Syd => argumentCount == 4,
+            ConditionalFormulaScalarFunctionKind.HypergeomDist => argumentCount == 5,
+            ConditionalFormulaScalarFunctionKind.BinomDistRange => argumentCount is 3 or 4,
             ConditionalFormulaScalarFunctionKind.BetaDist => argumentCount is >= 4 and <= 6,
             ConditionalFormulaScalarFunctionKind.BetaDistCompat or
             ConditionalFormulaScalarFunctionKind.BetaInv => argumentCount is >= 3 and <= 5,
@@ -3195,6 +3242,8 @@ public static partial class AccessibilityCheckerService
         NormSInv,
         Phi,
         Gauss,
+        Fisher,
+        FisherInv,
         Standardize,
         TDistCompat,
         TDist,
@@ -3222,6 +3271,15 @@ public static partial class AccessibilityCheckerService
         LogNormInv,
         ExponDist,
         WeibullDist,
+        BinomDist,
+        BinomDistRange,
+        BinomInv,
+        HypergeomDist,
+        HypergeomDistCompat,
+        NegBinomDist,
+        NegBinomDistCompat,
+        PoissonDist,
+        SeriesSum,
         Pmt,
         Pv,
         Fv,
@@ -4292,6 +4350,18 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.ExponDist:
                 case ConditionalFormulaScalarFunctionKind.WeibullDist:
                     return TryEvaluateFormulaContinuousDistributionFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Fisher:
+                case ConditionalFormulaScalarFunctionKind.FisherInv:
+                case ConditionalFormulaScalarFunctionKind.BinomDist:
+                case ConditionalFormulaScalarFunctionKind.BinomDistRange:
+                case ConditionalFormulaScalarFunctionKind.BinomInv:
+                case ConditionalFormulaScalarFunctionKind.HypergeomDist:
+                case ConditionalFormulaScalarFunctionKind.HypergeomDistCompat:
+                case ConditionalFormulaScalarFunctionKind.NegBinomDist:
+                case ConditionalFormulaScalarFunctionKind.NegBinomDistCompat:
+                case ConditionalFormulaScalarFunctionKind.PoissonDist:
+                case ConditionalFormulaScalarFunctionKind.SeriesSum:
+                    return TryEvaluateFormulaDiscreteStatisticalFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Pmt:
                 case ConditionalFormulaScalarFunctionKind.Pv:
                 case ConditionalFormulaScalarFunctionKind.Fv:
@@ -10321,6 +10391,458 @@ public static partial class AccessibilityCheckerService
             }
 
             return TryGetFormulaDistributionNumber(value, out number);
+        }
+
+        private bool TryEvaluateFormulaDiscreteStatisticalFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            var arguments = new ScalarValue[function.Arguments.Count];
+            for (var i = 0; i < function.Arguments.Count; i++)
+            {
+                if (function.Arguments[i].Kind == ConditionalFormulaOperandKind.ReferenceRange ||
+                    !TryResolveFormulaOperand(function.Arguments[i], rowOffset, colOffset, out arguments[i]))
+                {
+                    return false;
+                }
+            }
+
+            for (var i = 0; i < arguments.Length; i++)
+            {
+                if (arguments[i] is ErrorValue error)
+                {
+                    value = error;
+                    return true;
+                }
+            }
+
+            if (arguments.Any(static argument => argument is RangeValue))
+                return false;
+
+            switch (function.Kind)
+            {
+                case ConditionalFormulaScalarFunctionKind.Fisher:
+                    if (!TryGetFormulaDistributionNumber(arguments[0], out var fisherX))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaFisherScalar(fisherX);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.FisherInv:
+                    if (!TryGetFormulaDistributionNumber(arguments[0], out var fisherInvY))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaFisherInvScalar(fisherInvY);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.BinomDist:
+                    if (!TryGetFormulaDistributionNumber(arguments[0], out var binomDistSuccesses) ||
+                        !TryGetFormulaDistributionNumber(arguments[1], out var binomDistTrials) ||
+                        !TryGetFormulaDistributionNumber(arguments[2], out var binomDistProbability) ||
+                        !TryGetFormulaDistributionBoolean(arguments[3], out var binomDistCumulative))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaBinomDistScalar(binomDistSuccesses, binomDistTrials, binomDistProbability, binomDistCumulative);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.BinomDistRange:
+                    if (!TryGetFormulaDistributionNumber(arguments[0], out var binomDistRangeTrials) ||
+                        !TryGetFormulaDistributionNumber(arguments[1], out var binomDistRangeProbability) ||
+                        !TryGetFormulaDistributionNumber(arguments[2], out var binomDistRangeLower))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    var binomDistRangeUpper = binomDistRangeLower;
+                    if (arguments.Length == 4 &&
+                        !TryGetFormulaDistributionNumber(arguments[3], out binomDistRangeUpper))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaBinomDistRangeScalar(
+                        binomDistRangeTrials,
+                        binomDistRangeProbability,
+                        binomDistRangeLower,
+                        binomDistRangeUpper);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.BinomInv:
+                    if (!TryGetFormulaDistributionNumber(arguments[0], out var binomInvTrials) ||
+                        !TryGetFormulaDistributionNumber(arguments[1], out var binomInvProbability) ||
+                        !TryGetFormulaDistributionNumber(arguments[2], out var binomInvAlpha))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaBinomInvScalar(binomInvTrials, binomInvProbability, binomInvAlpha);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.HypergeomDist:
+                    if (!TryGetFormulaDistributionNumber(arguments[0], out var hypergeomSampleSuccesses) ||
+                        !TryGetFormulaDistributionNumber(arguments[1], out var hypergeomSampleSize) ||
+                        !TryGetFormulaDistributionNumber(arguments[2], out var hypergeomPopulationSuccesses) ||
+                        !TryGetFormulaDistributionNumber(arguments[3], out var hypergeomPopulationSize) ||
+                        !TryGetFormulaDistributionBoolean(arguments[4], out var hypergeomCumulative))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaHypergeomDistScalar(
+                        hypergeomSampleSuccesses,
+                        hypergeomSampleSize,
+                        hypergeomPopulationSuccesses,
+                        hypergeomPopulationSize,
+                        hypergeomCumulative);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.HypergeomDistCompat:
+                    if (!TryGetFormulaDistributionNumber(arguments[0], out var hypergeomCompatSampleSuccesses) ||
+                        !TryGetFormulaDistributionNumber(arguments[1], out var hypergeomCompatSampleSize) ||
+                        !TryGetFormulaDistributionNumber(arguments[2], out var hypergeomCompatPopulationSuccesses) ||
+                        !TryGetFormulaDistributionNumber(arguments[3], out var hypergeomCompatPopulationSize))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaHypergeomDistScalar(
+                        hypergeomCompatSampleSuccesses,
+                        hypergeomCompatSampleSize,
+                        hypergeomCompatPopulationSuccesses,
+                        hypergeomCompatPopulationSize,
+                        cumulative: false);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.NegBinomDist:
+                    if (!TryGetFormulaDistributionNumber(arguments[0], out var negBinomFailures) ||
+                        !TryGetFormulaDistributionNumber(arguments[1], out var negBinomSuccesses) ||
+                        !TryGetFormulaDistributionNumber(arguments[2], out var negBinomProbability) ||
+                        !TryGetFormulaDistributionBoolean(arguments[3], out var negBinomCumulative))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaNegBinomDistScalar(negBinomFailures, negBinomSuccesses, negBinomProbability, negBinomCumulative);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.NegBinomDistCompat:
+                    if (!TryGetFormulaDistributionNumber(arguments[0], out var negBinomCompatFailures) ||
+                        !TryGetFormulaDistributionNumber(arguments[1], out var negBinomCompatSuccesses) ||
+                        !TryGetFormulaDistributionNumber(arguments[2], out var negBinomCompatProbability))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaNegBinomDistScalar(negBinomCompatFailures, negBinomCompatSuccesses, negBinomCompatProbability, cumulative: false);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.PoissonDist:
+                    if (!TryGetFormulaDistributionNumber(arguments[0], out var poissonX) ||
+                        !TryGetFormulaDistributionNumber(arguments[1], out var poissonMean) ||
+                        !TryGetFormulaDistributionBoolean(arguments[2], out var poissonCumulative))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaPoissonDistScalar(poissonX, poissonMean, poissonCumulative);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.SeriesSum:
+                    if (!TryGetFormulaDistributionNumber(arguments[0], out var seriesSumX) ||
+                        !TryGetFormulaDistributionNumber(arguments[1], out var seriesSumN) ||
+                        !TryGetFormulaDistributionNumber(arguments[2], out _) ||
+                        !TryGetFormulaDistributionNumber(arguments[3], out var seriesSumCoefficient))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaSeriesSumScalar(seriesSumX, seriesSumN, seriesSumCoefficient);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static ScalarValue FormulaFisherScalar(double x)
+        {
+            if (x <= -1d || x >= 1d)
+                return ErrorValue.Num;
+
+            return FormulaDistributionNumberResult(0.5d * Math.Log((1d + x) / (1d - x)));
+        }
+
+        private static ScalarValue FormulaFisherInvScalar(double y) =>
+            FormulaDistributionNumberResult(Math.Tanh(y));
+
+        private static ScalarValue FormulaBinomDistScalar(
+            double successesValue,
+            double trialsValue,
+            double probability,
+            bool cumulative)
+        {
+            if (!TryGetFormulaDiscreteInteger(successesValue, out var successes) ||
+                !TryGetFormulaDiscreteInteger(trialsValue, out var trials))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (successes < 0 || trials < 0 || successes > trials || probability < 0d || probability > 1d)
+                return ErrorValue.Num;
+
+            return FormulaDiscreteProbabilityResult(cumulative
+                ? FormulaBinomCdf(successes, trials, probability)
+                : FormulaBinomPmf(successes, trials, probability));
+        }
+
+        private static ScalarValue FormulaBinomDistRangeScalar(
+            double trialsValue,
+            double probability,
+            double lowerValue,
+            double upperValue)
+        {
+            if (!TryGetFormulaDiscreteInteger(trialsValue, out var trials) ||
+                !TryGetFormulaDiscreteInteger(lowerValue, out var lower) ||
+                !TryGetFormulaDiscreteInteger(upperValue, out var upper))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (trials < 0 || probability < 0d || probability > 1d || lower < 0 || upper < lower || upper > trials)
+                return ErrorValue.Num;
+
+            var result = FormulaBinomCdf(upper, trials, probability) -
+                FormulaBinomCdf(lower - 1, trials, probability);
+            return FormulaDiscreteProbabilityResult(result);
+        }
+
+        private static ScalarValue FormulaBinomInvScalar(
+            double trialsValue,
+            double probability,
+            double alpha)
+        {
+            if (!TryGetFormulaDiscreteInteger(trialsValue, out var trials))
+                return ErrorValue.Num;
+
+            if (trials < 0 || probability < 0d || probability > 1d || alpha < 0d || alpha > 1d)
+                return ErrorValue.Num;
+
+            var low = 0;
+            var high = trials;
+            while (low < high)
+            {
+                var mid = low + (high - low) / 2;
+                if (FormulaBinomCdf(mid, trials, probability) >= alpha)
+                    high = mid;
+                else
+                    low = mid + 1;
+            }
+
+            return new NumberValue(low);
+        }
+
+        private static ScalarValue FormulaHypergeomDistScalar(
+            double sampleSuccessesValue,
+            double sampleSizeValue,
+            double populationSuccessesValue,
+            double populationSizeValue,
+            bool cumulative)
+        {
+            if (!TryGetFormulaDiscreteInteger(sampleSuccessesValue, out var sampleSuccesses) ||
+                !TryGetFormulaDiscreteInteger(sampleSizeValue, out var sampleSize) ||
+                !TryGetFormulaDiscreteInteger(populationSuccessesValue, out var populationSuccesses) ||
+                !TryGetFormulaDiscreteInteger(populationSizeValue, out var populationSize))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (sampleSuccesses < 0 ||
+                sampleSize < 0 ||
+                populationSuccesses < 0 ||
+                populationSize <= 0 ||
+                sampleSuccesses > sampleSize ||
+                sampleSuccesses > populationSuccesses ||
+                sampleSize > populationSize ||
+                populationSuccesses > populationSize)
+            {
+                return ErrorValue.Num;
+            }
+
+            if (!cumulative)
+            {
+                return FormulaDiscreteProbabilityResult(FormulaHypergeomPmf(
+                    sampleSuccesses,
+                    sampleSize,
+                    populationSuccesses,
+                    populationSize));
+            }
+
+            var lower = Math.Max(0, sampleSize - (populationSize - populationSuccesses));
+            var upper = Math.Min(Math.Min(sampleSize, populationSuccesses), sampleSuccesses);
+            var result = 0d;
+            for (var k = lower; k <= upper; k++)
+                result += FormulaHypergeomPmf(k, sampleSize, populationSuccesses, populationSize);
+
+            return FormulaDiscreteProbabilityResult(result);
+        }
+
+        private static ScalarValue FormulaNegBinomDistScalar(
+            double failuresValue,
+            double successesValue,
+            double probability,
+            bool cumulative)
+        {
+            if (!TryGetFormulaDiscreteInteger(failuresValue, out var failures) ||
+                !TryGetFormulaDiscreteInteger(successesValue, out var successes))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (failures < 0 || successes < 1 || probability <= 0d || probability > 1d ||
+                failures > int.MaxValue - successes)
+            {
+                return ErrorValue.Num;
+            }
+
+            return FormulaDiscreteProbabilityResult(cumulative
+                ? FormulaBetaInc(successes, failures + 1d, probability)
+                : FormulaNegBinomPmf(failures, successes, probability));
+        }
+
+        private static ScalarValue FormulaPoissonDistScalar(
+            double xValue,
+            double mean,
+            bool cumulative)
+        {
+            if (!TryGetFormulaDiscreteInteger(xValue, out var x))
+                return ErrorValue.Num;
+
+            if (x < 0 || mean < 0d)
+                return ErrorValue.Num;
+
+            return FormulaDiscreteProbabilityResult(cumulative
+                ? 1.0d - FormulaGammaInc(x + 1d, mean)
+                : FormulaPoissonPmf(x, mean));
+        }
+
+        private static ScalarValue FormulaSeriesSumScalar(
+            double x,
+            double n,
+            double coefficient) =>
+            FormulaDistributionNumberResult(coefficient * Math.Pow(x, n));
+
+        private static bool TryGetFormulaDiscreteInteger(double value, out int integer)
+        {
+            integer = 0;
+            if (!double.IsFinite(value))
+                return false;
+
+            var truncated = Math.Truncate(value);
+            if (!double.IsFinite(truncated) ||
+                truncated < int.MinValue ||
+                truncated > int.MaxValue)
+            {
+                return false;
+            }
+
+            integer = (int)truncated;
+            return true;
+        }
+
+        private static double FormulaLogBinom(int n, int k)
+        {
+            if (k < 0 || k > n)
+                return double.NegativeInfinity;
+
+            return FormulaLogGamma(n + 1d) - FormulaLogGamma(k + 1d) - FormulaLogGamma(n - k + 1d);
+        }
+
+        private static double FormulaBinomPmf(int successes, int trials, double probability)
+        {
+            if (successes < 0 || successes > trials)
+                return 0d;
+
+            if (probability == 0d)
+                return successes == 0 ? 1d : 0d;
+
+            if (probability == 1d)
+                return successes == trials ? 1d : 0d;
+
+            return Math.Exp(
+                FormulaLogBinom(trials, successes) +
+                successes * Math.Log(probability) +
+                (trials - successes) * Math.Log(1d - probability));
+        }
+
+        private static double FormulaBinomCdf(int successes, int trials, double probability)
+        {
+            if (successes < 0)
+                return 0d;
+
+            if (successes >= trials || probability == 0d)
+                return 1d;
+
+            if (probability == 1d)
+                return successes >= trials ? 1d : 0d;
+
+            return FormulaBetaInc(trials - successes, successes + 1d, 1.0d - probability);
+        }
+
+        private static double FormulaHypergeomPmf(
+            int sampleSuccesses,
+            int sampleSize,
+            int populationSuccesses,
+            int populationSize)
+        {
+            return Math.Exp(
+                FormulaLogBinom(populationSuccesses, sampleSuccesses) +
+                FormulaLogBinom(populationSize - populationSuccesses, sampleSize - sampleSuccesses) -
+                FormulaLogBinom(populationSize, sampleSize));
+        }
+
+        private static double FormulaNegBinomPmf(
+            int failures,
+            int successes,
+            double probability)
+        {
+            if (probability == 1d)
+                return failures == 0 ? 1d : 0d;
+
+            return Math.Exp(
+                FormulaLogBinom(failures + successes - 1, failures) +
+                successes * Math.Log(probability) +
+                failures * Math.Log(1d - probability));
+        }
+
+        private static double FormulaPoissonPmf(int x, double mean)
+        {
+            if (mean == 0d)
+                return x == 0 ? 1d : 0d;
+
+            return Math.Exp(x * Math.Log(mean) - mean - FormulaLogGamma(x + 1d));
+        }
+
+        private static ScalarValue FormulaDiscreteProbabilityResult(double result)
+        {
+            if (!double.IsFinite(result))
+                return ErrorValue.Num;
+
+            if (result < 0d && result > -1E-12d)
+                result = 0d;
+            else if (result > 1d && result < 1d + 1E-12d)
+                result = 1d;
+
+            return new NumberValue(result);
         }
 
         private bool TryEvaluateFormulaFinancialCashFlowFunction(
