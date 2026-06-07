@@ -2133,6 +2133,15 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void WorksheetSheetProperties_SanitizesInvalidNativeMetadataForSchemaValidity()
+    {
+        using var saved = Save(CreateInvalidWorksheetSheetPropertiesSourceWorkbook());
+
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetSheetPropertiesSanitized(saved);
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithPageLayout_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreatePageLayoutSourceWorkbook());
@@ -2202,6 +2211,51 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         AssertPageLayoutSanitized(saved);
+    }
+
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidWorksheetSheetPropertiesForSchemaValidity()
+    {
+        using var source = Save(CreatePageLayoutSourceWorkbook());
+        SetWorksheetSheetPropertiesInvalidNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetSheetPropertiesSanitized(saved);
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorksheetSheetPropertiesForSchemaValidity()
+    {
+        using var source = Save(CreatePageLayoutSourceWorkbook());
+        SetWorksheetSheetPropertiesInvalidNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetSheetPropertiesSanitized(saved);
     }
 
 
@@ -4432,6 +4486,24 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         return workbook;
     }
 
+    private static Workbook CreateInvalidWorksheetSheetPropertiesSourceWorkbook()
+    {
+        var workbook = CreatePageLayoutSourceWorkbook();
+        workbook.Name = "WorksheetSheetPropertiesInvalidSchema";
+        var sheet = workbook.GetSheetAt(0);
+        sheet.TabColor = new CellColor(0, 176, 80);
+        sheet.SheetPropertiesMetadata = new NativeXmlPreserveBag();
+        sheet.SheetPropertiesMetadata.Set(
+            "sheetPr",
+            """
+            <e filterMode="true" syncRef=" a1:b2 " syncHorizontal="maybe" customAttr="sheet-pr-native">
+              <nativeSheetPropertiesChild />
+              <fx:sheetPrNativeChild xmlns:fx="urn:freex:test" id="authored" />
+            </e>
+            """);
+        return workbook;
+    }
+
     private static void SetPageLayoutInvalidAttributes(MemoryStream stream)
     {
         stream.Position = 0;
@@ -4494,6 +4566,41 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
     }
 
+    private static void SetWorksheetSheetPropertiesInvalidNativeMetadata(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexNs = "urn:freex:test";
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        var root = worksheetXml.Root!;
+
+        var sheetProperties = root.Element(worksheetNs + "sheetPr");
+        if (sheetProperties is null)
+        {
+            sheetProperties = new XElement(worksheetNs + "sheetPr");
+            root.AddFirst(sheetProperties);
+        }
+
+        sheetProperties.SetAttributeValue("filterMode", "true");
+        sheetProperties.SetAttributeValue("syncRef", " a1:b2 ");
+        sheetProperties.SetAttributeValue("syncHorizontal", "maybe");
+        sheetProperties.SetAttributeValue("customAttr", "sheet-pr-native");
+        sheetProperties.Add(
+            new XElement(worksheetNs + "nativeSheetPropertiesChild"),
+            new XElement(freexNs + "sheetPrNativeChild", new XAttribute("id", "source")));
+
+        sheetProperties.Element(worksheetNs + "tabColor")?.Remove();
+        sheetProperties.Add(new XElement(
+            worksheetNs + "tabColor",
+            new XAttribute("rgb", "00ff0080"),
+            new XAttribute("tint", "2"),
+            new XAttribute("customColorAttr", "drop"),
+            new XElement(worksheetNs + "nativeTabColorChild")));
+
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
     private static void AssertPageLayoutSanitized(MemoryStream stream)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -4529,6 +4636,35 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         outlineProperties.Attribute("summaryBelow")?.Value.Should().NotBe("maybe");
         outlineProperties.Attribute("customAttr").Should().BeNull();
         outlineProperties.HasElements.Should().BeFalse();
+    }
+
+    private static void AssertWorksheetSheetPropertiesSanitized(MemoryStream stream)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexNs = "urn:freex:test";
+        var sheetProperties = ReadWorksheetChildElement(stream, "sheetPr");
+
+        sheetProperties.Attribute("filterMode")!.Value.Should().Be("1");
+        sheetProperties.Attribute("syncRef")!.Value.Should().Be("A1:B2");
+        sheetProperties.Attribute("syncHorizontal").Should().BeNull();
+        sheetProperties.Attribute("customAttr").Should().BeNull();
+        sheetProperties.Element(worksheetNs + "nativeSheetPropertiesChild").Should().BeNull();
+        sheetProperties.Elements(freexNs + "sheetPrNativeChild").Should().BeEmpty();
+        sheetProperties.Elements()
+            .Should()
+            .OnlyContain(element => element.Name == worksheetNs + "tabColor" ||
+                element.Name == worksheetNs + "outlinePr" ||
+                element.Name == worksheetNs + "pageSetUpPr");
+
+        var tabColor = sheetProperties.Element(worksheetNs + "tabColor");
+        tabColor.Should().NotBeNull();
+        tabColor!.Attribute("customColorAttr").Should().BeNull();
+        tabColor.Attribute("tint")?.Value.Should().NotBe("2");
+        tabColor.HasElements.Should().BeFalse();
+
+        var childNames = sheetProperties.Elements().Select(element => element.Name.LocalName).ToList();
+        if (childNames.Contains("tabColor"))
+            childNames.IndexOf("tabColor").Should().BeLessThan(childNames.IndexOf("pageSetUpPr"));
     }
 
     private static Workbook CreateManualPageBreakSourceWorkbook()

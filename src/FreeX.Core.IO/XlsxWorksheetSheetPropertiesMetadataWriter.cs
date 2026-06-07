@@ -35,7 +35,7 @@ internal static class XlsxWorksheetSheetPropertiesMetadataWriter
                 root.AddFirst(sheetProperties);
             }
 
-            var (spAttrs, spChildren) = XmlNativeBagSerializer.Deserialize(metadata.Get("sheetPr"));
+            var (spAttrs, _) = XmlNativeBagSerializer.Deserialize(metadata.Get("sheetPr"));
             foreach (var attribute in spAttrs)
             {
                 if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledSheetPropertiesAttribute(attribute.Key))
@@ -44,17 +44,7 @@ internal static class XlsxWorksheetSheetPropertiesMetadataWriter
                 XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(sheetProperties, attribute.Key, attribute.Value);
             }
 
-            if (spChildren.Count > 0)
-            {
-                sheetProperties.Elements()
-                    .Where(element => !IsModeledSheetPropertiesElement(element.Name.LocalName))
-                    .Remove();
-
-                foreach (var childXml in spChildren)
-                {
-                    XlsxWorksheetNativeMetadataHelpers.TryAddNativeChildElement(sheetProperties, childXml);
-                }
-            }
+            XlsxWorksheetSheetPropertiesNormalizer.NormalizeElement(sheetProperties);
 
             session.MarkDirty(worksheetEdit);
         }
@@ -62,7 +52,4 @@ internal static class XlsxWorksheetSheetPropertiesMetadataWriter
 
     private static bool IsModeledSheetPropertiesAttribute(string name) =>
         name is "codeName";
-
-    private static bool IsModeledSheetPropertiesElement(string name) =>
-        name is "tabColor" or "outlinePr" or "pageSetUpPr";
 }

@@ -16413,7 +16413,7 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedWorksheetSheetProperties()
+    public void XlsxAdapter_LoadedWorkbookSave_DropsInvalidWorksheetSheetPropertiesChildren()
     {
         var workbook = new Workbook("SheetPropertiesRetentionTest");
         var sheet = workbook.AddSheet("Data");
@@ -16432,7 +16432,7 @@ public partial class FileAdapterSmokeTests
         loadedSheet.AutoPageBreaks.Should().BeFalse();
         loadedSheet.SheetPropertiesMetadata.Should().NotBeNull();
         BagAttr(loadedSheet.SheetPropertiesMetadata, "sheetPr", "filterMode").Should().Be("1");
-        BagChildren(loadedSheet.SheetPropertiesMetadata, "sheetPr").Should().HaveCount(2);
+        BagChildren(loadedSheet.SheetPropertiesMetadata, "sheetPr").Should().BeEmpty();
         AddBagAttr(loadedSheet.SheetPropertiesMetadata!, "sheetPr", "invalid sheetPr attr", "skip");
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
@@ -16454,9 +16454,8 @@ public partial class FileAdapterSmokeTests
         sheetPr.Element(worksheetNs + "pageSetUpPr")!.Attribute("autoPageBreaks")!.Value.Should().Be("0");
         sheetPr.Element(worksheetNs + "pageSetUpPr")!.Attribute("fitToPage")!.Value.Should().Be("1");
         sheetPr.Elements(XName.Get("sheetPrNativeChild", "urn:freex:test"))
-            .Select(element => element.Attribute("id")?.Value)
             .Should()
-            .BeEquivalentTo("first", "second");
+            .BeEmpty();
     }
 
     [Fact]
@@ -16485,11 +16484,8 @@ public partial class FileAdapterSmokeTests
         sheetPr!.Attribute("filterMode")!.Value.Should().Be("1");
         sheetPr.Attribute("codeName").Should().BeNull("codeName is modeled separately");
         sheetPr.Elements(XName.Get("sheetPrNativeChild", "urn:freex:test"))
-            .Single()
-            .Attribute("id")!
-            .Value
             .Should()
-            .Be("authored");
+            .BeEmpty();
     }
 
     [Fact]

@@ -125,8 +125,7 @@ internal static class XlsxWorksheetPageLayoutNormalizer
         if (worksheetRoot.Element(WorksheetNs + "headerFooter") is { } headerFooter)
             changed |= NormalizeHeaderFooter(headerFooter);
 
-        if (worksheetRoot.Element(WorksheetNs + "sheetPr") is { } sheetProperties)
-            changed |= NormalizeSheetPropertiesPageLayout(sheetProperties);
+        changed |= XlsxWorksheetSheetPropertiesNormalizer.NormalizeWorksheetRoot(worksheetRoot);
 
         return changed;
     }
