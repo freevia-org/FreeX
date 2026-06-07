@@ -6,10 +6,14 @@ using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia;
 
-internal sealed record MacOsLaunchSmokeOptions(string ReportPath, bool VerifyImageClipboardPaste)
+internal sealed record MacOsLaunchSmokeOptions(
+    string ReportPath,
+    bool VerifyImageClipboardPaste,
+    bool VerifyLiveCommandKeys)
 {
     public const string Argument = "--macos-launch-smoke";
     public const string VerifyImageClipboardPasteArgument = "--macos-launch-smoke-verify-image-clipboard";
+    public const string VerifyLiveCommandKeysArgument = "--macos-launch-smoke-verify-live-command-keys";
 
     public static bool TryParse(
         IReadOnlyList<string> args,
@@ -24,12 +28,19 @@ internal sealed record MacOsLaunchSmokeOptions(string ReportPath, bool VerifyIma
         var filteredArguments = new List<string>();
         string? reportPath = null;
         var verifyImageClipboardPaste = false;
+        var verifyLiveCommandKeys = false;
         for (var index = 0; index < args.Count; index++)
         {
             var argument = args[index];
             if (string.Equals(argument, VerifyImageClipboardPasteArgument, StringComparison.OrdinalIgnoreCase))
             {
                 verifyImageClipboardPaste = true;
+                continue;
+            }
+
+            if (string.Equals(argument, VerifyLiveCommandKeysArgument, StringComparison.OrdinalIgnoreCase))
+            {
+                verifyLiveCommandKeys = true;
                 continue;
             }
 
@@ -63,7 +74,7 @@ internal sealed record MacOsLaunchSmokeOptions(string ReportPath, bool VerifyIma
         }
 
         if (reportPath is not null)
-            options = new MacOsLaunchSmokeOptions(reportPath, verifyImageClipboardPaste);
+            options = new MacOsLaunchSmokeOptions(reportPath, verifyImageClipboardPaste, verifyLiveCommandKeys);
 
         startupArguments = filteredArguments.ToArray();
         return true;
@@ -205,6 +216,70 @@ internal sealed record MacOsLaunchSmokeCommandKeySnapshot(
         HasBoldMenuGesture &&
         HasItalicMenuGesture &&
         HasUnderlineMenuGesture;
+}
+
+internal sealed record MacOsLaunchSmokeLiveCommandKeySnapshot(
+    bool IsReady,
+    bool HasBoldCommandKey,
+    bool HasBoldStateChange,
+    bool InitialBoldState,
+    bool CurrentBoldState,
+    bool HasItalicCommandKey,
+    bool HasItalicStateChange,
+    bool InitialItalicState,
+    bool CurrentItalicState,
+    bool HasUnderlineCommandKey,
+    bool HasUnderlineStateChange,
+    bool InitialUnderlineState,
+    bool CurrentUnderlineState)
+{
+    public static MacOsLaunchSmokeLiveCommandKeySnapshot Empty { get; } = new(
+        IsReady: false,
+        HasBoldCommandKey: false,
+        HasBoldStateChange: false,
+        InitialBoldState: false,
+        CurrentBoldState: false,
+        HasItalicCommandKey: false,
+        HasItalicStateChange: false,
+        InitialItalicState: false,
+        CurrentItalicState: false,
+        HasUnderlineCommandKey: false,
+        HasUnderlineStateChange: false,
+        InitialUnderlineState: false,
+        CurrentUnderlineState: false);
+
+    public static MacOsLaunchSmokeLiveCommandKeySnapshot Ready(
+        bool boldState,
+        bool italicState,
+        bool underlineState) =>
+        new(
+            IsReady: true,
+            HasBoldCommandKey: false,
+            HasBoldStateChange: false,
+            InitialBoldState: boldState,
+            CurrentBoldState: boldState,
+            HasItalicCommandKey: false,
+            HasItalicStateChange: false,
+            InitialItalicState: italicState,
+            CurrentItalicState: italicState,
+            HasUnderlineCommandKey: false,
+            HasUnderlineStateChange: false,
+            InitialUnderlineState: underlineState,
+            CurrentUnderlineState: underlineState);
+
+    public bool HasAnyCommandKey =>
+        HasBoldCommandKey ||
+        HasItalicCommandKey ||
+        HasUnderlineCommandKey;
+
+    public bool IsPassed =>
+        IsReady &&
+        HasBoldCommandKey &&
+        HasBoldStateChange &&
+        HasItalicCommandKey &&
+        HasItalicStateChange &&
+        HasUnderlineCommandKey &&
+        HasUnderlineStateChange;
 }
 
 internal sealed record MacOsLaunchSmokeSnapshot(
@@ -561,6 +636,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
 internal static class MacOsLaunchSmokeCoordinator
 {
     private const int MaxWaitMilliseconds = 15000;
+    private const int LiveCommandKeyWaitMilliseconds = 30000;
     private const int PollDelayMilliseconds = 250;
 
     public static void Start(MainWindow mainWindow, MacOsLaunchSmokeOptions options)
@@ -573,16 +649,23 @@ internal static class MacOsLaunchSmokeCoordinator
 
     private static async Task RunAsync(MainWindow mainWindow, MacOsLaunchSmokeOptions options)
     {
-        var deadline = DateTimeOffset.UtcNow.AddMilliseconds(MaxWaitMilliseconds);
+        var deadline = DateTimeOffset.UtcNow.AddMilliseconds(
+            MaxWaitMilliseconds + (options.VerifyLiveCommandKeys ? LiveCommandKeyWaitMilliseconds : 0));
         var snapshot = mainWindow.CreateLaunchSmokeSnapshot();
         var commandKeyEvidence = MacOsLaunchSmokeCommandKeySnapshot.Empty;
+        var liveCommandKeyEvidence = MacOsLaunchSmokeLiveCommandKeySnapshot.Empty;
         var initialExternalImageClipboardPictureCount = snapshot.ExternalImageClipboardPictureCount;
         var attemptedCommandKeyEvidence = false;
         var attemptedImageClipboardPaste = false;
         var attemptedDialogEvidence = false;
         try
         {
-            while (!IsPassedWithCommandKeyEvidence(snapshot, options, initialExternalImageClipboardPictureCount, commandKeyEvidence) &&
+            while (!IsPassedWithCommandKeyEvidence(
+                    snapshot,
+                    options,
+                    initialExternalImageClipboardPictureCount,
+                    commandKeyEvidence,
+                    liveCommandKeyEvidence) &&
                 DateTimeOffset.UtcNow < deadline)
             {
                 if (snapshot.HasShellEvidence &&
@@ -615,19 +698,49 @@ internal static class MacOsLaunchSmokeCoordinator
                     continue;
                 }
 
+                if (IsReadyForLiveCommandKeys(
+                        snapshot,
+                        options,
+                        initialExternalImageClipboardPictureCount,
+                        commandKeyEvidence,
+                        liveCommandKeyEvidence))
+                {
+                    liveCommandKeyEvidence = mainWindow.BeginLaunchSmokeLiveCommandKeyProbe();
+                    WriteReport(
+                        options.ReportPath,
+                        snapshot,
+                        commandKeyEvidence,
+                        liveCommandKeyEvidence,
+                        options,
+                        initialExternalImageClipboardPictureCount,
+                        attemptedCommandKeyEvidence,
+                        attemptedDialogEvidence,
+                        finalReport: false);
+                    continue;
+                }
+
                 await Task.Delay(PollDelayMilliseconds);
                 snapshot = mainWindow.CreateLaunchSmokeSnapshot();
+                liveCommandKeyEvidence = mainWindow.CreateLaunchSmokeLiveCommandKeySnapshot();
             }
 
+            liveCommandKeyEvidence = mainWindow.CreateLaunchSmokeLiveCommandKeySnapshot();
             WriteReport(
                 options.ReportPath,
                 snapshot,
                 commandKeyEvidence,
+                liveCommandKeyEvidence,
                 options,
                 initialExternalImageClipboardPictureCount,
                 attemptedCommandKeyEvidence,
-                attemptedDialogEvidence);
-            Shutdown(IsPassedWithCommandKeyEvidence(snapshot, options, initialExternalImageClipboardPictureCount, commandKeyEvidence) ? 0 : 1);
+                attemptedDialogEvidence,
+                finalReport: true);
+            Shutdown(IsPassedWithCommandKeyEvidence(
+                snapshot,
+                options,
+                initialExternalImageClipboardPictureCount,
+                commandKeyEvidence,
+                liveCommandKeyEvidence) ? 0 : 1);
         }
         catch (Exception ex)
         {
@@ -635,6 +748,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 options.ReportPath,
                 snapshot,
                 commandKeyEvidence,
+                liveCommandKeyEvidence,
                 options,
                 initialExternalImageClipboardPictureCount,
                 attemptedCommandKeyEvidence,
@@ -657,7 +771,20 @@ internal static class MacOsLaunchSmokeCoordinator
         MacOsLaunchSmokeSnapshot snapshot,
         MacOsLaunchSmokeOptions options,
         int initialExternalImageClipboardPictureCount,
-        MacOsLaunchSmokeCommandKeySnapshot commandKeyEvidence) =>
+        MacOsLaunchSmokeCommandKeySnapshot commandKeyEvidence,
+        MacOsLaunchSmokeLiveCommandKeySnapshot liveCommandKeyEvidence) =>
+        IsPassed(snapshot, options, initialExternalImageClipboardPictureCount) &&
+        commandKeyEvidence.IsPassed &&
+        (!options.VerifyLiveCommandKeys || liveCommandKeyEvidence.IsPassed);
+
+    private static bool IsReadyForLiveCommandKeys(
+        MacOsLaunchSmokeSnapshot snapshot,
+        MacOsLaunchSmokeOptions options,
+        int initialExternalImageClipboardPictureCount,
+        MacOsLaunchSmokeCommandKeySnapshot commandKeyEvidence,
+        MacOsLaunchSmokeLiveCommandKeySnapshot liveCommandKeyEvidence) =>
+        options.VerifyLiveCommandKeys &&
+        !liveCommandKeyEvidence.IsReady &&
         IsPassed(snapshot, options, initialExternalImageClipboardPictureCount) &&
         commandKeyEvidence.IsPassed;
 
@@ -694,10 +821,12 @@ internal static class MacOsLaunchSmokeCoordinator
         string reportPath,
         MacOsLaunchSmokeSnapshot snapshot,
         MacOsLaunchSmokeCommandKeySnapshot commandKeyEvidence,
+        MacOsLaunchSmokeLiveCommandKeySnapshot liveCommandKeyEvidence,
         MacOsLaunchSmokeOptions options,
         int initialExternalImageClipboardPictureCount,
         bool attemptedCommandKeyEvidence,
-        bool attemptedDialogEvidence)
+        bool attemptedDialogEvidence,
+        bool finalReport)
     {
         var directory = Path.GetDirectoryName(reportPath);
         if (!string.IsNullOrWhiteSpace(directory))
@@ -707,11 +836,12 @@ internal static class MacOsLaunchSmokeCoordinator
             snapshot,
             initialExternalImageClipboardPictureCount);
         var dialogSmokeStatus = GetDialogSmokeStatus(snapshot, attemptedDialogEvidence);
+        var liveCommandKeySmokeStatus = GetLiveCommandKeySmokeStatus(options, liveCommandKeyEvidence, finalReport);
 
         File.WriteAllLines(
             reportPath,
             [
-                $"macos_launch_smoke={(IsPassedWithCommandKeyEvidence(snapshot, options, initialExternalImageClipboardPictureCount, commandKeyEvidence) ? "passed" : "failed")}",
+                $"macos_launch_smoke={(IsPassedWithCommandKeyEvidence(snapshot, options, initialExternalImageClipboardPictureCount, commandKeyEvidence, liveCommandKeyEvidence) ? "passed" : "failed")}",
                 $"window_shown={FormatBool(snapshot.WindowShown)}",
                 $"window_title={snapshot.WindowTitle}",
                 $"display_name={snapshot.DisplayName}",
@@ -732,6 +862,16 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"cmd_bold_menu_gesture={FormatBool(commandKeyEvidence.HasBoldMenuGesture)}",
                 $"cmd_italic_menu_gesture={FormatBool(commandKeyEvidence.HasItalicMenuGesture)}",
                 $"cmd_underline_menu_gesture={FormatBool(commandKeyEvidence.HasUnderlineMenuGesture)}",
+                $"live_command_key_smoke_required={FormatBool(options.VerifyLiveCommandKeys)}",
+                $"live_command_key_smoke={liveCommandKeySmokeStatus}",
+                $"live_command_key_smoke_attempted={FormatBool(liveCommandKeyEvidence.IsReady)}",
+                $"live_command_key_smoke_ready={FormatBool(liveCommandKeyEvidence.IsReady)}",
+                $"live_cmd_bold_received={FormatBool(liveCommandKeyEvidence.HasBoldCommandKey)}",
+                $"live_cmd_bold_state_changed={FormatBool(liveCommandKeyEvidence.HasBoldStateChange)}",
+                $"live_cmd_italic_received={FormatBool(liveCommandKeyEvidence.HasItalicCommandKey)}",
+                $"live_cmd_italic_state_changed={FormatBool(liveCommandKeyEvidence.HasItalicStateChange)}",
+                $"live_cmd_underline_received={FormatBool(liveCommandKeyEvidence.HasUnderlineCommandKey)}",
+                $"live_cmd_underline_state_changed={FormatBool(liveCommandKeyEvidence.HasUnderlineStateChange)}",
                 $"external_image_clipboard_paste_required={FormatBool(options.VerifyImageClipboardPaste)}",
                 $"external_image_clipboard_paste={FormatBool(imageClipboardPasteVerified)}",
                 $"external_image_clipboard_picture_count={snapshot.ExternalImageClipboardPictureCount}",
@@ -942,6 +1082,7 @@ internal static class MacOsLaunchSmokeCoordinator
         string reportPath,
         MacOsLaunchSmokeSnapshot snapshot,
         MacOsLaunchSmokeCommandKeySnapshot commandKeyEvidence,
+        MacOsLaunchSmokeLiveCommandKeySnapshot liveCommandKeyEvidence,
         MacOsLaunchSmokeOptions options,
         int initialExternalImageClipboardPictureCount,
         bool attemptedCommandKeyEvidence,
@@ -952,11 +1093,36 @@ internal static class MacOsLaunchSmokeCoordinator
             reportPath,
             snapshot,
             commandKeyEvidence,
+            liveCommandKeyEvidence,
             options,
             initialExternalImageClipboardPictureCount,
             attemptedCommandKeyEvidence,
-            attemptedDialogEvidence);
+            attemptedDialogEvidence,
+            finalReport: true);
         File.AppendAllLines(reportPath, [$"error={exception.GetType().Name}: {exception.Message}"]);
+    }
+
+    private static string GetLiveCommandKeySmokeStatus(
+        MacOsLaunchSmokeOptions options,
+        MacOsLaunchSmokeLiveCommandKeySnapshot liveCommandKeyEvidence,
+        bool finalReport)
+    {
+        if (!options.VerifyLiveCommandKeys)
+            return "not_required";
+
+        if (liveCommandKeyEvidence.IsPassed)
+            return "passed";
+
+        if (!liveCommandKeyEvidence.IsReady)
+            return "not_ready";
+
+        if (!finalReport)
+            return "waiting_for_system_events";
+
+        if (!liveCommandKeyEvidence.HasAnyCommandKey)
+            return "blocked_or_not_received";
+
+        return "failed_missing_state_change";
     }
 
     private static string GetDialogSmokeStatus(

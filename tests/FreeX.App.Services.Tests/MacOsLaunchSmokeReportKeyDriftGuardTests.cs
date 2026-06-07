@@ -18,11 +18,11 @@ public sealed class MacOsLaunchSmokeReportKeyDriftGuardTests
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private static readonly Regex CommandKeySourceReportKeyPattern = new(
-        "\\$\"(?<key>(?:command_key|cmd)_[a-z0-9_]+)=",
+        "\\$\"(?<key>(?:command_key|cmd|live_command_key|live_cmd)_[a-z0-9_]+)=",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private static readonly Regex CommandKeyWorkflowGrepReportKeyPattern = new(
-        "grep -q \"(?<key>(?:command_key|cmd)_[a-z0-9_]+)=",
+        "grep -q \"(?<key>(?:command_key|cmd|live_command_key|live_cmd)_[a-z0-9_]+)=",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private static readonly string[] ExpectedCommandKeyReportKeys =
@@ -39,7 +39,17 @@ public sealed class MacOsLaunchSmokeReportKeyDriftGuardTests
         "cmd_select_all_menu_gesture",
         "cmd_underline_menu_gesture",
         "command_key_smoke",
-        "command_key_smoke_attempted"
+        "command_key_smoke_attempted",
+        "live_cmd_bold_received",
+        "live_cmd_bold_state_changed",
+        "live_cmd_italic_received",
+        "live_cmd_italic_state_changed",
+        "live_cmd_underline_received",
+        "live_cmd_underline_state_changed",
+        "live_command_key_smoke",
+        "live_command_key_smoke_attempted",
+        "live_command_key_smoke_ready",
+        "live_command_key_smoke_required"
     ];
 
     [Fact]
@@ -85,8 +95,11 @@ public sealed class MacOsLaunchSmokeReportKeyDriftGuardTests
             planning.Should().Contain($"{key}=");
 
         smokeSource.Should().Contain("internal sealed record MacOsLaunchSmokeCommandKeySnapshot(");
+        smokeSource.Should().Contain("internal sealed record MacOsLaunchSmokeLiveCommandKeySnapshot(");
         smokeSource.Should().Contain("commandKeyEvidence = CaptureCommandKeyEvidence(mainWindow);");
+        smokeSource.Should().Contain("liveCommandKeyEvidence = mainWindow.BeginLaunchSmokeLiveCommandKeyProbe();");
         smokeSource.Should().Contain("commandKeyEvidence.IsPassed");
+        smokeSource.Should().Contain("liveCommandKeyEvidence.IsPassed");
         smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_newWorkbookMenuItem\", Key.N, KeyModifiers.Meta)");
         smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_openMenuItem\", Key.O, KeyModifiers.Meta)");
         smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_saveMenuItem\", Key.S, KeyModifiers.Meta)");
