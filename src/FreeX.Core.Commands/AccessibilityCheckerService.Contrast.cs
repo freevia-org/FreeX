@@ -577,8 +577,8 @@ public static partial class AccessibilityCheckerService
         {
             if (function.Arguments.Count != 3 ||
                 !TryCreateFormulaExpression(function.Arguments[0], out var condition) ||
-                !TryCreateFormulaExpression(function.Arguments[1], out var whenTrue) ||
-                !TryCreateFormulaExpression(function.Arguments[2], out var whenFalse))
+                !TryCreateFormulaSelectorExpression(function.Arguments[1], out var whenTrue) ||
+                !TryCreateFormulaSelectorExpression(function.Arguments[2], out var whenFalse))
             {
                 return false;
             }
@@ -586,6 +586,15 @@ public static partial class AccessibilityCheckerService
             expression = new ConditionalFormulaIfExpression(condition, whenTrue, whenFalse);
             return true;
         }
+
+        if (TryCreateFormulaErrorFallbackExpression(function, out expression))
+            return true;
+
+        if (TryCreateFormulaIfsExpression(function, out expression))
+            return true;
+
+        if (TryCreateFormulaSwitchExpression(function, out expression))
+            return true;
 
         if (TryCreateFormulaPredicate(function, out var predicate))
         {
@@ -611,6 +620,112 @@ public static partial class AccessibilityCheckerService
         }
 
         expression = new ConditionalFormulaLogicalExpression(logicalOperator.Value, operands);
+        return true;
+    }
+
+    private static bool TryCreateFormulaSelectorExpression(FormulaNode ast, out ConditionalFormulaExpression expression)
+    {
+        if (TryCreateFormulaExpression(ast, out expression))
+            return true;
+
+        if (TryCreateFormulaOperand(ast, out var operand))
+        {
+            expression = new ConditionalFormulaOperandExpression(operand);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryCreateFormulaErrorFallbackExpression(
+        FunctionCallNode function,
+        out ConditionalFormulaExpression expression)
+    {
+        expression = default!;
+
+        var kind = string.Equals(function.FunctionName, "IFERROR", StringComparison.OrdinalIgnoreCase)
+            ? ConditionalFormulaErrorFallbackKind.IfError
+            : string.Equals(function.FunctionName, "IFNA", StringComparison.OrdinalIgnoreCase)
+                ? ConditionalFormulaErrorFallbackKind.IfNa
+                : (ConditionalFormulaErrorFallbackKind?)null;
+        if (!kind.HasValue)
+            return false;
+
+        if (function.Arguments.Count != 2 ||
+            !TryCreateFormulaSelectorExpression(function.Arguments[0], out var value) ||
+            !TryCreateFormulaSelectorExpression(function.Arguments[1], out var fallback))
+        {
+            return false;
+        }
+
+        expression = new ConditionalFormulaErrorFallbackExpression(kind.Value, value, fallback);
+        return true;
+    }
+
+    private static bool TryCreateFormulaIfsExpression(
+        FunctionCallNode function,
+        out ConditionalFormulaExpression expression)
+    {
+        expression = default!;
+        if (!string.Equals(function.FunctionName, "IFS", StringComparison.OrdinalIgnoreCase) ||
+            function.Arguments.Count < 2 ||
+            function.Arguments.Count > MaxFormulaSelectorArgumentCount ||
+            function.Arguments.Count % 2 != 0)
+        {
+            return false;
+        }
+
+        var branches = new ConditionalFormulaIfsBranch[function.Arguments.Count / 2];
+        for (var i = 0; i < branches.Length; i++)
+        {
+            if (!TryCreateFormulaExpression(function.Arguments[i * 2], out var condition) ||
+                !TryCreateFormulaSelectorExpression(function.Arguments[i * 2 + 1], out var value))
+            {
+                return false;
+            }
+
+            branches[i] = new ConditionalFormulaIfsBranch(condition, value);
+        }
+
+        expression = new ConditionalFormulaIfsExpression(branches);
+        return true;
+    }
+
+    private static bool TryCreateFormulaSwitchExpression(
+        FunctionCallNode function,
+        out ConditionalFormulaExpression expression)
+    {
+        expression = default!;
+        if (!string.Equals(function.FunctionName, "SWITCH", StringComparison.OrdinalIgnoreCase) ||
+            function.Arguments.Count < 3 ||
+            function.Arguments.Count > MaxFormulaSelectorArgumentCount ||
+            !TryCreateFormulaSelectorExpression(function.Arguments[0], out var selector))
+        {
+            return false;
+        }
+
+        var hasDefault = function.Arguments.Count % 2 == 0;
+        var caseCount = (function.Arguments.Count - 1) / 2;
+        var cases = new ConditionalFormulaSwitchCase[caseCount];
+        for (var i = 0; i < caseCount; i++)
+        {
+            if (!TryCreateFormulaSelectorExpression(function.Arguments[i * 2 + 1], out var matchValue) ||
+                !TryCreateFormulaSelectorExpression(function.Arguments[i * 2 + 2], out var result))
+            {
+                return false;
+            }
+
+            cases[i] = new ConditionalFormulaSwitchCase(matchValue, result);
+        }
+
+        ConditionalFormulaExpression? defaultValue = null;
+        if (hasDefault &&
+            !TryCreateFormulaSelectorExpression(function.Arguments[^1], out defaultValue))
+        {
+            return false;
+        }
+
+        expression = new ConditionalFormulaSwitchExpression(selector, cases, defaultValue);
         return true;
     }
 
@@ -730,6 +845,7 @@ public static partial class AccessibilityCheckerService
     private const int MaxFormulaModeArgumentCount = 255;
     private const int MaxFormulaSumProductArgumentCount = 255;
     private const int MaxFormulaConditionalAggregateArgumentCount = 255;
+    private const int MaxFormulaSelectorArgumentCount = 255;
     private const double MaxFormulaGcdInputExclusive = 9_223_372_036_854_775_808d;
     private const ulong MaxFormulaBitwiseInput = 281_474_976_710_655UL;
     private const int MaxFormulaBitwiseShift = 53;
@@ -2697,6 +2813,19 @@ public static partial class AccessibilityCheckerService
         ConditionalFormulaExpression WhenTrue,
         ConditionalFormulaExpression WhenFalse) : ConditionalFormulaExpression;
 
+    private sealed record ConditionalFormulaErrorFallbackExpression(
+        ConditionalFormulaErrorFallbackKind Kind,
+        ConditionalFormulaExpression Value,
+        ConditionalFormulaExpression Fallback) : ConditionalFormulaExpression;
+
+    private sealed record ConditionalFormulaIfsExpression(
+        IReadOnlyList<ConditionalFormulaIfsBranch> Branches) : ConditionalFormulaExpression;
+
+    private sealed record ConditionalFormulaSwitchExpression(
+        ConditionalFormulaExpression Selector,
+        IReadOnlyList<ConditionalFormulaSwitchCase> Cases,
+        ConditionalFormulaExpression? DefaultValue) : ConditionalFormulaExpression;
+
     private enum ConditionalFormulaLogicalOperator
     {
         And,
@@ -2704,6 +2833,20 @@ public static partial class AccessibilityCheckerService
         Xor,
         Not
     }
+
+    private enum ConditionalFormulaErrorFallbackKind
+    {
+        IfError,
+        IfNa
+    }
+
+    private readonly record struct ConditionalFormulaIfsBranch(
+        ConditionalFormulaExpression Condition,
+        ConditionalFormulaExpression Value);
+
+    private readonly record struct ConditionalFormulaSwitchCase(
+        ConditionalFormulaExpression MatchValue,
+        ConditionalFormulaExpression Result);
 
     private readonly record struct ConditionalFormulaComparison(
         ConditionalFormulaOperand Left,
@@ -3188,16 +3331,53 @@ public static partial class AccessibilityCheckerService
         private bool? EvaluateFormulaExpression(
             ConditionalFormulaExpression expression,
             int rowOffset,
-            int colOffset) =>
-            expression switch
+            int colOffset)
+        {
+            if (!TryEvaluateFormulaExpressionValue(expression, rowOffset, colOffset, out var value))
+                return null;
+
+            return FormulaBooleanValue(value);
+        }
+
+        private bool TryEvaluateFormulaExpressionValue(
+            ConditionalFormulaExpression expression,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            switch (expression)
             {
-                ConditionalFormulaOperandExpression operand => EvaluateFormulaBooleanOperand(operand.Operand, rowOffset, colOffset),
-                ConditionalFormulaComparisonExpression comparison => EvaluateFormulaComparison(comparison.Comparison, rowOffset, colOffset),
-                ConditionalFormulaLogicalExpression logical => EvaluateFormulaLogical(logical, rowOffset, colOffset),
-                ConditionalFormulaPredicateExpression predicate => EvaluateFormulaPredicate(predicate.Predicate, rowOffset, colOffset),
-                ConditionalFormulaIfExpression ifExpression => EvaluateFormulaIf(ifExpression, rowOffset, colOffset),
-                _ => null
-            };
+                case ConditionalFormulaOperandExpression operand:
+                    return TryResolveFormulaOperand(operand.Operand, rowOffset, colOffset, out value);
+                case ConditionalFormulaComparisonExpression comparison:
+                    return TryEvaluateFormulaComparisonValue(comparison.Comparison, rowOffset, colOffset, out value);
+                case ConditionalFormulaLogicalExpression logical:
+                    var logicalResult = EvaluateFormulaLogical(logical, rowOffset, colOffset);
+                    if (!logicalResult.HasValue)
+                        return false;
+
+                    value = new BoolValue(logicalResult.Value);
+                    return true;
+                case ConditionalFormulaPredicateExpression predicate:
+                    var predicateResult = EvaluateFormulaPredicate(predicate.Predicate, rowOffset, colOffset);
+                    if (!predicateResult.HasValue)
+                        return false;
+
+                    value = new BoolValue(predicateResult.Value);
+                    return true;
+                case ConditionalFormulaIfExpression ifExpression:
+                    return TryEvaluateFormulaIfValue(ifExpression, rowOffset, colOffset, out value);
+                case ConditionalFormulaErrorFallbackExpression errorFallback:
+                    return TryEvaluateFormulaErrorFallbackValue(errorFallback, rowOffset, colOffset, out value);
+                case ConditionalFormulaIfsExpression ifsExpression:
+                    return TryEvaluateFormulaIfsValue(ifsExpression, rowOffset, colOffset, out value);
+                case ConditionalFormulaSwitchExpression switchExpression:
+                    return TryEvaluateFormulaSwitchValue(switchExpression, rowOffset, colOffset, out value);
+                default:
+                    return false;
+            }
+        }
 
         private bool? EvaluateFormulaBooleanOperand(
             ConditionalFormulaOperand operand,
@@ -3308,6 +3488,145 @@ public static partial class AccessibilityCheckerService
             };
         }
 
+        private bool TryEvaluateFormulaIfValue(
+            ConditionalFormulaIfExpression ifExpression,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            if (!TryEvaluateFormulaExpressionValue(ifExpression.Condition, rowOffset, colOffset, out var conditionValue))
+            {
+                value = ErrorValue.Value;
+                return false;
+            }
+
+            if (conditionValue is ErrorValue)
+            {
+                value = conditionValue;
+                return true;
+            }
+
+            var condition = FormulaBooleanValue(conditionValue);
+            if (!condition.HasValue)
+            {
+                value = ErrorValue.Value;
+                return false;
+            }
+
+            return TryEvaluateFormulaExpressionValue(
+                condition.Value ? ifExpression.WhenTrue : ifExpression.WhenFalse,
+                rowOffset,
+                colOffset,
+                out value);
+        }
+
+        private bool TryEvaluateFormulaErrorFallbackValue(
+            ConditionalFormulaErrorFallbackExpression errorFallback,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            if (!TryEvaluateFormulaExpressionValue(errorFallback.Value, rowOffset, colOffset, out value))
+                return false;
+
+            if (value is not ErrorValue error || !FormulaErrorFallbackMatches(errorFallback.Kind, error))
+                return true;
+
+            return TryEvaluateFormulaExpressionValue(errorFallback.Fallback, rowOffset, colOffset, out value);
+        }
+
+        private static bool FormulaErrorFallbackMatches(
+            ConditionalFormulaErrorFallbackKind kind,
+            ErrorValue error) =>
+            kind switch
+            {
+                ConditionalFormulaErrorFallbackKind.IfError => true,
+                ConditionalFormulaErrorFallbackKind.IfNa => IsNaError(error),
+                _ => false
+            };
+
+        private bool TryEvaluateFormulaIfsValue(
+            ConditionalFormulaIfsExpression ifsExpression,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            for (var i = 0; i < ifsExpression.Branches.Count; i++)
+            {
+                var branch = ifsExpression.Branches[i];
+                if (!TryEvaluateFormulaExpressionValue(branch.Condition, rowOffset, colOffset, out var conditionValue))
+                {
+                    value = ErrorValue.Value;
+                    return false;
+                }
+
+                if (conditionValue is ErrorValue)
+                {
+                    value = conditionValue;
+                    return true;
+                }
+
+                var condition = FormulaBooleanValue(conditionValue);
+                if (!condition.HasValue)
+                {
+                    value = ErrorValue.Value;
+                    return false;
+                }
+
+                if (condition.Value)
+                    return TryEvaluateFormulaExpressionValue(branch.Value, rowOffset, colOffset, out value);
+            }
+
+            value = ErrorValue.NA;
+            return true;
+        }
+
+        private bool TryEvaluateFormulaSwitchValue(
+            ConditionalFormulaSwitchExpression switchExpression,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            if (!TryEvaluateFormulaExpressionValue(switchExpression.Selector, rowOffset, colOffset, out var selectorValue) ||
+                selectorValue is RangeValue)
+            {
+                value = ErrorValue.Value;
+                return false;
+            }
+
+            if (selectorValue is ErrorValue)
+            {
+                value = selectorValue;
+                return true;
+            }
+
+            for (var i = 0; i < switchExpression.Cases.Count; i++)
+            {
+                var switchCase = switchExpression.Cases[i];
+                if (!TryEvaluateFormulaExpressionValue(switchCase.MatchValue, rowOffset, colOffset, out var matchValue) ||
+                    matchValue is RangeValue)
+                {
+                    value = ErrorValue.Value;
+                    return false;
+                }
+
+                if (matchValue is ErrorValue)
+                {
+                    value = matchValue;
+                    return true;
+                }
+
+                if (CompareFormulaValues(selectorValue, matchValue) == 0)
+                    return TryEvaluateFormulaExpressionValue(switchCase.Result, rowOffset, colOffset, out value);
+            }
+
+            if (switchExpression.DefaultValue is { } defaultValue)
+                return TryEvaluateFormulaExpressionValue(defaultValue, rowOffset, colOffset, out value);
+
+            value = ErrorValue.NA;
+            return true;
+        }
+
         private bool? EvaluateFormulaPredicate(
             ConditionalFormulaPredicate predicate,
             int rowOffset,
@@ -3395,17 +3714,45 @@ public static partial class AccessibilityCheckerService
             int rowOffset,
             int colOffset)
         {
+            if (!TryEvaluateFormulaComparisonValue(comparison, rowOffset, colOffset, out var value))
+                return null;
+
+            return FormulaBooleanValue(value);
+        }
+
+        private bool TryEvaluateFormulaComparisonValue(
+            ConditionalFormulaComparison comparison,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
             if (!TryResolveFormulaOperand(comparison.Left, rowOffset, colOffset, out var left) ||
                 !TryResolveFormulaOperand(comparison.Right, rowOffset, colOffset, out var right))
             {
-                return null;
+                value = ErrorValue.Value;
+                return false;
             }
 
-            if (left is ErrorValue or RangeValue || right is ErrorValue or RangeValue)
-                return null;
+            if (left is ErrorValue)
+            {
+                value = left;
+                return true;
+            }
+
+            if (right is ErrorValue)
+            {
+                value = right;
+                return true;
+            }
+
+            if (left is RangeValue || right is RangeValue)
+            {
+                value = ErrorValue.Value;
+                return false;
+            }
 
             var result = CompareFormulaValues(left, right);
-            return comparison.Operator switch
+            value = new BoolValue(comparison.Operator switch
             {
                 BinaryOperator.Equal => result == 0,
                 BinaryOperator.NotEqual => result != 0,
@@ -3414,7 +3761,8 @@ public static partial class AccessibilityCheckerService
                 BinaryOperator.LessOrEqual => result <= 0,
                 BinaryOperator.GreaterOrEqual => result >= 0,
                 _ => false
-            };
+            });
+            return true;
         }
 
         private bool TryGetFormulaExpression(ConditionalFormat rule, out ConditionalFormulaExpression expression)
