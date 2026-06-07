@@ -1252,8 +1252,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
 
     private static XDocument LoadZipEntryXml(ZipArchiveEntry entry)
     {
-        using var stream = entry.Open();
-        return XDocument.Load(stream);
+        return XlsxPackageTestFixtures.LoadPackageXml(entry);
     }
 
     private static void AddContentTypeOverride(XDocument contentTypesXml, string partName, string contentType)
