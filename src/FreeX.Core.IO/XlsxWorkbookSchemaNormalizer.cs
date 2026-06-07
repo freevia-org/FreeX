@@ -25,6 +25,7 @@ internal static class XlsxWorkbookSchemaNormalizer
         XlsxWorksheetIgnoredErrorsNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetHyperlinkNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetConditionalFormatNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetDataValidationNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetExtensionListNormalizer.NormalizeWorksheets(archive);
         NormalizeWorksheets(archive, workbookNs);
 
