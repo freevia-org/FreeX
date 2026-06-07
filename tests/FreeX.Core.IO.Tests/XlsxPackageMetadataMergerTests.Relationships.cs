@@ -231,6 +231,72 @@ public sealed partial class XlsxPackageMetadataMergerTests
     }
 
     [Fact]
+    public void MergeRelationshipParts_PreservesWorkbookXmlMapsPackageGraph()
+    {
+        using var sourcePackage = CreatePackageWithWorkbookXmlMapsGraph();
+        using var targetPackage = CreatePackageWithExistingRootRelationships();
+        using var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var targetArchive = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, targetArchive);
+        XlsxPackageMetadataMerger.MergeContentTypes(sourceArchive, targetArchive);
+        XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, targetArchive, generatedEntriesBeforeMerge);
+
+        targetArchive.GetEntry("xl/xmlMaps.xml").Should().NotBeNull();
+
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "[Content_Types].xml");
+        contentTypesXml.Root!
+            .Elements(contentTypeNs + "Override")
+            .Should()
+            .ContainSingle(element =>
+                (string?)element.Attribute("PartName") == "/xl/xmlMaps.xml" &&
+                (string?)element.Attribute("ContentType") == "application/xml");
+
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var workbookRelationshipsXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "xl/_rels/workbook.xml.rels");
+        workbookRelationshipsXml.Root!
+            .Elements(relationshipNs + "Relationship")
+            .Should()
+            .ContainSingle(element =>
+                (string?)element.Attribute("Type") == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/xmlMaps" &&
+                (string?)element.Attribute("Target") == "xmlMaps.xml");
+    }
+
+    [Fact]
+    public void MergeRelationshipParts_PreservesWorkbookXmlMapsRelationshipWhenMapInfoPartAlreadyExists()
+    {
+        using var sourcePackage = CreatePackageWithWorkbookXmlMapsGraph();
+        using var targetPackage = CreatePackageWithGeneratedXmlMapsPart();
+        using var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var targetArchive = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, targetArchive);
+        generatedEntriesBeforeMerge.Should().Contain("xl/xmlMaps.xml");
+
+        XlsxPackageMetadataMerger.MergeContentTypes(sourceArchive, targetArchive);
+        XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, targetArchive, generatedEntriesBeforeMerge);
+
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "[Content_Types].xml");
+        contentTypesXml.Root!
+            .Elements(contentTypeNs + "Override")
+            .Should()
+            .ContainSingle(element =>
+                (string?)element.Attribute("PartName") == "/xl/xmlMaps.xml" &&
+                (string?)element.Attribute("ContentType") == "application/xml");
+
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var workbookRelationshipsXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "xl/_rels/workbook.xml.rels");
+        workbookRelationshipsXml.Root!
+            .Elements(relationshipNs + "Relationship")
+            .Should()
+            .ContainSingle(element =>
+                (string?)element.Attribute("Type") == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/xmlMaps" &&
+                (string?)element.Attribute("Target") == "xmlMaps.xml");
+    }
+
+    [Fact]
     public void MergeRelationshipParts_DeduplicatesExternalTargetsWithTrimmedTargetMode()
     {
         using var sourcePackage = CreatePackageWithWhitespacePaddedExternalWorksheetRelationship();

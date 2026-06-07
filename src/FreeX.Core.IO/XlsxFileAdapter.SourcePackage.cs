@@ -21,6 +21,7 @@ public sealed partial class XlsxFileAdapter
         var removedWorksheetPackageParts = GetExcludedWorksheetPackagePartPaths(sourceArchive, context, workbook);
         var excludedSourceParts = removedWorksheetPackageParts
             .Concat(XlsxWorksheetThreadedCommentMapper.GetSourcePackagePartExclusions(sourceArchive, workbook))
+            .Concat(XlsxDigitalSignaturePackagePolicy.GetEditedSaveExclusions(sourceArchive))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(
             sourceArchive,
@@ -44,7 +45,7 @@ public sealed partial class XlsxFileAdapter
         if (sourceParts.HasExternalLinks)
             XlsxExternalLinkReferencePreserver.Preserve(sourceArchive, generatedArchive);
         if (sourceParts.HasUnsupportedSheetParts)
-            XlsxUnsupportedSheetReferencePreserver.Preserve(sourceArchive, generatedArchive);
+            XlsxUnsupportedSheetReferencePreserver.Preserve(sourceArchive, generatedArchive, context);
         if (sourceParts.HasDrawings)
         {
             var drawingPaths = XlsxWorksheetDrawingPartMerger.MergeAndGetDrawingPaths(sourceArchive, generatedArchive, context);
