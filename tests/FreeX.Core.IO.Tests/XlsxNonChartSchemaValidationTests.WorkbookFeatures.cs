@@ -532,6 +532,8 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         calcPr.Attribute("iterateCount").Should().BeNull();
         calcPr.Attribute("iterateDelta").Should().BeNull();
         calcPr.Attribute("concurrentManualCount").Should().BeNull();
+        calcPr.Attribute("customCalcPrFlag").Should().BeNull();
+        calcPr.Element(calcPr.Name.Namespace + "nativeCalcPrChild").Should().BeNull();
     }
 
     [Fact]
@@ -930,6 +932,8 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         calcPr.SetAttributeValue("iterateCount", "not-a-number");
         calcPr.SetAttributeValue("iterateDelta", "not-a-number");
         calcPr.SetAttributeValue("concurrentManualCount", "not-a-number");
+        calcPr.SetAttributeValue("customCalcPrFlag", "removed");
+        calcPr.Add(new XElement(workbookNs + "nativeCalcPrChild"));
         ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
     }
 
