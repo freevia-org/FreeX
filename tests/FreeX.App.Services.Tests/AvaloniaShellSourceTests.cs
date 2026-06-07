@@ -55,6 +55,45 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_WiresWorkbookSharePlannerToAvaloniaFallback()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("private const string WorkbookShareSheetLabel = \"macOS Share Sheet\";");
+        source.Should().Contain("private readonly NativeMenuItem _shareWorkbookMenuItem = new();");
+        source.Should().Contain("_shareWorkbookMenuItem.Header = \"Share Workbook...\";");
+        source.Should().Contain("_shareWorkbookMenuItem.Click += async (_, _) => await ShareWorkbookAsync();");
+        source.Should().Contain("fileMenu.Items.Add(_shareWorkbookMenuItem);");
+        source.Should().Contain("_shareWorkbookMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("private async Task ShareWorkbookAsync()");
+        source.Should().Contain("WorkbookShareActionPlanner.CreatePlan(");
+        source.Should().Contain("_session.CurrentFilePath");
+        source.Should().Contain("new(");
+        source.Should().Contain("WorkbookShareSheetLabel");
+        source.Should().Contain("CanShowShareSheet: false");
+        source.Should().Contain("CanOpenContainingFolder: TopLevel.GetTopLevel(this)?.Launcher is not null");
+        source.Should().Contain("OperatingSystem.IsMacOS()");
+        source.Should().Contain("? \"Reveal in Finder\"");
+        source.Should().Contain(": \"Open Containing Folder\"");
+        source.Should().Contain("case WorkbookShareActionPlanKind.SaveAsBeforeShare:");
+        source.Should().Contain("await SaveWorkbookAsAsync();");
+        source.Should().Contain("case WorkbookShareActionPlanKind.OpenContainingFolder:");
+        source.Should().Contain("await TrySaveDirtyWorkbookForShareAsync()");
+        source.Should().Contain("await OpenWorkbookContainingFolderAsync(refreshedPlan);");
+        source.Should().Contain("case WorkbookShareActionPlanKind.Deferred:");
+        source.Should().Contain("WorkbookShareActionPlanner.FormatStatus(plan)");
+        source.Should().Contain("TopLevel.GetTopLevel(this)?.Launcher");
+        source.Should().Contain("await launcher.LaunchDirectoryInfoAsync(new DirectoryInfo(folderPath))");
+        source.Should().Contain("WorkbookShareActionUnavailableReason.ContainingFolderUnavailable");
+
+        source.Should().NotContain("DataTransferManager");
+        source.Should().NotContain("WindowInteropHelper");
+        source.Should().NotContain("Microsoft.Win32");
+        source.Should().NotContain("ProcessStartInfo");
+        source.Should().NotContain("System.Windows");
+    }
+
+    [Fact]
     public void MainWindow_WiresNativeFileMenuToSharedOpenSavePipeline()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
