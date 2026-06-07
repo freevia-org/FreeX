@@ -578,14 +578,18 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     public void WorkbookAdditionalViews_SanitizesInvalidWorkbookViewAttributesForSchemaValidity()
     {
         var workbook = CreateWorkbookAdditionalViewsSourceWorkbook();
+        workbook.AdditionalViews!.NativeAttributes["customBookViewsFlag"] = "removed";
         workbook.AdditionalViews!.Views[0].NativeXml = """
-            <workbookView xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" visibility="invalid" minimized="maybe" showHorizontalScroll="maybe" showVerticalScroll="maybe" showSheetTabs="maybe" tabRatio="not-a-number" firstSheet="not-a-number" activeTab="not-a-number" xWindow="not-a-number" windowWidth="not-a-number" />
+            <workbookView xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" visibility="invalid" minimized="maybe" showHorizontalScroll="maybe" showVerticalScroll="maybe" showSheetTabs="maybe" tabRatio="not-a-number" firstSheet="not-a-number" activeTab="not-a-number" xWindow="not-a-number" windowWidth="not-a-number" customWorkbookViewFlag="removed">
+              <nativeWorkbookViewChild />
+            </workbookView>
             """;
 
         using var saved = Save(workbook);
 
         SchemaErrors(saved).Should().BeEmpty();
         var bookViews = ReadWorkbookChildElement(saved, "bookViews");
+        bookViews.Attribute("customBookViewsFlag").Should().BeNull();
         var additionalView = bookViews.Elements(bookViews.Name.Namespace + "workbookView").Skip(1).Single();
         AssertWorkbookViewInvalidAttributesRemoved(additionalView);
     }
@@ -640,6 +644,8 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         var bookViews = ReadWorkbookChildElement(saved, "bookViews");
+        bookViews.Attribute("customBookViewsFlag").Should().BeNull();
+        bookViews.Element(bookViews.Name.Namespace + "nativeBookViewsChild").Should().BeNull();
         var primaryView = bookViews.Elements(bookViews.Name.Namespace + "workbookView").First();
         AssertWorkbookViewInvalidAttributesRemoved(primaryView);
     }
@@ -960,6 +966,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var bookViews = workbookXml.Root!
+            .Element(workbookNs + "bookViews")!;
+        bookViews.SetAttributeValue("customBookViewsFlag", "removed");
+        bookViews.Add(new XElement(workbookNs + "nativeBookViewsChild"));
         var workbookView = workbookXml.Root!
             .Element(workbookNs + "bookViews")!
             .Elements(workbookNs + "workbookView")
@@ -980,6 +990,8 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         workbookView.SetAttributeValue("activeTab", "not-a-number");
         workbookView.SetAttributeValue("xWindow", "not-a-number");
         workbookView.SetAttributeValue("windowWidth", "not-a-number");
+        workbookView.SetAttributeValue("customWorkbookViewFlag", "removed");
+        workbookView.Add(new XElement(workbookView.Name.Namespace + "nativeWorkbookViewChild"));
     }
 
     private static void AssertWorkbookViewInvalidAttributesRemoved(XElement workbookView)
@@ -994,5 +1006,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         workbookView.Attribute("activeTab").Should().BeNull();
         workbookView.Attribute("xWindow").Should().BeNull();
         workbookView.Attribute("windowWidth").Should().BeNull();
+        workbookView.Attribute("customWorkbookViewFlag").Should().BeNull();
+        workbookView.Element(workbookView.Name.Namespace + "nativeWorkbookViewChild").Should().BeNull();
     }
 }

@@ -7,6 +7,25 @@ internal static class XlsxWorkbookViewNormalizer
 {
     private static readonly XNamespace WorkbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
+    private static readonly HashSet<string> NoAttributes = [];
+
+    private static readonly HashSet<string> WorkbookViewAttributes =
+    [
+        "visibility",
+        "minimized",
+        "showHorizontalScroll",
+        "showVerticalScroll",
+        "showSheetTabs",
+        "xWindow",
+        "yWindow",
+        "windowWidth",
+        "windowHeight",
+        "tabRatio",
+        "firstSheet",
+        "activeTab",
+        "autoFilterDateGrouping"
+    ];
+
     private static readonly HashSet<string> ValidVisibilityValues =
     [
         "visible",
@@ -41,6 +60,9 @@ internal static class XlsxWorkbookViewNormalizer
     public static bool NormalizeBookViewsElement(XElement bookViews)
     {
         var changed = false;
+        changed |= RemoveUnknownAttributes(bookViews, NoAttributes);
+        changed |= RemoveUnexpectedChildElements(bookViews, WorkbookNs + "workbookView");
+
         foreach (var workbookView in bookViews.Elements(WorkbookNs + "workbookView"))
             changed |= NormalizeWorkbookViewElement(workbookView);
 
@@ -50,6 +72,8 @@ internal static class XlsxWorkbookViewNormalizer
     public static bool NormalizeWorkbookViewElement(XElement workbookView)
     {
         var changed = false;
+        changed |= RemoveUnknownAttributes(workbookView, WorkbookViewAttributes);
+        changed |= RemoveUnexpectedChildElements(workbookView, WorkbookNs + "extLst");
         changed |= NormalizeAttribute(workbookView, "visibility", value => NormalizeToken(value, ValidVisibilityValues));
 
         foreach (var attributeName in BooleanAttributes)
@@ -58,6 +82,36 @@ internal static class XlsxWorkbookViewNormalizer
             changed |= NormalizeAttribute(workbookView, attributeName, NormalizeIntOrNull);
         foreach (var attributeName in UnsignedIntAttributes)
             changed |= NormalizeAttribute(workbookView, attributeName, NormalizeUnsignedIntOrNull);
+
+        return changed;
+    }
+
+    private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedAttributes)
+    {
+        var changed = false;
+        foreach (var attribute in element.Attributes().ToList())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                (attribute.Name.NamespaceName.Length == 0 && allowedAttributes.Contains(attribute.Name.LocalName)))
+            {
+                continue;
+            }
+
+            attribute.Remove();
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool RemoveUnexpectedChildElements(XElement element, XName allowedChildName)
+    {
+        var changed = false;
+        foreach (var child in element.Elements().Where(child => child.Name != allowedChildName).ToList())
+        {
+            child.Remove();
+            changed = true;
+        }
 
         return changed;
     }
