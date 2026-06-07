@@ -203,6 +203,7 @@ internal static class XlsxDataValidationNativeMetadataMapper
                 }
             }
 
+            changed |= XlsxWorksheetDataValidationNormalizer.NormalizeElement(dataValidations);
             if (changed)
                 session.MarkDirty(edit);
         }
@@ -234,6 +235,7 @@ internal static class XlsxDataValidationNativeMetadataMapper
         }
 
         dataValidations.SetAttributeValue(CountAttributeName, count.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        XlsxWorksheetDataValidationNormalizer.NormalizeElement(dataValidations);
         return true;
     }
 

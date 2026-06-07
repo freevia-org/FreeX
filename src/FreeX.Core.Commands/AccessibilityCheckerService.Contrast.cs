@@ -1997,6 +1997,9 @@ public static partial class AccessibilityCheckerService
             case "INDIRECT":
                 kind = ConditionalFormulaScalarFunctionKind.Indirect;
                 return true;
+            case "ADDRESS":
+                kind = ConditionalFormulaScalarFunctionKind.Address;
+                return true;
             case "N":
                 kind = ConditionalFormulaScalarFunctionKind.N;
                 return true;
@@ -2023,6 +2026,27 @@ public static partial class AccessibilityCheckerService
                 return true;
             case "AREAS":
                 kind = ConditionalFormulaScalarFunctionKind.Areas;
+                return true;
+            case "CELL":
+                kind = ConditionalFormulaScalarFunctionKind.Cell;
+                return true;
+            case "INFO":
+                kind = ConditionalFormulaScalarFunctionKind.Info;
+                return true;
+            case "FORMULATEXT":
+                kind = ConditionalFormulaScalarFunctionKind.FormulaText;
+                return true;
+            case "HYPERLINK":
+                kind = ConditionalFormulaScalarFunctionKind.Hyperlink;
+                return true;
+            case "SHEET":
+                kind = ConditionalFormulaScalarFunctionKind.Sheet;
+                return true;
+            case "SHEETS":
+                kind = ConditionalFormulaScalarFunctionKind.Sheets;
+                return true;
+            case "GETPIVOTDATA":
+                kind = ConditionalFormulaScalarFunctionKind.GetPivotData;
                 return true;
             case "BIN2DEC":
                 kind = ConditionalFormulaScalarFunctionKind.Bin2Dec;
@@ -2385,9 +2409,12 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.HLookup => argumentCount is 3 or 4,
             ConditionalFormulaScalarFunctionKind.Offset => argumentCount is >= 3 and <= 5,
             ConditionalFormulaScalarFunctionKind.Indirect => argumentCount is 1 or 2,
+            ConditionalFormulaScalarFunctionKind.Address => argumentCount is >= 2 and <= 5,
             ConditionalFormulaScalarFunctionKind.N or
             ConditionalFormulaScalarFunctionKind.Type or
-            ConditionalFormulaScalarFunctionKind.ErrorType => argumentCount == 1,
+            ConditionalFormulaScalarFunctionKind.ErrorType or
+            ConditionalFormulaScalarFunctionKind.Info or
+            ConditionalFormulaScalarFunctionKind.FormulaText => argumentCount == 1,
             ConditionalFormulaScalarFunctionKind.Find or
             ConditionalFormulaScalarFunctionKind.Search or
             ConditionalFormulaScalarFunctionKind.FindB or
@@ -2517,10 +2544,16 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Na or
             ConditionalFormulaScalarFunctionKind.Pi => argumentCount == 0,
             ConditionalFormulaScalarFunctionKind.Row or
-            ConditionalFormulaScalarFunctionKind.Column => argumentCount is 0 or 1,
+            ConditionalFormulaScalarFunctionKind.Column or
+            ConditionalFormulaScalarFunctionKind.Sheet => argumentCount is 0 or 1,
             ConditionalFormulaScalarFunctionKind.Rows or
             ConditionalFormulaScalarFunctionKind.Columns or
-            ConditionalFormulaScalarFunctionKind.Areas => argumentCount == 1,
+            ConditionalFormulaScalarFunctionKind.Areas or
+            ConditionalFormulaScalarFunctionKind.Sheets => argumentCount == 1,
+            ConditionalFormulaScalarFunctionKind.Cell or
+            ConditionalFormulaScalarFunctionKind.Hyperlink => argumentCount is 1 or 2,
+            ConditionalFormulaScalarFunctionKind.GetPivotData => argumentCount is >= 2 and <= 255 &&
+                argumentCount % 2 == 0,
             _ => false
         };
 
@@ -3654,6 +3687,7 @@ public static partial class AccessibilityCheckerService
         HLookup,
         Offset,
         Indirect,
+        Address,
         N,
         Type,
         ErrorType,
@@ -3663,6 +3697,13 @@ public static partial class AccessibilityCheckerService
         Rows,
         Columns,
         Areas,
+        Cell,
+        Info,
+        FormulaText,
+        Hyperlink,
+        Sheet,
+        Sheets,
+        GetPivotData,
         Bin2Dec,
         Bin2Hex,
         Bin2Oct,
@@ -4889,6 +4930,15 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Offset:
                 case ConditionalFormulaScalarFunctionKind.Indirect:
                     return TryEvaluateFormulaLookupReferenceFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Address:
+                case ConditionalFormulaScalarFunctionKind.Cell:
+                case ConditionalFormulaScalarFunctionKind.Info:
+                case ConditionalFormulaScalarFunctionKind.FormulaText:
+                case ConditionalFormulaScalarFunctionKind.Hyperlink:
+                case ConditionalFormulaScalarFunctionKind.Sheet:
+                case ConditionalFormulaScalarFunctionKind.Sheets:
+                case ConditionalFormulaScalarFunctionKind.GetPivotData:
+                    return TryEvaluateFormulaInfoReferenceFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Bin2Dec:
                 case ConditionalFormulaScalarFunctionKind.Hex2Dec:
                 case ConditionalFormulaScalarFunctionKind.Oct2Dec:
@@ -11407,6 +11457,1395 @@ public static partial class AccessibilityCheckerService
 
             return value is NumberValue;
         }
+
+        private bool TryEvaluateFormulaInfoReferenceFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            return function.Kind switch
+            {
+                ConditionalFormulaScalarFunctionKind.Address =>
+                    TryEvaluateFormulaAddressFunction(function, rowOffset, colOffset, out value),
+                ConditionalFormulaScalarFunctionKind.Cell =>
+                    TryEvaluateFormulaCellFunction(function, rowOffset, colOffset, out value),
+                ConditionalFormulaScalarFunctionKind.Info =>
+                    TryEvaluateFormulaInfoFunction(function, rowOffset, colOffset, out value),
+                ConditionalFormulaScalarFunctionKind.FormulaText =>
+                    TryEvaluateFormulaFormulaTextFunction(function, rowOffset, colOffset, out value),
+                ConditionalFormulaScalarFunctionKind.Hyperlink =>
+                    TryEvaluateFormulaHyperlinkFunction(function, rowOffset, colOffset, out value),
+                ConditionalFormulaScalarFunctionKind.Sheet =>
+                    TryEvaluateFormulaSheetFunction(function, rowOffset, colOffset, out value),
+                ConditionalFormulaScalarFunctionKind.Sheets =>
+                    TryEvaluateFormulaSheetsFunction(function, rowOffset, colOffset, out value),
+                ConditionalFormulaScalarFunctionKind.GetPivotData =>
+                    TryEvaluateFormulaGetPivotDataFunction(function, rowOffset, colOffset, out value),
+                _ => false
+            };
+        }
+
+        private bool TryEvaluateFormulaAddressFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaInfoScalarArgument(function.Arguments[0], rowOffset, colOffset, out var rowValue) ||
+                !TryResolveFormulaInfoScalarArgument(function.Arguments[1], rowOffset, colOffset, out var colValue))
+            {
+                return false;
+            }
+
+            if (rowValue is ErrorValue rowError)
+            {
+                value = rowError;
+                return true;
+            }
+
+            if (colValue is ErrorValue colError)
+            {
+                value = colError;
+                return true;
+            }
+
+            if (!TryGetFormulaCoercedNumber(rowValue, out var rowNumber) ||
+                !TryGetFormulaCoercedNumber(colValue, out var colNumber))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            if (!double.IsFinite(rowNumber) || !double.IsFinite(colNumber))
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            var row = (int)Math.Truncate(rowNumber);
+            var col = (int)Math.Truncate(colNumber);
+            if (row < 1 ||
+                row > (int)CellAddress.MaxRow ||
+                col < 1 ||
+                col > (int)CellAddress.MaxCol)
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            var absNum = 1;
+            if (function.Arguments.Count > 2)
+            {
+                if (!TryResolveFormulaInfoScalarArgument(function.Arguments[2], rowOffset, colOffset, out var absValue))
+                    return false;
+
+                if (absValue is ErrorValue absError)
+                {
+                    value = absError;
+                    return true;
+                }
+
+                if (absValue is not BlankValue)
+                {
+                    if (!TryGetFormulaCoercedNumber(absValue, out var absNumber) || !double.IsFinite(absNumber))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    absNum = (int)Math.Truncate(absNumber);
+                    if (absNum is not (1 or 2 or 3 or 4))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+                }
+            }
+
+            var useA1 = true;
+            if (function.Arguments.Count > 3)
+            {
+                if (!TryResolveFormulaInfoScalarArgument(function.Arguments[3], rowOffset, colOffset, out var a1Value))
+                    return false;
+
+                if (a1Value is ErrorValue a1Error)
+                {
+                    value = a1Error;
+                    return true;
+                }
+
+                if (a1Value is not BlankValue &&
+                    !TryGetFormulaControlBool(a1Value, out useA1))
+                {
+                    value = ErrorValue.Value;
+                    return true;
+                }
+            }
+
+            string? sheetText = null;
+            if (function.Arguments.Count > 4)
+            {
+                if (!TryResolveFormulaInfoScalarArgument(function.Arguments[4], rowOffset, colOffset, out var sheetValue))
+                    return false;
+
+                if (sheetValue is ErrorValue sheetError)
+                {
+                    value = sheetError;
+                    return true;
+                }
+
+                if (sheetValue is not BlankValue)
+                {
+                    if (!TryGetFormulaCoercedText(sheetValue, out sheetText))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+                }
+            }
+
+            var colLetter = CellAddress.NumberToColumnName((uint)col);
+            var colAbs = absNum is 1 or 3;
+            var rowAbs = absNum is 1 or 2;
+            var address = useA1
+                ? $"{(colAbs ? "$" : string.Empty)}{colLetter}{(rowAbs ? "$" : string.Empty)}{row}"
+                : $"{(rowAbs ? $"R{row}" : $"R[{row}]")}{(colAbs ? $"C{col}" : $"C[{col}]")}";
+
+            if (!string.IsNullOrEmpty(sheetText))
+                address = $"{FormulaFormatAddressSheetText(sheetText)}!{address}";
+
+            value = new TextValue(address);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaCellFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaInfoScalarArgument(function.Arguments[0], rowOffset, colOffset, out var infoTypeValue))
+                return false;
+
+            if (infoTypeValue is ErrorValue infoError)
+            {
+                value = infoError;
+                return true;
+            }
+
+            if (!TryGetFormulaCoercedText(infoTypeValue, out var infoType))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            Sheet targetSheet;
+            uint row;
+            uint col;
+            ScalarValue cellValue;
+            if (function.Arguments.Count == 1)
+            {
+                targetSheet = sheet;
+                row = _formulaCurrentRow;
+                col = _formulaCurrentCol;
+                cellValue = targetSheet.GetValue(row, col);
+            }
+            else if (!TryResolveFormulaCellReferenceArgument(
+                function.Arguments[1],
+                rowOffset,
+                colOffset,
+                out targetSheet,
+                out row,
+                out col,
+                out cellValue))
+            {
+                return false;
+            }
+
+            var cell = targetSheet.GetCell(row, col);
+            var style = ResolveFormulaCellStyle(targetSheet, cell, row, col);
+            value = infoType.Trim().ToLowerInvariant() switch
+            {
+                "address" => new TextValue($"${CellAddress.NumberToColumnName(col)}${row}"),
+                "col" => new NumberValue(col),
+                "row" => new NumberValue(row),
+                "contents" => cellValue,
+                "type" => new TextValue(cellValue switch
+                {
+                    BlankValue => "b",
+                    TextValue => "l",
+                    _ => "v"
+                }),
+                "protect" => new NumberValue(style?.Locked ?? true ? 1 : 0),
+                "width" => new NumberValue(Math.Round(
+                    targetSheet.ColumnWidths.TryGetValue(col, out var width) ? width : targetSheet.DefaultColumnWidth,
+                    0,
+                    MidpointRounding.AwayFromZero)),
+                "filename" => new TextValue(string.Empty),
+                "format" => new TextValue(FormulaCellFormatInfo(style?.NumberFormat)),
+                "color" => new NumberValue(FormulaCellNegativeSectionUsesColor(style?.NumberFormat) ? 1 : 0),
+                "parentheses" => new NumberValue(FormulaCellPositiveOrAllSectionUsesParentheses(style?.NumberFormat) ? 1 : 0),
+                "prefix" => new TextValue(FormulaCellPrefixCode(style)),
+                _ => ErrorValue.Value
+            };
+
+            return true;
+        }
+
+        private bool TryEvaluateFormulaInfoFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaInfoScalarArgument(function.Arguments[0], rowOffset, colOffset, out var infoTypeValue))
+                return false;
+
+            if (infoTypeValue is ErrorValue infoError)
+            {
+                value = infoError;
+                return true;
+            }
+
+            if (!TryGetFormulaCoercedText(infoTypeValue, out var infoType))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            switch (infoType.Trim().ToLowerInvariant())
+            {
+                case "numfile":
+                    value = new NumberValue(workbook.SheetCount);
+                    return true;
+                case "recalc":
+                    value = new TextValue(workbook.CalculationMode == WorkbookCalculationMode.Manual
+                        ? "Manual"
+                        : "Automatic");
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private bool TryEvaluateFormulaFormulaTextFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.NA;
+            if (!TryResolveFormulaTopLeftCellReference(
+                function.Arguments[0],
+                rowOffset,
+                colOffset,
+                out _,
+                out _,
+                out _,
+                out var cell,
+                out var error))
+            {
+                value = error ?? ErrorValue.NA;
+                return true;
+            }
+
+            if (cell?.FormulaText is not { } formulaText)
+            {
+                value = ErrorValue.NA;
+                return true;
+            }
+
+            value = new TextValue(formulaText.StartsWith('=') ? formulaText : "=" + formulaText);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaHyperlinkFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaInfoScalarArgument(function.Arguments[0], rowOffset, colOffset, out var linkValue))
+                return false;
+
+            if (linkValue is ErrorValue linkError)
+            {
+                value = linkError;
+                return true;
+            }
+
+            ScalarValue? friendlyValue = null;
+            if (function.Arguments.Count > 1)
+            {
+                if (!TryResolveFormulaInfoScalarArgument(function.Arguments[1], rowOffset, colOffset, out var resolvedFriendly))
+                    return false;
+
+                if (resolvedFriendly is ErrorValue friendlyError)
+                {
+                    value = friendlyError;
+                    return true;
+                }
+
+                friendlyValue = resolvedFriendly;
+            }
+
+            var displayValue = friendlyValue is not null and not BlankValue ? friendlyValue : linkValue;
+            if (!TryGetFormulaCoercedText(displayValue, out var displayText))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            value = new TextValue(displayText);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaSheetFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.NA;
+            if (function.Arguments.Count == 0)
+            {
+                if (!TryGetFormulaSheetIndex(sheet, out var currentIndex))
+                    return true;
+
+                value = new NumberValue(currentIndex);
+                return true;
+            }
+
+            var argument = function.Arguments[0];
+            if (TryResolveFormulaArgumentSheet(argument, rowOffset, colOffset, out var targetSheet))
+            {
+                value = TryGetFormulaSheetIndex(targetSheet, out var index)
+                    ? new NumberValue(index)
+                    : ErrorValue.NA;
+                return true;
+            }
+
+            if (!TryResolveFormulaInfoScalarArgument(argument, rowOffset, colOffset, out var sheetNameValue))
+                return false;
+
+            if (sheetNameValue is ErrorValue sheetError)
+            {
+                value = sheetError;
+                return true;
+            }
+
+            if (!TryGetFormulaCoercedText(sheetNameValue, out var sheetName))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            value = TryGetFormulaSheetIndex(sheetName, out var requestedIndex)
+                ? new NumberValue(requestedIndex)
+                : ErrorValue.NA;
+            return true;
+        }
+
+        private bool TryEvaluateFormulaSheetsFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            if (function.Arguments.Count == 0)
+            {
+                value = new NumberValue(workbook.SheetCount);
+                return true;
+            }
+
+            var argument = function.Arguments[0];
+            if (TryResolveFormulaArgumentSheet(argument, rowOffset, colOffset, out _))
+            {
+                value = new NumberValue(1);
+                return true;
+            }
+
+            if (!TryResolveFormulaInfoScalarArgument(argument, rowOffset, colOffset, out var scalar))
+            {
+                value = ErrorValue.Value;
+                return false;
+            }
+
+            value = scalar is ErrorValue error ? error : ErrorValue.Value;
+            return true;
+        }
+
+        private bool TryEvaluateFormulaGetPivotDataFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaInfoScalarArgument(function.Arguments[0], rowOffset, colOffset, out var dataFieldValue))
+                return false;
+
+            if (dataFieldValue is ErrorValue dataFieldError)
+            {
+                value = dataFieldError;
+                return true;
+            }
+
+            if (!TryResolveFormulaGetPivotDataReference(
+                function.Arguments[1],
+                rowOffset,
+                colOffset,
+                out var pivotReferenceSheet,
+                out var pivotReferenceRow,
+                out var pivotReferenceCol,
+                out var pivotReferenceError))
+            {
+                value = pivotReferenceError ?? ErrorValue.Ref;
+                return true;
+            }
+
+            var dataFieldCaption = FormulaPivotText(dataFieldValue);
+            if (string.IsNullOrWhiteSpace(dataFieldCaption))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            var filters = new Dictionary<string, string>(StringComparer.CurrentCultureIgnoreCase);
+            for (var index = 2; index < function.Arguments.Count; index += 2)
+            {
+                if (!TryResolveFormulaInfoScalarArgument(function.Arguments[index], rowOffset, colOffset, out var fieldValue) ||
+                    !TryResolveFormulaInfoScalarArgument(function.Arguments[index + 1], rowOffset, colOffset, out var itemValue))
+                {
+                    return false;
+                }
+
+                if (fieldValue is ErrorValue fieldError)
+                {
+                    value = fieldError;
+                    return true;
+                }
+
+                if (itemValue is ErrorValue itemError)
+                {
+                    value = itemError;
+                    return true;
+                }
+
+                var fieldName = FormulaPivotText(fieldValue);
+                var itemName = FormulaPivotText(itemValue);
+                if (string.IsNullOrWhiteSpace(fieldName))
+                {
+                    value = ErrorValue.Value;
+                    return true;
+                }
+
+                if (filters.TryGetValue(fieldName, out var existingItem) &&
+                    !string.Equals(existingItem, itemName, StringComparison.CurrentCultureIgnoreCase))
+                {
+                    value = ErrorValue.Ref;
+                    return true;
+                }
+
+                filters[fieldName] = itemName;
+            }
+
+            var pivotAddress = new CellAddress(pivotReferenceSheet.Id, pivotReferenceRow, pivotReferenceCol);
+            var pivotTable = pivotReferenceSheet.PivotTables.FirstOrDefault(pivot => pivot.TargetRange.Contains(pivotAddress));
+            if (pivotTable is null)
+            {
+                value = ErrorValue.Ref;
+                return true;
+            }
+
+            var headers = ReadFormulaPivotSourceHeaders(pivotTable);
+            var dataFieldIndex = pivotTable.DataFields.FindIndex(field =>
+                string.Equals(field.Name, dataFieldCaption, StringComparison.CurrentCultureIgnoreCase));
+            if (dataFieldIndex < 0 ||
+                !FormulaGetPivotDataFilterFieldsAreVisible(pivotTable, headers, filters) ||
+                !FormulaPivotPageFieldFiltersMatch(pivotTable, headers, filters))
+            {
+                value = ErrorValue.Ref;
+                return true;
+            }
+
+            var materialized = FormulaGetPivotMaterializedRange(pivotReferenceSheet, pivotTable);
+            var headerRows = (uint)Math.Max(1, pivotTable.ColumnFields.Count);
+            var firstDataRow = pivotTable.TargetRange.Start.Row + headerRows;
+            var outputRow = ResolveFormulaGetPivotDataRow(
+                pivotReferenceSheet,
+                pivotTable,
+                headers,
+                filters,
+                firstDataRow,
+                materialized.End.Row);
+            if (outputRow is null)
+            {
+                value = ErrorValue.Ref;
+                return true;
+            }
+
+            var outputColumn = ResolveFormulaGetPivotDataColumn(
+                pivotReferenceSheet,
+                pivotTable,
+                headers,
+                filters,
+                dataFieldIndex,
+                materialized.End.Col);
+            if (outputColumn is null)
+            {
+                value = ErrorValue.Ref;
+                return true;
+            }
+
+            value = pivotReferenceSheet.GetCell(outputRow.Value, outputColumn.Value)?.Value ?? ErrorValue.Ref;
+            return true;
+        }
+
+        private bool TryResolveFormulaInfoScalarArgument(
+            ConditionalFormulaOperand argument,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (argument.Kind == ConditionalFormulaOperandKind.ReferenceRange)
+            {
+                if (!TryMaterializeFormulaReferenceRange(argument, rowOffset, colOffset, out var range))
+                    return false;
+
+                if (!TryGetSingleFormulaRangeValue(range, out value))
+                    return false;
+
+                return true;
+            }
+
+            return TryResolveFormulaOperand(argument, rowOffset, colOffset, out value);
+        }
+
+        private bool TryResolveFormulaCellReferenceArgument(
+            ConditionalFormulaOperand argument,
+            int rowOffset,
+            int colOffset,
+            out Sheet targetSheet,
+            out uint row,
+            out uint col,
+            out ScalarValue cellValue)
+        {
+            cellValue = ErrorValue.Value;
+            return TryResolveFormulaTopLeftCellReference(
+                argument,
+                rowOffset,
+                colOffset,
+                out targetSheet,
+                out row,
+                out col,
+                out _,
+                out _) &&
+                ((cellValue = targetSheet.GetValue(row, col)) is not null);
+        }
+
+        private bool TryResolveFormulaTopLeftCellReference(
+            ConditionalFormulaOperand argument,
+            int rowOffset,
+            int colOffset,
+            out Sheet targetSheet,
+            out uint row,
+            out uint col,
+            out Cell? cell,
+            out ErrorValue? error)
+        {
+            targetSheet = default!;
+            row = 0;
+            col = 0;
+            cell = null;
+            error = null;
+
+            if (argument.Kind == ConditionalFormulaOperandKind.Reference)
+            {
+                if (!TryResolveFormulaReference(argument, rowOffset, colOffset, out targetSheet, out row, out col))
+                {
+                    error = ErrorValue.Ref;
+                    return false;
+                }
+
+                cell = targetSheet.GetCell(row, col);
+                return true;
+            }
+
+            if (argument.Kind == ConditionalFormulaOperandKind.ReferenceRange)
+            {
+                if (!TryResolveFormulaReferenceRange(
+                    argument,
+                    rowOffset,
+                    colOffset,
+                    out targetSheet,
+                    out row,
+                    out col,
+                    out _,
+                    out _))
+                {
+                    error = ErrorValue.Ref;
+                    return false;
+                }
+
+                cell = targetSheet.GetCell(row, col);
+                return true;
+            }
+
+            error = ErrorValue.NA;
+            return false;
+        }
+
+        private bool TryResolveFormulaArgumentSheet(
+            ConditionalFormulaOperand argument,
+            int rowOffset,
+            int colOffset,
+            out Sheet targetSheet)
+        {
+            if (argument.Kind == ConditionalFormulaOperandKind.Reference)
+                return TryResolveFormulaReference(argument, rowOffset, colOffset, out targetSheet, out _, out _);
+
+            if (argument.Kind == ConditionalFormulaOperandKind.ReferenceRange)
+            {
+                return TryResolveFormulaReferenceRange(
+                    argument,
+                    rowOffset,
+                    colOffset,
+                    out targetSheet,
+                    out _,
+                    out _,
+                    out _,
+                    out _);
+            }
+
+            targetSheet = default!;
+            return false;
+        }
+
+        private bool TryResolveFormulaGetPivotDataReference(
+            ConditionalFormulaOperand argument,
+            int rowOffset,
+            int colOffset,
+            out Sheet targetSheet,
+            out uint row,
+            out uint col,
+            out ErrorValue? error)
+        {
+            error = null;
+            if (argument.Kind == ConditionalFormulaOperandKind.Reference)
+                return TryResolveFormulaReference(argument, rowOffset, colOffset, out targetSheet, out row, out col);
+
+            if (argument.Kind == ConditionalFormulaOperandKind.ReferenceRange)
+            {
+                if (!TryResolveFormulaReferenceRange(
+                    argument,
+                    rowOffset,
+                    colOffset,
+                    out targetSheet,
+                    out row,
+                    out col,
+                    out var endRow,
+                    out var endCol))
+                {
+                    error = ErrorValue.Ref;
+                    return false;
+                }
+
+                if (row != endRow || col != endCol)
+                {
+                    error = ErrorValue.Ref;
+                    return false;
+                }
+
+                return true;
+            }
+
+            targetSheet = default!;
+            row = 0;
+            col = 0;
+            error = ErrorValue.Ref;
+            return false;
+        }
+
+        private bool TryGetFormulaSheetIndex(Sheet targetSheet, out int index)
+        {
+            index = 0;
+            for (var i = 0; i < workbook.Sheets.Count; i++)
+            {
+                if (workbook.Sheets[i].Id != targetSheet.Id)
+                    continue;
+
+                index = i + 1;
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool TryGetFormulaSheetIndex(string sheetName, out int index)
+        {
+            index = 0;
+            for (var i = 0; i < workbook.Sheets.Count; i++)
+            {
+                if (!string.Equals(workbook.Sheets[i].Name, sheetName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                index = i + 1;
+                return true;
+            }
+
+            return false;
+        }
+
+        private CellStyle ResolveFormulaCellStyle(Sheet targetSheet, Cell? cell, uint row, uint col)
+        {
+            if (cell is not null)
+                return workbook.GetStyle(cell.StyleId);
+
+            var styleOnly = targetSheet.GetStyleOnly(row, col);
+            return styleOnly.HasValue ? workbook.GetStyle(styleOnly.Value) : CellStyle.Default;
+        }
+
+        private static string FormulaFormatAddressSheetText(string sheetText) =>
+            FormulaIsSimpleSheetQualifier(sheetText)
+                ? sheetText
+                : $"'{sheetText.Replace("'", "''")}'";
+
+        private static bool FormulaIsSimpleSheetQualifier(string sheetName) =>
+            sheetName.Length > 0 && sheetName.All(static ch => char.IsLetterOrDigit(ch) || ch is '_' or '.');
+
+        private static string FormulaCellPrefixCode(CellStyle? style) =>
+            (style?.HorizontalAlignment ?? HorizontalAlignment.General) switch
+            {
+                HorizontalAlignment.Left => "'",
+                HorizontalAlignment.Center => "^",
+                HorizontalAlignment.Right => "\"",
+                _ => string.Empty
+            };
+
+        private static string FormulaCellFormatInfo(string? numberFormat)
+        {
+            var code = FormulaCellFormatCode(numberFormat);
+            if (FormulaCellNegativeSectionUsesColor(numberFormat))
+                code += "-";
+            if (FormulaCellPositiveOrAllSectionUsesParentheses(numberFormat))
+                code += "()";
+            return code;
+        }
+
+        private static string FormulaCellFormatCode(string? numberFormat)
+        {
+            var normalized = NormalizeFormulaCellNumberFormat(numberFormat);
+            if (normalized.Length == 0 || normalized == "general")
+                return "G";
+
+            if (normalized.Length >= 2 && normalized[0] == '(' && normalized[^1] == ')')
+                normalized = normalized[1..^1];
+
+            return normalized switch
+            {
+                "0" => "F0",
+                "#,##0" => ",0",
+                "0.00" => "F2",
+                "#,##0.00" => ",2",
+                "$#,##0" or "$#,##0;($#,##0)" => "C0",
+                "$#,##0.00" or "$#,##0.00;($#,##0.00)" => "C2",
+                "0%" => "P0",
+                "0.00%" => "P2",
+                "0.00e+00" or "0.00e+0" or "0e+00" or "0e+0" => "S2",
+                "d-mmm-yy" or "dd-mmm-yy" => "D1",
+                "d-mmm" or "dd-mmm" => "D2",
+                "mmm-yy" => "D3",
+                "m/d/yy" or "m/d/yyyy" or "mm/dd/yy" or "mm/dd/yyyy" or "m/d/yyh:mm" or "m/d/yyyyh:mm" => "D4",
+                "mm/dd" or "m/d" => "D5",
+                "h:mm:ssam/pm" => "D6",
+                "h:mmam/pm" => "D7",
+                "h:mm:ss" => "D8",
+                _ => "G"
+            };
+        }
+
+        private static string NormalizeFormulaCellNumberFormat(string? numberFormat)
+        {
+            if (string.IsNullOrWhiteSpace(numberFormat))
+                return string.Empty;
+
+            var chars = new List<char>(numberFormat.Length);
+            var quoted = false;
+            var escaped = false;
+            var bracketed = false;
+
+            foreach (var ch in numberFormat)
+            {
+                if (ch == ';' && !quoted && !bracketed)
+                    break;
+
+                if (escaped)
+                {
+                    escaped = false;
+                    continue;
+                }
+
+                if (ch == '\\')
+                {
+                    escaped = true;
+                    continue;
+                }
+
+                if (ch == '"')
+                {
+                    quoted = !quoted;
+                    continue;
+                }
+
+                if (quoted)
+                    continue;
+
+                if (ch == '[')
+                {
+                    bracketed = true;
+                    continue;
+                }
+
+                if (ch == ']')
+                {
+                    bracketed = false;
+                    continue;
+                }
+
+                if (bracketed || ch is '_' or '*' or ' ')
+                    continue;
+
+                chars.Add(char.ToLowerInvariant(ch));
+            }
+
+            return new string(chars.ToArray());
+        }
+
+        private static bool FormulaCellNegativeSectionUsesColor(string? numberFormat)
+        {
+            var negativeSection = GetFormulaCellNegativeFormatSection(numberFormat);
+            if (negativeSection is null)
+                return false;
+
+            foreach (var bracket in EnumerateFormulaCellBracketedFormatTokens(negativeSection))
+            {
+                var token = bracket.Trim();
+                if (token.Length == 0)
+                    continue;
+                if (token.StartsWith("$-", StringComparison.Ordinal))
+                    continue;
+                if (token[0] is '<' or '>' or '=')
+                    continue;
+                if (token.Contains('=') || char.IsDigit(token[0]))
+                    continue;
+                if (token.StartsWith("DBNum", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool FormulaCellPositiveOrAllSectionUsesParentheses(string? numberFormat)
+        {
+            var sections = SplitFormulaCellFormatSections(numberFormat);
+            return sections.Count > 0 && FormulaCellFormatSectionUsesParentheses(sections[0]);
+        }
+
+        private static bool FormulaCellFormatSectionUsesParentheses(string section)
+        {
+            var quoted = false;
+            var escaped = false;
+            var bracketed = false;
+            var hasOpen = false;
+            var hasClose = false;
+
+            foreach (var ch in section)
+            {
+                if (escaped)
+                {
+                    escaped = false;
+                    continue;
+                }
+
+                if (ch == '\\')
+                {
+                    escaped = true;
+                    continue;
+                }
+
+                if (ch == '"')
+                {
+                    quoted = !quoted;
+                    continue;
+                }
+
+                if (quoted)
+                    continue;
+
+                if (ch == '[')
+                {
+                    bracketed = true;
+                    continue;
+                }
+
+                if (ch == ']')
+                {
+                    bracketed = false;
+                    continue;
+                }
+
+                if (bracketed)
+                    continue;
+
+                hasOpen |= ch == '(';
+                hasClose |= ch == ')';
+            }
+
+            return hasOpen && hasClose;
+        }
+
+        private static string? GetFormulaCellNegativeFormatSection(string? numberFormat)
+        {
+            var sections = SplitFormulaCellFormatSections(numberFormat);
+            return sections.Count >= 2 ? sections[1] : null;
+        }
+
+        private static List<string> SplitFormulaCellFormatSections(string? numberFormat)
+        {
+            var sections = new List<string>();
+            if (string.IsNullOrEmpty(numberFormat))
+                return sections;
+
+            var builder = new System.Text.StringBuilder();
+            var quoted = false;
+            var escaped = false;
+            var bracketed = false;
+
+            foreach (var ch in numberFormat)
+            {
+                if (escaped)
+                {
+                    builder.Append(ch);
+                    escaped = false;
+                    continue;
+                }
+
+                if (ch == '\\')
+                {
+                    builder.Append(ch);
+                    escaped = true;
+                    continue;
+                }
+
+                if (ch == '"')
+                {
+                    builder.Append(ch);
+                    quoted = !quoted;
+                    continue;
+                }
+
+                if (!quoted)
+                {
+                    if (ch == '[')
+                        bracketed = true;
+                    else if (ch == ']')
+                        bracketed = false;
+                    else if (ch == ';' && !bracketed)
+                    {
+                        sections.Add(builder.ToString());
+                        builder.Clear();
+                        continue;
+                    }
+                }
+
+                builder.Append(ch);
+            }
+
+            sections.Add(builder.ToString());
+            return sections;
+        }
+
+        private static IEnumerable<string> EnumerateFormulaCellBracketedFormatTokens(string section)
+        {
+            var quoted = false;
+            var escaped = false;
+            var tokenStart = -1;
+
+            for (var i = 0; i < section.Length; i++)
+            {
+                var ch = section[i];
+                if (escaped)
+                {
+                    escaped = false;
+                    continue;
+                }
+
+                if (ch == '\\')
+                {
+                    escaped = true;
+                    continue;
+                }
+
+                if (ch == '"')
+                {
+                    quoted = !quoted;
+                    continue;
+                }
+
+                if (quoted)
+                    continue;
+
+                if (ch == '[')
+                {
+                    tokenStart = i + 1;
+                    continue;
+                }
+
+                if (ch == ']' && tokenStart >= 0)
+                {
+                    yield return section[tokenStart..i];
+                    tokenStart = -1;
+                }
+            }
+        }
+
+        private bool FormulaGetPivotDataFilterFieldsAreVisible(
+            PivotTableModel pivotTable,
+            IReadOnlyList<string> headers,
+            IReadOnlyDictionary<string, string> filters)
+        {
+            var visibleFields = pivotTable.RowFields
+                .Concat(pivotTable.ColumnFields)
+                .Concat(pivotTable.PageFields)
+                .Select(field => FormulaPivotHeader(headers, field.SourceFieldIndex))
+                .Where(header => !string.IsNullOrWhiteSpace(header))
+                .ToHashSet(StringComparer.CurrentCultureIgnoreCase);
+
+            return filters.Keys.All(visibleFields.Contains);
+        }
+
+        private static bool FormulaPivotPageFieldFiltersMatch(
+            PivotTableModel pivotTable,
+            IReadOnlyList<string> headers,
+            IReadOnlyDictionary<string, string> filters)
+        {
+            foreach (var pageField in pivotTable.PageFields)
+            {
+                var header = FormulaPivotHeader(headers, pageField.SourceFieldIndex);
+                if (!filters.TryGetValue(header, out var expected))
+                    continue;
+
+                if (!string.IsNullOrWhiteSpace(pageField.SelectedItem))
+                    return string.Equals(pageField.SelectedItem, expected, StringComparison.CurrentCultureIgnoreCase);
+
+                if (pageField.SelectedItems is { Count: > 0 } selectedItems)
+                    return selectedItems.Contains(expected, StringComparer.CurrentCultureIgnoreCase);
+            }
+
+            return true;
+        }
+
+        private uint? ResolveFormulaGetPivotDataRow(
+            Sheet pivotSheet,
+            PivotTableModel pivotTable,
+            IReadOnlyList<string> headers,
+            IReadOnlyDictionary<string, string> filters,
+            uint firstDataRow,
+            uint lastRow)
+        {
+            var rowFields = pivotTable.RowFields.ToList();
+            if (rowFields.Count == 0)
+                return firstDataRow <= lastRow ? firstDataRow : null;
+
+            var requestedRowFieldCount = rowFields.Count(field => filters.ContainsKey(FormulaPivotHeader(headers, field.SourceFieldIndex)));
+            if (requestedRowFieldCount == 0)
+            {
+                for (var row = firstDataRow; row <= lastRow; row++)
+                    if (IsFormulaPivotGrandTotalText(pivotSheet.GetCell(row, pivotTable.TargetRange.Start.Col)?.Value))
+                        return row;
+            }
+
+            if (requestedRowFieldCount > 0 && requestedRowFieldCount < rowFields.Count)
+            {
+                for (var row = firstDataRow; row <= lastRow; row++)
+                {
+                    if (TryReadFormulaPivotSubtotalCaption(pivotSheet.GetCell(row, pivotTable.TargetRange.Start.Col)?.Value, out var subtotalItem) &&
+                        FormulaPivotSubtotalMatches(
+                            pivotSheet,
+                            pivotTable,
+                            headers,
+                            filters,
+                            firstDataRow,
+                            row,
+                            subtotalItem,
+                            requestedRowFieldCount))
+                    {
+                        return row;
+                    }
+                }
+            }
+
+            for (var row = firstDataRow; row <= lastRow; row++)
+            {
+                if (IsFormulaPivotGrandTotalText(pivotSheet.GetCell(row, pivotTable.TargetRange.Start.Col)?.Value))
+                {
+                    if (!rowFields.Any(field => filters.ContainsKey(FormulaPivotHeader(headers, field.SourceFieldIndex))))
+                        return row;
+                    continue;
+                }
+
+                if (TryFormulaCompactPivotRowMatch(pivotSheet, pivotTable, headers, filters, row, rowFields, requestedRowFieldCount))
+                    return row;
+
+                var matches = true;
+                for (var index = 0; index < rowFields.Count; index++)
+                {
+                    var header = FormulaPivotHeader(headers, rowFields[index].SourceFieldIndex);
+                    if (!filters.TryGetValue(header, out var expected))
+                        continue;
+
+                    var actual = ReadFormulaPivotRowItem(pivotSheet, pivotTable, row, firstDataRow, index, rowFields.Count);
+                    if (!string.Equals(actual, expected, StringComparison.CurrentCultureIgnoreCase))
+                    {
+                        matches = false;
+                        break;
+                    }
+                }
+
+                if (matches)
+                    return row;
+            }
+
+            return null;
+        }
+
+        private static bool TryFormulaCompactPivotRowMatch(
+            Sheet pivotSheet,
+            PivotTableModel pivotTable,
+            IReadOnlyList<string> headers,
+            IReadOnlyDictionary<string, string> filters,
+            uint row,
+            IReadOnlyList<PivotFieldModel> rowFields,
+            int requestedRowFieldCount)
+        {
+            if (pivotTable.ReportLayout != PivotReportLayout.Compact || rowFields.Count <= 1)
+                return false;
+            if (requestedRowFieldCount != rowFields.Count)
+                return false;
+
+            var expectedParts = new List<string>(rowFields.Count);
+            foreach (var field in rowFields)
+            {
+                var header = FormulaPivotHeader(headers, field.SourceFieldIndex);
+                if (!filters.TryGetValue(header, out var expected))
+                    return false;
+                expectedParts.Add(expected);
+            }
+
+            var actual = FormulaPivotText(pivotSheet.GetCell(row, pivotTable.TargetRange.Start.Col)?.Value);
+            var expectedCaption = string.Join(" ", expectedParts);
+            return string.Equals(actual, expectedCaption, StringComparison.CurrentCultureIgnoreCase);
+        }
+
+        private static uint? ResolveFormulaGetPivotDataColumn(
+            Sheet pivotSheet,
+            PivotTableModel pivotTable,
+            IReadOnlyList<string> headers,
+            IReadOnlyDictionary<string, string> filters,
+            int dataFieldIndex,
+            uint lastColumn)
+        {
+            var rowFieldColumns = FormulaPivotRowFieldOutputColumnCount(pivotTable);
+            var firstValueColumn = pivotTable.TargetRange.Start.Col + (uint)rowFieldColumns;
+            if (pivotTable.ColumnFields.Count == 0)
+                return firstValueColumn + (uint)dataFieldIndex <= lastColumn ? firstValueColumn + (uint)dataFieldIndex : null;
+
+            if (!pivotTable.ColumnFields.Any(field => filters.ContainsKey(FormulaPivotHeader(headers, field.SourceFieldIndex))))
+            {
+                for (var col = firstValueColumn; col <= lastColumn; col++)
+                {
+                    var columnDataFieldIndex = (int)((col - firstValueColumn) % (uint)Math.Max(1, pivotTable.DataFields.Count));
+                    if (columnDataFieldIndex != dataFieldIndex)
+                        continue;
+                    for (var level = 0; level < pivotTable.ColumnFields.Count; level++)
+                        if (IsFormulaPivotGrandTotalText(pivotSheet.GetCell(pivotTable.TargetRange.Start.Row + (uint)level, col)?.Value))
+                            return col;
+                }
+            }
+
+            for (var col = firstValueColumn; col <= lastColumn; col++)
+            {
+                var columnDataFieldIndex = (int)((col - firstValueColumn) % (uint)Math.Max(1, pivotTable.DataFields.Count));
+                if (columnDataFieldIndex != dataFieldIndex)
+                    continue;
+
+                var matches = true;
+                for (var level = 0; level < pivotTable.ColumnFields.Count; level++)
+                {
+                    var field = pivotTable.ColumnFields[level];
+                    var header = FormulaPivotHeader(headers, field.SourceFieldIndex);
+                    if (!filters.TryGetValue(header, out var expected))
+                        continue;
+
+                    var caption = FormulaPivotText(pivotSheet.GetCell(pivotTable.TargetRange.Start.Row + (uint)level, col)?.Value);
+                    if (pivotTable.DataFields.Count > 1 && level == pivotTable.ColumnFields.Count - 1)
+                    {
+                        var dataFieldName = pivotTable.DataFields[dataFieldIndex].Name;
+                        if (caption.EndsWith(dataFieldName, StringComparison.CurrentCultureIgnoreCase))
+                            caption = caption[..^dataFieldName.Length].TrimEnd();
+                    }
+
+                    if (!string.Equals(caption, expected, StringComparison.CurrentCultureIgnoreCase))
+                    {
+                        matches = false;
+                        break;
+                    }
+                }
+
+                if (matches)
+                    return col;
+            }
+
+            return null;
+        }
+
+        private static bool FormulaPivotSubtotalMatches(
+            Sheet pivotSheet,
+            PivotTableModel pivotTable,
+            IReadOnlyList<string> headers,
+            IReadOnlyDictionary<string, string> filters,
+            uint firstDataRow,
+            uint subtotalRow,
+            string subtotalItem,
+            int requestedRowFieldCount)
+        {
+            for (var index = 0; index < pivotTable.RowFields.Count; index++)
+            {
+                var header = FormulaPivotHeader(headers, pivotTable.RowFields[index].SourceFieldIndex);
+                if (!filters.TryGetValue(header, out var expected))
+                    continue;
+
+                string? actual = null;
+                if (index == 0)
+                    actual = subtotalItem;
+                else if (index < requestedRowFieldCount)
+                    actual = ReadFormulaPivotRowItem(pivotSheet, pivotTable, subtotalRow - 1, firstDataRow, index, pivotTable.RowFields.Count);
+
+                if (!string.Equals(actual, expected, StringComparison.CurrentCultureIgnoreCase))
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static string? ReadFormulaPivotRowItem(
+            Sheet pivotSheet,
+            PivotTableModel pivotTable,
+            uint row,
+            uint firstDataRow,
+            int fieldIndex,
+            int rowFieldCount)
+        {
+            if (pivotTable.ReportLayout == PivotReportLayout.Compact && rowFieldCount > 1)
+                return FormulaPivotText(pivotSheet.GetCell(row, pivotTable.TargetRange.Start.Col)?.Value);
+
+            var col = pivotTable.TargetRange.Start.Col + (uint)fieldIndex;
+            for (var current = row; current >= firstDataRow; current--)
+            {
+                var value = pivotSheet.GetCell(current, col)?.Value;
+                if (value is not null)
+                    return FormulaPivotText(value);
+                if (current == firstDataRow)
+                    break;
+            }
+
+            return null;
+        }
+
+        private IReadOnlyList<string> ReadFormulaPivotSourceHeaders(PivotTableModel pivotTable)
+        {
+            var sourceSheet = workbook.GetSheet(pivotTable.SourceRange.Start.Sheet);
+            if (sourceSheet is null)
+                return [];
+
+            var headers = new List<string>();
+            for (var col = pivotTable.SourceRange.Start.Col; col <= pivotTable.SourceRange.End.Col; col++)
+                headers.Add(FormulaPivotText(sourceSheet.GetCell(pivotTable.SourceRange.Start.Row, col)?.Value));
+            return headers;
+        }
+
+        private static string FormulaPivotHeader(IReadOnlyList<string> headers, int index) =>
+            index >= 0 && index < headers.Count ? headers[index] : string.Empty;
+
+        private static int FormulaPivotRowFieldOutputColumnCount(PivotTableModel pivotTable) =>
+            pivotTable.ReportLayout == PivotReportLayout.Compact && pivotTable.RowFields.Count > 1
+                ? 1
+                : pivotTable.RowFields.Count;
+
+        private static GridRange FormulaGetPivotMaterializedRange(Sheet pivotSheet, PivotTableModel pivotTable)
+        {
+            uint? minRow = null;
+            uint? minCol = null;
+            uint? maxRow = null;
+            uint? maxCol = null;
+            for (var row = pivotTable.TargetRange.Start.Row; row <= pivotTable.TargetRange.End.Row; row++)
+            {
+                for (var col = pivotTable.TargetRange.Start.Col; col <= pivotTable.TargetRange.End.Col; col++)
+                {
+                    if (pivotSheet.GetCell(row, col) is null)
+                        continue;
+
+                    minRow = minRow is null ? row : Math.Min(minRow.Value, row);
+                    minCol = minCol is null ? col : Math.Min(minCol.Value, col);
+                    maxRow = maxRow is null ? row : Math.Max(maxRow.Value, row);
+                    maxCol = maxCol is null ? col : Math.Max(maxCol.Value, col);
+                }
+            }
+
+            if (minRow is null || minCol is null || maxRow is null || maxCol is null)
+                return new GridRange(pivotTable.TargetRange.Start, pivotTable.TargetRange.Start);
+
+            return new GridRange(
+                new CellAddress(pivotSheet.Id, minRow.Value, minCol.Value),
+                new CellAddress(pivotSheet.Id, maxRow.Value, maxCol.Value));
+        }
+
+        private static bool IsFormulaPivotGrandTotalText(ScalarValue? value) =>
+            value is TextValue text && text.Value.StartsWith("Grand Total", StringComparison.CurrentCultureIgnoreCase);
+
+        private static bool TryReadFormulaPivotSubtotalCaption(ScalarValue? value, out string item)
+        {
+            item = string.Empty;
+            if (value is not TextValue text ||
+                !text.Value.EndsWith(" Total", StringComparison.CurrentCultureIgnoreCase) ||
+                text.Value.StartsWith("Grand Total", StringComparison.CurrentCultureIgnoreCase))
+            {
+                return false;
+            }
+
+            item = text.Value[..^" Total".Length];
+            return item.Length > 0;
+        }
+
+        private static string FormulaPivotText(ScalarValue? value) => value switch
+        {
+            null or BlankValue => string.Empty,
+            TextValue text => text.Value,
+            NumberValue number => number.Value.ToString(CultureInfo.InvariantCulture),
+            DateTimeValue date => date.Value.ToString(CultureInfo.InvariantCulture),
+            BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+            ErrorValue error => error.Code,
+            _ => value.ToString() ?? string.Empty
+        };
 
         private bool TryEvaluateFormulaLookupReferenceFunction(
             ConditionalFormulaScalarFunction function,
