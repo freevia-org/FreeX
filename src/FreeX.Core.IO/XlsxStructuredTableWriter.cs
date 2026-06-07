@@ -135,10 +135,7 @@ internal static class XlsxStructuredTableWriter
             root.SetAttributeValue("published", published ? "1" : "0");
         if (!string.IsNullOrWhiteSpace(table.Comment))
             root.SetAttributeValue("comment", table.Comment);
-        foreach (var (name, value) in table.NativeAttributes ?? new Dictionary<string, string>())
-        {
-            TrySetNativeAttributeIfMissing(root, name, value);
-        }
+        ApplyNativeAttributesIfMissing(root, table.NativeAttributes);
 
         if (table.HasAutoFilter)
             root.Add(ToAutoFilterXml(table, workbookNs));
@@ -195,10 +192,7 @@ internal static class XlsxStructuredTableWriter
                 ? null
                 : new XElement(workbookNs + "totalsRowFormula", column.TotalsRowFormula));
 
-        foreach (var (name, value) in column.NativeAttributes ?? new Dictionary<string, string>())
-        {
-            TrySetNativeAttributeIfMissing(element, name, value);
-        }
+        ApplyNativeAttributesIfMissing(element, column.NativeAttributes);
 
         foreach (var nativeChildXml in column.NativeChildXmls ?? [])
         {
@@ -219,10 +213,7 @@ internal static class XlsxStructuredTableWriter
         if (!string.IsNullOrWhiteSpace(table.StyleName))
             element.SetAttributeValue("name", table.StyleName);
 
-        foreach (var (name, value) in table.NativeStyleInfoAttributes ?? new Dictionary<string, string>())
-        {
-            TrySetNativeAttributeIfMissing(element, name, value);
-        }
+        ApplyNativeAttributesIfMissing(element, table.NativeStyleInfoAttributes);
 
         foreach (var nativeChildXml in table.NativeStyleInfoChildXmls ?? [])
         {
@@ -258,10 +249,7 @@ internal static class XlsxStructuredTableWriter
         StructuredTableModel table,
         XNamespace workbookNs)
     {
-        foreach (var (name, value) in table.NativeAutoFilterAttributes ?? new Dictionary<string, string>())
-        {
-            TrySetNativeAttributeIfMissing(element, name, value);
-        }
+        ApplyNativeAttributesIfMissing(element, table.NativeAutoFilterAttributes);
 
         foreach (var nativeChildXml in table.NativeAutoFilterChildXmls ?? [])
         {
@@ -276,10 +264,7 @@ internal static class XlsxStructuredTableWriter
         var element = new XElement(
             workbookNs + "filterColumn",
             new XAttribute("colId", filterColumn.ColumnId.ToString(CultureInfo.InvariantCulture)));
-        foreach (var (name, value) in filterColumn.NativeAttributes ?? new Dictionary<string, string>())
-        {
-            TrySetNativeAttributeIfMissing(element, name, value);
-        }
+        ApplyNativeAttributesIfMissing(element, filterColumn.NativeAttributes);
 
         var hasCustomFilters = filterColumn.CustomFilters.Count > 0;
         if (!hasCustomFilters && (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank))
@@ -300,10 +285,7 @@ internal static class XlsxStructuredTableWriter
             else if (filterColumn.CustomFiltersAnd)
                 customFilters.SetAttributeValue("and", "1");
 
-            foreach (var (name, value) in filterColumn.NativeCustomFiltersAttributes ?? new Dictionary<string, string>())
-            {
-                TrySetNativeAttributeIfMissing(customFilters, name, value);
-            }
+            ApplyNativeAttributesIfMissing(customFilters, filterColumn.NativeCustomFiltersAttributes);
 
             element.Add(customFilters);
         }
@@ -324,10 +306,7 @@ internal static class XlsxStructuredTableWriter
         if (filter.Value is not null)
             element.SetAttributeValue("val", filter.Value);
 
-        foreach (var (name, value) in filter.NativeAttributes ?? new Dictionary<string, string>())
-        {
-            TrySetNativeAttributeIfMissing(element, name, value);
-        }
+        ApplyNativeAttributesIfMissing(element, filter.NativeAttributes);
 
         return element;
     }
@@ -375,6 +354,19 @@ internal static class XlsxStructuredTableWriter
         catch
         {
             // Ignore malformed native table payloads from older saves.
+        }
+    }
+
+    private static void ApplyNativeAttributesIfMissing(
+        XElement element,
+        IReadOnlyDictionary<string, string>? attributes)
+    {
+        if (attributes is null)
+            return;
+
+        foreach (var (name, value) in attributes)
+        {
+            TrySetNativeAttributeIfMissing(element, name, value);
         }
     }
 
