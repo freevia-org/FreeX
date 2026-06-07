@@ -118,11 +118,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
 
         MergeDifferentialStyleElementNativeMetadata(dxf, style, workbookNs);
 
-        if (style.NativeDifferentialAttributes is { } attributes)
-        {
-            foreach (var (name, value) in attributes)
-                TrySetNativeAttributeIfMissing(dxf, name, value);
-        }
+        AddNativeAttributes(dxf, style.NativeDifferentialAttributes);
 
         if (style.NativeDifferentialChildXmls is { } childXmls)
         {
