@@ -12919,6 +12919,41 @@ public partial class FileAdapterSmokeTests
 
         var workbookRelsXml = LoadPackageXml(archive.GetEntry("xl/_rels/workbook.xml.rels")!);
         workbookRelsXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("revisionHeaders/revisionHeader1.xml");
+
+        var revisionHeaderRelsXml = LoadPackageXml(archive.GetEntry("xl/revisionHeaders/_rels/revisionHeader1.xml.rels")!);
+        revisionHeaderRelsXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("../revisions/revisionLog1.xml");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DropsDanglingWorkbookRevisionPointer()
+    {
+        var workbook = new Workbook("DanglingWorkbookRevisionPointerRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("dangling revision pointer"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddDanglingWorkbookRevisionPointer(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        archive.GetEntry("xl/revisionHeaders/missingRevisionHeader.xml").Should().BeNull();
+
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        workbookXml.Root!.Element(workbookNs + "revisionPtr").Should().BeNull();
+
+        var workbookRelsXml = LoadPackageXml(archive.GetEntry("xl/_rels/workbook.xml.rels")!);
+        workbookRelsXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("revisionHeaders/missingRevisionHeader.xml");
     }
 
     [Fact]
