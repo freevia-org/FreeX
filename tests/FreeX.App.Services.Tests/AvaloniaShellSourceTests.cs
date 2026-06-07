@@ -521,6 +521,18 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_BuildsAvaloniaFilePickerTypesFromCoreIoDescriptors()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("FileDialogFilterBuilder");
+        source.Should().Contain("BuildOpenPickerTypes(_session.OpenFormats, allSupportedName: \"All supported workbooks\")");
+        source.Should().Contain("BuildSavePickerTypes(_session.SaveFormats, preferredFirstExtension: NativeWorkbookExtension)");
+        source.Should().Contain("private static FilePickerFileType CreateFilePickerFileType(FilePickerTypeDescriptor descriptor)");
+        source.Should().Contain("Patterns = descriptor.Patterns.ToList()");
+    }
+
+    [Fact]
     public void App_WiresMacOsLaunchSmokeToRuntimeSnapshot()
     {
         var appSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "App.cs"));
