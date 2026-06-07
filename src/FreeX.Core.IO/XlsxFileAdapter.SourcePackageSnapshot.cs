@@ -1050,13 +1050,44 @@ public sealed partial class XlsxFileAdapter
 
         private static void NormalizePatchCustomViews(ZipArchive archive, Workbook workbook, bool sourceHasCustomViews)
         {
-            if (!sourceHasCustomViews || workbook.CustomViews.Count > 0)
+            if (!sourceHasCustomViews)
                 return;
 
-            var changed = RemovePatchWorkbookCustomViews(archive);
-            changed |= RemovePatchWorksheetCustomViews(archive);
+            var changed = workbook.CustomViews.Count > 0
+                ? NormalizePatchCustomWorkbookViews(archive)
+                : RemovePatchWorkbookCustomViews(archive) | RemovePatchWorksheetCustomViews(archive);
             if (changed)
                 XlsxExcelCompatibilityNormalizer.RemoveCalcChain(archive);
+        }
+
+        private static bool NormalizePatchCustomWorkbookViews(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return false;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var root = workbookXml.Root;
+            if (root is null)
+                return false;
+
+            var changed = false;
+            foreach (var customWorkbookViews in root.Elements(workbookNs + "customWorkbookViews").ToList())
+            {
+                changed |= XlsxWorkbookCustomViewNormalizer.NormalizeCustomWorkbookViewsElement(customWorkbookViews);
+                if (!XlsxWorkbookCustomViewNormalizer.ShouldRemoveCustomWorkbookViewsElement(customWorkbookViews))
+                    continue;
+
+                customWorkbookViews.Remove();
+                changed = true;
+            }
+
+            if (!changed)
+                return false;
+
+            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+            return true;
         }
 
         private static bool RemovePatchWorkbookCustomViews(ZipArchive archive)

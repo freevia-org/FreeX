@@ -997,6 +997,34 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Be(sourceSheetViews.ToString(SaveOptions.DisableFormatting));
     }
 
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidCustomWorkbookViewsForSchemaValidity()
+    {
+        using var source = Save(CreateCustomSheetViewsSourceWorkbook());
+        SetCustomWorkbookViewsInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var customWorkbookViews = ReadWorkbookChildElement(saved, "customWorkbookViews");
+        customWorkbookViews.Attribute("customCustomWorkbookViewsFlag").Should().BeNull();
+        customWorkbookViews.Element(customWorkbookViews.Name.Namespace + "nativeCustomWorkbookViewsChild").Should().BeNull();
+        var customWorkbookView = customWorkbookViews.Elements(customWorkbookViews.Name.Namespace + "customWorkbookView").Single();
+        AssertInvalidCustomWorkbookViewAttributesRemoved(customWorkbookView);
+    }
+
 
     [Fact]
     public void WorksheetAdditionalViews_ProducesSchemaValidWorkbook()
@@ -2874,6 +2902,45 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             ],
             Id: "{33333333-3333-3333-3333-333333333333}"));
         return workbook;
+    }
+
+    private static void SetCustomWorkbookViewsInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var customWorkbookViews = workbookXml.Root!.Element(workbookNs + "customWorkbookViews")!;
+        customWorkbookViews.SetAttributeValue("customCustomWorkbookViewsFlag", "removed");
+        customWorkbookViews.Add(new XElement(workbookNs + "nativeCustomWorkbookViewsChild"));
+        var customWorkbookView = customWorkbookViews.Element(workbookNs + "customWorkbookView")!;
+        customWorkbookView.SetAttributeValue("autoUpdate", "maybe");
+        customWorkbookView.SetAttributeValue("includePrintSettings", "maybe");
+        customWorkbookView.SetAttributeValue("mergeInterval", "not-a-number");
+        customWorkbookView.SetAttributeValue("activeSheetId", "not-a-number");
+        customWorkbookView.SetAttributeValue("xWindow", "not-a-number");
+        customWorkbookView.SetAttributeValue("yWindow", "not-a-number");
+        customWorkbookView.SetAttributeValue("showObjects", "invalid");
+        customWorkbookView.SetAttributeValue("showComments", "invalid");
+        customWorkbookView.SetAttributeValue("customCustomWorkbookViewFlag", "removed");
+        customWorkbookView.Add(new XElement(workbookNs + "nativeCustomWorkbookViewChild"));
+        ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+    }
+
+    private static void AssertInvalidCustomWorkbookViewAttributesRemoved(XElement customWorkbookView)
+    {
+        customWorkbookView.Attribute("name")!.Value.Should().Be("Review");
+        customWorkbookView.Attribute("guid")!.Value.Should().Be("{33333333-3333-3333-3333-333333333333}");
+        customWorkbookView.Attribute("autoUpdate").Should().BeNull();
+        customWorkbookView.Attribute("includePrintSettings").Should().BeNull();
+        customWorkbookView.Attribute("mergeInterval").Should().BeNull();
+        customWorkbookView.Attribute("activeSheetId")!.Value.Should().Be("1");
+        customWorkbookView.Attribute("xWindow").Should().BeNull();
+        customWorkbookView.Attribute("yWindow").Should().BeNull();
+        customWorkbookView.Attribute("showObjects").Should().BeNull();
+        customWorkbookView.Attribute("showComments").Should().BeNull();
+        customWorkbookView.Attribute("customCustomWorkbookViewFlag").Should().BeNull();
+        customWorkbookView.Element(customWorkbookView.Name.Namespace + "nativeCustomWorkbookViewChild").Should().BeNull();
     }
 
     private static Workbook CreateWorksheetAdditionalViewsSourceWorkbook()

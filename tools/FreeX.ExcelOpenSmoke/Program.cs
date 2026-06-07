@@ -5129,6 +5129,11 @@ internal static class ExcelOpenSmoke
             ],
             issues);
 
+        foreach (var attribute in customWorkbookViews.Attributes().Where(attribute => !attribute.IsNamespaceDeclaration))
+        {
+            issues.Add($"{WorkbookPart} {description} has unsupported attribute {attribute.Name}");
+        }
+
         foreach (var unexpectedChild in customWorkbookViews.Elements().Where(element => element.Name != SpreadsheetNs + "customWorkbookView"))
         {
             issues.Add($"{WorkbookPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}; expected customWorkbookView entries only");
@@ -5166,6 +5171,17 @@ internal static class ExcelOpenSmoke
             AddOptionalWorkbookMetadataBooleanIssue(description, attribute.Name.LocalName, attribute.Value, issues);
         }
 
+        foreach (var attribute in customWorkbookView.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                (attribute.Name.NamespaceName.Length == 0 && IsKnownCustomWorkbookViewAttribute(attribute.Name.LocalName)))
+            {
+                continue;
+            }
+
+            issues.Add($"{WorkbookPart} {description} has unsupported attribute {attribute.Name}");
+        }
+
         foreach (var attributeName in new[]
                  {
                      "mergeInterval",
@@ -5185,11 +5201,41 @@ internal static class ExcelOpenSmoke
         if (!string.IsNullOrWhiteSpace(showObjects) && !IsKnownWorkbookPropertiesShowObjectsValue(showObjects))
             issues.Add($"{WorkbookPart} {description} has invalid showObjects value '{showObjects}'");
 
+        var showComments = customWorkbookView.Attribute("showComments")?.Value;
+        if (!string.IsNullOrWhiteSpace(showComments) && !IsKnownCustomWorkbookViewShowCommentsValue(showComments))
+            issues.Add($"{WorkbookPart} {description} has invalid showComments value '{showComments}'");
+
         foreach (var unexpectedChild in customWorkbookView.Elements().Where(element => element.Name != SpreadsheetNs + "extLst"))
         {
-            issues.Add($"{WorkbookPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+            issues.Add($"{WorkbookPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}; expected extLst only");
         }
     }
+
+    private static bool IsKnownCustomWorkbookViewAttribute(string name) =>
+        name is "name" or
+            "guid" or
+            "autoUpdate" or
+            "mergeInterval" or
+            "changesSavedWin" or
+            "onlySync" or
+            "personalView" or
+            "includePrintSettings" or
+            "includeHiddenRowCol" or
+            "maximized" or
+            "minimized" or
+            "showHorizontalScroll" or
+            "showVerticalScroll" or
+            "showSheetTabs" or
+            "xWindow" or
+            "yWindow" or
+            "windowWidth" or
+            "windowHeight" or
+            "tabRatio" or
+            "activeSheetId" or
+            "showFormulaBar" or
+            "showStatusbar" or
+            "showComments" or
+            "showObjects";
 
     private static bool IsKnownCustomWorkbookViewBooleanAttribute(string name) =>
         name is "autoUpdate" or
@@ -5205,6 +5251,9 @@ internal static class ExcelOpenSmoke
             "showSheetTabs" or
             "showFormulaBar" or
             "showStatusbar";
+
+    private static bool IsKnownCustomWorkbookViewShowCommentsValue(string value) =>
+        value.Trim() is "commNone" or "commIndicator" or "commIndAndComment";
 
     private static void ThrowInvalidWorkbookViewMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
     {
