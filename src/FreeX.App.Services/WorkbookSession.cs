@@ -312,10 +312,14 @@ public sealed class WorkbookSession
         if (string.IsNullOrEmpty(text))
             return WorkbookNavigationResult.Failed("Find text is required.");
 
-        var effectiveOptions = options ?? CreateActiveSheetFindOptions(FindLookIn.Formulas);
+        if (searchText is null && options is null)
+        {
+            options = _lastFindOptions;
+            matchCase = _lastFindMatchCase;
+            matchEntireCell = _lastFindMatchEntireCell;
+        }
 
-        if (effectiveOptions.Within == FindWithin.Sheet && effectiveOptions.CurrentSheetId is null)
-            effectiveOptions = effectiveOptions with { CurrentSheetId = ActiveSheet.Id };
+        var effectiveOptions = ResolveFindOptions(options, FindLookIn.Formulas);
 
         var sameSearch =
             string.Equals(_lastFindText, text, StringComparison.Ordinal) &&
@@ -357,9 +361,7 @@ public sealed class WorkbookSession
         if (string.IsNullOrEmpty(searchText))
             return WorkbookFindAllResult.Failed("Find text is required.");
 
-        var effectiveOptions = options ?? CreateActiveSheetFindOptions(FindLookIn.Formulas);
-        if (effectiveOptions.Within == FindWithin.Sheet && effectiveOptions.CurrentSheetId is null)
-            effectiveOptions = effectiveOptions with { CurrentSheetId = ActiveSheet.Id };
+        var effectiveOptions = ResolveFindOptions(options, FindLookIn.Formulas);
 
         var results = FindReplaceService.Find(Workbook, searchText, effectiveOptions, matchCase, matchEntireCell);
         RememberFindSearch(searchText, effectiveOptions, matchCase, matchEntireCell);
@@ -372,51 +374,13 @@ public sealed class WorkbookSession
         string searchText,
         string replaceText,
         bool matchCase = false,
-        bool matchEntireCell = false)
-    {
-        ArgumentNullException.ThrowIfNull(searchText);
-        ArgumentNullException.ThrowIfNull(replaceText);
+        bool matchEntireCell = false) =>
+        ReplaceAllValues(searchText, replaceText, options: null, matchCase, matchEntireCell);
 
-        if (string.IsNullOrEmpty(searchText))
-            return WorkbookReplaceResult.Failed("Find text is required.");
-
-        var options = CreateActiveSheetFindOptions(FindLookIn.Values);
-        RememberFindSearch(searchText, options, matchCase, matchEntireCell);
-        _lastFindAddress = null;
-
-        var matches = FindReplaceService.Find(Workbook, searchText, options, matchCase, matchEntireCell);
-        if (matches.Count == 0)
-            return WorkbookReplaceResult.Replaced(0);
-
-        var comparison = matchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
-        var edits = new List<(CellAddress Address, Cell NewCell)>();
-        foreach (var match in matches)
-        {
-            var cell = ActiveSheet.GetCell(match.Address);
-            if (cell is null || cell.HasFormula)
-                continue;
-
-            if (TryCreateReplacementCell(cell, searchText, replaceText, comparison, matchEntireCell, out var newCell))
-                edits.Add((match.Address, newCell));
-        }
-
-        if (edits.Count == 0)
-            return WorkbookReplaceResult.Replaced(0);
-
-        var selectedRange = SelectedRange;
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            new EditCellsCommand(ActiveSheet.Id, edits));
-        if (!result.Success)
-            return WorkbookReplaceResult.Failed(result.ErrorMessage ?? "Replace All failed.");
-
-        ApplySuccessfulRangeEditResult(result, selectedRange);
-        return WorkbookReplaceResult.Replaced(edits.Count);
-    }
-
-    public WorkbookReplaceResult ReplaceNextValue(
+    public WorkbookReplaceResult ReplaceAllValues(
         string searchText,
         string replaceText,
+        FindOptions? options,
         bool matchCase = false,
         bool matchEntireCell = false)
     {
@@ -426,18 +390,94 @@ public sealed class WorkbookSession
         if (string.IsNullOrEmpty(searchText))
             return WorkbookReplaceResult.Failed("Find text is required.");
 
-        var options = CreateActiveSheetFindOptions(FindLookIn.Values);
+        var effectiveOptions = ResolveFindOptions(options, FindLookIn.Values);
+        RememberFindSearch(searchText, effectiveOptions, matchCase, matchEntireCell);
+        _lastFindAddress = null;
+
+        var matches = FindReplaceService.Find(Workbook, searchText, effectiveOptions, matchCase, matchEntireCell);
+        if (matches.Count == 0)
+            return WorkbookReplaceResult.Replaced(0);
+
+        var comparison = matchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+        var editsBySheet = new Dictionary<SheetId, List<(CellAddress Address, Cell NewCell)>>();
+        foreach (var match in matches)
+        {
+            var sheet = Workbook.GetSheet(match.Address.Sheet);
+            var cell = sheet?.GetCell(match.Address);
+            if (cell is null)
+                continue;
+
+            if (!TryCreateReplacementCell(
+                    cell,
+                    searchText,
+                    replaceText,
+                    comparison,
+                    matchEntireCell,
+                    effectiveOptions.LookIn,
+                    out var newCell))
+                continue;
+
+            if (!editsBySheet.TryGetValue(match.Address.Sheet, out var edits))
+            {
+                edits = [];
+                editsBySheet[match.Address.Sheet] = edits;
+            }
+
+            edits.Add((match.Address, newCell));
+        }
+
+        if (editsBySheet.Count == 0)
+            return WorkbookReplaceResult.Replaced(0, matchCount: matches.Count);
+
+        var selectedRange = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            ToCommand(
+                "Replace All",
+                editsBySheet
+                    .Select(pair => (IWorkbookCommand)new EditCellsCommand(pair.Key, pair.Value))
+                    .ToList()));
+        if (!result.Success)
+            return WorkbookReplaceResult.Failed(result.ErrorMessage ?? "Replace All failed.");
+
+        ApplySuccessfulRangeEditResult(result, selectedRange);
+        return WorkbookReplaceResult.Replaced(
+            editsBySheet.Values.Sum(static edits => edits.Count),
+            matchCount: matches.Count);
+    }
+
+    public WorkbookReplaceResult ReplaceNextValue(
+        string searchText,
+        string replaceText,
+        bool matchCase = false,
+        bool matchEntireCell = false) =>
+        ReplaceNextValue(searchText, replaceText, options: null, matchCase, matchEntireCell);
+
+    public WorkbookReplaceResult ReplaceNextValue(
+        string searchText,
+        string replaceText,
+        FindOptions? options,
+        bool matchCase = false,
+        bool matchEntireCell = false)
+    {
+        ArgumentNullException.ThrowIfNull(searchText);
+        ArgumentNullException.ThrowIfNull(replaceText);
+
+        if (string.IsNullOrEmpty(searchText))
+            return WorkbookReplaceResult.Failed("Find text is required.");
+
+        var effectiveOptions = ResolveFindOptions(options, FindLookIn.Values);
         var sameSearchText =
             string.Equals(_lastFindText, searchText, StringComparison.Ordinal) &&
             _lastFindMatchCase == matchCase &&
             _lastFindMatchEntireCell == matchEntireCell;
         var sameSearch =
             sameSearchText &&
-            (_lastFindOptions == options ||
+            (_lastFindOptions == effectiveOptions ||
                 (_lastFindAddress is { } lastAddress && ActiveCell.Equals(lastAddress)));
 
-        var matches = FindReplaceService.Find(Workbook, searchText, options, matchCase, matchEntireCell);
-        RememberFindSearch(searchText, options, matchCase, matchEntireCell);
+        var matches = FindReplaceService.Find(Workbook, searchText, effectiveOptions, matchCase, matchEntireCell);
+        RememberFindSearch(searchText, effectiveOptions, matchCase, matchEntireCell);
 
         if (matches.Count == 0)
         {
@@ -445,7 +485,7 @@ public sealed class WorkbookSession
             return WorkbookReplaceResult.Replaced(0);
         }
 
-        var index = GetReplaceTargetIndex(matches, options.SearchOrder, sameSearch);
+        var index = GetReplaceTargetIndex(matches, effectiveOptions.SearchOrder, sameSearch);
         var match = matches[index];
         var navigation = GoToCell(match.Address);
         if (!navigation.Success)
@@ -453,10 +493,16 @@ public sealed class WorkbookSession
 
         _lastFindAddress = null;
         var comparison = matchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
-        var cell = ActiveSheet.GetCell(match.Address);
+        var cell = Workbook.GetSheet(match.Address.Sheet)?.GetCell(match.Address);
         if (cell is null ||
-            cell.HasFormula ||
-            !TryCreateReplacementCell(cell, searchText, replaceText, comparison, matchEntireCell, out var newCell))
+            !TryCreateReplacementCell(
+                cell,
+                searchText,
+                replaceText,
+                comparison,
+                matchEntireCell,
+                effectiveOptions.LookIn,
+                out var newCell))
         {
             return WorkbookReplaceResult.Replaced(
                 0,
@@ -2215,6 +2261,14 @@ public sealed class WorkbookSession
             SearchOrder: FindSearchOrder.ByRows,
             LookIn: lookIn);
 
+    private FindOptions ResolveFindOptions(FindOptions? options, FindLookIn defaultLookIn)
+    {
+        var effectiveOptions = options ?? CreateActiveSheetFindOptions(defaultLookIn);
+        if (effectiveOptions.Within == FindWithin.Sheet && effectiveOptions.CurrentSheetId is null)
+            effectiveOptions = effectiveOptions with { CurrentSheetId = ActiveSheet.Id };
+        return effectiveOptions;
+    }
+
     private void RememberFindSearch(
         string searchText,
         FindOptions options,
@@ -2309,10 +2363,16 @@ public sealed class WorkbookSession
         string replaceText,
         StringComparison comparison,
         bool matchEntireCell,
+        FindLookIn lookIn,
         out Cell newCell)
     {
         newCell = null!;
-        var currentText = GetReplaceableDisplayText(cell.Value);
+        var currentText = lookIn switch
+        {
+            FindLookIn.Formulas => cell.FormulaText,
+            FindLookIn.Values => cell.HasFormula ? null : GetReplaceableDisplayText(cell.Value),
+            _ => null
+        };
         if (currentText is null)
             return false;
 
@@ -2325,6 +2385,13 @@ public sealed class WorkbookSession
         var newText = matchEntireCell
             ? replaceText
             : currentText.Replace(searchText, replaceText, comparison);
+
+        if (lookIn == FindLookIn.Formulas)
+        {
+            newCell = cell.Clone();
+            newCell.FormulaText = newText;
+            return true;
+        }
 
         ScalarValue newValue = double.TryParse(newText, NumberStyles.Any, CultureInfo.InvariantCulture, out var number)
             ? new NumberValue(number)

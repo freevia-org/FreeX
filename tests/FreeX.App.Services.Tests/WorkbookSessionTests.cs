@@ -477,6 +477,39 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void FindNext_WithoutArgumentsRepeatsLastOptionsAndMatchFlags()
+    {
+        var workbook = CreateWorkbook();
+        var firstSheet = workbook.Sheets.Single();
+        var secondSheet = workbook.AddSheet("Second");
+        var firstA1 = new CellAddress(firstSheet.Id, 1, 1);
+        var secondA1 = new CellAddress(secondSheet.Id, 1, 1);
+        firstSheet.SetCell(firstA1, new TextValue("Needle first"));
+        firstSheet.SetCell(new CellAddress(firstSheet.Id, 2, 1), new TextValue("needle wrong case"));
+        secondSheet.SetCell(secondA1, new TextValue("Needle second"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(firstA1);
+
+        var first = session.FindNext(
+            "Needle",
+            new FindOptions(Within: FindWithin.Workbook, LookIn: FindLookIn.Values),
+            matchCase: true);
+        var second = session.FindNext();
+
+        first.Success.Should().BeTrue();
+        first.SelectedRange.Should().Be(new GridRange(secondA1, secondA1));
+        first.MatchCount.Should().Be(2);
+        second.Success.Should().BeTrue();
+        second.SelectedRange.Should().Be(new GridRange(firstA1, firstA1));
+        second.MatchCount.Should().Be(2);
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
     public void ReplaceAllValues_ReplacesActiveSheetValuesPreservesSelectionAndSupportsUndoRedo()
     {
         var workbook = CreateWorkbook();
@@ -521,6 +554,111 @@ public sealed class WorkbookSessionTests
         redo.Success.Should().BeTrue();
         sheet.GetCell(a1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("bar one");
         sheet.GetCell(c1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("bar two");
+    }
+
+    [Fact]
+    public void ReplaceAllValues_CanReplaceWorkbookScopeValuesWithoutChangingActiveSheet()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var otherSheet = workbook.AddSheet("Other");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var otherA1 = new CellAddress(otherSheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("foo active"));
+        otherSheet.SetCell(otherA1, new TextValue("foo other"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(b2);
+
+        var result = session.ReplaceAllValues(
+            "foo",
+            "bar",
+            new FindOptions(Within: FindWithin.Workbook, LookIn: FindLookIn.Values));
+
+        result.Success.Should().BeTrue();
+        result.ReplacedCount.Should().Be(2);
+        result.MatchCount.Should().Be(2);
+        session.ActiveSheet.Should().BeSameAs(sheet);
+        session.SelectedRange.Should().Be(new GridRange(b2, b2));
+        sheet.GetCell(a1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("bar active");
+        otherSheet.GetCell(otherA1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("bar other");
+
+        session.UndoLastEdit().Success.Should().BeTrue();
+        sheet.GetCell(a1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("foo active");
+        otherSheet.GetCell(otherA1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("foo other");
+    }
+
+    [Fact]
+    public void ReplaceAllValues_WithFormulaLookInReplacesFormulaTextAndSupportsUndoRedo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var otherSheet = workbook.AddSheet("Other");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var otherA1 = new CellAddress(otherSheet.Id, 1, 1);
+        sheet.SetCell(a1, Cell.FromFormula("SUM(B1:B3)"));
+        sheet.GetCell(a1)!.StyleId = workbook.RegisterStyle(new CellStyle { Bold = true });
+        otherSheet.SetCell(otherA1, Cell.FromFormula("SUM(C1:C3)"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(b2);
+
+        var result = session.ReplaceAllValues(
+            "SUM",
+            "MAX",
+            new FindOptions(Within: FindWithin.Workbook, LookIn: FindLookIn.Formulas));
+
+        result.Success.Should().BeTrue();
+        result.ReplacedCount.Should().Be(2);
+        result.MatchCount.Should().Be(2);
+        session.SelectedRange.Should().Be(new GridRange(b2, b2));
+        session.IsDirty.Should().BeTrue();
+        sheet.GetCell(a1)!.FormulaText.Should().Be("MAX(B1:B3)");
+        sheet.GetCell(a1)!.StyleId.Should().NotBe(StyleId.Default);
+        otherSheet.GetCell(otherA1)!.FormulaText.Should().Be("MAX(C1:C3)");
+
+        session.UndoLastEdit().Success.Should().BeTrue();
+        sheet.GetCell(a1)!.FormulaText.Should().Be("SUM(B1:B3)");
+        otherSheet.GetCell(otherA1)!.FormulaText.Should().Be("SUM(C1:C3)");
+
+        session.RedoLastEdit().Success.Should().BeTrue();
+        sheet.GetCell(a1)!.FormulaText.Should().Be("MAX(B1:B3)");
+        otherSheet.GetCell(otherA1)!.FormulaText.Should().Be("MAX(C1:C3)");
+    }
+
+    [Fact]
+    public void ReplaceAllValues_NotesLookInDoesNotMutateCellValues()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("foo value"));
+        sheet.Comments[a1] = "foo note";
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var result = session.ReplaceAllValues(
+            "foo",
+            "bar",
+            new FindOptions(Within: FindWithin.Sheet, LookIn: FindLookIn.Notes));
+
+        result.Success.Should().BeTrue();
+        result.ReplacedCount.Should().Be(0);
+        result.MatchCount.Should().Be(1);
+        session.IsDirty.Should().BeFalse();
+        sheet.GetCell(a1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("foo value");
+        sheet.Comments[a1].Should().Be("foo note");
     }
 
     [Fact]
@@ -665,6 +803,68 @@ public sealed class WorkbookSessionTests
         sheet.GetCell(c1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("bar three");
         session.SelectedRange.Should().Be(new GridRange(c1, c1));
         session.IsDirty.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ReplaceNextValue_WithWorkbookScopeCanMoveToNextSheet()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var otherSheet = workbook.AddSheet("Other");
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        var otherA1 = new CellAddress(otherSheet.Id, 1, 1);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("foo active"));
+        otherSheet.SetCell(otherA1, new TextValue("foo other"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(c1);
+
+        var result = session.ReplaceNextValue(
+            "foo",
+            "bar",
+            new FindOptions(Within: FindWithin.Workbook, LookIn: FindLookIn.Values));
+
+        result.Success.Should().BeTrue();
+        result.ReplacedCount.Should().Be(1);
+        result.ReplacedRange.Should().Be(new GridRange(otherA1, otherA1));
+        session.ActiveSheet.Should().BeSameAs(otherSheet);
+        otherSheet.GetCell(otherA1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("bar other");
+    }
+
+    [Fact]
+    public void ReplaceNextValue_WithFormulaLookInReplacesFormulaText()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(a1, Cell.FromFormula("SUM(A2:A3)"));
+        sheet.SetCell(c1, Cell.FromFormula("SUM(C2:C3)"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.ReplaceNextValue(
+            "SUM",
+            "MAX",
+            new FindOptions(Within: FindWithin.Sheet, LookIn: FindLookIn.Formulas));
+
+        result.Success.Should().BeTrue();
+        result.ReplacedCount.Should().Be(1);
+        result.ReplacedRange.Should().Be(new GridRange(c1, c1));
+        result.MatchIndex.Should().Be(2);
+        result.MatchCount.Should().Be(2);
+        sheet.GetCell(a1)!.FormulaText.Should().Be("SUM(A2:A3)");
+        sheet.GetCell(c1)!.FormulaText.Should().Be("MAX(C2:C3)");
+
+        session.UndoLastEdit().Success.Should().BeTrue();
+        sheet.GetCell(c1)!.FormulaText.Should().Be("SUM(C2:C3)");
     }
 
     [Fact]

@@ -70,8 +70,28 @@ public sealed class MainWindow : Window
         ReplaceAll
     }
 
-    private sealed record FindDialogResult(string FindText, FindDialogAction Action);
-    private sealed record ReplaceDialogResult(string FindText, string ReplaceText, ReplaceDialogAction Action);
+    private sealed record FindDialogResult(
+        string FindText,
+        FindDialogAction Action,
+        FindOptions Options,
+        bool MatchCase,
+        bool MatchEntireCell);
+
+    private sealed record ReplaceDialogResult(
+        string FindText,
+        string ReplaceText,
+        ReplaceDialogAction Action,
+        FindOptions Options,
+        bool MatchCase,
+        bool MatchEntireCell);
+
+    private sealed record FindOptionsControls(
+        ComboBox WithinBox,
+        ComboBox SearchBox,
+        ComboBox LookInBox,
+        CheckBox MatchCaseBox,
+        CheckBox MatchEntireCellBox,
+        Control Panel);
     private sealed record GoToSpecialDialogResult(GoToSpecialKind Kind, GoToSpecialOptions Options);
     private sealed record GoToSpecialChoice(GoToSpecialKind Kind, string Label)
     {
@@ -3870,11 +3890,11 @@ public sealed class MainWindow : Window
 
         if (search.Action == FindDialogAction.FindNext)
         {
-            FindNext(search.FindText);
+            FindNext(search.FindText, search.Options, search.MatchCase, search.MatchEntireCell);
             return;
         }
 
-        var result = _session.FindAll(search.FindText);
+        var result = _session.FindAll(search.FindText, search.Options, search.MatchCase, search.MatchEntireCell);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? "Find All failed.");
@@ -3894,9 +3914,9 @@ public sealed class MainWindow : Window
         {
             Title = "Find",
             Width = 420,
-            Height = 170,
+            Height = 370,
             MinWidth = 360,
-            MinHeight = 150,
+            MinHeight = 330,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -3933,9 +3953,16 @@ public sealed class MainWindow : Window
         };
         AutomationProperties.SetAutomationId(cancelButton, "FindCancelButton");
 
+        var optionsControls = CreateFindOptionsControls("Find", defaultLookInIndex: 0);
+
         void Accept(FindDialogAction action)
         {
-            result = new FindDialogResult(findBox.Text ?? "", action);
+            result = new FindDialogResult(
+                findBox.Text ?? "",
+                action,
+                CreateFindOptions(optionsControls),
+                optionsControls.MatchCaseBox.IsChecked == true,
+                optionsControls.MatchEntireCellBox.IsChecked == true);
             dialog.Close();
         }
 
@@ -3977,6 +4004,7 @@ public sealed class MainWindow : Window
             {
                 new TextBlock { Text = "Find what" },
                 findBox,
+                optionsControls.Panel,
                 buttonRow,
             },
         };
@@ -3990,12 +4018,16 @@ public sealed class MainWindow : Window
         return result;
     }
 
-    private void FindNext(string? searchText = null)
+    private void FindNext(
+        string? searchText = null,
+        FindOptions? options = null,
+        bool matchCase = false,
+        bool matchEntireCell = false)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var result = _session.FindNext(searchText);
+        var result = _session.FindNext(searchText, options, matchCase, matchEntireCell);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? "Find failed.");
@@ -4101,8 +4133,18 @@ public sealed class MainWindow : Window
             return;
 
         var result = replacement.Action == ReplaceDialogAction.ReplaceAll
-            ? _session.ReplaceAllValues(replacement.FindText, replacement.ReplaceText)
-            : _session.ReplaceNextValue(replacement.FindText, replacement.ReplaceText);
+            ? _session.ReplaceAllValues(
+                replacement.FindText,
+                replacement.ReplaceText,
+                replacement.Options,
+                replacement.MatchCase,
+                replacement.MatchEntireCell)
+            : _session.ReplaceNextValue(
+                replacement.FindText,
+                replacement.ReplaceText,
+                replacement.Options,
+                replacement.MatchCase,
+                replacement.MatchEntireCell);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? "Replace failed.");
@@ -4112,7 +4154,7 @@ public sealed class MainWindow : Window
         if (replacement.Action == ReplaceDialogAction.ReplaceAll)
         {
             RefreshShell(result.ReplacedCount == 0
-                ? "No matches found."
+                ? result.MatchCount == 0 ? "No matches found." : "No replaceable match found."
                 : $"Replaced {result.ReplacedCount} cells");
             return;
         }
@@ -4129,9 +4171,9 @@ public sealed class MainWindow : Window
         {
             Title = "Replace",
             Width = 420,
-            Height = 230,
+            Height = 430,
             MinWidth = 360,
-            MinHeight = 200,
+            MinHeight = 390,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -4176,9 +4218,17 @@ public sealed class MainWindow : Window
         };
         AutomationProperties.SetAutomationId(cancelButton, "ReplaceCancelButton");
 
+        var optionsControls = CreateFindOptionsControls("Replace", defaultLookInIndex: 1);
+
         void Accept(ReplaceDialogAction action)
         {
-            result = new ReplaceDialogResult(findBox.Text ?? "", replaceBox.Text ?? "", action);
+            result = new ReplaceDialogResult(
+                findBox.Text ?? "",
+                replaceBox.Text ?? "",
+                action,
+                CreateFindOptions(optionsControls),
+                optionsControls.MatchCaseBox.IsChecked == true,
+                optionsControls.MatchEntireCellBox.IsChecked == true);
             dialog.Close();
         }
 
@@ -4211,6 +4261,7 @@ public sealed class MainWindow : Window
                 findBox,
                 new TextBlock { Text = "Replace with" },
                 replaceBox,
+                optionsControls.Panel,
                 buttonRow,
             },
         };
@@ -4552,6 +4603,106 @@ public sealed class MainWindow : Window
 
         await dialog.ShowDialog(this);
         return result;
+    }
+
+    private FindOptions CreateFindOptions(FindOptionsControls controls) =>
+        new(
+            Within: controls.WithinBox.SelectedIndex == 1 ? FindWithin.Workbook : FindWithin.Sheet,
+            CurrentSheetId: _session.ActiveSheet.Id,
+            SearchOrder: controls.SearchBox.SelectedIndex == 1 ? FindSearchOrder.ByColumns : FindSearchOrder.ByRows,
+            LookIn: controls.LookInBox.SelectedIndex switch
+            {
+                0 => FindLookIn.Formulas,
+                2 => FindLookIn.Notes,
+                3 => FindLookIn.Comments,
+                _ => FindLookIn.Values
+            });
+
+    private static FindOptionsControls CreateFindOptionsControls(string automationPrefix, int defaultLookInIndex)
+    {
+        var withinBox = CreateFindOptionComboBox(
+            $"{automationPrefix}WithinBox",
+            "Within",
+            ["Sheet", "Workbook"],
+            selectedIndex: 0);
+        var searchBox = CreateFindOptionComboBox(
+            $"{automationPrefix}SearchBox",
+            "Search",
+            ["By Rows", "By Columns"],
+            selectedIndex: 0);
+        var lookInBox = CreateFindOptionComboBox(
+            $"{automationPrefix}LookInBox",
+            "Look in",
+            ["Formulas", "Values", "Notes", "Comments"],
+            selectedIndex: defaultLookInIndex);
+        var matchCaseBox = CreateFindOptionCheckBox(
+            "Match case",
+            $"{automationPrefix}MatchCaseBox");
+        var matchEntireCellBox = CreateFindOptionCheckBox(
+            "Match entire cell contents",
+            $"{automationPrefix}MatchEntireCellBox");
+
+        var matchRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 12,
+            Children =
+            {
+                matchCaseBox,
+                matchEntireCellBox,
+            },
+        };
+
+        var panel = new StackPanel
+        {
+            Spacing = 6,
+            Children =
+            {
+                new TextBlock { Text = "Within" },
+                withinBox,
+                new TextBlock { Text = "Search" },
+                searchBox,
+                new TextBlock { Text = "Look in" },
+                lookInBox,
+                matchRow,
+            },
+        };
+        AutomationProperties.SetAutomationId(panel, $"{automationPrefix}OptionsPanel");
+
+        return new FindOptionsControls(
+            withinBox,
+            searchBox,
+            lookInBox,
+            matchCaseBox,
+            matchEntireCellBox,
+            panel);
+    }
+
+    private static ComboBox CreateFindOptionComboBox(
+        string automationId,
+        string automationName,
+        IReadOnlyList<string> values,
+        int selectedIndex)
+    {
+        var comboBox = new ComboBox
+        {
+            ItemsSource = values,
+            SelectedIndex = selectedIndex,
+            MinWidth = 160,
+        };
+        AutomationProperties.SetName(comboBox, automationName);
+        AutomationProperties.SetAutomationId(comboBox, automationId);
+        return comboBox;
+    }
+
+    private static CheckBox CreateFindOptionCheckBox(string label, string automationId)
+    {
+        var checkBox = new CheckBox
+        {
+            Content = label,
+        };
+        AutomationProperties.SetAutomationId(checkBox, automationId);
+        return checkBox;
     }
 
     private static void HandleReplaceDialogKey(KeyEventArgs e, Action accept, Action cancel)

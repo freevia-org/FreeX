@@ -210,19 +210,30 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("public static bool ShouldClip(");
         script.Should().Contain("CreateNativePasteSpecialMenu()");
         script.Should().Contain("private enum FindDialogAction");
-        script.Should().Contain("FindDialogResult(string FindText, FindDialogAction Action)");
+        script.Should().Contain("private sealed record FindDialogResult(");
+        script.Should().Contain("FindOptions Options,");
+        script.Should().Contain("bool MatchCase,");
+        script.Should().Contain("bool MatchEntireCell);");
         script.Should().Contain("`\"FindAllButton`\"");
+        script.Should().Contain("CreateFindOptionsControls(`\"Find`\", defaultLookInIndex: 0)");
+        script.Should().Contain("{automationPrefix}WithinBox");
+        script.Should().Contain("{automationPrefix}LookInBox");
         script.Should().Contain("`\"FindAllResultsStatusText`\"");
         script.Should().Contain("`\"FindAllResultsList`\"");
-        script.Should().Contain("_session.FindAll(search.FindText)");
+        script.Should().Contain("_session.FindAll(search.FindText, search.Options, search.MatchCase, search.MatchEntireCell)");
         script.Should().Contain("public WorkbookFindAllResult FindAll(");
         script.Should().Contain("private WorkbookFindAllMatch CreateFindAllMatch(FindResult result)");
         script.Should().Contain("private enum ReplaceDialogAction");
-        script.Should().Contain("ReplaceDialogResult(string FindText, string ReplaceText, ReplaceDialogAction Action)");
+        script.Should().Contain("private sealed record ReplaceDialogResult(");
+        script.Should().Contain("ReplaceDialogAction Action,");
+        script.Should().Contain("private sealed record FindOptionsControls(");
         script.Should().Contain("`\"ReplaceButton`\"");
-        script.Should().Contain("_session.ReplaceNextValue(replacement.FindText, replacement.ReplaceText)");
+        script.Should().Contain("CreateFindOptionsControls(`\"Replace`\", defaultLookInIndex: 1)");
+        script.Should().Contain("_session.ReplaceNextValue(");
+        script.Should().Contain("replacement.Options,");
         script.Should().Contain("public WorkbookReplaceResult ReplaceNextValue(");
-        script.Should().Contain("GetReplaceTargetIndex(matches, options.SearchOrder, sameSearch)");
+        script.Should().Contain("GetReplaceTargetIndex(matches, effectiveOptions.SearchOrder, sameSearch)");
+        script.Should().Contain("FindLookIn.Formulas => cell.FormulaText");
         script.Should().Contain("_bordersButton.Flyout = CreateBorderPresetFlyout();");
         script.Should().Contain("_bordersMenuItem.Menu = CreateNativeBorderPresetMenu();");
         script.Should().Contain("PasteSpecialClipboardAtActiveCell(text, mode, options)");
@@ -1034,9 +1045,27 @@ public sealed class MacOsAppReadinessPreflightTests
                     private readonly NativeMenuItem _goToMenuItem = new();
                     private readonly NativeMenuItem _goToSpecialMenuItem = new();
                     private enum FindDialogAction
-                    private sealed record FindDialogResult(string FindText, FindDialogAction Action);
+                    private sealed record FindDialogResult(
+                        string FindText,
+                        FindDialogAction Action,
+                        FindOptions Options,
+                        bool MatchCase,
+                        bool MatchEntireCell);
                     private enum ReplaceDialogAction
-                    private sealed record ReplaceDialogResult(string FindText, string ReplaceText, ReplaceDialogAction Action);
+                    private sealed record ReplaceDialogResult(
+                        string FindText,
+                        string ReplaceText,
+                        ReplaceDialogAction Action,
+                        FindOptions Options,
+                        bool MatchCase,
+                        bool MatchEntireCell);
+                    private sealed record FindOptionsControls(
+                        ComboBox WithinBox,
+                        ComboBox SearchBox,
+                        ComboBox LookInBox,
+                        CheckBox MatchCaseBox,
+                        CheckBox MatchEntireCellBox,
+                        Control Panel);
                     private sealed record GoToSpecialDialogResult(GoToSpecialKind Kind, GoToSpecialOptions Options);
                     private sealed record GoToSpecialChoice(GoToSpecialKind Kind, string Label)
                     _findMenuItem.Header = "Find...";
@@ -1067,7 +1096,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     private async Task<FindDialogResult?> ShowFindInputDialogAsync()
                     private async Task ShowFindAllResultsDialogAsync(string searchText, IReadOnlyList<WorkbookFindAllMatch> matches)
                     private void NavigateToFindAllMatch(WorkbookFindAllMatch match)
-                    private void FindNext(string? searchText = null)
+                    FindOptions? options = null,
                     private async Task ShowReplaceDialogAsync()
                     private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync()
                     private async Task ShowGoToDialogAsync()
@@ -1079,6 +1108,12 @@ public sealed class MacOsAppReadinessPreflightTests
                     "FindTextBox"
                     "FindNextButton"
                     "FindAllButton"
+                    CreateFindOptionsControls("Find", defaultLookInIndex: 0)
+                    {automationPrefix}WithinBox
+                    {automationPrefix}SearchBox
+                    {automationPrefix}LookInBox
+                    {automationPrefix}MatchCaseBox
+                    {automationPrefix}MatchEntireCellBox
                     "FindAllResultsStatusText"
                     "FindAllResultsList"
                     "FindAllCloseButton"
@@ -1086,6 +1121,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     "ReplaceWithTextBox"
                     "ReplaceButton"
                     "ReplaceAllButton"
+                    CreateFindOptionsControls("Replace", defaultLookInIndex: 1)
                     "GoToReferenceBox"
                     "GoToSpecialKindBox"
                     "GoToSpecialNumbersBox"
@@ -1093,13 +1129,21 @@ public sealed class MacOsAppReadinessPreflightTests
                     "GoToSpecialLogicalsBox"
                     "GoToSpecialErrorsBox"
                     "GoToSpecialOkButton"
-                    var result = _session.FindNext(searchText);
-                    var result = _session.FindAll(search.FindText);
+                    private FindOptions CreateFindOptions(FindOptionsControls controls)
+                    private static FindOptionsControls CreateFindOptionsControls(string automationPrefix, int defaultLookInIndex)
+                    FindLookIn.Formulas
+                    FindLookIn.Notes
+                    FindLookIn.Comments
+                    var result = _session.FindNext(searchText, options, matchCase, matchEntireCell);
+                    var result = _session.FindAll(search.FindText, search.Options, search.MatchCase, search.MatchEntireCell);
                     await ShowFindAllResultsDialogAsync(search.FindText, result.Matches);
                     var result = _session.GoToCell(match.Address);
                     replacement.Action == ReplaceDialogAction.ReplaceAll
-                    _session.ReplaceNextValue(replacement.FindText, replacement.ReplaceText)
-                    _session.ReplaceAllValues(replacement.FindText, replacement.ReplaceText)
+                    replacement.Options,
+                    replacement.MatchCase,
+                    replacement.MatchEntireCell
+                    _session.ReplaceNextValue(
+                    _session.ReplaceAllValues(
                     var result = _session.GoToReference(reference);
                     var result = _session.GoToSpecial(kind, options);
                     result.SelectedRanges.Count == 1
@@ -2026,9 +2070,14 @@ public sealed class MacOsAppReadinessPreflightTests
                 private WorkbookFindAllMatch CreateFindAllMatch(FindResult result)
                 private string FindNameForAddress(CellAddress address)
                 public WorkbookReplaceResult ReplaceNextValue(
-                var options = CreateActiveSheetFindOptions(FindLookIn.Values);
-                GetReplaceTargetIndex(matches, options.SearchOrder, sameSearch)
-                new EditCellsCommand(ActiveSheet.Id, [(match.Address, newCell)])
+                FindOptions? options,
+                var effectiveOptions = ResolveFindOptions(options, FindLookIn.Values);
+                GetReplaceTargetIndex(matches, effectiveOptions.SearchOrder, sameSearch)
+                new EditCellsCommand(pair.Key, pair.Value)
+                effectiveOptions.LookIn,
+                FindLookIn.Formulas => cell.FormulaText
+                FindLookIn.Values => cell.HasFormula ? null : GetReplaceableDisplayText(cell.Value)
+                newCell = cell.Clone();
                 return WorkbookReplaceResult.Replaced(1, replacedRange, index + 1, matches.Count);
                 public WorkbookNavigationResult GoToReference(string reference)
                 public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
