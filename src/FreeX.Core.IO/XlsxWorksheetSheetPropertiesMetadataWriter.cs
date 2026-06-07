@@ -36,20 +36,11 @@ internal static class XlsxWorksheetSheetPropertiesMetadataWriter
             }
 
             var (spAttrs, _) = XmlNativeBagSerializer.Deserialize(metadata.Get("sheetPr"));
-            foreach (var attribute in spAttrs)
-            {
-                if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledSheetPropertiesAttribute(attribute.Key))
-                    continue;
-
-                XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(sheetProperties, attribute.Key, attribute.Value);
-            }
+            XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(sheetProperties, spAttrs, ["codeName"]);
 
             XlsxWorksheetSheetPropertiesNormalizer.NormalizeElement(sheetProperties);
 
             session.MarkDirty(worksheetEdit);
         }
     }
-
-    private static bool IsModeledSheetPropertiesAttribute(string name) =>
-        name is "codeName";
 }

@@ -36,13 +36,7 @@ internal static class XlsxWorksheetDimensionMetadataWriter
             }
 
             var (dimAttrs, _) = XmlNativeBagSerializer.Deserialize(metadata.Get("dimension"));
-            foreach (var attribute in dimAttrs)
-            {
-                if (string.IsNullOrWhiteSpace(attribute.Key) || string.Equals(attribute.Key, "ref", StringComparison.Ordinal))
-                    continue;
-
-                XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(dimension, attribute.Key, attribute.Value);
-            }
+            XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(dimension, dimAttrs, ["ref"]);
 
             session.MarkDirty(worksheetEdit);
         }

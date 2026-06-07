@@ -36,13 +36,10 @@ internal static class XlsxWorksheetHeaderFooterMetadataWriter
             }
 
             var (hhAttrs, hhChildren) = XmlNativeBagSerializer.Deserialize(metadata.Get("headerFooter"));
-            foreach (var attribute in hhAttrs)
-            {
-                if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledHeaderFooterAttribute(attribute.Key))
-                    continue;
-
-                XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(headerFooter, attribute.Key, attribute.Value);
-            }
+            XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(
+                headerFooter,
+                hhAttrs,
+                ["differentOddEven", "differentFirst", "scaleWithDoc", "alignWithMargins"]);
 
             foreach (var childXml in hhChildren)
             {
@@ -56,8 +53,4 @@ internal static class XlsxWorksheetHeaderFooterMetadataWriter
             session.MarkDirty(worksheetEdit);
         }
     }
-
-    private static bool IsModeledHeaderFooterAttribute(string name) =>
-        name is "differentOddEven" or "differentFirst" or "scaleWithDoc" or "alignWithMargins";
-
 }

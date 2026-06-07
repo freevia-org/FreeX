@@ -53,17 +53,7 @@ internal static class XlsxWorksheetProtectionMetadataWriter
             if (metadata is not null)
             {
                 var (protAttrs, _) = XmlNativeBagSerializer.Deserialize(metadata.Get("sheetProtection"));
-                foreach (var attribute in protAttrs)
-                {
-                    if (string.IsNullOrWhiteSpace(attribute.Key) ||
-                        string.Equals(attribute.Key, "sheet", StringComparison.Ordinal) ||
-                        string.Equals(attribute.Key, "password", StringComparison.Ordinal))
-                    {
-                        continue;
-                    }
-
-                    XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(protection, attribute.Key, attribute.Value);
-                }
+                XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(protection, protAttrs, ["sheet", "password"]);
             }
 
             if (sheet.IsProtected)
