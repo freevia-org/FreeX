@@ -1408,6 +1408,9 @@ public static partial class AccessibilityCheckerService
             case "FV":
                 kind = ConditionalFormulaScalarFunctionKind.Fv;
                 return true;
+            case "FVSCHEDULE":
+                kind = ConditionalFormulaScalarFunctionKind.FvSchedule;
+                return true;
             case "NPER":
                 kind = ConditionalFormulaScalarFunctionKind.Nper;
                 return true;
@@ -1437,6 +1440,12 @@ public static partial class AccessibilityCheckerService
                 return true;
             case "XIRR":
                 kind = ConditionalFormulaScalarFunctionKind.Xirr;
+                return true;
+            case "ACCRINT":
+                kind = ConditionalFormulaScalarFunctionKind.Accrint;
+                return true;
+            case "ACCRINTM":
+                kind = ConditionalFormulaScalarFunctionKind.Accrintm;
                 return true;
             case "DISC":
                 kind = ConditionalFormulaScalarFunctionKind.Disc;
@@ -1584,6 +1593,12 @@ public static partial class AccessibilityCheckerService
                 return true;
             case "DOLLAR":
                 kind = ConditionalFormulaScalarFunctionKind.Dollar;
+                return true;
+            case "DOLLARDE":
+                kind = ConditionalFormulaScalarFunctionKind.Dollarde;
+                return true;
+            case "DOLLARFR":
+                kind = ConditionalFormulaScalarFunctionKind.Dollarfr;
                 return true;
             case "LEN":
                 kind = ConditionalFormulaScalarFunctionKind.Len;
@@ -2088,6 +2103,9 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Days or
             ConditionalFormulaScalarFunctionKind.Effect or
             ConditionalFormulaScalarFunctionKind.Nominal or
+            ConditionalFormulaScalarFunctionKind.FvSchedule or
+            ConditionalFormulaScalarFunctionKind.Dollarde or
+            ConditionalFormulaScalarFunctionKind.Dollarfr or
             ConditionalFormulaScalarFunctionKind.Decimal => argumentCount == 2,
             ConditionalFormulaScalarFunctionKind.LeftB or
             ConditionalFormulaScalarFunctionKind.RightB => argumentCount is 1 or 2,
@@ -2151,6 +2169,8 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Mirr => argumentCount == 3,
             ConditionalFormulaScalarFunctionKind.Xnpv => argumentCount == 3,
             ConditionalFormulaScalarFunctionKind.Xirr => argumentCount is 2 or 3,
+            ConditionalFormulaScalarFunctionKind.Accrint => argumentCount is >= 6 and <= 8,
+            ConditionalFormulaScalarFunctionKind.Accrintm => argumentCount is >= 3 and <= 5,
             ConditionalFormulaScalarFunctionKind.Disc or
             ConditionalFormulaScalarFunctionKind.Intrate or
             ConditionalFormulaScalarFunctionKind.Received or
@@ -2250,11 +2270,15 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaAggregateKind.SumIf or
             ConditionalFormulaAggregateKind.AverageIf => argumentCount is 2 or 3,
             ConditionalFormulaAggregateKind.CountIf => argumentCount == 2,
+            ConditionalFormulaAggregateKind.MaxIfs or
+            ConditionalFormulaAggregateKind.MinIfs or
             ConditionalFormulaAggregateKind.SumIfs or
             ConditionalFormulaAggregateKind.AverageIfs => argumentCount is >= 3 and <= MaxFormulaConditionalAggregateArgumentCount &&
                 (argumentCount - 1) % 2 == 0,
             ConditionalFormulaAggregateKind.CountIfs => argumentCount is >= 2 and <= MaxFormulaConditionalAggregateArgumentCount &&
                 argumentCount % 2 == 0,
+            ConditionalFormulaAggregateKind.Subtotal => argumentCount is >= 2 and <= MaxFormulaConditionalAggregateArgumentCount,
+            ConditionalFormulaAggregateKind.Aggregate => argumentCount is >= 3 and <= MaxFormulaConditionalAggregateArgumentCount,
             ConditionalFormulaAggregateKind.SumProduct => argumentCount is >= 1 and <= MaxFormulaSumProductArgumentCount,
             _ when IsFormulaDatabaseAggregate(aggregateKind) => argumentCount == 3,
             _ when IsFormulaPairwiseAggregate(aggregateKind) => argumentCount == 2,
@@ -2295,6 +2319,12 @@ public static partial class AccessibilityCheckerService
                 return true;
             case "SUMPRODUCT":
                 kind = ConditionalFormulaAggregateKind.SumProduct;
+                return true;
+            case "SUBTOTAL":
+                kind = ConditionalFormulaAggregateKind.Subtotal;
+                return true;
+            case "AGGREGATE":
+                kind = ConditionalFormulaAggregateKind.Aggregate;
                 return true;
             case "SUMXMY2":
                 kind = ConditionalFormulaAggregateKind.SumXMy2;
@@ -2354,11 +2384,17 @@ public static partial class AccessibilityCheckerService
             case "MIN":
                 kind = ConditionalFormulaAggregateKind.Min;
                 return true;
+            case "MINIFS":
+                kind = ConditionalFormulaAggregateKind.MinIfs;
+                return true;
             case "MINA":
                 kind = ConditionalFormulaAggregateKind.MinA;
                 return true;
             case "MAX":
                 kind = ConditionalFormulaAggregateKind.Max;
+                return true;
+            case "MAXIFS":
+                kind = ConditionalFormulaAggregateKind.MaxIfs;
                 return true;
             case "MAXA":
                 kind = ConditionalFormulaAggregateKind.MaxA;
@@ -2476,7 +2512,9 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaAggregateKind.AverageIf or
             ConditionalFormulaAggregateKind.SumIfs or
             ConditionalFormulaAggregateKind.CountIfs or
-            ConditionalFormulaAggregateKind.AverageIfs;
+            ConditionalFormulaAggregateKind.AverageIfs or
+            ConditionalFormulaAggregateKind.MinIfs or
+            ConditionalFormulaAggregateKind.MaxIfs;
 
     private static bool IsFormulaDatabaseAggregate(ConditionalFormulaAggregateKind aggregateKind) =>
         aggregateKind is
@@ -3030,6 +3068,7 @@ public static partial class AccessibilityCheckerService
         Pmt,
         Pv,
         Fv,
+        FvSchedule,
         Nper,
         Rate,
         Ipmt,
@@ -3040,6 +3079,8 @@ public static partial class AccessibilityCheckerService
         Mirr,
         Xnpv,
         Xirr,
+        Accrint,
+        Accrintm,
         Disc,
         Intrate,
         Received,
@@ -3089,6 +3130,8 @@ public static partial class AccessibilityCheckerService
         Text,
         Fixed,
         Dollar,
+        Dollarde,
+        Dollarfr,
         Len,
         LenB,
         Upper,
@@ -3212,6 +3255,8 @@ public static partial class AccessibilityCheckerService
         SumIfs,
         SumSq,
         SumProduct,
+        Subtotal,
+        Aggregate,
         SumXMy2,
         SumX2My2,
         SumX2Py2,
@@ -3230,8 +3275,10 @@ public static partial class AccessibilityCheckerService
         AverageA,
         Median,
         Min,
+        MinIfs,
         MinA,
         Max,
+        MaxIfs,
         MaxA,
         Count,
         CountIf,
@@ -4062,6 +4109,11 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Xnpv:
                 case ConditionalFormulaScalarFunctionKind.Xirr:
                     return TryEvaluateFormulaFinancialCashFlowFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.FvSchedule:
+                case ConditionalFormulaScalarFunctionKind.Dollarde:
+                case ConditionalFormulaScalarFunctionKind.Dollarfr:
+                case ConditionalFormulaScalarFunctionKind.Accrint:
+                case ConditionalFormulaScalarFunctionKind.Accrintm:
                 case ConditionalFormulaScalarFunctionKind.Disc:
                 case ConditionalFormulaScalarFunctionKind.Intrate:
                 case ConditionalFormulaScalarFunctionKind.Received:
@@ -10642,8 +10694,20 @@ public static partial class AccessibilityCheckerService
             var arguments = new ScalarValue[function.Arguments.Count];
             for (var i = 0; i < function.Arguments.Count; i++)
             {
-                if (!TryResolveFormulaOperand(function.Arguments[i], rowOffset, colOffset, out var argument) ||
-                    argument is RangeValue)
+                var allowRangeArgument = function.Kind == ConditionalFormulaScalarFunctionKind.FvSchedule && i == 1;
+                ScalarValue argument;
+                if (function.Arguments[i].Kind == ConditionalFormulaOperandKind.ReferenceRange)
+                {
+                    if (!allowRangeArgument ||
+                        !TryMaterializeFormulaReferenceRange(function.Arguments[i], rowOffset, colOffset, out var range))
+                    {
+                        return false;
+                    }
+
+                    argument = range;
+                }
+                else if (!TryResolveFormulaOperand(function.Arguments[i], rowOffset, colOffset, out argument) ||
+                    argument is RangeValue && !allowRangeArgument)
                 {
                     return false;
                 }
@@ -10659,6 +10723,67 @@ public static partial class AccessibilityCheckerService
 
             switch (function.Kind)
             {
+                case ConditionalFormulaScalarFunctionKind.FvSchedule:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var fvSchedulePrincipal, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialFvScheduleScalar(fvSchedulePrincipal, arguments[1]);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Dollarde:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var dollardeDollar, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var dollardeFraction, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialDollardeScalar(dollardeDollar, dollardeFraction);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Dollarfr:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var dollarfrDollar, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var dollarfrFraction, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialDollarfrScalar(dollarfrDollar, dollarfrFraction);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Accrint:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var accrintIssue, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var accrintFirstInterest, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var accrintSettlement, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var accrintRate, out value) ||
+                        !TryGetFormulaFinancialOptionalNumber(arguments, 4, 1000d, out var accrintPar, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[5], out var accrintRawFrequency, out value) ||
+                        !TryGetFormulaFinancialOptionalBasis(arguments, 6, out var accrintBasis, out value) ||
+                        !TryGetFormulaFinancialOptionalBool(arguments, 7, defaultValue: true, out var accrintCalcMethod, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialAccrintScalar(
+                        accrintIssue,
+                        accrintFirstInterest,
+                        accrintSettlement,
+                        accrintRate,
+                        accrintPar,
+                        accrintRawFrequency,
+                        accrintBasis,
+                        accrintCalcMethod);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Accrintm:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var accrintmIssue, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var accrintmSettlement, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var accrintmRate, out value) ||
+                        !TryGetFormulaFinancialOptionalNumber(arguments, 3, 1000d, out var accrintmPar, out value) ||
+                        !TryGetFormulaFinancialOptionalBasis(arguments, 4, out var accrintmBasis, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialAccrintmScalar(accrintmIssue, accrintmSettlement, accrintmRate, accrintmPar, accrintmBasis);
+                    return true;
                 case ConditionalFormulaScalarFunctionKind.Disc:
                     if (!TryGetFormulaFinancialNumber(arguments[0], out var discSettlement, out value) ||
                         !TryGetFormulaFinancialNumber(arguments[1], out var discMaturity, out value) ||
@@ -11128,6 +11253,144 @@ public static partial class AccessibilityCheckerService
                     boolean = false;
                     return false;
             }
+        }
+
+        private static ScalarValue FormulaFinancialFvScheduleScalar(double principal, ScalarValue scheduleSource)
+        {
+            if (!double.IsFinite(principal))
+                return ErrorValue.Num;
+
+            var result = principal;
+            if (scheduleSource is RangeValue scheduleRange)
+            {
+                if (!TryCollectFormulaFinancialRangeNumbers(scheduleRange, out var rates, out var scheduleError))
+                    return scheduleError ?? ErrorValue.Value;
+
+                for (var i = 0; i < rates.Count; i++)
+                {
+                    if (!double.IsFinite(rates[i]))
+                        return ErrorValue.Num;
+
+                    result *= 1d + rates[i];
+                }
+
+                return FormulaFinancialNumberResult(result);
+            }
+
+            if (!TryGetFormulaFinancialNumber(scheduleSource, out var rate, out var rateError))
+                return rateError;
+
+            return double.IsFinite(rate)
+                ? FormulaFinancialNumberResult(result * (1d + rate))
+                : ErrorValue.Num;
+        }
+
+        private static ScalarValue FormulaFinancialDollardeScalar(double dollar, double rawFraction) =>
+            FormulaFinancialDollarFractionScalar(dollar, rawFraction, convertFractionToDecimal: true);
+
+        private static ScalarValue FormulaFinancialDollarfrScalar(double dollar, double rawFraction) =>
+            FormulaFinancialDollarFractionScalar(dollar, rawFraction, convertFractionToDecimal: false);
+
+        private static ScalarValue FormulaFinancialDollarFractionScalar(
+            double dollar,
+            double rawFraction,
+            bool convertFractionToDecimal)
+        {
+            if (!double.IsFinite(dollar) || !double.IsFinite(rawFraction))
+                return ErrorValue.Num;
+
+            if (rawFraction < 0d)
+                return ErrorValue.Num;
+
+            var fraction = Math.Truncate(rawFraction);
+            if (fraction == 0d)
+                return ErrorValue.DivByZero;
+
+            var integerPart = Math.Truncate(dollar);
+            var fractionalPart = dollar - integerPart;
+            var digits = (int)Math.Ceiling(Math.Log10(fraction));
+            if (digits < 1)
+                digits = 1;
+
+            var scale = Math.Pow(10d, digits);
+            var result = convertFractionToDecimal
+                ? integerPart + fractionalPart * scale / fraction
+                : integerPart + fractionalPart * fraction / scale;
+            return FormulaFinancialNumberResult(result);
+        }
+
+        private static ScalarValue FormulaFinancialAccrintScalar(
+            double issue,
+            double firstInterest,
+            double settlement,
+            double rate,
+            double par,
+            double rawFrequency,
+            int basis,
+            bool calcMethod)
+        {
+            if (!double.IsFinite(issue) ||
+                !double.IsFinite(firstInterest) ||
+                !double.IsFinite(settlement) ||
+                !double.IsFinite(rate) ||
+                !double.IsFinite(par) ||
+                !double.IsFinite(rawFrequency))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (rate <= 0d || par <= 0d || !TryGetFormulaFinancialCouponFrequency(rawFrequency, out _))
+                return ErrorValue.Num;
+
+            if (!TryGetFormulaFinancialDate(issue, out var issueDate) ||
+                !TryGetFormulaFinancialDate(firstInterest, out var firstInterestDate) ||
+                !TryGetFormulaFinancialDate(settlement, out var settlementDate) ||
+                issueDate >= settlementDate ||
+                firstInterestDate < issueDate)
+            {
+                return ErrorValue.Num;
+            }
+
+            var accrualStart = !calcMethod && settlementDate > firstInterestDate
+                ? firstInterestDate
+                : issueDate;
+            var dayCountFraction = FormulaFinancialDayCountFraction(accrualStart, settlementDate, basis);
+            if (!double.IsFinite(dayCountFraction) || dayCountFraction < 0d)
+                return ErrorValue.Num;
+
+            return FormulaFinancialNumberResult(par * rate * dayCountFraction);
+        }
+
+        private static ScalarValue FormulaFinancialAccrintmScalar(
+            double issue,
+            double settlement,
+            double rate,
+            double par,
+            int basis)
+        {
+            if (!double.IsFinite(issue) ||
+                !double.IsFinite(settlement) ||
+                !double.IsFinite(rate) ||
+                !double.IsFinite(par))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (rate <= 0d || par <= 0d)
+                return ErrorValue.Num;
+
+            if (!TryGetFormulaFinancialDate(issue, out var issueDate) ||
+                !TryGetFormulaFinancialDate(settlement, out var settlementDate) ||
+                issueDate >= settlementDate)
+            {
+                return ErrorValue.Num;
+            }
+
+            var dayCountFraction = FormulaFinancialDayCountFraction(issueDate, settlementDate, basis);
+            if (!double.IsFinite(dayCountFraction) || dayCountFraction < 0d)
+                return ErrorValue.Num;
+
+            return FormulaFinancialNumberResult(par * rate * dayCountFraction);
         }
 
         private static ScalarValue FormulaFinancialSlnScalar(double cost, double salvage, double life)
@@ -17479,6 +17742,10 @@ public static partial class AccessibilityCheckerService
                     TryEvaluateFormulaCountIfsAggregate(arguments, rowOffset, colOffset, out value),
                 ConditionalFormulaAggregateKind.AverageIfs =>
                     TryEvaluateFormulaSumAverageIfsAggregate(arguments, rowOffset, colOffset, average: true, out value),
+                ConditionalFormulaAggregateKind.MinIfs =>
+                    TryEvaluateFormulaMinMaxIfsAggregate(arguments, rowOffset, colOffset, maximum: false, out value),
+                ConditionalFormulaAggregateKind.MaxIfs =>
+                    TryEvaluateFormulaMinMaxIfsAggregate(arguments, rowOffset, colOffset, maximum: true, out value),
                 _ => false
             };
         }
@@ -17669,6 +17936,70 @@ public static partial class AccessibilityCheckerService
                     ? ErrorValue.DivByZero
                     : FormulaConditionalAggregateNumberResult(total / count)
                 : FormulaConditionalAggregateNumberResult(total);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaMinMaxIfsAggregate(
+            IReadOnlyList<ConditionalFormulaAggregateArgument> arguments,
+            int rowOffset,
+            int colOffset,
+            bool maximum,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (arguments.Count < 3 || (arguments.Count - 1) % 2 != 0)
+                return false;
+
+            if (!TryResolveFormulaConditionalAggregateRangeArgument(arguments[0], rowOffset, colOffset, out var aggregateRange, out var aggregateRangeError))
+            {
+                value = aggregateRangeError ?? ErrorValue.Value;
+                return aggregateRangeError is not null;
+            }
+
+            var pairCount = (arguments.Count - 1) / 2;
+            if (!TryCreateFormulaConditionalCriteriaSet(
+                    arguments,
+                    firstCriteriaRangeIndex: 1,
+                    pairCount,
+                    aggregateRange,
+                    rowOffset,
+                    colOffset,
+                    out var criteriaSet,
+                    out var criteriaSetError))
+            {
+                value = criteriaSetError ?? ErrorValue.Value;
+                return criteriaSetError is not null;
+            }
+
+            var hasNumber = false;
+            var result = maximum ? double.NegativeInfinity : double.PositiveInfinity;
+            for (var row = 0; row < aggregateRange.RowCount; row++)
+            {
+                for (var col = 0; col < aggregateRange.ColCount; col++)
+                {
+                    if (!criteriaSet.Includes(row, col))
+                        continue;
+
+                    var aggregateValue = aggregateRange.Cells[row, col];
+                    if (aggregateValue is ErrorValue aggregateError)
+                    {
+                        value = aggregateError;
+                        return true;
+                    }
+
+                    if (!TryGetFormulaConditionalAggregateCellNumber(aggregateValue, out var number))
+                        continue;
+
+                    result = hasNumber
+                        ? maximum ? Math.Max(result, number) : Math.Min(result, number)
+                        : number;
+                    hasNumber = true;
+                }
+            }
+
+            value = hasNumber
+                ? FormulaConditionalAggregateNumberResult(result)
+                : new NumberValue(0d);
             return true;
         }
 
@@ -18648,6 +18979,803 @@ public static partial class AccessibilityCheckerService
             }
         }
 
+        private bool TryEvaluateFormulaSubtotalOrAggregate(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (operand.AggregateArguments is not { Count: > 0 } arguments)
+                return false;
+
+            return operand.AggregateKind switch
+            {
+                ConditionalFormulaAggregateKind.Subtotal =>
+                    TryEvaluateFormulaSubtotal(arguments, rowOffset, colOffset, out value),
+                ConditionalFormulaAggregateKind.Aggregate =>
+                    TryEvaluateFormulaAggregateFunction(arguments, rowOffset, colOffset, out value),
+                _ => false
+            };
+        }
+
+        private bool TryEvaluateFormulaSubtotal(
+            IReadOnlyList<ConditionalFormulaAggregateArgument> arguments,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (arguments.Count < 2 ||
+                !TryResolveFormulaAggregateControlInteger(arguments[0], rowOffset, colOffset, out var functionNumber, out value))
+            {
+                return value is ErrorValue;
+            }
+
+            if (!TryGetFormulaSubtotalFunctionKind(functionNumber, out var aggregateKind, out var ignoreHiddenRows))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            var options = new FormulaSubtotalAggregateOptions(
+                IgnoreHiddenRows: ignoreHiddenRows,
+                IgnoreFilteredRows: true,
+                IgnoreErrors: false,
+                IgnoreNestedAggregates: true,
+                AllowTextNumberLiterals: false);
+
+            return TryEvaluateFormulaSubtotalAggregateValues(
+                arguments,
+                firstValueArgument: 1,
+                lastValueArgumentExclusive: arguments.Count,
+                aggregateKind,
+                options,
+                rowOffset,
+                colOffset,
+                out value);
+        }
+
+        private bool TryEvaluateFormulaAggregateFunction(
+            IReadOnlyList<ConditionalFormulaAggregateArgument> arguments,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (arguments.Count < 3 ||
+                !TryResolveFormulaAggregateControlInteger(arguments[0], rowOffset, colOffset, out var functionNumber, out value))
+            {
+                return value is ErrorValue;
+            }
+
+            if (!TryResolveFormulaAggregateControlInteger(arguments[1], rowOffset, colOffset, out var option, out value))
+                return value is ErrorValue;
+
+            if (!TryGetFormulaAggregateFunctionKind(functionNumber, out var aggregateKind) ||
+                option is < 0 or > 7)
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            var requiresSelector = aggregateKind is
+                ConditionalFormulaAggregateKind.Large or
+                ConditionalFormulaAggregateKind.Small or
+                ConditionalFormulaAggregateKind.PercentileInc or
+                ConditionalFormulaAggregateKind.PercentileExc or
+                ConditionalFormulaAggregateKind.QuartileInc or
+                ConditionalFormulaAggregateKind.QuartileExc;
+            if (requiresSelector && arguments.Count < 4)
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            var options = new FormulaSubtotalAggregateOptions(
+                IgnoreHiddenRows: option is 1 or 3 or 5 or 7,
+                IgnoreFilteredRows: false,
+                IgnoreErrors: option is 2 or 3 or 6 or 7,
+                IgnoreNestedAggregates: option <= 3,
+                AllowTextNumberLiterals: true);
+
+            var lastValueArgumentExclusive = requiresSelector ? arguments.Count - 1 : arguments.Count;
+            if (!TryCollectFormulaSubtotalAggregateValues(
+                    arguments,
+                    firstValueArgument: 2,
+                    lastValueArgumentExclusive,
+                    aggregateKind,
+                    options,
+                    rowOffset,
+                    colOffset,
+                    out var numbers,
+                    out var nonBlankCount,
+                    out var error))
+            {
+                value = error ?? ErrorValue.Value;
+                return error is not null;
+            }
+
+            if (requiresSelector)
+            {
+                if (!TryResolveFormulaAggregateControlNumber(arguments[^1], rowOffset, colOffset, out var selector, out value))
+                    return value is ErrorValue;
+
+                value = FormulaAggregateSelectionResult(aggregateKind, numbers, selector);
+                return true;
+            }
+
+            value = FormulaSubtotalAggregateNumericResult(aggregateKind, numbers, nonBlankCount);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaSubtotalAggregateValues(
+            IReadOnlyList<ConditionalFormulaAggregateArgument> arguments,
+            int firstValueArgument,
+            int lastValueArgumentExclusive,
+            ConditionalFormulaAggregateKind aggregateKind,
+            FormulaSubtotalAggregateOptions options,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryCollectFormulaSubtotalAggregateValues(
+                    arguments,
+                    firstValueArgument,
+                    lastValueArgumentExclusive,
+                    aggregateKind,
+                    options,
+                    rowOffset,
+                    colOffset,
+                    out var numbers,
+                    out var nonBlankCount,
+                    out var error))
+            {
+                value = error ?? ErrorValue.Value;
+                return error is not null;
+            }
+
+            value = FormulaSubtotalAggregateNumericResult(aggregateKind, numbers, nonBlankCount);
+            return true;
+        }
+
+        private bool TryCollectFormulaSubtotalAggregateValues(
+            IReadOnlyList<ConditionalFormulaAggregateArgument> arguments,
+            int firstValueArgument,
+            int lastValueArgumentExclusive,
+            ConditionalFormulaAggregateKind aggregateKind,
+            FormulaSubtotalAggregateOptions options,
+            int rowOffset,
+            int colOffset,
+            out List<double> numbers,
+            out int nonBlankCount,
+            out ErrorValue? error)
+        {
+            numbers = [];
+            nonBlankCount = 0;
+            error = null;
+            if (firstValueArgument >= lastValueArgumentExclusive)
+                return false;
+
+            for (var i = firstValueArgument; i < lastValueArgumentExclusive; i++)
+            {
+                if (!AppendFormulaSubtotalAggregateArgument(
+                        arguments[i],
+                        aggregateKind,
+                        options,
+                        rowOffset,
+                        colOffset,
+                        numbers,
+                        ref nonBlankCount,
+                        out error))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private bool AppendFormulaSubtotalAggregateArgument(
+            ConditionalFormulaAggregateArgument argument,
+            ConditionalFormulaAggregateKind aggregateKind,
+            FormulaSubtotalAggregateOptions options,
+            int rowOffset,
+            int colOffset,
+            List<double> numbers,
+            ref int nonBlankCount,
+            out ErrorValue? error)
+        {
+            error = null;
+            switch (argument.Kind)
+            {
+                case ConditionalFormulaAggregateArgumentKind.Literal:
+                    return AppendFormulaSubtotalAggregateValue(
+                        argument.Literal ?? BlankValue.Instance,
+                        aggregateKind,
+                        options,
+                        isDirectArgument: true,
+                        isLiteralArgument: true,
+                        sourceSheet: null,
+                        row: 0,
+                        col: 0,
+                        numbers,
+                        ref nonBlankCount,
+                        out error);
+                case ConditionalFormulaAggregateArgumentKind.Reference:
+                    if (!TryResolveFormulaAggregateReference(argument, rowOffset, colOffset, out var targetSheet, out var row, out var col))
+                        return false;
+
+                    return AppendFormulaSubtotalAggregateValue(
+                        targetSheet.GetValue(row, col),
+                        aggregateKind,
+                        options,
+                        isDirectArgument: false,
+                        isLiteralArgument: false,
+                        targetSheet,
+                        row,
+                        col,
+                        numbers,
+                        ref nonBlankCount,
+                        out error);
+                case ConditionalFormulaAggregateArgumentKind.Range:
+                    if (!TryResolveFormulaAggregateRange(
+                            argument,
+                            rowOffset,
+                            colOffset,
+                            out var rangeSheet,
+                            out var startRow,
+                            out var startCol,
+                            out var endRow,
+                            out var endCol))
+                    {
+                        return false;
+                    }
+
+                    return AppendFormulaSubtotalAggregateRange(
+                        rangeSheet,
+                        startRow,
+                        startCol,
+                        endRow,
+                        endCol,
+                        aggregateKind,
+                        options,
+                        numbers,
+                        ref nonBlankCount,
+                        out error);
+                case ConditionalFormulaAggregateArgumentKind.Operand:
+                    if (!argument.Operand.HasValue)
+                        return false;
+
+                    if (argument.Operand.Value.Kind == ConditionalFormulaOperandKind.ReferenceRange)
+                    {
+                        if (!TryResolveFormulaReferenceRange(
+                                argument.Operand.Value,
+                                rowOffset,
+                                colOffset,
+                                out var operandRangeSheet,
+                                out var operandStartRow,
+                                out var operandStartCol,
+                                out var operandEndRow,
+                                out var operandEndCol))
+                        {
+                            return false;
+                        }
+
+                        return AppendFormulaSubtotalAggregateRange(
+                            operandRangeSheet,
+                            operandStartRow,
+                            operandStartCol,
+                            operandEndRow,
+                            operandEndCol,
+                            aggregateKind,
+                            options,
+                            numbers,
+                            ref nonBlankCount,
+                            out error);
+                    }
+
+                    if (!TryResolveFormulaOperand(argument.Operand.Value, rowOffset, colOffset, out var operandValue))
+                        return false;
+
+                    return operandValue is RangeValue operandRange
+                        ? AppendFormulaSubtotalAggregateRange(
+                            operandRange,
+                            aggregateKind,
+                            options,
+                            numbers,
+                            ref nonBlankCount,
+                            out error)
+                        : AppendFormulaSubtotalAggregateValue(
+                            operandValue,
+                            aggregateKind,
+                            options,
+                            isDirectArgument: true,
+                            isLiteralArgument: false,
+                            sourceSheet: null,
+                            row: 0,
+                            col: 0,
+                            numbers,
+                            ref nonBlankCount,
+                            out error);
+                default:
+                    return false;
+            }
+        }
+
+        private bool AppendFormulaSubtotalAggregateRange(
+            Sheet targetSheet,
+            uint startRow,
+            uint startCol,
+            uint endRow,
+            uint endCol,
+            ConditionalFormulaAggregateKind aggregateKind,
+            FormulaSubtotalAggregateOptions options,
+            List<double> numbers,
+            ref int nonBlankCount,
+            out ErrorValue? error)
+        {
+            error = null;
+            for (var currentRow = startRow; currentRow <= endRow; currentRow++)
+            {
+                for (var currentCol = startCol; currentCol <= endCol; currentCol++)
+                {
+                    if (!AppendFormulaSubtotalAggregateValue(
+                            targetSheet.GetValue(currentRow, currentCol),
+                            aggregateKind,
+                            options,
+                            isDirectArgument: false,
+                            isLiteralArgument: false,
+                            targetSheet,
+                            currentRow,
+                            currentCol,
+                            numbers,
+                            ref nonBlankCount,
+                            out error))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        private bool AppendFormulaSubtotalAggregateRange(
+            RangeValue range,
+            ConditionalFormulaAggregateKind aggregateKind,
+            FormulaSubtotalAggregateOptions options,
+            List<double> numbers,
+            ref int nonBlankCount,
+            out ErrorValue? error)
+        {
+            error = null;
+            var targetSheet = string.IsNullOrEmpty(range.SheetName)
+                ? sheet
+                : workbook.GetSheet(range.SheetName);
+            for (var row = 0; row < range.RowCount; row++)
+            {
+                for (var col = 0; col < range.ColCount; col++)
+                {
+                    var sourceRow = range.StartRow + (uint)row;
+                    var sourceCol = range.StartCol + (uint)col;
+                    if (!AppendFormulaSubtotalAggregateValue(
+                            range.Cells[row, col],
+                            aggregateKind,
+                            options,
+                            isDirectArgument: false,
+                            isLiteralArgument: false,
+                            targetSheet,
+                            sourceRow,
+                            sourceCol,
+                            numbers,
+                            ref nonBlankCount,
+                            out error))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        private bool AppendFormulaSubtotalAggregateValue(
+            ScalarValue value,
+            ConditionalFormulaAggregateKind aggregateKind,
+            FormulaSubtotalAggregateOptions options,
+            bool isDirectArgument,
+            bool isLiteralArgument,
+            Sheet? sourceSheet,
+            uint row,
+            uint col,
+            List<double> numbers,
+            ref int nonBlankCount,
+            out ErrorValue? error)
+        {
+            error = null;
+            if (value is RangeValue range)
+                return AppendFormulaSubtotalAggregateRange(range, aggregateKind, options, numbers, ref nonBlankCount, out error);
+
+            if (sourceSheet is not null)
+            {
+                if (ShouldSkipFormulaSubtotalAggregateRow(sourceSheet, row, options) ||
+                    options.IgnoreNestedAggregates && IsFormulaSubtotalOrAggregateCell(sourceSheet, row, col))
+                {
+                    return true;
+                }
+            }
+
+            if (value is ErrorValue valueError)
+            {
+                if (options.IgnoreErrors)
+                    return true;
+
+                error = valueError;
+                return false;
+            }
+
+            if (value is BlankValue)
+                return true;
+
+            nonBlankCount++;
+            if (TryGetFormulaSubtotalAggregateNumber(
+                    value,
+                    aggregateKind,
+                    isDirectArgument,
+                    isLiteralArgument,
+                    options.AllowTextNumberLiterals,
+                    out var number,
+                    out var numberError))
+            {
+                numbers.Add(number);
+                return true;
+            }
+
+            if (numberError is not null)
+            {
+                error = numberError;
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool ShouldSkipFormulaSubtotalAggregateRow(
+            Sheet targetSheet,
+            uint row,
+            FormulaSubtotalAggregateOptions options) =>
+            options.IgnoreHiddenRows
+                ? targetSheet.IsRowEffectivelyHidden(row)
+                : options.IgnoreFilteredRows && targetSheet.FilterHiddenRows.Contains(row);
+
+        private bool IsFormulaSubtotalOrAggregateCell(Sheet targetSheet, uint row, uint col)
+        {
+            var cell = targetSheet == sheet && occupiedCells.TryGetValue((row, col), out var occupiedCell)
+                ? occupiedCell
+                : targetSheet.GetCell(row, col);
+            return cell?.FormulaText is { } formulaText &&
+                IsFormulaSubtotalOrAggregateFormula(formulaText);
+        }
+
+        private static bool IsFormulaSubtotalOrAggregateFormula(string formulaText) =>
+            formulaText.IndexOf("SUBTOTAL(", StringComparison.OrdinalIgnoreCase) >= 0 ||
+            formulaText.IndexOf("AGGREGATE(", StringComparison.OrdinalIgnoreCase) >= 0;
+
+        private bool TryResolveFormulaAggregateControlInteger(
+            ConditionalFormulaAggregateArgument argument,
+            int rowOffset,
+            int colOffset,
+            out int result,
+            out ScalarValue value)
+        {
+            result = 0;
+            if (!TryResolveFormulaAggregateControlNumber(argument, rowOffset, colOffset, out var number, out value))
+                return false;
+
+            if (!double.IsFinite(number) ||
+                number < int.MinValue ||
+                number > int.MaxValue ||
+                Math.Truncate(number) != number)
+            {
+                value = ErrorValue.Value;
+                return false;
+            }
+
+            result = (int)number;
+            return true;
+        }
+
+        private bool TryResolveFormulaAggregateControlNumber(
+            ConditionalFormulaAggregateArgument argument,
+            int rowOffset,
+            int colOffset,
+            out double number,
+            out ScalarValue value)
+        {
+            number = 0d;
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaConditionalAggregateScalarArgument(argument, rowOffset, colOffset, out value))
+                return false;
+
+            if (value is ErrorValue)
+                return false;
+
+            if (value is RangeValue)
+            {
+                value = ErrorValue.Value;
+                return false;
+            }
+
+            if (!TryGetNumber(value, out number))
+            {
+                value = ErrorValue.Value;
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryGetFormulaSubtotalFunctionKind(
+            int functionNumber,
+            out ConditionalFormulaAggregateKind aggregateKind,
+            out bool ignoreHiddenRows)
+        {
+            ignoreHiddenRows = false;
+            if (functionNumber is >= 101 and <= 111)
+            {
+                ignoreHiddenRows = true;
+                functionNumber -= 100;
+            }
+
+            return TryGetFormulaSubtotalAggregateFunctionKind(functionNumber, out aggregateKind);
+        }
+
+        private static bool TryGetFormulaAggregateFunctionKind(
+            int functionNumber,
+            out ConditionalFormulaAggregateKind aggregateKind)
+        {
+            if (TryGetFormulaSubtotalAggregateFunctionKind(functionNumber, out aggregateKind))
+                return true;
+
+            aggregateKind = functionNumber switch
+            {
+                12 => ConditionalFormulaAggregateKind.Median,
+                13 => ConditionalFormulaAggregateKind.ModeSngl,
+                14 => ConditionalFormulaAggregateKind.Large,
+                15 => ConditionalFormulaAggregateKind.Small,
+                16 => ConditionalFormulaAggregateKind.PercentileInc,
+                17 => ConditionalFormulaAggregateKind.QuartileInc,
+                18 => ConditionalFormulaAggregateKind.PercentileExc,
+                19 => ConditionalFormulaAggregateKind.QuartileExc,
+                _ => default
+            };
+            return functionNumber is >= 12 and <= 19;
+        }
+
+        private static bool TryGetFormulaSubtotalAggregateFunctionKind(
+            int functionNumber,
+            out ConditionalFormulaAggregateKind aggregateKind)
+        {
+            aggregateKind = functionNumber switch
+            {
+                1 => ConditionalFormulaAggregateKind.Average,
+                2 => ConditionalFormulaAggregateKind.Count,
+                3 => ConditionalFormulaAggregateKind.CountA,
+                4 => ConditionalFormulaAggregateKind.Max,
+                5 => ConditionalFormulaAggregateKind.Min,
+                6 => ConditionalFormulaAggregateKind.Product,
+                7 => ConditionalFormulaAggregateKind.StdDevSample,
+                8 => ConditionalFormulaAggregateKind.StdDevPopulation,
+                9 => ConditionalFormulaAggregateKind.Sum,
+                10 => ConditionalFormulaAggregateKind.VarianceSample,
+                11 => ConditionalFormulaAggregateKind.VariancePopulation,
+                _ => default
+            };
+            return functionNumber is >= 1 and <= 11;
+        }
+
+        private static bool TryGetFormulaSubtotalAggregateNumber(
+            ScalarValue value,
+            ConditionalFormulaAggregateKind aggregateKind,
+            bool isDirectArgument,
+            bool isLiteralArgument,
+            bool allowTextNumberLiterals,
+            out double number,
+            out ErrorValue? error)
+        {
+            error = null;
+            switch (value)
+            {
+                case NumberValue numeric:
+                    number = numeric.Value;
+                    break;
+                case DateTimeValue dateTime:
+                    number = dateTime.Value;
+                    break;
+                case BoolValue boolean when isDirectArgument:
+                    number = boolean.Value ? 1d : 0d;
+                    break;
+                case TextValue text when isDirectArgument && allowTextNumberLiterals && isLiteralArgument:
+                    if (!TryParseFormulaStatisticalNumberText(text.Value, out var parsed))
+                    {
+                        number = 0d;
+                        error = ErrorValue.Value;
+                        return false;
+                    }
+
+                    number = parsed;
+                    break;
+                case TextValue when isDirectArgument && IsFormulaNumericAggregate(aggregateKind):
+                    number = 0d;
+                    error = ErrorValue.Value;
+                    return false;
+                default:
+                    number = 0d;
+                    return false;
+            }
+
+            if (double.IsFinite(number))
+                return true;
+
+            error = ErrorValue.Num;
+            return false;
+        }
+
+        private ScalarValue FormulaSubtotalAggregateNumericResult(
+            ConditionalFormulaAggregateKind aggregateKind,
+            List<double> numbers,
+            int nonBlankCount)
+        {
+            return aggregateKind switch
+            {
+                ConditionalFormulaAggregateKind.Average when numbers.Count > 0 =>
+                    FormulaConditionalAggregateNumberResult(numbers.Average()),
+                ConditionalFormulaAggregateKind.Average => ErrorValue.DivByZero,
+                ConditionalFormulaAggregateKind.Count => new NumberValue(numbers.Count),
+                ConditionalFormulaAggregateKind.CountA => new NumberValue(nonBlankCount),
+                ConditionalFormulaAggregateKind.Max => new NumberValue(numbers.Count > 0 ? numbers.Max() : 0d),
+                ConditionalFormulaAggregateKind.Min => new NumberValue(numbers.Count > 0 ? numbers.Min() : 0d),
+                ConditionalFormulaAggregateKind.Product =>
+                    FormulaConditionalAggregateNumberResult(numbers.Count == 0 ? 1d : numbers.Aggregate(1d, (product, number) => product * number)),
+                ConditionalFormulaAggregateKind.StdDevSample when numbers.Count > 1 =>
+                    FormulaConditionalAggregateNumberResult(StandardDeviationFormulaNumbers(numbers, sample: true)),
+                ConditionalFormulaAggregateKind.StdDevSample => ErrorValue.DivByZero,
+                ConditionalFormulaAggregateKind.StdDevPopulation when numbers.Count > 0 =>
+                    FormulaConditionalAggregateNumberResult(StandardDeviationFormulaNumbers(numbers, sample: false)),
+                ConditionalFormulaAggregateKind.StdDevPopulation => ErrorValue.DivByZero,
+                ConditionalFormulaAggregateKind.Sum => FormulaConditionalAggregateNumberResult(numbers.Sum()),
+                ConditionalFormulaAggregateKind.VarianceSample when numbers.Count > 1 =>
+                    FormulaConditionalAggregateNumberResult(VarianceFormulaNumbers(numbers, sample: true)),
+                ConditionalFormulaAggregateKind.VarianceSample => ErrorValue.DivByZero,
+                ConditionalFormulaAggregateKind.VariancePopulation when numbers.Count > 0 =>
+                    FormulaConditionalAggregateNumberResult(VarianceFormulaNumbers(numbers, sample: false)),
+                ConditionalFormulaAggregateKind.VariancePopulation => ErrorValue.DivByZero,
+                ConditionalFormulaAggregateKind.Median when numbers.Count > 0 =>
+                    FormulaConditionalAggregateNumberResult(MedianFormulaNumbers(numbers)),
+                ConditionalFormulaAggregateKind.Median => ErrorValue.Num,
+                ConditionalFormulaAggregateKind.ModeSngl => FormulaAggregateModeSnglResult(numbers),
+                _ => ErrorValue.Value
+            };
+        }
+
+        private ScalarValue FormulaAggregateSelectionResult(
+            ConditionalFormulaAggregateKind aggregateKind,
+            List<double> numbers,
+            double selector)
+        {
+            if (!double.IsFinite(selector))
+                return ErrorValue.Num;
+
+            return aggregateKind switch
+            {
+                ConditionalFormulaAggregateKind.Large =>
+                    FormulaAggregateLargeSmallResult(numbers, selector, largest: true),
+                ConditionalFormulaAggregateKind.Small =>
+                    FormulaAggregateLargeSmallResult(numbers, selector, largest: false),
+                ConditionalFormulaAggregateKind.PercentileInc =>
+                    EvaluateFormulaPercentile(FormulaAggregateNumberRange(numbers), selector, inclusive: true),
+                ConditionalFormulaAggregateKind.PercentileExc =>
+                    EvaluateFormulaPercentile(FormulaAggregateNumberRange(numbers), selector, inclusive: false),
+                ConditionalFormulaAggregateKind.QuartileInc =>
+                    FormulaAggregateQuartileResult(numbers, selector, inclusive: true),
+                ConditionalFormulaAggregateKind.QuartileExc =>
+                    FormulaAggregateQuartileResult(numbers, selector, inclusive: false),
+                _ => ErrorValue.Value
+            };
+        }
+
+        private static ScalarValue FormulaAggregateLargeSmallResult(
+            List<double> numbers,
+            double rawK,
+            bool largest)
+        {
+            if (!double.IsFinite(rawK) || rawK < int.MinValue || rawK > int.MaxValue)
+                return ErrorValue.Num;
+
+            var k = (int)rawK;
+            if (k < 1 || k > numbers.Count)
+                return ErrorValue.Num;
+
+            numbers.Sort();
+            return FormulaStatisticalNumberResult(largest ? numbers[^k] : numbers[k - 1]);
+        }
+
+        private ScalarValue FormulaAggregateQuartileResult(
+            List<double> numbers,
+            double rawQuartile,
+            bool inclusive)
+        {
+            if (!double.IsFinite(rawQuartile) || rawQuartile < int.MinValue || rawQuartile > int.MaxValue)
+                return ErrorValue.Num;
+
+            var quartile = (int)rawQuartile;
+            if (inclusive)
+            {
+                if (quartile is < 0 or > 4)
+                    return ErrorValue.Num;
+
+                return quartile switch
+                {
+                    0 => EvaluateFormulaPercentile(FormulaAggregateNumberRange(numbers), 0d, inclusive: true),
+                    4 => EvaluateFormulaPercentile(FormulaAggregateNumberRange(numbers), 1d, inclusive: true),
+                    _ => EvaluateFormulaPercentile(FormulaAggregateNumberRange(numbers), quartile / 4.0, inclusive: true)
+                };
+            }
+
+            return quartile is < 1 or > 3
+                ? ErrorValue.Num
+                : EvaluateFormulaPercentile(FormulaAggregateNumberRange(numbers), quartile / 4.0, inclusive: false);
+        }
+
+        private static ScalarValue FormulaAggregateModeSnglResult(List<double> numbers)
+        {
+            if (numbers.Count == 0)
+                return ErrorValue.NA;
+
+            var frequencies = new Dictionary<double, int>();
+            var order = new List<double>();
+            foreach (var number in numbers)
+            {
+                if (!double.IsFinite(number))
+                    return ErrorValue.Num;
+
+                if (!frequencies.ContainsKey(number))
+                    order.Add(number);
+
+                frequencies[number] = frequencies.GetValueOrDefault(number) + 1;
+            }
+
+            var maxFrequency = frequencies.Values.Max();
+            if (maxFrequency < 2)
+                return ErrorValue.NA;
+
+            foreach (var candidate in order)
+            {
+                if (frequencies[candidate] == maxFrequency)
+                    return FormulaStatisticalNumberResult(candidate);
+            }
+
+            return ErrorValue.NA;
+        }
+
+        private static RangeValue FormulaAggregateNumberRange(List<double> numbers)
+        {
+            var cells = new ScalarValue[numbers.Count, 1];
+            for (var i = 0; i < numbers.Count; i++)
+                cells[i, 0] = new NumberValue(numbers[i]);
+
+            return new RangeValue(cells);
+        }
+
+        private readonly record struct FormulaSubtotalAggregateOptions(
+            bool IgnoreHiddenRows,
+            bool IgnoreFilteredRows,
+            bool IgnoreErrors,
+            bool IgnoreNestedAggregates,
+            bool AllowTextNumberLiterals);
+
         private bool TryEvaluateFormulaAggregate(
             ConditionalFormulaOperand operand,
             int rowOffset,
@@ -18655,6 +19783,9 @@ public static partial class AccessibilityCheckerService
             out ScalarValue value)
         {
             value = ErrorValue.Value;
+            if (operand.AggregateKind is ConditionalFormulaAggregateKind.Subtotal or ConditionalFormulaAggregateKind.Aggregate)
+                return TryEvaluateFormulaSubtotalOrAggregate(operand, rowOffset, colOffset, out value);
+
             if (IsFormulaDatabaseAggregate(operand.AggregateKind))
                 return TryEvaluateFormulaDatabaseAggregate(operand, rowOffset, colOffset, out value);
 

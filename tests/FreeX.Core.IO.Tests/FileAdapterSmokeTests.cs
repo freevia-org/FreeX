@@ -12752,8 +12752,14 @@ public partial class FileAdapterSmokeTests
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
-        workbookXml.ToString().Should().Contain("{00112233-4455-6677-8899-AABBCCDDEEFF}");
-        workbookXml.ToString().Should().Contain("FreeXUnknownWorkbookExtension");
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var extensionList = workbookXml.Root!.Element(workbookNs + "extLst")!;
+        extensionList.Attribute("customWorkbookExtLstFlag").Should().BeNull();
+        extensionList.Element(workbookNs + "nativeWorkbookExtLstChild").Should().BeNull();
+        var extension = extensionList.Element(workbookNs + "ext")!;
+        extension.Attribute("uri")!.Value.Should().Be("{00112233-4455-6677-8899-AABBCCDDEEFF}");
+        extension.Attribute("customWorkbookExtFlag").Should().BeNull();
+        extension.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("FreeXUnknownWorkbookExtension");
     }
 
     [Fact]

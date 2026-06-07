@@ -1213,6 +1213,9 @@ public partial class XlsxCorpusRunnerTests
     private static XDocument LoadPackageXml(ZipArchiveEntry entry) =>
         XlsxPackageTestFixtures.LoadPackageXml(entry);
 
+    private static XDocument LoadPackageXml(ZipArchive archive, string entryName) =>
+        XlsxPackageTestFixtures.LoadPackageXml(archive, entryName, entryName);
+
     private static void ReplacePackageXml(ZipArchive archive, string entryName, XDocument document)
     {
         archive.GetEntry(entryName)?.Delete();
