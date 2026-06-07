@@ -13269,7 +13269,7 @@ public partial class FileAdapterSmokeTests
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
         var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
         var xml = workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
-        xml.Should().Contain("validWorkbookPrAttr=\"keep\"");
+        xml.Should().NotContain("validWorkbookPrAttr=\"keep\"");
         xml.Should().NotContain("validFileVersionAttr=\"keep\"");
         xml.Should().NotContain("validRecoveryAttr=\"keep\"");
         xml.Should().NotContain("validFunctionGroupsAttr=\"keep\"");
@@ -14199,9 +14199,8 @@ public partial class FileAdapterSmokeTests
         workbookPr.Attribute("date1904")!.Value.Should().Be("1");
         workbookPr.Attribute("defaultThemeVersion")!.Value.Should().Be("166925");
         workbookPr.Elements(XName.Get("workbookPrNativeChild", "urn:freex:test"))
-            .Select(element => element.Attribute("id")?.Value)
             .Should()
-            .BeEquivalentTo("first", "second");
+            .BeEmpty();
     }
 
     [Fact]
@@ -14235,9 +14234,8 @@ public partial class FileAdapterSmokeTests
         workbookPr!.Attribute("date1904").Should().BeNull();
         workbookPr.Attribute("defaultThemeVersion")!.Value.Should().Be("166925");
         workbookPr.Elements(XName.Get("workbookPrNativeChild", "urn:freex:test"))
-            .Select(element => element.Attribute("id")?.Value)
             .Should()
-            .BeEquivalentTo("first", "second");
+            .BeEmpty();
     }
 
     [Fact]

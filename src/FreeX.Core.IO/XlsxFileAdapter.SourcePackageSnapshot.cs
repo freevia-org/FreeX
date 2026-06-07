@@ -839,6 +839,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchCustomViews(archive, workbook, SourceHasCustomViews);
                 NormalizePatchWorkbookViews(archive);
                 NormalizePatchWorkbookCalculationProperties(archive);
+                NormalizePatchWorkbookProperties(archive);
                 NormalizePatchWorkbookFileVersion(archive);
                 NormalizePatchWorkbookFileSharing(archive);
                 NormalizePatchWorkbookFileRecoveryProperties(archive);
@@ -1133,6 +1134,22 @@ public sealed partial class XlsxFileAdapter
             var calcPr = workbookXml.Root?.Element(workbookNs + "calcPr");
             if (calcPr is not null &&
                 XlsxWorkbookCalculationPropertyNormalizer.NormalizeElement(calcPr))
+            {
+                XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
+            }
+        }
+
+        private static void NormalizePatchWorkbookProperties(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var workbookPr = workbookXml.Root?.Element(workbookNs + "workbookPr");
+            if (workbookPr is not null &&
+                XlsxWorkbookPropertiesNormalizer.NormalizeElement(workbookPr))
             {
                 XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
             }

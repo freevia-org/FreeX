@@ -108,6 +108,7 @@ internal static class XlsxWorkbookMetadataWriter
         }
 
         workbookProperties.SetAttributeValue("date1904", workbook.Uses1904DateSystem ? "1" : null);
+        XlsxWorkbookPropertiesNormalizer.NormalizeElement(workbookProperties);
         return true;
     }
 

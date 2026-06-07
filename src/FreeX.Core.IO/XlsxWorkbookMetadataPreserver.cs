@@ -396,6 +396,7 @@ internal static class XlsxWorkbookMetadataPreserver
             var cloned = new XElement(sourceWorkbookProperties);
             foreach (var attribute in modeledAttributes)
                 cloned.Attribute(attribute)?.Remove();
+            XlsxWorkbookPropertiesNormalizer.NormalizeElement(cloned);
 
             if (!cloned.HasAttributes && !cloned.HasElements)
                 return false;
@@ -404,10 +405,14 @@ internal static class XlsxWorkbookMetadataPreserver
             return true;
         }
 
-        return XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(
+        var changed = XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(
             sourceWorkbookProperties,
             targetWorkbookProperties,
             modeledAttributes);
+        if (XlsxWorkbookPropertiesNormalizer.NormalizeElement(targetWorkbookProperties))
+            changed = true;
+
+        return changed;
     }
 
     private static bool MergeWorkbookViews(XElement? sourceBookViews, XElement targetRoot, XNamespace workbookNs)
