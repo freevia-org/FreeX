@@ -76,8 +76,8 @@ internal static class XlsxWorksheetPhoneticPropertyNormalizer
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(phoneticPr, PhoneticPropertyAttributes);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(phoneticPr, "fontId", NormalizeUnsignedInt);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(phoneticPr, "type", value => NormalizeToken(value, ValidTypes));
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(phoneticPr, "alignment", value => NormalizeToken(value, ValidAlignments));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(phoneticPr, "type", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, ValidTypes));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(phoneticPr, "alignment", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, ValidAlignments));
         changed |= XlsxXmlNormalizationHelpers.RemoveChildElements(phoneticPr);
         return changed;
     }
@@ -91,12 +91,6 @@ internal static class XlsxWorksheetPhoneticPropertyNormalizer
         return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
             ? parsed.ToString(CultureInfo.InvariantCulture)
             : "0";
-    }
-
-    private static string? NormalizeToken(string? value, IReadOnlySet<string> allowedValues)
-    {
-        var trimmed = value?.Trim();
-        return trimmed is not null && allowedValues.Contains(trimmed) ? trimmed : null;
     }
 
     private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
