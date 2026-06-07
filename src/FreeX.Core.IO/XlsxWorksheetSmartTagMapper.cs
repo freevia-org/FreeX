@@ -123,18 +123,11 @@ internal static class XlsxWorksheetSmartTagMapper
 
     private static XElement? ToXml(WorksheetSmartTagsModel model)
     {
-        if (!string.IsNullOrWhiteSpace(model.NativeXml))
+        if (XlsxWorksheetNativeMetadataHelpers.TryParseNativeElement(
+                model.NativeXml,
+                WorksheetNs + "smartTags") is { } nativeElement)
         {
-            try
-            {
-                var nativeElement = XElement.Parse(model.NativeXml);
-                if (nativeElement.Name == WorksheetNs + "smartTags")
-                    return nativeElement;
-            }
-            catch
-            {
-                // Fall back to the structured model below.
-            }
+            return nativeElement;
         }
 
         if (model.Cells.Count == 0)

@@ -93,21 +93,12 @@ internal static class XlsxWorksheetAdditionalViewMapper
 
     private static XElement? ToXml(WorksheetAdditionalViewModel model)
     {
-        if (!string.IsNullOrWhiteSpace(model.NativeXml))
+        if (XlsxWorksheetNativeMetadataHelpers.TryParseNativeElement(
+                model.NativeXml,
+                WorksheetNs + "sheetView",
+                XlsxWorksheetSheetViewNormalizer.NormalizeSheetViewElement) is { } nativeElement)
         {
-            try
-            {
-                var nativeElement = XElement.Parse(model.NativeXml);
-                if (nativeElement.Name == WorksheetNs + "sheetView")
-                {
-                    XlsxWorksheetSheetViewNormalizer.NormalizeSheetViewElement(nativeElement);
-                    return IsAdditionalView(nativeElement) ? nativeElement : null;
-                }
-            }
-            catch
-            {
-                // Fall back to the structured model below.
-            }
+            return IsAdditionalView(nativeElement) ? nativeElement : null;
         }
 
         if (string.IsNullOrWhiteSpace(model.WorkbookViewId) && model.NativeAttributes.Count == 0)
