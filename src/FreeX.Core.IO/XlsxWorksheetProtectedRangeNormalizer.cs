@@ -89,6 +89,7 @@ internal static class XlsxWorksheetProtectedRangeNormalizer
     {
         var changed = false;
         changed |= RemoveUnknownAttributes(protectedRange, ProtectedRangeAttributes);
+        changed |= NormalizeAttribute(protectedRange, "password", NormalizeLegacyPasswordHashOrNull);
         changed |= NormalizeAttribute(protectedRange, "sqref", NormalizeSqref);
         changed |= NormalizeAttribute(protectedRange, "name", NormalizeOptionalText);
         changed |= NormalizeAttribute(protectedRange, "hashValue", NormalizeBase64BinaryOrNull);
@@ -202,6 +203,18 @@ internal static class XlsxWorksheetProtectedRangeNormalizer
         {
             return null;
         }
+    }
+
+    private static string? NormalizeLegacyPasswordHashOrNull(string? value)
+    {
+        var trimmed = value?.Trim();
+        if (trimmed is not { Length: 4 } ||
+            !trimmed.All(static c => char.IsAsciiHexDigit(c)))
+        {
+            return null;
+        }
+
+        return trimmed.ToUpperInvariant();
     }
 
     private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry) =>
