@@ -370,6 +370,7 @@ jobs:
             grep -q "native_paste_special_picture_menu_item=true" "$launch_smoke_report"
             grep -q "native_paste_special_linked_picture_menu_item=true" "$launch_smoke_report"
             grep -q "native_select_all_menu_item=true" "$launch_smoke_report"
+            grep -q "native_go_to_special_menu_item=true" "$launch_smoke_report"
             grep -q "native_autosum_menu_item=true" "$launch_smoke_report"
             grep -q "native_autosum_sum_menu_item=true" "$launch_smoke_report"
             grep -q "native_autosum_average_menu_item=true" "$launch_smoke_report"

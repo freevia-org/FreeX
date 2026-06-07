@@ -57,6 +57,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_open_recent_item_count=[1-9]");
         script.Should().Contain("native_close_workbook_menu_item=true");
         script.Should().Contain("native_select_all_menu_item=true");
+        script.Should().Contain("native_go_to_special_menu_item=true");
         script.Should().Contain("native_fill_cells_menu_item=true");
         script.Should().Contain("native_fill_down_menu_item=true");
         script.Should().Contain("native_fill_right_menu_item=true");
@@ -92,6 +93,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("HasNativeOpenRecentMenuItem &&");
         script.Should().Contain("NativeOpenRecentItemCount > 0 &&");
         script.Should().Contain("HasNativeSelectAllMenuItem &&");
+        script.Should().Contain("HasNativeGoToSpecialMenuItem &&");
         script.Should().Contain("HasNativeCloseWorkbookMenuItem &&");
         script.Should().Contain("HasNativeRenameSheetMenuItem &&");
         script.Should().Contain("HasNativeTabColorMenuItem &&");
@@ -705,6 +707,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_paste_special_picture_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_paste_special_linked_picture_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_select_all_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_go_to_special_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_autosum_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_autosum_sum_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_autosum_average_menu_item=true" "$artifact_root/launch.txt"
@@ -1015,7 +1018,10 @@ public sealed class MacOsAppReadinessPreflightTests
                     private readonly NativeMenuItem _findNextMenuItem = new();
                     private readonly NativeMenuItem _replaceMenuItem = new();
                     private readonly NativeMenuItem _goToMenuItem = new();
+                    private readonly NativeMenuItem _goToSpecialMenuItem = new();
                     private sealed record ReplaceDialogResult(string FindText, string ReplaceText);
+                    private sealed record GoToSpecialDialogResult(GoToSpecialKind Kind, GoToSpecialOptions Options);
+                    private sealed record GoToSpecialChoice(GoToSpecialKind Kind, string Label)
                     _findMenuItem.Header = "Find...";
                     _findMenuItem.Gesture = new KeyGesture(Key.F, KeyModifiers.Meta);
                     _findMenuItem.Click += async (_, _) => await ShowFindDialogAsync();
@@ -1028,29 +1034,47 @@ public sealed class MacOsAppReadinessPreflightTests
                     _goToMenuItem.Header = "Go To...";
                     _goToMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control);
                     _goToMenuItem.Click += async (_, _) => await ShowGoToDialogAsync();
+                    _goToSpecialMenuItem.Header = "Go To Special...";
+                    _goToSpecialMenuItem.Click += async (_, _) => await ShowGoToSpecialDialogAsync();
                     editMenu.Items.Add(_findMenuItem);
                     editMenu.Items.Add(_findNextMenuItem);
                     editMenu.Items.Add(_replaceMenuItem);
                     editMenu.Items.Add(_goToMenuItem);
+                    editMenu.Items.Add(_goToSpecialMenuItem);
                     _findMenuItem.IsEnabled = isIdle;
                     _findNextMenuItem.IsEnabled = isIdle && !string.IsNullOrWhiteSpace(_session.LastFindText);
                     _replaceMenuItem.IsEnabled = isIdle;
                     _goToMenuItem.IsEnabled = isIdle;
+                    _goToSpecialMenuItem.IsEnabled = isIdle;
                     private async Task ShowFindDialogAsync()
                     private void FindNext(string? searchText = null)
                     private async Task ShowReplaceDialogAsync()
                     private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync()
                     private async Task ShowGoToDialogAsync()
+                    private async Task ShowGoToSpecialDialogAsync()
+                    private async Task<GoToSpecialDialogResult?> ShowGoToSpecialInputDialogAsync()
+                    private static GoToSpecialChoice[] CreateGoToSpecialChoices()
+                    private bool SelectGoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
                     private async Task<string?> ShowSingleInputDialogAsync(
                     "FindTextBox"
                     "ReplaceFindTextBox"
                     "ReplaceWithTextBox"
                     "ReplaceAllButton"
                     "GoToReferenceBox"
+                    "GoToSpecialKindBox"
+                    "GoToSpecialNumbersBox"
+                    "GoToSpecialTextBox"
+                    "GoToSpecialLogicalsBox"
+                    "GoToSpecialErrorsBox"
+                    "GoToSpecialOkButton"
                     var result = _session.FindNext(searchText);
                     var result = _session.ReplaceAllValues(replacement.FindText, replacement.ReplaceText);
                     var result = _session.GoToReference(reference);
+                    var result = _session.GoToSpecial(kind, options);
+                    result.SelectedRanges.Count == 1
                     e.Key == Key.F5;
+                    args.Key == Key.Oem1 && args.KeyModifiers == KeyModifiers.Alt;
+                    SelectGoToSpecial(GoToSpecialKind.VisibleCellsOnly);
                     e.Key == Key.F && HasOnlyCommandModifier(e.KeyModifiers);
                     e.Key == Key.G && e.KeyModifiers == KeyModifiers.Meta;
                     e.Key == Key.H && HasOnlyControlModifier(e.KeyModifiers);
@@ -1512,6 +1536,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativeOpenRecentMenuItem &&
                     NativeOpenRecentItemCount > 0 &&
                     HasNativeSelectAllMenuItem &&
+                    HasNativeGoToSpecialMenuItem &&
                     HasNativeCloseWorkbookMenuItem &&
                     HasNativeRenameSheetMenuItem &&
                     HasNativeMoveSheetLeftMenuItem &&
@@ -1581,6 +1606,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativePasteSpecialUnicodeTextMenuItem &&
                     HasNativePasteSpecialPictureMenuItem &&
                     HasNativePasteSpecialLinkedPictureMenuItem &&
+                    HasNativeGoToSpecialMenuItem &&
                     HasNativeAutoSumMenuItem &&
                     HasNativeAutoSumSumMenuItem &&
                     HasNativeAutoSumAverageMenuItem &&
@@ -1615,6 +1641,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativeOpenRecentMenuItem { get; }
                 private int NativeOpenRecentItemCount { get; }
                 private bool HasNativeSelectAllMenuItem { get; }
+                private bool HasNativeGoToSpecialMenuItem { get; }
                 private bool HasNativeCloseWorkbookMenuItem { get; }
                 private bool HasNativeRenameSheetMenuItem { get; }
                 private bool HasNativeMoveSheetLeftMenuItem { get; }
@@ -1711,7 +1738,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 public int ExternalImageClipboardPicturePngByteCount { get; }
                 public int NativeBordersPresetCount { get; }
                 public int NativeCellStylesPresetCount { get; }
-                public string Report => "external_image_clipboard_paste_required= external_image_clipboard_paste= external_image_clipboard_picture_count= external_image_clipboard_picture_png_bytes= native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= toolbar_format_painter_button= toolbar_autosum_button= toolbar_autosum_sum_menu_item= toolbar_autosum_average_menu_item= toolbar_autosum_count_numbers_menu_item= toolbar_autosum_count_all_menu_item= toolbar_autosum_max_menu_item= toolbar_autosum_min_menu_item= toolbar_fill_cells_button= toolbar_fill_down_menu_item= toolbar_fill_right_menu_item= toolbar_fill_up_menu_item= toolbar_fill_left_menu_item= toolbar_clear_button= toolbar_clear_all_menu_item= toolbar_clear_formats_menu_item= toolbar_clear_contents_menu_item= toolbar_clear_comments_menu_item= toolbar_clear_hyperlinks_menu_item= toolbar_borders_button= toolbar_wrap_text_button= toolbar_merge_and_center_button= focusable_sheet_tab= focusable_active_sheet_tab= shell_focus_cycle_targets= sheet_tab_context_keyboard_help= sheet_tab_context_rename_menu_item= sheet_tab_context_tab_color_menu_item= sheet_tab_context_no_color_menu_item= sheet_tab_context_select_all_sheets_menu_item= sheet_tab_context_ungroup_sheets_menu_item= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_select_all_sheets_menu_item= native_ungroup_sheets_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_format_painter_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_autosum_menu_item= native_autosum_sum_menu_item= native_autosum_average_menu_item= native_autosum_count_numbers_menu_item= native_autosum_count_all_menu_item= native_autosum_max_menu_item= native_autosum_min_menu_item= native_fill_cells_menu_item= native_fill_down_menu_item= native_fill_right_menu_item= native_fill_up_menu_item= native_fill_left_menu_item= native_clear_menu_item= native_clear_all_menu_item= native_clear_formats_menu_item= native_clear_contents_menu_item= native_clear_comments_menu_item= native_clear_hyperlinks_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_borders_menu_item= native_borders_preset_count= native_merge_and_center_menu_item= native_unmerge_cells_menu_item= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+                public string Report => "external_image_clipboard_paste_required= external_image_clipboard_paste= external_image_clipboard_picture_count= external_image_clipboard_picture_png_bytes= native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= toolbar_format_painter_button= toolbar_autosum_button= toolbar_autosum_sum_menu_item= toolbar_autosum_average_menu_item= toolbar_autosum_count_numbers_menu_item= toolbar_autosum_count_all_menu_item= toolbar_autosum_max_menu_item= toolbar_autosum_min_menu_item= toolbar_fill_cells_button= toolbar_fill_down_menu_item= toolbar_fill_right_menu_item= toolbar_fill_up_menu_item= toolbar_fill_left_menu_item= toolbar_clear_button= toolbar_clear_all_menu_item= toolbar_clear_formats_menu_item= toolbar_clear_contents_menu_item= toolbar_clear_comments_menu_item= toolbar_clear_hyperlinks_menu_item= toolbar_borders_button= toolbar_wrap_text_button= toolbar_merge_and_center_button= focusable_sheet_tab= focusable_active_sheet_tab= shell_focus_cycle_targets= sheet_tab_context_keyboard_help= sheet_tab_context_rename_menu_item= sheet_tab_context_tab_color_menu_item= sheet_tab_context_no_color_menu_item= sheet_tab_context_select_all_sheets_menu_item= sheet_tab_context_ungroup_sheets_menu_item= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_select_all_sheets_menu_item= native_ungroup_sheets_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_format_painter_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_go_to_special_menu_item= native_autosum_menu_item= native_autosum_sum_menu_item= native_autosum_average_menu_item= native_autosum_count_numbers_menu_item= native_autosum_count_all_menu_item= native_autosum_max_menu_item= native_autosum_min_menu_item= native_fill_cells_menu_item= native_fill_down_menu_item= native_fill_right_menu_item= native_fill_up_menu_item= native_fill_left_menu_item= native_clear_menu_item= native_clear_all_menu_item= native_clear_formats_menu_item= native_clear_contents_menu_item= native_clear_comments_menu_item= native_clear_hyperlinks_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_borders_menu_item= native_borders_preset_count= native_merge_and_center_menu_item= native_unmerge_cells_menu_item= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
             }
 
             internal sealed class MacOsLaunchSmokeCoordinator
@@ -1962,7 +1989,12 @@ public sealed class MacOsAppReadinessPreflightTests
                 bool keepSourceColumnWidths = false
                 if (keepSourceColumnWidths)
                 public string LastFindText => _lastFindText ??
+                public IReadOnlyList<GridRange> SelectedRanges { get; private set; } = [];
                 public WorkbookNavigationResult GoToReference(string reference)
+                public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
+                GoToSpecialService.Find(Workbook, ActiveSheet, SelectedRange, kind, ActiveCell, options)
+                SelectionRangeService.CompressAddresses(matches)
+                SelectRanges(selectedRange, ranges);
                 WorkbookReferenceNavigator.TryParseReferenceRange(
                 public WorkbookNavigationResult FindNext(
                 FindReplaceService.Find(Workbook, text, effectiveOptions, matchCase, matchEntireCell)

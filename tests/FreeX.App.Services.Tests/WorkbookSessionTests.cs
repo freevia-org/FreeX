@@ -223,6 +223,120 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void GoToSpecial_SelectsBlanksWithoutDirtyingWorkbook()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(a1, new TextValue("filled"));
+        sheet.SetCell(c1, new NumberValue(10));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, c1));
+
+        var result = session.GoToSpecial(GoToSpecialKind.Blanks);
+
+        result.Success.Should().BeTrue();
+        result.MatchCount.Should().Be(1);
+        result.SelectedRange.Should().Be(new GridRange(b1, b1));
+        result.SelectedRanges.Should().Equal(new GridRange(b1, b1));
+        session.SelectedRange.Should().Be(new GridRange(b1, b1));
+        session.SelectedRanges.Should().Equal(new GridRange(b1, b1));
+        session.ActiveCell.Should().Be(b1);
+        session.FormulaEditAddress.Should().BeNull();
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public void GoToSpecial_ConstantsHonorsValueTypeFiltersWithoutDirtyingWorkbook()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(a1, new NumberValue(42));
+        sheet.SetCell(b1, new TextValue("text"));
+        sheet.SetCell(c1, new BoolValue(true));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, c1));
+
+        var result = session.GoToSpecial(
+            GoToSpecialKind.Constants,
+            new GoToSpecialOptions(GoToSpecialValueTypes.Numbers | GoToSpecialValueTypes.Logicals));
+
+        result.Success.Should().BeTrue();
+        result.MatchCount.Should().Be(2);
+        result.SelectedRange.Should().Be(new GridRange(a1, a1));
+        result.SelectedRanges.Should().Equal(new GridRange(a1, a1), new GridRange(c1, c1));
+        session.SelectedRange.Should().Be(new GridRange(a1, a1));
+        session.SelectedRanges.Should().Equal(new GridRange(a1, a1), new GridRange(c1, c1));
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public void GoToSpecial_VisibleCellsOnlySkipsHiddenRowsAndColumns()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        sheet.HiddenRows.Add(2);
+        sheet.HiddenCols.Add(2);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b2));
+
+        var result = session.GoToSpecial(GoToSpecialKind.VisibleCellsOnly);
+
+        result.Success.Should().BeTrue();
+        result.MatchCount.Should().Be(1);
+        result.SelectedRanges.Should().Equal(new GridRange(a1, a1));
+        session.SelectedRange.Should().Be(new GridRange(a1, a1));
+        session.SelectedRanges.Should().Equal(new GridRange(a1, a1));
+        session.ActiveCell.Should().Be(a1);
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public void GoToSpecial_NoMatchesLeavesSelectionUnchanged()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new NumberValue(1));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        var originalRange = session.SelectedRange;
+
+        var result = session.GoToSpecial(GoToSpecialKind.Blanks);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be("No cells found.");
+        result.SelectedRange.Should().BeNull();
+        result.SelectedRanges.Should().BeEmpty();
+        session.SelectedRange.Should().Be(originalRange);
+        session.SelectedRanges.Should().Equal(originalRange);
+        session.ActiveCell.Should().Be(a1);
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
     public void FindNext_StartsAfterActiveCellThenWrapsAndStoresLastText()
     {
         var workbook = CreateWorkbook();

@@ -74,7 +74,7 @@ public sealed class WorkbookSession
         SelectSingleSheetGroup(ActiveSheet.Id);
         RefreshSheetTabsForActiveSheet();
         ActiveCell = GetInitialActiveCell(ActiveSheet);
-        SelectedRange = new GridRange(ActiveCell, ActiveCell);
+        SetSingleSelectedRange(new GridRange(ActiveCell, ActiveCell));
         Viewport = BuildViewport();
     }
 
@@ -91,6 +91,8 @@ public sealed class WorkbookSession
     public CellAddress ActiveCell { get; private set; }
 
     public GridRange SelectedRange { get; private set; }
+
+    public IReadOnlyList<GridRange> SelectedRanges { get; private set; } = [];
 
     public CellAddress? FormulaEditAddress { get; private set; }
 
@@ -204,24 +206,50 @@ public sealed class WorkbookSession
         ActiveCell = address;
         ActiveSheet.ActiveRow = address.Row;
         ActiveSheet.ActiveCol = address.Col;
-        SelectedRange = new GridRange(address, address);
+        SetSingleSelectedRange(new GridRange(address, address));
         FormulaEditAddress = null;
         EnsureActiveCellVisible();
     }
 
     public void SelectRange(GridRange range)
     {
-        if (!range.Start.Sheet.Equals(ActiveSheet.Id))
-            throw new ArgumentException("Selected range must be on the active sheet.", nameof(range));
-        if (!IsValidAddress(range.Start) || !IsValidAddress(range.End))
-            throw new ArgumentOutOfRangeException(nameof(range), "Selected range must be inside the worksheet bounds.");
+        ValidateSelectionRange(range, nameof(range));
+        SelectRanges(range, [range]);
+    }
 
-        SelectedRange = range;
-        ActiveCell = range.Start;
+    private void SelectRanges(GridRange primaryRange, IReadOnlyList<GridRange> ranges)
+    {
+        ValidateSelectionRange(primaryRange, nameof(primaryRange));
+        if (ranges.Count == 0)
+            throw new ArgumentException("At least one selected range is required.", nameof(ranges));
+        foreach (var range in ranges)
+            ValidateSelectionRange(range, nameof(ranges));
+
+        SetSelectedRanges(primaryRange, ranges);
+        ActiveCell = primaryRange.Start;
         ActiveSheet.ActiveRow = ActiveCell.Row;
         ActiveSheet.ActiveCol = ActiveCell.Col;
         FormulaEditAddress = null;
         EnsureActiveCellVisible();
+    }
+
+    private void ValidateSelectionRange(GridRange range, string paramName)
+    {
+        if (!range.Start.Sheet.Equals(ActiveSheet.Id))
+            throw new ArgumentException("Selected range must be on the active sheet.", paramName);
+        if (!range.End.Sheet.Equals(ActiveSheet.Id))
+            throw new ArgumentException("Selected range must be on the active sheet.", paramName);
+        if (!IsValidAddress(range.Start) || !IsValidAddress(range.End))
+            throw new ArgumentOutOfRangeException(paramName, "Selected range must be inside the worksheet bounds.");
+    }
+
+    private void SetSingleSelectedRange(GridRange range) =>
+        SetSelectedRanges(range, [range]);
+
+    private void SetSelectedRanges(GridRange primaryRange, IReadOnlyList<GridRange> ranges)
+    {
+        SelectedRange = primaryRange;
+        SelectedRanges = ranges.ToArray();
     }
 
     public GridRange SelectCurrentRegionOrAll()
@@ -260,6 +288,18 @@ public sealed class WorkbookSession
             return WorkbookNavigationResult.Failed("Reference is not valid.");
 
         return GoToRange(range);
+    }
+
+    public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
+    {
+        var matches = GoToSpecialService.Find(Workbook, ActiveSheet, SelectedRange, kind, ActiveCell, options);
+        if (matches.Count == 0)
+            return WorkbookGoToSpecialResult.Failed("No cells found.");
+
+        var ranges = SelectionRangeService.CompressAddresses(matches);
+        var selectedRange = ranges[0];
+        SelectRanges(selectedRange, ranges);
+        return WorkbookGoToSpecialResult.Selected(selectedRange, ranges, matches.Count);
     }
 
     public WorkbookNavigationResult FindNext(
@@ -432,7 +472,7 @@ public sealed class WorkbookSession
         if (sheetChanged)
         {
             ActiveCell = GetInitialActiveCell(ActiveSheet);
-            SelectedRange = new GridRange(ActiveCell, ActiveCell);
+            SetSingleSelectedRange(new GridRange(ActiveCell, ActiveCell));
             RefreshViewport();
         }
 
@@ -765,7 +805,7 @@ public sealed class WorkbookSession
         ActiveCell = address;
         ActiveSheet.ActiveRow = address.Row;
         ActiveSheet.ActiveCol = address.Col;
-        SelectedRange = new GridRange(address, address);
+        SetSingleSelectedRange(new GridRange(address, address));
         FormulaEditAddress = address;
     }
 
@@ -1990,7 +2030,7 @@ public sealed class WorkbookSession
         ActiveCell = GetInitialActiveCell(ActiveSheet);
         ActiveSheet.ActiveRow = ActiveCell.Row;
         ActiveSheet.ActiveCol = ActiveCell.Col;
-        SelectedRange = new GridRange(ActiveCell, ActiveCell);
+        SetSingleSelectedRange(new GridRange(ActiveCell, ActiveCell));
         FormulaEditAddress = null;
         IsDirty = true;
         _selectionStatsRevision++;
@@ -2025,7 +2065,7 @@ public sealed class WorkbookSession
         ActiveCell = address;
         ActiveSheet.ActiveRow = address.Row;
         ActiveSheet.ActiveCol = address.Col;
-        SelectedRange = new GridRange(address, address);
+        SetSingleSelectedRange(new GridRange(address, address));
         FormulaEditAddress = null;
         IsDirty = true;
         _selectionStatsRevision++;
@@ -2038,7 +2078,7 @@ public sealed class WorkbookSession
         ActiveCell = selectedRange.Start;
         ActiveSheet.ActiveRow = ActiveCell.Row;
         ActiveSheet.ActiveCol = ActiveCell.Col;
-        SelectedRange = selectedRange;
+        SetSingleSelectedRange(selectedRange);
         FormulaEditAddress = null;
         IsDirty = true;
         _selectionStatsRevision++;
@@ -2307,7 +2347,7 @@ public sealed class WorkbookSession
         if (!TryGetRectangleEnd(start, rowCount, colCount, out var end))
             return;
 
-        SelectedRange = new GridRange(start, end);
+        SetSingleSelectedRange(new GridRange(start, end));
     }
 
     private void EnsureActiveCellVisible()

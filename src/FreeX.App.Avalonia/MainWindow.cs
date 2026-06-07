@@ -59,6 +59,11 @@ public sealed class MainWindow : Window
     }
 
     private sealed record ReplaceDialogResult(string FindText, string ReplaceText);
+    private sealed record GoToSpecialDialogResult(GoToSpecialKind Kind, GoToSpecialOptions Options);
+    private sealed record GoToSpecialChoice(GoToSpecialKind Kind, string Label)
+    {
+        public override string ToString() => Label;
+    }
 
     private const double CellIndentLevelWidth = 12;
     private const string CommaNumberFormat = "#,##0.00";
@@ -198,6 +203,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _findNextMenuItem = new();
     private readonly NativeMenuItem _replaceMenuItem = new();
     private readonly NativeMenuItem _goToMenuItem = new();
+    private readonly NativeMenuItem _goToSpecialMenuItem = new();
     private readonly NativeMenuItem _autoSumMenuItem = new();
     private readonly NativeMenuItem _autoSumSumMenuItem = new();
     private readonly NativeMenuItem _autoSumAverageMenuItem = new();
@@ -515,6 +521,9 @@ public sealed class MainWindow : Window
         _goToMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control);
         _goToMenuItem.Click += async (_, _) => await ShowGoToDialogAsync();
 
+        _goToSpecialMenuItem.Header = "Go To Special...";
+        _goToSpecialMenuItem.Click += async (_, _) => await ShowGoToSpecialDialogAsync();
+
         _autoSumMenuItem.Header = "AutoSum";
         _autoSumMenuItem.Menu = CreateNativeAutoSumMenu();
 
@@ -772,6 +781,7 @@ public sealed class MainWindow : Window
         editMenu.Items.Add(_findNextMenuItem);
         editMenu.Items.Add(_replaceMenuItem);
         editMenu.Items.Add(_goToMenuItem);
+        editMenu.Items.Add(_goToSpecialMenuItem);
         editMenu.Items.Add(new NativeMenuItemSeparator());
         editMenu.Items.Add(_autoSumMenuItem);
         editMenu.Items.Add(_fillCellsMenuItem);
@@ -1488,6 +1498,7 @@ public sealed class MainWindow : Window
         _findNextMenuItem.IsEnabled = isIdle && !string.IsNullOrWhiteSpace(_session.LastFindText);
         _replaceMenuItem.IsEnabled = isIdle;
         _goToMenuItem.IsEnabled = isIdle;
+        _goToSpecialMenuItem.IsEnabled = isIdle;
         _autoSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
         _autoSumSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
         _autoSumAverageMenuItem.IsEnabled = _autoSumButton.IsEnabled;
@@ -2191,10 +2202,13 @@ public sealed class MainWindow : Window
         Math.Max(MinimumDisplayedRowHeight, metric.Height) * zoomFactor;
 
     private bool IsSelectedColumn(uint col) =>
-        _session.SelectedRange.Start.Col <= col && col <= _session.SelectedRange.End.Col;
+        _session.SelectedRanges.Any(range => range.Start.Col <= col && col <= range.End.Col);
 
     private bool IsSelectedRow(uint row) =>
-        _session.SelectedRange.Start.Row <= row && row <= _session.SelectedRange.End.Row;
+        _session.SelectedRanges.Any(range => range.Start.Row <= row && row <= range.End.Row);
+
+    private bool IsSelectedCell(CellAddress address) =>
+        _session.SelectedRanges.Any(range => range.Contains(address));
 
     private Border CreateHeaderCell(string text, bool selected = false, double zoomFactor = 1) =>
         CreateCellBorder(
@@ -2215,7 +2229,7 @@ public sealed class MainWindow : Window
     {
         var hasCell = cell.Row != 0 && cell.Col != 0;
         var address = new CellAddress(_session.ActiveSheet.Id, row, col);
-        var selected = _session.SelectedRange.Contains(address);
+        var selected = IsSelectedCell(address);
 
         if (!hasCell)
             return CreateInteractiveCellBorder(
@@ -4001,6 +4015,214 @@ public sealed class MainWindow : Window
         RefreshShell($"Selected {FormatRangeReference(result.SelectedRange!.Value)}");
     }
 
+    private async Task ShowGoToSpecialDialogAsync()
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var selection = await ShowGoToSpecialInputDialogAsync();
+        if (selection is null)
+            return;
+
+        SelectGoToSpecial(selection.Kind, selection.Options);
+    }
+
+    private async Task<GoToSpecialDialogResult?> ShowGoToSpecialInputDialogAsync()
+    {
+        GoToSpecialDialogResult? result = null;
+        var dialog = new Window
+        {
+            Title = "Go To Special",
+            Width = 420,
+            Height = 310,
+            MinWidth = 360,
+            MinHeight = 280,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+
+        var choices = CreateGoToSpecialChoices();
+        var kindBox = new ComboBox
+        {
+            ItemsSource = choices,
+            SelectedIndex = 0,
+            MinWidth = 300,
+        };
+        AutomationProperties.SetName(kindBox, "Go to");
+        AutomationProperties.SetAutomationId(kindBox, "GoToSpecialKindBox");
+
+        var numbersBox = CreateGoToSpecialValueTypeBox("Numbers", "GoToSpecialNumbersBox");
+        var textBox = CreateGoToSpecialValueTypeBox("Text", "GoToSpecialTextBox");
+        var logicalsBox = CreateGoToSpecialValueTypeBox("Logicals", "GoToSpecialLogicalsBox");
+        var errorsBox = CreateGoToSpecialValueTypeBox("Errors", "GoToSpecialErrorsBox");
+
+        var okButton = new Button
+        {
+            Content = "OK",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(okButton, "GoToSpecialOkButton");
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(cancelButton, "GoToSpecialCancelButton");
+
+        void RefreshValueTypeState()
+        {
+            var enabled = kindBox.SelectedItem is GoToSpecialChoice choice &&
+                UsesGoToSpecialValueTypeOptions(choice.Kind);
+            numbersBox.IsEnabled = enabled;
+            textBox.IsEnabled = enabled;
+            logicalsBox.IsEnabled = enabled;
+            errorsBox.IsEnabled = enabled;
+        }
+
+        GoToSpecialValueTypes GetValueTypes()
+        {
+            var valueTypes = GoToSpecialValueTypes.None;
+            if (numbersBox.IsChecked == true)
+                valueTypes |= GoToSpecialValueTypes.Numbers;
+            if (textBox.IsChecked == true)
+                valueTypes |= GoToSpecialValueTypes.Text;
+            if (logicalsBox.IsChecked == true)
+                valueTypes |= GoToSpecialValueTypes.Logicals;
+            if (errorsBox.IsChecked == true)
+                valueTypes |= GoToSpecialValueTypes.Errors;
+            return valueTypes;
+        }
+
+        void Accept()
+        {
+            var choice = kindBox.SelectedItem as GoToSpecialChoice ?? choices[0];
+            var options = UsesGoToSpecialValueTypeOptions(choice.Kind)
+                ? new GoToSpecialOptions(GetValueTypes())
+                : new GoToSpecialOptions();
+            result = new GoToSpecialDialogResult(choice.Kind, options);
+            dialog.Close();
+        }
+
+        kindBox.SelectionChanged += (_, _) => RefreshValueTypeState();
+        okButton.Click += (_, _) => Accept();
+        cancelButton.Click += (_, _) => dialog.Close();
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                e.Handled = true;
+                Accept();
+            }
+            else if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                dialog.Close();
+            }
+        };
+
+        var valueTypeRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 12,
+            Children =
+            {
+                numbersBox,
+                textBox,
+                logicalsBox,
+                errorsBox,
+            },
+        };
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Children =
+            {
+                cancelButton,
+                okButton,
+            },
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = "Go to" },
+                kindBox,
+                new TextBlock { Text = "Value types" },
+                valueTypeRow,
+                buttonRow,
+            },
+        };
+        dialog.Opened += (_, _) =>
+        {
+            RefreshValueTypeState();
+            kindBox.Focus();
+        };
+
+        await dialog.ShowDialog(this);
+        return result;
+    }
+
+    private static CheckBox CreateGoToSpecialValueTypeBox(string label, string automationId)
+    {
+        var checkBox = new CheckBox
+        {
+            Content = label,
+            IsChecked = true,
+        };
+        AutomationProperties.SetAutomationId(checkBox, automationId);
+        return checkBox;
+    }
+
+    private static GoToSpecialChoice[] CreateGoToSpecialChoices() =>
+    [
+        new(GoToSpecialKind.Blanks, "Blanks"),
+        new(GoToSpecialKind.Constants, "Constants"),
+        new(GoToSpecialKind.Formulas, "Formulas"),
+        new(GoToSpecialKind.Comments, "Comments"),
+        new(GoToSpecialKind.CurrentRegion, "Current region"),
+        new(GoToSpecialKind.RowDifferences, "Row differences"),
+        new(GoToSpecialKind.ColumnDifferences, "Column differences"),
+        new(GoToSpecialKind.LastCell, "Last cell"),
+        new(GoToSpecialKind.ConditionalFormats, "Conditional formats"),
+        new(GoToSpecialKind.Objects, "Objects"),
+        new(GoToSpecialKind.Precedents, "Precedents"),
+        new(GoToSpecialKind.Dependents, "Dependents"),
+        new(GoToSpecialKind.DataValidation, "Data validation"),
+        new(GoToSpecialKind.VisibleCellsOnly, "Visible cells only"),
+    ];
+
+    private static bool UsesGoToSpecialValueTypeOptions(GoToSpecialKind kind) =>
+        kind is GoToSpecialKind.Constants or GoToSpecialKind.Formulas;
+
+    private bool SelectGoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return false;
+
+        ClearSelectedDrawingObject();
+        var result = _session.GoToSpecial(kind, options);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Go To Special failed.");
+            return false;
+        }
+
+        var selectedText = result.SelectedRanges.Count == 1
+            ? FormatRangeReference(result.SelectedRange!.Value)
+            : $"{result.MatchCount} cells";
+        RefreshShell($"Selected {selectedText}");
+        return true;
+    }
+
     private async Task<string?> ShowSingleInputDialogAsync(
         string title,
         string label,
@@ -5650,6 +5872,7 @@ public sealed class MainWindow : Window
             HasNativePasteSpecialPictureMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Picture"),
             HasNativePasteSpecialLinkedPictureMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Linked Picture"),
             HasNativeSelectAllMenuItem: HasNativeMenuItem(_selectAllMenuItem, "Select All"),
+            HasNativeGoToSpecialMenuItem: HasNativeMenuItem(_goToSpecialMenuItem, "Go To Special...", requireGesture: false),
             HasNativeAutoSumMenuItem: HasNativeMenuItem(_autoSumMenuItem, "AutoSum", requireGesture: false),
             HasNativeAutoSumSumMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, "Sum"),
             HasNativeAutoSumAverageMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, "Average"),
@@ -5900,6 +6123,9 @@ public sealed class MainWindow : Window
     private static bool IsAutoSumShortcut(KeyEventArgs args) =>
         args.Key == Key.OemPlus && args.KeyModifiers == KeyModifiers.Alt;
 
+    private static bool IsSelectVisibleCellsOnlyShortcut(KeyEventArgs args) =>
+        args.Key == Key.Oem1 && args.KeyModifiers == KeyModifiers.Alt;
+
     private async void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {
         if (IsShellFocusCycleKey(e))
@@ -5913,6 +6139,13 @@ public sealed class MainWindow : Window
         {
             e.Handled = true;
             InsertAutoSumFormula("SUM");
+            return;
+        }
+
+        if (IsSelectVisibleCellsOnlyShortcut(e))
+        {
+            e.Handled = true;
+            SelectGoToSpecial(GoToSpecialKind.VisibleCellsOnly);
             return;
         }
 
