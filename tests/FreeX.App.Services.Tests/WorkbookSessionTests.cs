@@ -3455,6 +3455,199 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void IsSelectedRangeMerged_DetectsOverlappingMergedRegion()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var c3 = new CellAddress(sheet.Id, 3, 3);
+        sheet.AddMergedRegion(new GridRange(a1, b2));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        session.SelectCell(b2);
+        session.IsSelectedRangeMerged.Should().BeTrue();
+
+        session.SelectCell(c3);
+        session.IsSelectedRangeMerged.Should().BeFalse();
+    }
+
+    [Fact]
+    public void MergeAndCenterSelectedRange_MergesCentersPreservesSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var range = new GridRange(a1, b2);
+        sheet.SetCell(a1, new TextValue("kept"));
+        sheet.SetCell(b2, new TextValue("restored"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(range);
+
+        var result = session.MergeAndCenterSelectedRange();
+
+        result.Success.Should().BeTrue();
+        sheet.MergedRegions.Should().Contain(range);
+        sheet.GetValue(b2).Should().Be(BlankValue.Instance);
+        GetStyle(workbook, sheet, a1).HorizontalAlignment.Should().Be(HorizontalAlignment.Center);
+        GetStyle(workbook, sheet, b2).HorizontalAlignment.Should().Be(HorizontalAlignment.Center);
+        session.ActiveCell.Should().Be(a1);
+        session.SelectedRange.Should().Be(range);
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.MergedRegions.Should().NotContain(range);
+        sheet.GetValue(b2).Should().Be(new TextValue("restored"));
+        GetStyle(workbook, sheet, a1).HorizontalAlignment.Should().Be(HorizontalAlignment.General);
+    }
+
+    [Fact]
+    public void MergeAndCenterSelectedRange_SingleCellCentersWithoutMergedRegion()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("value"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.MergeAndCenterSelectedRange();
+
+        result.Success.Should().BeTrue();
+        sheet.MergedRegions.Should().BeEmpty();
+        GetStyle(workbook, sheet, a1).HorizontalAlignment.Should().Be(HorizontalAlignment.Center);
+        session.SelectedRange.Should().Be(new GridRange(a1, a1));
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        GetStyle(workbook, sheet, a1).HorizontalAlignment.Should().Be(HorizontalAlignment.General);
+    }
+
+    [Fact]
+    public void UnmergeSelectedRange_RemovesOverlappingMergedRegionPreservesSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var range = new GridRange(a1, b2);
+        sheet.AddMergedRegion(range);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(b2);
+
+        var result = session.UnmergeSelectedRange();
+
+        result.Success.Should().BeTrue();
+        sheet.MergedRegions.Should().BeEmpty();
+        session.ActiveCell.Should().Be(b2);
+        session.SelectedRange.Should().Be(new GridRange(b2, b2));
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.MergedRegions.Should().Contain(range);
+    }
+
+    [Fact]
+    public void UnmergeSelectedRange_NoOpsWithoutMarkingDirtyWhenSelectionHasNoMergedRegion()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.UnmergeSelectedRange();
+
+        result.Success.Should().BeTrue();
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+        session.SelectedRange.Should().Be(new GridRange(a1, a1));
+    }
+
+    [Fact]
+    public void MergeAndCenterSelectedRange_RejectsProtectedSheetWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var range = new GridRange(a1, b2);
+        sheet.SetCell(a1, new TextValue("locked"));
+        sheet.IsProtected = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(range);
+
+        var result = session.MergeAndCenterSelectedRange();
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("protected");
+        sheet.MergedRegions.Should().BeEmpty();
+        GetStyle(workbook, sheet, a1).HorizontalAlignment.Should().Be(HorizontalAlignment.General);
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void UnmergeSelectedRange_RejectsProtectedSheetWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var range = new GridRange(a1, b2);
+        sheet.AddMergedRegion(range);
+        sheet.IsProtected = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(b2);
+
+        var result = session.UnmergeSelectedRange();
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("protected");
+        sheet.MergedRegions.Should().Contain(range);
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void PasteClipboardTextAtActiveCell_FallsBackToExternalTextWhenClipboardTextChanges()
     {
         var workbook = CreateWorkbook();
@@ -4693,6 +4886,85 @@ public sealed class WorkbookSessionTests
         summary.GetStyleOnly(summaryB2.Row, summaryB2.Col).Should().BeNull();
         GetStyle(workbook, details, detailsA1).BorderTop.Should().Be(new CellBorder());
         details.GetStyleOnly(detailsB2.Row, detailsB2.Col).Should().BeNull();
+    }
+
+    [Fact]
+    public void MergeAndCenterSelectedRange_PropagatesAcrossGroupedSheetsAndUndoRestores()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var summaryA1 = new CellAddress(summary.Id, 1, 1);
+        var summaryB2 = new CellAddress(summary.Id, 2, 2);
+        var detailsA1 = new CellAddress(details.Id, 1, 1);
+        var detailsB2 = new CellAddress(details.Id, 2, 2);
+        var summaryRange = new GridRange(summaryA1, summaryB2);
+        var detailsRange = new GridRange(detailsA1, detailsB2);
+        summary.SetCell(summaryA1, new TextValue("summary"));
+        details.SetCell(detailsA1, new TextValue("details"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectAllVisibleSheets();
+        session.SelectRange(summaryRange);
+
+        var result = session.MergeAndCenterSelectedRange();
+
+        result.Success.Should().BeTrue();
+        summary.MergedRegions.Should().Contain(summaryRange);
+        details.MergedRegions.Should().Contain(detailsRange);
+        GetStyle(workbook, summary, summaryA1).HorizontalAlignment.Should().Be(HorizontalAlignment.Center);
+        GetStyle(workbook, details, detailsA1).HorizontalAlignment.Should().Be(HorizontalAlignment.Center);
+        session.SelectedRange.Should().Be(summaryRange);
+        session.IsWorkbookGrouped.Should().BeTrue();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        summary.MergedRegions.Should().BeEmpty();
+        details.MergedRegions.Should().BeEmpty();
+        GetStyle(workbook, summary, summaryA1).HorizontalAlignment.Should().Be(HorizontalAlignment.General);
+        GetStyle(workbook, details, detailsA1).HorizontalAlignment.Should().Be(HorizontalAlignment.General);
+    }
+
+    [Fact]
+    public void UnmergeSelectedRange_PropagatesAcrossGroupedSheetsAndUndoRestores()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var summaryA1 = new CellAddress(summary.Id, 1, 1);
+        var summaryB2 = new CellAddress(summary.Id, 2, 2);
+        var detailsA1 = new CellAddress(details.Id, 1, 1);
+        var detailsB2 = new CellAddress(details.Id, 2, 2);
+        var summaryRange = new GridRange(summaryA1, summaryB2);
+        var detailsRange = new GridRange(detailsA1, detailsB2);
+        summary.AddMergedRegion(summaryRange);
+        details.AddMergedRegion(detailsRange);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectAllVisibleSheets();
+        session.SelectCell(summaryB2);
+
+        var result = session.UnmergeSelectedRange();
+
+        result.Success.Should().BeTrue();
+        summary.MergedRegions.Should().BeEmpty();
+        details.MergedRegions.Should().BeEmpty();
+        session.ActiveCell.Should().Be(summaryB2);
+        session.SelectedRange.Should().Be(new GridRange(summaryB2, summaryB2));
+        session.IsWorkbookGrouped.Should().BeTrue();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        summary.MergedRegions.Should().Contain(summaryRange);
+        details.MergedRegions.Should().Contain(detailsRange);
     }
 
     [Fact]

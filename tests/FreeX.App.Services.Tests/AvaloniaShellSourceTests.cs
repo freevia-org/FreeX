@@ -556,6 +556,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("HasNativeClearTabColorMenuItem &&");
         smokeSource.Should().Contain("NativeTabColorSwatchCount == CellColorPalettePlanner.BuildDefaultSwatches().Count");
         smokeSource.Should().Contain("HasBordersButton &&");
+        smokeSource.Should().Contain("HasMergeAndCenterButton &&");
         smokeSource.Should().Contain("HasFocusableSheetTab &&");
         smokeSource.Should().Contain("HasFocusableActiveSheetTab &&");
         smokeSource.Should().Contain("HasShellFocusCycleTargets &&");
@@ -627,6 +628,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_fill_color_swatch_count={snapshot.NativeFillColorSwatchCount}");
         smokeSource.Should().Contain("native_font_color_swatch_count={snapshot.NativeFontColorSwatchCount}");
         smokeSource.Should().Contain("toolbar_borders_button={FormatBool(snapshot.HasBordersButton)}");
+        smokeSource.Should().Contain("toolbar_merge_and_center_button={FormatBool(snapshot.HasMergeAndCenterButton)}");
         smokeSource.Should().Contain("native_borders_menu_item={FormatBool(snapshot.HasNativeBordersMenuItem)}");
         smokeSource.Should().Contain("native_borders_preset_count={snapshot.NativeBordersPresetCount}");
         smokeSource.Should().Contain("native_cell_styles_menu_item={FormatBool(snapshot.HasNativeCellStylesMenuItem)}");
@@ -646,6 +648,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_align_middle_menu_item={FormatBool(snapshot.HasNativeAlignMiddleMenuItem)}");
         smokeSource.Should().Contain("native_align_bottom_menu_item={FormatBool(snapshot.HasNativeAlignBottomMenuItem)}");
         smokeSource.Should().Contain("native_wrap_text_menu_item={FormatBool(snapshot.HasNativeWrapTextMenuItem)}");
+        smokeSource.Should().Contain("native_merge_and_center_menu_item={FormatBool(snapshot.HasNativeMergeAndCenterMenuItem)}");
+        smokeSource.Should().Contain("native_unmerge_cells_menu_item={FormatBool(snapshot.HasNativeUnmergeCellsMenuItem)}");
         smokeSource.Should().Contain("native_show_gridlines_menu_item={FormatBool(snapshot.HasNativeShowGridlinesMenuItem)}");
         smokeSource.Should().Contain("native_show_headings_menu_item={FormatBool(snapshot.HasNativeShowHeadingsMenuItem)}");
         smokeSource.Should().Contain("native_zoom_in_menu_item={FormatBool(snapshot.HasNativeZoomInMenuItem)}");
@@ -749,6 +753,7 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("NativeFillColorSwatchCount: nativeFillColorSwatchCount");
         windowSource.Should().Contain("NativeFontColorSwatchCount: nativeFontColorSwatchCount");
         windowSource.Should().Contain("HasBordersButton: _bordersButton.Content?.ToString() == \"Borders\"");
+        windowSource.Should().Contain("HasMergeAndCenterButton: _mergeAndCenterButton.Content?.ToString() == \"Merge & Center\"");
         windowSource.Should().Contain("HasNativeBordersMenuItem: HasNativeMenuItem(_bordersMenuItem, \"Borders\", requireGesture: false)");
         windowSource.Should().Contain("NativeBordersPresetCount: nativeBordersPresetCount");
         windowSource.Should().Contain("HasNativeCellStylesMenuItem: HasNativeMenuItem(_cellStylesMenuItem, \"Cell Styles\", requireGesture: false)");
@@ -768,6 +773,8 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeAlignMiddleMenuItem: HasNativeMenuItem(_alignMiddleMenuItem, \"Align Middle\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAlignBottomMenuItem: HasNativeMenuItem(_alignBottomMenuItem, \"Align Bottom\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeWrapTextMenuItem: HasNativeMenuItem(_wrapTextMenuItem, \"Wrap Text\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeMergeAndCenterMenuItem: HasNativeMenuItem(_mergeAndCenterMenuItem, \"Merge & Center\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeUnmergeCellsMenuItem: HasNativeMenuItem(_unmergeCellsMenuItem, \"Unmerge Cells\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeShowGridlinesMenuItem: HasNativeMenuItem(_showGridlinesMenuItem, \"Gridlines\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeShowHeadingsMenuItem: HasNativeMenuItem(_showHeadingsMenuItem, \"Headings\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeZoomInMenuItem: HasNativeMenuItem(_zoomInMenuItem, \"Zoom In\")");
@@ -1317,6 +1324,54 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("toolbar_borders_button={FormatBool(snapshot.HasBordersButton)}");
         smokeSource.Should().Contain("native_borders_menu_item={FormatBool(snapshot.HasNativeBordersMenuItem)}");
         smokeSource.Should().Contain("native_borders_preset_count={snapshot.NativeBordersPresetCount}");
+    }
+
+    [Fact]
+    public void MainWindow_WiresMergeAndCenterThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+
+        source.Should().Contain("private readonly Button _mergeAndCenterButton = new();");
+        source.Should().Contain("private readonly NativeMenuItem _mergeAndCenterMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _unmergeCellsMenuItem = new();");
+        source.Should().Contain("_mergeAndCenterButton.Content = \"Merge & Center\";");
+        source.Should().Contain("_mergeAndCenterButton.Click += MergeAndCenterButton_Click;");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_mergeAndCenterButton, \"HomeMergeAndCenterButton\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_mergeAndCenterButton, \"Merge and center the selected cells.\");");
+        source.Should().Contain("_mergeAndCenterMenuItem.Header = \"Merge & Center\";");
+        source.Should().Contain("_mergeAndCenterMenuItem.Click += (_, _) => MergeAndCenterSelectedRange();");
+        source.Should().Contain("_unmergeCellsMenuItem.Header = \"Unmerge Cells\";");
+        source.Should().Contain("_unmergeCellsMenuItem.Click += (_, _) => UnmergeSelectedRange();");
+        source.Should().Contain("formatMenu.Items.Add(_mergeAndCenterMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_unmergeCellsMenuItem);");
+        source.Should().Contain("_mergeAndCenterButton.IsEnabled = isIdle;");
+        source.Should().Contain("_mergeAndCenterMenuItem.IsEnabled = _mergeAndCenterButton.IsEnabled;");
+        source.Should().Contain("_unmergeCellsMenuItem.IsEnabled = isIdle && _session.IsSelectedRangeMerged;");
+        source.Should().Contain("_mergeAndCenterButton,");
+        source.Should().Contain("private void MergeAndCenterButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("private void MergeAndCenterSelectedRange()");
+        source.Should().Contain("var result = _session.MergeAndCenterSelectedRange();");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Merge & Center failed.\");");
+        source.Should().Contain("RefreshShell($\"Merged and centered {rangeReference}\");");
+        source.Should().Contain("private void UnmergeSelectedRange()");
+        source.Should().Contain("var result = _session.UnmergeSelectedRange();");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Unmerge Cells failed.\");");
+        source.Should().Contain("RefreshShell($\"Unmerged cells in {rangeReference}\");");
+        source.Should().Contain("HasMergeAndCenterButton: _mergeAndCenterButton.Content?.ToString() == \"Merge & Center\"");
+        source.Should().Contain("HomeMergeAndCenterButton");
+        source.Should().Contain("HasNativeMergeAndCenterMenuItem: HasNativeMenuItem(_mergeAndCenterMenuItem, \"Merge & Center\", requireGesture: false)");
+        source.Should().Contain("HasNativeUnmergeCellsMenuItem: HasNativeMenuItem(_unmergeCellsMenuItem, \"Unmerge Cells\", requireGesture: false)");
+
+        smokeSource.Should().Contain("bool HasMergeAndCenterButton,");
+        smokeSource.Should().Contain("bool HasNativeMergeAndCenterMenuItem,");
+        smokeSource.Should().Contain("bool HasNativeUnmergeCellsMenuItem,");
+        smokeSource.Should().Contain("HasMergeAndCenterButton &&");
+        smokeSource.Should().Contain("HasNativeMergeAndCenterMenuItem &&");
+        smokeSource.Should().Contain("HasNativeUnmergeCellsMenuItem &&");
+        smokeSource.Should().Contain("toolbar_merge_and_center_button={FormatBool(snapshot.HasMergeAndCenterButton)}");
+        smokeSource.Should().Contain("native_merge_and_center_menu_item={FormatBool(snapshot.HasNativeMergeAndCenterMenuItem)}");
+        smokeSource.Should().Contain("native_unmerge_cells_menu_item={FormatBool(snapshot.HasNativeUnmergeCellsMenuItem)}");
     }
 
     [Fact]

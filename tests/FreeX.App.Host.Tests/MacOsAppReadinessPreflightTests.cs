@@ -24,8 +24,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_fill_color_swatch_count=69");
         script.Should().Contain("native_font_color_swatch_count=69");
         script.Should().Contain("toolbar_borders_button=true");
+        script.Should().Contain("toolbar_merge_and_center_button=true");
         script.Should().Contain("native_borders_menu_item=true");
         script.Should().Contain("native_borders_preset_count=8");
+        script.Should().Contain("native_merge_and_center_menu_item=true");
+        script.Should().Contain("native_unmerge_cells_menu_item=true");
         script.Should().Contain("native_cell_styles_menu_item=true");
         script.Should().Contain("native_cell_styles_preset_count=33");
         script.Should().Contain("--macos-launch-smoke-verify-image-clipboard");
@@ -69,6 +72,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("HasNativeRenameSheetMenuItem &&");
         script.Should().Contain("HasNativeTabColorMenuItem &&");
         script.Should().Contain("HasBordersButton &&");
+        script.Should().Contain("HasMergeAndCenterButton &&");
         script.Should().Contain("HasFocusableSheetTab &&");
         script.Should().Contain("HasFocusableActiveSheetTab &&");
         script.Should().Contain("HasShellFocusCycleTargets &&");
@@ -83,9 +87,14 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("HasNativeDeleteSheetMenuItem &&");
         script.Should().Contain("HasNativeBordersMenuItem &&");
         script.Should().Contain("NativeBordersPresetCount == Enum.GetValues<CellBorderPreset>().Length");
+        script.Should().Contain("HasNativeMergeAndCenterMenuItem &&");
+        script.Should().Contain("HasNativeUnmergeCellsMenuItem &&");
         script.Should().Contain("toolbar_borders_button=");
+        script.Should().Contain("toolbar_merge_and_center_button=");
         script.Should().Contain("native_borders_menu_item=");
         script.Should().Contain("native_borders_preset_count=");
+        script.Should().Contain("native_merge_and_center_menu_item=");
+        script.Should().Contain("native_unmerge_cells_menu_item=");
         script.Should().Contain("native_help_menu=true");
         script.Should().Contain("native_help_online_menu_item=true");
         script.Should().Contain("native_legal_notices_menu_item=");
@@ -543,6 +552,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "external_image_clipboard_picture_png_bytes=[1-9]" "$artifact_root/launch.txt"
                       grep -q "new_sheet_button=true" "$artifact_root/launch.txt"
                       grep -q "toolbar_borders_button=true" "$artifact_root/launch.txt"
+                      grep -q "toolbar_merge_and_center_button=true" "$artifact_root/launch.txt"
                       grep -q "native_file_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_new_workbook_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_open_recent_menu_item=true" "$artifact_root/launch.txt"
@@ -602,6 +612,8 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_font_color_swatch_count=69" "$artifact_root/launch.txt"
                       grep -q "native_borders_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_borders_preset_count=8" "$artifact_root/launch.txt"
+                      grep -q "native_merge_and_center_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_unmerge_cells_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_cell_styles_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_cell_styles_preset_count=33" "$artifact_root/launch.txt"
                       grep -q "native_horizontal_text_menu_item=true" "$artifact_root/launch.txt"
@@ -1014,6 +1026,21 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasBordersButton: _bordersButton.Content?.ToString() == "Borders";
                     HasNativeBordersMenuItem: HasNativeMenuItem(_bordersMenuItem, "Borders", requireGesture: false);
                     NativeBordersPresetCount: nativeBordersPresetCount;
+                    _mergeAndCenterButton.Content = "Merge & Center";
+                    AutomationProperties.SetAutomationId(_mergeAndCenterButton, "HomeMergeAndCenterButton");
+                    AutomationProperties.SetHelpText(_mergeAndCenterButton, "Merge and center the selected cells.");
+                    _mergeAndCenterMenuItem.Header = "Merge & Center";
+                    _mergeAndCenterMenuItem.Click += (_, _) => MergeAndCenterSelectedRange();
+                    _unmergeCellsMenuItem.Header = "Unmerge Cells";
+                    _unmergeCellsMenuItem.Click += (_, _) => UnmergeSelectedRange();
+                    formatMenu.Items.Add(_mergeAndCenterMenuItem);
+                    formatMenu.Items.Add(_unmergeCellsMenuItem);
+                    _mergeAndCenterButton.IsEnabled = isIdle;
+                    _mergeAndCenterMenuItem.IsEnabled = _mergeAndCenterButton.IsEnabled;
+                    _unmergeCellsMenuItem.IsEnabled = isIdle && _session.IsSelectedRangeMerged;
+                    HasMergeAndCenterButton: _mergeAndCenterButton.Content?.ToString() == "Merge & Center";
+                    HasNativeMergeAndCenterMenuItem: HasNativeMenuItem(_mergeAndCenterMenuItem, "Merge & Center", requireGesture: false);
+                    HasNativeUnmergeCellsMenuItem: HasNativeMenuItem(_unmergeCellsMenuItem, "Unmerge Cells", requireGesture: false);
                     HasSheetTabContextKeyboardHelp: HasSheetTabButton(button =>;
                     string.Equals(AutomationProperties.GetHelpText(button), SheetTabContextHelpText, StringComparison.Ordinal));
                     HasSheetTabContextRenameMenuItem: HasSheetTabContextMenuItem("Rename...");
@@ -1033,6 +1060,14 @@ public sealed class MacOsAppReadinessPreflightTests
                 private void ApplySelectedRangeBorderPreset(CellBorderPreset preset)
                 {
                     var result = _session.SetSelectedRangeBorderPreset(preset);
+                }
+                private void MergeAndCenterSelectedRange()
+                {
+                    var result = _session.MergeAndCenterSelectedRange();
+                }
+                private void UnmergeSelectedRange()
+                {
+                    var result = _session.UnmergeSelectedRange();
                 }
                 private static bool HasVisibleCellBorder(CellStyle? style) => true;
                 private NativeMenu CreateNativeOpenRecentMenu(bool isIdle) => new();
@@ -1190,6 +1225,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativeClearTabColorMenuItem &&
                     NativeTabColorSwatchCount == CellColorPalettePlanner.BuildDefaultSwatches().Count &&
                     HasBordersButton &&
+                    HasMergeAndCenterButton &&
                     HasFocusableSheetTab &&
                     HasFocusableActiveSheetTab &&
                     HasShellFocusCycleTargets &&
@@ -1231,6 +1267,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativePasteSpecialLinkedPictureMenuItem &&
                     HasNativeBordersMenuItem &&
                     NativeBordersPresetCount == Enum.GetValues<CellBorderPreset>().Length &&
+                    HasNativeMergeAndCenterMenuItem &&
+                    HasNativeUnmergeCellsMenuItem &&
                     HasNativeCellStylesMenuItem &&
                     HasNativeCopyMenuItem;
                 private bool HasNativeFileMenu { get; }
@@ -1251,6 +1289,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativeClearTabColorMenuItem { get; }
                 private int NativeTabColorSwatchCount { get; }
                 private bool HasBordersButton { get; }
+                private bool HasMergeAndCenterButton { get; }
                 private bool HasFocusableSheetTab { get; }
                 private bool HasFocusableActiveSheetTab { get; }
                 private bool HasShellFocusCycleTargets { get; }
@@ -1293,11 +1332,13 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativePasteSpecialPictureMenuItem { get; }
                 private bool HasNativePasteSpecialLinkedPictureMenuItem { get; }
                 private bool HasNativeBordersMenuItem { get; }
+                private bool HasNativeMergeAndCenterMenuItem { get; }
+                private bool HasNativeUnmergeCellsMenuItem { get; }
                 public int ExternalImageClipboardPictureCount { get; }
                 public int ExternalImageClipboardPicturePngByteCount { get; }
                 public int NativeBordersPresetCount { get; }
                 public int NativeCellStylesPresetCount { get; }
-                public string Report => "external_image_clipboard_paste_required= external_image_clipboard_paste= external_image_clipboard_picture_count= external_image_clipboard_picture_png_bytes= native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= toolbar_borders_button= focusable_sheet_tab= focusable_active_sheet_tab= shell_focus_cycle_targets= sheet_tab_context_keyboard_help= sheet_tab_context_rename_menu_item= sheet_tab_context_tab_color_menu_item= sheet_tab_context_no_color_menu_item= sheet_tab_context_select_all_sheets_menu_item= sheet_tab_context_ungroup_sheets_menu_item= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_select_all_sheets_menu_item= native_ungroup_sheets_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_borders_menu_item= native_borders_preset_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+                public string Report => "external_image_clipboard_paste_required= external_image_clipboard_paste= external_image_clipboard_picture_count= external_image_clipboard_picture_png_bytes= native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= toolbar_borders_button= toolbar_merge_and_center_button= focusable_sheet_tab= focusable_active_sheet_tab= shell_focus_cycle_targets= sheet_tab_context_keyboard_help= sheet_tab_context_rename_menu_item= sheet_tab_context_tab_color_menu_item= sheet_tab_context_no_color_menu_item= sheet_tab_context_select_all_sheets_menu_item= sheet_tab_context_ungroup_sheets_menu_item= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_select_all_sheets_menu_item= native_ungroup_sheets_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_borders_menu_item= native_borders_preset_count= native_merge_and_center_menu_item= native_unmerge_cells_menu_item= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
             }
 
             internal sealed class MacOsLaunchSmokeCoordinator
@@ -1354,6 +1395,32 @@ public sealed class MacOsAppReadinessPreflightTests
 
                 public static string GetDisplayName(CellBorderPreset preset) => "";
                 public static bool RequiresPerCellPlanning(CellBorderPreset preset) => true;
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Services/CellMergePlanner.cs",
+            """
+            namespace FreeX.App.Services;
+
+            public static class CellMergePlanner
+            {
+                public static bool IsSelectionMerged(Sheet sheet, GridRange range) =>
+                    sheet.MergedRegions.Any(region => region.Overlaps(range));
+
+                public static IReadOnlyList<IWorkbookCommand> CreateMergeAndCenterCommands(SheetId sheetId, GridRange range)
+                {
+                    new MergeCellsCommand(sheetId, range).ToString();
+                    new ApplyStyleCommand(sheetId, range, new StyleDiff(HAlign: HorizontalAlignment.Center)).ToString();
+                    return [];
+                }
+
+                public static IReadOnlyList<IWorkbookCommand> CreateUnmergeCommands(Sheet sheet, SheetId sheetId, GridRange range)
+                {
+                    new UnmergeCellsCommand(sheetId, region).ToString();
+                    return [];
+                }
             }
             """);
 
@@ -1435,6 +1502,15 @@ public sealed class MacOsAppReadinessPreflightTests
                 CellBorderPresetPlanner.RequiresPerCellPlanning(preset)
                 BorderShortcutService.HasBorderChanges(diff)
                 GroupedApplyStyleCommand(targetSheetIds, sourceRange, diff)
+                public bool IsSelectedRangeMerged => CellMergePlanner.IsSelectionMerged(ActiveSheet, SelectedRange);
+                public WorkbookCellEditResult MergeAndCenterSelectedRange()
+                CreateMergeAndCenterCommand(range)
+                public WorkbookCellEditResult UnmergeSelectedRange()
+                CreateUnmergeCommands(range)
+                private IWorkbookCommand CreateMergeAndCenterCommand(GridRange range)
+                CellMergePlanner.CreateMergeAndCenterCommands(sheetId, sheetRange)
+                private IReadOnlyList<IWorkbookCommand> CreateUnmergeCommands(GridRange range)
+                CellMergePlanner.CreateUnmergeCommands(sheet, sheetId, RemapRangeToSheet(range, sheetId))
                 public bool SelectSheetFromTab(SheetId sheetId, bool selectRange, bool toggle)
                 SheetGroupSelectionService.SelectRange(
                 SheetGroupSelectionService.Toggle(sheetId, _groupedSheetIds)

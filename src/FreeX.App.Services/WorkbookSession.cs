@@ -151,6 +151,8 @@ public sealed class WorkbookSession
 
     public bool IsSelectedRangeStartWrapText => GetCellStyle(SelectedRange.Start).WrapText;
 
+    public bool IsSelectedRangeMerged => CellMergePlanner.IsSelectionMerged(ActiveSheet, SelectedRange);
+
     public HorizontalAlignment SelectedRangeStartHorizontalAlignment =>
         GetCellStyle(SelectedRange.Start).HorizontalAlignment;
 
@@ -1059,6 +1061,36 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public WorkbookCellEditResult MergeAndCenterSelectedRange()
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            CreateMergeAndCenterCommand(range));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
+    public WorkbookCellEditResult UnmergeSelectedRange()
+    {
+        var range = SelectedRange;
+        var commands = CreateUnmergeCommands(range);
+        if (commands.Count == 0)
+            return new WorkbookCellEditResult(true, null, [], RecalcReport: null);
+
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            ToCommand("Unmerge Cells", commands));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
     public WorkbookCellEditResult IncreaseSelectedRangeDecimalPlaces() =>
         SetSelectedRangeNumberFormat(NumberFormatDecimalAdjuster.AddDecimalPlace(SelectedRangeStartNumberFormat));
 
@@ -1427,6 +1459,35 @@ public sealed class WorkbookSession
         }
 
         return ToCommand(CellBorderPresetPlanner.GetDisplayName(preset), commands);
+    }
+
+    private IWorkbookCommand CreateMergeAndCenterCommand(GridRange range)
+    {
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        var commands = new List<IWorkbookCommand>(targetSheetIds.Count * 2);
+        foreach (var sheetId in targetSheetIds)
+        {
+            var sheetRange = RemapRangeToSheet(range, sheetId);
+            commands.AddRange(CellMergePlanner.CreateMergeAndCenterCommands(sheetId, sheetRange));
+        }
+
+        return ToCommand("Merge & Center", commands);
+    }
+
+    private IReadOnlyList<IWorkbookCommand> CreateUnmergeCommands(GridRange range)
+    {
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        var commands = new List<IWorkbookCommand>();
+        foreach (var sheetId in targetSheetIds)
+        {
+            var sheet = Workbook.GetSheet(sheetId);
+            if (sheet is null)
+                continue;
+
+            commands.AddRange(CellMergePlanner.CreateUnmergeCommands(sheet, sheetId, RemapRangeToSheet(range, sheetId)));
+        }
+
+        return commands;
     }
 
     private IWorkbookCommand CreateSetFontSizeCommand(GridRange range, double fontSize, double rowHeight)

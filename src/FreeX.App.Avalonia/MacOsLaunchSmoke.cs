@@ -81,6 +81,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool IsOpening,
     bool HasNewSheetButton,
     bool HasBordersButton,
+    bool HasMergeAndCenterButton,
     bool HasFocusableSheetTab,
     bool HasFocusableActiveSheetTab,
     bool HasShellFocusCycleTargets,
@@ -169,6 +170,8 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeAlignMiddleMenuItem,
     bool HasNativeAlignBottomMenuItem,
     bool HasNativeWrapTextMenuItem,
+    bool HasNativeMergeAndCenterMenuItem,
+    bool HasNativeUnmergeCellsMenuItem,
     bool HasNativeShowGridlinesMenuItem,
     bool HasNativeShowHeadingsMenuItem,
     bool HasNativeZoomInMenuItem,
@@ -201,6 +204,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         ViewportColumnCount > 0 &&
         HasNewSheetButton &&
         HasBordersButton &&
+        HasMergeAndCenterButton &&
         HasFocusableSheetTab &&
         HasFocusableActiveSheetTab &&
         HasShellFocusCycleTargets &&
@@ -289,6 +293,8 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeAlignMiddleMenuItem &&
         HasNativeAlignBottomMenuItem &&
         HasNativeWrapTextMenuItem &&
+        HasNativeMergeAndCenterMenuItem &&
+        HasNativeUnmergeCellsMenuItem &&
         HasNativeShowGridlinesMenuItem &&
         HasNativeShowHeadingsMenuItem &&
         HasNativeZoomInMenuItem &&
@@ -409,6 +415,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"is_opening={FormatBool(snapshot.IsOpening)}",
                 $"new_sheet_button={FormatBool(snapshot.HasNewSheetButton)}",
                 $"toolbar_borders_button={FormatBool(snapshot.HasBordersButton)}",
+                $"toolbar_merge_and_center_button={FormatBool(snapshot.HasMergeAndCenterButton)}",
                 $"focusable_sheet_tab={FormatBool(snapshot.HasFocusableSheetTab)}",
                 $"focusable_active_sheet_tab={FormatBool(snapshot.HasFocusableActiveSheetTab)}",
                 $"shell_focus_cycle_targets={FormatBool(snapshot.HasShellFocusCycleTargets)}",
@@ -497,6 +504,8 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_align_middle_menu_item={FormatBool(snapshot.HasNativeAlignMiddleMenuItem)}",
                 $"native_align_bottom_menu_item={FormatBool(snapshot.HasNativeAlignBottomMenuItem)}",
                 $"native_wrap_text_menu_item={FormatBool(snapshot.HasNativeWrapTextMenuItem)}",
+                $"native_merge_and_center_menu_item={FormatBool(snapshot.HasNativeMergeAndCenterMenuItem)}",
+                $"native_unmerge_cells_menu_item={FormatBool(snapshot.HasNativeUnmergeCellsMenuItem)}",
                 $"native_show_gridlines_menu_item={FormatBool(snapshot.HasNativeShowGridlinesMenuItem)}",
                 $"native_show_headings_menu_item={FormatBool(snapshot.HasNativeShowHeadingsMenuItem)}",
                 $"native_zoom_in_menu_item={FormatBool(snapshot.HasNativeZoomInMenuItem)}",

@@ -146,6 +146,7 @@ public sealed class MainWindow : Window
     private readonly ToggleButton _alignMiddleButton = new();
     private readonly ToggleButton _alignBottomButton = new();
     private readonly ToggleButton _wrapTextButton = new();
+    private readonly Button _mergeAndCenterButton = new();
     private readonly Button _decreaseIndentButton = new();
     private readonly Button _increaseIndentButton = new();
     private readonly NativeMenuItem _newWorkbookMenuItem = new();
@@ -203,6 +204,8 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _alignMiddleMenuItem = new();
     private readonly NativeMenuItem _alignBottomMenuItem = new();
     private readonly NativeMenuItem _wrapTextMenuItem = new();
+    private readonly NativeMenuItem _mergeAndCenterMenuItem = new();
+    private readonly NativeMenuItem _unmergeCellsMenuItem = new();
     private readonly NativeMenuItem _decreaseIndentMenuItem = new();
     private readonly NativeMenuItem _increaseIndentMenuItem = new();
     private readonly NativeMenuItem _showGridlinesMenuItem = new();
@@ -546,6 +549,12 @@ public sealed class MainWindow : Window
         _wrapTextMenuItem.Header = "Wrap Text";
         _wrapTextMenuItem.Click += (_, _) => ToggleSelectedRangeWrapText();
 
+        _mergeAndCenterMenuItem.Header = "Merge & Center";
+        _mergeAndCenterMenuItem.Click += (_, _) => MergeAndCenterSelectedRange();
+
+        _unmergeCellsMenuItem.Header = "Unmerge Cells";
+        _unmergeCellsMenuItem.Click += (_, _) => UnmergeSelectedRange();
+
         _decreaseIndentMenuItem.Header = "Decrease Indent";
         _decreaseIndentMenuItem.Click += (_, _) => DecreaseSelectedRangeIndent();
 
@@ -675,6 +684,8 @@ public sealed class MainWindow : Window
         formatMenu.Items.Add(_alignMiddleMenuItem);
         formatMenu.Items.Add(_alignBottomMenuItem);
         formatMenu.Items.Add(_wrapTextMenuItem);
+        formatMenu.Items.Add(_mergeAndCenterMenuItem);
+        formatMenu.Items.Add(_unmergeCellsMenuItem);
         formatMenu.Items.Add(_decreaseIndentMenuItem);
         formatMenu.Items.Add(_increaseIndentMenuItem);
         formatMenu.Items.Add(_alignLeftMenuItem);
@@ -990,6 +1001,14 @@ public sealed class MainWindow : Window
         _wrapTextButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _wrapTextButton.Click += WrapTextButton_Click;
 
+        _mergeAndCenterButton.Content = "Merge & Center";
+        _mergeAndCenterButton.Padding = new Thickness(10, 4);
+        _mergeAndCenterButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _mergeAndCenterButton.Click += MergeAndCenterButton_Click;
+        AutomationProperties.SetAutomationId(_mergeAndCenterButton, "HomeMergeAndCenterButton");
+        AutomationProperties.SetName(_mergeAndCenterButton, "Merge & Center");
+        AutomationProperties.SetHelpText(_mergeAndCenterButton, "Merge and center the selected cells.");
+
         _decreaseIndentButton.Content = "Out";
         _decreaseIndentButton.Padding = new Thickness(10, 4);
         _decreaseIndentButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -1074,6 +1093,7 @@ public sealed class MainWindow : Window
                     _alignMiddleButton,
                     _alignBottomButton,
                     _wrapTextButton,
+                    _mergeAndCenterButton,
                     _decreaseIndentButton,
                     _increaseIndentButton,
                     _alignLeftButton,
@@ -1205,6 +1225,7 @@ public sealed class MainWindow : Window
         _alignMiddleButton.IsEnabled = isIdle;
         _alignBottomButton.IsEnabled = isIdle;
         _wrapTextButton.IsEnabled = isIdle;
+        _mergeAndCenterButton.IsEnabled = isIdle;
         _decreaseIndentButton.IsEnabled = isIdle;
         _increaseIndentButton.IsEnabled = isIdle;
 
@@ -1268,6 +1289,8 @@ public sealed class MainWindow : Window
         _alignMiddleMenuItem.IsEnabled = _alignMiddleButton.IsEnabled;
         _alignBottomMenuItem.IsEnabled = _alignBottomButton.IsEnabled;
         _wrapTextMenuItem.IsEnabled = _wrapTextButton.IsEnabled;
+        _mergeAndCenterMenuItem.IsEnabled = _mergeAndCenterButton.IsEnabled;
+        _unmergeCellsMenuItem.IsEnabled = isIdle && _session.IsSelectedRangeMerged;
         _decreaseIndentMenuItem.IsEnabled = _decreaseIndentButton.IsEnabled;
         _increaseIndentMenuItem.IsEnabled = _increaseIndentButton.IsEnabled;
         _showGridlinesMenuItem.IsEnabled = isIdle;
@@ -3710,6 +3733,11 @@ public sealed class MainWindow : Window
         ApplySelectedRangeWrapText(_wrapTextButton.IsChecked == true);
     }
 
+    private void MergeAndCenterButton_Click(object? sender, RoutedEventArgs e)
+    {
+        MergeAndCenterSelectedRange();
+    }
+
     private void DecreaseIndentButton_Click(object? sender, RoutedEventArgs e)
     {
         DecreaseSelectedRangeIndent();
@@ -4433,6 +4461,46 @@ public sealed class MainWindow : Window
         RefreshShell($"Applied {presetName} to {rangeReference}");
     }
 
+    private void MergeAndCenterSelectedRange()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.MergeAndCenterSelectedRange();
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "Merge & Center failed.");
+            return;
+        }
+
+        RefreshShell($"Merged and centered {rangeReference}");
+    }
+
+    private void UnmergeSelectedRange()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.UnmergeSelectedRange();
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "Unmerge Cells failed.");
+            return;
+        }
+
+        RefreshShell($"Unmerged cells in {rangeReference}");
+    }
+
     private void ApplySelectedRangeCurrencyFormat()
     {
         ApplySelectedRangeNumberFormat(CurrencyNumberFormat, "Applied currency format to", "Currency format failed.");
@@ -4716,6 +4784,9 @@ public sealed class MainWindow : Window
             HasBordersButton: _bordersButton.Content?.ToString() == "Borders" &&
                 string.Equals(AutomationProperties.GetAutomationId(_bordersButton), "HomeBordersButton", StringComparison.Ordinal) &&
                 string.Equals(AutomationProperties.GetHelpText(_bordersButton), "Apply or change borders on the selected cells.", StringComparison.Ordinal),
+            HasMergeAndCenterButton: _mergeAndCenterButton.Content?.ToString() == "Merge & Center" &&
+                string.Equals(AutomationProperties.GetAutomationId(_mergeAndCenterButton), "HomeMergeAndCenterButton", StringComparison.Ordinal) &&
+                string.Equals(AutomationProperties.GetHelpText(_mergeAndCenterButton), "Merge and center the selected cells.", StringComparison.Ordinal),
             HasFocusableSheetTab: HasSheetTabButton(button => button.Focusable),
             HasFocusableActiveSheetTab: FindSheetTabButton(_session.ActiveSheet.Id)?.Focusable == true,
             HasShellFocusCycleTargets: _sheetGridHost.Focusable &&
@@ -4809,6 +4880,8 @@ public sealed class MainWindow : Window
             HasNativeAlignMiddleMenuItem: HasNativeMenuItem(_alignMiddleMenuItem, "Align Middle", requireGesture: false),
             HasNativeAlignBottomMenuItem: HasNativeMenuItem(_alignBottomMenuItem, "Align Bottom", requireGesture: false),
             HasNativeWrapTextMenuItem: HasNativeMenuItem(_wrapTextMenuItem, "Wrap Text", requireGesture: false),
+            HasNativeMergeAndCenterMenuItem: HasNativeMenuItem(_mergeAndCenterMenuItem, "Merge & Center", requireGesture: false),
+            HasNativeUnmergeCellsMenuItem: HasNativeMenuItem(_unmergeCellsMenuItem, "Unmerge Cells", requireGesture: false),
             HasNativeShowGridlinesMenuItem: HasNativeMenuItem(_showGridlinesMenuItem, "Gridlines", requireGesture: false),
             HasNativeShowHeadingsMenuItem: HasNativeMenuItem(_showHeadingsMenuItem, "Headings", requireGesture: false),
             HasNativeZoomInMenuItem: HasNativeMenuItem(_zoomInMenuItem, "Zoom In"),
@@ -5244,6 +5317,7 @@ public sealed class MainWindow : Window
         _alignMiddleButton,
         _alignBottomButton,
         _wrapTextButton,
+        _mergeAndCenterButton,
         _decreaseIndentButton,
         _increaseIndentButton,
         _alignLeftButton,

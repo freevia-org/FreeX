@@ -215,6 +215,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"native_font_color_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_borders_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_borders_preset_count=8\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"toolbar_merge_and_center_button=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_cell_styles_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_cell_styles_preset_count=33\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_horizontal_text_menu_item=true\" \"$launch_smoke_report\"");
@@ -232,6 +233,8 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"native_align_middle_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_align_bottom_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_wrap_text_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_merge_and_center_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_unmerge_cells_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_decrease_indent_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_increase_indent_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_align_left_menu_item=true\" \"$launch_smoke_report\"");
