@@ -112,16 +112,16 @@ internal static class XlsxWorkbookCustomViewNormalizer
         changed |= NormalizeExtensionLists(customWorkbookView);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, "name", NormalizeOptionalText);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, "guid", NormalizeGuid);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, "showComments", value => NormalizeToken(value, ShowCommentsValues));
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, "showObjects", value => NormalizeToken(value, ShowObjectsValues));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, "showComments", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, ShowCommentsValues));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, "showObjects", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, ShowObjectsValues));
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, "activeSheetId", value => NormalizeUnsignedIntOrDefault(value, "1"));
 
         foreach (var attributeName in BooleanAttributes)
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, attributeName, NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, attributeName, XlsxXmlNormalizationHelpers.NormalizeBoolean);
         foreach (var attributeName in IntAttributes)
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, attributeName, NormalizeIntOrNull);
         foreach (var attributeName in UnsignedIntAttributes)
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, attributeName, NormalizeUnsignedIntOrNull);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, attributeName, XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
 
         return changed;
     }
@@ -169,17 +169,6 @@ internal static class XlsxWorkbookCustomViewNormalizer
         return changed;
     }
 
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed switch
-        {
-            "0" or "1" => trimmed,
-            "true" or "false" => trimmed,
-            _ => null
-        };
-    }
-
     private static string? NormalizeGuid(string? value)
     {
         var trimmed = value?.Trim();
@@ -200,20 +189,6 @@ internal static class XlsxWorkbookCustomViewNormalizer
     {
         var trimmed = value?.Trim();
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
-    }
-
-    private static string? NormalizeToken(string? value, IReadOnlySet<string> allowedValues)
-    {
-        var trimmed = value?.Trim();
-        return trimmed is not null && allowedValues.Contains(trimmed) ? trimmed : null;
-    }
-
-    private static string? NormalizeUnsignedIntOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed.ToString(CultureInfo.InvariantCulture)
-            : null;
     }
 
     private static string NormalizeUnsignedIntOrDefault(string? value, string defaultValue)

@@ -75,14 +75,14 @@ internal static class XlsxWorkbookViewNormalizer
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(workbookView, WorkbookViewAttributes);
         changed |= RemoveUnexpectedChildElements(workbookView, WorkbookNs + "extLst");
         changed |= NormalizeExtensionLists(workbookView);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookView, "visibility", value => NormalizeToken(value, ValidVisibilityValues));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookView, "visibility", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, ValidVisibilityValues));
 
         foreach (var attributeName in BooleanAttributes)
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookView, attributeName, NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookView, attributeName, XlsxXmlNormalizationHelpers.NormalizeBoolean);
         foreach (var attributeName in IntAttributes)
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookView, attributeName, NormalizeIntOrNull);
         foreach (var attributeName in UnsignedIntAttributes)
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookView, attributeName, NormalizeUnsignedIntOrNull);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(workbookView, attributeName, XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
 
         return changed;
     }
@@ -126,17 +126,6 @@ internal static class XlsxWorkbookViewNormalizer
         return changed;
     }
 
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed switch
-        {
-            "0" or "1" => trimmed,
-            "true" or "false" => trimmed,
-            _ => null
-        };
-    }
-
     private static string? NormalizeIntOrNull(string? value)
     {
         var trimmed = value?.Trim();
@@ -145,17 +134,4 @@ internal static class XlsxWorkbookViewNormalizer
             : null;
     }
 
-    private static string? NormalizeToken(string? value, IReadOnlySet<string> allowedValues)
-    {
-        var trimmed = value?.Trim();
-        return trimmed is not null && allowedValues.Contains(trimmed) ? trimmed : null;
-    }
-
-    private static string? NormalizeUnsignedIntOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed.ToString(CultureInfo.InvariantCulture)
-            : null;
-    }
 }
