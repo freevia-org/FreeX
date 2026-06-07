@@ -344,14 +344,22 @@ internal static partial class XlsxChartXmlWriter
 
     private static void AddOptionalBoolElement(XElement element, XNamespace chartNs, string name, bool? value)
     {
-        if (value is { } boolValue)
-            element.Add(new XElement(chartNs + name, new XAttribute("val", boolValue ? "1" : "0")));
+        AddOptionalValueElement(element, chartNs, name, value is { } boolValue ? boolValue ? "1" : "0" : null);
     }
 
     private static void AddOptionalIntElement(XElement element, XNamespace chartNs, string name, int? value)
     {
-        if (value is { } intValue)
-            element.Add(new XElement(chartNs + name, new XAttribute("val", intValue.ToString(CultureInfo.InvariantCulture))));
+        AddOptionalValueElement(
+            element,
+            chartNs,
+            name,
+            value is { } intValue ? intValue.ToString(CultureInfo.InvariantCulture) : null);
+    }
+
+    private static void AddOptionalValueElement(XElement element, XNamespace chartNs, string name, string? value)
+    {
+        if (value is not null)
+            element.Add(new XElement(chartNs + name, new XAttribute("val", value)));
     }
 
     private static void AddOptionalIntAttribute(XElement element, string name, int? value)
