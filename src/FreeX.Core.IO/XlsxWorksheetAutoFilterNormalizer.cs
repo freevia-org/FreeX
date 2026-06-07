@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
 using FreeX.Core.Model;
+using static FreeX.Core.IO.XlsxXmlNormalizationHelpers;
 
 namespace FreeX.Core.IO;
 
@@ -348,24 +349,6 @@ internal static class XlsxWorksheetAutoFilterNormalizer
         return changed;
     }
 
-    private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedNames)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                (attribute.Name.NamespaceName.Length == 0 && allowedNames.Contains(attribute.Name.LocalName)))
-            {
-                continue;
-            }
-
-            attribute.Remove();
-            changed = true;
-        }
-
-        return changed;
-    }
-
     private static bool RemoveUnexpectedChildren(XElement element, IReadOnlySet<string> allowedLocalNames)
     {
         var changed = false;
@@ -400,15 +383,6 @@ internal static class XlsxWorksheetAutoFilterNormalizer
         return changed;
     }
 
-    private static bool RemoveAllNodes(XElement element)
-    {
-        if (!element.Nodes().Any())
-            return false;
-
-        element.RemoveNodes();
-        return true;
-    }
-
     private static bool NormalizeChildOrder(XElement element, Func<XElement, int> orderSelector)
     {
         var children = element.Elements()
@@ -432,35 +406,6 @@ internal static class XlsxWorksheetAutoFilterNormalizer
 
     private static int FilterColumnChildOrder(XElement child) =>
         child.Name == WorksheetNs + "extLst" ? 100 : 0;
-
-    private static bool NormalizeAttribute(
-        XElement element,
-        string attributeName,
-        Func<string?, string?> normalize)
-    {
-        var attribute = element.Attribute(attributeName);
-        var normalized = normalize(attribute?.Value);
-        if (normalized is null)
-        {
-            if (attribute is null)
-                return false;
-
-            attribute.Remove();
-            return true;
-        }
-
-        return SetAttributeIfChanged(element, attributeName, normalized);
-    }
-
-    private static bool SetAttributeIfChanged(XElement element, string attributeName, string value)
-    {
-        var attribute = element.Attribute(attributeName);
-        if (attribute is not null && string.Equals(attribute.Value, value, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(attributeName, value);
-        return true;
-    }
 
     private static string? NormalizeBoolean(string? value)
     {
