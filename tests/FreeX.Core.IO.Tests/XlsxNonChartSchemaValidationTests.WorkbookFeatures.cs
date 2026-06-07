@@ -147,6 +147,8 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         fileSharing.Attribute("readOnlyRecommended").Should().BeNull();
         fileSharing.Attribute("reservationPassword")!.Value.Should().Be("1234");
         fileSharing.Attribute("revisionsPassword").Should().BeNull();
+        fileSharing.Attribute("hashValue").Should().BeNull();
+        fileSharing.Attribute("saltValue").Should().BeNull();
         fileSharing.Attribute("customFileSharingFlag").Should().BeNull();
         fileSharing.Attribute("spinCount").Should().BeNull();
         fileSharing.Element(fileSharing.Name.Namespace + "nativeFileSharingChild").Should().BeNull();
@@ -464,7 +466,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         protection.Attribute("lockStructure").Should().BeNull();
         protection.Attribute("lockWindows").Should().BeNull();
         protection.Attribute("lockRevision").Should().BeNull();
+        protection.Attribute("workbookHashValue").Should().BeNull();
+        protection.Attribute("workbookSaltValue").Should().BeNull();
         protection.Attribute("workbookSpinCount").Should().BeNull();
+        protection.Attribute("revisionsHashValue").Should().BeNull();
+        protection.Attribute("revisionsSaltValue").Should().BeNull();
         protection.Attribute("revisionsSpinCount").Should().BeNull();
         protection.Attribute("algorithmName").Should().BeNull();
         protection.Attribute("hashValue").Should().BeNull();
@@ -790,6 +796,8 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var fileSharing = workbookXml.Root!.Element(workbookNs + "fileSharing")!;
         fileSharing.SetAttributeValue("readOnlyRecommended", "maybe");
         fileSharing.SetAttributeValue("revisionsPassword", "removed");
+        fileSharing.SetAttributeValue("hashValue", "not-base64");
+        fileSharing.SetAttributeValue("saltValue", "also-not-base64");
         fileSharing.SetAttributeValue("customFileSharingFlag", "removed");
         fileSharing.SetAttributeValue("spinCount", "not-a-number");
         fileSharing.Add(new XElement(workbookNs + "nativeFileSharingChild"));
@@ -956,7 +964,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         protection.SetAttributeValue("lockStructure", "maybe");
         protection.SetAttributeValue("lockWindows", "maybe");
         protection.SetAttributeValue("lockRevision", "maybe");
+        protection.SetAttributeValue("workbookHashValue", "not-base64");
+        protection.SetAttributeValue("workbookSaltValue", "also-not-base64");
         protection.SetAttributeValue("workbookSpinCount", "not-a-number");
+        protection.SetAttributeValue("revisionsHashValue", "not-base64");
+        protection.SetAttributeValue("revisionsSaltValue", "also-not-base64");
         protection.SetAttributeValue("revisionsSpinCount", "not-a-number");
         protection.SetAttributeValue("algorithmName", "removed");
         protection.SetAttributeValue("hashValue", "removed");

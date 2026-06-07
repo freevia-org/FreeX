@@ -45,6 +45,10 @@ internal static class XlsxWorkbookProtectionNormalizer
             changed |= NormalizeAttribute(workbookProtection, attributeName, NormalizeBoolean);
         foreach (var attributeName in UnsignedIntAttributes)
             changed |= NormalizeAttribute(workbookProtection, attributeName, NormalizeUnsignedIntOrNull);
+        changed |= NormalizeAttribute(workbookProtection, "revisionsHashValue", NormalizeBase64BinaryOrNull);
+        changed |= NormalizeAttribute(workbookProtection, "revisionsSaltValue", NormalizeBase64BinaryOrNull);
+        changed |= NormalizeAttribute(workbookProtection, "workbookHashValue", NormalizeBase64BinaryOrNull);
+        changed |= NormalizeAttribute(workbookProtection, "workbookSaltValue", NormalizeBase64BinaryOrNull);
 
         return changed;
     }
@@ -116,5 +120,22 @@ internal static class XlsxWorkbookProtectionNormalizer
         return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
             ? parsed.ToString(CultureInfo.InvariantCulture)
             : null;
+    }
+
+    private static string? NormalizeBase64BinaryOrNull(string? value)
+    {
+        var trimmed = value?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+            return null;
+
+        try
+        {
+            _ = Convert.FromBase64String(trimmed);
+            return trimmed;
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
     }
 }
