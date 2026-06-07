@@ -263,8 +263,7 @@ public sealed class XlsxWorkbookThemeReaderTests
         package.Position = 0;
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: false);
-        using var reader = new StreamReader(archive.GetEntry("xl/theme/theme1.xml")!.Open());
-        var savedXml = reader.ReadToEnd();
+        var savedXml = LoadThemeXml(archive);
 
         savedXml.Should().Contain("objectDefaults");
         savedXml.Should().Contain("schemeClr val=\"accent1\"");
@@ -296,8 +295,7 @@ public sealed class XlsxWorkbookThemeReaderTests
         package.Position = 0;
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: false);
-        using var reader = new StreamReader(archive.GetEntry("xl/theme/theme1.xml")!.Open());
-        var savedXml = reader.ReadToEnd();
+        var savedXml = LoadThemeXml(archive);
 
         savedXml.Should().Contain("objectDefaults");
         savedXml.Should().Contain("spDef");
@@ -329,8 +327,7 @@ public sealed class XlsxWorkbookThemeReaderTests
         package.Position = 0;
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: false);
-        using var reader = new StreamReader(archive.GetEntry("xl/theme/theme1.xml")!.Open());
-        var savedXml = reader.ReadToEnd();
+        var savedXml = LoadThemeXml(archive);
 
         savedXml.Should().Contain("extraClrSchemeLst");
         savedXml.Should().Contain("Modeled Alternate");
@@ -472,8 +469,7 @@ public sealed class XlsxWorkbookThemeReaderTests
         package.Position = 0;
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: false);
-        using var reader = new StreamReader(archive.GetEntry("xl/theme/theme1.xml")!.Open());
-        var savedXml = reader.ReadToEnd();
+        var savedXml = LoadThemeXml(archive);
 
         savedXml.Should().Contain("objectDefaults");
         savedXml.Should().NotContain("urn:not-drawingml");
@@ -493,6 +489,11 @@ public sealed class XlsxWorkbookThemeReaderTests
     private static XDocument LoadThemeDocument(ZipArchive archive)
     {
         return XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/theme/theme1.xml", "xl/theme/theme1.xml");
+    }
+
+    private static string LoadThemeXml(ZipArchive archive)
+    {
+        return LoadThemeDocument(archive).ToString(SaveOptions.DisableFormatting);
     }
 
     private const string NativeThemeWithDeepSchemesXml = """
