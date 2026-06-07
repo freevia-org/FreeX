@@ -8,6 +8,54 @@ namespace FreeX.Core.IO.Tests;
 public sealed partial class XlsxPackageMetadataMergerTests
 {
     [Fact]
+    public void MergeRelationshipParts_PreservesQueryTableWorksheetGraphToGeneratedQueryTablePart()
+    {
+        using var sourcePackage = XlsxPackageTestFixtures.CreatePackage(
+            ("xl/worksheets/_rels/sheet1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdQueryTable"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/queryTable"
+                                Target="../queryTables/queryTable1.xml"/>
+                </Relationships>
+                """),
+            ("xl/queryTables/queryTable1.xml", """
+                <queryTable xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                            name="FreeXQueryTable"
+                            connectionId="1"/>
+                """));
+        using var targetPackage = XlsxPackageTestFixtures.CreatePackage(
+            ("xl/worksheets/sheet1.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <sheetData/>
+                </worksheet>
+                """),
+            ("xl/worksheets/_rels/sheet1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>
+                """),
+            ("xl/queryTables/queryTable1.xml", """
+                <queryTable xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                            name="GeneratedQueryTable"
+                            connectionId="1"/>
+                """));
+        using var source = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var target = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(source, target);
+        XlsxPackageMetadataMerger.MergeRelationshipParts(source, target, generatedEntriesBeforeMerge);
+
+        var relationshipsXml = LoadWorksheetRelationshipsXml(target);
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        relationshipsXml.Root!
+            .Elements(relationshipNs + "Relationship")
+            .Where(element =>
+                element.Attribute("Id")?.Value == "rIdQueryTable" &&
+                element.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/queryTable" &&
+                element.Attribute("Target")?.Value == "../queryTables/queryTable1.xml")
+            .Should()
+            .ContainSingle();
+    }
+
+    [Fact]
     public void MergeRelationshipParts_PreservesPercentEncodedInternalTargetsForCopiedParts()
     {
         using var sourcePackage = CreatePackageWithPercentEncodedMediaRelationship();

@@ -50,6 +50,42 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         queryTableParts.Attribute("count")!.Value.Should().Be("1");
     }
 
+    [Fact]
+    public void LoadedWorkbookSave_RemovesDanglingWorksheetQueryTablePartMarkers()
+    {
+        var workbook = new Workbook("DanglingQueryTableMarker");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Value"));
+
+        using var source = Save(workbook);
+        AddInvalidConnectionQueryTablePackage(source);
+        DeleteQueryTableRelationship(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new NumberValue(7));
+
+        using var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+
+        SchemaErrors(saved).Should().BeEmpty();
+
+        var worksheet = ReadPackageRootElement(saved, "xl/worksheets/sheet1.xml");
+        worksheet.Element(worksheet.Name.Namespace + "queryTableParts").Should().BeNull();
+
+        saved.Position = 0;
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        archive.GetEntry("xl/queryTables/queryTable1.xml").Should().NotBeNull();
+        var worksheetRelationships = LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationshipTypes = worksheetRelationships.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Select(relationship => relationship.Attribute("Type")?.Value)
+            .ToArray();
+        relationshipTypes.Should().NotContain("http://schemas.openxmlformats.org/officeDocument/2006/relationships/queryTable");
+    }
+
     private static void AddInvalidConnectionQueryTablePackage(MemoryStream packageStream)
     {
         packageStream.Position = 0;
@@ -142,6 +178,22 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             contentTypeNs + "Override",
             new XAttribute("PartName", partName),
             new XAttribute("ContentType", contentType)));
+    }
+
+    private static void DeleteQueryTableRelationship(MemoryStream packageStream)
+    {
+        packageStream.Position = 0;
+        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var worksheetRelationshipsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+        var worksheetRelationships = LoadPackageXml(archive, worksheetRelationshipsPath);
+        worksheetRelationships.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/queryTable")
+            .Remove();
+        ReplacePackageXml(archive, worksheetRelationshipsPath, worksheetRelationships);
+        packageStream.Position = 0;
     }
 
 }
