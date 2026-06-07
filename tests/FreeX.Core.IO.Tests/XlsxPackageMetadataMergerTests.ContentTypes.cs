@@ -20,7 +20,7 @@ public sealed partial class XlsxPackageMetadataMergerTests
             targetArchive,
             new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "xl/media/image1.png" });
 
-        var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive.GetEntry("[Content_Types].xml")!);
+        var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "[Content_Types].xml", "[Content_Types].xml");
         XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
 
         contentTypesXml.Root!
@@ -49,7 +49,7 @@ public sealed partial class XlsxPackageMetadataMergerTests
 
         XlsxPackageMetadataMerger.MergeContentTypes(sourceArchive, targetArchive);
 
-        var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive.GetEntry("[Content_Types].xml")!);
+        var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "[Content_Types].xml", "[Content_Types].xml");
         XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
         var overridePartNames = contentTypesXml.Root!
             .Elements(contentTypeNs + "Override")
@@ -72,7 +72,7 @@ public sealed partial class XlsxPackageMetadataMergerTests
 
         XlsxPackageMetadataMerger.MergeContentTypes(sourceArchive, targetArchive);
 
-        var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive.GetEntry("[Content_Types].xml")!);
+        var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "[Content_Types].xml", "[Content_Types].xml");
         XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
 
         contentTypesXml.Root!
@@ -92,7 +92,7 @@ public sealed partial class XlsxPackageMetadataMergerTests
 
         XlsxPackageMetadataMerger.MergeContentTypes(sourceArchive, targetArchive);
 
-        var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive.GetEntry("[Content_Types].xml")!);
+        var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "[Content_Types].xml", "[Content_Types].xml");
         XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
 
         contentTypesXml.Root!
@@ -115,7 +115,7 @@ public sealed partial class XlsxPackageMetadataMergerTests
             targetArchive,
             new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "xl/media/image1.png" });
 
-        var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive.GetEntry("[Content_Types].xml")!);
+        var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "[Content_Types].xml", "[Content_Types].xml");
         XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
 
         var overridePartNames = contentTypesXml.Root!
@@ -138,7 +138,7 @@ public sealed partial class XlsxPackageMetadataMergerTests
 
         XlsxPackageMetadataMerger.MergeContentTypes(sourceArchive, targetArchive);
 
-        var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive.GetEntry("[Content_Types].xml")!);
+        var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "[Content_Types].xml", "[Content_Types].xml");
         XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
 
         contentTypesXml.Root!
