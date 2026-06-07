@@ -66,11 +66,20 @@ internal static class XlsxStructuredTableSchemaNormalizer
         var changed = false;
 
         changed |= NormalizeRequiredUnsignedIntAttribute(table, "id", ExtractTrailingNumber(tablePath));
-        changed |= NormalizeAttribute(table, "tableType", value => NormalizeToken(value, ValidTableTypes));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(
+            table,
+            "tableType",
+            value => NormalizeToken(value, ValidTableTypes));
         foreach (var attributeName in TableUnsignedIntAttributes)
-            changed |= NormalizeAttribute(table, attributeName, NormalizeUnsignedIntOrNull);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(
+                table,
+                attributeName,
+                NormalizeUnsignedIntOrNull);
         foreach (var attributeName in TableBooleanAttributes)
-            changed |= NormalizeAttribute(table, attributeName, NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(
+                table,
+                attributeName,
+                NormalizeBoolean);
 
         var autoFilter = table.Element(WorksheetNs + "autoFilter");
         if (autoFilter is not null)
@@ -111,7 +120,7 @@ internal static class XlsxStructuredTableSchemaNormalizer
     {
         var changed = false;
         var columns = tableColumns.Elements(WorksheetNs + "tableColumn").ToArray();
-        changed |= SetAttributeIfChanged(
+        changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(
             tableColumns,
             "count",
             columns.Length.ToString(CultureInfo.InvariantCulture));
@@ -129,17 +138,20 @@ internal static class XlsxStructuredTableSchemaNormalizer
         var changed = false;
 
         changed |= NormalizeRequiredUnsignedIntAttribute(tableColumn, "id", fallbackId);
-        changed |= NormalizeAttribute(
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(
             tableColumn,
             "totalsRowFunction",
             value => NormalizeToken(value, ValidTotalsRowFunctions));
         foreach (var attributeName in TableColumnUnsignedIntAttributes)
-            changed |= NormalizeAttribute(tableColumn, attributeName, NormalizeUnsignedIntOrNull);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(
+                tableColumn,
+                attributeName,
+                NormalizeUnsignedIntOrNull);
 
         foreach (var formula in tableColumn.Elements(WorksheetNs + "calculatedColumnFormula"))
-            changed |= NormalizeAttribute(formula, "array", NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(formula, "array", NormalizeBoolean);
         foreach (var formula in tableColumn.Elements(WorksheetNs + "totalsRowFormula"))
-            changed |= NormalizeAttribute(formula, "array", NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(formula, "array", NormalizeBoolean);
 
         changed |= NormalizeExtensionLists(tableColumn);
         changed |= NormalizeChildOrder(tableColumn, TableColumnChildOrder);
@@ -150,7 +162,10 @@ internal static class XlsxStructuredTableSchemaNormalizer
     {
         var changed = false;
         foreach (var attributeName in TableStyleInfoBooleanAttributes)
-            changed |= NormalizeAttribute(tableStyleInfo, attributeName, NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(
+                tableStyleInfo,
+                attributeName,
+                NormalizeBoolean);
 
         return changed;
     }
@@ -264,36 +279,7 @@ internal static class XlsxStructuredTableSchemaNormalizer
     {
         var normalized = NormalizeUnsignedIntOrNull(element.Attribute(attributeName)?.Value) ??
             Math.Max(1, fallbackValue).ToString(CultureInfo.InvariantCulture);
-        return SetAttributeIfChanged(element, attributeName, normalized);
-    }
-
-    private static bool NormalizeAttribute(
-        XElement element,
-        string attributeName,
-        Func<string?, string?> normalize)
-    {
-        var attribute = element.Attribute(attributeName);
-        var normalized = normalize(attribute?.Value);
-        if (normalized is null)
-        {
-            if (attribute is null)
-                return false;
-
-            attribute.Remove();
-            return true;
-        }
-
-        return SetAttributeIfChanged(element, attributeName, normalized);
-    }
-
-    private static bool SetAttributeIfChanged(XElement element, string attributeName, string value)
-    {
-        var attribute = element.Attribute(attributeName);
-        if (attribute is not null && string.Equals(attribute.Value, value, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(attributeName, value);
-        return true;
+        return XlsxXmlNormalizationHelpers.SetAttributeIfChanged(element, attributeName, normalized);
     }
 
     private static string? NormalizeBoolean(string? value)
