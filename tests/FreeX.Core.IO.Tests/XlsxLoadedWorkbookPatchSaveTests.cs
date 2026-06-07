@@ -2015,11 +2015,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         stream.Write(sourceBytes, 0, sourceBytes.Length);
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
         {
-            var sharedStringsEntry = archive.GetEntry("xl/sharedStrings.xml");
-            sharedStringsEntry.Should().NotBeNull();
-            XDocument sharedStringsXml;
-            using (var sharedStringsStream = sharedStringsEntry!.Open())
-                sharedStringsXml = XDocument.Load(sharedStringsStream);
+            var sharedStringsXml = LoadPackageXml(archive, "xl/sharedStrings.xml");
 
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
             var sharedString = sharedStringsXml.Root!
@@ -2033,10 +2029,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
                     new XElement(workbookNs + "sz", new XAttribute("val", "11"))),
                 new XElement(workbookNs + "t", "original value")));
 
-            sharedStringsEntry.Delete();
-            var replacement = archive.CreateEntry("xl/sharedStrings.xml");
-            using var replacementStream = replacement.Open();
-            sharedStringsXml.Save(replacementStream, System.Xml.Linq.SaveOptions.DisableFormatting);
+            ReplacePackageXml(archive, "xl/sharedStrings.xml", sharedStringsXml);
         }
 
         return stream.ToArray();
@@ -2087,18 +2080,11 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         stream.Write(sourceBytes, 0, sourceBytes.Length);
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
         {
-            var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
-            worksheetEntry.Should().NotBeNull();
-            XDocument worksheetXml;
-            using (var worksheetStream = worksheetEntry!.Open())
-                worksheetXml = XDocument.Load(worksheetStream);
+            var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
 
             update(worksheetXml);
 
-            worksheetEntry.Delete();
-            var replacement = archive.CreateEntry("xl/worksheets/sheet1.xml");
-            using var replacementStream = replacement.Open();
-            worksheetXml.Save(replacementStream, System.Xml.Linq.SaveOptions.DisableFormatting);
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
         return stream.ToArray();
@@ -2110,11 +2096,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         stream.Write(sourceBytes, 0, sourceBytes.Length);
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
         {
-            var workbookEntry = archive.GetEntry("xl/workbook.xml");
-            workbookEntry.Should().NotBeNull();
-            XDocument workbookXml;
-            using (var workbookStream = workbookEntry!.Open())
-                workbookXml = XDocument.Load(workbookStream);
+            var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
 
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
             workbookXml.Root!.Add(new XElement(
@@ -2129,10 +2111,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
                     new XAttribute("includePrintSettings", "1"),
                     new XAttribute("includeHiddenRowCol", "1"))));
 
-            workbookEntry.Delete();
-            var replacement = archive.CreateEntry("xl/workbook.xml");
-            using var replacementStream = replacement.Open();
-            workbookXml.Save(replacementStream, System.Xml.Linq.SaveOptions.DisableFormatting);
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
         return stream.ToArray();
@@ -2142,10 +2121,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     {
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-        var entry = archive.GetEntry("xl/workbook.xml");
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        var document = XDocument.Load(entryStream);
+        var document = LoadPackageXml(archive, "xl/workbook.xml");
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         return document.Root!.Element(workbookNs + "customWorkbookViews");
     }
@@ -2154,10 +2130,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     {
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-        var entry = archive.GetEntry(worksheetPath);
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        var document = XDocument.Load(entryStream);
+        var document = LoadPackageXml(archive, worksheetPath);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         return document.Root!.Element(worksheetNs + "customSheetViews");
     }
@@ -2166,10 +2139,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     {
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-        var entry = archive.GetEntry("xl/sharedStrings.xml");
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        var document = XDocument.Load(entryStream);
+        var document = LoadPackageXml(archive, "xl/sharedStrings.xml");
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         return document.Root!
             .Elements(workbookNs + "si")
@@ -2214,11 +2184,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         stream.Position = 0;
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
         {
-            var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
-            worksheetEntry.Should().NotBeNull();
-            XDocument worksheetXml;
-            using (var worksheetStream = worksheetEntry!.Open())
-                worksheetXml = XDocument.Load(worksheetStream);
+            var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
 
             var worksheetNs = worksheetXml.Root!.Name.Namespace;
             var mergeCells = worksheetXml.Root.Element(worksheetNs + "mergeCells");
@@ -2233,10 +2199,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
                     mergeCell.SetAttributeValue("nativeMergeCellAttr", "kept-C1-D1");
             }
 
-            worksheetEntry.Delete();
-            var replacement = archive.CreateEntry("xl/worksheets/sheet1.xml");
-            using var replacementStream = replacement.Open();
-            worksheetXml.Save(replacementStream, System.Xml.Linq.SaveOptions.DisableFormatting);
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
         return stream.ToArray();
@@ -3205,10 +3168,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     {
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-        var entry = archive.GetEntry(worksheetPath);
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        var document = XDocument.Load(entryStream);
+        var document = LoadPackageXml(archive, worksheetPath);
         var ns = document.Root!.Name.Namespace;
         return document.Root!
             .Element(ns + "sheetViews")
@@ -3222,10 +3182,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     {
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-        var entry = archive.GetEntry(worksheetPath);
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        var document = XDocument.Load(entryStream);
+        var document = LoadPackageXml(archive, worksheetPath);
         var ns = document.Root!.Name.Namespace;
         return document
             .Descendants(ns + "row")
@@ -3238,10 +3195,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     {
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-        var entry = archive.GetEntry(worksheetPath);
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        var document = XDocument.Load(entryStream);
+        var document = LoadPackageXml(archive, worksheetPath);
         var ns = document.Root!.Name.Namespace;
         foreach (var element in document.Descendants(ns + "col"))
         {
@@ -3300,10 +3254,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     {
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-        var entry = archive.GetEntry(worksheetPath);
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        var document = XDocument.Load(entryStream);
+        var document = LoadPackageXml(archive, worksheetPath);
         var ns = document.Root!.Name.Namespace;
         return document.Root.Element(ns + "mergeCells");
     }
@@ -3336,10 +3287,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     {
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-        var entry = archive.GetEntry(worksheetPath);
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        var document = XDocument.Load(entryStream);
+        var document = LoadPackageXml(archive, worksheetPath);
         var ns = document.Root!.Name.Namespace;
         return document.Root.Element(ns + "hyperlinks");
     }
@@ -3367,10 +3315,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     {
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-        var entry = archive.GetEntry(commentsPath);
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        var document = XDocument.Load(entryStream);
+        var document = LoadPackageXml(archive, commentsPath);
         var ns = document.Root!.Name.Namespace;
         var comment = document
             .Descendants(ns + "comment")
@@ -3390,10 +3335,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     {
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-        var entry = archive.GetEntry(worksheetPath);
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        var document = XDocument.Load(entryStream);
+        var document = LoadPackageXml(archive, worksheetPath);
         var ns = document.Root!.Name.Namespace;
         return document.Root.Element(ns + "dimension")?.Attribute("ref")?.Value;
     }
@@ -3409,10 +3351,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     {
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-        var entry = archive.GetEntry(worksheetPath);
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        var document = XDocument.Load(entryStream);
+        var document = LoadPackageXml(archive, worksheetPath);
         var ns = document.Root!.Name.Namespace;
         var cell = document
             .Descendants(ns + "c")
