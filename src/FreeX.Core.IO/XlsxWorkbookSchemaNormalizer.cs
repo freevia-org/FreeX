@@ -35,6 +35,7 @@ internal static class XlsxWorkbookSchemaNormalizer
         XlsxWorksheetExtensionListNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetWebPublishItemsNormalizer.NormalizePackage(archive);
         XlsxWorksheetOleControlNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetRelationshipMarkerNormalizer.NormalizeWorksheets(archive);
         NormalizeWorksheets(archive, workbookNs);
 
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
