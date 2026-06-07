@@ -12173,7 +12173,10 @@ public partial class FileAdapterSmokeTests
         archive.GetEntry("xl/queryTables/queryTable1.xml").Should().NotBeNull();
 
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
-        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("queryTableParts");
+        worksheetXml.Root!
+            .Element(worksheetXml.Root.Name.Namespace + "queryTableParts")
+            .Should()
+            .BeNull();
 
         var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
         worksheetRelsXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("../queryTables/queryTable1.xml");
