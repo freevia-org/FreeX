@@ -1480,6 +1480,18 @@ public static partial class AccessibilityCheckerService
             case "YIELDMAT":
                 kind = ConditionalFormulaScalarFunctionKind.Yieldmat;
                 return true;
+            case "ODDFPRICE":
+                kind = ConditionalFormulaScalarFunctionKind.Oddfprice;
+                return true;
+            case "ODDFYIELD":
+                kind = ConditionalFormulaScalarFunctionKind.Oddfyield;
+                return true;
+            case "ODDLPRICE":
+                kind = ConditionalFormulaScalarFunctionKind.Oddlprice;
+                return true;
+            case "ODDLYIELD":
+                kind = ConditionalFormulaScalarFunctionKind.Oddlyield;
+                return true;
             case "SLN":
                 kind = ConditionalFormulaScalarFunctionKind.Sln;
                 return true;
@@ -2153,6 +2165,10 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Duration or
             ConditionalFormulaScalarFunctionKind.Mduration or
             ConditionalFormulaScalarFunctionKind.Yieldmat => argumentCount is 5 or 6,
+            ConditionalFormulaScalarFunctionKind.Oddfprice or
+            ConditionalFormulaScalarFunctionKind.Oddfyield => argumentCount is 8 or 9,
+            ConditionalFormulaScalarFunctionKind.Oddlprice or
+            ConditionalFormulaScalarFunctionKind.Oddlyield => argumentCount is 7 or 8,
             ConditionalFormulaScalarFunctionKind.Db or
             ConditionalFormulaScalarFunctionKind.Ddb => argumentCount is 4 or 5,
             ConditionalFormulaScalarFunctionKind.Vdb => argumentCount is >= 5 and <= 7,
@@ -3038,6 +3054,10 @@ public static partial class AccessibilityCheckerService
         Yield,
         Yielddisc,
         Yieldmat,
+        Oddfprice,
+        Oddfyield,
+        Oddlprice,
+        Oddlyield,
         Sln,
         Syd,
         Db,
@@ -3761,7 +3781,8 @@ public static partial class AccessibilityCheckerService
                 BinaryOperator.LessOrEqual => result <= 0,
                 BinaryOperator.GreaterOrEqual => result >= 0,
                 _ => false
-            };
+            });
+            return true;
         }
 
         private bool TryGetFormulaExpression(ConditionalFormat rule, out ConditionalFormulaExpression expression)
@@ -4055,6 +4076,10 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Yield:
                 case ConditionalFormulaScalarFunctionKind.Yielddisc:
                 case ConditionalFormulaScalarFunctionKind.Yieldmat:
+                case ConditionalFormulaScalarFunctionKind.Oddfprice:
+                case ConditionalFormulaScalarFunctionKind.Oddfyield:
+                case ConditionalFormulaScalarFunctionKind.Oddlprice:
+                case ConditionalFormulaScalarFunctionKind.Oddlyield:
                 case ConditionalFormulaScalarFunctionKind.Sln:
                 case ConditionalFormulaScalarFunctionKind.Syd:
                 case ConditionalFormulaScalarFunctionKind.Db:
@@ -10897,6 +10922,98 @@ public static partial class AccessibilityCheckerService
 
                     value = FormulaFinancialYieldmatScalar(yieldmatSettlement, yieldmatMaturity, yieldmatIssue, yieldmatRate, yieldmatPrice, yieldmatBasis);
                     return true;
+                case ConditionalFormulaScalarFunctionKind.Oddfprice:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var oddfpriceSettlement, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var oddfpriceMaturity, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var oddfpriceIssue, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var oddfpriceFirstCoupon, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[4], out var oddfpriceRate, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[5], out var oddfpriceYield, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[6], out var oddfpriceRedemption, out value) ||
+                        !TryGetFormulaFinancialBondFrequencyAndBasis(arguments, 7, 8, out var oddfpriceFrequency, out var oddfpriceBasis, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialOddfpriceScalar(
+                        oddfpriceSettlement,
+                        oddfpriceMaturity,
+                        oddfpriceIssue,
+                        oddfpriceFirstCoupon,
+                        oddfpriceRate,
+                        oddfpriceYield,
+                        oddfpriceRedemption,
+                        oddfpriceFrequency,
+                        oddfpriceBasis);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Oddfyield:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var oddfyieldSettlement, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var oddfyieldMaturity, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var oddfyieldIssue, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var oddfyieldFirstCoupon, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[4], out var oddfyieldRate, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[5], out var oddfyieldPrice, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[6], out var oddfyieldRedemption, out value) ||
+                        !TryGetFormulaFinancialBondFrequencyAndBasis(arguments, 7, 8, out var oddfyieldFrequency, out var oddfyieldBasis, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialOddfyieldScalar(
+                        oddfyieldSettlement,
+                        oddfyieldMaturity,
+                        oddfyieldIssue,
+                        oddfyieldFirstCoupon,
+                        oddfyieldRate,
+                        oddfyieldPrice,
+                        oddfyieldRedemption,
+                        oddfyieldFrequency,
+                        oddfyieldBasis);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Oddlprice:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var oddlpriceSettlement, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var oddlpriceMaturity, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var oddlpriceLastInterest, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var oddlpriceRate, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[4], out var oddlpriceYield, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[5], out var oddlpriceRedemption, out value) ||
+                        !TryGetFormulaFinancialBondFrequencyAndBasis(arguments, 6, 7, out var oddlpriceFrequency, out var oddlpriceBasis, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialOddlpriceScalar(
+                        oddlpriceSettlement,
+                        oddlpriceMaturity,
+                        oddlpriceLastInterest,
+                        oddlpriceRate,
+                        oddlpriceYield,
+                        oddlpriceRedemption,
+                        oddlpriceFrequency,
+                        oddlpriceBasis);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Oddlyield:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var oddlyieldSettlement, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var oddlyieldMaturity, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var oddlyieldLastInterest, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var oddlyieldRate, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[4], out var oddlyieldPrice, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[5], out var oddlyieldRedemption, out value) ||
+                        !TryGetFormulaFinancialBondFrequencyAndBasis(arguments, 6, 7, out var oddlyieldFrequency, out var oddlyieldBasis, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialOddlyieldScalar(
+                        oddlyieldSettlement,
+                        oddlyieldMaturity,
+                        oddlyieldLastInterest,
+                        oddlyieldRate,
+                        oddlyieldPrice,
+                        oddlyieldRedemption,
+                        oddlyieldFrequency,
+                        oddlyieldBasis);
+                    return true;
                 case ConditionalFormulaScalarFunctionKind.Coupdaybs:
                 case ConditionalFormulaScalarFunctionKind.Coupdays:
                 case ConditionalFormulaScalarFunctionKind.Coupdaysnc:
@@ -11474,6 +11591,457 @@ public static partial class AccessibilityCheckerService
 
             var numerator = (1d + rate * daysIssueToMaturity) / (price / 100d) - 1d;
             return FormulaFinancialNumberResult(numerator / daysSettlementToMaturity);
+        }
+
+        private static ScalarValue FormulaFinancialOddfpriceScalar(
+            double settlement,
+            double maturity,
+            double issue,
+            double firstCoupon,
+            double rate,
+            double yield,
+            double redemption,
+            int frequency,
+            int basis)
+        {
+            if (!double.IsFinite(settlement) ||
+                !double.IsFinite(maturity) ||
+                !double.IsFinite(issue) ||
+                !double.IsFinite(firstCoupon) ||
+                !double.IsFinite(rate) ||
+                !double.IsFinite(yield) ||
+                !double.IsFinite(redemption))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (rate < 0d ||
+                yield < 0d ||
+                redemption <= 0d ||
+                !TryGetFormulaFinancialOddFirstCouponDates(
+                    settlement,
+                    maturity,
+                    issue,
+                    firstCoupon,
+                    frequency,
+                    basis,
+                    out var settlementDate,
+                    out var maturityDate,
+                    out var issueDate,
+                    out var firstCouponDate))
+            {
+                return ErrorValue.Num;
+            }
+
+            return TryCalculateFormulaFinancialOddFirstPrice(
+                    issueDate,
+                    settlementDate,
+                    maturityDate,
+                    firstCouponDate,
+                    rate,
+                    yield,
+                    redemption,
+                    frequency,
+                    basis,
+                    out var price)
+                ? FormulaFinancialNumberResult(price)
+                : ErrorValue.Num;
+        }
+
+        private static ScalarValue FormulaFinancialOddfyieldScalar(
+            double settlement,
+            double maturity,
+            double issue,
+            double firstCoupon,
+            double rate,
+            double price,
+            double redemption,
+            int frequency,
+            int basis)
+        {
+            if (!double.IsFinite(settlement) ||
+                !double.IsFinite(maturity) ||
+                !double.IsFinite(issue) ||
+                !double.IsFinite(firstCoupon) ||
+                !double.IsFinite(rate) ||
+                !double.IsFinite(price) ||
+                !double.IsFinite(redemption))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (rate < 0d ||
+                price <= 0d ||
+                redemption <= 0d ||
+                !TryGetFormulaFinancialOddFirstCouponDates(
+                    settlement,
+                    maturity,
+                    issue,
+                    firstCoupon,
+                    frequency,
+                    basis,
+                    out var settlementDate,
+                    out var maturityDate,
+                    out var issueDate,
+                    out var firstCouponDate))
+            {
+                return ErrorValue.Num;
+            }
+
+            var yield = 0.1d;
+            for (var iteration = 0; iteration < MaxFormulaFinancialBondYieldIterations; iteration++)
+            {
+                if (!TryCalculateFormulaFinancialOddFirstPrice(
+                        issueDate,
+                        settlementDate,
+                        maturityDate,
+                        firstCouponDate,
+                        rate,
+                        yield,
+                        redemption,
+                        frequency,
+                        basis,
+                        out var calculatedPrice) ||
+                    !TryCalculateFormulaFinancialOddFirstPrice(
+                        issueDate,
+                        settlementDate,
+                        maturityDate,
+                        firstCouponDate,
+                        rate,
+                        yield + 1E-6d,
+                        redemption,
+                        frequency,
+                        basis,
+                        out var shiftedPrice))
+                {
+                    return ErrorValue.Num;
+                }
+
+                var derivative = (shiftedPrice - calculatedPrice) / 1E-6d;
+                if (!double.IsFinite(derivative))
+                    return ErrorValue.Num;
+
+                if (Math.Abs(derivative) < 1E-14d)
+                    break;
+
+                var delta = (calculatedPrice - price) / derivative;
+                if (!double.IsFinite(delta))
+                    return ErrorValue.Num;
+
+                yield -= delta;
+                if (yield < -0.999d)
+                    yield = -0.999d;
+
+                if (Math.Abs(delta) < 1E-10d)
+                    break;
+            }
+
+            return FormulaFinancialNumberResult(yield);
+        }
+
+        private static ScalarValue FormulaFinancialOddlpriceScalar(
+            double settlement,
+            double maturity,
+            double lastInterest,
+            double rate,
+            double yield,
+            double redemption,
+            int frequency,
+            int basis)
+        {
+            if (!double.IsFinite(settlement) ||
+                !double.IsFinite(maturity) ||
+                !double.IsFinite(lastInterest) ||
+                !double.IsFinite(rate) ||
+                !double.IsFinite(yield) ||
+                !double.IsFinite(redemption))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (rate < 0d ||
+                yield < 0d ||
+                redemption <= 0d ||
+                !TryGetFormulaFinancialOddLastCouponDates(
+                    settlement,
+                    maturity,
+                    lastInterest,
+                    frequency,
+                    basis,
+                    out var settlementDate,
+                    out var maturityDate,
+                    out var lastInterestDate))
+            {
+                return ErrorValue.Num;
+            }
+
+            return TryCalculateFormulaFinancialOddLastPrice(
+                    lastInterestDate,
+                    settlementDate,
+                    maturityDate,
+                    rate,
+                    yield,
+                    redemption,
+                    frequency,
+                    basis,
+                    out var price)
+                ? FormulaFinancialNumberResult(price)
+                : ErrorValue.Num;
+        }
+
+        private static ScalarValue FormulaFinancialOddlyieldScalar(
+            double settlement,
+            double maturity,
+            double lastInterest,
+            double rate,
+            double price,
+            double redemption,
+            int frequency,
+            int basis)
+        {
+            if (!double.IsFinite(settlement) ||
+                !double.IsFinite(maturity) ||
+                !double.IsFinite(lastInterest) ||
+                !double.IsFinite(rate) ||
+                !double.IsFinite(price) ||
+                !double.IsFinite(redemption))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (rate < 0d ||
+                price <= 0d ||
+                redemption <= 0d ||
+                !TryGetFormulaFinancialOddLastCouponDates(
+                    settlement,
+                    maturity,
+                    lastInterest,
+                    frequency,
+                    basis,
+                    out var settlementDate,
+                    out var maturityDate,
+                    out var lastInterestDate))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (!TryGetFormulaFinancialOddLastCouponPeriods(
+                    lastInterestDate,
+                    settlementDate,
+                    maturityDate,
+                    frequency,
+                    basis,
+                    out var accruedPeriods,
+                    out var remainingPeriods,
+                    out var oddCouponPeriods))
+            {
+                return ErrorValue.Num;
+            }
+
+            var couponAmount = rate / frequency * redemption;
+            var numerator = redemption + couponAmount * oddCouponPeriods;
+            var denominator = price + couponAmount * accruedPeriods;
+            if (Math.Abs(remainingPeriods) < 1E-14d ||
+                Math.Abs(denominator) < 1E-14d)
+            {
+                return ErrorValue.DivByZero;
+            }
+
+            return FormulaFinancialNumberResult((numerator / denominator - 1d) / remainingPeriods * frequency);
+        }
+
+        private static bool TryGetFormulaFinancialOddFirstCouponDates(
+            double settlement,
+            double maturity,
+            double issue,
+            double firstCoupon,
+            int frequency,
+            int basis,
+            out DateTime settlementDate,
+            out DateTime maturityDate,
+            out DateTime issueDate,
+            out DateTime firstCouponDate)
+        {
+            settlementDate = default;
+            maturityDate = default;
+            issueDate = default;
+            firstCouponDate = default;
+            return frequency is 1 or 2 or 4 &&
+                basis is >= 0 and <= 4 &&
+                TryGetFormulaFinancialCouponDate(settlement, out settlementDate) &&
+                TryGetFormulaFinancialCouponDate(maturity, out maturityDate) &&
+                TryGetFormulaFinancialCouponDate(issue, out issueDate) &&
+                TryGetFormulaFinancialCouponDate(firstCoupon, out firstCouponDate) &&
+                maturityDate > firstCouponDate &&
+                firstCouponDate > settlementDate &&
+                settlementDate > issueDate;
+        }
+
+        private static bool TryGetFormulaFinancialOddLastCouponDates(
+            double settlement,
+            double maturity,
+            double lastInterest,
+            int frequency,
+            int basis,
+            out DateTime settlementDate,
+            out DateTime maturityDate,
+            out DateTime lastInterestDate)
+        {
+            settlementDate = default;
+            maturityDate = default;
+            lastInterestDate = default;
+            return frequency is 1 or 2 or 4 &&
+                basis is >= 0 and <= 4 &&
+                TryGetFormulaFinancialCouponDate(settlement, out settlementDate) &&
+                TryGetFormulaFinancialCouponDate(maturity, out maturityDate) &&
+                TryGetFormulaFinancialCouponDate(lastInterest, out lastInterestDate) &&
+                maturityDate > settlementDate &&
+                settlementDate > lastInterestDate;
+        }
+
+        private static bool TryCalculateFormulaFinancialOddFirstPrice(
+            DateTime issue,
+            DateTime settlement,
+            DateTime maturity,
+            DateTime firstCoupon,
+            double rate,
+            double yield,
+            double redemption,
+            int frequency,
+            int basis,
+            out double price)
+        {
+            price = 0d;
+            var yieldPerPeriod = yield / frequency;
+            if (1d + yieldPerPeriod <= 0d)
+                return false;
+
+            var months = 12 / frequency;
+            DateTime previousCoupon;
+            try
+            {
+                previousCoupon = firstCoupon.AddMonths(-months);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return false;
+            }
+
+            var daysInCoupon = FormulaFinancialCouponPeriodDays(previousCoupon, frequency, basis);
+            if (!double.IsFinite(daysInCoupon) || Math.Abs(daysInCoupon) < 1E-14d)
+                return false;
+
+            var accrued = FormulaFinancialDays(issue, settlement, basis) / daysInCoupon;
+            var firstCouponPeriods = FormulaFinancialDays(issue, firstCoupon, basis) / daysInCoupon;
+            var periodsToFirstCoupon = FormulaFinancialDays(settlement, firstCoupon, basis) / daysInCoupon;
+            var couponAmount = rate / frequency * redemption;
+            price = couponAmount * firstCouponPeriods / Math.Pow(1d + yieldPerPeriod, periodsToFirstCoupon);
+
+            var period = 1;
+            try
+            {
+                for (var currentDate = firstCoupon.AddMonths(months); currentDate <= maturity; currentDate = currentDate.AddMonths(months))
+                {
+                    if (period >= MaxFormulaFinancialBondCouponIterations)
+                        return false;
+
+                    var cash = couponAmount;
+                    if (currentDate == maturity)
+                        cash += redemption;
+
+                    price += cash / Math.Pow(1d + yieldPerPeriod, period + periodsToFirstCoupon);
+                    period++;
+                }
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return false;
+            }
+
+            price -= couponAmount * accrued;
+            return double.IsFinite(price);
+        }
+
+        private static bool TryCalculateFormulaFinancialOddLastPrice(
+            DateTime lastInterest,
+            DateTime settlement,
+            DateTime maturity,
+            double rate,
+            double yield,
+            double redemption,
+            int frequency,
+            int basis,
+            out double price)
+        {
+            price = 0d;
+            if (!TryGetFormulaFinancialOddLastCouponPeriods(
+                    lastInterest,
+                    settlement,
+                    maturity,
+                    frequency,
+                    basis,
+                    out var accruedPeriods,
+                    out var remainingPeriods,
+                    out var oddCouponPeriods))
+            {
+                return false;
+            }
+
+            var couponAmount = rate / frequency * redemption;
+            var denominator = 1d + remainingPeriods * yield / frequency;
+            if (Math.Abs(denominator) < 1E-14d)
+                return false;
+
+            price = (redemption + couponAmount * oddCouponPeriods) / denominator - couponAmount * accruedPeriods;
+            return double.IsFinite(price);
+        }
+
+        private static bool TryGetFormulaFinancialOddLastCouponPeriods(
+            DateTime lastInterest,
+            DateTime settlement,
+            DateTime maturity,
+            int frequency,
+            int basis,
+            out double accruedPeriods,
+            out double remainingPeriods,
+            out double oddCouponPeriods)
+        {
+            accruedPeriods = 0d;
+            remainingPeriods = 0d;
+            oddCouponPeriods = 0d;
+            var daysInCoupon = FormulaFinancialCouponPeriodDays(lastInterest, frequency, basis);
+            if (!double.IsFinite(daysInCoupon) || Math.Abs(daysInCoupon) < 1E-14d)
+                return false;
+
+            accruedPeriods = FormulaFinancialDays(lastInterest, settlement, basis) / daysInCoupon;
+            remainingPeriods = FormulaFinancialDays(settlement, maturity, basis) / daysInCoupon;
+            oddCouponPeriods = FormulaFinancialDays(lastInterest, maturity, basis) / daysInCoupon;
+            return double.IsFinite(accruedPeriods) &&
+                double.IsFinite(remainingPeriods) &&
+                double.IsFinite(oddCouponPeriods);
+        }
+
+        private static double FormulaFinancialCouponPeriodDays(DateTime periodStart, int frequency, int basis) =>
+            FormulaFinancialDays(periodStart, periodStart.AddMonths(12 / frequency), basis);
+
+        private static double FormulaFinancialDays(DateTime start, DateTime end, int basis) =>
+            basis switch
+            {
+                0 => FormulaFinancialDays360Us(start, end),
+                4 => FormulaDays30E360(start, end),
+                _ => (end - start).TotalDays
+            };
+
+        private static double FormulaFinancialDays360Us(DateTime start, DateTime end)
+        {
+            var startDay = start.Day;
+            var endDay = end.Day;
+            if (endDay == 31 && startDay >= 30)
+                endDay = 30;
+            if (startDay == 31)
+                startDay = 30;
+
+            return (end.Year - start.Year) * 360d + (end.Month - start.Month) * 30d + (endDay - startDay);
         }
 
         private static bool TryValidateFormulaFinancialBondSchedule(

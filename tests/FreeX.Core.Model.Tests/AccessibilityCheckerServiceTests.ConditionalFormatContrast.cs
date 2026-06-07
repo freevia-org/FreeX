@@ -4777,6 +4777,43 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialOddCouponFunctions()
+    {
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ODDFPRICE($A1,$C1,$D1,$E1,$F1,$G1,$I1,$J1,$K1)>99", "B1", "B4", "B8");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ODDFYIELD($A1,$C1,$D1,$E1,$F1,$H1,$I1,$J1,$K1)>0.08", "B4");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ODDLPRICE($A1,$L1,$D1,$F1,$G1,$I1,$J1,$K1)>100", "B2", "B4");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ODDLYIELD($A1,$L1,$D1,$F1,$H1,$I1,$J1,$K1)>0.09", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialOddCouponWrappersDefaultsAndOptionalArguments()
+    {
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("IF(ODDFPRICE($A1,$C1,$D1,$E1,$F1,$G1,$I1,$J1)>99,TRUE,FALSE)", "B1", "B4", "B8");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("SUM(ODDFPRICE($A1,$C1,$D1,$E1,$F1,$G1,$I1,$J1,$K1),ODDLPRICE($A1,$L1,$D1,$F1,$G1,$I1,$J1,$K1))>200", "B4");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("AND($M1,ODDLYIELD($A1,$L1,$D1,$F1,$H1,$I1,$J1)>0.09)", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialOddCouponErrorPredicates()
+    {
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ISNUMBER(ODDLYIELD($A1,$L1,$D1,$F1,$H1,$I1,$J1,$K1))", "B1", "B2", "B3", "B4", "B8");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ISNA(ODDFPRICE($A1,$C1,$D1,$E1,$F1,$G1,$I1,$J1,$K1))", "B5");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ISERROR(ODDFYIELD($A1,$C1,$D1,$E1,$F1,$H1,$I1,$J1,$K1))", "B5", "B6", "B7", "B9");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ISERR(ODDLPRICE($A1,$L1,$D1,$F1,$G1,$I1,$J1,$K1))", "B6", "B7", "B9");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatFinancialOddCouponUnsupportedShapesArityAndComparisons()
+    {
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ODDFPRICE($A$1:$A$2,$C1,$D1,$E1,$F1,$G1,$I1,$J1,$K1)>0");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ISERROR(ODDFPRICE($A$1:$A$2,$C1,$D1,$E1,$F1,$G1,$I1,$J1,$K1))");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ODDFYIELD($A1,$C1,$D1,$E1,$F1,$H1,$I1)>0");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ODDLPRICE($A1,$L1,$D1,$F1,$G1,$I1,$J1,$K1,$M1)>0");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ODDLYIELD($A1,$L1,$D1,$F1,$H1,$I1,$J$1:$J$2,$K1)>0");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ODDFPRICE($A$6,$C$6,$D$6,$E$6,$F$6,$G$6,$I$6,$J$6)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatArithmeticComparison()
     {
         AssertFormulaArithmeticContrastLocations("($A1+25-50)*2/5>=40", "B4");
@@ -7245,6 +7282,196 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 11), discountPrice);
     }
 
+    private static Workbook CreateFormulaFinancialOddCouponFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 9, 2);
+
+        SetFormulaFinancialOddCouponFunctionContrastRow(
+            sheet,
+            1,
+            new NumberValue(43900),
+            new NumberValue(44562),
+            new NumberValue(43831),
+            new NumberValue(44197),
+            new NumberValue(0.05),
+            new NumberValue(0.05),
+            new NumberValue(99),
+            new NumberValue(100),
+            new NumberValue(2),
+            new NumberValue(0),
+            new NumberValue(44197),
+            active: true,
+            "Odd first par");
+        SetFormulaFinancialOddCouponFunctionContrastRow(
+            sheet,
+            2,
+            new NumberValue(43910),
+            new NumberValue(44592),
+            new NumberValue(43840),
+            new NumberValue(44228),
+            new NumberValue(0.06),
+            new NumberValue(0.07),
+            new NumberValue(101),
+            new NumberValue(110),
+            new NumberValue(4),
+            new NumberValue(1),
+            new NumberValue(44228),
+            active: false,
+            "Quarter actual");
+        SetFormulaFinancialOddCouponFunctionContrastRow(
+            sheet,
+            3,
+            new NumberValue(43900),
+            new NumberValue(44562),
+            new NumberValue(43831),
+            new NumberValue(44197),
+            new NumberValue(0.02),
+            new NumberValue(0.10),
+            new NumberValue(105),
+            new NumberValue(100),
+            new NumberValue(2),
+            new NumberValue(0),
+            new NumberValue(44197),
+            active: true,
+            "Below threshold");
+        SetFormulaFinancialOddCouponFunctionContrastRow(
+            sheet,
+            4,
+            new NumberValue(44000),
+            new NumberValue(44562),
+            new NumberValue(43831),
+            new NumberValue(44197),
+            new NumberValue(0.08),
+            new NumberValue(0.04),
+            new NumberValue(98),
+            new NumberValue(100),
+            new NumberValue(2),
+            new NumberValue(0),
+            new NumberValue(44197),
+            active: true,
+            "High coupon");
+        SetFormulaFinancialOddCouponFunctionContrastRow(
+            sheet,
+            5,
+            ErrorValue.NA,
+            new NumberValue(44562),
+            new NumberValue(43831),
+            new NumberValue(44197),
+            new NumberValue(0.05),
+            new NumberValue(0.05),
+            new NumberValue(99),
+            new NumberValue(100),
+            new NumberValue(2),
+            new NumberValue(0),
+            new NumberValue(44197),
+            active: true,
+            "NA settlement");
+        SetFormulaFinancialOddCouponFunctionContrastRow(
+            sheet,
+            6,
+            new NumberValue(43900),
+            new NumberValue(44562),
+            new NumberValue(43831),
+            new NumberValue(43890),
+            new NumberValue(0.05),
+            new NumberValue(0.05),
+            new NumberValue(99),
+            new NumberValue(100),
+            new NumberValue(2),
+            new NumberValue(0),
+            new NumberValue(43890),
+            active: true,
+            "Invalid order");
+        SetFormulaFinancialOddCouponFunctionContrastRow(
+            sheet,
+            7,
+            new TextValue("Open"),
+            new NumberValue(44562),
+            new NumberValue(43831),
+            new NumberValue(44197),
+            new NumberValue(0.05),
+            new NumberValue(0.05),
+            new NumberValue(99),
+            new NumberValue(100),
+            new NumberValue(2),
+            new NumberValue(0),
+            new NumberValue(44197),
+            active: true,
+            "Value settlement");
+        SetFormulaFinancialOddCouponFunctionContrastRow(
+            sheet,
+            8,
+            new NumberValue(43900),
+            new NumberValue(44562),
+            new NumberValue(43831),
+            new NumberValue(44197),
+            new NumberValue(0.05),
+            new NumberValue(0.05),
+            new NumberValue(99),
+            new NumberValue(100),
+            new NumberValue(2.9),
+            new NumberValue(0.9),
+            new NumberValue(44197),
+            active: true,
+            "Fractional optional");
+        SetFormulaFinancialOddCouponFunctionContrastRow(
+            sheet,
+            9,
+            new NumberValue(43900),
+            new NumberValue(44562),
+            new NumberValue(43831),
+            new NumberValue(44197),
+            new NumberValue(0.05),
+            new NumberValue(0.05),
+            new NumberValue(99),
+            new NumberValue(100),
+            new NumberValue(3),
+            new NumberValue(0),
+            new NumberValue(44197),
+            active: true,
+            "Invalid frequency");
+
+        return workbook;
+    }
+
+    private static void SetFormulaFinancialOddCouponFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        ScalarValue settlement,
+        ScalarValue maturity,
+        ScalarValue issueOrLastInterest,
+        ScalarValue firstCoupon,
+        ScalarValue rate,
+        ScalarValue yieldRate,
+        ScalarValue price,
+        ScalarValue redemption,
+        ScalarValue frequency,
+        ScalarValue basis,
+        ScalarValue shortMaturity,
+        bool active,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), settlement);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), maturity);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 4), issueOrLastInterest);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 5), firstCoupon);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 6), rate);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 7), yieldRate);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 8), price);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 9), redemption);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 10), frequency);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 11), basis);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 12), shortMaturity);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 13), new BoolValue(active));
+    }
+
     private static void AssertFormulaBooleanContrastLocations(string formulaText, params string[] expectedLocations)
     {
         var workbook = CreateFormulaBooleanContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
@@ -7390,6 +7617,19 @@ public sealed partial class AccessibilityCheckerServiceTests
         params string[] expectedLocations)
     {
         var workbook = CreateFormulaFinancialBondYieldFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaFinancialOddCouponFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaFinancialOddCouponFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
 
         FindLowContrastCellTextIssues(workbook)
