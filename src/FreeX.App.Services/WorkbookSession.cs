@@ -1005,6 +1005,54 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public WorkbookCellEditResult ClearSelectedRangeAll()
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            CreateClearAllCommand(range));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
+    public WorkbookCellEditResult ClearSelectedRangeFormats() =>
+        ApplySelectedRangeStyle(CellStyleDiffPlanner.ClearFormatsDiff());
+
+    public WorkbookCellEditResult ClearSelectedRangeComments()
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            CreateRangeCommand(
+                range,
+                "Clear Comments and Notes",
+                static (sheetId, sheetRange) => new ClearCommentsCommand(sheetId, sheetRange)));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
+    public WorkbookCellEditResult ClearSelectedRangeHyperlinks()
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            CreateRangeCommand(
+                range,
+                "Clear Hyperlinks",
+                static (sheetId, sheetRange) => new ClearHyperlinksCommand(sheetId, sheetRange)));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
     public bool CaptureFormatPainterSource(bool persistent = false)
     {
         _formatPainterSourceSheetId = ActiveSheet.Id;
@@ -1544,6 +1592,28 @@ public sealed class WorkbookSession
         }
 
         return ToCommand("Format Painter", commands);
+    }
+
+    private IWorkbookCommand CreateClearAllCommand(GridRange range)
+    {
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        var commands = new List<IWorkbookCommand>(targetSheetIds.Count);
+        foreach (var sheetId in targetSheetIds)
+        {
+            var sheetRange = RemapRangeToSheet(range, sheetId);
+            commands.Add(new CompositeWorkbookCommand(
+                "Clear All",
+                [
+                    new ClearContentsCommand(sheetId, sheetRange),
+                    new ApplyStyleCommand(sheetId, sheetRange, CellStyleDiffPlanner.ClearFormatsDiff()),
+                    new ClearConditionalFormatsCommand(sheetId, sheetRange),
+                    new ClearDataValidationCommand(sheetId, sheetRange),
+                    new ClearCommentsCommand(sheetId, sheetRange),
+                    new ClearHyperlinksCommand(sheetId, sheetRange)
+                ]));
+        }
+
+        return ToCommand("Clear All", commands);
     }
 
     private IReadOnlyList<IWorkbookCommand> CreateUnmergeCommands(GridRange range)

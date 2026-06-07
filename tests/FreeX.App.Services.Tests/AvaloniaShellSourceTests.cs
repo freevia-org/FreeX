@@ -162,9 +162,19 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_selectAllMenuItem.Header = \"Select All\";");
         source.Should().Contain("_selectAllMenuItem.Gesture = new KeyGesture(Key.A, KeyModifiers.Meta);");
         source.Should().Contain("_selectAllMenuItem.Click += (_, _) => SelectCurrentRegionOrAll();");
+        source.Should().Contain("_clearMenuItem.Header = \"Clear\";");
+        source.Should().Contain("_clearMenuItem.Menu = CreateNativeClearMenu();");
+        source.Should().Contain("_clearAllMenuItem.Header = \"Clear All\";");
+        source.Should().Contain("_clearAllMenuItem.Click += (_, _) => ClearSelectedRangeAll();");
+        source.Should().Contain("_clearFormatsMenuItem.Header = \"Clear Formats\";");
+        source.Should().Contain("_clearFormatsMenuItem.Click += (_, _) => ClearSelectedRangeFormats();");
         source.Should().Contain("_clearContentsMenuItem.Header = \"Clear Contents\";");
         source.Should().Contain("_clearContentsMenuItem.Gesture = new KeyGesture(Key.Delete);");
         source.Should().Contain("_clearContentsMenuItem.Click += (_, _) => ClearSelectedRangeContents();");
+        source.Should().Contain("_clearCommentsMenuItem.Header = \"Clear Comments and Notes\";");
+        source.Should().Contain("_clearCommentsMenuItem.Click += (_, _) => ClearSelectedRangeComments();");
+        source.Should().Contain("_clearHyperlinksMenuItem.Header = \"Clear Hyperlinks\";");
+        source.Should().Contain("_clearHyperlinksMenuItem.Click += (_, _) => ClearSelectedRangeHyperlinks();");
         source.Should().Contain("_boldMenuItem.Header = \"Bold\";");
         source.Should().Contain("_boldMenuItem.Gesture = new KeyGesture(Key.B, KeyModifiers.Meta);");
         source.Should().Contain("_boldMenuItem.Click += (_, _) => ToggleSelectedRangeBold();");
@@ -366,7 +376,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("editMenu.Items.Add(_copyMenuItem);");
         source.Should().Contain("editMenu.Items.Add(_pasteMenuItem);");
         source.Should().Contain("editMenu.Items.Add(_pasteSpecialMenuItem);");
-        source.Should().Contain("editMenu.Items.Add(_clearContentsMenuItem);");
+        source.Should().Contain("editMenu.Items.Add(_clearMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_boldMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_italicMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_underlineMenuItem);");
@@ -420,7 +430,12 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_copyMenuItem.IsEnabled = _copyButton.IsEnabled;");
         source.Should().Contain("_pasteMenuItem.IsEnabled = _pasteButton.IsEnabled;");
         source.Should().Contain("_pasteSpecialMenuItem.IsEnabled = _pasteSpecialButton.IsEnabled;");
-        source.Should().Contain("_clearContentsMenuItem.IsEnabled = _clearContentsButton.IsEnabled;");
+        source.Should().Contain("_clearMenuItem.IsEnabled = _clearButton.IsEnabled;");
+        source.Should().Contain("_clearAllMenuItem.IsEnabled = _clearButton.IsEnabled;");
+        source.Should().Contain("_clearFormatsMenuItem.IsEnabled = _clearButton.IsEnabled;");
+        source.Should().Contain("_clearContentsMenuItem.IsEnabled = _clearButton.IsEnabled;");
+        source.Should().Contain("_clearCommentsMenuItem.IsEnabled = _clearButton.IsEnabled;");
+        source.Should().Contain("_clearHyperlinksMenuItem.IsEnabled = _clearButton.IsEnabled;");
         source.Should().Contain("_boldMenuItem.IsEnabled = _boldButton.IsEnabled;");
         source.Should().Contain("_italicMenuItem.IsEnabled = _italicButton.IsEnabled;");
         source.Should().Contain("_underlineMenuItem.IsEnabled = _underlineButton.IsEnabled;");
@@ -614,7 +629,12 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_select_all_sheets_menu_item={FormatBool(snapshot.HasNativeSelectAllSheetsMenuItem)}");
         smokeSource.Should().Contain("native_ungroup_sheets_menu_item={FormatBool(snapshot.HasNativeUngroupSheetsMenuItem)}");
         smokeSource.Should().Contain("native_select_all_menu_item={FormatBool(snapshot.HasNativeSelectAllMenuItem)}");
+        smokeSource.Should().Contain("native_clear_menu_item={FormatBool(snapshot.HasNativeClearMenuItem)}");
+        smokeSource.Should().Contain("native_clear_all_menu_item={FormatBool(snapshot.HasNativeClearAllMenuItem)}");
+        smokeSource.Should().Contain("native_clear_formats_menu_item={FormatBool(snapshot.HasNativeClearFormatsMenuItem)}");
         smokeSource.Should().Contain("native_clear_contents_menu_item={FormatBool(snapshot.HasNativeClearContentsMenuItem)}");
+        smokeSource.Should().Contain("native_clear_comments_menu_item={FormatBool(snapshot.HasNativeClearCommentsMenuItem)}");
+        smokeSource.Should().Contain("native_clear_hyperlinks_menu_item={FormatBool(snapshot.HasNativeClearHyperlinksMenuItem)}");
         smokeSource.Should().Contain("native_bold_menu_item={FormatBool(snapshot.HasNativeBoldMenuItem)}");
         smokeSource.Should().Contain("native_italic_menu_item={FormatBool(snapshot.HasNativeItalicMenuItem)}");
         smokeSource.Should().Contain("native_underline_menu_item={FormatBool(snapshot.HasNativeUnderlineMenuItem)}");
@@ -627,6 +647,12 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_font_color_menu_item={FormatBool(snapshot.HasNativeFontColorMenuItem)}");
         smokeSource.Should().Contain("native_fill_color_swatch_count={snapshot.NativeFillColorSwatchCount}");
         smokeSource.Should().Contain("native_font_color_swatch_count={snapshot.NativeFontColorSwatchCount}");
+        smokeSource.Should().Contain("toolbar_clear_button={FormatBool(snapshot.HasClearButton)}");
+        smokeSource.Should().Contain("toolbar_clear_all_menu_item={FormatBool(snapshot.HasClearAllMenuItem)}");
+        smokeSource.Should().Contain("toolbar_clear_formats_menu_item={FormatBool(snapshot.HasClearFormatsMenuItem)}");
+        smokeSource.Should().Contain("toolbar_clear_contents_menu_item={FormatBool(snapshot.HasClearContentsMenuItem)}");
+        smokeSource.Should().Contain("toolbar_clear_comments_menu_item={FormatBool(snapshot.HasClearCommentsMenuItem)}");
+        smokeSource.Should().Contain("toolbar_clear_hyperlinks_menu_item={FormatBool(snapshot.HasClearHyperlinksMenuItem)}");
         smokeSource.Should().Contain("toolbar_borders_button={FormatBool(snapshot.HasBordersButton)}");
         smokeSource.Should().Contain("toolbar_merge_and_center_button={FormatBool(snapshot.HasMergeAndCenterButton)}");
         smokeSource.Should().Contain("native_borders_menu_item={FormatBool(snapshot.HasNativeBordersMenuItem)}");
@@ -739,7 +765,19 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativePasteSpecialLinkedPictureMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, \"Linked Picture\")");
         windowSource.Should().Contain("private static bool HasNativeSubmenuItem(NativeMenu? menu, string expectedHeader)");
         windowSource.Should().Contain("HasNativeSelectAllMenuItem: HasNativeMenuItem(_selectAllMenuItem, \"Select All\")");
-        windowSource.Should().Contain("HasNativeClearContentsMenuItem: HasNativeMenuItem(_clearContentsMenuItem, \"Clear Contents\")");
+        windowSource.Should().Contain("HasClearButton: _clearButton.Content?.ToString() == \"Clear\"");
+        windowSource.Should().Contain("HasClearAllMenuItem: HasToolbarMenuItem(_clearAllFlyoutItem, \"Clear All\")");
+        windowSource.Should().Contain("HasClearFormatsMenuItem: HasToolbarMenuItem(_clearFormatsFlyoutItem, \"Clear Formats\")");
+        windowSource.Should().Contain("HasClearContentsMenuItem: HasToolbarMenuItem(_clearContentsFlyoutItem, \"Clear Contents\")");
+        windowSource.Should().Contain("HasClearCommentsMenuItem: HasToolbarMenuItem(_clearCommentsFlyoutItem, \"Clear Comments and Notes\")");
+        windowSource.Should().Contain("HasClearHyperlinksMenuItem: HasToolbarMenuItem(_clearHyperlinksFlyoutItem, \"Clear Hyperlinks\")");
+        windowSource.Should().Contain("private static bool HasToolbarMenuItem(MenuItem item, string expectedHeader)");
+        windowSource.Should().Contain("HasNativeClearMenuItem: HasNativeMenuItem(_clearMenuItem, \"Clear\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeClearAllMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, \"Clear All\")");
+        windowSource.Should().Contain("HasNativeClearFormatsMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, \"Clear Formats\")");
+        windowSource.Should().Contain("HasNativeClearContentsMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, \"Clear Contents\")");
+        windowSource.Should().Contain("HasNativeClearCommentsMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, \"Clear Comments and Notes\")");
+        windowSource.Should().Contain("HasNativeClearHyperlinksMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, \"Clear Hyperlinks\")");
         windowSource.Should().Contain("HasNativeBoldMenuItem: HasNativeMenuItem(_boldMenuItem, \"Bold\")");
         windowSource.Should().Contain("HasNativeItalicMenuItem: HasNativeMenuItem(_italicMenuItem, \"Italic\")");
         windowSource.Should().Contain("HasNativeUnderlineMenuItem: HasNativeMenuItem(_underlineMenuItem, \"Underline\")");
@@ -1093,21 +1131,91 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
-    public void MainWindow_WiresClearContentsThroughSharedWorkbookSession()
+    public void MainWindow_WiresClearMenuThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
 
-        source.Should().Contain("private readonly Button _clearContentsButton = new();");
-        source.Should().Contain("_clearContentsButton.Content = \"Clear\";");
-        source.Should().Contain("_clearContentsButton.Click += ClearContentsButton_Click;");
-        source.Should().Contain("_clearContentsButton.IsEnabled = isIdle;");
-        source.Should().Contain("private void ClearContentsButton_Click(object? sender, RoutedEventArgs e)");
+        sessionSource.Should().Contain("public WorkbookCellEditResult ClearSelectedRangeAll()");
+        sessionSource.Should().Contain("public WorkbookCellEditResult ClearSelectedRangeFormats()");
+        sessionSource.Should().Contain("public WorkbookCellEditResult ClearSelectedRangeComments()");
+        sessionSource.Should().Contain("public WorkbookCellEditResult ClearSelectedRangeHyperlinks()");
+        sessionSource.Should().Contain("new ClearContentsCommand(sheetId, sheetRange)");
+        sessionSource.Should().Contain("CellStyleDiffPlanner.ClearFormatsDiff()");
+        sessionSource.Should().Contain("new ClearConditionalFormatsCommand(sheetId, sheetRange)");
+        sessionSource.Should().Contain("new ClearDataValidationCommand(sheetId, sheetRange)");
+        sessionSource.Should().Contain("new ClearCommentsCommand(sheetId, sheetRange)");
+        sessionSource.Should().Contain("new ClearHyperlinksCommand(sheetId, sheetRange)");
+
+        source.Should().Contain("private readonly DropDownButton _clearButton = new();");
+        source.Should().Contain("private readonly MenuItem _clearAllFlyoutItem = new();");
+        source.Should().Contain("private readonly MenuItem _clearFormatsFlyoutItem = new();");
+        source.Should().Contain("private readonly MenuItem _clearContentsFlyoutItem = new();");
+        source.Should().Contain("private readonly MenuItem _clearCommentsFlyoutItem = new();");
+        source.Should().Contain("private readonly MenuItem _clearHyperlinksFlyoutItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _clearMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _clearAllMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _clearFormatsMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _clearContentsMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _clearCommentsMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _clearHyperlinksMenuItem = new();");
+        source.Should().Contain("_clearButton.Content = \"Clear\";");
+        source.Should().Contain("_clearButton.Flyout = CreateClearFlyout();");
+        source.Should().Contain("_clearButton.Click += ClearButton_Click;");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_clearButton, \"HomeClearButton\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_clearButton, \"Clear contents, formatting, comments, hyperlinks, or all cell state from the selected range.\");");
+        source.Should().Contain("_clearAllFlyoutItem.Header = \"Clear All\";");
+        source.Should().Contain("_clearAllFlyoutItem.Click += (_, _) => ClearSelectedRangeAll();");
+        source.Should().Contain("_clearFormatsFlyoutItem.Header = \"Clear Formats\";");
+        source.Should().Contain("_clearFormatsFlyoutItem.Click += (_, _) => ClearSelectedRangeFormats();");
+        source.Should().Contain("_clearContentsFlyoutItem.Header = \"Clear Contents\";");
+        source.Should().Contain("_clearContentsFlyoutItem.Click += (_, _) => ClearSelectedRangeContents();");
+        source.Should().Contain("_clearCommentsFlyoutItem.Header = \"Clear Comments and Notes\";");
+        source.Should().Contain("_clearCommentsFlyoutItem.Click += (_, _) => ClearSelectedRangeComments();");
+        source.Should().Contain("_clearHyperlinksFlyoutItem.Header = \"Clear Hyperlinks\";");
+        source.Should().Contain("_clearHyperlinksFlyoutItem.Click += (_, _) => ClearSelectedRangeHyperlinks();");
+        source.Should().Contain("_clearMenuItem.Header = \"Clear\";");
+        source.Should().Contain("_clearMenuItem.Menu = CreateNativeClearMenu();");
+        source.Should().Contain("editMenu.Items.Add(_clearMenuItem);");
+        source.Should().Contain("private MenuFlyout CreateClearFlyout()");
+        source.Should().Contain("private NativeMenu CreateNativeClearMenu()");
+        source.Should().Contain("_clearButton.IsEnabled = isIdle;");
+        source.Should().Contain("_clearMenuItem.IsEnabled = _clearButton.IsEnabled;");
+        source.Should().Contain("private void ClearButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("private void ClearSelectedRangeAll()");
+        source.Should().Contain("var result = _session.ClearSelectedRangeAll();");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Clear All failed.\");");
+        source.Should().Contain("private void ClearSelectedRangeFormats()");
+        source.Should().Contain("var result = _session.ClearSelectedRangeFormats();");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Clear Formats failed.\");");
         source.Should().Contain("private void ClearSelectedRangeContents()");
         source.Should().Contain("var result = _session.ClearSelectedRangeContents();");
         source.Should().Contain("RefreshShell($\"Cleared {rangeReference}\");");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Clear Contents failed.\");");
+        source.Should().Contain("private void ClearSelectedRangeComments()");
+        source.Should().Contain("var result = _session.ClearSelectedRangeComments();");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Clear Comments and Notes failed.\");");
+        source.Should().Contain("private void ClearSelectedRangeHyperlinks()");
+        source.Should().Contain("var result = _session.ClearSelectedRangeHyperlinks();");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Clear Hyperlinks failed.\");");
         source.Should().Contain("if (e.Key == Key.Delete)");
         source.Should().Contain("ClearSelectedRangeContents();");
+
+        smokeSource.Should().Contain("bool HasClearButton,");
+        smokeSource.Should().Contain("bool HasClearAllMenuItem,");
+        smokeSource.Should().Contain("bool HasClearFormatsMenuItem,");
+        smokeSource.Should().Contain("bool HasClearContentsMenuItem,");
+        smokeSource.Should().Contain("bool HasClearCommentsMenuItem,");
+        smokeSource.Should().Contain("bool HasClearHyperlinksMenuItem,");
+        smokeSource.Should().Contain("bool HasNativeClearMenuItem,");
+        smokeSource.Should().Contain("bool HasNativeClearAllMenuItem,");
+        smokeSource.Should().Contain("bool HasNativeClearFormatsMenuItem,");
+        smokeSource.Should().Contain("bool HasNativeClearContentsMenuItem,");
+        smokeSource.Should().Contain("bool HasNativeClearCommentsMenuItem,");
+        smokeSource.Should().Contain("bool HasNativeClearHyperlinksMenuItem,");
+        smokeSource.Should().Contain("toolbar_clear_button={FormatBool(snapshot.HasClearButton)}");
+        smokeSource.Should().Contain("native_clear_menu_item={FormatBool(snapshot.HasNativeClearMenuItem)}");
     }
 
     [Fact]

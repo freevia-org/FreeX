@@ -122,7 +122,12 @@ public sealed class MainWindow : Window
     private readonly Button _pasteButton = new();
     private readonly DropDownButton _pasteSpecialButton = new();
     private readonly Button _formatPainterButton = new();
-    private readonly Button _clearContentsButton = new();
+    private readonly DropDownButton _clearButton = new();
+    private readonly MenuItem _clearAllFlyoutItem = new();
+    private readonly MenuItem _clearFormatsFlyoutItem = new();
+    private readonly MenuItem _clearContentsFlyoutItem = new();
+    private readonly MenuItem _clearCommentsFlyoutItem = new();
+    private readonly MenuItem _clearHyperlinksFlyoutItem = new();
     private readonly ToggleButton _boldButton = new();
     private readonly ToggleButton _italicButton = new();
     private readonly ToggleButton _underlineButton = new();
@@ -175,7 +180,12 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _pasteSpecialMenuItem = new();
     private readonly NativeMenuItem _formatPainterMenuItem = new();
     private readonly NativeMenuItem _selectAllMenuItem = new();
+    private readonly NativeMenuItem _clearMenuItem = new();
+    private readonly NativeMenuItem _clearAllMenuItem = new();
+    private readonly NativeMenuItem _clearFormatsMenuItem = new();
     private readonly NativeMenuItem _clearContentsMenuItem = new();
+    private readonly NativeMenuItem _clearCommentsMenuItem = new();
+    private readonly NativeMenuItem _clearHyperlinksMenuItem = new();
     private readonly NativeMenuItem _boldMenuItem = new();
     private readonly NativeMenuItem _italicMenuItem = new();
     private readonly NativeMenuItem _underlineMenuItem = new();
@@ -459,9 +469,24 @@ public sealed class MainWindow : Window
         _selectAllMenuItem.Gesture = new KeyGesture(Key.A, KeyModifiers.Meta);
         _selectAllMenuItem.Click += (_, _) => SelectCurrentRegionOrAll();
 
+        _clearMenuItem.Header = "Clear";
+        _clearMenuItem.Menu = CreateNativeClearMenu();
+
+        _clearAllMenuItem.Header = "Clear All";
+        _clearAllMenuItem.Click += (_, _) => ClearSelectedRangeAll();
+
+        _clearFormatsMenuItem.Header = "Clear Formats";
+        _clearFormatsMenuItem.Click += (_, _) => ClearSelectedRangeFormats();
+
         _clearContentsMenuItem.Header = "Clear Contents";
         _clearContentsMenuItem.Gesture = new KeyGesture(Key.Delete);
         _clearContentsMenuItem.Click += (_, _) => ClearSelectedRangeContents();
+
+        _clearCommentsMenuItem.Header = "Clear Comments and Notes";
+        _clearCommentsMenuItem.Click += (_, _) => ClearSelectedRangeComments();
+
+        _clearHyperlinksMenuItem.Header = "Clear Hyperlinks";
+        _clearHyperlinksMenuItem.Click += (_, _) => ClearSelectedRangeHyperlinks();
 
         _boldMenuItem.Header = "Bold";
         _boldMenuItem.Gesture = new KeyGesture(Key.B, KeyModifiers.Meta);
@@ -657,7 +682,7 @@ public sealed class MainWindow : Window
         editMenu.Items.Add(_formatPainterMenuItem);
         editMenu.Items.Add(new NativeMenuItemSeparator());
         editMenu.Items.Add(_selectAllMenuItem);
-        editMenu.Items.Add(_clearContentsMenuItem);
+        editMenu.Items.Add(_clearMenuItem);
 
         var formatMenu = new NativeMenu();
         formatMenu.Items.Add(_boldMenuItem);
@@ -874,10 +899,29 @@ public sealed class MainWindow : Window
         AutomationProperties.SetName(_formatPainterButton, "Format Painter");
         AutomationProperties.SetHelpText(_formatPainterButton, "Copy formatting from the selection and apply it to another range.");
 
-        _clearContentsButton.Content = "Clear";
-        _clearContentsButton.Padding = new Thickness(10, 4);
-        _clearContentsButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
-        _clearContentsButton.Click += ClearContentsButton_Click;
+        _clearButton.Content = "Clear";
+        _clearButton.Padding = new Thickness(10, 4);
+        _clearButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _clearButton.Flyout = CreateClearFlyout();
+        _clearButton.Click += ClearButton_Click;
+        AutomationProperties.SetAutomationId(_clearButton, "HomeClearButton");
+        AutomationProperties.SetName(_clearButton, "Clear");
+        AutomationProperties.SetHelpText(_clearButton, "Clear contents, formatting, comments, hyperlinks, or all cell state from the selected range.");
+
+        _clearAllFlyoutItem.Header = "Clear All";
+        _clearAllFlyoutItem.Click += (_, _) => ClearSelectedRangeAll();
+
+        _clearFormatsFlyoutItem.Header = "Clear Formats";
+        _clearFormatsFlyoutItem.Click += (_, _) => ClearSelectedRangeFormats();
+
+        _clearContentsFlyoutItem.Header = "Clear Contents";
+        _clearContentsFlyoutItem.Click += (_, _) => ClearSelectedRangeContents();
+
+        _clearCommentsFlyoutItem.Header = "Clear Comments and Notes";
+        _clearCommentsFlyoutItem.Click += (_, _) => ClearSelectedRangeComments();
+
+        _clearHyperlinksFlyoutItem.Header = "Clear Hyperlinks";
+        _clearHyperlinksFlyoutItem.Click += (_, _) => ClearSelectedRangeHyperlinks();
 
         _boldButton.Content = "B";
         _boldButton.FontWeight = FontWeight.Bold;
@@ -1091,7 +1135,7 @@ public sealed class MainWindow : Window
                     _pasteButton,
                     _pasteSpecialButton,
                     _formatPainterButton,
-                    _clearContentsButton,
+                    _clearButton,
                     _boldButton,
                     _italicButton,
                     _underlineButton,
@@ -1221,7 +1265,7 @@ public sealed class MainWindow : Window
         _pasteButton.IsEnabled = isIdle;
         _pasteSpecialButton.IsEnabled = isIdle;
         _formatPainterButton.IsEnabled = isIdle;
-        _clearContentsButton.IsEnabled = isIdle;
+        _clearButton.IsEnabled = isIdle;
         _boldButton.IsEnabled = isIdle;
         _italicButton.IsEnabled = isIdle;
         _underlineButton.IsEnabled = isIdle;
@@ -1280,7 +1324,12 @@ public sealed class MainWindow : Window
         _pasteSpecialMenuItem.IsEnabled = _pasteSpecialButton.IsEnabled;
         _formatPainterMenuItem.IsEnabled = _formatPainterButton.IsEnabled;
         _selectAllMenuItem.IsEnabled = isIdle;
-        _clearContentsMenuItem.IsEnabled = _clearContentsButton.IsEnabled;
+        _clearMenuItem.IsEnabled = _clearButton.IsEnabled;
+        _clearAllMenuItem.IsEnabled = _clearButton.IsEnabled;
+        _clearFormatsMenuItem.IsEnabled = _clearButton.IsEnabled;
+        _clearContentsMenuItem.IsEnabled = _clearButton.IsEnabled;
+        _clearCommentsMenuItem.IsEnabled = _clearButton.IsEnabled;
+        _clearHyperlinksMenuItem.IsEnabled = _clearButton.IsEnabled;
         _boldMenuItem.IsEnabled = _boldButton.IsEnabled;
         _italicMenuItem.IsEnabled = _italicButton.IsEnabled;
         _underlineMenuItem.IsEnabled = _underlineButton.IsEnabled;
@@ -2321,6 +2370,30 @@ public sealed class MainWindow : Window
         {
             ItemsSource = CreatePasteSpecialMenuItems().ToArray(),
         };
+
+    private MenuFlyout CreateClearFlyout() =>
+        new()
+        {
+            ItemsSource = new[]
+            {
+                _clearAllFlyoutItem,
+                _clearFormatsFlyoutItem,
+                _clearContentsFlyoutItem,
+                _clearCommentsFlyoutItem,
+                _clearHyperlinksFlyoutItem,
+            },
+        };
+
+    private NativeMenu CreateNativeClearMenu()
+    {
+        var menu = new NativeMenu();
+        menu.Items.Add(_clearAllMenuItem);
+        menu.Items.Add(_clearFormatsMenuItem);
+        menu.Items.Add(_clearContentsMenuItem);
+        menu.Items.Add(_clearCommentsMenuItem);
+        menu.Items.Add(_clearHyperlinksMenuItem);
+        return menu;
+    }
 
     private IEnumerable<MenuItem> CreatePasteSpecialMenuItems()
     {
@@ -3675,7 +3748,7 @@ public sealed class MainWindow : Window
         CaptureFormatPainterSource(persistent: false);
     }
 
-    private void ClearContentsButton_Click(object? sender, RoutedEventArgs e)
+    private void ClearButton_Click(object? sender, RoutedEventArgs e)
     {
         ClearSelectedRangeContents();
     }
@@ -4174,6 +4247,82 @@ public sealed class MainWindow : Window
         }
 
         RefreshShell($"Cleared {rangeReference}");
+    }
+
+    private void ClearSelectedRangeAll()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.ClearSelectedRangeAll();
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Clear All failed.");
+            return;
+        }
+
+        RefreshShell($"Cleared all from {rangeReference}");
+    }
+
+    private void ClearSelectedRangeFormats()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.ClearSelectedRangeFormats();
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Clear Formats failed.");
+            return;
+        }
+
+        RefreshShell($"Cleared formats from {rangeReference}");
+    }
+
+    private void ClearSelectedRangeComments()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.ClearSelectedRangeComments();
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Clear Comments and Notes failed.");
+            return;
+        }
+
+        RefreshShell($"Cleared comments and notes from {rangeReference}");
+    }
+
+    private void ClearSelectedRangeHyperlinks()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.ClearSelectedRangeHyperlinks();
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Clear Hyperlinks failed.");
+            return;
+        }
+
+        RefreshShell($"Cleared hyperlinks from {rangeReference}");
     }
 
     private void CaptureFormatPainterSource(bool persistent)
@@ -4855,6 +5004,15 @@ public sealed class MainWindow : Window
             HasFormatPainterButton: _formatPainterButton.Content?.ToString() == "Format Painter" &&
                 string.Equals(AutomationProperties.GetAutomationId(_formatPainterButton), "HomeFormatPainterButton", StringComparison.Ordinal) &&
                 string.Equals(AutomationProperties.GetHelpText(_formatPainterButton), "Copy formatting from the selection and apply it to another range.", StringComparison.Ordinal),
+            HasClearButton: _clearButton.Content?.ToString() == "Clear" &&
+                _clearButton.Flyout is MenuFlyout &&
+                string.Equals(AutomationProperties.GetAutomationId(_clearButton), "HomeClearButton", StringComparison.Ordinal) &&
+                string.Equals(AutomationProperties.GetHelpText(_clearButton), "Clear contents, formatting, comments, hyperlinks, or all cell state from the selected range.", StringComparison.Ordinal),
+            HasClearAllMenuItem: HasToolbarMenuItem(_clearAllFlyoutItem, "Clear All"),
+            HasClearFormatsMenuItem: HasToolbarMenuItem(_clearFormatsFlyoutItem, "Clear Formats"),
+            HasClearContentsMenuItem: HasToolbarMenuItem(_clearContentsFlyoutItem, "Clear Contents"),
+            HasClearCommentsMenuItem: HasToolbarMenuItem(_clearCommentsFlyoutItem, "Clear Comments and Notes"),
+            HasClearHyperlinksMenuItem: HasToolbarMenuItem(_clearHyperlinksFlyoutItem, "Clear Hyperlinks"),
             HasBordersButton: _bordersButton.Content?.ToString() == "Borders" &&
                 string.Equals(AutomationProperties.GetAutomationId(_bordersButton), "HomeBordersButton", StringComparison.Ordinal) &&
                 string.Equals(AutomationProperties.GetHelpText(_bordersButton), "Apply or change borders on the selected cells.", StringComparison.Ordinal),
@@ -4923,7 +5081,12 @@ public sealed class MainWindow : Window
             HasNativePasteSpecialPictureMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Picture"),
             HasNativePasteSpecialLinkedPictureMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Linked Picture"),
             HasNativeSelectAllMenuItem: HasNativeMenuItem(_selectAllMenuItem, "Select All"),
-            HasNativeClearContentsMenuItem: HasNativeMenuItem(_clearContentsMenuItem, "Clear Contents"),
+            HasNativeClearMenuItem: HasNativeMenuItem(_clearMenuItem, "Clear", requireGesture: false),
+            HasNativeClearAllMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, "Clear All"),
+            HasNativeClearFormatsMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, "Clear Formats"),
+            HasNativeClearContentsMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, "Clear Contents"),
+            HasNativeClearCommentsMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, "Clear Comments and Notes"),
+            HasNativeClearHyperlinksMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, "Clear Hyperlinks"),
             HasNativeBoldMenuItem: HasNativeMenuItem(_boldMenuItem, "Bold"),
             HasNativeItalicMenuItem: HasNativeMenuItem(_italicMenuItem, "Italic"),
             HasNativeUnderlineMenuItem: HasNativeMenuItem(_underlineMenuItem, "Underline"),
@@ -4980,6 +5143,9 @@ public sealed class MainWindow : Window
             HasNativeLegalNoticesMenuItem: HasNativeMenuItem(_legalNoticesMenuItem, "Legal Notices", requireGesture: false),
             HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, "Quit FreeX"));
     }
+
+    private static bool HasToolbarMenuItem(MenuItem item, string expectedHeader) =>
+        string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal);
 
     private static bool HasNativeMenuItem(NativeMenuItem item, string expectedHeader, bool requireGesture = true) =>
         string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal) &&
@@ -5378,7 +5544,7 @@ public sealed class MainWindow : Window
         _pasteButton,
         _pasteSpecialButton,
         _formatPainterButton,
-        _clearContentsButton,
+        _clearButton,
         _boldButton,
         _italicButton,
         _underlineButton,

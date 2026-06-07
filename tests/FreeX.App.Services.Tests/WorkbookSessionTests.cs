@@ -1850,6 +1850,265 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void ClearSelectedRangeFormats_ClearsStylePreservesContentCommentsHyperlinksSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var styleId = workbook.RegisterStyle(new CellStyle
+        {
+            Bold = true,
+            FillColor = new CellColor(0xEE, 0xDD, 0xCC),
+            NumberFormat = "$#,##0.00"
+        });
+        sheet.SetCell(a1, new Cell { Value = new NumberValue(42), StyleId = styleId });
+        sheet.Comments[a1] = "Keep note";
+        sheet.Hyperlinks[a1] = "https://example.com";
+        sheet.HyperlinkMetadata[a1] = new HyperlinkMetadata(ScreenTip: "Open example");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.ClearSelectedRangeFormats();
+
+        result.Success.Should().BeTrue();
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveCell.Should().Be(a1);
+        session.SelectedRange.Should().Be(new GridRange(a1, a1));
+        sheet.GetValue(a1).Should().Be(new NumberValue(42));
+        sheet.Comments[a1].Should().Be("Keep note");
+        sheet.Hyperlinks[a1].Should().Be("https://example.com");
+        var clearedStyle = workbook.GetStyle(sheet.GetCell(a1)!.StyleId);
+        clearedStyle.Bold.Should().BeFalse();
+        clearedStyle.FillColor.Should().BeNull();
+        clearedStyle.NumberFormat.Should().Be("General");
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.GetCell(a1)!.StyleId.Should().Be(styleId);
+        sheet.GetValue(a1).Should().Be(new NumberValue(42));
+        sheet.HyperlinkMetadata[a1].Should().Be(new HyperlinkMetadata(ScreenTip: "Open example"));
+    }
+
+    [Fact]
+    public void ClearSelectedRangeComments_ClearsNotesAndThreadedCommentsPreservesSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(a1, new TextValue("note"));
+        sheet.Comments[a1] = "Legacy note";
+        sheet.ThreadedComments[b1] = new ThreadedComment("Thread note", "Quinn")
+        {
+            Replies = [new CommentReply("Reply", "Codex")]
+        };
+        sheet.Comments[c1] = "Outside";
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b1));
+
+        var result = session.ClearSelectedRangeComments();
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().Contain([a1, b1]);
+        session.SelectedRange.Should().Be(new GridRange(a1, b1));
+        sheet.GetValue(a1).Should().Be(new TextValue("note"));
+        sheet.Comments.Should().NotContainKey(a1);
+        sheet.ThreadedComments.Should().NotContainKey(b1);
+        sheet.Comments[c1].Should().Be("Outside");
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.Comments[a1].Should().Be("Legacy note");
+        sheet.ThreadedComments[b1].Text.Should().Be("Thread note");
+        sheet.ThreadedComments[b1].Replies.Should().Equal(new CommentReply("Reply", "Codex"));
+        sheet.Comments[c1].Should().Be("Outside");
+    }
+
+    [Fact]
+    public void ClearSelectedRangeHyperlinks_ClearsTargetsPreservesDisplayTextSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("Example"));
+        sheet.Hyperlinks[a1] = "https://example.com";
+        sheet.HyperlinkMetadata[a1] = new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            ScreenTip: "Open example");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.ClearSelectedRangeHyperlinks();
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().ContainSingle().Which.Should().Be(a1);
+        session.ActiveCell.Should().Be(a1);
+        session.SelectedRange.Should().Be(new GridRange(a1, a1));
+        sheet.GetValue(a1).Should().Be(new TextValue("Example"));
+        sheet.Hyperlinks.Should().NotContainKey(a1);
+        sheet.HyperlinkMetadata.Should().NotContainKey(a1);
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.GetValue(a1).Should().Be(new TextValue("Example"));
+        sheet.Hyperlinks[a1].Should().Be("https://example.com");
+        sheet.HyperlinkMetadata[a1].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            ScreenTip: "Open example"));
+    }
+
+    [Fact]
+    public void ClearSelectedRangeAll_ClearsContentsFormatsRulesCommentsHyperlinksSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var range = new GridRange(a1, b1);
+        var styleId = workbook.RegisterStyle(new CellStyle
+        {
+            Bold = true,
+            FillColor = new CellColor(0x22, 0x99, 0x66),
+            NumberFormat = "0.00%"
+        });
+        sheet.SetCell(a1, new Cell { Value = new NumberValue(10), StyleId = styleId });
+        sheet.SetFormula(b1, "A1+1");
+        sheet.Comments[a1] = "Legacy note";
+        sheet.ThreadedComments[b1] = new ThreadedComment("Thread note", "Quinn");
+        sheet.Hyperlinks[a1] = "https://example.com";
+        sheet.HyperlinkMetadata[a1] = new HyperlinkMetadata(ScreenTip: "Open example");
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = range,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "5"
+        });
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = range,
+            Type = DvType.List,
+            Formula1 = "Yes,No"
+        });
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(range);
+
+        var result = session.ClearSelectedRangeAll();
+
+        result.Success.Should().BeTrue();
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveCell.Should().Be(a1);
+        session.SelectedRange.Should().Be(range);
+        sheet.GetCell(a1)!.Value.Should().Be(BlankValue.Instance);
+        sheet.GetCell(b1)!.FormulaText.Should().BeNull();
+        GetStyle(workbook, sheet, a1).Bold.Should().BeFalse();
+        GetStyle(workbook, sheet, a1).FillColor.Should().BeNull();
+        GetStyle(workbook, sheet, a1).NumberFormat.Should().Be("General");
+        sheet.ConditionalFormats.Should().BeEmpty();
+        sheet.DataValidations.Should().BeEmpty();
+        sheet.Comments.Should().BeEmpty();
+        sheet.ThreadedComments.Should().BeEmpty();
+        sheet.Hyperlinks.Should().BeEmpty();
+        sheet.HyperlinkMetadata.Should().BeEmpty();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.GetValue(a1).Should().Be(new NumberValue(10));
+        sheet.GetCell(b1)!.FormulaText.Should().Be("A1+1");
+        sheet.GetCell(a1)!.StyleId.Should().Be(styleId);
+        sheet.ConditionalFormats.Should().ContainSingle();
+        sheet.DataValidations.Should().ContainSingle();
+        sheet.Comments[a1].Should().Be("Legacy note");
+        sheet.ThreadedComments[b1].Text.Should().Be("Thread note");
+        sheet.Hyperlinks[a1].Should().Be("https://example.com");
+        sheet.HyperlinkMetadata[a1].Should().Be(new HyperlinkMetadata(ScreenTip: "Open example"));
+    }
+
+    [Fact]
+    public void ClearSelectedRangeAll_PropagatesAcrossGroupedSheetsAndUndoRestores()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var hidden = workbook.AddSheet("Hidden");
+        hidden.IsHidden = true;
+        var summaryA1 = new CellAddress(summary.Id, 1, 1);
+        var detailsA1 = new CellAddress(details.Id, 1, 1);
+        var hiddenA1 = new CellAddress(hidden.Id, 1, 1);
+        var summaryStyle = workbook.RegisterStyle(new CellStyle { Bold = true, FillColor = new CellColor(0xAA, 0xBB, 0xCC) });
+        var detailsStyle = workbook.RegisterStyle(new CellStyle { Italic = true, FillColor = new CellColor(0xCC, 0xBB, 0xAA) });
+        var hiddenStyle = workbook.RegisterStyle(new CellStyle { Underline = true });
+        summary.SetCell(summaryA1, new Cell { Value = new TextValue("summary"), StyleId = summaryStyle });
+        details.SetCell(detailsA1, new Cell { Value = new TextValue("details"), StyleId = detailsStyle });
+        hidden.SetCell(hiddenA1, new Cell { Value = new TextValue("hidden"), StyleId = hiddenStyle });
+        summary.Comments[summaryA1] = "summary note";
+        details.Comments[detailsA1] = "details note";
+        hidden.Comments[hiddenA1] = "hidden note";
+        summary.Hyperlinks[summaryA1] = "https://summary.example.com";
+        details.Hyperlinks[detailsA1] = "https://details.example.com";
+        hidden.Hyperlinks[hiddenA1] = "https://hidden.example.com";
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectAllVisibleSheets();
+        session.SelectCell(summaryA1);
+
+        var result = session.ClearSelectedRangeAll();
+
+        result.Success.Should().BeTrue();
+        summary.GetCell(summaryA1)!.Value.Should().Be(BlankValue.Instance);
+        details.GetCell(detailsA1)!.Value.Should().Be(BlankValue.Instance);
+        hidden.GetValue(hiddenA1).Should().Be(new TextValue("hidden"));
+        summary.Comments.Should().NotContainKey(summaryA1);
+        details.Comments.Should().NotContainKey(detailsA1);
+        hidden.Comments[hiddenA1].Should().Be("hidden note");
+        summary.Hyperlinks.Should().NotContainKey(summaryA1);
+        details.Hyperlinks.Should().NotContainKey(detailsA1);
+        hidden.Hyperlinks[hiddenA1].Should().Be("https://hidden.example.com");
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        summary.GetValue(summaryA1).Should().Be(new TextValue("summary"));
+        details.GetValue(detailsA1).Should().Be(new TextValue("details"));
+        hidden.GetValue(hiddenA1).Should().Be(new TextValue("hidden"));
+        summary.GetCell(summaryA1)!.StyleId.Should().Be(summaryStyle);
+        details.GetCell(detailsA1)!.StyleId.Should().Be(detailsStyle);
+        hidden.GetCell(hiddenA1)!.StyleId.Should().Be(hiddenStyle);
+        summary.Comments[summaryA1].Should().Be("summary note");
+        details.Comments[detailsA1].Should().Be("details note");
+        hidden.Comments[hiddenA1].Should().Be("hidden note");
+        summary.Hyperlinks[summaryA1].Should().Be("https://summary.example.com");
+        details.Hyperlinks[detailsA1].Should().Be("https://details.example.com");
+        hidden.Hyperlinks[hiddenA1].Should().Be("https://hidden.example.com");
+    }
+
+    [Fact]
     public void SetSelectedRangeBold_AppliesStylePreservesSelectionAndUndo()
     {
         var workbook = CreateWorkbook();

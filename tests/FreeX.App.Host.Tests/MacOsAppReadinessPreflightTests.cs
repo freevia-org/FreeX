@@ -24,6 +24,12 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_fill_color_swatch_count=69");
         script.Should().Contain("native_font_color_swatch_count=69");
         script.Should().Contain("toolbar_format_painter_button=true");
+        script.Should().Contain("toolbar_clear_button=true");
+        script.Should().Contain("toolbar_clear_all_menu_item=true");
+        script.Should().Contain("toolbar_clear_formats_menu_item=true");
+        script.Should().Contain("toolbar_clear_contents_menu_item=true");
+        script.Should().Contain("toolbar_clear_comments_menu_item=true");
+        script.Should().Contain("toolbar_clear_hyperlinks_menu_item=true");
         script.Should().Contain("toolbar_borders_button=true");
         script.Should().Contain("toolbar_merge_and_center_button=true");
         script.Should().Contain("native_format_painter_menu_item=true");
@@ -46,6 +52,12 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_open_recent_item_count=[1-9]");
         script.Should().Contain("native_close_workbook_menu_item=true");
         script.Should().Contain("native_select_all_menu_item=true");
+        script.Should().Contain("native_clear_menu_item=true");
+        script.Should().Contain("native_clear_all_menu_item=true");
+        script.Should().Contain("native_clear_formats_menu_item=true");
+        script.Should().Contain("native_clear_contents_menu_item=true");
+        script.Should().Contain("native_clear_comments_menu_item=true");
+        script.Should().Contain("native_clear_hyperlinks_menu_item=true");
         script.Should().Contain("new_sheet_button=true");
         script.Should().Contain("native_sheet_menu=true");
         script.Should().Contain("native_new_sheet_menu_item=true");
@@ -74,6 +86,12 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("HasNativeRenameSheetMenuItem &&");
         script.Should().Contain("HasNativeTabColorMenuItem &&");
         script.Should().Contain("HasFormatPainterButton &&");
+        script.Should().Contain("HasClearButton &&");
+        script.Should().Contain("HasClearAllMenuItem &&");
+        script.Should().Contain("HasClearFormatsMenuItem &&");
+        script.Should().Contain("HasClearContentsMenuItem &&");
+        script.Should().Contain("HasClearCommentsMenuItem &&");
+        script.Should().Contain("HasClearHyperlinksMenuItem &&");
         script.Should().Contain("HasBordersButton &&");
         script.Should().Contain("HasMergeAndCenterButton &&");
         script.Should().Contain("HasFocusableSheetTab &&");
@@ -89,14 +107,32 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("HasNativeUngroupSheetsMenuItem &&");
         script.Should().Contain("HasNativeDeleteSheetMenuItem &&");
         script.Should().Contain("HasNativeFormatPainterMenuItem &&");
+        script.Should().Contain("HasNativeClearMenuItem &&");
+        script.Should().Contain("HasNativeClearAllMenuItem &&");
+        script.Should().Contain("HasNativeClearFormatsMenuItem &&");
+        script.Should().Contain("HasNativeClearContentsMenuItem &&");
+        script.Should().Contain("HasNativeClearCommentsMenuItem &&");
+        script.Should().Contain("HasNativeClearHyperlinksMenuItem &&");
         script.Should().Contain("HasNativeBordersMenuItem &&");
         script.Should().Contain("NativeBordersPresetCount == Enum.GetValues<CellBorderPreset>().Length");
         script.Should().Contain("HasNativeMergeAndCenterMenuItem &&");
         script.Should().Contain("HasNativeUnmergeCellsMenuItem &&");
         script.Should().Contain("toolbar_format_painter_button=");
+        script.Should().Contain("toolbar_clear_button=");
+        script.Should().Contain("toolbar_clear_all_menu_item=");
+        script.Should().Contain("toolbar_clear_formats_menu_item=");
+        script.Should().Contain("toolbar_clear_contents_menu_item=");
+        script.Should().Contain("toolbar_clear_comments_menu_item=");
+        script.Should().Contain("toolbar_clear_hyperlinks_menu_item=");
         script.Should().Contain("toolbar_borders_button=");
         script.Should().Contain("toolbar_merge_and_center_button=");
         script.Should().Contain("native_format_painter_menu_item=");
+        script.Should().Contain("native_clear_menu_item=");
+        script.Should().Contain("native_clear_all_menu_item=");
+        script.Should().Contain("native_clear_formats_menu_item=");
+        script.Should().Contain("native_clear_contents_menu_item=");
+        script.Should().Contain("native_clear_comments_menu_item=");
+        script.Should().Contain("native_clear_hyperlinks_menu_item=");
         script.Should().Contain("native_borders_menu_item=");
         script.Should().Contain("native_borders_preset_count=");
         script.Should().Contain("native_merge_and_center_menu_item=");
@@ -558,6 +594,12 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "external_image_clipboard_picture_png_bytes=[1-9]" "$artifact_root/launch.txt"
                       grep -q "new_sheet_button=true" "$artifact_root/launch.txt"
                       grep -q "toolbar_format_painter_button=true" "$artifact_root/launch.txt"
+                      grep -q "toolbar_clear_button=true" "$artifact_root/launch.txt"
+                      grep -q "toolbar_clear_all_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "toolbar_clear_formats_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "toolbar_clear_contents_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "toolbar_clear_comments_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "toolbar_clear_hyperlinks_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "toolbar_borders_button=true" "$artifact_root/launch.txt"
                       grep -q "toolbar_merge_and_center_button=true" "$artifact_root/launch.txt"
                       grep -q "native_file_menu=true" "$artifact_root/launch.txt"
@@ -612,7 +654,12 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_paste_special_picture_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_paste_special_linked_picture_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_select_all_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_clear_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_clear_all_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_clear_formats_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_clear_contents_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_clear_comments_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_clear_hyperlinks_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_bold_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_fill_color_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_font_color_menu_item=true" "$artifact_root/launch.txt"
@@ -736,6 +783,30 @@ public sealed class MacOsAppReadinessPreflightTests
                     editMenu.Items.Add(_formatPainterMenuItem);
                     _formatPainterButton.IsEnabled = isIdle;
                     _formatPainterMenuItem.IsEnabled = _formatPainterButton.IsEnabled;
+                    _clearButton.Content = "Clear";
+                    AutomationProperties.SetAutomationId(_clearButton, "HomeClearButton");
+                    AutomationProperties.SetHelpText(_clearButton, "Clear contents, formatting, comments, hyperlinks, or all cell state from the selected range.");
+                    _clearButton.Flyout = CreateClearFlyout();
+                    _clearAllFlyoutItem.Header = "Clear All";
+                    _clearFormatsFlyoutItem.Header = "Clear Formats";
+                    _clearContentsFlyoutItem.Header = "Clear Contents";
+                    _clearCommentsFlyoutItem.Header = "Clear Comments and Notes";
+                    _clearHyperlinksFlyoutItem.Header = "Clear Hyperlinks";
+                    _clearMenuItem.Header = "Clear";
+                    _clearMenuItem.Menu = CreateNativeClearMenu();
+                    _clearAllMenuItem.Header = "Clear All";
+                    _clearAllMenuItem.Click += (_, _) => ClearSelectedRangeAll();
+                    _clearFormatsMenuItem.Header = "Clear Formats";
+                    _clearFormatsMenuItem.Click += (_, _) => ClearSelectedRangeFormats();
+                    _clearContentsMenuItem.Header = "Clear Contents";
+                    _clearContentsMenuItem.Click += (_, _) => ClearSelectedRangeContents();
+                    _clearCommentsMenuItem.Header = "Clear Comments and Notes";
+                    _clearCommentsMenuItem.Click += (_, _) => ClearSelectedRangeComments();
+                    _clearHyperlinksMenuItem.Header = "Clear Hyperlinks";
+                    _clearHyperlinksMenuItem.Click += (_, _) => ClearSelectedRangeHyperlinks();
+                    editMenu.Items.Add(_clearMenuItem);
+                    _clearButton.IsEnabled = isIdle;
+                    _clearMenuItem.IsEnabled = _clearButton.IsEnabled;
                     _bordersButton.Flyout = CreateBorderPresetFlyout();
                     AutomationProperties.SetAutomationId(_bordersButton, "HomeBordersButton");
                     AutomationProperties.SetHelpText(_bordersButton, "Apply or change borders on the selected cells.");
@@ -1041,6 +1112,10 @@ public sealed class MacOsAppReadinessPreflightTests
                     _zoomText.Focusable;
                     HasFormatPainterButton: _formatPainterButton.Content?.ToString() == "Format Painter";
                     HasNativeFormatPainterMenuItem: HasNativeMenuItem(_formatPainterMenuItem, "Format Painter", requireGesture: false);
+                    HasClearButton: _clearButton.Content?.ToString() == "Clear";
+                    HasClearAllMenuItem: HasToolbarMenuItem(_clearAllFlyoutItem, "Clear All");
+                    HasNativeClearMenuItem: HasNativeMenuItem(_clearMenuItem, "Clear", requireGesture: false);
+                    HasNativeClearHyperlinksMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, "Clear Hyperlinks");
                     HasBordersButton: _bordersButton.Content?.ToString() == "Borders";
                     HasNativeBordersMenuItem: HasNativeMenuItem(_bordersMenuItem, "Borders", requireGesture: false);
                     NativeBordersPresetCount: nativeBordersPresetCount;
@@ -1086,6 +1161,24 @@ public sealed class MacOsAppReadinessPreflightTests
                 private void CancelFormatPainter()
                 {
                     _session.CancelFormatPainter();
+                }
+                private MenuFlyout CreateClearFlyout() => new();
+                private NativeMenu CreateNativeClearMenu() => new();
+                private void ClearSelectedRangeAll()
+                {
+                    _session.ClearSelectedRangeAll();
+                }
+                private void ClearSelectedRangeFormats()
+                {
+                    _session.ClearSelectedRangeFormats();
+                }
+                private void ClearSelectedRangeComments()
+                {
+                    _session.ClearSelectedRangeComments();
+                }
+                private void ClearSelectedRangeHyperlinks()
+                {
+                    _session.ClearSelectedRangeHyperlinks();
                 }
                 private void ApplySelectedRangeBorderPreset(CellBorderPreset preset)
                 {
@@ -1255,6 +1348,12 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativeClearTabColorMenuItem &&
                     NativeTabColorSwatchCount == CellColorPalettePlanner.BuildDefaultSwatches().Count &&
                     HasFormatPainterButton &&
+                    HasClearButton &&
+                    HasClearAllMenuItem &&
+                    HasClearFormatsMenuItem &&
+                    HasClearContentsMenuItem &&
+                    HasClearCommentsMenuItem &&
+                    HasClearHyperlinksMenuItem &&
                     HasBordersButton &&
                     HasMergeAndCenterButton &&
                     HasFocusableSheetTab &&
@@ -1297,6 +1396,12 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativePasteSpecialUnicodeTextMenuItem &&
                     HasNativePasteSpecialPictureMenuItem &&
                     HasNativePasteSpecialLinkedPictureMenuItem &&
+                    HasNativeClearMenuItem &&
+                    HasNativeClearAllMenuItem &&
+                    HasNativeClearFormatsMenuItem &&
+                    HasNativeClearContentsMenuItem &&
+                    HasNativeClearCommentsMenuItem &&
+                    HasNativeClearHyperlinksMenuItem &&
                     HasNativeBordersMenuItem &&
                     NativeBordersPresetCount == Enum.GetValues<CellBorderPreset>().Length &&
                     HasNativeMergeAndCenterMenuItem &&
@@ -1321,6 +1426,12 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativeClearTabColorMenuItem { get; }
                 private int NativeTabColorSwatchCount { get; }
                 private bool HasFormatPainterButton { get; }
+                private bool HasClearButton { get; }
+                private bool HasClearAllMenuItem { get; }
+                private bool HasClearFormatsMenuItem { get; }
+                private bool HasClearContentsMenuItem { get; }
+                private bool HasClearCommentsMenuItem { get; }
+                private bool HasClearHyperlinksMenuItem { get; }
                 private bool HasBordersButton { get; }
                 private bool HasMergeAndCenterButton { get; }
                 private bool HasFocusableSheetTab { get; }
@@ -1365,6 +1476,12 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativePasteSpecialPictureMenuItem { get; }
                 private bool HasNativePasteSpecialLinkedPictureMenuItem { get; }
                 private bool HasNativeFormatPainterMenuItem { get; }
+                private bool HasNativeClearMenuItem { get; }
+                private bool HasNativeClearAllMenuItem { get; }
+                private bool HasNativeClearFormatsMenuItem { get; }
+                private bool HasNativeClearContentsMenuItem { get; }
+                private bool HasNativeClearCommentsMenuItem { get; }
+                private bool HasNativeClearHyperlinksMenuItem { get; }
                 private bool HasNativeBordersMenuItem { get; }
                 private bool HasNativeMergeAndCenterMenuItem { get; }
                 private bool HasNativeUnmergeCellsMenuItem { get; }
@@ -1372,7 +1489,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 public int ExternalImageClipboardPicturePngByteCount { get; }
                 public int NativeBordersPresetCount { get; }
                 public int NativeCellStylesPresetCount { get; }
-                public string Report => "external_image_clipboard_paste_required= external_image_clipboard_paste= external_image_clipboard_picture_count= external_image_clipboard_picture_png_bytes= native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= toolbar_format_painter_button= toolbar_borders_button= toolbar_merge_and_center_button= focusable_sheet_tab= focusable_active_sheet_tab= shell_focus_cycle_targets= sheet_tab_context_keyboard_help= sheet_tab_context_rename_menu_item= sheet_tab_context_tab_color_menu_item= sheet_tab_context_no_color_menu_item= sheet_tab_context_select_all_sheets_menu_item= sheet_tab_context_ungroup_sheets_menu_item= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_select_all_sheets_menu_item= native_ungroup_sheets_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_format_painter_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_borders_menu_item= native_borders_preset_count= native_merge_and_center_menu_item= native_unmerge_cells_menu_item= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+                public string Report => "external_image_clipboard_paste_required= external_image_clipboard_paste= external_image_clipboard_picture_count= external_image_clipboard_picture_png_bytes= native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= toolbar_format_painter_button= toolbar_clear_button= toolbar_clear_all_menu_item= toolbar_clear_formats_menu_item= toolbar_clear_contents_menu_item= toolbar_clear_comments_menu_item= toolbar_clear_hyperlinks_menu_item= toolbar_borders_button= toolbar_merge_and_center_button= focusable_sheet_tab= focusable_active_sheet_tab= shell_focus_cycle_targets= sheet_tab_context_keyboard_help= sheet_tab_context_rename_menu_item= sheet_tab_context_tab_color_menu_item= sheet_tab_context_no_color_menu_item= sheet_tab_context_select_all_sheets_menu_item= sheet_tab_context_ungroup_sheets_menu_item= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_select_all_sheets_menu_item= native_ungroup_sheets_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_format_painter_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_clear_menu_item= native_clear_all_menu_item= native_clear_formats_menu_item= native_clear_contents_menu_item= native_clear_comments_menu_item= native_clear_hyperlinks_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_borders_menu_item= native_borders_preset_count= native_merge_and_center_menu_item= native_unmerge_cells_menu_item= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
             }
 
             internal sealed class MacOsLaunchSmokeCoordinator
@@ -1537,6 +1654,17 @@ public sealed class MacOsAppReadinessPreflightTests
                 CreateFormatPainterCommand(sourceSheet, sourceRange, targetRange)
                 private IWorkbookCommand CreateFormatPainterCommand(Sheet sourceSheet, GridRange sourceRange, GridRange targetRange)
                 FormatPainterCommandFactory.Create(
+                public WorkbookCellEditResult ClearSelectedRangeAll()
+                public WorkbookCellEditResult ClearSelectedRangeFormats()
+                public WorkbookCellEditResult ClearSelectedRangeComments()
+                public WorkbookCellEditResult ClearSelectedRangeHyperlinks()
+                private IWorkbookCommand CreateClearAllCommand(GridRange range)
+                new ClearContentsCommand(sheetId, sheetRange)
+                CellStyleDiffPlanner.ClearFormatsDiff()
+                new ClearConditionalFormatsCommand(sheetId, sheetRange)
+                new ClearDataValidationCommand(sheetId, sheetRange)
+                new ClearCommentsCommand(sheetId, sheetRange)
+                new ClearHyperlinksCommand(sheetId, sheetRange)
                 public WorkbookCellEditResult SetSelectedRangeBorderPreset(CellBorderPreset preset)
                 CreateBorderPresetCommand(range, preset)
                 CellBorderPresetPlanner.Plan(preset, range, range.Start)

@@ -81,6 +81,12 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool IsOpening,
     bool HasNewSheetButton,
     bool HasFormatPainterButton,
+    bool HasClearButton,
+    bool HasClearAllMenuItem,
+    bool HasClearFormatsMenuItem,
+    bool HasClearContentsMenuItem,
+    bool HasClearCommentsMenuItem,
+    bool HasClearHyperlinksMenuItem,
     bool HasBordersButton,
     bool HasMergeAndCenterButton,
     bool HasFocusableSheetTab,
@@ -140,7 +146,12 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativePasteSpecialPictureMenuItem,
     bool HasNativePasteSpecialLinkedPictureMenuItem,
     bool HasNativeSelectAllMenuItem,
+    bool HasNativeClearMenuItem,
+    bool HasNativeClearAllMenuItem,
+    bool HasNativeClearFormatsMenuItem,
     bool HasNativeClearContentsMenuItem,
+    bool HasNativeClearCommentsMenuItem,
+    bool HasNativeClearHyperlinksMenuItem,
     bool HasNativeBoldMenuItem,
     bool HasNativeItalicMenuItem,
     bool HasNativeUnderlineMenuItem,
@@ -206,6 +217,12 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         ViewportColumnCount > 0 &&
         HasNewSheetButton &&
         HasFormatPainterButton &&
+        HasClearButton &&
+        HasClearAllMenuItem &&
+        HasClearFormatsMenuItem &&
+        HasClearContentsMenuItem &&
+        HasClearCommentsMenuItem &&
+        HasClearHyperlinksMenuItem &&
         HasBordersButton &&
         HasMergeAndCenterButton &&
         HasFocusableSheetTab &&
@@ -265,7 +282,12 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativePasteSpecialPictureMenuItem &&
         HasNativePasteSpecialLinkedPictureMenuItem &&
         HasNativeSelectAllMenuItem &&
+        HasNativeClearMenuItem &&
+        HasNativeClearAllMenuItem &&
+        HasNativeClearFormatsMenuItem &&
         HasNativeClearContentsMenuItem &&
+        HasNativeClearCommentsMenuItem &&
+        HasNativeClearHyperlinksMenuItem &&
         HasNativeBoldMenuItem &&
         HasNativeItalicMenuItem &&
         HasNativeUnderlineMenuItem &&
@@ -419,6 +441,12 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"is_opening={FormatBool(snapshot.IsOpening)}",
                 $"new_sheet_button={FormatBool(snapshot.HasNewSheetButton)}",
                 $"toolbar_format_painter_button={FormatBool(snapshot.HasFormatPainterButton)}",
+                $"toolbar_clear_button={FormatBool(snapshot.HasClearButton)}",
+                $"toolbar_clear_all_menu_item={FormatBool(snapshot.HasClearAllMenuItem)}",
+                $"toolbar_clear_formats_menu_item={FormatBool(snapshot.HasClearFormatsMenuItem)}",
+                $"toolbar_clear_contents_menu_item={FormatBool(snapshot.HasClearContentsMenuItem)}",
+                $"toolbar_clear_comments_menu_item={FormatBool(snapshot.HasClearCommentsMenuItem)}",
+                $"toolbar_clear_hyperlinks_menu_item={FormatBool(snapshot.HasClearHyperlinksMenuItem)}",
                 $"toolbar_borders_button={FormatBool(snapshot.HasBordersButton)}",
                 $"toolbar_merge_and_center_button={FormatBool(snapshot.HasMergeAndCenterButton)}",
                 $"focusable_sheet_tab={FormatBool(snapshot.HasFocusableSheetTab)}",
@@ -478,7 +506,12 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_paste_special_picture_menu_item={FormatBool(snapshot.HasNativePasteSpecialPictureMenuItem)}",
                 $"native_paste_special_linked_picture_menu_item={FormatBool(snapshot.HasNativePasteSpecialLinkedPictureMenuItem)}",
                 $"native_select_all_menu_item={FormatBool(snapshot.HasNativeSelectAllMenuItem)}",
+                $"native_clear_menu_item={FormatBool(snapshot.HasNativeClearMenuItem)}",
+                $"native_clear_all_menu_item={FormatBool(snapshot.HasNativeClearAllMenuItem)}",
+                $"native_clear_formats_menu_item={FormatBool(snapshot.HasNativeClearFormatsMenuItem)}",
                 $"native_clear_contents_menu_item={FormatBool(snapshot.HasNativeClearContentsMenuItem)}",
+                $"native_clear_comments_menu_item={FormatBool(snapshot.HasNativeClearCommentsMenuItem)}",
+                $"native_clear_hyperlinks_menu_item={FormatBool(snapshot.HasNativeClearHyperlinksMenuItem)}",
                 $"native_bold_menu_item={FormatBool(snapshot.HasNativeBoldMenuItem)}",
                 $"native_italic_menu_item={FormatBool(snapshot.HasNativeItalicMenuItem)}",
                 $"native_underline_menu_item={FormatBool(snapshot.HasNativeUnderlineMenuItem)}",

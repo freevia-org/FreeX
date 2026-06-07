@@ -146,6 +146,12 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"external_image_clipboard_picture_png_bytes=[1-9]\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"new_sheet_button=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"toolbar_format_painter_button=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"toolbar_clear_button=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"toolbar_clear_all_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"toolbar_clear_formats_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"toolbar_clear_contents_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"toolbar_clear_comments_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"toolbar_clear_hyperlinks_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"toolbar_borders_button=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"focusable_sheet_tab=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"focusable_active_sheet_tab=true\" \"$launch_smoke_report\"");
@@ -204,7 +210,12 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"native_paste_special_unicode_text_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_paste_special_picture_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_paste_special_linked_picture_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_clear_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_clear_all_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_clear_formats_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_clear_contents_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_clear_comments_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_clear_hyperlinks_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_bold_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_italic_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_underline_menu_item=true\" \"$launch_smoke_report\"");
