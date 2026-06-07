@@ -174,6 +174,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
             HasWorkbookProtectionSchemaIssues: false,
             HasWorkbookWebPublishingSchemaIssues: false,
+            HasWorkbookSmartTagSchemaIssues: false,
             HasWorksheetRelationshipMarkerSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
@@ -249,6 +250,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
             HasWorkbookProtectionSchemaIssues: false,
             HasWorkbookWebPublishingSchemaIssues: false,
+            HasWorkbookSmartTagSchemaIssues: false,
             HasWorksheetRelationshipMarkerSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
@@ -296,6 +298,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
             HasWorkbookProtectionSchemaIssues: false,
             HasWorkbookWebPublishingSchemaIssues: false,
+            HasWorkbookSmartTagSchemaIssues: false,
             HasWorksheetRelationshipMarkerSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
@@ -339,6 +342,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
             HasWorkbookProtectionSchemaIssues: false,
             HasWorkbookWebPublishingSchemaIssues: false,
+            HasWorkbookSmartTagSchemaIssues: false,
             HasWorksheetRelationshipMarkerSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
@@ -411,6 +415,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
             HasWorkbookProtectionSchemaIssues: false,
             HasWorkbookWebPublishingSchemaIssues: false,
+            HasWorkbookSmartTagSchemaIssues: false,
             HasWorksheetRelationshipMarkerSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
@@ -539,6 +544,53 @@ public sealed class XlsxLoadPackageStreamTests
     }
 
     [Fact]
+    public void ClosedXmlLoadSanitizer_NormalizesWorkbookSmartTagMetadata()
+    {
+        using var package = CreatePackageWithWorkbook(
+            """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <sheets/>
+              <smartTagPr embed=" 1 " show="all" customSmartTagFlag="removed">
+                <nativeSmartTagChild/>
+              </smartTagPr>
+              <smartTagTypes customSmartTagTypesFlag="removed">
+                <smartTagType namespaceUri=" urn:freeX " name=" Smart " url=" https://example.invalid " customSmartTagTypeFlag="removed">
+                  <nativeSmartTagTypeChild/>
+                </smartTagType>
+                <smartTagType name="Removed"/>
+                <nativeSmartTagTypesChild/>
+              </smartTagTypes>
+            </workbook>
+            """);
+
+        using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(package);
+
+        sanitized.Should().NotBeSameAs(package);
+        using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/workbook.xml");
+
+        var smartTagPr = workbookXml.Root!.Element(workbookNs + "smartTagPr")!;
+        smartTagPr.Attribute("embed")!.Value.Should().Be("1");
+        smartTagPr.Attribute("show")!.Value.Should().Be("all");
+        smartTagPr.Attribute("customSmartTagFlag").Should().BeNull();
+        smartTagPr.Elements().Should().BeEmpty();
+
+        var smartTagTypes = workbookXml.Root!.Element(workbookNs + "smartTagTypes")!;
+        smartTagTypes.Attribute("customSmartTagTypesFlag").Should().BeNull();
+        smartTagTypes.Element(workbookNs + "nativeSmartTagTypesChild").Should().BeNull();
+        var smartTagType = smartTagTypes.Elements(workbookNs + "smartTagType")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        smartTagType.Attribute("namespaceUri")!.Value.Should().Be("urn:freeX");
+        smartTagType.Attribute("name")!.Value.Should().Be("Smart");
+        smartTagType.Attribute("url")!.Value.Should().Be("https://example.invalid");
+        smartTagType.Attribute("customSmartTagTypeFlag").Should().BeNull();
+        smartTagType.Elements().Should().BeEmpty();
+    }
+
+    [Fact]
     public void ClosedXmlLoadSanitizer_RemovesMergeCellsFromHintedWorksheets()
     {
         using var package = CreatePackageWithWorksheets(
@@ -583,6 +635,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
             HasWorkbookProtectionSchemaIssues: false,
             HasWorkbookWebPublishingSchemaIssues: false,
+            HasWorkbookSmartTagSchemaIssues: false,
             HasWorksheetRelationshipMarkerSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
