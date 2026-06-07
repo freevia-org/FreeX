@@ -5,9 +5,15 @@ namespace FreeX.Core.Commands;
 internal static class DrawingShapeCommandGuards
 {
     private const string DrawingShapeNotFoundMessage = "Drawing shape was not found.";
+    private const string InvalidDrawingShapeSizeMessage = "Shape size must be positive.";
 
     public static CommandOutcome? RejectIfEditObjectsBlocked(Sheet sheet) =>
         CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects);
+
+    public static CommandOutcome? RejectInvalidSize(double width, double height) =>
+        double.IsFinite(width) && double.IsFinite(height) && width > 0 && height > 0
+            ? null
+            : new CommandOutcome(false, InvalidDrawingShapeSizeMessage);
 
     public static CommandOutcome TryMoveZOrder(
         Sheet sheet,
