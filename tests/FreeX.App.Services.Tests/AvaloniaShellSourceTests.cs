@@ -654,6 +654,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("toolbar_clear_comments_menu_item={FormatBool(snapshot.HasClearCommentsMenuItem)}");
         smokeSource.Should().Contain("toolbar_clear_hyperlinks_menu_item={FormatBool(snapshot.HasClearHyperlinksMenuItem)}");
         smokeSource.Should().Contain("toolbar_borders_button={FormatBool(snapshot.HasBordersButton)}");
+        smokeSource.Should().Contain("toolbar_wrap_text_button={FormatBool(snapshot.HasWrapTextButton)}");
         smokeSource.Should().Contain("toolbar_merge_and_center_button={FormatBool(snapshot.HasMergeAndCenterButton)}");
         smokeSource.Should().Contain("native_borders_menu_item={FormatBool(snapshot.HasNativeBordersMenuItem)}");
         smokeSource.Should().Contain("native_borders_preset_count={snapshot.NativeBordersPresetCount}");
@@ -810,6 +811,7 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeAlignTopMenuItem: HasNativeMenuItem(_alignTopMenuItem, \"Align Top\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAlignMiddleMenuItem: HasNativeMenuItem(_alignMiddleMenuItem, \"Align Middle\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAlignBottomMenuItem: HasNativeMenuItem(_alignBottomMenuItem, \"Align Bottom\", requireGesture: false)");
+        windowSource.Should().Contain("HasWrapTextButton: _wrapTextButton.Content?.ToString() == \"Wrap\"");
         windowSource.Should().Contain("HasNativeWrapTextMenuItem: HasNativeMenuItem(_wrapTextMenuItem, \"Wrap Text\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeMergeAndCenterMenuItem: HasNativeMenuItem(_mergeAndCenterMenuItem, \"Merge & Center\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeUnmergeCellsMenuItem: HasNativeMenuItem(_unmergeCellsMenuItem, \"Unmerge Cells\", requireGesture: false)");
@@ -1865,6 +1867,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly ToggleButton _wrapTextButton = new();");
         source.Should().Contain("_wrapTextButton.Content = \"Wrap\";");
         source.Should().Contain("_wrapTextButton.Click += WrapTextButton_Click;");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_wrapTextButton, \"HomeWrapTextButton\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_wrapTextButton, \"Wrap text within the selected cells.\");");
         source.Should().Contain("_wrapTextButton.IsChecked = _session.IsSelectedRangeStartWrapText;");
         source.Should().Contain("_wrapTextButton.IsEnabled = isIdle;");
         source.Should().Contain("private void WrapTextButton_Click(object? sender, RoutedEventArgs e)");

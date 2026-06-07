@@ -1175,6 +1175,9 @@ public sealed class MainWindow : Window
         _wrapTextButton.Padding = new Thickness(10, 4);
         _wrapTextButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _wrapTextButton.Click += WrapTextButton_Click;
+        AutomationProperties.SetAutomationId(_wrapTextButton, "HomeWrapTextButton");
+        AutomationProperties.SetName(_wrapTextButton, "Wrap Text");
+        AutomationProperties.SetHelpText(_wrapTextButton, "Wrap text within the selected cells.");
 
         _mergeAndCenterButton.Content = "Merge & Center";
         _mergeAndCenterButton.Padding = new Thickness(10, 4);
@@ -5266,6 +5269,9 @@ public sealed class MainWindow : Window
             HasBordersButton: _bordersButton.Content?.ToString() == "Borders" &&
                 string.Equals(AutomationProperties.GetAutomationId(_bordersButton), "HomeBordersButton", StringComparison.Ordinal) &&
                 string.Equals(AutomationProperties.GetHelpText(_bordersButton), "Apply or change borders on the selected cells.", StringComparison.Ordinal),
+            HasWrapTextButton: _wrapTextButton.Content?.ToString() == "Wrap" &&
+                string.Equals(AutomationProperties.GetAutomationId(_wrapTextButton), "HomeWrapTextButton", StringComparison.Ordinal) &&
+                string.Equals(AutomationProperties.GetHelpText(_wrapTextButton), "Wrap text within the selected cells.", StringComparison.Ordinal),
             HasMergeAndCenterButton: _mergeAndCenterButton.Content?.ToString() == "Merge & Center" &&
                 string.Equals(AutomationProperties.GetAutomationId(_mergeAndCenterButton), "HomeMergeAndCenterButton", StringComparison.Ordinal) &&
                 string.Equals(AutomationProperties.GetHelpText(_mergeAndCenterButton), "Merge and center the selected cells.", StringComparison.Ordinal),

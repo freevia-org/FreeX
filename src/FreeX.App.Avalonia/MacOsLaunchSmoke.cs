@@ -100,6 +100,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasClearCommentsMenuItem,
     bool HasClearHyperlinksMenuItem,
     bool HasBordersButton,
+    bool HasWrapTextButton,
     bool HasMergeAndCenterButton,
     bool HasFocusableSheetTab,
     bool HasFocusableActiveSheetTab,
@@ -260,6 +261,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasClearCommentsMenuItem &&
         HasClearHyperlinksMenuItem &&
         HasBordersButton &&
+        HasWrapTextButton &&
         HasMergeAndCenterButton &&
         HasFocusableSheetTab &&
         HasFocusableActiveSheetTab &&
@@ -508,6 +510,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"toolbar_clear_comments_menu_item={FormatBool(snapshot.HasClearCommentsMenuItem)}",
                 $"toolbar_clear_hyperlinks_menu_item={FormatBool(snapshot.HasClearHyperlinksMenuItem)}",
                 $"toolbar_borders_button={FormatBool(snapshot.HasBordersButton)}",
+                $"toolbar_wrap_text_button={FormatBool(snapshot.HasWrapTextButton)}",
                 $"toolbar_merge_and_center_button={FormatBool(snapshot.HasMergeAndCenterButton)}",
                 $"focusable_sheet_tab={FormatBool(snapshot.HasFocusableSheetTab)}",
                 $"focusable_active_sheet_tab={FormatBool(snapshot.HasFocusableActiveSheetTab)}",
