@@ -59,8 +59,8 @@ public sealed partial class XlsxBroaderRetentionChecksTests
         var sheetFormat = worksheetXml.Root.Element(MainNs + "sheetFormatPr");
         sheetFormat.Should().NotBeNull();
         sheetFormat!.Attribute("baseColWidth")!.Value.Should().Be("12");
-        sheetFormat.Attribute("nativeSheetFormatAttr")!.Value.Should().Be("kept");
-        sheetFormat.Element(FxNs + "sheetFormatNativeChild")!.Attribute("id")!.Value.Should().Be("sheet-format");
+        sheetFormat.Attribute("nativeSheetFormatAttr").Should().BeNull();
+        sheetFormat.Element(FxNs + "sheetFormatNativeChild").Should().BeNull();
 
         var printOptions = worksheetXml.Root.Element(MainNs + "printOptions");
         printOptions.Should().NotBeNull();

@@ -17,11 +17,13 @@ internal static class XlsxWorkbookSchemaNormalizer
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XlsxWorksheetDimensionNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetCalculationPropertyNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetSheetFormatNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetSheetViewNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetPhoneticPropertyNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetCellWatchesNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetCustomPropertiesNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetIgnoredErrorsNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetHyperlinkNormalizer.NormalizeWorksheets(archive);
         NormalizeWorksheets(archive, workbookNs);
 
         var workbookEntry = archive.GetEntry("xl/workbook.xml");

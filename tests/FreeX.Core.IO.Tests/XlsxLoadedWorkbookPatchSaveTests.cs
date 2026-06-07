@@ -553,7 +553,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
             .Equal(ReadPackageEntry(sourceBytes, "xl/styles.xml"));
         ReadHyperlinksAttribute(savedBytes, "xl/worksheets/sheet1.xml", "nativeHyperlinksAttr")
             .Should()
-            .Be("kept");
+            .BeNull();
         ReadHyperlinkAttribute(savedBytes, "xl/worksheets/sheet1.xml", "A1", "location")
             .Should()
             .Be("Data!C3");
@@ -565,7 +565,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
             .Be("Jump display");
         ReadHyperlinkAttribute(savedBytes, "xl/worksheets/sheet1.xml", "A1", "customAttr")
             .Should()
-            .Be("kept-link");
+            .BeNull();
 
         using var reloadStream = new MemoryStream(savedBytes, writable: false);
         var reloadedSheet = adapter.Load(reloadStream).GetSheetAt(0);
