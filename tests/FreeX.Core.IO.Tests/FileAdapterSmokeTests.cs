@@ -18008,6 +18008,54 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_RebindsWorksheetCustomPropertyRelationshipIdCollision()
+    {
+        var workbook = new Workbook("WorksheetCustomPropertiesRelationshipCollision");
+        var sheet = workbook.AddSheet("Data");
+        var hyperlinkAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(hyperlinkAddress, new TextValue("custom property"));
+        sheet.Hyperlinks[hyperlinkAddress] = "https://example.com/custom-property";
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetCustomPropertySidecarWithCollidingRelationship(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var customProperty = worksheetXml.Root!
+            .Element(worksheetNs + "customProperties")!
+            .Elements(worksheetNs + "customPr")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        var customPropertyRelationshipId = customProperty.Attribute(relNs + "id")!.Value;
+        var hyperlinkRelationshipId = worksheetXml.Root!
+            .Element(worksheetNs + "hyperlinks")!
+            .Element(worksheetNs + "hyperlink")!
+            .Attribute(relNs + "id")!
+            .Value;
+
+        customProperty.Attribute("name")!.Value.Should().Be("FreeXNativeProperty");
+        customPropertyRelationshipId.Should().NotBe(hyperlinkRelationshipId);
+        AssertWorksheetCustomPropertyRelationship(archive, customPropertyRelationshipId, "authored-custom-property.bin");
+        ReadPackageEntry(saved.ToArray(), "xl/customProperty/authored-custom-property.bin")
+            .Should()
+            .Equal(Encoding.Unicode.GetBytes("authored sidecar"));
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadsWorksheetCustomPropertiesIntoSheetModel()
     {
         var workbook = new Workbook("WorksheetCustomPropertiesLoadTest");
@@ -23748,6 +23796,63 @@ public partial class FileAdapterSmokeTests
                     new XAttribute("id", "1"),
                     new XAttribute("unsupportedAttr", "kept"))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetCustomPropertySidecarWithCollidingRelationship(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            const string relationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customProperty";
+            const string sidecarPath = "xl/customProperty/authored-custom-property.bin";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var hyperlink = worksheetXml.Root!
+                .Element(worksheetNs + "hyperlinks")!
+                .Element(worksheetNs + "hyperlink")!;
+            var sourceHyperlinkRelId = hyperlink.Attribute(relNs + "id")!.Value;
+            hyperlink.SetAttributeValue(relNs + "id", "rIdHyperlink");
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "customProperties",
+                new XElement(
+                    worksheetNs + "customPr",
+                    new XAttribute("name", "FreeXNativeProperty"),
+                    new XAttribute(relNs + "id", "rId1"))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+            var relsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+            var hyperlinkRel = relsXml.Root!
+                .Elements(packageRelNs + "Relationship")
+                .Single(element => element.Attribute("Id")?.Value == sourceHyperlinkRelId);
+            hyperlinkRel.SetAttributeValue("Id", "rIdHyperlink");
+            relsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rId1"),
+                new XAttribute("Type", relationshipType),
+                new XAttribute("Target", "../customProperty/authored-custom-property.bin")));
+            ReplacePackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels", relsXml);
+
+            archive.GetEntry(sidecarPath)?.Delete();
+            var sidecar = archive.CreateEntry(sidecarPath);
+            using (var stream = sidecar.Open())
+            {
+                var bytes = Encoding.Unicode.GetBytes("authored sidecar");
+                stream.Write(bytes, 0, bytes.Length);
+            }
+
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(
+                contentTypesXml,
+                contentTypeNs,
+                "/xl/customProperty/authored-custom-property.bin",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.customProperty");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
         }
 
         packageStream.Position = 0;
