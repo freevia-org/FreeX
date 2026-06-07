@@ -252,6 +252,20 @@ internal static partial class XlsxWorksheetMetadataPreserver
                         changed = true;
                     }
 
+                    if (RebindWorksheetCustomPropertyRelationships(
+                        sourceArchive,
+                        targetArchive,
+                        sourceBlock,
+                        targetRoot,
+                        sourceWorksheetPath,
+                        targetWorksheetPath,
+                        workbookNs,
+                        relNs,
+                        packageRelNs))
+                    {
+                        changed = true;
+                    }
+
                     continue;
                 }
                 if (sourceBlock.Name == workbookNs + "rowBreaks")
@@ -376,6 +390,11 @@ internal static partial class XlsxWorksheetMetadataPreserver
             context.RelNs,
             context.SourceSheets,
             context.TargetSheets,
+            context,
+            worksheetsWithPreservableSourceMetadata);
+        RebindWorksheetCustomPropertyRelationships(
+            sourceArchive,
+            targetArchive,
             context,
             worksheetsWithPreservableSourceMetadata);
     }
