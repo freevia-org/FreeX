@@ -2655,6 +2655,12 @@ public static partial class AccessibilityCheckerService
             case "STDEV.P":
                 kind = ConditionalFormulaAggregateKind.StdDevPopulation;
                 return true;
+            case "STDEVA":
+                kind = ConditionalFormulaAggregateKind.StdDevA;
+                return true;
+            case "STDEVPA":
+                kind = ConditionalFormulaAggregateKind.StdDevPA;
+                return true;
             case "VAR":
             case "VAR.S":
                 kind = ConditionalFormulaAggregateKind.VarianceSample;
@@ -2662,6 +2668,12 @@ public static partial class AccessibilityCheckerService
             case "VARP":
             case "VAR.P":
                 kind = ConditionalFormulaAggregateKind.VariancePopulation;
+                return true;
+            case "VARA":
+                kind = ConditionalFormulaAggregateKind.VarianceA;
+                return true;
+            case "VARPA":
+                kind = ConditionalFormulaAggregateKind.VariancePA;
                 return true;
             case "AVEDEV":
                 kind = ConditionalFormulaAggregateKind.AveDev;
@@ -2809,6 +2821,9 @@ public static partial class AccessibilityCheckerService
             case "DCOUNTA":
                 kind = ConditionalFormulaAggregateKind.DCountA;
                 return true;
+            case "DGET":
+                kind = ConditionalFormulaAggregateKind.DGet;
+                return true;
             case "DMAX":
                 kind = ConditionalFormulaAggregateKind.DMax;
                 return true;
@@ -2877,6 +2892,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaAggregateKind.DAverage or
             ConditionalFormulaAggregateKind.DCount or
             ConditionalFormulaAggregateKind.DCountA or
+            ConditionalFormulaAggregateKind.DGet or
             ConditionalFormulaAggregateKind.DMax or
             ConditionalFormulaAggregateKind.DMin or
             ConditionalFormulaAggregateKind.DProduct or
@@ -3695,8 +3711,12 @@ public static partial class AccessibilityCheckerService
         DevSq,
         StdDevSample,
         StdDevPopulation,
+        StdDevA,
+        StdDevPA,
         VarianceSample,
         VariancePopulation,
+        VarianceA,
+        VariancePA,
         AveDev,
         Kurt,
         Skew,
@@ -3743,6 +3763,7 @@ public static partial class AccessibilityCheckerService
         DAverage,
         DCount,
         DCountA,
+        DGet,
         DMax,
         DMin,
         DProduct,
@@ -24233,6 +24254,7 @@ public static partial class AccessibilityCheckerService
             {
                 ConditionalFormulaAggregateKind.DCount => new NumberValue(FormulaDatabaseAggregateNumericValues(matches).Count),
                 ConditionalFormulaAggregateKind.DCountA => new NumberValue(FormulaDatabaseAggregateNonBlankCount(matches)),
+                ConditionalFormulaAggregateKind.DGet => FormulaDatabaseAggregateSingleMatchResult(matches),
                 _ => FormulaDatabaseAggregateNumberResult(
                     operand.AggregateKind,
                     FormulaDatabaseAggregateNumericValues(matches))
@@ -24468,6 +24490,14 @@ public static partial class AccessibilityCheckerService
 
             return count;
         }
+
+        private static ScalarValue FormulaDatabaseAggregateSingleMatchResult(IReadOnlyList<ScalarValue> values) =>
+            values.Count switch
+            {
+                0 => ErrorValue.Value,
+                1 => values[0],
+                _ => ErrorValue.Num
+            };
 
         private static ScalarValue FormulaDatabaseAggregateNumberResult(
             ConditionalFormulaAggregateKind aggregateKind,
@@ -25376,8 +25406,12 @@ public static partial class AccessibilityCheckerService
                 ConditionalFormulaAggregateKind.DevSq when numericValues.Count > 0 => new NumberValue(DevSqFormulaNumbers(numericValues)),
                 ConditionalFormulaAggregateKind.StdDevSample when numericValues.Count > 1 => new NumberValue(StandardDeviationFormulaNumbers(numericValues, sample: true)),
                 ConditionalFormulaAggregateKind.StdDevPopulation when numericValues.Count > 0 => new NumberValue(StandardDeviationFormulaNumbers(numericValues, sample: false)),
+                ConditionalFormulaAggregateKind.StdDevA when numericValues.Count > 1 => new NumberValue(StandardDeviationFormulaNumbers(numericValues, sample: true)),
+                ConditionalFormulaAggregateKind.StdDevPA when numericValues.Count > 0 => new NumberValue(StandardDeviationFormulaNumbers(numericValues, sample: false)),
                 ConditionalFormulaAggregateKind.VarianceSample when numericValues.Count > 1 => new NumberValue(VarianceFormulaNumbers(numericValues, sample: true)),
                 ConditionalFormulaAggregateKind.VariancePopulation when numericValues.Count > 0 => new NumberValue(VarianceFormulaNumbers(numericValues, sample: false)),
+                ConditionalFormulaAggregateKind.VarianceA when numericValues.Count > 1 => new NumberValue(VarianceFormulaNumbers(numericValues, sample: true)),
+                ConditionalFormulaAggregateKind.VariancePA when numericValues.Count > 0 => new NumberValue(VarianceFormulaNumbers(numericValues, sample: false)),
                 ConditionalFormulaAggregateKind.AveDev when numericValues.Count > 0 => new NumberValue(AveDevFormulaNumbers(numericValues)),
                 ConditionalFormulaAggregateKind.Kurt => FormulaKurtAggregateResult(numericValues),
                 ConditionalFormulaAggregateKind.Skew => FormulaSkewAggregateResult(numericValues, population: false),
@@ -25834,6 +25868,10 @@ public static partial class AccessibilityCheckerService
         private static bool IsFormulaAValueAggregate(ConditionalFormulaAggregateKind aggregateKind) =>
             aggregateKind is
                 ConditionalFormulaAggregateKind.AverageA or
+                ConditionalFormulaAggregateKind.StdDevA or
+                ConditionalFormulaAggregateKind.StdDevPA or
+                ConditionalFormulaAggregateKind.VarianceA or
+                ConditionalFormulaAggregateKind.VariancePA or
                 ConditionalFormulaAggregateKind.MinA or
                 ConditionalFormulaAggregateKind.MaxA;
 
@@ -25847,8 +25885,12 @@ public static partial class AccessibilityCheckerService
                 ConditionalFormulaAggregateKind.DevSq or
                 ConditionalFormulaAggregateKind.StdDevSample or
                 ConditionalFormulaAggregateKind.StdDevPopulation or
+                ConditionalFormulaAggregateKind.StdDevA or
+                ConditionalFormulaAggregateKind.StdDevPA or
                 ConditionalFormulaAggregateKind.VarianceSample or
                 ConditionalFormulaAggregateKind.VariancePopulation or
+                ConditionalFormulaAggregateKind.VarianceA or
+                ConditionalFormulaAggregateKind.VariancePA or
                 ConditionalFormulaAggregateKind.AveDev or
                 ConditionalFormulaAggregateKind.Kurt or
                 ConditionalFormulaAggregateKind.Skew or
