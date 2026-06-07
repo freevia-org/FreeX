@@ -3866,6 +3866,112 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTypeFunctionComparisons()
+    {
+        AssertFormulaInfoScalarFunctionContrastLocations("TYPE($A1)=1", "B1", "B4", "B5");
+        AssertFormulaInfoScalarFunctionContrastLocations("TYPE($A1)=2", "B2", "B15");
+        AssertFormulaInfoScalarFunctionContrastLocations("TYPE($A1)=4", "B3", "B16");
+        AssertFormulaInfoScalarFunctionContrastLocations(
+            "TYPE($A1)=16",
+            "B6",
+            "B7",
+            "B8",
+            "B9",
+            "B10",
+            "B11",
+            "B12",
+            "B13",
+            "B14");
+        AssertFormulaInfoScalarFunctionContrastLocations("TYPE($A$1:$A$5)=64", FormulaInfoScalarAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatNFunctionConversionsWrappersAndPredicates()
+    {
+        AssertFormulaInfoScalarFunctionContrastLocations("N($A1)>0", "B1", "B3", "B4");
+        AssertFormulaInfoScalarFunctionContrastLocations("N($A1)=0", "B2", "B5", "B15", "B16");
+        AssertFormulaInfoScalarFunctionContrastLocations("AND(TYPE($A1)=1,N($A1)>0)", "B1", "B4");
+        AssertFormulaInfoScalarFunctionContrastLocations("IF(TYPE($A1)=2,N($A1)=0,FALSE)", "B2", "B15");
+        AssertFormulaInfoScalarFunctionContrastLocations(
+            "ISNUMBER(N($A1))",
+            "B1",
+            "B2",
+            "B3",
+            "B4",
+            "B5",
+            "B15",
+            "B16");
+        AssertFormulaInfoScalarFunctionContrastLocations(
+            "ISERROR(N($A1))",
+            "B6",
+            "B7",
+            "B8",
+            "B9",
+            "B10",
+            "B11",
+            "B12",
+            "B13",
+            "B14");
+        AssertFormulaInfoScalarFunctionContrastLocations("ISNA(N($A1))", "B6");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatErrorTypeFunctionCodesAndPredicates()
+    {
+        AssertFormulaInfoScalarFunctionContrastLocations("ERROR.TYPE($A1)=7", "B6");
+        AssertFormulaInfoScalarFunctionContrastLocations("ERROR.TYPE($A1)=2", "B7");
+        AssertFormulaInfoScalarFunctionContrastLocations(
+            "ERROR.TYPE($A1)>=8",
+            "B8",
+            "B9",
+            "B10",
+            "B11",
+            "B12",
+            "B13",
+            "B14");
+        AssertFormulaInfoScalarFunctionContrastLocations(
+            "ISNA(ERROR.TYPE($A1))",
+            "B1",
+            "B2",
+            "B3",
+            "B4",
+            "B5",
+            "B15",
+            "B16");
+        AssertFormulaInfoScalarFunctionContrastLocations(
+            "AND(ISNUMBER(ERROR.TYPE($A1)),ERROR.TYPE($A1)>=8)",
+            "B8",
+            "B9",
+            "B10",
+            "B11",
+            "B12",
+            "B13",
+            "B14");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatInfoScalarFunctionRangeAggregateCases()
+    {
+        AssertFormulaInfoScalarFunctionContrastLocations("SUM(N($A$1:$A$5))=45043", FormulaInfoScalarAllLocations);
+        AssertFormulaInfoScalarFunctionContrastLocations("SUMPRODUCT(N($A$1:$A$5),$C$1:$C$5)=180045", FormulaInfoScalarAllLocations);
+        AssertFormulaInfoScalarFunctionContrastLocations("SUM(ERROR.TYPE($A$6:$A$14))=86", FormulaInfoScalarAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatInfoScalarFunctionUnsupportedOrErrorCases()
+    {
+        AssertFormulaInfoScalarFunctionContrastLocations("TYPE()=1");
+        AssertFormulaInfoScalarFunctionContrastLocations("TYPE($A1,1)=1");
+        AssertFormulaInfoScalarFunctionContrastLocations("N()=0");
+        AssertFormulaInfoScalarFunctionContrastLocations("N($A1,1)=0");
+        AssertFormulaInfoScalarFunctionContrastLocations("ERROR.TYPE()=7");
+        AssertFormulaInfoScalarFunctionContrastLocations("ERROR.TYPE($A1,1)=7");
+        AssertFormulaInfoScalarFunctionContrastLocations("N($A$1:$A$5)=0");
+        AssertFormulaInfoScalarFunctionContrastLocations("ERROR.TYPE($A$6:$A$7)=7");
+        AssertFormulaInfoScalarFunctionContrastLocations("SUM(ERROR.TYPE($A$1:$A$7))=9");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatArithmeticComparison()
     {
         AssertFormulaArithmeticContrastLocations("($A1+25-50)*2/5>=40", "B4");
@@ -4955,6 +5061,50 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 3), new BoolValue(flag));
     }
 
+    private static Workbook CreateFormulaInfoScalarFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 16, 2);
+
+        SetFormulaInfoScalarFunctionContrastRow(sheet, 1, new NumberValue(42), "Number", 1);
+        SetFormulaInfoScalarFunctionContrastRow(sheet, 2, new TextValue("hello"), "Text", 2);
+        SetFormulaInfoScalarFunctionContrastRow(sheet, 3, new BoolValue(true), "TRUE", 3);
+        SetFormulaInfoScalarFunctionContrastRow(sheet, 4, new DateTimeValue(45000), "Date serial", 4);
+        SetFormulaInfoScalarFunctionContrastRow(sheet, 5, null, "Blank", 5);
+        SetFormulaInfoScalarFunctionContrastRow(sheet, 6, ErrorValue.NA, "NA error", 1);
+        SetFormulaInfoScalarFunctionContrastRow(sheet, 7, ErrorValue.DivByZero, "Division error", 1);
+        SetFormulaInfoScalarFunctionContrastRow(sheet, 8, ErrorValue.Spill, "Spill error", 1);
+        SetFormulaInfoScalarFunctionContrastRow(sheet, 9, new ErrorValue("#CONNECT!"), "Connect error", 1);
+        SetFormulaInfoScalarFunctionContrastRow(sheet, 10, new ErrorValue("#BLOCKED!"), "Blocked error", 1);
+        SetFormulaInfoScalarFunctionContrastRow(sheet, 11, new ErrorValue("#UNKNOWN!"), "Unknown error", 1);
+        SetFormulaInfoScalarFunctionContrastRow(sheet, 12, new ErrorValue("#FIELD!"), "Field error", 1);
+        SetFormulaInfoScalarFunctionContrastRow(sheet, 13, ErrorValue.Calc, "Calc error", 1);
+        SetFormulaInfoScalarFunctionContrastRow(sheet, 14, new ErrorValue("#GETTING_DATA"), "Getting data error", 1);
+        SetFormulaInfoScalarFunctionContrastRow(sheet, 15, new TextValue("123"), "Numeric text", 1);
+        SetFormulaInfoScalarFunctionContrastRow(sheet, 16, new BoolValue(false), "FALSE", 1);
+
+        return workbook;
+    }
+
+    private static void SetFormulaInfoScalarFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        ScalarValue? source,
+        string label,
+        double weight)
+    {
+        if (source is not null)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), source);
+
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), new NumberValue(weight));
+    }
+
     private static void AssertFormulaBooleanContrastLocations(string formulaText, params string[] expectedLocations)
     {
         var workbook = CreateFormulaBooleanContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
@@ -5191,6 +5341,19 @@ public sealed partial class AccessibilityCheckerServiceTests
             .Equal(expectedLocations);
     }
 
+    private static void AssertFormulaInfoScalarFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaInfoScalarFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
     private static void AssertFormulaIfContrastLocations(string formulaText, params string[] expectedLocations)
     {
         var workbook = CreateFormulaLogicalContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
@@ -5250,6 +5413,9 @@ public sealed partial class AccessibilityCheckerServiceTests
 
     private static string[] FormulaUnicodeAllLocations =>
         ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9"];
+
+    private static string[] FormulaInfoScalarAllLocations =>
+        ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9", "B10", "B11", "B12", "B13", "B14", "B15", "B16"];
 
     private static void AddFormulaContrastRule(
         Sheet sheet,
