@@ -1267,8 +1267,14 @@ public static partial class AccessibilityCheckerService
             case "WORKDAY":
                 kind = ConditionalFormulaScalarFunctionKind.Workday;
                 return true;
+            case "WORKDAY.INTL":
+                kind = ConditionalFormulaScalarFunctionKind.WorkdayIntl;
+                return true;
             case "NETWORKDAYS":
                 kind = ConditionalFormulaScalarFunctionKind.Networkdays;
+                return true;
+            case "NETWORKDAYS.INTL":
+                kind = ConditionalFormulaScalarFunctionKind.NetworkdaysIntl;
                 return true;
             case "NA":
                 kind = ConditionalFormulaScalarFunctionKind.Na;
@@ -1463,6 +1469,8 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Workday or
             ConditionalFormulaScalarFunctionKind.Networkdays or
             ConditionalFormulaScalarFunctionKind.Yearfrac => argumentCount is 2 or 3,
+            ConditionalFormulaScalarFunctionKind.WorkdayIntl or
+            ConditionalFormulaScalarFunctionKind.NetworkdaysIntl => argumentCount is >= 2 and <= 4,
             ConditionalFormulaScalarFunctionKind.Find or
             ConditionalFormulaScalarFunctionKind.Search => argumentCount is 2 or 3,
             ConditionalFormulaScalarFunctionKind.Mid or
@@ -2139,7 +2147,9 @@ public static partial class AccessibilityCheckerService
         Days360,
         Yearfrac,
         Workday,
+        WorkdayIntl,
         Networkdays,
+        NetworkdaysIntl,
         Na,
         Row,
         Column,
@@ -2818,7 +2828,9 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Days360:
                 case ConditionalFormulaScalarFunctionKind.Yearfrac:
                 case ConditionalFormulaScalarFunctionKind.Workday:
+                case ConditionalFormulaScalarFunctionKind.WorkdayIntl:
                 case ConditionalFormulaScalarFunctionKind.Networkdays:
+                case ConditionalFormulaScalarFunctionKind.NetworkdaysIntl:
                     return TryEvaluateFormulaDateScalarFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Na:
                     value = ErrorValue.NA;
@@ -4901,8 +4913,10 @@ public static partial class AccessibilityCheckerService
                     value = new NumberValue(yearfrac);
                     return true;
                 case ConditionalFormulaScalarFunctionKind.Workday:
+                case ConditionalFormulaScalarFunctionKind.WorkdayIntl:
                     return TryEvaluateFormulaWorkday(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Networkdays:
+                case ConditionalFormulaScalarFunctionKind.NetworkdaysIntl:
                     return TryEvaluateFormulaNetworkdays(function, rowOffset, colOffset, out value);
                 default:
                     return false;
@@ -5230,6 +5244,35 @@ public static partial class AccessibilityCheckerService
             out ScalarValue value)
         {
             value = ErrorValue.Value;
+            if (!TryPropagateFormulaWorkdayArgumentErrors(function, rowOffset, colOffset, out var argumentError))
+            {
+                if (argumentError is not null)
+                {
+                    value = argumentError;
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (!TryResolveFormulaWorkdayWeekendMask(function, rowOffset, colOffset, out var weekendMask, out var weekendError))
+            {
+                if (weekendError is not null)
+                {
+                    value = weekendError;
+                    return true;
+                }
+
+                return false;
+            }
+
+            var holidayArgumentIndex = function.Kind == ConditionalFormulaScalarFunctionKind.WorkdayIntl ? 3 : 2;
+            if (!TryCollectFormulaWorkdayHolidays(function, holidayArgumentIndex, rowOffset, colOffset, out var holidays, out var holidayError))
+            {
+                value = holidayError ?? ErrorValue.Value;
+                return holidayError is not null;
+            }
+
             if (!TryResolveFormulaWorkdayDate(function.Arguments[0], rowOffset, colOffset, out var current, out var startError))
             {
                 if (startError is not null)
@@ -5252,12 +5295,6 @@ public static partial class AccessibilityCheckerService
                 return false;
             }
 
-            if (!TryCollectFormulaWorkdayHolidays(function, rowOffset, colOffset, out var holidays, out var holidayError))
-            {
-                value = holidayError ?? ErrorValue.Value;
-                return holidayError is not null;
-            }
-
             if (!double.IsFinite(rawDays) ||
                 rawDays < int.MinValue + 1d ||
                 rawDays > int.MaxValue)
@@ -5268,19 +5305,20 @@ public static partial class AccessibilityCheckerService
 
             var sign = rawDays < 0 ? -1 : 1;
             var remaining = Math.Abs((int)rawDays);
+            var workdaysPerWeek = CountFormulaWorkdaysPerWeek(weekendMask);
             try
             {
-                if (remaining > 5 && holidays.Count == 0)
+                if (remaining > workdaysPerWeek && holidays.Count == 0)
                 {
-                    var fullWeeks = (remaining - 1) / 5;
+                    var fullWeeks = (remaining - 1) / workdaysPerWeek;
                     current = current.AddDays((long)sign * fullWeeks * 7);
-                    remaining -= fullWeeks * 5;
+                    remaining -= fullWeeks * workdaysPerWeek;
                 }
 
                 while (remaining > 0)
                 {
                     current = current.AddDays(sign);
-                    if (FormulaExcelDowToMonIndex(current) < 5 &&
+                    if (!weekendMask[FormulaExcelDowToMonIndex(current)] &&
                         !holidays.Contains(current.Date))
                     {
                         remaining--;
@@ -5310,6 +5348,35 @@ public static partial class AccessibilityCheckerService
             out ScalarValue value)
         {
             value = ErrorValue.Value;
+            if (!TryPropagateFormulaWorkdayArgumentErrors(function, rowOffset, colOffset, out var argumentError))
+            {
+                if (argumentError is not null)
+                {
+                    value = argumentError;
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (!TryResolveFormulaWorkdayWeekendMask(function, rowOffset, colOffset, out var weekendMask, out var weekendError))
+            {
+                if (weekendError is not null)
+                {
+                    value = weekendError;
+                    return true;
+                }
+
+                return false;
+            }
+
+            var holidayArgumentIndex = function.Kind == ConditionalFormulaScalarFunctionKind.NetworkdaysIntl ? 3 : 2;
+            if (!TryCollectFormulaWorkdayHolidays(function, holidayArgumentIndex, rowOffset, colOffset, out var holidays, out var holidayError))
+            {
+                value = holidayError ?? ErrorValue.Value;
+                return holidayError is not null;
+            }
+
             if (!TryResolveFormulaWorkdayDate(function.Arguments[0], rowOffset, colOffset, out var startRaw, out var startError))
             {
                 if (startError is not null)
@@ -5332,23 +5399,17 @@ public static partial class AccessibilityCheckerService
                 return false;
             }
 
-            if (!TryCollectFormulaWorkdayHolidays(function, rowOffset, colOffset, out var holidays, out var holidayError))
-            {
-                value = holidayError ?? ErrorValue.Value;
-                return holidayError is not null;
-            }
-
             var start = startRaw.Date;
             var end = endRaw.Date;
             var sign = start <= end ? 1 : -1;
             var lo = start <= end ? start : end;
             var hi = start <= end ? end : start;
-            var count = CountFormulaExcelWeekdaysInclusive(lo, hi);
+            var count = CountFormulaWorkdaysInclusive(lo, hi, weekendMask);
             foreach (var holiday in holidays)
             {
                 if (holiday >= lo &&
                     holiday <= hi &&
-                    FormulaExcelDowToMonIndex(holiday) < 5)
+                    !weekendMask[FormulaExcelDowToMonIndex(holiday)])
                 {
                     count--;
                 }
@@ -5356,6 +5417,62 @@ public static partial class AccessibilityCheckerService
 
             value = new NumberValue(sign * count);
             return true;
+        }
+
+        private bool TryPropagateFormulaWorkdayArgumentErrors(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ErrorValue? error)
+        {
+            error = null;
+            for (var i = 0; i < function.Arguments.Count; i++)
+            {
+                var argument = function.Arguments[i];
+                if (argument.Kind == ConditionalFormulaOperandKind.ReferenceRange)
+                    continue;
+
+                if (!TryResolveFormulaOperand(argument, rowOffset, colOffset, out var value))
+                    return false;
+
+                if (value is ErrorValue argumentError)
+                {
+                    error = argumentError;
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private bool TryResolveFormulaWorkdayWeekendMask(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out bool[] weekendMask,
+            out ErrorValue? error)
+        {
+            weekendMask = CreateDefaultFormulaWorkdayWeekendMask();
+            error = null;
+            if (function.Kind is not ConditionalFormulaScalarFunctionKind.WorkdayIntl and
+                not ConditionalFormulaScalarFunctionKind.NetworkdaysIntl)
+            {
+                return true;
+            }
+
+            if (function.Arguments.Count < 3)
+                return true;
+
+            if (!TryResolveFormulaOperand(function.Arguments[2], rowOffset, colOffset, out var value))
+                return false;
+
+            if (value is ErrorValue valueError)
+            {
+                error = valueError;
+                return false;
+            }
+
+            return TryGetFormulaWorkdayWeekendMask(value, out weekendMask, out error);
         }
 
         private bool TryResolveFormulaWorkdayDate(
@@ -5439,6 +5556,7 @@ public static partial class AccessibilityCheckerService
 
         private bool TryCollectFormulaWorkdayHolidays(
             ConditionalFormulaScalarFunction function,
+            int argumentIndex,
             int rowOffset,
             int colOffset,
             out HashSet<DateTime> holidays,
@@ -5446,10 +5564,10 @@ public static partial class AccessibilityCheckerService
         {
             holidays = [];
             error = null;
-            if (function.Arguments.Count < 3)
+            if (function.Arguments.Count <= argumentIndex)
                 return true;
 
-            var operand = function.Arguments[2];
+            var operand = function.Arguments[argumentIndex];
             if (operand.Kind == ConditionalFormulaOperandKind.ReferenceRange)
             {
                 if (!TryResolveFormulaReferenceRange(
@@ -5555,16 +5673,147 @@ public static partial class AccessibilityCheckerService
         private static bool IsValidFormulaWorkdaySerial(double serial) =>
             double.IsFinite(serial) && serial >= 0 && serial <= 2958465.0;
 
-        private static int CountFormulaExcelWeekdaysInclusive(DateTime lo, DateTime hi)
+        private static bool[] CreateDefaultFormulaWorkdayWeekendMask()
+        {
+            var mask = new bool[7];
+            mask[5] = true;
+            mask[6] = true;
+            return mask;
+        }
+
+        private static bool TryGetFormulaWorkdayWeekendMask(
+            ScalarValue value,
+            out bool[] mask,
+            out ErrorValue? error)
+        {
+            mask = new bool[7];
+            error = null;
+            if (value is BlankValue)
+            {
+                mask = CreateDefaultFormulaWorkdayWeekendMask();
+                return true;
+            }
+
+            if (value is TextValue text)
+            {
+                var pattern = text.Value;
+                if (pattern.Length != 7 ||
+                    pattern.Any(static c => c is not '0' and not '1') ||
+                    pattern.All(static c => c == '1'))
+                {
+                    error = ErrorValue.Value;
+                    return false;
+                }
+
+                for (var i = 0; i < pattern.Length; i++)
+                    mask[i] = pattern[i] == '1';
+
+                return true;
+            }
+
+            if (!TryGetFormulaWorkdayWeekendNumber(value, out var rawCode))
+            {
+                error = ErrorValue.Value;
+                return false;
+            }
+
+            if (!double.IsFinite(rawCode))
+            {
+                error = ErrorValue.Value;
+                return false;
+            }
+
+            var code = (int)rawCode;
+            switch (code)
+            {
+                case 1:
+                    mask[5] = true;
+                    mask[6] = true;
+                    break;
+                case 2:
+                    mask[6] = true;
+                    mask[0] = true;
+                    break;
+                case 3:
+                    mask[0] = true;
+                    mask[1] = true;
+                    break;
+                case 4:
+                    mask[1] = true;
+                    mask[2] = true;
+                    break;
+                case 5:
+                    mask[2] = true;
+                    mask[3] = true;
+                    break;
+                case 6:
+                    mask[3] = true;
+                    mask[4] = true;
+                    break;
+                case 7:
+                    mask[4] = true;
+                    mask[5] = true;
+                    break;
+                case 11:
+                    mask[6] = true;
+                    break;
+                case 12:
+                    mask[0] = true;
+                    break;
+                case 13:
+                    mask[1] = true;
+                    break;
+                case 14:
+                    mask[2] = true;
+                    break;
+                case 15:
+                    mask[3] = true;
+                    break;
+                case 16:
+                    mask[4] = true;
+                    break;
+                case 17:
+                    mask[5] = true;
+                    break;
+                default:
+                    error = ErrorValue.Num;
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryGetFormulaWorkdayWeekendNumber(ScalarValue value, out double number) =>
+            value switch
+            {
+                NumberValue numeric => TryFiniteFormulaWorkdayNumber(numeric.Value, out number),
+                DateTimeValue dateTime => TryFiniteFormulaWorkdayNumber(dateTime.Value, out number),
+                BoolValue boolean => TryFiniteFormulaWorkdayNumber(boolean.Value ? 1d : 0d, out number),
+                _ => TryFiniteFormulaWorkdayNumber(double.NaN, out number)
+            };
+
+        private static int CountFormulaWorkdaysPerWeek(IReadOnlyList<bool> weekendMask)
+        {
+            var count = 0;
+            for (var i = 0; i < weekendMask.Count; i++)
+            {
+                if (!weekendMask[i])
+                    count++;
+            }
+
+            return count;
+        }
+
+        private static int CountFormulaWorkdaysInclusive(DateTime lo, DateTime hi, IReadOnlyList<bool> weekendMask)
         {
             var totalDays = (int)(hi - lo).TotalDays + 1;
             var fullWeeks = totalDays / 7;
-            var count = fullWeeks * 5;
+            var count = fullWeeks * CountFormulaWorkdaysPerWeek(weekendMask);
             var startDow = FormulaExcelDowToMonIndex(lo);
             for (var i = 0; i < totalDays % 7; i++)
             {
                 var dow = (startDow + i) % 7;
-                if (dow < 5)
+                if (!weekendMask[dow])
                     count++;
             }
 
