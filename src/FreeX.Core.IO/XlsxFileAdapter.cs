@@ -716,6 +716,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             null,
             null,
             null,
+            null,
             packageParts.HasInspected ? packageParts.HasWorkbookWebPublishingSchemaIssues : null,
             packageParts.HasInspected ? packageParts.HasWorkbookSmartTagSchemaIssues : null,
             packageParts.HasInspected ? packageParts.HasWorkbookNativeMetadataSchemaIssues : null,
