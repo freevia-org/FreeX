@@ -479,6 +479,50 @@ public sealed partial class XlsxPackageMetadataMergerTests
     }
 
     [Fact]
+    public void MergeRelationshipParts_RebindsGeneratedWebExtensionReferenceWhenTaskpaneRelationshipIdCollides()
+    {
+        using var sourcePackage = CreatePackageWithWorkbookWebExtensionTaskpaneGraph();
+        using var targetPackage = CreatePackageWithGeneratedWebExtensionTaskpaneRelationshipCollision();
+        using var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var targetArchive = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, targetArchive);
+        generatedEntriesBeforeMerge.Should().Contain("xl/webextensions/taskpanes.xml");
+
+        XlsxPackageMetadataMerger.MergeContentTypes(sourceArchive, targetArchive);
+        XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, targetArchive, generatedEntriesBeforeMerge);
+
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var taskpanesRelationshipsXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "xl/webextensions/_rels/taskpanes.xml.rels");
+        var webExtensionRelationship = taskpanesRelationshipsXml.Root!
+            .Elements(relationshipNs + "Relationship")
+            .Single(element =>
+                (string?)element.Attribute("Type") == "http://schemas.microsoft.com/office/2011/relationships/webextension" &&
+                (string?)element.Attribute("Target") == "webextension1.xml");
+        var reboundId = webExtensionRelationship.Attribute("Id")!.Value;
+
+        reboundId.Should().NotBe("rIdWebExtension1");
+        taskpanesRelationshipsXml.Root!
+            .Elements(relationshipNs + "Relationship")
+            .Select(element => element.Attribute("Id")?.Value)
+            .OfType<string>()
+            .Should()
+            .OnlyHaveUniqueItems();
+
+        XNamespace taskpanesNs = "http://schemas.microsoft.com/office/webextensions/taskpanes/2010/11";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var taskpanesXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "xl/webextensions/taskpanes.xml");
+        taskpanesXml.Root!
+            .Descendants(taskpanesNs + "webextensionref")
+            .Should()
+            .ContainSingle(element => (string?)element.Attribute(relNs + "id") == reboundId);
+        taskpanesXml.Root!
+            .Descendants(taskpanesNs + "webextensionref")
+            .Should()
+            .NotContain(element => (string?)element.Attribute(relNs + "id") == "rIdWebExtension1");
+    }
+
+    [Fact]
     public void MergeRelationshipParts_PreservesWorkbookXmlMapsPackageGraph()
     {
         using var sourcePackage = CreatePackageWithWorkbookXmlMapsGraph();
