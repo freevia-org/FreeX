@@ -49,7 +49,7 @@ internal static class XlsxWorkbookExternalReferencesNormalizer
         HashSet<string> seenRelationshipIds)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(externalReferences, allowRelationshipId: false);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(externalReferences, Array.Empty<XName>());
         changed |= RemoveUnexpectedChildElements(externalReferences, WorkbookNs + "externalReference");
 
         foreach (var externalReference in externalReferences.Elements(WorkbookNs + "externalReference").ToList())
@@ -69,27 +69,9 @@ internal static class XlsxWorkbookExternalReferencesNormalizer
     private static bool NormalizeExternalReferenceElement(XElement externalReference)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(externalReference, allowRelationshipId: true);
-        changed |= RemoveAllNodes(externalReference);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(externalReference, RelationshipNs + "id");
+        changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(externalReference);
         changed |= NormalizeRelationshipId(externalReference);
-        return changed;
-    }
-
-    private static bool RemoveUnknownAttributes(XElement element, bool allowRelationshipId)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                (allowRelationshipId && attribute.Name == RelationshipNs + "id"))
-            {
-                continue;
-            }
-
-            attribute.Remove();
-            changed = true;
-        }
-
         return changed;
     }
 
@@ -103,15 +85,6 @@ internal static class XlsxWorkbookExternalReferencesNormalizer
         }
 
         return changed;
-    }
-
-    private static bool RemoveAllNodes(XElement element)
-    {
-        if (!element.Nodes().Any())
-            return false;
-
-        element.RemoveNodes();
-        return true;
     }
 
     private static bool NormalizeRelationshipId(XElement externalReference)
