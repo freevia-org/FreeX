@@ -38,8 +38,8 @@ public sealed partial class XlsxFileAdapter
             foreach (var rule in conditionalFormatting.Elements(worksheetNs + "cfRule"))
             {
                 var type = rule.Attribute("type")?.Value;
-                var priority = ReadIntAttribute(rule, "priority") ?? 1;
-                var formatIfTrue = ReadIntAttribute(rule, "dxfId") is { } dxfId &&
+                var priority = XlsxXmlAttributeReader.ReadIntAttribute(rule, "priority") ?? 1;
+                var formatIfTrue = XlsxXmlAttributeReader.ReadIntAttribute(rule, "dxfId") is { } dxfId &&
                     dxfId >= 0 &&
                     dxfId < differentialStyles.Count
                     ? differentialStyles[dxfId].Clone()
@@ -95,7 +95,7 @@ public sealed partial class XlsxFileAdapter
                         AboveAverage = mappedType == CfRuleType.Top10
                             ? !IsTruthy(rule.Attribute("bottom")?.Value)
                             : !IsFalse(rule.Attribute("aboveAverage")?.Value),
-                        TopBottomRank = ReadIntAttribute(rule, "rank") ?? 10,
+                        TopBottomRank = XlsxXmlAttributeReader.ReadIntAttribute(rule, "rank") ?? 10,
                         TopBottomPercent = IsTruthy(rule.Attribute("percent")?.Value),
                         TextRuleText = rule.Attribute("text")?.Value,
                         DateOccurringPeriod = mappedType == CfRuleType.DateOccurring
@@ -174,8 +174,12 @@ public sealed partial class XlsxFileAdapter
                             var gradientVal = x14DataBar.Attribute("gradient")?.Value;
                             if (gradientVal is not null)
                                 format.DataBarGradient = !IsFalse(gradientVal);
-                            format.DataBarMinLength = ReadIntAttribute(x14DataBar, "minLength") ?? format.DataBarMinLength;
-                            format.DataBarMaxLength = ReadIntAttribute(x14DataBar, "maxLength") ?? format.DataBarMaxLength;
+                            format.DataBarMinLength =
+                                XlsxXmlAttributeReader.ReadIntAttribute(x14DataBar, "minLength") ??
+                                format.DataBarMinLength;
+                            format.DataBarMaxLength =
+                                XlsxXmlAttributeReader.ReadIntAttribute(x14DataBar, "maxLength") ??
+                                format.DataBarMaxLength;
                             var borderVal = x14DataBar.Attribute("border")?.Value;
                             if (borderVal is not null)
                                 format.DataBarBorder = IsTruthy(borderVal);
@@ -295,8 +299,8 @@ public sealed partial class XlsxFileAdapter
             Priority = priority,
             RuleType = CfRuleType.DataBar,
             DataBarShowValue = !IsFalse(dataBar.Attribute("showValue")?.Value),
-            DataBarMinLength = ReadIntAttribute(dataBar, "minLength"),
-            DataBarMaxLength = ReadIntAttribute(dataBar, "maxLength")
+            DataBarMinLength = XlsxXmlAttributeReader.ReadIntAttribute(dataBar, "minLength"),
+            DataBarMaxLength = XlsxXmlAttributeReader.ReadIntAttribute(dataBar, "maxLength")
         };
         ApplyThreshold(thresholds.ElementAtOrDefault(0), value =>
         {
@@ -352,7 +356,7 @@ public sealed partial class XlsxFileAdapter
         foreach (var cfIcon in iconSet.Elements(worksheetNs + "cfIcon"))
         {
             var iconSetAttr = cfIcon.Attribute("iconSet")?.Value?.Trim();
-            var iconId = ReadIntAttribute(cfIcon, "iconId") ?? 0;
+            var iconId = XlsxXmlAttributeReader.ReadIntAttribute(cfIcon, "iconId") ?? 0;
             if (!string.IsNullOrWhiteSpace(iconSetAttr) && iconId >= 0)
                 yield return new CfIconOverride(iconSetAttr, iconId);
         }
