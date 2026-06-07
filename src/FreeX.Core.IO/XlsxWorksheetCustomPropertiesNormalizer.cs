@@ -39,7 +39,7 @@ internal static class XlsxWorksheetCustomPropertiesNormalizer
     public static bool NormalizeElement(XElement customProperties)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(customProperties, EmptyAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(customProperties, EmptyAttributes);
         changed |= RemoveUnexpectedChildren(customProperties, WorksheetNs + "customPr");
 
         var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -136,24 +136,6 @@ internal static class XlsxWorksheetCustomPropertiesNormalizer
                 continue;
 
             child.Remove();
-            changed = true;
-        }
-
-        return changed;
-    }
-
-    private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedNames)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                (attribute.Name.NamespaceName.Length == 0 && allowedNames.Contains(attribute.Name.LocalName)))
-            {
-                continue;
-            }
-
-            attribute.Remove();
             changed = true;
         }
 
