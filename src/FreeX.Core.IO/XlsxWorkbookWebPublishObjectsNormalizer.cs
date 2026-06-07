@@ -60,7 +60,7 @@ internal static class XlsxWorkbookWebPublishObjectsNormalizer
     public static bool NormalizeWebPublishObjectsElement(XElement webPublishObjects)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(webPublishObjects, WebPublishObjectsAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(webPublishObjects, WebPublishObjectsAttributes);
         changed |= RemoveUnexpectedChildElements(webPublishObjects, WorkbookNs + "webPublishObject");
 
         foreach (var webPublishObject in webPublishObjects.Elements(WorkbookNs + "webPublishObject").ToList())
@@ -83,13 +83,13 @@ internal static class XlsxWorkbookWebPublishObjectsNormalizer
     private static bool NormalizeWebPublishObjectElement(XElement webPublishObject)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(webPublishObject, WebPublishObjectAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(webPublishObject, WebPublishObjectAttributes);
         changed |= RemoveAllNodes(webPublishObject);
-        changed |= NormalizeAttribute(webPublishObject, "id", NormalizeUnsignedIntOrNull);
-        changed |= NormalizeAttribute(webPublishObject, "autoRepublish", NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishObject, "id", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishObject, "autoRepublish", NormalizeBoolean);
 
         foreach (var attributeName in TextAttributes)
-            changed |= NormalizeAttribute(webPublishObject, attributeName, NormalizeOptionalText);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishObject, attributeName, NormalizeOptionalText);
 
         return changed;
     }
@@ -103,30 +103,7 @@ internal static class XlsxWorkbookWebPublishObjectsNormalizer
     private static bool NormalizeCount(XElement webPublishObjects)
     {
         var count = webPublishObjects.Elements(WorkbookNs + "webPublishObject").Count().ToString(CultureInfo.InvariantCulture);
-        var attribute = webPublishObjects.Attribute("count");
-        if (attribute is not null && string.Equals(attribute.Value, count, StringComparison.Ordinal))
-            return false;
-
-        webPublishObjects.SetAttributeValue("count", count);
-        return true;
-    }
-
-    private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedNames)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                (attribute.Name.NamespaceName.Length == 0 && allowedNames.Contains(attribute.Name.LocalName)))
-            {
-                continue;
-            }
-
-            attribute.Remove();
-            changed = true;
-        }
-
-        return changed;
+        return XlsxXmlNormalizationHelpers.SetAttributeIfChanged(webPublishObjects, "count", count);
     }
 
     private static bool RemoveUnexpectedChildElements(XElement element, XName allowedChildName)
@@ -147,29 +124,6 @@ internal static class XlsxWorkbookWebPublishObjectsNormalizer
             return false;
 
         element.RemoveNodes();
-        return true;
-    }
-
-    private static bool NormalizeAttribute(
-        XElement element,
-        string attributeName,
-        Func<string?, string?> normalize)
-    {
-        var attribute = element.Attribute(attributeName);
-        var normalized = normalize(attribute?.Value);
-        if (normalized is null)
-        {
-            if (attribute is null)
-                return false;
-
-            attribute.Remove();
-            return true;
-        }
-
-        if (attribute is not null && string.Equals(attribute.Value, normalized, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(attributeName, normalized);
         return true;
     }
 
