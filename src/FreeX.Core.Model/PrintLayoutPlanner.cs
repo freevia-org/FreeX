@@ -16,8 +16,7 @@ public static class PrintLayoutPlanner
         uint rowsPerPage,
         IReadOnlyCollection<uint>? manualRowBreaks = null)
     {
-        if (rowsPerPage == 0)
-            throw new ArgumentOutOfRangeException(nameof(rowsPerPage), "Rows per page must be at least 1.");
+        ThrowIfInvalidPageSize(rowsPerPage, nameof(rowsPerPage), "Rows");
 
         return BuildAxisPlans(
             printRange.Start.Row,
@@ -35,8 +34,7 @@ public static class PrintLayoutPlanner
         uint columnsPerPage,
         IReadOnlyCollection<uint>? manualColumnBreaks = null)
     {
-        if (columnsPerPage == 0)
-            throw new ArgumentOutOfRangeException(nameof(columnsPerPage), "Columns per page must be at least 1.");
+        ThrowIfInvalidPageSize(columnsPerPage, nameof(columnsPerPage), "Columns");
 
         return BuildAxisPlans(
             printRange.Start.Col,
@@ -81,6 +79,12 @@ public static class PrintLayoutPlanner
         }
 
         return titleIndexes;
+    }
+
+    private static void ThrowIfInvalidPageSize(uint valuesPerPage, string paramName, string label)
+    {
+        if (valuesPerPage == 0)
+            throw new ArgumentOutOfRangeException(paramName, $"{label} per page must be at least 1.");
     }
 
     private static List<TPlan> BuildAxisPlans<TPlan>(
