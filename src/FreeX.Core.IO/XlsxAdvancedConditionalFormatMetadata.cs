@@ -57,20 +57,13 @@ internal static class XlsxAdvancedConditionalFormatMetadata
 
         foreach (var xml in cf.NativeChildXmls)
         {
-            try
-            {
-                var el = XElement.Parse(xml);
-                if (el.Name.LocalName != "extLst")
-                    continue;
+            var element = TryParseNativeXml(xml);
+            if (element is null || element.Name.LocalName != "extLst")
+                continue;
 
-                var id = el.Descendants(X14Ns + "id").FirstOrDefault()?.Value?.Trim();
-                if (!string.IsNullOrWhiteSpace(id))
-                    return id;
-            }
-            catch
-            {
-                // Ignore malformed native XML.
-            }
+            var id = element.Descendants(X14Ns + "id").FirstOrDefault()?.Value?.Trim();
+            if (!string.IsNullOrWhiteSpace(id))
+                return id;
         }
 
         return null;
@@ -78,20 +71,32 @@ internal static class XlsxAdvancedConditionalFormatMetadata
 
     public static bool HasNativeX14DataBarPayloadChildren(ConditionalFormat cf)
     {
-        foreach (var nativeChildXml in (cf.NativePayloadChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
+        foreach (var nativeChildXml in cf.NativePayloadChildXmls ?? [])
         {
-            try
+            if (TryParseNativeXml(nativeChildXml) is { } nativeChild &&
+                nativeChild.Name.Namespace == X14Ns)
             {
-                if (XElement.Parse(nativeChildXml).Name.Namespace == X14Ns)
-                    return true;
-            }
-            catch
-            {
-                // Ignore malformed native payloads from older saves.
+                return true;
             }
         }
 
         return false;
+    }
+
+    private static XElement? TryParseNativeXml(string? xml)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
+            return null;
+
+        try
+        {
+            return XElement.Parse(xml);
+        }
+        catch
+        {
+            // Ignore malformed native XML captured from older saves.
+            return null;
+        }
     }
 
     public static string ToAdvancedCfRuleType(CfRuleType type) =>
