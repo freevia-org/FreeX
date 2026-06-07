@@ -5,6 +5,23 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxWorkbookCalculationPropertyNormalizer
 {
+    private static readonly HashSet<string> CalculationPropertyAttributes =
+    [
+        "calcId",
+        "calcMode",
+        "fullCalcOnLoad",
+        "refMode",
+        "iterate",
+        "iterateCount",
+        "iterateDelta",
+        "fullPrecision",
+        "calcCompleted",
+        "calcOnSave",
+        "concurrentCalc",
+        "concurrentManualCount",
+        "forceFullCalc"
+    ];
+
     private static readonly HashSet<string> ValidCalculationModes =
     [
         "manual",
@@ -39,6 +56,8 @@ internal static class XlsxWorkbookCalculationPropertyNormalizer
     public static bool NormalizeElement(XElement calcPr)
     {
         var changed = false;
+        changed |= RemoveUnknownAttributes(calcPr);
+        changed |= RemoveAllNodes(calcPr);
         changed |= NormalizeAttribute(calcPr, "calcMode", value => NormalizeToken(value, ValidCalculationModes));
         changed |= NormalizeAttribute(calcPr, "refMode", value => NormalizeToken(value, ValidReferenceModes));
         changed |= NormalizeAttribute(calcPr, "iterateDelta", NormalizeDouble);
@@ -49,6 +68,33 @@ internal static class XlsxWorkbookCalculationPropertyNormalizer
             changed |= NormalizeAttribute(calcPr, attributeName, NormalizeUnsignedIntOrNull);
 
         return changed;
+    }
+
+    private static bool RemoveUnknownAttributes(XElement element)
+    {
+        var changed = false;
+        foreach (var attribute in element.Attributes().ToList())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                (attribute.Name.NamespaceName.Length == 0 && CalculationPropertyAttributes.Contains(attribute.Name.LocalName)))
+            {
+                continue;
+            }
+
+            attribute.Remove();
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool RemoveAllNodes(XElement element)
+    {
+        if (!element.Nodes().Any())
+            return false;
+
+        element.RemoveNodes();
+        return true;
     }
 
     private static bool NormalizeAttribute(
