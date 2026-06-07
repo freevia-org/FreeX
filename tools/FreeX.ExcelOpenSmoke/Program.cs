@@ -12295,14 +12295,29 @@ internal static class ExcelOpenSmoke
     {
         var extension = extensionReference.Element;
         var description = $"{extensionListDescription} ext #{extensionReference.Ordinal}";
+        foreach (var attribute in extension.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                (attribute.Name.NamespaceName.Length == 0 && attribute.Name.LocalName == "uri"))
+            {
+                continue;
+            }
+
+            issues.Add($"{worksheetPart} {description} has unsupported attribute {attribute.Name}");
+        }
+
         var uri = extension.Attribute("uri")?.Value;
         if (string.IsNullOrWhiteSpace(uri))
         {
             issues.Add($"{worksheetPart} {description} has no uri");
         }
-        else if (!seenUris.Add(uri.Trim()))
+        else
         {
-            issues.Add($"{worksheetPart} {extensionListDescription} has duplicate ext uri '{uri}'");
+            var trimmedUri = uri.Trim();
+            if (!string.Equals(uri, trimmedUri, StringComparison.Ordinal))
+                issues.Add($"{worksheetPart} {description} has untrimmed uri '{uri}'");
+            if (!seenUris.Add(trimmedUri))
+                issues.Add($"{worksheetPart} {extensionListDescription} has duplicate ext uri '{uri}'");
         }
     }
 
