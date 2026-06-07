@@ -143,9 +143,14 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"macOS Preview Workbook\" \"$smoke_log\"");
         workflow.Should().Contain("grep -q \"drawing_object_previews=3\" \"$smoke_log\"");
         workflow.Should().Contain("grep -q \"roundtrip_drawing_object_previews=3\" \"$smoke_log\"");
+        workflow.Should().Contain("grep -q \"format_cells_style_roundtrip=true\" \"$smoke_log\"");
         workflow.Should().Contain("\"$unzip_root/FreeX.app/Contents/MacOS/FreeX\" --packaging-smoke \"$smoke_file\" | tee -a \"$smoke_log\"");
         workflow.Should().Contain("grep -q \"Packaging smoke opened\" \"$smoke_log\"");
         workflow.Should().Contain("grep -q \"edited, saved, and reopened\" \"$smoke_log\"");
+        workflow.Should().Contain("format_cells_style_roundtrip_count=\"$(grep -c \"format_cells_style_roundtrip=true\" \"$smoke_log\")\"");
+        workflow.Should().Contain("test \"$format_cells_style_roundtrip_count\" -ge 2");
+        workflow.Should().Contain("echo \"format_cells_style_roundtrip=true\"");
+        workflow.Should().Contain("echo \"format_cells_style_roundtrip_count=$format_cells_style_roundtrip_count\"");
         workflow.Should().Contain("lsregister -f \"$unzip_root/FreeX.app\"");
         workflow.Should().Contain("launch_clipboard_image=\"$RUNNER_TEMP/freex-$runtime-clipboard.png\"");
         workflow.Should().Contain("base64 -D > \"$launch_clipboard_image\"");

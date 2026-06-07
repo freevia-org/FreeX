@@ -332,6 +332,7 @@ jobs:
             grep -q "macOS Preview Workbook" "$smoke_log"
             grep -q "drawing_object_previews=3" "$smoke_log"
             grep -q "roundtrip_drawing_object_previews=3" "$smoke_log"
+            grep -q "format_cells_style_roundtrip=true" "$smoke_log"
             grep -q "edited, saved, and reopened" "$smoke_log"
 
             smoke_file="$RUNNER_TEMP/freex-$runtime-smoke.csv"
@@ -339,6 +340,12 @@ jobs:
             "$unzip_root/FreeX.app/Contents/MacOS/FreeX" --packaging-smoke "$smoke_file" | tee -a "$smoke_log"
             grep -q "Packaging smoke opened" "$smoke_log"
             grep -q "edited, saved, and reopened" "$smoke_log"
+            format_cells_style_roundtrip_count="$(grep -c "format_cells_style_roundtrip=true" "$smoke_log")"
+            test "$format_cells_style_roundtrip_count" -ge 2
+            {
+              echo "format_cells_style_roundtrip=true"
+              echo "format_cells_style_roundtrip_count=$format_cells_style_roundtrip_count"
+            } >> "$evidence_path"
             echo "smoke_status=passed" >> "$evidence_path"
 
             launch_smoke_file="$RUNNER_TEMP/freex-$runtime-launch.csv"

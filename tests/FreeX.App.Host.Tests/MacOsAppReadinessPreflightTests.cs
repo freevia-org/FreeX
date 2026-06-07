@@ -329,6 +329,9 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_legal_notices_menu_item=");
         script.Should().Contain("drawing_object_previews=3");
         script.Should().Contain("roundtrip_drawing_object_previews=3");
+        script.Should().Contain("format_cells_style_roundtrip=true");
+        script.Should().Contain("format_cells_style_roundtrip_count");
+        script.Should().Contain("test \"$format_cells_style_roundtrip_count\" -ge 2");
         script.Should().Contain("shasum -a 256 -c \"$zip_name.sha256\"");
         script.Should().Contain("zip_sha256=$zip_sha256");
         script.Should().Contain("freex-$runtime-macos-tester-instructions.md");
@@ -827,6 +830,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     run: |
                       app="$RUNNER_TEMP/FreeX.app"
                       artifact_root="$GITHUB_WORKSPACE/artifacts"
+                      smoke_log="$artifact_root/smoke.log"
                       runtime="osx-arm64"
                       zip_name="freex-$runtime-macos-app.zip"
                       zip_path="$artifact_root/$zip_name"
@@ -885,13 +889,18 @@ public sealed class MacOsAppReadinessPreflightTests
                       Unzip the GitHub Actions artifact wrapper first; these files are inside it.
                       If artifact_channel=internal-preview, ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing.
                       EOF
-                      "$unzip_root/FreeX.app/Contents/MacOS/FreeX" --packaging-smoke | tee "$artifact_root/smoke.log"
-                      grep -q "macOS Preview Workbook" "$artifact_root/smoke.log"
-                      grep -q "drawing_object_previews=3" "$artifact_root/smoke.log"
-                      grep -q "roundtrip_drawing_object_previews=3" "$artifact_root/smoke.log"
-                      "$unzip_root/FreeX.app/Contents/MacOS/FreeX" --packaging-smoke "$RUNNER_TEMP/smoke.csv" | tee -a "$artifact_root/smoke.log"
-                      grep -q "Packaging smoke opened" "$artifact_root/smoke.log"
-                      grep -q "edited, saved, and reopened" "$artifact_root/smoke.log"
+                      "$unzip_root/FreeX.app/Contents/MacOS/FreeX" --packaging-smoke | tee "$smoke_log"
+                      grep -q "macOS Preview Workbook" "$smoke_log"
+                      grep -q "drawing_object_previews=3" "$smoke_log"
+                      grep -q "roundtrip_drawing_object_previews=3" "$smoke_log"
+                      grep -q "format_cells_style_roundtrip=true" "$smoke_log"
+                      "$unzip_root/FreeX.app/Contents/MacOS/FreeX" --packaging-smoke "$RUNNER_TEMP/smoke.csv" | tee -a "$smoke_log"
+                      grep -q "Packaging smoke opened" "$smoke_log"
+                      grep -q "edited, saved, and reopened" "$smoke_log"
+                      format_cells_style_roundtrip_count="$(grep -c "format_cells_style_roundtrip=true" "$smoke_log")"
+                      test "$format_cells_style_roundtrip_count" -ge 2
+                      echo "format_cells_style_roundtrip=true"
+                      echo "format_cells_style_roundtrip_count=$format_cells_style_roundtrip_count"
                       /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$unzip_root/FreeX.app"
                       launch_clipboard_image="$RUNNER_TEMP/freex-$runtime-clipboard.png"
                       base64 -D > "$launch_clipboard_image"
@@ -2797,7 +2806,17 @@ public sealed class MacOsAppReadinessPreflightTests
                     _sessionFactory.Create(source, SmokeViewportHeight, SmokeViewportWidth, includeObjects: true);
                     VerifyDrawingObjectPreviews();
                     PortPreviewWorkbookFactory.PreviewShapeName.ToString();
-                    var result = $"Packaging smoke opened; drawing_object_previews={drawingObjectPreviewCount}; edited, saved, and reopened; roundtrip_drawing_object_previews={roundTripDrawingObjectPreviewCount}.";
+                    ApplyFormatCellsStartupSmokeStyle();
+                    VerifyFormatCellsStartupSmokeStyle();
+                    var result = $"Packaging smoke opened; drawing_object_previews={drawingObjectPreviewCount}; edited, saved, and reopened after applying compact Format Cells style to B2; format_cells_style_roundtrip=true; roundtrip_drawing_object_previews={roundTripDrawingObjectPreviewCount}.";
+                }
+
+                private void ApplyFormatCellsStartupSmokeStyle()
+                {
+                }
+
+                private void VerifyFormatCellsStartupSmokeStyle()
+                {
                 }
             }
 
