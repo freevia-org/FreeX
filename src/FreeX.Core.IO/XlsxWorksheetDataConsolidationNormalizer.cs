@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO.Compression;
 using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
@@ -58,6 +59,26 @@ internal static class XlsxWorksheetDataConsolidationNormalizer
         }
 
         return changed;
+    }
+
+    public static bool NormalizeWorksheetRoot(XElement worksheetRoot)
+    {
+        var dataConsolidate = worksheetRoot.Element(WorksheetNs + "dataConsolidate");
+        return dataConsolidate is not null && NormalizeElement(dataConsolidate);
+    }
+
+    public static void NormalizeWorksheets(ZipArchive archive)
+    {
+        foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
+        {
+            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+            var root = worksheetXml.Root;
+            if (root is null)
+                continue;
+
+            if (NormalizeWorksheetRoot(root))
+                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+        }
     }
 
     private static bool MergeDuplicateDataReferences(XElement dataConsolidate)
@@ -195,5 +216,13 @@ internal static class XlsxWorksheetDataConsolidationNormalizer
     {
         var trimmed = value?.Trim();
         return trimmed is not null && allowedValues.Contains(trimmed) ? trimmed : null;
+    }
+
+    private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
+    {
+        var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+        return path.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+               path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+               !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
     }
 }
