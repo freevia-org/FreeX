@@ -402,6 +402,66 @@ public sealed partial class XlsxPackageMetadataMergerTests
                 """),
             ("xl/embeddings/package1.bin", "package"));
 
+    private static MemoryStream CreatePackageWithPivotCacheRecordsRelationshipIdCollisionSource() =>
+        XlsxPackageTestFixtures.CreatePackage(
+            ("[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/pivotCache/pivotCacheDefinition1.xml"
+                            ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml"/>
+                  <Override PartName="/xl/pivotCache/pivotCacheRecords1.xml"
+                            ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml"/>
+                </Types>
+                """),
+            ("xl/pivotCache/pivotCacheDefinition1.xml", """
+                <pivotCacheDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                                      xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+                                      r:id="rIdPivotCacheRecords"
+                                      recordCount="1"/>
+                """),
+            ("xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdPivotCacheRecords"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords"
+                                Target="pivotCacheRecords1.xml"/>
+                </Relationships>
+                """),
+            ("xl/pivotCache/pivotCacheRecords1.xml", """
+                <pivotCacheRecords xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="1">
+                  <r><x v="0"/></r>
+                </pivotCacheRecords>
+                """));
+
+    private static MemoryStream CreatePackageWithGeneratedPivotCacheRecordsRelationshipIdCollisionTarget() =>
+        XlsxPackageTestFixtures.CreatePackage(
+            ("[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Default Extension="bin" ContentType="application/vnd.openxmlformats-officedocument.oleObject"/>
+                </Types>
+                """),
+            ("xl/pivotCache/pivotCacheDefinition1.xml", """
+                <pivotCacheDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                                      xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+                                      r:id="rIdPivotCacheRecords"
+                                      recordCount="1"/>
+                """),
+            ("xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdPivotCacheRecords"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/package"
+                                Target="../embeddings/package1.bin"/>
+                </Relationships>
+                """),
+            ("xl/pivotCache/pivotCacheRecords1.xml", """
+                <pivotCacheRecords xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="1">
+                  <r><x v="0"/></r>
+                </pivotCacheRecords>
+                """),
+            ("xl/embeddings/package1.bin", "package"));
+
     private static MemoryStream CreatePackageWithWhitespacePaddedCorePropertiesRelationship() =>
         XlsxPackageTestFixtures.CreatePackage(
             ("[Content_Types].xml", """

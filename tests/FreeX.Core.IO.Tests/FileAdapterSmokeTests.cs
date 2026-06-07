@@ -20669,6 +20669,51 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookFullSave_PreservesPivotCacheRecordsRelationshipTarget()
+    {
+        var workbook = new Workbook("PivotCacheRecordsCollisionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalPivotTablePackage(
+            source,
+            includeCacheRecords: true,
+            pivotCacheDefinitionXml: PivotCacheDefinitionWithRecordsRelationshipXml);
+        RetargetPivotCacheRecordsRelationship(source, "pivotCacheRecords2.xml");
+
+        var loaded = adapter.Load(source);
+        loaded.Uses1904DateSystem = !loaded.Uses1904DateSystem;
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        archive.GetEntry("xl/pivotCache/pivotCacheRecords2.xml").Should().NotBeNull();
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var cacheRelsXml = LoadPackageXml(archive.GetEntry("xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels")!);
+        var recordsRelationship = cacheRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Single(element =>
+                (string?)element.Attribute("Type") == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords" &&
+                (string?)element.Attribute("Target") == "pivotCacheRecords2.xml");
+        var reboundId = recordsRelationship.Attribute("Id")!.Value;
+
+        var cacheXml = LoadPackageXml(archive.GetEntry("xl/pivotCache/pivotCacheDefinition1.xml")!);
+        cacheXml.Root!.Attribute(relNs + "id")!.Value.Should().Be(reboundId);
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_RoundTripsExpandedPivotTableFields()
     {
         var workbook = new Workbook("ExpandedPivotXlsxTest");
@@ -24692,6 +24737,40 @@ public partial class FileAdapterSmokeTests
         packageStream.Position = 0;
     }
 
+    private static void RetargetPivotCacheRecordsRelationship(MemoryStream packageStream, string recordsTarget)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+            var cacheRelsPath = "xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels";
+            var cacheRelsXml = LoadPackageXml(archive.GetEntry(cacheRelsPath)!);
+            var recordsRelationship = cacheRelsXml.Root!
+                .Elements(packageRelNs + "Relationship")
+                .Single(element =>
+                    (string?)element.Attribute("Type") == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords");
+            recordsRelationship.SetAttributeValue("Id", "rIdPivotCacheRecords");
+            recordsRelationship.SetAttributeValue("Target", recordsTarget);
+            ReplacePackageXml(archive, cacheRelsPath, cacheRelsXml);
+
+            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(
+                contentTypesXml,
+                contentTypeNs,
+                "/xl/pivotCache/" + recordsTarget,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            ReplacePackageXml(
+                archive,
+                "xl/pivotCache/" + recordsTarget,
+                XDocument.Parse(MinimalPivotCacheRecordsXml));
+        }
+
+        packageStream.Position = 0;
+    }
+
     private static void MoveWorksheetPackagePart(MemoryStream packageStream, string sourceWorksheetPath, string targetWorksheetPath)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
@@ -25489,6 +25568,33 @@ public partial class FileAdapterSmokeTests
 
     private const string MinimalPivotCacheDefinitionXml = """
         <pivotCacheDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                              refreshedBy="FreeX Test"
+                              refreshOnLoad="0"
+                              recordCount="2">
+          <cacheSource type="worksheet">
+            <worksheetSource ref="A1:B3" sheet="Data"/>
+          </cacheSource>
+          <cacheFields count="2">
+            <cacheField name="Category" numFmtId="0">
+              <sharedItems count="2">
+                <s v="A"/>
+                <s v="B"/>
+              </sharedItems>
+            </cacheField>
+            <cacheField name="Amount" numFmtId="0">
+              <sharedItems containsNumber="1" count="2">
+                <n v="10"/>
+                <n v="20"/>
+              </sharedItems>
+            </cacheField>
+          </cacheFields>
+        </pivotCacheDefinition>
+        """;
+
+    private const string PivotCacheDefinitionWithRecordsRelationshipXml = """
+        <pivotCacheDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                              xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+                              r:id="rIdPivotCacheRecords"
                               refreshedBy="FreeX Test"
                               refreshOnLoad="0"
                               recordCount="2">

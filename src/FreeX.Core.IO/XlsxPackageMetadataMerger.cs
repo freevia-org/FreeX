@@ -10,6 +10,7 @@ internal static class XlsxPackageMetadataMerger
     private const string ImageRelationshipType = SpreadsheetRelationshipPrefix + "image";
     private const string PackageRelationshipType = SpreadsheetRelationshipPrefix + "package";
     private const string PivotCacheDefinitionRelationshipType = SpreadsheetRelationshipPrefix + "pivotCacheDefinition";
+    private const string PivotCacheRecordsRelationshipType = SpreadsheetRelationshipPrefix + "pivotCacheRecords";
     private const string ChartExStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartStyle";
     private const string ChartExColorStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartColorStyle";
 
@@ -460,6 +461,7 @@ internal static class XlsxPackageMetadataMerger
                 IsChartExStyleColorPackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
                 IsDataModelPackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
                 IsXmlMapsPackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
+                IsPivotCacheRecordsPackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
                 IsCustomXmlPackageGraphRelationship(relationshipPartPath, relationship, targetPart));
     }
 
@@ -480,6 +482,30 @@ internal static class XlsxPackageMetadataMerger
         var relationshipType = NormalizeRelationshipType(relationship);
         return string.Equals(relationshipType, ChartExStyleRelationshipType, StringComparison.OrdinalIgnoreCase) ||
                string.Equals(relationshipType, ChartExColorStyleRelationshipType, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsPivotCacheRecordsPackageGraphRelationship(
+        string relationshipPartPath,
+        XElement relationship,
+        string targetPart)
+    {
+        if (!targetPart.StartsWith("xl/pivotCache/pivotCacheRecords", StringComparison.OrdinalIgnoreCase) ||
+            !targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var sourcePart = RelationshipPartToSourcePart(relationshipPartPath);
+        if (!sourcePart.StartsWith("xl/pivotCache/pivotCacheDefinition", StringComparison.OrdinalIgnoreCase) ||
+            !sourcePart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return string.Equals(
+            NormalizeRelationshipType(relationship),
+            PivotCacheRecordsRelationshipType,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsXmlMapsPackageGraphRelationship(
@@ -566,7 +592,8 @@ internal static class XlsxPackageMetadataMerger
         return string.Equals(relationshipType, ExternalLinkPathRelationshipType, StringComparison.OrdinalIgnoreCase) ||
                string.Equals(relationshipType, ImageRelationshipType, StringComparison.OrdinalIgnoreCase) ||
                string.Equals(relationshipType, PackageRelationshipType, StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(relationshipType, PivotCacheDefinitionRelationshipType, StringComparison.OrdinalIgnoreCase);
+               string.Equals(relationshipType, PivotCacheDefinitionRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(relationshipType, PivotCacheRecordsRelationshipType, StringComparison.OrdinalIgnoreCase);
     }
 
     private static void RebindCopiedPartRelationshipReferences(
@@ -587,6 +614,9 @@ internal static class XlsxPackageMetadataMerger
 
         if (generatedEntriesBeforeMerge.Contains(sourcePart))
         {
+            if (IsPivotCacheDefinitionPart(sourcePart))
+                RebindGeneratedPivotCacheRecordsRelationshipReference(targetIndex, sourcePart, relationshipIdMap);
+
             RebindGeneratedWorksheetPictureRelationshipReference(targetIndex, sourcePart, relationshipIdMap);
             return;
         }
@@ -618,6 +648,46 @@ internal static class XlsxPackageMetadataMerger
 
         if (changed)
             WriteXml(targetIndex, sourcePart, xml, targetEntry.LastWriteTime, SaveOptions.DisableFormatting);
+    }
+
+    private static bool IsPivotCacheDefinitionPart(string sourcePart) =>
+        sourcePart.StartsWith("xl/pivotCache/pivotCacheDefinition", StringComparison.OrdinalIgnoreCase) &&
+        sourcePart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
+
+    private static void RebindGeneratedPivotCacheRecordsRelationshipReference(
+        ArchiveEntryIndex targetIndex,
+        string sourcePart,
+        IReadOnlyDictionary<string, string> relationshipIdMap)
+    {
+        var targetEntry = targetIndex.Get(sourcePart);
+        if (targetEntry is null)
+            return;
+
+        XDocument xml;
+        try
+        {
+            xml = XlsxPackageXmlEditor.LoadXml(targetEntry);
+        }
+        catch
+        {
+            return;
+        }
+
+        XNamespace pivotNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var root = xml.Root;
+        if (root?.Name != pivotNs + "pivotCacheDefinition")
+            return;
+
+        var idAttribute = root.Attribute(relNs + "id");
+        if (idAttribute is null ||
+            !relationshipIdMap.TryGetValue(idAttribute.Value, out var replacementId))
+        {
+            return;
+        }
+
+        idAttribute.Value = replacementId;
+        WriteXml(targetIndex, sourcePart, xml, targetEntry.LastWriteTime, SaveOptions.DisableFormatting);
     }
 
     private static void RebindGeneratedWorksheetPictureRelationshipReference(
