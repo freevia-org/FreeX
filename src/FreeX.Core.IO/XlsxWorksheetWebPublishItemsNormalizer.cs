@@ -117,12 +117,12 @@ internal static class XlsxWorksheetWebPublishItemsNormalizer
         var changed = false;
         changed |= RemoveUnknownAttributes(webPublishItem, WebPublishItemAttributes);
         changed |= RemoveAllNodes(webPublishItem);
-        changed |= NormalizeAttribute(webPublishItem, "id", NormalizeUnsignedIntOrNull);
-        changed |= NormalizeAttribute(webPublishItem, "sourceType", NormalizeSourceType);
-        changed |= NormalizeAttribute(webPublishItem, "autoRepublish", NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishItem, "id", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishItem, "sourceType", NormalizeSourceType);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishItem, "autoRepublish", NormalizeBoolean);
 
         foreach (var attributeName in TextAttributes)
-            changed |= NormalizeAttribute(webPublishItem, attributeName, NormalizeOptionalText);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishItem, attributeName, NormalizeOptionalText);
 
         return changed;
     }
@@ -135,12 +135,7 @@ internal static class XlsxWorksheetWebPublishItemsNormalizer
     private static bool NormalizeCount(XElement webPublishItems)
     {
         var count = webPublishItems.Elements(WorksheetNs + "webPublishItem").Count().ToString(CultureInfo.InvariantCulture);
-        var attribute = webPublishItems.Attribute("count");
-        if (attribute is not null && string.Equals(attribute.Value, count, StringComparison.Ordinal))
-            return false;
-
-        webPublishItems.SetAttributeValue("count", count);
-        return true;
+        return XlsxXmlNormalizationHelpers.SetAttributeIfChanged(webPublishItems, "count", count);
     }
 
     private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedNames)
@@ -180,29 +175,6 @@ internal static class XlsxWorksheetWebPublishItemsNormalizer
             return false;
 
         element.RemoveNodes();
-        return true;
-    }
-
-    private static bool NormalizeAttribute(
-        XElement element,
-        string attributeName,
-        Func<string?, string?> normalize)
-    {
-        var attribute = element.Attribute(attributeName);
-        var normalized = normalize(attribute?.Value);
-        if (normalized is null)
-        {
-            if (attribute is null)
-                return false;
-
-            attribute.Remove();
-            return true;
-        }
-
-        if (attribute is not null && string.Equals(attribute.Value, normalized, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(attributeName, normalized);
         return true;
     }
 
