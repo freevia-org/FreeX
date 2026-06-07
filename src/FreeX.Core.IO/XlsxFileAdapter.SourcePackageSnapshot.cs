@@ -389,6 +389,14 @@ public sealed partial class XlsxFileAdapter
         private const string ChartExRelationshipType = "http://schemas.microsoft.com/office/2014/relationships/chartEx";
         private const string ChartExStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartStyle";
         private const string ChartExColorStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartColorStyle";
+        private const string DiagramDataRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData";
+        private const string DiagramLayoutRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout";
+        private const string DiagramQuickStyleRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle";
+        private const string DiagramColorsRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors";
+        private const string DiagramDataContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml";
+        private const string DiagramLayoutContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml";
+        private const string DiagramStyleContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml";
+        private const string DiagramColorsContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml";
         private const string ImageRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
         private const string PivotTableRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable";
         private const string PivotCacheDefinitionRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition";
@@ -2664,6 +2672,7 @@ public sealed partial class XlsxFileAdapter
             XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
             XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
             XNamespace chartExNs = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+            const string diagramGraphicDataUri = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
             XNamespace markupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
             if (drawingRoot.Name != spreadsheetDrawingNs + "wsDr" ||
                 drawingXml.Descendants(spreadsheetDrawingNs + "cxnSp").Any() ||
@@ -2675,6 +2684,10 @@ public sealed partial class XlsxFileAdapter
             var chartElements = drawingXml
                 .Descendants()
                 .Where(element => element.Name == chartNs + "chart" || element.Name == chartExNs + "chart")
+                .ToList();
+            var diagramGraphicDataElements = drawingXml
+                .Descendants(drawingNs + "graphicData")
+                .Where(element => string.Equals(element.Attribute("uri")?.Value, diagramGraphicDataUri, StringComparison.Ordinal))
                 .ToList();
             var pictureElements = drawingXml.Descendants(spreadsheetDrawingNs + "pic").ToList();
             var sourceShapeElements = drawingXml
@@ -2713,12 +2726,15 @@ public sealed partial class XlsxFileAdapter
                 var chartCount = anchor
                     .Descendants()
                     .Count(element => element.Name == chartNs + "chart" || element.Name == chartExNs + "chart");
+                var diagramCount = anchor
+                    .Descendants(drawingNs + "graphicData")
+                    .Count(element => string.Equals(element.Attribute("uri")?.Value, diagramGraphicDataUri, StringComparison.Ordinal));
                 var pictureCount = anchor.Descendants(spreadsheetDrawingNs + "pic").Count();
                 var shapeCount = anchor
                     .Descendants(spreadsheetDrawingNs + "sp")
                     .Count(element => !element.Ancestors(markupCompatNs + "Fallback").Any());
-                if (chartCount + pictureCount + shapeCount == 0 ||
-                    anchor.Descendants(spreadsheetDrawingNs + "graphicFrame").Count() != chartCount)
+                if (chartCount + diagramCount + pictureCount + shapeCount == 0 ||
+                    anchor.Descendants(spreadsheetDrawingNs + "graphicFrame").Count() != chartCount + diagramCount)
                 {
                     return false;
                 }
@@ -2781,6 +2797,27 @@ public sealed partial class XlsxFileAdapter
                 allowedChartPaths.Add(chartPath);
             }
 
+            foreach (var graphicDataElement in diagramGraphicDataElements)
+            {
+                var relationshipIds = graphicDataElement
+                    .DescendantsAndSelf()
+                    .Attributes()
+                    .Where(attribute => attribute.Name.Namespace == relNs)
+                    .Select(attribute => attribute.Value)
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .ToArray();
+                if (relationshipIds.Length == 0 ||
+                    !TryAddPatchSafeDiagramPackagePaths(
+                        archive,
+                        drawingPath,
+                        relationshipElements,
+                        relationshipIds,
+                        referencedRelationshipIds))
+                {
+                    return false;
+                }
+            }
+
             foreach (var pictureElement in pictureElements)
             {
                 var imageRelId = pictureElement
@@ -2818,6 +2855,125 @@ public sealed partial class XlsxFileAdapter
             allowedDrawingPackagePaths.Add(drawingPath);
             allowedDrawingPackagePaths.Add(drawingRelsPath);
             return true;
+        }
+
+        private static bool TryAddPatchSafeDiagramPackagePaths(
+            ZipArchive archive,
+            string drawingPath,
+            IReadOnlyList<XElement> relationshipElements,
+            IReadOnlyList<string> relationshipIds,
+            HashSet<string> referencedRelationshipIds)
+        {
+            var contentTypes = TryReadPackageContentTypes(archive);
+            if (contentTypes is null)
+                return false;
+
+            var relationshipTypesById = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var id in relationshipIds)
+            {
+                var relationship = relationshipElements.FirstOrDefault(element =>
+                    string.Equals(element.Attribute("Id")?.Value, id, StringComparison.Ordinal));
+                var type = relationship?.Attribute("Type")?.Value;
+                if (string.Equals(type, DiagramDataRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(type, DiagramLayoutRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(type, DiagramQuickStyleRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(type, DiagramColorsRelationshipType, StringComparison.OrdinalIgnoreCase))
+                {
+                    relationshipTypesById[id] = type!;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+
+            var seenTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (relationshipId, relationshipType) in relationshipTypesById)
+            {
+                if (!seenTypes.Add(relationshipType) ||
+                    !referencedRelationshipIds.Add(relationshipId) ||
+                    !TryGetRelationship(relationshipElements, relationshipId, relationshipType, out var target))
+                {
+                    return false;
+                }
+
+                var diagramPath = XlsxPackagePath.ResolveRelationshipTarget(drawingPath, target);
+                if (!diagramPath.StartsWith("xl/diagrams/", StringComparison.OrdinalIgnoreCase) ||
+                    diagramPath.Contains("/_rels/", StringComparison.OrdinalIgnoreCase) ||
+                    !diagramPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ||
+                    archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(diagramPath)) is not null ||
+                    archive.GetEntry(diagramPath) is not { } diagramEntry ||
+                    !DiagramPartHasExpectedContentType(contentTypes, diagramPath, relationshipType))
+                {
+                    return false;
+                }
+
+                try
+                {
+                    var diagramXml = XlsxPackageXmlEditor.LoadXml(diagramEntry);
+                    if (diagramXml.Root is null)
+                        return false;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+
+            return seenTypes.Contains(DiagramDataRelationshipType);
+        }
+
+        private static Dictionary<string, string>? TryReadPackageContentTypes(ZipArchive archive)
+        {
+            var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+            if (contentTypesEntry is null)
+                return null;
+
+            try
+            {
+                XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+                var contentTypesXml = XlsxPackageXmlEditor.LoadXml(contentTypesEntry);
+                return contentTypesXml.Root?
+                    .Elements(contentTypeNs + "Override")
+                    .Select(element => (
+                        PartName: NormalizeContentTypePartName(element.Attribute("PartName")?.Value),
+                        ContentType: element.Attribute("ContentType")?.Value))
+                    .Where(pair => !string.IsNullOrWhiteSpace(pair.PartName) && !string.IsNullOrWhiteSpace(pair.ContentType))
+                    .ToDictionary(pair => pair.PartName!, pair => pair.ContentType!, StringComparer.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string? NormalizeContentTypePartName(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            return XlsxPackagePath.NormalizeZipPath(value.Trim().Replace('\\', '/').TrimStart('/'));
+        }
+
+        private static bool DiagramPartHasExpectedContentType(
+            IReadOnlyDictionary<string, string> contentTypes,
+            string diagramPath,
+            string relationshipType)
+        {
+            if (!contentTypes.TryGetValue(diagramPath, out var contentType))
+                return false;
+
+            var expectedContentType = relationshipType switch
+            {
+                DiagramDataRelationshipType => DiagramDataContentType,
+                DiagramLayoutRelationshipType => DiagramLayoutContentType,
+                DiagramQuickStyleRelationshipType => DiagramStyleContentType,
+                DiagramColorsRelationshipType => DiagramColorsContentType,
+                _ => null
+            };
+
+            return !string.IsNullOrWhiteSpace(expectedContentType) &&
+                   string.Equals(contentType, expectedContentType, StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool TryAddPatchSafeChartExPackagePaths(
