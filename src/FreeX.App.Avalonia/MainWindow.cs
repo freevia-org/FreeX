@@ -3047,6 +3047,12 @@ public sealed class MainWindow : Window
 
         var text = await clipboard.TryGetTextAsync();
         var destination = _session.ActiveCell;
+        if (_session.ShouldPreferExternalClipboardImage(text) &&
+            await TryPasteClipboardImageAsync(clipboard, destination))
+        {
+            return;
+        }
+
         var result = _session.PasteClipboardTextAtActiveCell(text);
         if (!result.Success)
         {
@@ -3055,6 +3061,40 @@ public sealed class MainWindow : Window
         }
 
         RefreshShell($"Pasted at {FormatCellReference(destination)}");
+    }
+
+    private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard, CellAddress destination)
+    {
+        byte[] pngBytes;
+        int pixelWidth;
+        int pixelHeight;
+        try
+        {
+            using var bitmap = await clipboard.TryGetBitmapAsync();
+            if (bitmap is null)
+                return false;
+
+            var pixelSize = bitmap.PixelSize;
+            pixelWidth = pixelSize.Width;
+            pixelHeight = pixelSize.Height;
+            using var stream = new MemoryStream();
+            bitmap.Save(stream);
+            pngBytes = stream.ToArray();
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+
+        var result = _session.PasteClipboardImageAtActiveCell(pngBytes, pixelWidth, pixelHeight);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Paste Picture failed.");
+            return true;
+        }
+
+        RefreshShell($"Pasted picture at {FormatCellReference(destination)}");
+        return true;
     }
 
     private async Task PasteSpecialClipboardTextAsync(

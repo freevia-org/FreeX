@@ -797,6 +797,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("await clipboard.SetTextAsync(_session.CutSelectedRangeText());");
         source.Should().Contain("await clipboard.SetTextAsync(_session.CopySelectedRangeText());");
         source.Should().Contain("var text = await clipboard.TryGetTextAsync();");
+        source.Should().Contain("_session.ShouldPreferExternalClipboardImage(text)");
+        source.Should().Contain("private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard, CellAddress destination)");
+        source.Should().Contain("await clipboard.TryGetBitmapAsync()");
+        source.Should().Contain("bitmap.Save(stream)");
+        source.Should().Contain("_session.PasteClipboardImageAtActiveCell(pngBytes, pixelWidth, pixelHeight)");
         source.Should().Contain("_session.PasteClipboardTextAtActiveCell(text)");
         source.Should().Contain("_session.PasteSpecialClipboardAtActiveCell(text, mode, options)");
         source.Should().Contain("_session.PasteSpecialClipboardAtActiveCell(text, mode, options, keepSourceColumnWidths: true)");

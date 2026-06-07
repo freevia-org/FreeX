@@ -782,6 +782,39 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public bool ShouldPreferExternalClipboardImage(string? text)
+    {
+        if (!string.IsNullOrWhiteSpace(text))
+            return false;
+
+        return _internalClipboard is not { } internalClipboard ||
+            (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal));
+    }
+
+    public WorkbookCellEditResult PasteClipboardImageAtActiveCell(
+        IReadOnlyCollection<byte> pngBytes,
+        int pixelWidth,
+        int pixelHeight)
+    {
+        ArgumentNullException.ThrowIfNull(pngBytes);
+
+        var destination = ActiveCell;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            ClipboardPictureService.CreateInsertCommand(
+                ActiveSheet.Id,
+                destination,
+                pngBytes,
+                pixelWidth,
+                pixelHeight));
+        if (!result.Success)
+            return result;
+
+        _internalClipboard = null;
+        ApplySuccessfulEditResult(result, destination);
+        return result;
+    }
+
     public WorkbookCellEditResult PasteExternalTextAtActiveCell(string text, bool preserveText = false)
     {
         ArgumentNullException.ThrowIfNull(text);

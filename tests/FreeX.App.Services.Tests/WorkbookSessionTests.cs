@@ -1194,6 +1194,67 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void ShouldPreferExternalClipboardImage_UsesImageOnlyWhenNoTextOrInternalCopyWins()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("source"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        session.ShouldPreferExternalClipboardImage(null).Should().BeTrue();
+        session.ShouldPreferExternalClipboardImage("").Should().BeTrue();
+        session.ShouldPreferExternalClipboardImage("text").Should().BeFalse();
+
+        session.SelectCell(a1);
+        var clipboardText = session.CopySelectedRangeText();
+
+        session.ShouldPreferExternalClipboardImage(null).Should().BeFalse();
+        session.ShouldPreferExternalClipboardImage(clipboardText).Should().BeFalse();
+        session.ShouldPreferExternalClipboardImage("").Should().BeTrue();
+    }
+
+    [Fact]
+    public void PasteClipboardImageAtActiveCell_AddsBinaryImagePicturePreservesSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var d4 = new CellAddress(sheet.Id, 4, 4);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(d4);
+        var pngBytes = new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 };
+
+        var result = session.PasteClipboardImageAtActiveCell(pngBytes, pixelWidth: 96, pixelHeight: 72);
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().ContainSingle().Which.Should().Be(d4);
+        session.ActiveCell.Should().Be(d4);
+        session.SelectedRange.Should().Be(new GridRange(d4, d4));
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        var picture = sheet.Pictures.Should().ContainSingle().Subject;
+        picture.Anchor.Should().Be(d4);
+        picture.Kind.Should().Be(PictureKind.Image);
+        picture.ContentType.Should().Be("image/png");
+        picture.ImageBytes.Should().Equal(pngBytes);
+        picture.Width.Should().Be(96);
+        picture.Height.Should().Be(72);
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.Pictures.Should().BeEmpty();
+    }
+
+    [Fact]
     public void ClearSelectedRangeContents_ClearsValuesAndFormulasPreservesSelectionAndUndo()
     {
         var workbook = CreateWorkbook();

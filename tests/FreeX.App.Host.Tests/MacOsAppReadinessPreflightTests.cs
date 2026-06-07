@@ -66,7 +66,14 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("_session.PasteClipboardTextAtActiveCell(text, preserveText: true)");
         script.Should().Contain("CreatePastePictureMenuItem(`\"Picture`\", linkedPicture: false)");
         script.Should().Contain("CreateNativePastePictureMenuItem(`\"Linked Picture`\", linkedPicture: true)");
+        script.Should().Contain("_session.ShouldPreferExternalClipboardImage(text)");
+        script.Should().Contain("private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard, CellAddress destination)");
+        script.Should().Contain("await clipboard.TryGetBitmapAsync()");
+        script.Should().Contain("bitmap.Save(stream)");
+        script.Should().Contain("_session.PasteClipboardImageAtActiveCell(pngBytes, pixelWidth, pixelHeight)");
         script.Should().Contain("_session.PastePictureFromClipboardAtActiveCell(text, linkedPicture)");
+        script.Should().Contain("public WorkbookCellEditResult PasteClipboardImageAtActiveCell(");
+        script.Should().Contain("ClipboardPictureService.CreateInsertCommand(");
         script.Should().Contain("native_paste_special_text_menu_item=true");
         script.Should().Contain("native_paste_special_unicode_text_menu_item=true");
         script.Should().Contain("native_paste_special_picture_menu_item=true");
@@ -551,6 +558,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     CreateNativePastePictureMenuItem("Picture", linkedPicture: false);
                     CreateNativePastePictureMenuItem("Linked Picture", linkedPicture: true);
                     _session.PasteClipboardTextAtActiveCell(text, preserveText: true);
+                    _session.ShouldPreferExternalClipboardImage(text);
+                    private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard, CellAddress destination)
+                    await clipboard.TryGetBitmapAsync()
+                    bitmap.Save(stream)
+                    _session.PasteClipboardImageAtActiveCell(pngBytes, pixelWidth, pixelHeight);
                     private async Task PastePictureFromClipboardAsync(string label, bool linkedPicture)
                     _session.PastePictureFromClipboardAtActiveCell(text, linkedPicture);
                     HasNativePasteSpecialTextMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Text");
@@ -846,6 +858,9 @@ public sealed class MacOsAppReadinessPreflightTests
                 PasteLinkService.CreateLinkedCells(
                 public WorkbookCellEditResult PastePictureFromClipboardAtActiveCell(
                 new PasteRangeAsPictureCommand(
+                public bool ShouldPreferExternalClipboardImage(string? text)
+                public WorkbookCellEditResult PasteClipboardImageAtActiveCell(
+                ClipboardPictureService.CreateInsertCommand(
                 private static string FormatPictureCellText(ScalarValue value)
                 new PasteColumnWidthsCommand(
                 new EditCellsCommand(ActiveSheet.Id, linkedCells)
