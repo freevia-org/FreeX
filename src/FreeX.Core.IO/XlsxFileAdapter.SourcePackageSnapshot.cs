@@ -1485,6 +1485,7 @@ public sealed partial class XlsxFileAdapter
         private static void NormalizePatchSharedStrings(ZipArchive archive)
         {
             XlsxRichTextFontNormalizer.NormalizeSharedStrings(archive);
+            XlsxSharedStringPackageGraphNormalizer.NormalizePackage(archive);
         }
 
         private static void NormalizePatchInlineStringFonts(ZipArchive archive)
