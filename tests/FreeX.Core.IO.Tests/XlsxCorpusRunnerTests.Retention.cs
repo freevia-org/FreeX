@@ -1514,7 +1514,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace x15Ns = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var extensionList = worksheetXml.Root!.Element(worksheetNs + "extLst");
         extensionList.Should().NotBeNull(because);
         extensionList!.Elements(worksheetNs + "ext")
@@ -1539,7 +1539,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var customSheetViews = worksheetXml.Root!.Element(worksheetNs + "customSheetViews");
         if (!expectCustomSheetViews)
         {
@@ -1569,7 +1569,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var scenarios = worksheetXml.Root!.Element(worksheetNs + "scenarios");
         scenarios.Should().NotBeNull(because);
 
@@ -1596,7 +1596,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var cellSmartTags = worksheetXml.Root!
             .Element(worksheetNs + "smartTags")!
             .Elements(worksheetNs + "cellSmartTags")
@@ -1627,7 +1627,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var customProperty = worksheetXml.Root!
             .Element(worksheetNs + "customProperties")!
             .Elements(worksheetNs + "customPr")
@@ -1674,7 +1674,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var dataConsolidate = worksheetXml.Root!.Element(worksheetNs + "dataConsolidate");
         dataConsolidate.Should().NotBeNull(because);
         dataConsolidate!.Attribute("function")!.Value.Should().Be("sum", because);
@@ -1699,7 +1699,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var autoFilter = worksheetXml.Root!.Element(worksheetNs + "autoFilter");
         autoFilter.Should().NotBeNull(because);
         autoFilter!.Attribute("ref")!.Value.Should().Be("A1:B3", because);
@@ -1722,7 +1722,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var autoFilter = worksheetXml.Root!.Element(worksheetNs + "autoFilter");
         autoFilter.Should().NotBeNull(because);
         autoFilter!.Attribute("ref")!.Value.Should().Be("A1:B3", because);
@@ -1753,7 +1753,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var phoneticProperties = worksheetXml.Root!.Element(worksheetNs + "phoneticPr");
         phoneticProperties.Should().NotBeNull(because);
         phoneticProperties!.Attribute("fontId")!.Value.Should().Be("1", because);
@@ -1767,7 +1767,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var cellWatches = worksheetXml.Root!.Element(worksheetNs + "cellWatches");
         cellWatches.Should().NotBeNull(because);
         cellWatches!.Attribute("nativeContainer").Should().BeNull(because);
@@ -1788,10 +1788,10 @@ public partial class XlsxCorpusRunnerTests
         const string relationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableSingleCells";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         worksheetXml.Root!.Element(worksheetNs + "singleXmlCells").Should().BeNull(because);
 
-        var relsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var relsXml = LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
         var relationship = relsXml.Root!
             .Elements(packageRelNs + "Relationship")
             .Should()
@@ -1801,7 +1801,7 @@ public partial class XlsxCorpusRunnerTests
                 because)
             .Subject;
         var partPath = XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, relationship.Attribute("Target")!.Value);
-        var singleXmlCells = LoadPackageXml(archive.GetEntry(partPath)!).Root;
+        var singleXmlCells = LoadPackageXml(archive, partPath).Root;
         singleXmlCells.Should().NotBeNull(because);
         singleXmlCells!.Attribute("nativeSingleXmlCellsAttr").Should().BeNull(because);
 
@@ -1824,7 +1824,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var sheetCalcPr = worksheetXml.Root!.Element(worksheetNs + "sheetCalcPr");
         sheetCalcPr.Should().NotBeNull(because);
         sheetCalcPr!.Attribute("fullCalcOnLoad")!.Value.Should().Be("1", because);
@@ -1836,7 +1836,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var sheetViews = worksheetXml.Root!.Element(worksheetNs + "sheetViews");
         sheetViews.Should().NotBeNull(because);
         sheetViews!.Attribute("nativeSheetViewsAttr").Should().BeNull(because);
@@ -1855,7 +1855,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var sheetFormat = worksheetXml.Root!.Element(worksheetNs + "sheetFormatPr");
         sheetFormat.Should().NotBeNull(because);
         sheetFormat!.Attribute("baseColWidth")!.Value.Should().Be("12", because);
@@ -1870,7 +1870,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var rowBreaks = worksheetXml.Root!.Element(worksheetNs + "rowBreaks");
         rowBreaks.Should().NotBeNull(because);
         rowBreaks!.Attribute("count")!.Value.Should().Be("1", because);
@@ -1905,7 +1905,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var printOptions = worksheetXml.Root!.Element(worksheetNs + "printOptions");
         printOptions.Should().NotBeNull(because);
         printOptions!.Attribute("gridLinesSet")!.Value.Should().Be("1", because);
@@ -1922,7 +1922,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var pageSetup = worksheetXml.Root!.Element(worksheetNs + "pageSetup");
         pageSetup.Should().NotBeNull(because);
         pageSetup!.Attribute("usePrinterDefaults")!.Value.Should().Be("1", because);
@@ -1936,7 +1936,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var headerFooter = worksheetXml.Root!.Element(worksheetNs + "headerFooter");
         headerFooter.Should().NotBeNull(because);
         headerFooter!.Attribute("nativeHeaderFooterAttr").Should().BeNull(because);
@@ -1949,7 +1949,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var dimension = worksheetXml.Root!.Element(worksheetNs + "dimension");
         dimension.Should().NotBeNull(because);
         dimension!.Attribute("ref")!.Value.Should().Be(expectedRef, because);
@@ -1961,7 +1961,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var sheetPr = worksheetXml.Root!.Element(worksheetNs + "sheetPr");
         sheetPr.Should().NotBeNull(because);
         sheetPr!.Attribute("filterMode")!.Value.Should().Be("1", because);
@@ -1979,7 +1979,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var protection = worksheetXml.Root!.Element(worksheetNs + "sheetProtection");
         protection.Should().NotBeNull(because);
         protection!.Attribute("sheet")!.Value.Should().Be("1", because);
@@ -1997,7 +1997,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var protectedRanges = worksheetXml.Root!.Element(worksheetNs + "protectedRanges");
         protectedRanges.Should().NotBeNull(because);
         var ranges = protectedRanges!.Elements(worksheetNs + "protectedRange").ToArray();
@@ -2024,7 +2024,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace freexNs = "urn:freex:test";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var cols = worksheetXml.Root!.Element(worksheetNs + "cols");
         cols.Should().NotBeNull(because);
         cols!.Attribute("nativeColsAttr").Should().BeNull(because);
@@ -2091,7 +2091,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var ignoredError = worksheetXml.Root!
             .Element(worksheetNs + "ignoredErrors")!
             .Elements(worksheetNs + "ignoredError")
@@ -2107,7 +2107,7 @@ public partial class XlsxCorpusRunnerTests
     private static void AssertWorkbookExtensionList(Stream package, string because)
     {
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         workbookXml.ToString(SaveOptions.DisableFormatting)
             .Should()
             .Contain("{00112233-4455-6677-8899-AABBCCDDEEFF}", because)
@@ -2119,7 +2119,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var workbookProperties = workbookXml.Root!.Element(workbookNs + "workbookPr");
         workbookProperties.Should().NotBeNull(because);
         workbookProperties!.Attribute("date1904")!.Value.Should().Be("1", because);
@@ -2132,7 +2132,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var calculationProperties = workbookXml.Root!.Element(workbookNs + "calcPr");
         calculationProperties.Should().NotBeNull(because);
         calculationProperties!.Attribute("calcMode")!.Value.Should().Be("manual", because);
@@ -2149,7 +2149,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var fileVersion = workbookXml.Root!.Element(workbookNs + "fileVersion");
         fileVersion.Should().NotBeNull(because);
         fileVersion!.Attribute("appName")!.Value.Should().Be("xl", because);
@@ -2164,7 +2164,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var recoveryBlocks = workbookXml.Root!.Elements(workbookNs + "fileRecoveryPr").ToArray();
         recoveryBlocks.Should().HaveCount(2, because);
         recoveryBlocks[0].Attribute("autoRecover")!.Value.Should().Be("1", because);
@@ -2180,7 +2180,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var fileSharing = workbookXml.Root!.Element(workbookNs + "fileSharing");
         fileSharing.Should().NotBeNull(because);
         fileSharing!.Attribute("readOnlyRecommended")!.Value.Should().Be("1", because);
@@ -2193,7 +2193,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var protection = workbookXml.Root!.Element(workbookNs + "workbookProtection");
         protection.Should().NotBeNull(because);
         protection!.Attribute("lockStructure")!.Value.Should().Be("1", because);
@@ -2211,7 +2211,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var smartTagProperties = workbookXml.Root!.Element(workbookNs + "smartTagPr");
         smartTagProperties.Should().NotBeNull(because);
         smartTagProperties!.Attribute("embed")!.Value.Should().Be("1", because);
@@ -2235,7 +2235,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var functionGroups = workbookXml.Root!.Element(workbookNs + "functionGroups");
         functionGroups.Should().NotBeNull(because);
         functionGroups!.Attribute("builtInGroupCount")!.Value.Should().Be("16", because);
@@ -2253,7 +2253,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var views = workbookXml.Root!
             .Element(workbookNs + "bookViews")!
             .Elements(workbookNs + "workbookView")
@@ -2293,7 +2293,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var definedName = workbookXml.Root!
             .Element(workbookNs + "definedNames")!
             .Elements(workbookNs + "definedName")
@@ -2310,7 +2310,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
+        var stylesXml = LoadPackageXml(archive, "xl/styles.xml");
         var colors = stylesXml.Root!.Element(workbookNs + "colors");
         colors.Should().NotBeNull(because);
         colors!.ToString(SaveOptions.DisableFormatting).Should().Contain("rgb=\"FF010203\"", because);
@@ -2354,7 +2354,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var themeXml = LoadPackageXml(archive.GetEntry("xl/theme/theme1.xml")!);
+        var themeXml = LoadPackageXml(archive, "xl/theme/theme1.xml");
         var themeElements = themeXml.Root!.Element(drawingNs + "themeElements")!;
         var colorScheme = themeElements.Element(drawingNs + "clrScheme")!;
         colorScheme.Element(drawingNs + "accent1")!
@@ -2387,7 +2387,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         worksheetXml.Descendants(worksheetNs + "f")
             .Select(formula => formula.Value)
             .Where(formula =>
@@ -2406,7 +2406,7 @@ public partial class XlsxCorpusRunnerTests
         var tableRelId = tablePart.Attribute(officeRelNs + "id")?.Value;
         tableRelId.Should().NotBeNullOrWhiteSpace(because);
 
-        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var worksheetRelsXml = LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
         worksheetRelsXml.Root!
             .Elements(packageRelNs + "Relationship")
             .Should()
@@ -2416,7 +2416,7 @@ public partial class XlsxCorpusRunnerTests
                 string.Equals(AttributeValue(rel, "Target"), "../tables/table1.xml", StringComparison.OrdinalIgnoreCase),
                 because);
 
-        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!);
+        var tableXml = LoadPackageXml(archive, "xl/tables/table1.xml");
         tableXml.Root!.Name.Should().Be(worksheetNs + "table", because);
         tableXml.Root.Attribute("displayName")!.Value.Should().Be("SalesTable", because);
         tableXml.Root.Attribute("ref")!.Value.Should().Be("A1:D3", because);
@@ -2445,7 +2445,7 @@ public partial class XlsxCorpusRunnerTests
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
         archive.GetEntry("xl/worksheets/sheet2.xml").Should().NotBeNull(because);
 
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         worksheetXml.Descendants(workbookNs + "f")
             .Select(formula => formula.Value)
             .Where(formula =>
@@ -2454,7 +2454,7 @@ public partial class XlsxCorpusRunnerTests
             .Should()
             .HaveCount(2, because);
 
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var lookupSheet = workbookXml.Root!
             .Element(workbookNs + "sheets")!
             .Elements(workbookNs + "sheet")
@@ -2464,7 +2464,7 @@ public partial class XlsxCorpusRunnerTests
         var lookupRelId = lookupSheet.Attribute(officeRelNs + "id")?.Value;
         lookupRelId.Should().NotBeNullOrWhiteSpace(because);
 
-        var workbookRelsXml = LoadPackageXml(archive.GetEntry("xl/_rels/workbook.xml.rels")!);
+        var workbookRelsXml = LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
         workbookRelsXml.Root!
             .Elements(packageRelNs + "Relationship")
             .Should()
@@ -2489,7 +2489,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var definedNames = workbookXml.Root!
             .Element(workbookNs + "definedNames")!
             .Elements(workbookNs + "definedName")
@@ -2513,7 +2513,7 @@ public partial class XlsxCorpusRunnerTests
         string because)
     {
         XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
-        var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+        var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
         contentTypesXml.Root!
             .Elements(contentTypeNs + "Override")
             .Should()
@@ -2537,13 +2537,13 @@ public partial class XlsxCorpusRunnerTests
         archive.GetEntry("xl/drawings/_rels/vmlDrawing1.vml.rels").Should().NotBeNull(because);
         archive.GetEntry("xl/media/headerFooterImage1.png").Should().NotBeNull(because);
 
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var legacyDrawing = worksheetXml.Root!.Element(worksheetNs + "legacyDrawingHF");
         legacyDrawing.Should().NotBeNull(because);
         var relId = legacyDrawing!.Attribute(officeRelNs + "id")?.Value;
         relId.Should().NotBeNullOrWhiteSpace(because);
 
-        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var worksheetRelsXml = LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
         worksheetRelsXml.Root!
             .Elements(packageRelNs + "Relationship")
             .Where(rel =>
@@ -2553,13 +2553,13 @@ public partial class XlsxCorpusRunnerTests
             .Should()
             .ContainSingle(because);
 
-        var vmlDrawing = LoadPackageXml(archive.GetEntry("xl/drawings/vmlDrawing1.vml")!);
+        var vmlDrawing = LoadPackageXml(archive, "xl/drawings/vmlDrawing1.vml");
         vmlDrawing.Descendants()
             .Where(element => element.Attribute(officeNs + "relid")?.Value == "rIdImage1")
             .Should()
             .ContainSingle(because);
 
-        var vmlRelsXml = LoadPackageXml(archive.GetEntry("xl/drawings/_rels/vmlDrawing1.vml.rels")!);
+        var vmlRelsXml = LoadPackageXml(archive, "xl/drawings/_rels/vmlDrawing1.vml.rels");
         vmlRelsXml.Root!
             .Elements(packageRelNs + "Relationship")
             .Where(rel =>
@@ -2581,12 +2581,12 @@ public partial class XlsxCorpusRunnerTests
         archive.GetEntry("xl/drawings/_rels/vmlDrawing1.vml.rels").Should().NotBeNull(because);
         archive.GetEntry("xl/media/vmlImage1.png").Should().NotBeNull(because);
 
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var legacyDrawing = worksheetXml.Root!.Element(worksheetNs + "legacyDrawing");
         legacyDrawing.Should().NotBeNull(because);
         legacyDrawing!.Attribute(officeRelNs + "id")!.Value.Should().Be("rIdFreeXLegacyDrawing", because);
 
-        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var worksheetRelsXml = LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
         var hasLegacyDrawingRelationship = worksheetRelsXml.Root!
             .Elements(packageRelNs + "Relationship")
             .Count(rel =>
@@ -2595,12 +2595,12 @@ public partial class XlsxCorpusRunnerTests
                 string.Equals(rel.Attribute("Target")?.Value, "../drawings/vmlDrawing1.vml", StringComparison.OrdinalIgnoreCase)) == 1;
         hasLegacyDrawingRelationship.Should().BeTrue(because);
 
-        var vmlDrawing = LoadPackageXml(archive.GetEntry("xl/drawings/vmlDrawing1.vml")!);
+        var vmlDrawing = LoadPackageXml(archive, "xl/drawings/vmlDrawing1.vml");
         vmlDrawing.Descendants()
             .Single(element => string.Equals(element.Name.LocalName, "shape", StringComparison.OrdinalIgnoreCase))
             .Attribute("id")!.Value.Should().Be("FreeXLegacyDrawingShape", because);
 
-        var vmlRelsXml = LoadPackageXml(archive.GetEntry("xl/drawings/_rels/vmlDrawing1.vml.rels")!);
+        var vmlRelsXml = LoadPackageXml(archive, "xl/drawings/_rels/vmlDrawing1.vml.rels");
         var hasImageRelationship = vmlRelsXml.Root!
             .Elements(packageRelNs + "Relationship")
             .Count(rel =>
@@ -2618,20 +2618,20 @@ public partial class XlsxCorpusRunnerTests
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var coreProperties = LoadPackageXml(archive.GetEntry("docProps/core.xml")!);
+        var coreProperties = LoadPackageXml(archive, "docProps/core.xml");
         coreProperties.Root!.Name.Should().Be(corePropertiesNs + "coreProperties", because);
         coreProperties.Root.Element(dcNs + "title")!.Value.Should().Be("FreeX document property corpus", because);
         coreProperties.Root.Element(dcNs + "subject")!.Value.Should().Be("Stable document properties retained", because);
         coreProperties.Root.Element(corePropertiesNs + "keywords")!.Value.Should().Be("xlsx parity", because);
         coreProperties.Root.Element(corePropertiesNs + "lastModifiedBy")!.Value.Should().Be("FreeX Fixture", because);
 
-        var appProperties = LoadPackageXml(archive.GetEntry("docProps/app.xml")!);
+        var appProperties = LoadPackageXml(archive, "docProps/app.xml");
         appProperties.Root!.Name.Should().Be(extendedPropertiesNs + "Properties", because);
         appProperties.Root.Element(extendedPropertiesNs + "Application")!.Value.Should().Be("Microsoft Excel", because);
         appProperties.Root.Element(extendedPropertiesNs + "Company")!.Value.Should().Be("FreeX Test Lab", because);
         appProperties.Root.Element(extendedPropertiesNs + "Manager")!.Value.Should().Be("Workbook Fidelity", because);
 
-        var packageRelsXml = LoadPackageXml(archive.GetEntry("_rels/.rels")!);
+        var packageRelsXml = LoadPackageXml(archive, "_rels/.rels");
         packageRelsXml.Root!
             .Elements(packageRelNs + "Relationship")
             .Where(rel =>
@@ -2647,12 +2647,12 @@ public partial class XlsxCorpusRunnerTests
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var calcChain = LoadPackageXml(archive.GetEntry("xl/calcChain.xml")!);
+        var calcChain = LoadPackageXml(archive, "xl/calcChain.xml");
         calcChain.Root!.Name.Should().Be(calcNs + "calcChain", because);
         calcChain.Root.Elements(calcNs + "c").Should().ContainSingle(because)
             .Which.Attribute("r")!.Value.Should().Be("A1", because);
 
-        var workbookRelsXml = LoadPackageXml(archive.GetEntry("xl/_rels/workbook.xml.rels")!);
+        var workbookRelsXml = LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
         workbookRelsXml.Root!
             .Elements(packageRelNs + "Relationship")
             .Where(rel =>
@@ -2668,7 +2668,7 @@ public partial class XlsxCorpusRunnerTests
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        var customProperties = LoadPackageXml(archive.GetEntry("docProps/custom.xml")!);
+        var customProperties = LoadPackageXml(archive, "docProps/custom.xml");
         var propertiesByName = customProperties.Root!
             .Elements(customPropertiesNs + "property")
             .ToDictionary(property => property.Attribute("name")?.Value ?? "", StringComparer.OrdinalIgnoreCase);
@@ -2677,7 +2677,7 @@ public partial class XlsxCorpusRunnerTests
         propertiesByName.Should().ContainKey("MSIP_Label_01234567-89ab-cdef-0123-456789abcdef_Enabled", because);
         propertiesByName["MSIP_Label_01234567-89ab-cdef-0123-456789abcdef_Enabled"].Value.Should().Be("true", because);
 
-        var packageRelsXml = LoadPackageXml(archive.GetEntry("_rels/.rels")!);
+        var packageRelsXml = LoadPackageXml(archive, "_rels/.rels");
         packageRelsXml.Root!
             .Elements(packageRelNs + "Relationship")
             .Where(rel =>
@@ -2696,7 +2696,7 @@ public partial class XlsxCorpusRunnerTests
         archive.GetEntry("customXml/itemProps1.xml").Should().NotBeNull(because);
         archive.GetEntry("customXml/_rels/item1.xml.rels").Should().NotBeNull(because);
 
-        var workbookRelsXml = LoadPackageXml(archive.GetEntry("xl/_rels/workbook.xml.rels")!);
+        var workbookRelsXml = LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
         workbookRelsXml.Root!
             .Elements(packageRelNs + "Relationship")
             .Where(rel =>
@@ -2712,7 +2712,7 @@ public partial class XlsxCorpusRunnerTests
             .Should()
             .BeEmpty(because);
 
-        var itemRelsXml = LoadPackageXml(archive.GetEntry("customXml/_rels/item1.xml.rels")!);
+        var itemRelsXml = LoadPackageXml(archive, "customXml/_rels/item1.xml.rels");
         itemRelsXml.Root!
             .Elements(packageRelNs + "Relationship")
             .Where(rel =>
@@ -2731,14 +2731,14 @@ public partial class XlsxCorpusRunnerTests
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
         archive.GetEntry("xl/printerSettings/printerSettings1.bin").Should().NotBeNull(because);
 
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var relId = worksheetXml.Root?
             .Element(worksheetNs + "pageSetup")?
             .Attribute(officeRelNs + "id")?
             .Value;
         relId.Should().Be("rIdPrinterSettings1", because);
 
-        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var worksheetRelsXml = LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
         var printerRelationships = worksheetRelsXml.Root!
             .Elements(packageRelNs + "Relationship")
             .Where(rel =>
