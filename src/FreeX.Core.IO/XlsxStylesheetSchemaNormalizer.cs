@@ -149,13 +149,13 @@ internal static class XlsxStylesheetSchemaNormalizer
     internal static bool NormalizeDifferentialStyles(XElement differentialStyles, XNamespace workbookNs)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(differentialStyles, DifferentialStylesAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(differentialStyles, DifferentialStylesAttributes);
         changed |= RemoveUnexpectedChildren(differentialStyles, workbookNs + "dxf");
 
         foreach (var dxf in differentialStyles.Elements(workbookNs + "dxf"))
             changed |= NormalizeDifferentialStyle(dxf, workbookNs);
 
-        changed |= SetAttributeIfChanged(
+        changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(
             differentialStyles,
             "count",
             differentialStyles.Elements(workbookNs + "dxf").Count().ToString(CultureInfo.InvariantCulture));
@@ -165,7 +165,7 @@ internal static class XlsxStylesheetSchemaNormalizer
     private static bool NormalizeDifferentialStyle(XElement dxf, XNamespace workbookNs)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(dxf, EmptyAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(dxf, EmptyAttributes);
         changed |= RemoveUnexpectedChildren(dxf, DifferentialStyleChildren, workbookNs);
         changed |= RemoveDuplicateChildren(dxf, DifferentialStyleChildren, workbookNs);
 
@@ -181,11 +181,11 @@ internal static class XlsxStylesheetSchemaNormalizer
         return child.Name.LocalName switch
         {
             "font" => NormalizeDifferentialFont(child, workbookNs),
-            "numFmt" => RemoveUnknownAttributes(child, NumFmtAttributes),
-            "fill" => RemoveUnknownAttributes(child, EmptyAttributes),
-            "alignment" => RemoveUnknownAttributes(child, AlignmentAttributes),
-            "border" => RemoveUnknownAttributes(child, BorderAttributes),
-            "protection" => RemoveUnknownAttributes(child, ProtectionAttributes),
+            "numFmt" => XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(child, NumFmtAttributes),
+            "fill" => XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(child, EmptyAttributes),
+            "alignment" => XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(child, AlignmentAttributes),
+            "border" => XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(child, BorderAttributes),
+            "protection" => XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(child, ProtectionAttributes),
             "extLst" => NormalizeExtensionListElement(child, workbookNs),
             _ => false
         };
@@ -238,12 +238,12 @@ internal static class XlsxStylesheetSchemaNormalizer
         HashSet<string> seenUris)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(extensionList, EmptyAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(extensionList, EmptyAttributes);
         changed |= RemoveUnexpectedChildren(extensionList, workbookNs + "ext");
 
         foreach (var extension in extensionList.Elements(workbookNs + "ext").ToList())
         {
-            changed |= RemoveUnknownAttributes(extension, ExtensionAttributes);
+            changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(extension, ExtensionAttributes);
             changed |= NormalizeExtensionUri(extension);
             var uri = extension.Attribute("uri")?.Value;
             if (string.IsNullOrWhiteSpace(uri) || !seenUris.Add(uri))
@@ -272,18 +272,20 @@ internal static class XlsxStylesheetSchemaNormalizer
             return true;
         }
 
-        return SetAttributeIfChanged(extension, "uri", trimmed);
+        return XlsxXmlNormalizationHelpers.SetAttributeIfChanged(extension, "uri", trimmed);
     }
 
     private static bool NormalizeDifferentialFont(XElement font, XNamespace workbookNs)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(font, EmptyAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(font, EmptyAttributes);
         changed |= RemoveUnexpectedChildren(font, DifferentialFontChildren, workbookNs);
         changed |= RemoveDuplicateChildren(font, DifferentialFontChildren, workbookNs);
 
         foreach (var child in font.Elements())
-            changed |= RemoveUnknownAttributes(child, DifferentialFontChildAttributes(child.Name.LocalName));
+            changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(
+                child,
+                DifferentialFontChildAttributes(child.Name.LocalName));
 
         return changed;
     }
@@ -300,7 +302,7 @@ internal static class XlsxStylesheetSchemaNormalizer
     internal static bool NormalizeTableStyles(XElement tableStyles, XNamespace workbookNs)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(tableStyles, TableStylesAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(tableStyles, TableStylesAttributes);
         changed |= RemoveUnexpectedChildren(tableStyles, workbookNs + "tableStyle");
 
         var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -314,22 +316,22 @@ internal static class XlsxStylesheetSchemaNormalizer
                 continue;
             }
 
-            changed |= SetAttributeIfChanged(tableStyle, "name", name);
-            changed |= RemoveUnknownAttributes(tableStyle, TableStyleAttributes);
-            changed |= NormalizeAttribute(tableStyle, "pivot", NormalizeBoolean);
-            changed |= NormalizeAttribute(tableStyle, "table", NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(tableStyle, "name", name);
+            changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(tableStyle, TableStyleAttributes);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tableStyle, "pivot", NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tableStyle, "table", NormalizeBoolean);
             changed |= RemoveUnexpectedChildren(tableStyle, workbookNs + "tableStyleElement");
 
             foreach (var tableStyleElement in tableStyle.Elements(workbookNs + "tableStyleElement").ToList())
                 changed |= NormalizeTableStyleElement(tableStyleElement);
 
-            changed |= SetAttributeIfChanged(
+            changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(
                 tableStyle,
                 "count",
                 tableStyle.Elements(workbookNs + "tableStyleElement").Count().ToString(CultureInfo.InvariantCulture));
         }
 
-        changed |= SetAttributeIfChanged(
+        changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(
             tableStyles,
             "count",
             tableStyles.Elements(workbookNs + "tableStyle").Count().ToString(CultureInfo.InvariantCulture));
@@ -346,11 +348,13 @@ internal static class XlsxStylesheetSchemaNormalizer
         }
 
         var changed = false;
-        changed |= SetAttributeIfChanged(tableStyleElement, "type", type);
-        changed |= RemoveUnknownAttributes(tableStyleElement, TableStyleElementAttributes);
-        changed |= NormalizeAttribute(tableStyleElement, "dxfId", NormalizeUnsignedInt);
-        changed |= NormalizeAttribute(tableStyleElement, "size", NormalizeUnsignedInt);
-        changed |= RemoveAllNodes(tableStyleElement);
+        changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(tableStyleElement, "type", type);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(
+            tableStyleElement,
+            TableStyleElementAttributes);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tableStyleElement, "dxfId", NormalizeUnsignedInt);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tableStyleElement, "size", NormalizeUnsignedInt);
+        changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(tableStyleElement);
         return changed;
     }
 
@@ -437,25 +441,6 @@ internal static class XlsxStylesheetSchemaNormalizer
         element.Name == workbookNs + "scheme" ? 14 :
         90;
 
-    private static bool NormalizeAttribute(
-        XElement element,
-        string attributeName,
-        Func<string?, string?> normalize)
-    {
-        var attribute = element.Attribute(attributeName);
-        var normalized = normalize(attribute?.Value);
-        if (normalized is null)
-        {
-            if (attribute is null)
-                return false;
-
-            attribute.Remove();
-            return true;
-        }
-
-        return SetAttributeIfChanged(element, attributeName, normalized);
-    }
-
     private static string? NormalizeBoolean(string? value)
     {
         var trimmed = value?.Trim();
@@ -538,40 +523,4 @@ internal static class XlsxStylesheetSchemaNormalizer
         return changed;
     }
 
-    private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedNames)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                (attribute.Name.NamespaceName.Length == 0 && allowedNames.Contains(attribute.Name.LocalName)))
-            {
-                continue;
-            }
-
-            attribute.Remove();
-            changed = true;
-        }
-
-        return changed;
-    }
-
-    private static bool SetAttributeIfChanged(XElement element, string attributeName, string value)
-    {
-        var attribute = element.Attribute(attributeName);
-        if (attribute is not null && string.Equals(attribute.Value, value, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(attributeName, value);
-        return true;
-    }
-
-    private static bool RemoveAllNodes(XElement element)
-    {
-        if (!element.Nodes().Any())
-            return false;
-
-        element.RemoveNodes();
-        return true;
-    }
 }
