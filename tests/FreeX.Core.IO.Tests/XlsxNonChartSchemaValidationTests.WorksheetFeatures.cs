@@ -1144,6 +1144,39 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             "nativeWorkbookViewExtLstChild");
     }
 
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidCustomSheetViewExtensionListsForSchemaValidity()
+    {
+        using var source = Save(CreateCustomSheetViewsSourceWorkbook());
+        SetCustomSheetViewExtensionListsInvalidNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var customSheetViews = ReadWorksheetChildElement(saved, "customSheetViews");
+        var customSheetView = customSheetViews.Elements(customSheetViews.Name.Namespace + "customSheetView").Single();
+        AssertExtensionListSanitized(
+            customSheetView,
+            customSheetViews.Name.Namespace,
+            CustomSheetViewExtensionUri,
+            "FreeXCustomSheetViewExtension",
+            "customCustomSheetViewExtLstFlag",
+            "customCustomSheetViewExtFlag",
+            "nativeCustomSheetViewExtLstChild");
+    }
+
 
     [Fact]
     public void WorksheetAdditionalViews_ProducesSchemaValidWorkbook()
@@ -2180,6 +2213,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     private const string WorksheetSortConditionExtensionUri = "{FREEX-WORKSHEET-SORT-CONDITION-EXT}";
     private const string WorksheetRowExtensionUri = "{FREEX-WORKSHEET-ROW-EXT}";
     private const string WorksheetCellExtensionUri = "{FREEX-WORKSHEET-CELL-EXT}";
+    private const string CustomSheetViewExtensionUri = "{FREEX-CUSTOM-SHEET-VIEW-EXT}";
 
     private static Workbook CreateStructuredTableSourceWorkbook()
     {
@@ -3530,6 +3564,29 @@ public sealed partial class XlsxNonChartSchemaValidationTests
                 workbookNs + "extLst",
                 new XElement(workbookNs + "ext", new XAttribute("uri", "{FREEX-DUPLICATE-CUSTOM-WORKBOOK-VIEW-EXTLST}"))));
         ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+    }
+
+    private static void SetCustomSheetViewExtensionListsInvalidNativeMetadata(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        var customSheetView = worksheetXml.Root!
+            .Element(worksheetNs + "customSheetViews")!
+            .Element(worksheetNs + "customSheetView")!;
+        customSheetView.Add(
+            CreateInvalidExtensionList(
+                worksheetNs,
+                CustomSheetViewExtensionUri,
+                "FreeXCustomSheetViewExtension",
+                "customCustomSheetViewExtLstFlag",
+                "customCustomSheetViewExtFlag",
+                "nativeCustomSheetViewExtLstChild"),
+            new XElement(
+                worksheetNs + "extLst",
+                new XElement(worksheetNs + "ext", new XAttribute("uri", "{FREEX-DUPLICATE-CUSTOM-SHEET-VIEW-EXTLST}"))));
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
     }
 
     private static void AssertInvalidCustomWorkbookViewAttributesRemoved(XElement customWorkbookView)
