@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
 
@@ -87,6 +86,9 @@ internal static class XlsxWorksheetProtectedRangeNormalizer
 
     private static bool NormalizeProtectedRangeElement(XElement protectedRange)
     {
+        if (IsUnsupportedMultiAreaProtectedRange(protectedRange))
+            return false;
+
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(protectedRange, ProtectedRangeAttributes);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protectedRange, "password", NormalizeLegacyPasswordHashOrNull);
@@ -94,14 +96,57 @@ internal static class XlsxWorksheetProtectedRangeNormalizer
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protectedRange, "name", NormalizeOptionalText);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protectedRange, "hashValue", NormalizeBase64BinaryOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protectedRange, "saltValue", NormalizeBase64BinaryOrNull);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protectedRange, "spinCount", NormalizeUnsignedIntOrNull);
-        changed |= XlsxXmlNormalizationHelpers.RemoveChildElements(protectedRange);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protectedRange, "spinCount", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
+        changed |= NormalizeProtectedRangeChildren(protectedRange);
         return changed;
     }
 
     private static bool ShouldRemoveProtectedRangeElement(XElement protectedRange) =>
         string.IsNullOrWhiteSpace(protectedRange.Attribute("sqref")?.Value) ||
         string.IsNullOrWhiteSpace(protectedRange.Attribute("name")?.Value);
+
+    private static bool IsUnsupportedMultiAreaProtectedRange(XElement protectedRange)
+    {
+        var tokens = protectedRange.Attribute("sqref")?.Value
+            .Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return tokens is { Length: > 1 };
+    }
+
+    private static bool NormalizeProtectedRangeChildren(XElement protectedRange)
+    {
+        var children = protectedRange.Elements().ToList();
+        if (children.Count == 0)
+            return false;
+
+        if (children.Any(child => child.Name != WorksheetNs + "extLst"))
+            return XlsxXmlNormalizationHelpers.RemoveChildElements(protectedRange);
+
+        var changed = false;
+        var keptExtensionList = false;
+        foreach (var extensionList in protectedRange.Elements(WorksheetNs + "extLst").ToList())
+            changed |= NormalizeExtensionListChild(extensionList, ref keptExtensionList);
+
+        return changed;
+    }
+
+    private static bool NormalizeExtensionListChild(XElement extensionList, ref bool keptExtensionList)
+    {
+        if (keptExtensionList)
+        {
+            extensionList.Remove();
+            return true;
+        }
+
+        var changed = XlsxWorksheetExtensionListNormalizer.NormalizeExtensionListElement(extensionList);
+        if (XlsxWorksheetExtensionListNormalizer.ShouldRemoveExtensionListElement(extensionList))
+        {
+            extensionList.Remove();
+            return true;
+        }
+
+        keptExtensionList = true;
+        return changed;
+    }
 
     private static bool RemoveUnexpectedChildElements(XElement element, XName allowedChildName)
     {
@@ -127,14 +172,6 @@ internal static class XlsxWorksheetProtectedRangeNormalizer
             .Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         return tokens is { Length: > 0 }
             ? string.Join(' ', tokens)
-            : null;
-    }
-
-    private static string? NormalizeUnsignedIntOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed.ToString(CultureInfo.InvariantCulture)
             : null;
     }
 

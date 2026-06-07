@@ -1011,6 +1011,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchWorksheetOleControls(archive);
                 NormalizePatchWorksheetRelationshipMarkers(archive);
                 NormalizePatchSingleCellTableParts(archive);
+                XlsxPackageMetadataMerger.NormalizeCustomXmlPackageGraph(archive);
 
                 if (invalidatesCalcChain)
                 {

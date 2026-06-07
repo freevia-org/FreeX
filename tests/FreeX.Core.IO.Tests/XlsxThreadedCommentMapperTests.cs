@@ -159,6 +159,77 @@ public sealed class XlsxThreadedCommentMapperTests
             });
     }
 
+    [Fact]
+    public void NormalizePackageGraph_RemovesStaleThreadedRelationshipsWhenRelationshipIdsCollide()
+    {
+        var workbook = CreateWorkbookWithReplies();
+        using var package = XlsxPackageTestHelper.SaveWorkbook(workbook);
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            AddStaleRelationshipWithCollidingId(
+                archive,
+                "xl/_rels/workbook.xml.rels",
+                "http://schemas.microsoft.com/office/2017/10/relationships/person",
+                "https://example.invalid/person.xml");
+            AddStaleRelationshipWithCollidingId(
+                archive,
+                "xl/worksheets/_rels/sheet1.xml.rels",
+                "http://schemas.microsoft.com/office/2017/10/relationships/threadedComment",
+                "https://example.invalid/threadedComment.xml");
+        }
+
+        XlsxWorkbookWorksheetPathMap? pathMap;
+        package.Position = 0;
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            pathMap = XlsxWorkbookWorksheetPathMap.TryCreate(archive);
+            pathMap.Should().NotBeNull();
+        }
+
+        package.Position = 0;
+        XlsxWorksheetThreadedCommentMapper.NormalizePackageGraph(package, workbook, pathMap);
+
+        package.Position = 0;
+        using var verifyArchive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        LoadXml(verifyArchive, "xl/_rels/workbook.xml.rels")
+            .Root!
+            .Elements(PackageRelNs + "Relationship")
+            .Where(element => AttributeValue(element, "Type") == "http://schemas.microsoft.com/office/2017/10/relationships/person")
+            .Should()
+            .ContainSingle(element =>
+                AttributeValue(element, "Target") == "persons/person.xml" &&
+                AttributeValue(element, "TargetMode") == null);
+        LoadXml(verifyArchive, "xl/worksheets/_rels/sheet1.xml.rels")
+            .Root!
+            .Elements(PackageRelNs + "Relationship")
+            .Where(element => AttributeValue(element, "Type") == "http://schemas.microsoft.com/office/2017/10/relationships/threadedComment")
+            .Should()
+            .ContainSingle(element =>
+                AttributeValue(element, "Target") == "../threadedComments/threadedComment1.xml" &&
+                AttributeValue(element, "TargetMode") == null);
+    }
+
+    private static void AddStaleRelationshipWithCollidingId(
+        ZipArchive archive,
+        string relationshipsPath,
+        string relationshipType,
+        string externalTarget)
+    {
+        var relationshipsXml = LoadXml(archive, relationshipsPath);
+        var relationship = relationshipsXml.Root!
+            .Elements(PackageRelNs + "Relationship")
+            .First(element => AttributeValue(element, "Type") == relationshipType);
+        var collidingId = relationship.Attribute("Id")!.Value;
+        relationship.SetAttributeValue("Id", $"{collidingId}Canonical");
+        relationshipsXml.Root!.Add(new XElement(
+            PackageRelNs + "Relationship",
+            new XAttribute("Id", collidingId),
+            new XAttribute("Type", relationshipType),
+            new XAttribute("Target", externalTarget),
+            new XAttribute("TargetMode", "External")));
+        ReplacePackageXml(archive, relationshipsPath, relationshipsXml);
+    }
+
     private static Workbook CreateWorkbook(DateTimeOffset createdAt)
     {
         var workbook = new Workbook("ThreadedRootXlsxTest");
@@ -207,6 +278,14 @@ public sealed class XlsxThreadedCommentMapperTests
 
     private static XDocument LoadXml(ZipArchive archive, string path) =>
         XlsxPackageTestFixtures.LoadPackageXml(archive, path, path);
+
+    private static void ReplacePackageXml(ZipArchive archive, string path, XDocument document)
+    {
+        archive.GetEntry(path)?.Delete();
+        var entry = archive.CreateEntry(path, CompressionLevel.Optimal);
+        using var stream = entry.Open();
+        document.Save(stream, SaveOptions.DisableFormatting);
+    }
 
     private static string? AttributeValue(XElement element, string name) =>
         element.Attribute(name)?.Value;
