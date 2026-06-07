@@ -35,7 +35,7 @@ internal static class XlsxWorksheetSortStateNormalizer
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(condition, "sortBy", value => NormalizeToken(value, ValidSortByValues));
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(condition, "dxfId", NormalizeUnsignedIntOrNull);
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(condition, "iconId", NormalizeUnsignedIntOrNull);
-            changed |= RemoveAllNodes(condition);
+            changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(condition);
         }
 
         changed |= NormalizeChildOrder(sortState, SortStateChildOrder);
@@ -123,15 +123,6 @@ internal static class XlsxWorksheetSortStateNormalizer
         child.Name == WorksheetNs + "sortCondition" ? 0 :
         child.Name == WorksheetNs + "extLst" ? 100 :
         90;
-
-    private static bool RemoveAllNodes(XElement element)
-    {
-        if (!element.Nodes().Any())
-            return false;
-
-        element.RemoveNodes();
-        return true;
-    }
 
     private static string? NormalizeBoolean(string? value)
     {

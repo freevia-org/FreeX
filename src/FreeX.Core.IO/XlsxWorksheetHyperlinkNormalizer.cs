@@ -72,7 +72,7 @@ internal static class XlsxWorksheetHyperlinkNormalizer
                 continue;
             }
 
-            changed |= RemoveAllNodes(hyperlink);
+            changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(hyperlink);
         }
 
         return changed;
@@ -196,15 +196,6 @@ internal static class XlsxWorksheetHyperlinkNormalizer
         }
 
         return changed;
-    }
-
-    private static bool RemoveAllNodes(XElement element)
-    {
-        if (!element.Nodes().Any())
-            return false;
-
-        element.RemoveNodes();
-        return true;
     }
 
     private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)

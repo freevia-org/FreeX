@@ -78,17 +78,8 @@ internal static class XlsxWorksheetPhoneticPropertyNormalizer
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(phoneticPr, "fontId", NormalizeUnsignedInt);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(phoneticPr, "type", value => NormalizeToken(value, ValidTypes));
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(phoneticPr, "alignment", value => NormalizeToken(value, ValidAlignments));
-        changed |= RemoveAllChildren(phoneticPr);
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElements(phoneticPr);
         return changed;
-    }
-
-    private static bool RemoveAllChildren(XElement element)
-    {
-        if (!element.HasElements)
-            return false;
-
-        element.Elements().Remove();
-        return true;
     }
 
     private static string? NormalizeUnsignedInt(string? value)
