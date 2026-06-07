@@ -147,6 +147,41 @@ public sealed partial class XlsxPackageMetadataMergerTests
     }
 
     [Fact]
+    public void MergeRelationshipParts_RebindsCopiedDrawingImageReferenceWhenRelationshipIdCollides()
+    {
+        using var sourcePackage = CreatePackageWithDrawingImageRelationshipIdCollisionSource();
+        using var targetPackage = CreatePackageWithDrawingImageRelationshipIdCollisionTarget();
+        using var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var targetArchive = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, targetArchive);
+        XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, targetArchive, generatedEntriesBeforeMerge);
+
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationshipsXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "xl/drawings/_rels/drawing1.xml.rels");
+        var imageRelationship = relationshipsXml.Root!
+            .Elements(relationshipNs + "Relationship")
+            .Single(element =>
+                (string?)element.Attribute("Type") == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" &&
+                (string?)element.Attribute("Target") == "../media/image1.png");
+        var reboundId = imageRelationship.Attribute("Id")!.Value;
+
+        reboundId.Should().NotBe("rIdImage");
+
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var drawingXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "xl/drawings/drawing1.xml");
+        drawingXml.Root!
+            .Descendants(drawingNs + "blip")
+            .Should()
+            .ContainSingle(element => (string?)element.Attribute(relNs + "embed") == reboundId);
+        drawingXml.Root!
+            .Descendants(drawingNs + "blip")
+            .Should()
+            .NotContain(element => (string?)element.Attribute(relNs + "embed") == "rIdImage");
+    }
+
+    [Fact]
     public void MergeRelationshipParts_PreservesWorkbookWebExtensionTaskpaneGraph()
     {
         using var sourcePackage = CreatePackageWithWorkbookWebExtensionTaskpaneGraph();
