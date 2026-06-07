@@ -1259,6 +1259,22 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public WorkbookDataValidationMutationResult ApplyDataValidationToSelectedRange(DataValidation rule)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+
+        var command = CreateSetSelectedRangeDataValidationCommand(rule);
+        if (command is null)
+            return WorkbookDataValidationMutationResult.NoMutation();
+
+        var result = _cellEditService.ExecuteEditCommand(Workbook, command);
+        if (!result.Success)
+            return WorkbookDataValidationMutationResult.FromEditResult(result, mutated: false);
+
+        ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
+        return WorkbookDataValidationMutationResult.FromEditResult(result, mutated: true);
+    }
+
     public WorkbookCellEditResult PasteLinkFromClipboardAtActiveCell(
         string? text,
         bool transpose = false,
@@ -1433,6 +1449,20 @@ public sealed class WorkbookSession
 
         ApplySuccessfulRangeEditResult(result, range);
         return result;
+    }
+
+    public WorkbookDataValidationMutationResult ClearSelectedRangeDataValidation()
+    {
+        var command = CreateClearSelectedRangeDataValidationCommand();
+        if (command is null)
+            return WorkbookDataValidationMutationResult.NoMutation();
+
+        var result = _cellEditService.ExecuteEditCommand(Workbook, command);
+        if (!result.Success)
+            return WorkbookDataValidationMutationResult.FromEditResult(result, mutated: false);
+
+        ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
+        return WorkbookDataValidationMutationResult.FromEditResult(result, mutated: true);
     }
 
     public WorkbookCellEditResult ClearSelectedRangeFormats() =>
@@ -2277,6 +2307,52 @@ public sealed class WorkbookSession
         return ToCommand(title, commands);
     }
 
+    private IWorkbookCommand? CreateSetSelectedRangeDataValidationCommand(DataValidation rule)
+    {
+        var selectedRanges = GetCurrentSelectedRanges();
+        var commands = new List<IWorkbookCommand>();
+        foreach (var sheetId in CurrentGroupedEditSheetIds())
+        {
+            var sheet = Workbook.GetSheet(sheetId);
+            if (sheet is null)
+                continue;
+
+            var sheetRanges = selectedRanges
+                .Select(range => RemapRangeToSheet(range, sheetId))
+                .ToArray();
+            var sheetRule = CloneDataValidationForRanges(rule, sheetRanges[0], sheetRanges.Skip(1));
+            if (WouldSetDataValidationMutate(sheet, sheetRule))
+                commands.Add(new SetDataValidationCommand(sheetId, sheetRule));
+        }
+
+        return commands.Count == 0
+            ? null
+            : ToCommand("Data Validation", commands);
+    }
+
+    private IWorkbookCommand? CreateClearSelectedRangeDataValidationCommand()
+    {
+        var selectedRanges = GetCurrentSelectedRanges();
+        var commands = new List<IWorkbookCommand>();
+        foreach (var sheetId in CurrentGroupedEditSheetIds())
+        {
+            var sheet = Workbook.GetSheet(sheetId);
+            if (sheet is null)
+                continue;
+
+            foreach (var range in selectedRanges)
+            {
+                var sheetRange = RemapRangeToSheet(range, sheetId);
+                if (HasDataValidationOverlapping(sheet, sheetRange))
+                    commands.Add(new ClearDataValidationCommand(sheetId, sheetRange));
+            }
+        }
+
+        return commands.Count == 0
+            ? null
+            : ToCommand("Clear Data Validation", commands);
+    }
+
     private IWorkbookCommand CreateGroupedSheetCommand(
         string title,
         Func<SheetId, IWorkbookCommand> createCommand)
@@ -2308,6 +2384,110 @@ public sealed class WorkbookSession
 
     private static bool HasStyleDiffChanges(StyleDiff diff) =>
         diff != EmptyStyleDiff;
+
+    private IReadOnlyList<GridRange> GetCurrentSelectedRanges() =>
+        SelectedRanges.Count == 0
+            ? [SelectedRange]
+            : SelectedRanges;
+
+    private static bool WouldSetDataValidationMutate(Sheet sheet, DataValidation rule)
+    {
+        var existing = sheet.DataValidations.FirstOrDefault(candidate =>
+            candidate.Id == rule.Id || candidate.AppliesTo == rule.AppliesTo);
+        return existing is null || !DataValidationRulesEqual(existing, rule);
+    }
+
+    private static bool HasDataValidationOverlapping(Sheet sheet, GridRange range) =>
+        sheet.DataValidations.Any(rule => DataValidationRanges(rule).Any(ruleRange => ruleRange.Overlaps(range)));
+
+    private static IEnumerable<GridRange> DataValidationRanges(DataValidation rule)
+    {
+        yield return rule.AppliesTo;
+        foreach (var range in rule.AdditionalRanges)
+            yield return range;
+    }
+
+    private static DataValidation CloneDataValidationForRanges(
+        DataValidation source,
+        GridRange appliesTo,
+        IEnumerable<GridRange> additionalRanges)
+    {
+        var clone = new DataValidation
+        {
+            AppliesTo = appliesTo,
+            Type = source.Type,
+            Operator = source.Operator,
+            Formula1 = source.Formula1,
+            Formula2 = source.Formula2,
+            AllowBlank = source.AllowBlank,
+            ShowDropdown = source.ShowDropdown,
+            AlertStyle = source.AlertStyle,
+            ShowInputMessage = source.ShowInputMessage,
+            ShowErrorMessage = source.ShowErrorMessage,
+            ErrorTitle = source.ErrorTitle,
+            ErrorMessage = source.ErrorMessage,
+            PromptTitle = source.PromptTitle,
+            PromptMessage = source.PromptMessage,
+            NativeAttributes = source.NativeAttributes,
+            NativeChildXmls = source.NativeChildXmls,
+            NativeContainerAttributes = source.NativeContainerAttributes,
+            NativeContainerChildXmls = source.NativeContainerChildXmls
+        };
+        clone.AdditionalRanges.AddRange(additionalRanges);
+        return clone;
+    }
+
+    private static bool DataValidationRulesEqual(DataValidation left, DataValidation right) =>
+        left.AppliesTo == right.AppliesTo &&
+        left.AdditionalRanges.SequenceEqual(right.AdditionalRanges) &&
+        left.Type == right.Type &&
+        left.Operator == right.Operator &&
+        string.Equals(left.Formula1, right.Formula1, StringComparison.Ordinal) &&
+        string.Equals(left.Formula2, right.Formula2, StringComparison.Ordinal) &&
+        left.AllowBlank == right.AllowBlank &&
+        left.ShowDropdown == right.ShowDropdown &&
+        left.AlertStyle == right.AlertStyle &&
+        left.ShowInputMessage == right.ShowInputMessage &&
+        left.ShowErrorMessage == right.ShowErrorMessage &&
+        string.Equals(left.ErrorTitle, right.ErrorTitle, StringComparison.Ordinal) &&
+        string.Equals(left.ErrorMessage, right.ErrorMessage, StringComparison.Ordinal) &&
+        string.Equals(left.PromptTitle, right.PromptTitle, StringComparison.Ordinal) &&
+        string.Equals(left.PromptMessage, right.PromptMessage, StringComparison.Ordinal) &&
+        DictionaryEquals(left.NativeAttributes, right.NativeAttributes) &&
+        SequenceEquals(left.NativeChildXmls, right.NativeChildXmls) &&
+        DictionaryEquals(left.NativeContainerAttributes, right.NativeContainerAttributes) &&
+        SequenceEquals(left.NativeContainerChildXmls, right.NativeContainerChildXmls);
+
+    private static bool DictionaryEquals(
+        IReadOnlyDictionary<string, string>? left,
+        IReadOnlyDictionary<string, string>? right)
+    {
+        if (ReferenceEquals(left, right))
+            return true;
+        if (left is null || right is null || left.Count != right.Count)
+            return false;
+
+        foreach (var (key, value) in left)
+        {
+            if (!right.TryGetValue(key, out var rightValue) ||
+                !string.Equals(value, rightValue, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool SequenceEquals(IReadOnlyList<string>? left, IReadOnlyList<string>? right)
+    {
+        if (ReferenceEquals(left, right))
+            return true;
+        if (left is null || right is null)
+            return false;
+
+        return left.SequenceEqual(right, StringComparer.Ordinal);
+    }
 
     private static double GetFittingRowHeight(double fontSize) =>
         Math.Min(MaximumRowHeight, FontSizePlanner.EstimateFittingRowHeight(fontSize));
