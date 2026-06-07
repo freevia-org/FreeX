@@ -6,7 +6,10 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxUnsupportedSheetReferencePreserver
 {
-    public static void Preserve(ZipArchive sourceArchive, ZipArchive targetArchive)
+    public static void Preserve(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        XlsxSourcePackagePreservationContext? context)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -31,14 +34,15 @@ internal static class XlsxUnsupportedSheetReferencePreserver
         if (sourceSheets is null || targetSheets is null)
             return;
 
-        var sourceRelationships = sourceWorkbookRelsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Where(relationship => !string.IsNullOrWhiteSpace(relationship.Attribute("Id")?.Value))
-            .ToDictionary(
-                relationship => relationship.Attribute("Id")!.Value,
-                relationship => relationship,
-                StringComparer.OrdinalIgnoreCase)
-            ?? new Dictionary<string, XElement>(StringComparer.OrdinalIgnoreCase);
+        var sourceRelationships = new Dictionary<string, XElement>(StringComparer.OrdinalIgnoreCase);
+        foreach (var relationship in sourceWorkbookRelsXml.Root?.Elements(packageRelNs + "Relationship") ?? [])
+        {
+            var id = relationship.Attribute("Id")?.Value;
+            if (!string.IsNullOrWhiteSpace(id))
+                sourceRelationships.TryAdd(id, relationship);
+        }
+
+        var worksheetPathRebindings = CreateWorksheetPathRebindings(context);
         var targetSheetNames = targetSheets
             .Elements(workbookNs + "sheet")
             .Select(sheet => sheet.Attribute("name")?.Value)
@@ -96,6 +100,13 @@ internal static class XlsxUnsupportedSheetReferencePreserver
             changed = true;
         }
 
+        if (worksheetPathRebindings.Count != 0)
+            changed |= RebindUnsupportedSheetSidecarRelationships(
+                sourceArchive,
+                targetArchive,
+                worksheetPathRebindings,
+                packageRelNs);
+
         if (!changed)
             return;
 
@@ -105,4 +116,243 @@ internal static class XlsxUnsupportedSheetReferencePreserver
 
     private static bool IsWorksheetRelationshipType(string relationshipType) =>
         relationshipType.EndsWith("/worksheet", StringComparison.OrdinalIgnoreCase);
+
+    private static IReadOnlyDictionary<string, string> CreateWorksheetPathRebindings(
+        XlsxSourcePackagePreservationContext? context)
+    {
+        if (context is null)
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        var rebindings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var sourceSheet in context.SourceSheets)
+        {
+            if (!IsWorksheetPartPath(sourceSheet.Value) ||
+                !context.TargetSheets.TryGetValue(sourceSheet.Key, out var targetPath) ||
+                !IsWorksheetPartPath(targetPath) ||
+                string.Equals(sourceSheet.Value, targetPath, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            rebindings[sourceSheet.Value] = targetPath;
+        }
+
+        return rebindings;
+    }
+
+    private static bool RebindUnsupportedSheetSidecarRelationships(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        IReadOnlyDictionary<string, string> worksheetPathRebindings,
+        XNamespace packageRelNs)
+    {
+        var changed = false;
+        foreach (var sheetPath in targetArchive.Entries
+                     .Select(entry => entry.FullName)
+                     .Where(IsUnsupportedSheetPartPath)
+                     .ToArray())
+        {
+            var relsPath = XlsxPackagePath.GetRelationshipPartPath(sheetPath);
+            var relsEntry = targetArchive.GetEntry(relsPath);
+            var relsXml = relsEntry is not null
+                ? XlsxPackageXmlEditor.LoadXml(relsEntry)
+                : CreateReboundUnsupportedSheetRelationshipPart(
+                    sourceArchive,
+                    targetArchive,
+                    sheetPath,
+                    worksheetPathRebindings,
+                    packageRelNs);
+            if (relsXml is null)
+                continue;
+
+            var relsChanged = relsEntry is null;
+            relsChanged |= MergeReboundUnsupportedSheetRelationships(
+                sourceArchive,
+                targetArchive,
+                sheetPath,
+                relsXml,
+                worksheetPathRebindings,
+                packageRelNs);
+            foreach (var relationship in relsXml.Root?.Elements(packageRelNs + "Relationship") ?? [])
+            {
+                if (string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var target = relationship.Attribute("Target")?.Value;
+                if (string.IsNullOrWhiteSpace(target))
+                    continue;
+
+                var resolvedTarget = XlsxPackagePath.ResolveRelationshipTarget(sheetPath, target);
+                if (!worksheetPathRebindings.TryGetValue(resolvedTarget, out var reboundTarget))
+                    continue;
+
+                relationship.SetAttributeValue("Target", GetUnsupportedSheetRelationshipTarget(sheetPath, reboundTarget));
+                relsChanged = true;
+            }
+
+            if (!relsChanged)
+                continue;
+
+            XlsxPackageXmlEditor.ReplaceXml(targetArchive, relsPath, relsXml);
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool MergeReboundUnsupportedSheetRelationships(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        string sheetPath,
+        XDocument targetRelsXml,
+        IReadOnlyDictionary<string, string> worksheetPathRebindings,
+        XNamespace packageRelNs)
+    {
+        var sourceRelsEntry = sourceArchive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(sheetPath));
+        if (sourceRelsEntry is null)
+            return false;
+
+        var targetRoot = targetRelsXml.Root;
+        if (targetRoot is null)
+            return false;
+
+        var sourceRelsXml = XlsxPackageXmlEditor.LoadXml(sourceRelsEntry);
+        var usedIds = targetRoot
+            .Elements(packageRelNs + "Relationship")
+            .Select(relationship => relationship.Attribute("Id")?.Value)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var signatures = targetRoot
+            .Elements(packageRelNs + "Relationship")
+            .Select(RelationshipSignature)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var changed = false;
+        foreach (var sourceRelationship in sourceRelsXml.Root?.Elements(packageRelNs + "Relationship") ?? [])
+        {
+            var rebound = TryCreateReboundRelationship(
+                sourceRelationship,
+                targetArchive,
+                sheetPath,
+                worksheetPathRebindings);
+            if (rebound is null)
+                continue;
+
+            if (!signatures.Add(RelationshipSignature(rebound)))
+                continue;
+
+            var id = rebound.Attribute("Id")?.Value;
+            if (string.IsNullOrWhiteSpace(id) || !usedIds.Add(id))
+                rebound.SetAttributeValue("Id", XlsxPackageXmlEditor.NextRelationshipId(targetRelsXml, packageRelNs));
+
+            id = rebound.Attribute("Id")?.Value;
+            if (!string.IsNullOrWhiteSpace(id))
+                usedIds.Add(id);
+
+            targetRoot.Add(rebound);
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static XDocument? CreateReboundUnsupportedSheetRelationshipPart(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        string sheetPath,
+        IReadOnlyDictionary<string, string> worksheetPathRebindings,
+        XNamespace packageRelNs)
+    {
+        var sourceRelsEntry = sourceArchive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(sheetPath));
+        if (sourceRelsEntry is null)
+            return null;
+
+        var sourceRelsXml = XlsxPackageXmlEditor.LoadXml(sourceRelsEntry);
+        var targetRelsXml = new XDocument(new XElement(packageRelNs + "Relationships"));
+        var usedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var signatures = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var sourceRelationship in sourceRelsXml.Root?.Elements(packageRelNs + "Relationship") ?? [])
+        {
+            var copy = TryCreateReboundRelationship(
+                sourceRelationship,
+                targetArchive,
+                sheetPath,
+                worksheetPathRebindings);
+            if (copy is null)
+                continue;
+
+            var signature = RelationshipSignature(copy);
+            if (!signatures.Add(signature))
+                continue;
+
+            var id = copy.Attribute("Id")?.Value;
+            if (string.IsNullOrWhiteSpace(id))
+                copy.SetAttributeValue("Id", XlsxPackageXmlEditor.NextRelationshipId(targetRelsXml, packageRelNs));
+            else if (!usedIds.Add(id))
+                copy.SetAttributeValue("Id", XlsxPackageXmlEditor.NextRelationshipId(targetRelsXml, packageRelNs));
+
+            id = copy.Attribute("Id")?.Value;
+            if (!string.IsNullOrWhiteSpace(id))
+                usedIds.Add(id);
+
+            targetRelsXml.Root!.Add(copy);
+        }
+
+        return targetRelsXml.Root!.HasElements ? targetRelsXml : null;
+    }
+
+    private static XElement? TryCreateReboundRelationship(
+        XElement sourceRelationship,
+        ZipArchive targetArchive,
+        string sheetPath,
+        IReadOnlyDictionary<string, string> worksheetPathRebindings)
+    {
+        var copy = new XElement(sourceRelationship);
+        var target = copy.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target))
+            return null;
+
+        if (!string.Equals(copy.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+        {
+            var resolvedTarget = XlsxPackagePath.ResolveRelationshipTarget(sheetPath, target);
+            if (worksheetPathRebindings.TryGetValue(resolvedTarget, out var reboundTarget))
+                copy.SetAttributeValue("Target", GetUnsupportedSheetRelationshipTarget(sheetPath, reboundTarget));
+            else if (targetArchive.GetEntry(resolvedTarget) is null)
+                return null;
+        }
+
+        return copy;
+    }
+
+    private static string RelationshipSignature(XElement relationship) =>
+        string.Join("|",
+            relationship.Attribute("Type")?.Value.Trim() ?? "",
+            relationship.Attribute("Target")?.Value.Trim().Replace('\\', '/') ?? "",
+            relationship.Attribute("TargetMode")?.Value.Trim() ?? "");
+
+    private static string GetUnsupportedSheetRelationshipTarget(string sheetPath, string targetPath)
+    {
+        var sourceDirectory = sheetPath.Replace('\\', '/');
+        var slash = sourceDirectory.LastIndexOf('/');
+        sourceDirectory = slash >= 0 ? sourceDirectory[..slash] : "";
+        if ((sourceDirectory.Equals("xl/chartsheets", StringComparison.OrdinalIgnoreCase) ||
+             sourceDirectory.Equals("xl/dialogSheets", StringComparison.OrdinalIgnoreCase) ||
+             sourceDirectory.Equals("xl/macroSheets", StringComparison.OrdinalIgnoreCase)) &&
+            targetPath.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"../worksheets/{targetPath["xl/worksheets/".Length..]}";
+        }
+
+        return XlsxPackagePath.GetRelationshipTarget(sheetPath, targetPath);
+    }
+
+    private static bool IsUnsupportedSheetPartPath(string path) =>
+        path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+        (path.StartsWith("xl/chartsheets/", StringComparison.OrdinalIgnoreCase) ||
+         path.StartsWith("xl/dialogSheets/", StringComparison.OrdinalIgnoreCase) ||
+         path.StartsWith("xl/macroSheets/", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsWorksheetPartPath(string path) =>
+        path.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+        path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
 }

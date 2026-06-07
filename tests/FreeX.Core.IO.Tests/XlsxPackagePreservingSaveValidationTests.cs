@@ -194,6 +194,53 @@ public sealed class XlsxPackagePreservingSaveValidationTests
             "External");
     }
 
+    [Fact]
+    public void LoadEditSave_RebindsUnsupportedSheetSidecarWorksheetRelationships()
+    {
+        var sourceBytes = CreatePackageWithUnsupportedSheetWorksheetPathRebinding();
+
+        var savedBytes = SaveAfterLoadingAndEditing(sourceBytes, workbook =>
+        {
+            var sheet = workbook.GetSheet("Data");
+            sheet.Should().NotBeNull();
+            sheet!.SetCell(new CellAddress(sheet.Id, 5, 2), new TextValue("worksheet path rebound"));
+        });
+
+        AssertRoundTripCellValue(savedBytes, "Data", 5, 2, new TextValue("worksheet path rebound"));
+
+        using var savedPackage = new MemoryStream(savedBytes);
+        using var savedArchive = new ZipArchive(savedPackage, ZipArchiveMode.Read);
+
+        savedArchive.GetEntry("xl/worksheets/sourceData.xml").Should().BeNull();
+        savedArchive.GetEntry("xl/worksheets/sheet1.xml").Should().NotBeNull();
+
+        AssertWorkbookSheet(
+            savedArchive,
+            "Chart Sidecar",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet",
+            "chartsheets/sheet1.xml");
+        AssertRelationship(
+            savedArchive,
+            "xl/chartsheets/_rels/sheet1.xml.rels",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet",
+            "../worksheets/sheet1.xml");
+        AssertRelationship(
+            savedArchive,
+            "xl/chartsheets/_rels/sheet1.xml.rels",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+            "https://example.com/chart-sidecar",
+            "External");
+
+        var workbookRelIds = XlsxPackageTestFixtures
+            .LoadPackageXml(savedArchive, "xl/_rels/workbook.xml.rels", "xl/_rels/workbook.xml.rels")
+            .Root!
+            .Elements(PackageRelNs + "Relationship")
+            .Select(element => element.Attribute("Id")?.Value)
+            .OfType<string>()
+            .ToArray();
+        workbookRelIds.Should().OnlyHaveUniqueItems();
+    }
+
     private static byte[] CreatePackageWithUnknownPackageGraph(string sheetName)
     {
         var packageBytes = CreateClosedXmlWorkbook(sheetName);
@@ -431,6 +478,72 @@ public sealed class XlsxPackagePreservingSaveValidationTests
                 "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
                 "https://example.com/macro-sidecar",
                 "External");
+        }
+
+        return package.ToArray();
+    }
+
+    private static byte[] CreatePackageWithUnsupportedSheetWorksheetPathRebinding()
+    {
+        var packageBytes = CreatePackageWithUnsupportedSheetSidecars();
+        using var package = CreateExpandablePackage(packageBytes);
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            RenamePackageEntry(archive, "xl/worksheets/sheet1.xml", "xl/worksheets/sourceData.xml");
+            RenamePackageEntry(archive, "xl/worksheets/_rels/sheet1.xml.rels", "xl/worksheets/_rels/sourceData.xml.rels");
+
+            var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(
+                archive,
+                "[Content_Types].xml",
+                "[Content_Types].xml");
+            var worksheetOverride = contentTypesXml.Root!
+                .Elements(ContentTypeNs + "Override")
+                .FirstOrDefault(element =>
+                    string.Equals((string?)element.Attribute("PartName"), "/xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase));
+            worksheetOverride?.SetAttributeValue("PartName", "/xl/worksheets/sourceData.xml");
+            ReplaceXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            var workbookXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/workbook.xml", "xl/workbook.xml");
+            workbookXml.Root!
+                .Element(workbookNs + "sheets")!
+                .Elements(workbookNs + "sheet")
+                .Single(element => string.Equals((string?)element.Attribute("name"), "Data", StringComparison.Ordinal))
+                .SetAttributeValue(relNs + "id", "rIdDataSource");
+            workbookXml.Root!
+                .Element(workbookNs + "sheets")!
+                .Elements(workbookNs + "sheet")
+                .Single(element => string.Equals((string?)element.Attribute("name"), "Chart Sidecar", StringComparison.Ordinal))
+                .SetAttributeValue(relNs + "id", "rId1");
+            ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+
+            var workbookRelsXml = XlsxPackageTestFixtures.LoadPackageXml(
+                archive,
+                "xl/_rels/workbook.xml.rels",
+                "xl/_rels/workbook.xml.rels");
+            var dataWorksheetRelationship = workbookRelsXml.Root!
+                .Elements(PackageRelNs + "Relationship")
+                .Single(element =>
+                    string.Equals(
+                        (string?)element.Attribute("Type"),
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet",
+                        StringComparison.Ordinal));
+            dataWorksheetRelationship.SetAttributeValue("Id", "rIdDataSource");
+            dataWorksheetRelationship.SetAttributeValue("Target", "worksheets/sourceData.xml");
+            workbookRelsXml.Root!
+                .Elements(PackageRelNs + "Relationship")
+                .Single(element =>
+                    string.Equals((string?)element.Attribute("Target"), "chartsheets/sheet1.xml", StringComparison.Ordinal))
+                .SetAttributeValue("Id", "rId1");
+            ReplaceXml(archive, "xl/_rels/workbook.xml.rels", workbookRelsXml);
+
+            AppendRelationship(
+                archive,
+                "xl/chartsheets/_rels/sheet1.xml.rels",
+                "rIdChartDataWorksheet",
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet",
+                "../worksheets/sourceData.xml");
         }
 
         return package.ToArray();
@@ -718,5 +831,23 @@ public sealed class XlsxPackagePreservingSaveValidationTests
         var entry = archive.CreateEntry(path, CompressionLevel.Optimal);
         using var stream = entry.Open();
         stream.Write(content);
+    }
+
+    private static void RenamePackageEntry(ZipArchive archive, string sourcePath, string targetPath)
+    {
+        var sourceEntry = archive.GetEntry(sourcePath);
+        if (sourceEntry is null)
+            return;
+
+        var bytes = new MemoryStream();
+        using (var source = sourceEntry.Open())
+            source.CopyTo(bytes);
+
+        sourceEntry.Delete();
+        archive.GetEntry(targetPath)?.Delete();
+        var targetEntry = archive.CreateEntry(targetPath, CompressionLevel.Optimal);
+        bytes.Position = 0;
+        using var target = targetEntry.Open();
+        bytes.CopyTo(target);
     }
 }
