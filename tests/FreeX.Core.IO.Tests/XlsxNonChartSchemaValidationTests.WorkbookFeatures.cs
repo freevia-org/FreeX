@@ -155,6 +155,34 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidWorkbookFileSharingForSchemaValidity()
+    {
+        using var source = Save(CreateWorkbookFileSharingSourceWorkbook());
+        SetWorkbookFileSharingInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var fileSharing = ReadWorkbookChildElement(saved, "fileSharing");
+        fileSharing.Attribute("reservationPassword").Should().BeNull();
+        fileSharing.Attribute("revisionsPassword").Should().BeNull();
+        fileSharing.Attribute("hashValue").Should().BeNull();
+        fileSharing.Attribute("saltValue").Should().BeNull();
+        fileSharing.Attribute("customFileSharingFlag").Should().BeNull();
+        fileSharing.Attribute("spinCount").Should().BeNull();
+        fileSharing.Element(fileSharing.Name.Namespace + "nativeFileSharingChild").Should().BeNull();
+    }
+
+    [Fact]
     public void WorkbookFileRecoveryProperties_ProducesSchemaValidWorkbook()
     {
         SchemaErrors(CreateWorkbookFileRecoveryPropertiesSourceWorkbook()).Should().BeEmpty();
@@ -214,6 +242,29 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         fileRecoveryPr.Attribute("crashSave").Should().BeNull();
         fileRecoveryPr.Attribute("dataExtractLoad").Should().BeNull();
         fileRecoveryPr.Attribute("repairLoad").Should().BeNull();
+        fileRecoveryPr.Attribute("customRecoveryFlag").Should().BeNull();
+        fileRecoveryPr.Element(fileRecoveryPr.Name.Namespace + "nativeRecoveryChild").Should().BeNull();
+    }
+
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidWorkbookFileRecoveryPropertiesForSchemaValidity()
+    {
+        using var source = Save(CreateWorkbookFileRecoveryPropertiesSourceWorkbook());
+        SetWorkbookFileRecoveryInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var fileRecoveryPr = ReadWorkbookChildElement(saved, "fileRecoveryPr");
         fileRecoveryPr.Attribute("customRecoveryFlag").Should().BeNull();
         fileRecoveryPr.Element(fileRecoveryPr.Name.Namespace + "nativeRecoveryChild").Should().BeNull();
     }
@@ -483,6 +534,44 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidWorkbookProtectionForSchemaValidity()
+    {
+        using var source = Save(CreateWorkbookProtectionSourceWorkbook());
+        SetWorkbookProtectionInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var protection = ReadWorkbookChildElement(saved, "workbookProtection");
+        protection.Attribute("lockStructure").Should().BeNull();
+        protection.Attribute("lockWindows").Should().BeNull();
+        protection.Attribute("lockRevision").Should().BeNull();
+        protection.Attribute("workbookPassword").Should().BeNull();
+        protection.Attribute("revisionsPassword").Should().BeNull();
+        protection.Attribute("workbookHashValue").Should().BeNull();
+        protection.Attribute("workbookSaltValue").Should().BeNull();
+        protection.Attribute("workbookSpinCount").Should().BeNull();
+        protection.Attribute("revisionsHashValue").Should().BeNull();
+        protection.Attribute("revisionsSaltValue").Should().BeNull();
+        protection.Attribute("revisionsSpinCount").Should().BeNull();
+        protection.Attribute("algorithmName").Should().BeNull();
+        protection.Attribute("hashValue").Should().BeNull();
+        protection.Attribute("saltValue").Should().BeNull();
+        protection.Attribute("spinCount").Should().BeNull();
+        protection.Attribute("customWorkbookProtectionFlag").Should().BeNull();
+        protection.Element(protection.Name.Namespace + "nativeWorkbookProtectionChild").Should().BeNull();
+    }
+
+    [Fact]
     public void WorkbookCalculationProperties_ProducesSchemaValidWorkbook()
     {
         SchemaErrors(CreateWorkbookCalculationPropertiesSourceWorkbook()).Should().BeEmpty();
@@ -536,6 +625,35 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.Save(workbook, saved);
 
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var calcPr = ReadWorkbookChildElement(saved, "calcPr");
+        calcPr.Attribute("calcId").Should().BeNull();
+        calcPr.Attribute("refMode").Should().BeNull();
+        calcPr.Attribute("fullPrecision").Should().BeNull();
+        calcPr.Attribute("iterateCount").Should().BeNull();
+        calcPr.Attribute("iterateDelta").Should().BeNull();
+        calcPr.Attribute("concurrentManualCount").Should().BeNull();
+        calcPr.Attribute("customCalcPrFlag").Should().BeNull();
+        calcPr.Element(calcPr.Name.Namespace + "nativeCalcPrChild").Should().BeNull();
+    }
+
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidWorkbookCalculationPropertiesForSchemaValidity()
+    {
+        using var source = Save(CreateWorkbookCalculationPropertiesSourceWorkbook());
+        SetWorkbookCalculationPropertiesInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         var calcPr = ReadWorkbookChildElement(saved, "calcPr");
         calcPr.Attribute("calcId").Should().BeNull();
