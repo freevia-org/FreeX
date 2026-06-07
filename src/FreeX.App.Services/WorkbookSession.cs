@@ -14,6 +14,8 @@ public sealed class WorkbookSession
         bool IsCut);
 
     private const double MaximumRowHeight = 409.5;
+    private const string MultiRangeClipboardErrorSuffix =
+        " does not support multiple selected ranges yet.";
 
     private static readonly StyleDiff EmptyStyleDiff = new();
 
@@ -1057,16 +1059,40 @@ public sealed class WorkbookSession
 
     public string CopySelectedRangeText()
     {
+        var result = TryCopySelectedRangeText();
+        if (!result.Success)
+            throw new InvalidOperationException(result.ErrorMessage);
+
+        return result.Text!;
+    }
+
+    public WorkbookClipboardTextResult TryCopySelectedRangeText()
+    {
+        if (TryCreateMultiRangeClipboardTextResult("Copy", out var result))
+            return result;
+
         var text = ClipboardSerializer.Serialize(Viewport, SelectedRange);
         _internalClipboard = CaptureInternalClipboard(SelectedRange, text, isCut: false);
-        return text;
+        return WorkbookClipboardTextResult.Succeeded(text);
     }
 
     public string CutSelectedRangeText()
     {
+        var result = TryCutSelectedRangeText();
+        if (!result.Success)
+            throw new InvalidOperationException(result.ErrorMessage);
+
+        return result.Text!;
+    }
+
+    public WorkbookClipboardTextResult TryCutSelectedRangeText()
+    {
+        if (TryCreateMultiRangeClipboardTextResult("Cut", out var result))
+            return result;
+
         var text = ClipboardSerializer.Serialize(Viewport, SelectedRange);
         _internalClipboard = CaptureInternalClipboard(SelectedRange, text, isCut: true);
-        return text;
+        return WorkbookClipboardTextResult.Succeeded(text);
     }
 
     public WorkbookCellEditResult PasteClipboardTextAtActiveCell(string? text, bool preserveText = false)
@@ -1105,6 +1131,9 @@ public sealed class WorkbookSession
                 [],
                 RecalcReport: null);
         }
+
+        if (TryCreateMultiRangeClipboardEditResult("Paste Special", out var multiRangeResult))
+            return multiRangeResult;
 
         if (_internalClipboard is not { } internalClipboard ||
             (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
@@ -2865,6 +2894,41 @@ public sealed class WorkbookSession
         return new InternalClipboard(range, cells, text, isCut);
     }
 
+    private bool TryCreateMultiRangeClipboardTextResult(
+        string operation,
+        out WorkbookClipboardTextResult result)
+    {
+        if (SelectedRanges.Count <= 1)
+        {
+            result = WorkbookClipboardTextResult.Succeeded(string.Empty);
+            return false;
+        }
+
+        result = WorkbookClipboardTextResult.Failed(CreateMultiRangeClipboardError(operation));
+        return true;
+    }
+
+    private bool TryCreateMultiRangeClipboardEditResult(
+        string operation,
+        out WorkbookCellEditResult result)
+    {
+        if (SelectedRanges.Count <= 1)
+        {
+            result = new WorkbookCellEditResult(true, null, [], RecalcReport: null);
+            return false;
+        }
+
+        result = new WorkbookCellEditResult(
+            false,
+            CreateMultiRangeClipboardError(operation),
+            [],
+            RecalcReport: null);
+        return true;
+    }
+
+    private static string CreateMultiRangeClipboardError(string operation) =>
+        operation + MultiRangeClipboardErrorSuffix;
+
     private static bool ShouldClearCutSourceAfterPaste(
         InternalClipboard clipboard,
         CellAddress destination,
@@ -3156,4 +3220,16 @@ public sealed class WorkbookSession
 
         return status;
     }
+}
+
+public sealed record WorkbookClipboardTextResult(
+    bool Success,
+    string? Text,
+    string? ErrorMessage)
+{
+    public static WorkbookClipboardTextResult Succeeded(string text) =>
+        new(true, text, null);
+
+    public static WorkbookClipboardTextResult Failed(string errorMessage) =>
+        new(false, null, errorMessage);
 }

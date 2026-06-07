@@ -1711,6 +1711,41 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void CopySelectedRangeText_RejectsMultipleSelectedRanges()
+    {
+        var (session, _, a1, c1) = CreateSessionWithMultipleSelectedRanges();
+
+        var result = session.TryCopySelectedRangeText();
+        Action copy = () => session.CopySelectedRangeText();
+
+        result.Success.Should().BeFalse();
+        result.Text.Should().BeNull();
+        result.ErrorMessage.Should().Be("Copy does not support multiple selected ranges yet.");
+        copy.Should()
+            .Throw<InvalidOperationException>()
+            .WithMessage("Copy does not support multiple selected ranges yet.");
+        session.SelectedRanges.Should().Equal(new GridRange(a1, a1), new GridRange(c1, c1));
+    }
+
+    [Fact]
+    public void CutSelectedRangeText_RejectsMultipleSelectedRanges()
+    {
+        var (session, sheet, a1, c1) = CreateSessionWithMultipleSelectedRanges();
+
+        var result = session.TryCutSelectedRangeText();
+        Action cut = () => session.CutSelectedRangeText();
+
+        result.Success.Should().BeFalse();
+        result.Text.Should().BeNull();
+        result.ErrorMessage.Should().Be("Cut does not support multiple selected ranges yet.");
+        cut.Should()
+            .Throw<InvalidOperationException>()
+            .WithMessage("Cut does not support multiple selected ranges yet.");
+        sheet.GetValue(a1).Should().Be(new NumberValue(42));
+        sheet.GetValue(c1).Should().Be(new BoolValue(true));
+    }
+
+    [Fact]
     public void PasteClipboardTextAtActiveCell_UsesInternalClipboardAndRebasesFormulas()
     {
         var workbook = CreateWorkbook();
@@ -1993,6 +2028,39 @@ public sealed class WorkbookSessionTests
         result.Success.Should().BeFalse();
         result.ErrorMessage.Should().Be("Paste Special requires copied FreeX cells.");
         sheet.GetCell(c1).Should().BeNull();
+    }
+
+    [Fact]
+    public void PasteSpecialClipboardAtActiveCell_RejectsMultipleSelectedRanges()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        var e1 = new CellAddress(sheet.Id, 1, 5);
+        sheet.SetCell(a1, new NumberValue(42));
+        sheet.SetCell(c1, new TextValue("left"));
+        sheet.SetCell(e1, new TextValue("right"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+        var clipboardText = session.CopySelectedRangeText();
+        session.SelectRange(new GridRange(c1, e1));
+        session.GoToSpecial(
+            GoToSpecialKind.Constants,
+            new GoToSpecialOptions(GoToSpecialValueTypes.Text));
+
+        var result = session.PasteSpecialClipboardAtActiveCell(clipboardText, PasteCellsMode.Values, default);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be("Paste Special does not support multiple selected ranges yet.");
+        result.AffectedCells.Should().BeEmpty();
+        session.SelectedRanges.Should().Equal(new GridRange(c1, c1), new GridRange(e1, e1));
+        sheet.GetValue(c1).Should().Be(new TextValue("left"));
+        sheet.GetValue(e1).Should().Be(new TextValue("right"));
     }
 
     [Fact]
@@ -7615,6 +7683,30 @@ public sealed class WorkbookSessionTests
 
     private static WorkbookSession CreateSession(StartupWorkbookLoadResult source) =>
         new WorkbookSessionFactory().Create(source, viewportHeight: 240, viewportWidth: 320);
+
+    private static (WorkbookSession Session, Sheet Sheet, CellAddress A1, CellAddress C1)
+        CreateSessionWithMultipleSelectedRanges()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(a1, new NumberValue(42));
+        sheet.SetCell(b1, new TextValue("text"));
+        sheet.SetCell(c1, new BoolValue(true));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, c1));
+        session.GoToSpecial(
+            GoToSpecialKind.Constants,
+            new GoToSpecialOptions(GoToSpecialValueTypes.Numbers | GoToSpecialValueTypes.Logicals));
+        session.SelectedRanges.Should().HaveCount(2);
+        return (session, sheet, a1, c1);
+    }
 
     private static CellStyle GetStyle(Workbook workbook, Sheet sheet, CellAddress address)
     {
