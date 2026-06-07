@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using static FreeX.Core.IO.XlsxXmlNormalizationHelpers;
 
 namespace FreeX.Core.IO;
 
@@ -137,7 +138,7 @@ internal static class XlsxWorksheetGridXmlNormalizer
     {
         var changed = false;
         changed |= RemoveUnknownAttributes(columns, EmptyAttributes);
-        changed |= RemoveUnexpectedChildren(columns, WorksheetNs + "col");
+        changed |= RemoveChildElementsExcept(columns, WorksheetNs + "col");
 
         foreach (var column in columns.Elements(WorksheetNs + "col").ToList())
             changed |= NormalizeColumnElement(column);
@@ -155,7 +156,7 @@ internal static class XlsxWorksheetGridXmlNormalizer
     {
         var changed = false;
         changed |= RemoveUnknownAttributes(sheetData, EmptyAttributes);
-        changed |= RemoveUnexpectedChildren(sheetData, WorksheetNs + "row");
+        changed |= RemoveChildElementsExcept(sheetData, WorksheetNs + "row");
 
         foreach (var row in sheetData.Elements(WorksheetNs + "row").ToList())
             changed |= NormalizeRowElement(row, cellMetadataCount, valueMetadataCount);
@@ -328,21 +329,6 @@ internal static class XlsxWorksheetGridXmlNormalizer
         return changed;
     }
 
-    private static bool RemoveUnexpectedChildren(XElement element, XName allowedChildName)
-    {
-        var changed = false;
-        foreach (var child in element.Elements().ToList())
-        {
-            if (child.Name == allowedChildName)
-                continue;
-
-            child.Remove();
-            changed = true;
-        }
-
-        return changed;
-    }
-
     private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedNames)
     {
         var changed = false;
@@ -360,31 +346,6 @@ internal static class XlsxWorksheetGridXmlNormalizer
         }
 
         return changed;
-    }
-
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed switch
-        {
-            "0" or "1" => trimmed,
-            "true" or "false" => trimmed,
-            _ => null
-        };
-    }
-
-    private static string? NormalizeToken(string? value, IReadOnlySet<string> allowedValues)
-    {
-        var trimmed = value?.Trim();
-        return trimmed is not null && allowedValues.Contains(trimmed) ? trimmed : null;
-    }
-
-    private static string? NormalizeUnsignedIntOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed.ToString(CultureInfo.InvariantCulture)
-            : null;
     }
 
     private static string? NormalizeMetadataIndex(string? value, uint metadataCount)

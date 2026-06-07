@@ -26,7 +26,7 @@ internal static class XlsxWorksheetMergeCellsNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(mergeCells, MergeCellsAttributes);
-        changed |= RemoveUnexpectedChildren(mergeCells, WorksheetNs + "mergeCell");
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(mergeCells, WorksheetNs + "mergeCell");
 
         foreach (var mergeCell in mergeCells.Elements(WorksheetNs + "mergeCell").ToList())
             changed |= NormalizeMergeCellElement(mergeCell);
@@ -72,21 +72,6 @@ internal static class XlsxWorksheetMergeCellsNormalizer
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(mergeCell, MergeCellAttributes);
         changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(mergeCell, "ref", normalizedReference);
         changed |= XlsxXmlNormalizationHelpers.RemoveChildElements(mergeCell);
-        return changed;
-    }
-
-    private static bool RemoveUnexpectedChildren(XElement element, XName allowedChildName)
-    {
-        var changed = false;
-        foreach (var child in element.Elements().ToList())
-        {
-            if (child.Name == allowedChildName)
-                continue;
-
-            child.Remove();
-            changed = true;
-        }
-
         return changed;
     }
 

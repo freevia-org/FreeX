@@ -462,6 +462,8 @@ public sealed partial class MainWindowXamlKeyTipTests
             "PivotChartOptionsBtn_Click",
             "PivotInsertSlicerBtn_Click",
             "PivotInsertTimelineBtn_Click",
+            "PivotExpandCollapseButtonsBtn_Click",
+            "PivotFieldHeadersBtn_Click",
             "PivotGrandTotalsBtn_Click",
             "PivotSubtotalsBtn_Click",
             "PivotReportLayoutBtn_Click",
@@ -498,6 +500,8 @@ public sealed partial class MainWindowXamlKeyTipTests
         source.Should().Contain("bool? printTitles = null");
         source.Should().Contain("bool? printExpandCollapseButtons = null");
         source.Should().Contain("bool updateAltText = false");
+        source.Should().Contain("showExpandCollapseButtons: !pivotTable.ShowExpandCollapseButtons");
+        source.Should().Contain("showFieldHeaders: !pivotTable.ShowFieldHeaders");
         source.Should().Contain("compactRowLabelIndent,");
         source.Should().Contain("updateAltText: true");
     }

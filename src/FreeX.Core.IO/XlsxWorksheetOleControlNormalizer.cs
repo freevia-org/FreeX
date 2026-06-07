@@ -139,7 +139,7 @@ internal static class XlsxWorksheetOleControlNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(oleObjects, NoAttributes, RelNs + "id");
-        changed |= RemoveUnexpectedChildElements(oleObjects, WorksheetNs + "oleObject");
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(oleObjects, WorksheetNs + "oleObject");
 
         foreach (var oleObject in oleObjects.Elements(WorksheetNs + "oleObject").ToList())
         {
@@ -158,7 +158,7 @@ internal static class XlsxWorksheetOleControlNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(controls, NoAttributes, RelNs + "id");
-        changed |= RemoveUnexpectedChildElements(controls, WorksheetNs + "control");
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(controls, WorksheetNs + "control");
 
         foreach (var control in controls.Elements(WorksheetNs + "control").ToList())
         {
@@ -177,7 +177,7 @@ internal static class XlsxWorksheetOleControlNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(oleObject, OleObjectAttributes, RelNs + "id");
-        changed |= RemoveUnexpectedChildElements(oleObject, WorksheetNs + "objectPr");
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(oleObject, WorksheetNs + "objectPr");
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "shapeId", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "autoLoad", XlsxXmlNormalizationHelpers.NormalizeBoolean);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "oleUpdate", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, OleUpdateValues));
@@ -191,7 +191,7 @@ internal static class XlsxWorksheetOleControlNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(control, ControlAttributes, RelNs + "id");
-        changed |= RemoveUnexpectedChildElements(control, WorksheetNs + "controlPr");
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(control, WorksheetNs + "controlPr");
         changed |= NormalizeControlProperties(control);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(control, "shapeId", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(control, "name", NormalizeOptionalText);
@@ -212,7 +212,7 @@ internal static class XlsxWorksheetOleControlNormalizer
             }
 
             changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(controlProperties, ControlPropertiesAttributes, RelNs + "id");
-            changed |= RemoveUnexpectedChildElements(controlProperties, WorksheetNs + "anchor");
+            changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(controlProperties, WorksheetNs + "anchor");
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "locked", XlsxXmlNormalizationHelpers.NormalizeBoolean);
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "defaultSize", XlsxXmlNormalizationHelpers.NormalizeBoolean);
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(controlProperties, "print", XlsxXmlNormalizationHelpers.NormalizeBoolean);
@@ -422,18 +422,6 @@ internal static class XlsxWorksheetOleControlNormalizer
         var targetPart = ResolveRelationshipTarget(worksheetPath, relationship);
         if (!string.IsNullOrWhiteSpace(targetPart))
             XlsxPackageXmlEditor.EnsureSpecificContentType(archive, targetPart, ControlPropertiesContentType);
-    }
-
-    private static bool RemoveUnexpectedChildElements(XElement element, XName allowedChildName)
-    {
-        var changed = false;
-        foreach (var child in element.Elements().Where(child => child.Name != allowedChildName).ToList())
-        {
-            child.Remove();
-            changed = true;
-        }
-
-        return changed;
     }
 
     private static string? NormalizeOptionalText(string? value)

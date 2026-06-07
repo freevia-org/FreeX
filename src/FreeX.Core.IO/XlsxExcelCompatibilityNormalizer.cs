@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
@@ -12,6 +13,9 @@ internal static partial class XlsxExcelCompatibilityNormalizer
     private const string PivotCacheRecordsRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords";
     private const string PivotTableRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable";
     private const string CalcChainRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain";
+    private const string VolatileDependenciesPath = "xl/volatileDependencies.xml";
+    private const string VolatileDependenciesContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.volatileDependencies+xml";
+    private const string VolatileDependenciesRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/volatileDependencies";
 
     private static readonly XNamespace WorkbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
     private static readonly XNamespace RelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -51,6 +55,7 @@ internal static partial class XlsxExcelCompatibilityNormalizer
         if (changedWorksheets)
             RemoveCalcChain(archive);
 
+        NormalizeVolatileDependenciesPackageGraph(archive);
         PruneMissingContentTypeOverrides(archive);
     }
 
@@ -532,6 +537,7 @@ internal static partial class XlsxExcelCompatibilityNormalizer
     internal static void RemoveCalcChain(ZipArchive archive)
     {
         archive.GetEntry("xl/calcChain.xml")?.Delete();
+        archive.GetEntry(VolatileDependenciesPath)?.Delete();
 
         var workbookRelationships = LoadXml(archive, "xl/_rels/workbook.xml.rels");
         var relationshipRoot = workbookRelationships?.Root;
@@ -541,7 +547,9 @@ internal static partial class XlsxExcelCompatibilityNormalizer
                 .Elements(PackageRelNs + "Relationship")
                 .Where(relationship =>
                     string.Equals(relationship.Attribute("Type")?.Value, CalcChainRelationshipType, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(relationship.Attribute("Target")?.Value, "calcChain.xml", StringComparison.OrdinalIgnoreCase))
+                    RelationshipTargetsPart(relationship, "xl/calcChain.xml") ||
+                    string.Equals(relationship.Attribute("Type")?.Value, VolatileDependenciesRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+                    RelationshipTargetsPart(relationship, VolatileDependenciesPath))
                 .ToList();
             foreach (var relationship in calcRelationships)
                 relationship.Remove();
@@ -551,6 +559,125 @@ internal static partial class XlsxExcelCompatibilityNormalizer
         }
 
         RemoveContentTypeOverride(archive, "/xl/calcChain.xml");
+        RemoveContentTypeOverride(archive, "/" + VolatileDependenciesPath);
+    }
+
+    private static void NormalizeVolatileDependenciesPackageGraph(ZipArchive archive)
+    {
+        if (archive.GetEntry(VolatileDependenciesPath) is null)
+        {
+            RemoveContentTypeOverride(archive, "/" + VolatileDependenciesPath);
+            RemoveWorkbookRelationships(
+                archive,
+                relationship =>
+                    string.Equals(relationship.Attribute("Type")?.Value, VolatileDependenciesRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+                    RelationshipTargetsPart(relationship, VolatileDependenciesPath));
+            return;
+        }
+
+        EnsureContentTypeOverride(archive, "/" + VolatileDependenciesPath, VolatileDependenciesContentType);
+
+        var workbookRelationships = LoadXml(archive, "xl/_rels/workbook.xml.rels");
+        var relationshipRoot = workbookRelationships?.Root;
+        if (relationshipRoot is null)
+            return;
+
+        var volatileRelationships = relationshipRoot
+            .Elements(PackageRelNs + "Relationship")
+            .Where(relationship =>
+                string.Equals(relationship.Attribute("Type")?.Value, VolatileDependenciesRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+                RelationshipTargetsPart(relationship, VolatileDependenciesPath))
+            .ToList();
+
+        var current = volatileRelationships.FirstOrDefault(relationship =>
+            string.Equals(relationship.Attribute("Type")?.Value, VolatileDependenciesRelationshipType, StringComparison.OrdinalIgnoreCase) &&
+            RelationshipTargetsPart(relationship, VolatileDependenciesPath));
+        var changed = false;
+        foreach (var relationship in volatileRelationships)
+        {
+            if (ReferenceEquals(relationship, current))
+                continue;
+
+            relationship.Remove();
+            changed = true;
+        }
+
+        if (current is null)
+        {
+            relationshipRoot.Add(new XElement(
+                PackageRelNs + "Relationship",
+                new XAttribute("Id", NextRelationshipId(relationshipRoot)),
+                new XAttribute("Type", VolatileDependenciesRelationshipType),
+                new XAttribute("Target", "volatileDependencies.xml")));
+            changed = true;
+        }
+        else
+        {
+            if (!string.Equals(current.Attribute("Target")?.Value, "volatileDependencies.xml", StringComparison.Ordinal))
+            {
+                current.SetAttributeValue("Target", "volatileDependencies.xml");
+                changed = true;
+            }
+
+            if (current.Attribute("TargetMode") is not null)
+            {
+                current.Attribute("TargetMode")!.Remove();
+                changed = true;
+            }
+        }
+
+        if (changed)
+            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/_rels/workbook.xml.rels", workbookRelationships!);
+    }
+
+    private static void RemoveWorkbookRelationships(ZipArchive archive, Func<XElement, bool> shouldRemove)
+    {
+        var workbookRelationships = LoadXml(archive, "xl/_rels/workbook.xml.rels");
+        var relationshipRoot = workbookRelationships?.Root;
+        if (relationshipRoot is null)
+            return;
+
+        var removed = false;
+        foreach (var relationship in relationshipRoot.Elements(PackageRelNs + "Relationship").Where(shouldRemove).ToList())
+        {
+            relationship.Remove();
+            removed = true;
+        }
+
+        if (removed)
+            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/_rels/workbook.xml.rels", workbookRelationships!);
+    }
+
+    private static bool RelationshipTargetsPart(XElement relationship, string partPath)
+    {
+        if (relationship.Attribute("TargetMode") is { Value: var mode } &&
+            string.Equals(mode, "External", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var target = relationship.Attribute("Target")?.Value;
+        return !string.IsNullOrWhiteSpace(target) &&
+               string.Equals(
+                   XlsxPackagePath.ResolveRelationshipTarget("xl/workbook.xml", target),
+                   partPath,
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NextRelationshipId(XElement relationshipRoot)
+    {
+        var used = relationshipRoot
+            .Elements(PackageRelNs + "Relationship")
+            .Select(relationship => relationship.Attribute("Id")?.Value)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        for (var index = 1;; index++)
+        {
+            var id = "rId" + index.ToString(CultureInfo.InvariantCulture);
+            if (!used.Contains(id))
+                return id;
+        }
     }
 
     private static List<string> GetWorkbookWorksheetPaths(ZipArchive archive)

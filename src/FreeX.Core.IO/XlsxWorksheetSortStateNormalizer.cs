@@ -15,7 +15,7 @@ internal static class XlsxWorksheetSortStateNormalizer
     public static bool NormalizeElement(XElement sortState)
     {
         var changed = false;
-        changed |= RemoveUnexpectedChildren(sortState, SortStateChildren);
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(sortState, WorksheetNs, SortStateChildren);
         changed |= NormalizeExtensionLists(sortState);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sortState, "columnSort", XlsxXmlNormalizationHelpers.NormalizeBoolean);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sortState, "caseSensitive", XlsxXmlNormalizationHelpers.NormalizeBoolean);
@@ -37,7 +37,7 @@ internal static class XlsxWorksheetSortStateNormalizer
             changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(condition);
         }
 
-        changed |= NormalizeChildOrder(sortState, SortStateChildOrder);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeChildOrder(sortState, SortStateChildOrder);
         return changed;
     }
 
@@ -86,36 +86,6 @@ internal static class XlsxWorksheetSortStateNormalizer
         }
 
         return changed;
-    }
-
-    private static bool RemoveUnexpectedChildren(XElement element, IReadOnlySet<string> allowedLocalNames)
-    {
-        var changed = false;
-        foreach (var child in element.Elements().ToList())
-        {
-            if (child.Name.Namespace == WorksheetNs && allowedLocalNames.Contains(child.Name.LocalName))
-                continue;
-
-            child.Remove();
-            changed = true;
-        }
-
-        return changed;
-    }
-
-    private static bool NormalizeChildOrder(XElement element, Func<XElement, int> orderSelector)
-    {
-        var children = element.Elements()
-            .Select((child, index) => new { Child = child, Index = index })
-            .OrderBy(item => orderSelector(item.Child))
-            .ThenBy(item => item.Index)
-            .Select(item => item.Child)
-            .ToList();
-        if (children.Count == 0 || element.Elements().SequenceEqual(children))
-            return false;
-
-        element.ReplaceNodes(children);
-        return true;
     }
 
     private static int SortStateChildOrder(XElement child) =>
