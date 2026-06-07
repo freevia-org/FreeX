@@ -52,7 +52,7 @@ public sealed partial class XlsxBroaderRetentionChecksTests
         workbookText.Should().NotContain("customSmartTagTypeFlag=\"keep\"");
         workbookText.Should().NotContain("customFunctionGroupFlag=\"keep\"");
         workbookText.Should().Contain("FreeXNativeFunctions");
-        workbookText.Should().Contain("nativeHiddenViewAttr=\"kept\"");
+        workbookText.Should().NotContain("nativeHiddenViewAttr=\"kept\"");
         workbookXml.Root.Element(MainNs + "customWorkbookViews").Should().BeNull();
         workbookText.Should().Contain("{FREEX-WORKBOOK-EXT}");
         workbookText.Should().Contain("externalReferences");

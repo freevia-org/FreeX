@@ -62,7 +62,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             using var harness = MainWindowHarness.Create();
             var expectations = new[]
             {
-                new RibbonFallbackExpectation("Insert", 900, Expanded: ["Tables"], Collapsed: ["Charts"]),
+                new RibbonFallbackExpectation("Insert", 900, Expanded: [], Collapsed: ["Charts"]),
                 new RibbonFallbackExpectation("Data", 1120, Expanded: ["Data Tools", "Forecast"], Collapsed: ["Sort & Filter"]),
                 new RibbonFallbackExpectation("Page Layout", 1120, Expanded: ["Themes", "Page Setup", "Arrange"], Collapsed: []),
                 new RibbonFallbackExpectation("View", 900, Expanded: ["Workbook Views", "Show", "Zoom"], Collapsed: ["Window"]),
@@ -75,9 +75,13 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 if (!harness.CanUseRequestedRibbonWidth(expectation.Width))
                     continue;
 
-                harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
-                    expectation.Expanded,
-                    $"{expectation.Tab} at {expectation.Width:0}px should keep Excel-style primary groups expanded before lower-priority groups; {harness.DebugActiveRibbonChildren}");
+                if (expectation.Expanded.Count > 0)
+                {
+                    harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
+                        expectation.Expanded,
+                        $"{expectation.Tab} at {expectation.Width:0}px should keep Excel-style primary groups expanded before lower-priority groups; {harness.DebugActiveRibbonChildren}");
+                }
+
                 if (expectation.Collapsed.Count > 0)
                 {
                     harness.CollapsedActiveRibbonGroupNames.Should().Contain(

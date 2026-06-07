@@ -1862,7 +1862,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
             workbook.SaveAs(stream);
         }
 
-        return stream.ToArray();
+        return RemoveEmptyWorkbookDefinedNames(stream.ToArray());
     }
 
     private static byte[] CreateDenseSourcePackage(int rowCount, int columnCount)
@@ -1880,7 +1880,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
             workbook.SaveAs(stream);
         }
 
-        return stream.ToArray();
+        return RemoveEmptyWorkbookDefinedNames(stream.ToArray());
     }
 
     private static byte[] AddOfficeRevisionUidAttributes(byte[] sourceBytes)
@@ -2195,6 +2195,32 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
             workbook.SaveAs(stream);
         }
 
+        return RemoveEmptyWorkbookDefinedNames(stream.ToArray());
+    }
+
+    private static byte[] RemoveEmptyWorkbookDefinedNames(byte[] sourceBytes)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(sourceBytes, 0, sourceBytes.Length);
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
+            var changed = false;
+            foreach (var definedNames in workbookXml.Root!.Elements(workbookNs + "definedNames").ToList())
+            {
+                if (definedNames.HasElements || definedNames.Attributes().Any(attribute => !attribute.IsNamespaceDeclaration))
+                    continue;
+
+                definedNames.Remove();
+                changed = true;
+            }
+
+            if (changed)
+                ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
         return stream.ToArray();
     }
 
@@ -2239,7 +2265,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
             worksheetXml.Save(replacementStream, System.Xml.Linq.SaveOptions.DisableFormatting);
         }
 
-        return stream.ToArray();
+        return RemoveEmptyWorkbookDefinedNames(stream.ToArray());
     }
 
     private static byte[] CreateInternalHyperlinkSourcePackage()

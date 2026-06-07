@@ -8,6 +8,7 @@ namespace FreeX.Core.IO;
 internal static class XlsxWorksheetGridXmlNormalizer
 {
     private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    private static readonly XNamespace MarkupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
 
     private static readonly IReadOnlySet<string> EmptyAttributes = new HashSet<string>(StringComparer.Ordinal);
     private static readonly IReadOnlySet<string> ColumnAttributes =
@@ -306,6 +307,7 @@ internal static class XlsxWorksheetGridXmlNormalizer
         foreach (var attribute in element.Attributes().ToList())
         {
             if (attribute.IsNamespaceDeclaration ||
+                attribute.Name.NamespaceName == MarkupCompatNs.NamespaceName ||
                 (attribute.Name.NamespaceName.Length == 0 && allowedNames.Contains(attribute.Name.LocalName)))
             {
                 continue;
