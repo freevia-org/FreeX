@@ -318,6 +318,38 @@ public sealed class WorkbookSession
         return WorkbookGoToSpecialResult.Selected(selectedRange, ranges, matches.Count);
     }
 
+    public ReviewWorkflowPlan GetReviewWorkflowPlan(
+        IReadOnlySet<string>? customDictionary = null,
+        ISet<string>? ignoredWords = null,
+        ISet<ReviewSpellingIssueKey>? ignoredIssues = null) =>
+        ReviewWorkflowPlanner.CreatePlan(
+            Workbook,
+            ActiveSheet.Id,
+            customDictionary,
+            ignoredWords,
+            ignoredIssues);
+
+    public WorkbookNavigationResult GoToNextNote(bool previous = false) =>
+        GoToReviewNavigationPlan(ReviewWorkflowPlanner.FindNextNote(ActiveSheet, ActiveCell, previous));
+
+    public WorkbookNavigationResult GoToNextThreadedComment(bool previous = false) =>
+        GoToReviewNavigationPlan(ReviewWorkflowPlanner.FindNextThreadedComment(ActiveSheet, ActiveCell, previous));
+
+    public WorkbookNavigationResult GoToAccessibilityIssue(AccessibilityIssue issue) =>
+        GoToCell(ReviewWorkflowPlanner.GetAccessibilityNavigationTarget(issue));
+
+    public WorkbookCellEditResult ExecuteReviewCommand(IWorkbookCommand command, CellAddress? fallbackAddress = null)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        var result = _cellEditService.ExecuteEditCommand(Workbook, command);
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulEditResult(result, fallbackAddress ?? ActiveCell);
+        return result;
+    }
+
     public WorkbookNavigationResult FindNext(
         string? searchText = null,
         FindOptions? options = null,
@@ -2736,6 +2768,11 @@ public sealed class WorkbookSession
     private SheetId? ResolveSheetIdByName(string sheetName) =>
         Workbook.Sheets.FirstOrDefault(sheet =>
             string.Equals(sheet.Name, sheetName, StringComparison.OrdinalIgnoreCase))?.Id;
+
+    private WorkbookNavigationResult GoToReviewNavigationPlan(ReviewNavigationPlan plan) =>
+        plan is { Success: true, Target: { } target }
+            ? GoToCell(target)
+            : WorkbookNavigationResult.Failed(plan.ErrorMessage ?? "Review target was not found.");
 
     private WorkbookCellEditResult SetFreezePanes(uint frozenRows, uint frozenCols)
     {
