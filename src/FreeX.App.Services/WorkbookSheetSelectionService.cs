@@ -6,7 +6,8 @@ public sealed record WorkbookSheetTab(
     SheetId Id,
     string Name,
     bool IsActive,
-    CellColor? TabColor = null);
+    CellColor? TabColor = null,
+    bool IsGrouped = false);
 
 public sealed record WorkbookHiddenSheet(
     SheetId Id,
@@ -22,7 +23,9 @@ public sealed record WorkbookSheetSelection(
 
 public sealed class WorkbookSheetSelectionService
 {
-    public WorkbookSheetSelection EnsureActiveSheet(Workbook workbook)
+    public WorkbookSheetSelection EnsureActiveSheet(
+        Workbook workbook,
+        IReadOnlySet<SheetId>? groupedSheetIds = null)
     {
         ArgumentNullException.ThrowIfNull(workbook);
 
@@ -31,10 +34,13 @@ public sealed class WorkbookSheetSelectionService
 
         var index = ResolveActiveIndex(workbook);
         workbook.ActiveSheetIndex = index;
-        return CreateSelection(workbook, index);
+        return CreateSelection(workbook, index, groupedSheetIds);
     }
 
-    public WorkbookSheetSelection SelectSheet(Workbook workbook, SheetId sheetId)
+    public WorkbookSheetSelection SelectSheet(
+        Workbook workbook,
+        SheetId sheetId,
+        IReadOnlySet<SheetId>? groupedSheetIds = null)
     {
         ArgumentNullException.ThrowIfNull(workbook);
 
@@ -44,20 +50,28 @@ public sealed class WorkbookSheetSelectionService
         var selectableIndexes = GetSelectableIndexes(workbook);
         var index = selectableIndexes.FirstOrDefault(candidate => workbook.Sheets[candidate].Id == sheetId, -1);
         if (index < 0)
-            return EnsureActiveSheet(workbook);
+            return EnsureActiveSheet(workbook, groupedSheetIds);
 
         workbook.ActiveSheetIndex = index;
-        return CreateSelection(workbook, index);
+        return CreateSelection(workbook, index, groupedSheetIds);
     }
 
-    private static WorkbookSheetSelection CreateSelection(Workbook workbook, int activeIndex)
+    private static WorkbookSheetSelection CreateSelection(
+        Workbook workbook,
+        int activeIndex,
+        IReadOnlySet<SheetId>? groupedSheetIds)
     {
         var activeSheet = workbook.Sheets[activeIndex];
         var tabs = GetSelectableIndexes(workbook)
             .Select(index =>
             {
                 var sheet = workbook.Sheets[index];
-                return new WorkbookSheetTab(sheet.Id, sheet.Name, sheet.Id == activeSheet.Id, sheet.TabColor);
+                return new WorkbookSheetTab(
+                    sheet.Id,
+                    sheet.Name,
+                    sheet.Id == activeSheet.Id,
+                    sheet.TabColor,
+                    groupedSheetIds?.Contains(sheet.Id) == true);
             })
             .ToList();
 

@@ -543,6 +543,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("HasNativeTabColorMenuItem &&");
         smokeSource.Should().Contain("HasNativeClearTabColorMenuItem &&");
         smokeSource.Should().Contain("NativeTabColorSwatchCount == CellColorPalettePlanner.BuildDefaultSwatches().Count");
+        smokeSource.Should().Contain("HasNativeSelectAllSheetsMenuItem &&");
+        smokeSource.Should().Contain("HasNativeUngroupSheetsMenuItem &&");
         smokeSource.Should().Contain("HasNativeShowGridlinesMenuItem &&");
         smokeSource.Should().Contain("HasNativeShowHeadingsMenuItem &&");
         smokeSource.Should().Contain("HasNativeZoomInMenuItem &&");
@@ -586,6 +588,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_tab_color_menu_item={FormatBool(snapshot.HasNativeTabColorMenuItem)}");
         smokeSource.Should().Contain("native_tab_color_clear_item={FormatBool(snapshot.HasNativeClearTabColorMenuItem)}");
         smokeSource.Should().Contain("native_tab_color_swatch_count={snapshot.NativeTabColorSwatchCount}");
+        smokeSource.Should().Contain("native_select_all_sheets_menu_item={FormatBool(snapshot.HasNativeSelectAllSheetsMenuItem)}");
+        smokeSource.Should().Contain("native_ungroup_sheets_menu_item={FormatBool(snapshot.HasNativeUngroupSheetsMenuItem)}");
         smokeSource.Should().Contain("native_select_all_menu_item={FormatBool(snapshot.HasNativeSelectAllMenuItem)}");
         smokeSource.Should().Contain("native_clear_contents_menu_item={FormatBool(snapshot.HasNativeClearContentsMenuItem)}");
         smokeSource.Should().Contain("native_bold_menu_item={FormatBool(snapshot.HasNativeBoldMenuItem)}");
@@ -650,6 +654,8 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeOpenRecentMenuItem: HasNativeMenuItem(_openRecentMenuItem, \"Open Recent\", requireGesture: false)");
         windowSource.Should().Contain("NativeOpenRecentItemCount: nativeOpenRecentItemCount");
         windowSource.Should().Contain("NativeTabColorSwatchCount: nativeTabColorSwatchCount");
+        windowSource.Should().Contain("HasNativeSelectAllSheetsMenuItem: HasNativeMenuItem(_selectAllSheetsMenuItem, \"Select All Sheets\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeUngroupSheetsMenuItem: HasNativeMenuItem(_ungroupSheetsMenuItem, \"Ungroup Sheets\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeCloseWorkbookMenuItem: HasNativeMenuItem(_closeWorkbookMenuItem, \"Close Workbook\")");
         windowSource.Should().Contain("HasNativeEditMenu: hasNativeEditMenu");
         windowSource.Should().Contain("HasNativeFormatMenu: hasNativeFormatMenu");
@@ -1530,6 +1536,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _moveSheetLeftMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _moveSheetRightMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _tabColorMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _selectAllSheetsMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _ungroupSheetsMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _hideSheetMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _unhideSheetMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _deleteSheetMenuItem = new();");
@@ -1549,6 +1557,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_moveSheetRightMenuItem.Click += (_, _) => MoveActiveSheetRight();");
         source.Should().Contain("_tabColorMenuItem.Header = \"Tab Color\";");
         source.Should().Contain("_tabColorMenuItem.Menu = CreateNativeSheetTabColorMenu();");
+        source.Should().Contain("_selectAllSheetsMenuItem.Header = \"Select All Sheets\";");
+        source.Should().Contain("_selectAllSheetsMenuItem.Click += (_, _) => SelectAllVisibleSheets();");
+        source.Should().Contain("_ungroupSheetsMenuItem.Header = \"Ungroup Sheets\";");
+        source.Should().Contain("_ungroupSheetsMenuItem.Click += (_, _) => UngroupSheets();");
         source.Should().Contain("_hideSheetMenuItem.Header = \"Hide Sheet\";");
         source.Should().Contain("_hideSheetMenuItem.Click += (_, _) => HideActiveSheet();");
         source.Should().Contain("_unhideSheetMenuItem.Header = \"Unhide Sheet...\";");
@@ -1561,6 +1573,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("sheetMenu.Items.Add(_moveSheetLeftMenuItem);");
         source.Should().Contain("sheetMenu.Items.Add(_moveSheetRightMenuItem);");
         source.Should().Contain("sheetMenu.Items.Add(_tabColorMenuItem);");
+        source.Should().Contain("sheetMenu.Items.Add(_selectAllSheetsMenuItem);");
+        source.Should().Contain("sheetMenu.Items.Add(_ungroupSheetsMenuItem);");
         source.Should().Contain("sheetMenu.Items.Add(_hideSheetMenuItem);");
         source.Should().Contain("sheetMenu.Items.Add(_unhideSheetMenuItem);");
         source.Should().Contain("sheetMenu.Items.Add(_deleteSheetMenuItem);");
@@ -1573,6 +1587,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_moveSheetLeftMenuItem.IsEnabled = isIdle && activeSheetTabIndex > 0;");
         source.Should().Contain("activeSheetTabIndex < _session.SheetTabs.Count - 1;");
         source.Should().Contain("_tabColorMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("_selectAllSheetsMenuItem.IsEnabled = isIdle && _session.SheetTabs.Count > 1;");
+        source.Should().Contain("_ungroupSheetsMenuItem.IsEnabled = isIdle && _session.IsWorkbookGrouped;");
         source.Should().Contain("_hideSheetMenuItem.IsEnabled = isIdle && _session.CanHideActiveSheet;");
         source.Should().Contain("_unhideSheetMenuItem.IsEnabled = isIdle && _session.HiddenSheets.Count > 0;");
         source.Should().Contain("_deleteSheetMenuItem.IsEnabled = isIdle;");
@@ -1607,6 +1623,16 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var result = _session.SetActiveSheetTabColor(color);");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Tab Color failed.\");");
         source.Should().Contain("RefreshShell(color is null");
+        source.Should().Contain("private void SelectAllVisibleSheets()");
+        source.Should().Contain("var changed = _session.SelectAllVisibleSheets();");
+        source.Should().Contain("RefreshShell(\"Selected all visible sheets\");");
+        source.Should().Contain("private void UngroupSheets()");
+        source.Should().Contain("var changed = _session.UngroupSheets();");
+        source.Should().Contain("RefreshShell($\"Ungrouped sheets to {_session.ActiveSheet.Name}\");");
+        source.Should().Contain("private string FormatWindowWorkbookTitle()");
+        source.Should().Contain("? $\"{_session.DisplayName} [Group]\"");
+        source.Should().Contain("var isGroupedTab = tab.IsGrouped && _session.IsWorkbookGrouped;");
+        source.Should().Contain(": isGroupedTab");
         source.Should().Contain("private void HideActiveSheet()");
         source.Should().Contain("var result = _session.HideActiveSheet();");
         source.Should().Contain("RefreshShell($\"Hid {sheetName}\");");
@@ -1631,6 +1657,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("HasNativeTabColorMenuItem: HasNativeMenuItem(_tabColorMenuItem, \"Tab Color\", requireGesture: false)");
         source.Should().Contain("HasNativeClearTabColorMenuItem: HasNativeSubmenuItem(_tabColorMenuItem.Menu, \"No Color\")");
         source.Should().Contain("NativeTabColorSwatchCount: nativeTabColorSwatchCount");
+        source.Should().Contain("HasNativeSelectAllSheetsMenuItem: HasNativeMenuItem(_selectAllSheetsMenuItem, \"Select All Sheets\", requireGesture: false)");
+        source.Should().Contain("HasNativeUngroupSheetsMenuItem: HasNativeMenuItem(_ungroupSheetsMenuItem, \"Ungroup Sheets\", requireGesture: false)");
         source.Should().Contain("HasNativeHideSheetMenuItem: HasNativeMenuItem(_hideSheetMenuItem, \"Hide Sheet\", requireGesture: false)");
         source.Should().Contain("HasNativeUnhideSheetMenuItem: HasNativeMenuItem(_unhideSheetMenuItem, \"Unhide Sheet...\", requireGesture: false)");
         source.Should().Contain("HasNativeDeleteSheetMenuItem: HasNativeMenuItem(_deleteSheetMenuItem, \"Delete Sheet\", requireGesture: false)");
@@ -1645,6 +1673,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("HasNativeTabColorMenuItem &&");
         smokeSource.Should().Contain("HasNativeClearTabColorMenuItem &&");
         smokeSource.Should().Contain("NativeTabColorSwatchCount == CellColorPalettePlanner.BuildDefaultSwatches().Count");
+        smokeSource.Should().Contain("HasNativeSelectAllSheetsMenuItem &&");
+        smokeSource.Should().Contain("HasNativeUngroupSheetsMenuItem &&");
         smokeSource.Should().Contain("HasNativeHideSheetMenuItem &&");
         smokeSource.Should().Contain("HasNativeUnhideSheetMenuItem &&");
         smokeSource.Should().Contain("HasNativeDeleteSheetMenuItem &&");
@@ -1658,6 +1688,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_tab_color_menu_item={FormatBool(snapshot.HasNativeTabColorMenuItem)}");
         smokeSource.Should().Contain("native_tab_color_clear_item={FormatBool(snapshot.HasNativeClearTabColorMenuItem)}");
         smokeSource.Should().Contain("native_tab_color_swatch_count={snapshot.NativeTabColorSwatchCount}");
+        smokeSource.Should().Contain("native_select_all_sheets_menu_item={FormatBool(snapshot.HasNativeSelectAllSheetsMenuItem)}");
+        smokeSource.Should().Contain("native_ungroup_sheets_menu_item={FormatBool(snapshot.HasNativeUngroupSheetsMenuItem)}");
         smokeSource.Should().Contain("native_hide_sheet_menu_item={FormatBool(snapshot.HasNativeHideSheetMenuItem)}");
         smokeSource.Should().Contain("native_unhide_sheet_menu_item={FormatBool(snapshot.HasNativeUnhideSheetMenuItem)}");
         smokeSource.Should().Contain("native_delete_sheet_menu_item={FormatBool(snapshot.HasNativeDeleteSheetMenuItem)}");

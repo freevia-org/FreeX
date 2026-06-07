@@ -89,6 +89,8 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeTabColorMenuItem,
     bool HasNativeClearTabColorMenuItem,
     int NativeTabColorSwatchCount,
+    bool HasNativeSelectAllSheetsMenuItem,
+    bool HasNativeUngroupSheetsMenuItem,
     bool HasNativeHideSheetMenuItem,
     bool HasNativeUnhideSheetMenuItem,
     bool HasNativeDeleteSheetMenuItem,
@@ -195,6 +197,8 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeTabColorMenuItem &&
         HasNativeClearTabColorMenuItem &&
         NativeTabColorSwatchCount == CellColorPalettePlanner.BuildDefaultSwatches().Count &&
+        HasNativeSelectAllSheetsMenuItem &&
+        HasNativeUngroupSheetsMenuItem &&
         HasNativeHideSheetMenuItem &&
         HasNativeUnhideSheetMenuItem &&
         HasNativeDeleteSheetMenuItem &&
@@ -349,6 +353,8 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_tab_color_menu_item={FormatBool(snapshot.HasNativeTabColorMenuItem)}",
                 $"native_tab_color_clear_item={FormatBool(snapshot.HasNativeClearTabColorMenuItem)}",
                 $"native_tab_color_swatch_count={snapshot.NativeTabColorSwatchCount}",
+                $"native_select_all_sheets_menu_item={FormatBool(snapshot.HasNativeSelectAllSheetsMenuItem)}",
+                $"native_ungroup_sheets_menu_item={FormatBool(snapshot.HasNativeUngroupSheetsMenuItem)}",
                 $"native_hide_sheet_menu_item={FormatBool(snapshot.HasNativeHideSheetMenuItem)}",
                 $"native_unhide_sheet_menu_item={FormatBool(snapshot.HasNativeUnhideSheetMenuItem)}",
                 $"native_delete_sheet_menu_item={FormatBool(snapshot.HasNativeDeleteSheetMenuItem)}",

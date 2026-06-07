@@ -22,6 +22,7 @@ public sealed class WorkbookSession
     private readonly IViewportService _viewportService;
     private readonly bool _includeObjects;
     private readonly WorkbookSelectionStatsCache _selectionStatsCache = new();
+    private readonly HashSet<SheetId> _groupedSheetIds = [];
     private InternalClipboard? _internalClipboard;
     private double _viewportHeight;
     private double _viewportWidth;
@@ -61,6 +62,8 @@ public sealed class WorkbookSession
         var selection = _sheetSelectionService.EnsureActiveSheet(Workbook);
         ActiveSheet = selection.Sheet;
         SheetTabs = selection.Tabs;
+        SelectSingleSheetGroup(ActiveSheet.Id);
+        RefreshSheetTabsForActiveSheet();
         ActiveCell = GetInitialActiveCell(ActiveSheet);
         SelectedRange = new GridRange(ActiveCell, ActiveCell);
         Viewport = BuildViewport();
@@ -83,6 +86,10 @@ public sealed class WorkbookSession
     public CellAddress? FormulaEditAddress { get; private set; }
 
     public IReadOnlyList<WorkbookSheetTab> SheetTabs { get; private set; }
+
+    public bool IsWorkbookGrouped =>
+        _groupedSheetIds.Contains(ActiveSheet.Id) &&
+        GetSelectableSheetIds().Count(_groupedSheetIds.Contains) > 1;
 
     public bool IsShowingGridlines => ActiveSheet.ShowGridlines;
 
@@ -261,17 +268,40 @@ public sealed class WorkbookSession
 
     public bool SelectSheet(SheetId sheetId)
     {
+        var previousSheetId = ActiveSheet.Id;
+        var previousGroupedSheetIds = _groupedSheetIds.ToHashSet();
         var selection = _sheetSelectionService.SelectSheet(Workbook, sheetId);
-        SheetTabs = selection.Tabs;
-        if (ActiveSheet.Id == selection.Sheet.Id)
-            return false;
+        var sheetChanged = previousSheetId != selection.Sheet.Id;
 
         ActiveSheet = selection.Sheet;
-        ActiveCell = GetInitialActiveCell(ActiveSheet);
-        SelectedRange = new GridRange(ActiveCell, ActiveCell);
+        SelectSingleSheetGroup(ActiveSheet.Id);
+        RefreshSheetTabsForActiveSheet();
         FormulaEditAddress = null;
-        RefreshViewport();
-        return true;
+
+        if (sheetChanged)
+        {
+            ActiveCell = GetInitialActiveCell(ActiveSheet);
+            SelectedRange = new GridRange(ActiveCell, ActiveCell);
+            RefreshViewport();
+        }
+
+        return sheetChanged || !previousGroupedSheetIds.SetEquals(_groupedSheetIds);
+    }
+
+    public bool SelectAllVisibleSheets()
+    {
+        var changed = SetGroupedSheetIds(
+            SheetGroupSelectionService.SelectAll(GetSelectableSheetIds()),
+            ActiveSheet.Id);
+        RefreshSheetTabsForActiveSheet();
+        return changed;
+    }
+
+    public bool UngroupSheets()
+    {
+        var changed = SetGroupedSheetIds([ActiveSheet.Id], ActiveSheet.Id);
+        RefreshSheetTabsForActiveSheet();
+        return changed;
     }
 
     public WorkbookCellEditResult AddSheet()
@@ -1393,11 +1423,62 @@ public sealed class WorkbookSession
         return null;
     }
 
+    private IReadOnlyList<SheetId> GetSelectableSheetIds()
+    {
+        var visible = Workbook.Sheets
+            .Where(sheet => !sheet.IsHidden && !sheet.IsVeryHidden)
+            .Select(sheet => sheet.Id)
+            .ToList();
+
+        return visible.Count > 0
+            ? visible
+            : Workbook.Sheets.Select(sheet => sheet.Id).ToList();
+    }
+
+    private void SelectSingleSheetGroup(SheetId sheetId) =>
+        SetGroupedSheetIds([sheetId], sheetId);
+
+    private bool SetGroupedSheetIds(IEnumerable<SheetId> sheetIds, SheetId fallbackSheetId)
+    {
+        var previous = _groupedSheetIds.ToHashSet();
+        var selectableSheetIds = GetSelectableSheetIds().ToHashSet();
+        _groupedSheetIds.Clear();
+
+        foreach (var sheetId in sheetIds)
+        {
+            if (selectableSheetIds.Contains(sheetId))
+                _groupedSheetIds.Add(sheetId);
+        }
+
+        if (_groupedSheetIds.Count == 0 || !_groupedSheetIds.Contains(fallbackSheetId))
+        {
+            _groupedSheetIds.Clear();
+            if (selectableSheetIds.Contains(fallbackSheetId))
+                _groupedSheetIds.Add(fallbackSheetId);
+            else if (selectableSheetIds.Count > 0)
+                _groupedSheetIds.Add(selectableSheetIds.First());
+        }
+
+        return !previous.SetEquals(_groupedSheetIds);
+    }
+
+    private void RefreshSheetTabsForActiveSheet()
+    {
+        SetGroupedSheetIds(_groupedSheetIds.ToArray(), ActiveSheet.Id);
+        var selection = _sheetSelectionService.SelectSheet(
+            Workbook,
+            ActiveSheet.Id,
+            IsWorkbookGrouped ? _groupedSheetIds : null);
+        ActiveSheet = selection.Sheet;
+        SheetTabs = selection.Tabs;
+    }
+
     private void ApplySuccessfulWorkbookStructureResult(SheetId preferredSheetId)
     {
         var selection = _sheetSelectionService.SelectSheet(Workbook, preferredSheetId);
         ActiveSheet = selection.Sheet;
-        SheetTabs = selection.Tabs;
+        SelectSingleSheetGroup(ActiveSheet.Id);
+        RefreshSheetTabsForActiveSheet();
         ActiveCell = GetInitialActiveCell(ActiveSheet);
         ActiveSheet.ActiveRow = ActiveCell.Row;
         ActiveSheet.ActiveCol = ActiveCell.Col;
@@ -1411,9 +1492,9 @@ public sealed class WorkbookSession
 
     private void ApplySuccessfulWorkbookMetadataResult(SheetId preferredSheetId)
     {
-        var selection = _sheetSelectionService.SelectSheet(Workbook, preferredSheetId);
+        var selection = _sheetSelectionService.SelectSheet(Workbook, preferredSheetId, _groupedSheetIds);
         ActiveSheet = selection.Sheet;
-        SheetTabs = selection.Tabs;
+        RefreshSheetTabsForActiveSheet();
         ActiveSheet.ActiveRow = ActiveCell.Row;
         ActiveSheet.ActiveCol = ActiveCell.Col;
         FormulaEditAddress = null;
@@ -1428,9 +1509,9 @@ public sealed class WorkbookSession
         var address = result.AffectedCells.FirstOrDefault(fallbackAddress);
         if (!ActiveSheet.Id.Equals(address.Sheet))
         {
-            var selection = _sheetSelectionService.SelectSheet(Workbook, address.Sheet);
+            var selection = _sheetSelectionService.SelectSheet(Workbook, address.Sheet, _groupedSheetIds);
             ActiveSheet = selection.Sheet;
-            SheetTabs = selection.Tabs;
+            RefreshSheetTabsForActiveSheet();
         }
 
         ActiveCell = address;

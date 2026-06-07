@@ -156,6 +156,8 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"native_tab_color_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_tab_color_clear_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_tab_color_swatch_count=69\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_select_all_sheets_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_ungroup_sheets_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_hide_sheet_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_unhide_sheet_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_delete_sheet_menu_item=true\" \"$launch_smoke_report\"");

@@ -59,6 +59,23 @@ public sealed class WorkbookSheetSelectionServiceTests
     }
 
     [Fact]
+    public void SelectSheet_PropagatesGroupedVisibleTabState()
+    {
+        var workbook = new Workbook();
+        var summary = workbook.AddSheet("Summary");
+        var details = workbook.AddSheet("Details");
+        var hidden = workbook.AddSheet("Hidden");
+        hidden.IsHidden = true;
+        var grouped = new HashSet<SheetId> { summary.Id, details.Id, hidden.Id };
+
+        var selection = new WorkbookSheetSelectionService().SelectSheet(workbook, details.Id, grouped);
+
+        selection.Tabs.Should().Equal(
+            new WorkbookSheetTab(summary.Id, "Summary", IsActive: false, TabColor: null, IsGrouped: true),
+            new WorkbookSheetTab(details.Id, "Details", IsActive: true, TabColor: null, IsGrouped: true));
+    }
+
+    [Fact]
     public void SelectSheet_IgnoresHiddenSheetWhenVisibleSheetsExist()
     {
         var workbook = new Workbook();

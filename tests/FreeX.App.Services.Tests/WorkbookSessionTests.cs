@@ -3693,6 +3693,79 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SelectAllVisibleSheets_GroupsTabsWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var hidden = workbook.AddSheet("Hidden");
+        hidden.IsHidden = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectSheet(details.Id);
+
+        var changed = session.SelectAllVisibleSheets();
+
+        changed.Should().BeTrue();
+        session.IsWorkbookGrouped.Should().BeTrue();
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+        session.SheetTabs.Should().Equal(
+            new WorkbookSheetTab(summary.Id, "Sheet1", IsActive: false, TabColor: null, IsGrouped: true),
+            new WorkbookSheetTab(details.Id, "Details", IsActive: true, TabColor: null, IsGrouped: true));
+    }
+
+    [Fact]
+    public void UngroupSheets_RestoresActiveSheetGroupWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectSheet(details.Id);
+        session.SelectAllVisibleSheets();
+
+        var changed = session.UngroupSheets();
+
+        changed.Should().BeTrue();
+        session.IsWorkbookGrouped.Should().BeFalse();
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+        session.SheetTabs.Should().Equal(
+            new WorkbookSheetTab(summary.Id, "Sheet1", IsActive: false),
+            new WorkbookSheetTab(details.Id, "Details", IsActive: true));
+    }
+
+    [Fact]
+    public void SelectSheet_ClearsGroupedSheetsEvenWhenActiveSheetDoesNotChange()
+    {
+        var workbook = CreateWorkbook();
+        var details = workbook.AddSheet("Details");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectSheet(details.Id);
+        session.SelectAllVisibleSheets();
+
+        var changed = session.SelectSheet(details.Id);
+
+        changed.Should().BeTrue();
+        session.IsWorkbookGrouped.Should().BeFalse();
+        session.ActiveSheet.Should().BeSameAs(details);
+        session.IsDirty.Should().BeFalse();
+        session.SheetTabs.Should().OnlyContain(tab => !tab.IsGrouped);
+    }
+
+    [Fact]
     public void HideActiveSheet_HidesSheetSelectsVisibleSurvivorAndKeepsUndoRedoCoherent()
     {
         var workbook = CreateWorkbook();

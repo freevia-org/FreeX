@@ -140,6 +140,8 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _moveSheetLeftMenuItem = new();
     private readonly NativeMenuItem _moveSheetRightMenuItem = new();
     private readonly NativeMenuItem _tabColorMenuItem = new();
+    private readonly NativeMenuItem _selectAllSheetsMenuItem = new();
+    private readonly NativeMenuItem _ungroupSheetsMenuItem = new();
     private readonly NativeMenuItem _hideSheetMenuItem = new();
     private readonly NativeMenuItem _unhideSheetMenuItem = new();
     private readonly NativeMenuItem _deleteSheetMenuItem = new();
@@ -380,6 +382,12 @@ public sealed class MainWindow : Window
 
         _tabColorMenuItem.Header = "Tab Color";
         _tabColorMenuItem.Menu = CreateNativeSheetTabColorMenu();
+
+        _selectAllSheetsMenuItem.Header = "Select All Sheets";
+        _selectAllSheetsMenuItem.Click += (_, _) => SelectAllVisibleSheets();
+
+        _ungroupSheetsMenuItem.Header = "Ungroup Sheets";
+        _ungroupSheetsMenuItem.Click += (_, _) => UngroupSheets();
 
         _hideSheetMenuItem.Header = "Hide Sheet";
         _hideSheetMenuItem.Click += (_, _) => HideActiveSheet();
@@ -667,6 +675,8 @@ public sealed class MainWindow : Window
         sheetMenu.Items.Add(_moveSheetLeftMenuItem);
         sheetMenu.Items.Add(_moveSheetRightMenuItem);
         sheetMenu.Items.Add(_tabColorMenuItem);
+        sheetMenu.Items.Add(_selectAllSheetsMenuItem);
+        sheetMenu.Items.Add(_ungroupSheetsMenuItem);
         sheetMenu.Items.Add(new NativeMenuItemSeparator());
         sheetMenu.Items.Add(_hideSheetMenuItem);
         sheetMenu.Items.Add(_unhideSheetMenuItem);
@@ -1038,6 +1048,11 @@ public sealed class MainWindow : Window
         };
     }
 
+    private string FormatWindowWorkbookTitle() =>
+        _session.IsWorkbookGrouped
+            ? $"{_session.DisplayName} [Group]"
+            : _session.DisplayName;
+
     private void RefreshShell(string status)
     {
         var preserveFormulaEdit = _formulaBox.IsFocused && _session.FormulaEditAddress is not null;
@@ -1048,7 +1063,7 @@ public sealed class MainWindow : Window
 
         _sheetGridHost.Content = BuildSheetGrid();
         _sheetTabsHost.Content = BuildSheetTabs();
-        _titleText.Text = _session.DisplayName;
+        _titleText.Text = FormatWindowWorkbookTitle();
         _detailText.Text = $"{_session.ActiveSheet.Name}  |  {_session.Viewport.RowMetrics.Count} rows x {_session.Viewport.ColMetrics.Count} columns";
         _cellAddressText.Text = FormatCellReference(_session.ActiveCell);
         _formulaBox.Text = preserveFormulaEdit
@@ -1079,7 +1094,7 @@ public sealed class MainWindow : Window
         _statusText.Foreground = ShouldUseWarningStatusColor(status)
             ? Brush(143, 74, 18)
             : Brush(67, 113, 83);
-        Title = $"FreeX - {_session.DisplayName}{(_session.IsDirty ? " *" : "")}";
+        Title = $"FreeX - {FormatWindowWorkbookTitle()}{(_session.IsDirty ? " *" : "")}";
         UpdateViewportScrollBars();
         UpdateSaveButton();
     }
@@ -1168,6 +1183,8 @@ public sealed class MainWindow : Window
             activeSheetTabIndex >= 0 &&
             activeSheetTabIndex < _session.SheetTabs.Count - 1;
         _tabColorMenuItem.IsEnabled = isIdle;
+        _selectAllSheetsMenuItem.IsEnabled = isIdle && _session.SheetTabs.Count > 1;
+        _ungroupSheetsMenuItem.IsEnabled = isIdle && _session.IsWorkbookGrouped;
         _hideSheetMenuItem.IsEnabled = isIdle && _session.CanHideActiveSheet;
         _unhideSheetMenuItem.IsEnabled = isIdle && _session.HiddenSheets.Count > 0;
         _deleteSheetMenuItem.IsEnabled = isIdle;
@@ -1247,6 +1264,7 @@ public sealed class MainWindow : Window
 
         foreach (var tab in _session.SheetTabs)
         {
+            var isGroupedTab = tab.IsGrouped && _session.IsWorkbookGrouped;
             var content = new AvaloniaGrid
             {
                 RowDefinitions =
@@ -1259,7 +1277,7 @@ public sealed class MainWindow : Window
             {
                 Text = tab.Name,
                 FontSize = 12,
-                FontWeight = tab.IsActive ? FontWeight.SemiBold : FontWeight.Normal,
+                FontWeight = tab.IsActive || isGroupedTab ? FontWeight.SemiBold : FontWeight.Normal,
                 Foreground = tab.IsActive ? SelectionHeaderForeground : HeaderForeground,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 TextAlignment = TextAlignment.Center,
@@ -1282,8 +1300,12 @@ public sealed class MainWindow : Window
                 MaxWidth = 180,
                 MinHeight = 28,
                 Padding = new Thickness(12, 4),
-                Background = tab.IsActive ? SelectionHeaderBackground : Brushes.White,
-                BorderBrush = tab.IsActive ? SelectionBorder : ToolbarBorder,
+                Background = tab.IsActive
+                    ? SelectionHeaderBackground
+                    : isGroupedTab
+                        ? Brush(236, 246, 255)
+                        : Brushes.White,
+                BorderBrush = tab.IsActive || isGroupedTab ? SelectionBorder : ToolbarBorder,
                 BorderThickness = new Thickness(1),
                 Content = content,
             };
@@ -2439,6 +2461,32 @@ public sealed class MainWindow : Window
 
         ClearSelectedDrawingObject();
         RefreshShell($"Selected {_session.ActiveSheet.Name}");
+    }
+
+    private void SelectAllVisibleSheets()
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var changed = _session.SelectAllVisibleSheets();
+        if (!changed)
+            return;
+
+        ClearSelectedDrawingObject();
+        RefreshShell("Selected all visible sheets");
+    }
+
+    private void UngroupSheets()
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var changed = _session.UngroupSheets();
+        if (!changed)
+            return;
+
+        ClearSelectedDrawingObject();
+        RefreshShell($"Ungrouped sheets to {_session.ActiveSheet.Name}");
     }
 
     private void AddNewSheet()
@@ -4175,6 +4223,8 @@ public sealed class MainWindow : Window
             HasNativeTabColorMenuItem: HasNativeMenuItem(_tabColorMenuItem, "Tab Color", requireGesture: false),
             HasNativeClearTabColorMenuItem: HasNativeSubmenuItem(_tabColorMenuItem.Menu, "No Color"),
             NativeTabColorSwatchCount: nativeTabColorSwatchCount,
+            HasNativeSelectAllSheetsMenuItem: HasNativeMenuItem(_selectAllSheetsMenuItem, "Select All Sheets", requireGesture: false),
+            HasNativeUngroupSheetsMenuItem: HasNativeMenuItem(_ungroupSheetsMenuItem, "Ungroup Sheets", requireGesture: false),
             HasNativeHideSheetMenuItem: HasNativeMenuItem(_hideSheetMenuItem, "Hide Sheet", requireGesture: false),
             HasNativeUnhideSheetMenuItem: HasNativeMenuItem(_unhideSheetMenuItem, "Unhide Sheet...", requireGesture: false),
             HasNativeDeleteSheetMenuItem: HasNativeMenuItem(_deleteSheetMenuItem, "Delete Sheet", requireGesture: false),
