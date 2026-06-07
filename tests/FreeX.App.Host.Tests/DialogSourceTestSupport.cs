@@ -56,7 +56,14 @@ internal static class DialogSourceTestSupport
     public static T GetPrivateField<T>(object instance, string name)
         where T : class
     {
-        var field = instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        var type = instance.GetType();
+        FieldInfo? field = null;
+        while (type is not null && field is null)
+        {
+            field = type.GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+            type = type.BaseType;
+        }
+
         field.Should().NotBeNull();
         return field!.GetValue(instance).Should().BeOfType<T>().Subject;
     }
@@ -66,7 +73,14 @@ internal static class DialogSourceTestSupport
 
     public static void InvokePrivateHandler(object instance, string methodName, object sender)
     {
-        var method = instance.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        var type = instance.GetType();
+        MethodInfo? method = null;
+        while (type is not null && method is null)
+        {
+            method = type.GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+            type = type.BaseType;
+        }
+
         method.Should().NotBeNull();
         method!.Invoke(instance, [sender, new RoutedEventArgs()]);
     }

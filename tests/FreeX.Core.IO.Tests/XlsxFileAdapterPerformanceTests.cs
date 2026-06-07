@@ -386,7 +386,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         snapshotSource.Should().Contain("public bool TryEnsureCellPatchEligibility(");
         snapshotSource.Should().Contain("IsCellPatchEligibilityLazy = false");
         snapshotSource.Should().Contain("SourceHasCustomViews");
-        snapshotSource.Should().Contain("if (!sourceHasCustomViews || workbook.CustomViews.Count > 0)");
+        snapshotSource.Should().Contain("if (sourceHasWorkbookCustomViews || workbook.CustomViews.Count > 0)");
         snapshotSource.Should().Contain("layout.CustomViews.Count > 0");
         snapshotSource.Should().Contain("SourceNeedsPackageGraphNormalization");
         snapshotSource.Should().Contain("if (SourceNeedsPackageGraphNormalization != false)");

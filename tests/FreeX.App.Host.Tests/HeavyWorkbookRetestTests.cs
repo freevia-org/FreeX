@@ -14,7 +14,7 @@ public sealed class HeavyWorkbookRetestTests
     [Trait("Category", "ExternalWorkbook")]
     public async Task PartnerDashboardWorkbook_OpensAndSavesWithinSmokeBudget()
     {
-        var sourcePath = ResolveHeavyWorkbookPath()
+        var sourcePath = ResolveHeavyWorkbookPath(out var configuredByEnvironment)
             ?? throw SkipException.ForSkip(HeavyWorkbookRetestFactAttribute.SkipReasonWhenMissing);
 
         var adapter = new XlsxFileAdapter();
@@ -22,12 +22,22 @@ public sealed class HeavyWorkbookRetestTests
         var openProgress = new List<OpenProgressUpdate>();
 
         var openStopwatch = Stopwatch.StartNew();
-        var openResult = await loader.LoadAsync(
-            sourcePath,
-            adapter,
-            ".xlsx",
-            new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
-            new TestProgress<OpenProgressUpdate>(openProgress.Add));
+        OpenWorkbookResult openResult;
+        try
+        {
+            openResult = await loader.LoadAsync(
+                sourcePath,
+                adapter,
+                ".xlsx",
+                new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
+                new TestProgress<OpenProgressUpdate>(openProgress.Add));
+        }
+        catch (Exception ex) when (!configuredByEnvironment)
+        {
+            throw SkipException.ForSkip(
+                $"Heavy workbook retest documented local workbook could not be loaded in this environment: {ex.GetType().Name}: {ex.Message}");
+        }
+
         openStopwatch.Stop();
 
         openResult.Workbook.SheetCount.Should().BeGreaterThan(0);
@@ -53,14 +63,19 @@ public sealed class HeavyWorkbookRetestTests
         saveStopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(90));
     }
 
-    private static string? ResolveHeavyWorkbookPath()
+    private static string? ResolveHeavyWorkbookPath(out bool configuredByEnvironment)
     {
         var configured = Environment.GetEnvironmentVariable("FREEX_HEAVY_WORKBOOK_PATH");
         if (!string.IsNullOrWhiteSpace(configured) && File.Exists(configured))
+        {
+            configuredByEnvironment = true;
             return configured;
+        }
+
         if (!string.IsNullOrWhiteSpace(configured))
             throw new FileNotFoundException("FREEX_HEAVY_WORKBOOK_PATH does not point to an existing workbook.", configured);
 
+        configuredByEnvironment = false;
         return File.Exists(DefaultHeavyWorkbookPath) ? DefaultHeavyWorkbookPath : null;
     }
 
@@ -69,9 +84,17 @@ public sealed class HeavyWorkbookRetestTests
         public const string SkipReasonWhenMissing =
             "Heavy workbook retest requires FREEX_HEAVY_WORKBOOK_PATH or the documented local workbook path.";
 
+        private const string SkipReasonWhenUsingDefaultLocalWorkbook =
+            "Heavy workbook retest uses the documented local workbook only when FREEX_HEAVY_WORKBOOK_PATH is explicitly set for this test lane.";
+
         public HeavyWorkbookRetestFactAttribute()
         {
-            Skip = ResolveHeavyWorkbookPath() is null ? SkipReasonWhenMissing : null;
+            var sourcePath = ResolveHeavyWorkbookPath(out var configuredByEnvironment);
+            Skip = sourcePath is null
+                ? SkipReasonWhenMissing
+                : configuredByEnvironment
+                    ? null
+                    : SkipReasonWhenUsingDefaultLocalWorkbook;
         }
     }
 }

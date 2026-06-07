@@ -2427,6 +2427,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.TDistCompat or
             ConditionalFormulaScalarFunctionKind.ConfidenceNorm or
             ConditionalFormulaScalarFunctionKind.ConfidenceT or
+            ConditionalFormulaScalarFunctionKind.TDist or
             ConditionalFormulaScalarFunctionKind.FDistRt or
             ConditionalFormulaScalarFunctionKind.FInv or
             ConditionalFormulaScalarFunctionKind.FInvRt or
@@ -2444,7 +2445,6 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Rri or
             ConditionalFormulaScalarFunctionKind.Pduration or
             ConditionalFormulaScalarFunctionKind.Convert => argumentCount == 3,
-            ConditionalFormulaScalarFunctionKind.TDist or
             ConditionalFormulaScalarFunctionKind.FDist or
             ConditionalFormulaScalarFunctionKind.NormDist or
             ConditionalFormulaScalarFunctionKind.GammaDist or

@@ -5354,11 +5354,11 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialBillDiscountFunctions()
     {
-        AssertFormulaFinancialBillDiscountFunctionContrastLocations("DISC($A1,$C1,$E1,$G1,$K1)>0.02", "B1", "B3");
-        AssertFormulaFinancialBillDiscountFunctionContrastLocations("INTRATE($A1,$C1,$F1,$G1,$K1)>0.05", "B1", "B3");
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("DISC($A1,$C1,$E1,$G1,$K1)>0.02", "B1", "B3", "B6");
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("INTRATE($A1,$C1,$F1,$G1,$K1)>0.05", "B1", "B3", "B6");
         AssertFormulaFinancialBillDiscountFunctionContrastLocations("RECEIVED($A1,$C1,$F1,$H1,$K1)>98", "B2", "B3");
         AssertFormulaFinancialBillDiscountFunctionContrastLocations("TBILLPRICE($A1,$L1,$H1)<99", "B1");
-        AssertFormulaFinancialBillDiscountFunctionContrastLocations("TBILLYIELD($A1,$L1,$E1)>0.05", "B1", "B3");
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("TBILLYIELD($A1,$L1,$E1)>0.05", "B1", "B3", "B6");
         AssertFormulaFinancialBillDiscountFunctionContrastLocations("TBILLEQ($A1,$L1,$H1)>0.04", "B1", "B3");
         AssertFormulaFinancialBillDiscountFunctionContrastLocations("PRICEDISC($A1,$C1,$H1,$G1,$K1)<96", "B1");
         AssertFormulaFinancialBillDiscountFunctionContrastLocations("PRICEMAT($A1,$C1,$D1,$I1,$J1,$K1)>100.5", "B3");
@@ -5367,7 +5367,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialBillDiscountWrappersDefaultsAndErrors()
     {
-        AssertFormulaFinancialBillDiscountFunctionContrastLocations("IF(DISC($A1,$C1,$E1,$G1)>0.02,TRUE,FALSE)", "B1", "B3");
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("IF(DISC($A1,$C1,$E1,$G1)>0.02,TRUE,FALSE)", "B1", "B3", "B6");
         AssertFormulaFinancialBillDiscountFunctionContrastLocations("AND($M1,TBILLPRICE($A1,$L1,$H1)<99)", "B1");
         AssertFormulaFinancialBillDiscountFunctionContrastLocations("ISNUMBER(TBILLEQ($A1,$L1,$H1))", "B1", "B2", "B3");
         AssertFormulaFinancialBillDiscountFunctionContrastLocations("ISNA(DISC($A1,$C1,$E1,$G1,$K1))", "B4");
