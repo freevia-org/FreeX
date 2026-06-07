@@ -320,6 +320,12 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("bool? MergeCells = null");
         script.Should().Contain("`\"FormatCellsFillPatternStyleBox`\"");
         script.Should().Contain("`\"FormatCellsFillPatternColorBox`\"");
+        script.Should().Contain("`\"FormatCellsNormalFontBox`\"");
+        script.Should().Contain("var normalStyle = CellStyle.Default;");
+        script.Should().Contain("Bold: normalFont ? normalStyle.Bold : ReadChangedFormatCellsBool(_session.IsSelectedRangeStartBold, boldBox)");
+        script.Should().Contain("FontName: normalFont ? normalStyle.FontName : ReadChangedFormatCellsText(currentFontName, fontNameBox)");
+        script.Should().Contain("FontColor: normalFont ? normalStyle.FontColor : (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color");
+        script.Should().Contain("SelectFormatCellsColor(fontColorBox, normal.FontColor)");
         script.Should().Contain("FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillPatternStyle, fillPatternStyleBox)");
         script.Should().Contain("FillPatternColor: clearFill ? null : (fillPatternColorBox.SelectedItem as FormatCellsColorChoice)?.Color");
         script.Should().Contain("CellFillPatternStyle? FillPatternStyle = null");
@@ -1617,12 +1623,18 @@ public sealed class MacOsAppReadinessPreflightTests
                     "FormatCellsIndentLevelBox"
                     "FormatCellsTextRotationBox"
                     "FormatCellsFontNameBox"
+                    "FormatCellsNormalFontBox"
                     "FormatCellsSuperscriptBox"
                     "FormatCellsSubscriptBox"
                     "FormatCellsLockedBox"
                     "FormatCellsHiddenBox"
                     var currentMergeCells = _session.IsSelectedRangeMerged;
                     MergeCells: ReadChangedFormatCellsBool(currentMergeCells, mergeCellsBox)
+                    var normalStyle = CellStyle.Default;
+                    Bold: normalFont ? normalStyle.Bold : ReadChangedFormatCellsBool(_session.IsSelectedRangeStartBold, boldBox)
+                    FontName: normalFont ? normalStyle.FontName : ReadChangedFormatCellsText(currentFontName, fontNameBox)
+                    FontColor: normalFont ? normalStyle.FontColor : (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color
+                    SelectFormatCellsColor(fontColorBox, normal.FontColor)
                     FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillPatternStyle, fillPatternStyleBox)
                     FillPatternColor: clearFill ? null : (fillPatternColorBox.SelectedItem as FormatCellsColorChoice)?.Color
                     CreateFormatCellsField("Pattern style", fillPatternStyleBox)

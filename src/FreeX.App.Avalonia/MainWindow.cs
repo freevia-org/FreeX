@@ -4878,6 +4878,24 @@ public sealed class MainWindow : Window
         };
         AutomationProperties.SetName(fontColorBox, "Font color");
         AutomationProperties.SetAutomationId(fontColorBox, "FormatCellsFontColorBox");
+        var normalFontBox = CreateFormatCellsCheckBox("Normal font", "FormatCellsNormalFontBox", false);
+        normalFontBox.PropertyChanged += (_, e) =>
+        {
+            if (e.Property != ToggleButton.IsCheckedProperty || normalFontBox.IsChecked != true)
+                return;
+
+            var normal = CellStyle.Default;
+            fontNameBox.Text = normal.FontName;
+            fontSizeBox.Text = normal.FontSize.ToString("0.##", CultureInfo.InvariantCulture);
+            boldBox.IsChecked = normal.Bold;
+            italicBox.IsChecked = normal.Italic;
+            underlineBox.IsChecked = normal.Underline;
+            doubleUnderlineBox.IsChecked = normal.DoubleUnderline;
+            strikethroughBox.IsChecked = normal.Strikethrough;
+            superscriptBox.IsChecked = normal.Superscript;
+            subscriptBox.IsChecked = normal.Subscript;
+            SelectFormatCellsColor(fontColorBox, normal.FontColor);
+        };
 
         var fillColorBox = new ComboBox
         {
@@ -4948,7 +4966,15 @@ public sealed class MainWindow : Window
 
         void Accept()
         {
-            if (!TryReadFormatCellsFontSize(fontSizeBox.Text, currentFontSize, out var fontSize, out var message))
+            var normalFont = normalFontBox.IsChecked == true;
+            var normalStyle = CellStyle.Default;
+            string message;
+            double? fontSize;
+            if (normalFont)
+            {
+                fontSize = normalStyle.FontSize;
+            }
+            else if (!TryReadFormatCellsFontSize(fontSizeBox.Text, currentFontSize, out fontSize, out message))
             {
                 errorText.Text = message;
                 return;
@@ -4980,20 +5006,20 @@ public sealed class MainWindow : Window
                 HorizontalAlignment: ReadChangedFormatCellsValue(currentHorizontalAlignment, horizontalAlignmentBox),
                 VerticalAlignment: ReadChangedFormatCellsValue(currentVerticalAlignment, verticalAlignmentBox),
                 WrapText: ReadChangedFormatCellsBool(_session.IsSelectedRangeStartWrapText, wrapTextBox),
-                Bold: ReadChangedFormatCellsBool(_session.IsSelectedRangeStartBold, boldBox),
-                Italic: ReadChangedFormatCellsBool(_session.IsSelectedRangeStartItalic, italicBox),
-                Underline: ReadChangedFormatCellsBool(currentUnderline, underlineBox),
-                Strikethrough: ReadChangedFormatCellsBool(_session.IsSelectedRangeStartStrikethrough, strikethroughBox),
-                DoubleUnderline: ReadChangedFormatCellsBool(currentDoubleUnderline, doubleUnderlineBox),
-                Superscript: ReadChangedFormatCellsBool(currentSuperscript, superscriptBox),
-                Subscript: ReadChangedFormatCellsBool(currentSubscript, subscriptBox),
-                FontName: ReadChangedFormatCellsText(currentFontName, fontNameBox),
+                Bold: normalFont ? normalStyle.Bold : ReadChangedFormatCellsBool(_session.IsSelectedRangeStartBold, boldBox),
+                Italic: normalFont ? normalStyle.Italic : ReadChangedFormatCellsBool(_session.IsSelectedRangeStartItalic, italicBox),
+                Underline: normalFont ? normalStyle.Underline : ReadChangedFormatCellsBool(currentUnderline, underlineBox),
+                Strikethrough: normalFont ? normalStyle.Strikethrough : ReadChangedFormatCellsBool(_session.IsSelectedRangeStartStrikethrough, strikethroughBox),
+                DoubleUnderline: normalFont ? normalStyle.DoubleUnderline : ReadChangedFormatCellsBool(currentDoubleUnderline, doubleUnderlineBox),
+                Superscript: normalFont ? normalStyle.Superscript : ReadChangedFormatCellsBool(currentSuperscript, superscriptBox),
+                Subscript: normalFont ? normalStyle.Subscript : ReadChangedFormatCellsBool(currentSubscript, subscriptBox),
+                FontName: normalFont ? normalStyle.FontName : ReadChangedFormatCellsText(currentFontName, fontNameBox),
                 FontSize: fontSize,
                 FillColor: fillChoice?.Color,
                 ClearFill: clearFill,
                 FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillPatternStyle, fillPatternStyleBox),
                 FillPatternColor: clearFill ? null : (fillPatternColorBox.SelectedItem as FormatCellsColorChoice)?.Color,
-                FontColor: (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color,
+                FontColor: normalFont ? normalStyle.FontColor : (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color,
                 ShrinkToFit: ReadChangedFormatCellsBool(currentShrinkToFit, shrinkToFitBox),
                 MergeCells: ReadChangedFormatCellsBool(currentMergeCells, mergeCellsBox),
                 IndentLevel: indentLevel,
@@ -5092,6 +5118,7 @@ public sealed class MainWindow : Window
                     CreateFormatCellsField("Font", fontNameBox),
                     CreateFormatCellsField("Size", fontSizeBox),
                     CreateFormatCellsField("Color", fontColorBox),
+                    normalFontBox,
                 },
             });
         var fillTab = CreateFormatCellsTab(
@@ -5353,6 +5380,14 @@ public sealed class MainWindow : Window
     {
         var value = checkBox.IsChecked == true;
         return value == currentValue ? null : value;
+    }
+
+    private static void SelectFormatCellsColor(ComboBox comboBox, CellColor color)
+    {
+        if (comboBox.ItemsSource is not IEnumerable<FormatCellsColorChoice> choices)
+            return;
+
+        comboBox.SelectedItem = choices.FirstOrDefault(choice => choice.Color == color) ?? comboBox.SelectedItem;
     }
 
     private static T? ReadChangedFormatCellsValue<T>(T currentValue, ComboBox comboBox)
