@@ -314,6 +314,68 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void Save_LoadedUnchangedWorkbookWithDigitalSignatures_CopiesSourcePackage()
+    {
+        var sourceBytes = AddDigitalSignaturePackageGraph(CreateSourcePackage());
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourceCopy);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("model_unchanged");
+        saved.ToArray().Should().Equal(sourceBytes);
+    }
+
+    [Fact]
+    public void Save_LoadedEditedWorkbookWithDigitalSignatures_RemovesInvalidatedSignaturePackageGraph()
+    {
+        var sourceBytes = AddDigitalSignaturePackageGraph(CreateSourcePackage());
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("edited signed workbook"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("package_guard_digital_signatures");
+        PackageHasEntry(savedBytes, "_xmlsignatures/origin.sigs").Should().BeFalse();
+        PackageHasEntry(savedBytes, "_xmlsignatures/sig1.xml").Should().BeFalse();
+        PackageHasEntry(savedBytes, "_xmlsignatures/_rels/origin.sigs.rels").Should().BeFalse();
+        ReadContentTypeOverrides(savedBytes)
+            .Should()
+            .NotContain(new[]
+            {
+                "/_xmlsignatures/origin.sigs",
+                "/_xmlsignatures/sig1.xml"
+            });
+        RootRelationshipsContain(
+                savedBytes,
+                "http://schemas.openxmlformats.org/package/2006/relationships/digital-signature/origin",
+                "_xmlsignatures/origin.sigs")
+            .Should()
+            .BeFalse();
+        using var reload = new MemoryStream(savedBytes, writable: false);
+        adapter.Load(reload)
+            .GetSheetAt(0)
+            .GetCell(1, 1)!
+            .Value
+            .Should()
+            .Be(new TextValue("edited signed workbook"));
+    }
+
+    [Fact]
     public void Save_LoadedUnchangedWorkbookAboveLegacyFingerprintLimit_CopiesSourcePackage()
     {
         var sourceBytes = CreateDenseSourcePackage(rowCount: 100, columnCount: 251);
@@ -2224,6 +2286,64 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         return stream.ToArray();
     }
 
+    private static byte[] AddDigitalSignaturePackageGraph(byte[] sourceBytes)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(sourceBytes, 0, sourceBytes.Length);
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+            var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+            contentTypesXml.Root!
+                .Elements(contentTypeNs + "Override")
+                .Where(element =>
+                    string.Equals((string?)element.Attribute("PartName"), "/_xmlsignatures/origin.sigs", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals((string?)element.Attribute("PartName"), "/_xmlsignatures/sig1.xml", StringComparison.OrdinalIgnoreCase))
+                .Remove();
+            contentTypesXml.Root.Add(
+                new XElement(
+                    contentTypeNs + "Override",
+                    new XAttribute("PartName", "/_xmlsignatures/origin.sigs"),
+                    new XAttribute("ContentType", "application/vnd.openxmlformats-package.digital-signature-origin")),
+                new XElement(
+                    contentTypeNs + "Override",
+                    new XAttribute("PartName", "/_xmlsignatures/sig1.xml"),
+                    new XAttribute("ContentType", "application/vnd.openxmlformats-package.digital-signature-xmlsignature+xml")));
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var rootRelationshipsXml = LoadPackageXml(archive, "_rels/.rels");
+            rootRelationshipsXml.Root!.Add(new XElement(
+                relationshipNs + "Relationship",
+                new XAttribute("Id", "rIdSignatureOrigin"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/package/2006/relationships/digital-signature/origin"),
+                new XAttribute("Target", "_xmlsignatures/origin.sigs")));
+            ReplacePackageXml(archive, "_rels/.rels", rootRelationshipsXml);
+
+            ReplacePackageXml(
+                archive,
+                "_xmlsignatures/origin.sigs",
+                new XDocument(new XElement("SignatureOrigin")));
+            ReplacePackageXml(
+                archive,
+                "_xmlsignatures/sig1.xml",
+                new XDocument(new XElement("Signature")));
+            ReplacePackageXml(
+                archive,
+                "_xmlsignatures/_rels/origin.sigs.rels",
+                new XDocument(new XElement(
+                    relationshipNs + "Relationships",
+                    new XElement(
+                        relationshipNs + "Relationship",
+                        new XAttribute("Id", "rIdSignature1"),
+                        new XAttribute("Type", "http://schemas.openxmlformats.org/package/2006/relationships/digital-signature/signature"),
+                        new XAttribute("Target", "sig1.xml")))));
+        }
+
+        return stream.ToArray();
+    }
+
     private static byte[] AddOfficeWebExtensionPackageGraph(byte[] sourceBytes)
     {
         using var stream = new MemoryStream();
@@ -3959,6 +4079,19 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
         var document = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
+        var ns = document.Root!.Name.Namespace;
+        return document.Root!
+            .Elements(ns + "Relationship")
+            .Any(element =>
+                string.Equals(element.Attribute("Type")?.Value, type, StringComparison.Ordinal) &&
+                string.Equals(element.Attribute("Target")?.Value, target, StringComparison.Ordinal));
+    }
+
+    private static bool RootRelationshipsContain(byte[] packageBytes, string type, string target)
+    {
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var document = XlsxPackageTestFixtures.LoadPackageXml(archive, "_rels/.rels");
         var ns = document.Root!.Name.Namespace;
         return document.Root!
             .Elements(ns + "Relationship")
