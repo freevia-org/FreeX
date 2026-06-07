@@ -54,6 +54,8 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var workbookNs = autoFilter.Name.Namespace;
         var columns = autoFilter.Elements(workbookNs + "filterColumn").ToArray();
         columns.Should().HaveCount(3);
+        autoFilter.Attribute("customAttr").Should().BeNull();
+        autoFilter.Element(workbookNs + "nativeAutoFilterChild").Should().BeNull();
 
         columns[0].Attribute("hiddenButton").Should().BeNull();
         columns[0].Attribute("showButton").Should().BeNull();
@@ -113,12 +115,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .BeTrue(blockReason);
 
         var sheet = workbook.GetSheetAt(0);
-        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(42));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 5), new NumberValue(42));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
 
-        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
         adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
         SchemaErrors(saved).Should().BeEmpty();
         ReadPackageRootElement(saved, "xl/tables/table1.xml")
@@ -155,6 +157,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var autoFilter = ReadPackageRootElement(saved, "xl/tables/table1.xml")
             .Element(XName.Get("autoFilter", "http://schemas.openxmlformats.org/spreadsheetml/2006/main"))!;
         var workbookNs = autoFilter.Name.Namespace;
+        autoFilter.Attribute("customAttr").Should().BeNull();
+        autoFilter.Element(workbookNs + "nativeAutoFilterChild").Should().BeNull();
+        autoFilter.Element(workbookNs + "extLst").Should().NotBeNull();
         var firstColumn = autoFilter.Elements(workbookNs + "filterColumn").First();
         firstColumn.Attribute("hiddenButton").Should().BeNull();
         firstColumn.Attribute("showButton").Should().BeNull();
@@ -1985,6 +1990,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             HasAutoFilter = true,
             StyleName = "TableStyleMedium2",
             ShowRowStripes = true,
+            NativeAutoFilterAttributes = new Dictionary<string, string> { ["customAttr"] = "removed" },
+            NativeAutoFilterChildXmls =
+            [
+                "<extLst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ext uri=\"{FREEX-TABLE-AUTOFILTER-EXT}\" /></extLst>",
+                "<nativeAutoFilterChild xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" />"
+            ]
         };
         table.Columns.Add(new StructuredTableColumnModel(1, "Name"));
         table.Columns.Add(new StructuredTableColumnModel(2, "Value"));
@@ -2353,7 +2364,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!);
         var autoFilter = tableXml.Root!.Element(workbookNs + "autoFilter")!;
+        autoFilter.SetAttributeValue("customAttr", "removed");
         autoFilter.Add(
+            new XElement(workbookNs + "extLst", new XElement(workbookNs + "ext", new XAttribute("uri", "{FREEX-TABLE-AUTOFILTER-EXT}"))),
+            new XElement(workbookNs + "nativeAutoFilterChild"),
             new XElement(
                 workbookNs + "filterColumn",
                 new XAttribute("colId", "0"),
