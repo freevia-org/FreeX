@@ -26,6 +26,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_cell_styles_menu_item=true");
         script.Should().Contain("native_cell_styles_preset_count=33");
         script.Should().Contain("native_new_workbook_menu_item=true");
+        script.Should().Contain("native_close_workbook_menu_item=true");
         script.Should().Contain("new_sheet_button=true");
         script.Should().Contain("native_sheet_menu=true");
         script.Should().Contain("native_new_sheet_menu_item=true");
@@ -33,6 +34,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_duplicate_sheet_menu_item=true");
         script.Should().Contain("native_delete_sheet_menu_item=true");
         script.Should().Contain("HasNativeNewWorkbookMenuItem &&");
+        script.Should().Contain("HasNativeCloseWorkbookMenuItem &&");
         script.Should().Contain("HasNativeRenameSheetMenuItem &&");
         script.Should().Contain("HasNativeDeleteSheetMenuItem &&");
         script.Should().Contain("native_help_menu=true");
@@ -60,7 +62,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("TryCreateDrawingBitmap(imageBytes, out var bitmap)");
         script.Should().Contain("private static bool HasVisibleCellBorder(CellStyle? style)");
         script.Should().Contain("_newWorkbookMenuItem.Click += (_, _) => CreateNewWorkbook();");
+        script.Should().Contain("_closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();");
         script.Should().Contain("_sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true)");
+        script.Should().Contain("private async void MainWindow_Closing(object? sender, WindowClosingEventArgs e)");
+        script.Should().Contain("private async Task<bool> ConfirmDirtyWorkbookCloseAsync(string title, string discardButtonText)");
+        script.Should().Contain("AutomationProperties.SetAutomationId(saveButton, `\"DirtyWorkbookSaveButton`\");");
         script.Should().Contain("public WorkbookSession CreateNew(");
         script.Should().Contain("WorkbookFactory.Create(options)");
         script.Should().Contain("`\"Created new workbook.`\"");
@@ -351,6 +357,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_file_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_new_workbook_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_edit_menu=true" "$artifact_root/launch.txt"
+                      grep -q "native_close_workbook_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_format_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_sheet_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_help_menu=true" "$artifact_root/launch.txt"
@@ -459,8 +466,21 @@ public sealed class MacOsAppReadinessPreflightTests
                     TryCreateDrawingBitmap(imageBytes, out var bitmap);
                     AddStyledCellBorderOverlay(content, style);
                     _newWorkbookMenuItem.Click += (_, _) => CreateNewWorkbook();
+                    _closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();
                     fileMenu.Items.Add(_newWorkbookMenuItem);
+                    fileMenu.Items.Add(_closeWorkbookMenuItem);
                     _sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true);
+                    Closing += MainWindow_Closing;
+                    ConfirmDirtyWorkbookCloseAsync("Close Workbook", "Discard and Close").ToString();
+                    ResetToNewWorkbook("Closed workbook.");
+                    ConfirmDirtyWorkbookCloseAsync("Close FreeX", "Discard and Close").ToString();
+                    TryQuitApplicationAsync().ToString();
+                    ConfirmDirtyWorkbookCloseAsync("Quit FreeX", "Discard and Quit").ToString();
+                    _allowCloseWithoutDirtyPrompt = true;
+                    SaveCurrentWorkbookAsync().ToString();
+                    AutomationProperties.SetAutomationId(saveButton, "DirtyWorkbookSaveButton");
+                    AutomationProperties.SetAutomationId(discardButton, "DirtyWorkbookDiscardButton");
+                    AutomationProperties.SetAutomationId(cancelButton, "DirtyWorkbookCancelButton");
                     _newSheetButton.Click += (_, _) => AddNewSheet();
                     _newSheetMenuItem.Click += (_, _) => AddNewSheet();
                     _renameSheetMenuItem.Click += async (_, _) => await RenameActiveSheetAsync();
@@ -487,6 +507,14 @@ public sealed class MacOsAppReadinessPreflightTests
                 }
                 private static bool HasVisibleCellBorder(CellStyle? style) => true;
                 private void CreateNewWorkbook() { }
+                private async Task CloseWorkbookAsync() => await Task.CompletedTask;
+                private void ResetToNewWorkbook(string status) { }
+                private async void MainWindow_Closing(object? sender, WindowClosingEventArgs e) => await Task.CompletedTask;
+                private async Task TryQuitApplicationAsync() => await Task.CompletedTask;
+                private async Task<bool> ConfirmDirtyWorkbookCloseAsync(string title, string discardButtonText) => await Task.FromResult(true);
+                private async Task<DirtyWorkbookCloseChoice> ShowDirtyWorkbookCloseDialogAsync(string title, string discardButtonText) => await Task.FromResult(DirtyWorkbookCloseChoice.Cancel);
+                private async Task SaveDirtyWorkbookBeforeCloseAsync() => await SaveCurrentWorkbookAsync();
+                private async Task SaveCurrentWorkbookAsync() => await Task.CompletedTask;
                 private async Task RenameActiveSheetAsync() => await Task.CompletedTask;
                 private async Task<string?> ShowRenameSheetDialogAsync(string currentName) => await Task.FromResult<string?>(currentName);
                 internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot() => new();
@@ -510,19 +538,20 @@ public sealed class MacOsAppReadinessPreflightTests
 
             internal sealed class MacOsLaunchSmokeSnapshot
             {
-                public bool IsPassed => HasNativeFileMenu && HasNativeEditMenu && HasNativeFormatMenu && HasNativeSheetMenu && HasNativeHelpMenu && HasNativeNewWorkbookMenuItem && HasNativeRenameSheetMenuItem && HasNativeDeleteSheetMenuItem && HasNativeCellStylesMenuItem && HasNativeCopyMenuItem;
+                public bool IsPassed => HasNativeFileMenu && HasNativeEditMenu && HasNativeFormatMenu && HasNativeSheetMenu && HasNativeHelpMenu && HasNativeNewWorkbookMenuItem && HasNativeCloseWorkbookMenuItem && HasNativeRenameSheetMenuItem && HasNativeDeleteSheetMenuItem && HasNativeCellStylesMenuItem && HasNativeCopyMenuItem;
                 private bool HasNativeFileMenu { get; }
                 private bool HasNativeEditMenu { get; }
                 private bool HasNativeFormatMenu { get; }
                 private bool HasNativeSheetMenu { get; }
                 private bool HasNativeHelpMenu { get; }
                 private bool HasNativeNewWorkbookMenuItem { get; }
+                private bool HasNativeCloseWorkbookMenuItem { get; }
                 private bool HasNativeRenameSheetMenuItem { get; }
                 private bool HasNativeDeleteSheetMenuItem { get; }
                 private bool HasNativeCellStylesMenuItem { get; }
                 private bool HasNativeCopyMenuItem { get; }
                 public int NativeCellStylesPresetCount { get; }
-                public string Report => "native_new_workbook_menu_item= new_sheet_button= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_delete_sheet_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+                public string Report => "native_new_workbook_menu_item= native_close_workbook_menu_item= new_sheet_button= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_delete_sheet_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
             }
             """);
 

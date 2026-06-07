@@ -41,6 +41,13 @@ public sealed class MainWindow : Window
         Font
     }
 
+    private enum DirtyWorkbookCloseChoice
+    {
+        Cancel,
+        Save,
+        Discard
+    }
+
     private const double CellIndentLevelWidth = 12;
     private const string CommaNumberFormat = "#,##0.00";
     private const string CurrencyNumberFormat = "$#,##0.00";
@@ -120,6 +127,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _openMenuItem = new();
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
+    private readonly NativeMenuItem _closeWorkbookMenuItem = new();
     private readonly NativeMenuItem _newSheetMenuItem = new();
     private readonly NativeMenuItem _renameSheetMenuItem = new();
     private readonly NativeMenuItem _duplicateSheetMenuItem = new();
@@ -173,6 +181,8 @@ public sealed class MainWindow : Window
     private string? _formulaBoxEditOriginalText;
     private bool _isOpening;
     private bool _isSaving;
+    private bool _allowCloseWithoutDirtyPrompt;
+    private bool _isDirtyCloseDialogOpen;
     private bool _isUpdatingWorksheetScrollBars;
     private SelectionPaneObjectKind? _selectedDrawingObjectKind;
     private Guid? _selectedDrawingObjectId;
@@ -193,6 +203,7 @@ public sealed class MainWindow : Window
         ConfigureWorkbookDropTarget();
         KeyDown += MainWindow_KeyDown;
         TextInput += MainWindow_TextInput;
+        Closing += MainWindow_Closing;
         RefreshShell(_session.StartupStatus);
     }
 
@@ -319,6 +330,10 @@ public sealed class MainWindow : Window
         _saveAsMenuItem.Header = "Save As...";
         _saveAsMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Shift);
         _saveAsMenuItem.Click += async (_, _) => await SaveWorkbookAsAsync();
+
+        _closeWorkbookMenuItem.Header = "Close Workbook";
+        _closeWorkbookMenuItem.Gesture = new KeyGesture(Key.W, KeyModifiers.Meta);
+        _closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();
 
         _newSheetMenuItem.Header = "New Sheet";
         _newSheetMenuItem.Gesture = new KeyGesture(Key.F11, KeyModifiers.Shift);
@@ -482,13 +497,15 @@ public sealed class MainWindow : Window
 
         _quitMenuItem.Header = "Quit FreeX";
         _quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);
-        _quitMenuItem.Click += (_, _) => TryQuitApplication();
+        _quitMenuItem.Click += async (_, _) => await TryQuitApplicationAsync();
 
         var fileMenu = new NativeMenu();
         fileMenu.Items.Add(_newWorkbookMenuItem);
         fileMenu.Items.Add(_openMenuItem);
         fileMenu.Items.Add(_saveMenuItem);
         fileMenu.Items.Add(_saveAsMenuItem);
+        fileMenu.Items.Add(new NativeMenuItemSeparator());
+        fileMenu.Items.Add(_closeWorkbookMenuItem);
         fileMenu.Items.Add(new NativeMenuItemSeparator());
         fileMenu.Items.Add(_quitMenuItem);
 
@@ -1013,6 +1030,7 @@ public sealed class MainWindow : Window
         _openMenuItem.IsEnabled = _openButton.IsEnabled;
         _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
         _saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;
+        _closeWorkbookMenuItem.IsEnabled = isIdle;
         _newSheetMenuItem.IsEnabled = _newSheetButton.IsEnabled;
         _renameSheetMenuItem.IsEnabled = isIdle;
         _duplicateSheetMenuItem.IsEnabled = isIdle;
@@ -2089,6 +2107,28 @@ public sealed class MainWindow : Window
         _session = _sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true);
         ClearSelectedDrawingObject();
         RefreshShell(_session.StartupStatus);
+    }
+
+    private async Task CloseWorkbookAsync()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        if (!await ConfirmDirtyWorkbookCloseAsync("Close Workbook", "Discard and Close"))
+            return;
+
+        ResetToNewWorkbook("Closed workbook.");
+    }
+
+    private void ResetToNewWorkbook(string status)
+    {
+        var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
+        _session = _sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true);
+        ClearSelectedDrawingObject();
+        RefreshShell(status);
     }
 
     private async Task RenameActiveSheetAsync()
@@ -3184,6 +3224,7 @@ public sealed class MainWindow : Window
             HasNativeOpenMenuItem: HasNativeMenuItem(_openMenuItem, "Open..."),
             HasNativeSaveMenuItem: HasNativeMenuItem(_saveMenuItem, "Save"),
             HasNativeSaveAsMenuItem: HasNativeMenuItem(_saveAsMenuItem, "Save As..."),
+            HasNativeCloseWorkbookMenuItem: HasNativeMenuItem(_closeWorkbookMenuItem, "Close Workbook"),
             HasNativeNewSheetMenuItem: HasNativeMenuItem(_newSheetMenuItem, "New Sheet"),
             HasNativeRenameSheetMenuItem: HasNativeMenuItem(_renameSheetMenuItem, "Rename Sheet...", requireGesture: false),
             HasNativeDuplicateSheetMenuItem: HasNativeMenuItem(_duplicateSheetMenuItem, "Duplicate Sheet", requireGesture: false),
@@ -3366,6 +3407,11 @@ public sealed class MainWindow : Window
             e.Handled = true;
             CreateNewWorkbook();
         }
+        else if (e.Key == Key.W && HasOnlyCommandModifier(e.KeyModifiers))
+        {
+            e.Handled = true;
+            await CloseWorkbookAsync();
+        }
         else if (e.Key == Key.O)
         {
             e.Handled = true;
@@ -3373,8 +3419,53 @@ public sealed class MainWindow : Window
         }
     }
 
-    private void TryQuitApplication()
+    private async void MainWindow_Closing(object? sender, WindowClosingEventArgs e)
     {
+        if (_allowCloseWithoutDirtyPrompt)
+            return;
+
+        if (_isOpening || _isSaving)
+        {
+            e.Cancel = true;
+            ShowOpenIssue("Finish opening or saving before closing FreeX.");
+            return;
+        }
+
+        if (!TryCommitPendingFormulaEdit())
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        if (!_session.IsDirty)
+            return;
+
+        e.Cancel = true;
+        if (_isDirtyCloseDialogOpen)
+            return;
+
+        if (await ConfirmDirtyWorkbookCloseAsync("Close FreeX", "Discard and Close"))
+        {
+            _allowCloseWithoutDirtyPrompt = true;
+            Close();
+        }
+    }
+
+    private async Task TryQuitApplicationAsync()
+    {
+        if (_isOpening || _isSaving)
+        {
+            ShowOpenIssue("Finish opening or saving before quitting FreeX.");
+            return;
+        }
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        if (!await ConfirmDirtyWorkbookCloseAsync("Quit FreeX", "Discard and Quit"))
+            return;
+
+        _allowCloseWithoutDirtyPrompt = true;
         if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.TryShutdown(0);
@@ -3861,6 +3952,146 @@ public sealed class MainWindow : Window
     {
         _statusText.Text = message;
         _statusText.Foreground = Brush(143, 74, 18);
+    }
+
+    private async Task<bool> ConfirmDirtyWorkbookCloseAsync(string title, string discardButtonText)
+    {
+        if (!_session.IsDirty)
+            return true;
+
+        var choice = await ShowDirtyWorkbookCloseDialogAsync(title, discardButtonText);
+        if (choice == DirtyWorkbookCloseChoice.Cancel)
+            return false;
+
+        if (choice == DirtyWorkbookCloseChoice.Discard)
+            return true;
+
+        await SaveCurrentWorkbookAsync();
+        return !_session.IsDirty;
+    }
+
+    private async Task<DirtyWorkbookCloseChoice> ShowDirtyWorkbookCloseDialogAsync(
+        string title,
+        string discardButtonText)
+    {
+        if (_isDirtyCloseDialogOpen)
+            return DirtyWorkbookCloseChoice.Cancel;
+
+        _isDirtyCloseDialogOpen = true;
+        var choice = DirtyWorkbookCloseChoice.Cancel;
+        try
+        {
+            var dialog = new Window
+            {
+                Title = title,
+                Width = 440,
+                Height = 210,
+                MinWidth = 400,
+                MinHeight = 200,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                ShowInTaskbar = false,
+            };
+
+            var titleText = new TextBlock
+            {
+                Text = $"Save changes to {_session.DisplayName}?",
+                FontSize = 16,
+                FontWeight = FontWeight.SemiBold,
+                TextWrapping = TextWrapping.Wrap,
+            };
+            var detailText = new TextBlock
+            {
+                Text = "Unsaved changes will be lost if you discard them.",
+                Foreground = HeaderForeground,
+                TextWrapping = TextWrapping.Wrap,
+            };
+
+            var saveButton = new Button
+            {
+                Content = "Save",
+                MinWidth = 92,
+                Padding = new Thickness(10, 4),
+            };
+            AutomationProperties.SetAutomationId(saveButton, "DirtyWorkbookSaveButton");
+            AutomationProperties.SetName(saveButton, "Save");
+            AutomationProperties.SetHelpText(saveButton, "Save the workbook before closing.");
+
+            var discardButton = new Button
+            {
+                Content = discardButtonText,
+                MinWidth = 132,
+                Padding = new Thickness(10, 4),
+            };
+            AutomationProperties.SetAutomationId(discardButton, "DirtyWorkbookDiscardButton");
+            AutomationProperties.SetName(discardButton, discardButtonText);
+            AutomationProperties.SetHelpText(discardButton, "Close without saving workbook changes.");
+
+            var cancelButton = new Button
+            {
+                Content = "Cancel",
+                MinWidth = 92,
+                Padding = new Thickness(10, 4),
+            };
+            AutomationProperties.SetAutomationId(cancelButton, "DirtyWorkbookCancelButton");
+            AutomationProperties.SetName(cancelButton, "Cancel");
+            AutomationProperties.SetHelpText(cancelButton, "Return to the workbook without closing.");
+
+            void Finish(DirtyWorkbookCloseChoice selectedChoice)
+            {
+                choice = selectedChoice;
+                dialog.Close();
+            }
+
+            saveButton.Click += (_, _) => Finish(DirtyWorkbookCloseChoice.Save);
+            discardButton.Click += (_, _) => Finish(DirtyWorkbookCloseChoice.Discard);
+            cancelButton.Click += (_, _) => Finish(DirtyWorkbookCloseChoice.Cancel);
+            dialog.KeyDown += (_, e) =>
+            {
+                if (e.Key == Key.Enter)
+                {
+                    Finish(DirtyWorkbookCloseChoice.Save);
+                    e.Handled = true;
+                }
+                else if (e.Key == Key.Escape)
+                {
+                    Finish(DirtyWorkbookCloseChoice.Cancel);
+                    e.Handled = true;
+                }
+            };
+
+            var buttonRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+                Children =
+                {
+                    cancelButton,
+                    discardButton,
+                    saveButton,
+                },
+            };
+
+            dialog.Content = new StackPanel
+            {
+                Margin = new Thickness(18),
+                Spacing = 12,
+                Children =
+                {
+                    titleText,
+                    detailText,
+                    new Border { Height = 10 },
+                    buttonRow,
+                },
+            };
+
+            await dialog.ShowDialog(this);
+            return choice;
+        }
+        finally
+        {
+            _isDirtyCloseDialogOpen = false;
+        }
     }
 
     private async Task OpenExternalHelpLinkAsync(string url, string title)

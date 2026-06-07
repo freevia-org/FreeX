@@ -139,6 +139,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"native_open_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_save_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_save_as_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_close_workbook_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_edit_menu=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_format_menu=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_sheet_menu=true\" \"$launch_smoke_report\"");
