@@ -102,11 +102,11 @@ internal static class XlsxConnectionQueryTableSchemaNormalizer
             if (attributeName is "id" or "refreshedVersion")
                 continue;
 
-            changed |= NormalizeAttribute(connection, attributeName, NormalizeUnsignedIntOrNull);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(connection, attributeName, NormalizeUnsignedIntOrNull);
         }
 
         foreach (var attributeName in ConnectionBooleanAttributes)
-            changed |= NormalizeAttribute(connection, attributeName, NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(connection, attributeName, NormalizeBoolean);
 
         return changed;
     }
@@ -126,11 +126,11 @@ internal static class XlsxConnectionQueryTableSchemaNormalizer
                 if (attributeName == "connectionId")
                     continue;
 
-                changed |= NormalizeAttribute(root, attributeName, NormalizeUnsignedIntOrNull);
+                changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(root, attributeName, NormalizeUnsignedIntOrNull);
             }
 
             foreach (var attributeName in QueryTableBooleanAttributes)
-                changed |= NormalizeAttribute(root, attributeName, NormalizeBoolean);
+                changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(root, attributeName, NormalizeBoolean);
 
             if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(archive, entry.FullName, document);
@@ -171,7 +171,7 @@ internal static class XlsxConnectionQueryTableSchemaNormalizer
             .Elements(WorksheetNs + "queryTablePart")
             .Count()
             .ToString(CultureInfo.InvariantCulture);
-        changed |= SetAttributeIfChanged(queryTableParts, "count", count);
+        changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(queryTableParts, "count", count);
         return changed;
     }
 
@@ -179,36 +179,7 @@ internal static class XlsxConnectionQueryTableSchemaNormalizer
     {
         var normalized = NormalizeUnsignedIntOrNull(element.Attribute(attributeName)?.Value) ??
                          fallbackValue.ToString(CultureInfo.InvariantCulture);
-        return SetAttributeIfChanged(element, attributeName, normalized);
-    }
-
-    private static bool NormalizeAttribute(
-        XElement element,
-        string attributeName,
-        Func<string?, string?> normalize)
-    {
-        var attribute = element.Attribute(attributeName);
-        var normalized = normalize(attribute?.Value);
-        if (normalized is null)
-        {
-            if (attribute is null)
-                return false;
-
-            attribute.Remove();
-            return true;
-        }
-
-        return SetAttributeIfChanged(element, attributeName, normalized);
-    }
-
-    private static bool SetAttributeIfChanged(XElement element, string attributeName, string value)
-    {
-        var attribute = element.Attribute(attributeName);
-        if (attribute is not null && string.Equals(attribute.Value, value, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(attributeName, value);
-        return true;
+        return XlsxXmlNormalizationHelpers.SetAttributeIfChanged(element, attributeName, normalized);
     }
 
     private static string? NormalizeBoolean(string? value)
