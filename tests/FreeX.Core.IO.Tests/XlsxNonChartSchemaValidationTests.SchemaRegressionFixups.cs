@@ -174,7 +174,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
                 new XElement(workbookNs + "indexedColors")),
             new XElement(workbookNs + "dxfs"),
             new XElement(workbookNs + "tableStyles"),
-            new XElement(workbookNs + "extLst")));
+            new XElement(
+                workbookNs + "extLst",
+                new XElement(workbookNs + "ext", new XAttribute("uri", "{FREEX-STYLESHEET-ORDERING-EXT}")))));
 
         XlsxStylesheetSchemaNormalizer.NormalizeStylesheet(stylesXml, workbookNs).Should().BeTrue();
 

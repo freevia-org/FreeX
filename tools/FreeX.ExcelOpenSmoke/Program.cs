@@ -8322,11 +8322,30 @@ internal static class ExcelOpenSmoke
         foreach (var extension in extensions.Select((element, index) => (Ordinal: index + 1, Element: element)))
         {
             var extensionDescription = $"{description} ext #{extension.Ordinal}";
+            foreach (var attribute in extension.Element.Attributes())
+            {
+                if (attribute.IsNamespaceDeclaration ||
+                    (attribute.Name.NamespaceName.Length == 0 && attribute.Name.LocalName == "uri"))
+                {
+                    continue;
+                }
+
+                issues.Add($"{worksheetPart} {extensionDescription} has unsupported attribute {attribute.Name}");
+            }
+
             var uri = extension.Element.Attribute("uri")?.Value;
             if (string.IsNullOrWhiteSpace(uri))
+            {
                 issues.Add($"{worksheetPart} {extensionDescription} has no uri");
-            else if (!seenUris.Add(uri.Trim()))
-                issues.Add($"{worksheetPart} {description} has duplicate ext uri '{uri}'");
+            }
+            else
+            {
+                var trimmedUri = uri.Trim();
+                if (!string.Equals(uri, trimmedUri, StringComparison.Ordinal))
+                    issues.Add($"{worksheetPart} {extensionDescription} has untrimmed uri '{uri}'");
+                if (!seenUris.Add(trimmedUri))
+                    issues.Add($"{worksheetPart} {description} has duplicate ext uri '{uri}'");
+            }
         }
     }
 
