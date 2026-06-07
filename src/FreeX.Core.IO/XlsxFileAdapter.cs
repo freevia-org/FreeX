@@ -1136,25 +1136,11 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 throw new WorkbookTooLargeException(
                     string.Create(
                         CultureInfo.InvariantCulture,
-                        $"The file exceeds the {FormatFileSize(maxFileBytes)} open limit."));
+                        $"The file exceeds the {WorkbookOpenSizeGuard.FormatBytes(maxFileBytes)} open limit."));
             }
 
             destination.Write(buffer, 0, read);
         }
-    }
-
-    private static string FormatFileSize(long bytes)
-    {
-        string[] units = ["bytes", "KB", "MB", "GB", "TB"];
-        double value = bytes;
-        var unit = 0;
-        while (value >= 1024 && unit < units.Length - 1)
-        {
-            value /= 1024;
-            unit++;
-        }
-
-        return string.Create(CultureInfo.InvariantCulture, $"{value:0.#} {units[unit]}");
     }
 
     private readonly record struct LoadPackageStream(

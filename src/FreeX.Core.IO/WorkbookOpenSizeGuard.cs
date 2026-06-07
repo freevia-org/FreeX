@@ -110,7 +110,7 @@ public static class WorkbookOpenSizeGuard
         }
     }
 
-    private static string FormatBytes(long bytes)
+    internal static string FormatBytes(long bytes)
     {
         string[] units = ["bytes", "KB", "MB", "GB", "TB"];
         double value = bytes;
