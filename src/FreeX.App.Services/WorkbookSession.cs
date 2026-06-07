@@ -352,6 +352,18 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public WorkbookGoalSeekResult ExecuteGoalSeek(GoalSeekRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var result = _cellEditService.ExecuteGoalSeek(Workbook, request);
+        if (!result.Success || result.EditResult is null)
+            return result;
+
+        ApplySuccessfulEditResult(result.EditResult, request.ChangingCell);
+        return result;
+    }
+
     public WorkbookNavigationResult FindNext(
         string? searchText = null,
         FindOptions? options = null,
