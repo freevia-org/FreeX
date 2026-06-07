@@ -3954,7 +3954,7 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void XlsxAdapter_LoadedWorkbookSave_PreservesAdvancedWorkbookProtectionMetadata()
+    public void XlsxAdapter_LoadedWorkbookSave_SanitizesAdvancedWorkbookProtectionMetadata()
     {
         var workbook = new Workbook("AdvancedWorkbookProtectionRetentionTest");
         var sheet = workbook.AddSheet("S1");
@@ -3986,15 +3986,14 @@ public partial class FileAdapterSmokeTests
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var protection = workbookXml.Root!.Element(workbookNs + "workbookProtection");
         protection.Should().NotBeNull();
-        (protection!.Attribute("algorithmName")?.Value).Should().Be("SHA-512");
-        (protection.Attribute("hashValue")?.Value).Should().Be("def456");
-        (protection.Attribute("saltValue")?.Value).Should().Be("salt456");
-        (protection.Attribute("spinCount")?.Value).Should().Be("100000");
+        protection!.Attribute("algorithmName").Should().BeNull();
+        protection.Attribute("hashValue").Should().BeNull();
+        protection.Attribute("saltValue").Should().BeNull();
+        protection.Attribute("spinCount").Should().BeNull();
         (protection.Attribute("lockWindows")?.Value).Should().Be("1");
         protection.Elements(XName.Get("workbookProtectionNativeChild", "urn:freex:test"))
-            .Select(element => element.Attribute("id")?.Value)
             .Should()
-            .BeEquivalentTo("first", "second");
+            .BeEmpty();
     }
 
     [Fact]
@@ -13277,7 +13276,7 @@ public partial class FileAdapterSmokeTests
         xml.Should().NotContain("validSmartTagPrAttr=\"keep\"");
         xml.Should().NotContain("validSmartTagTypesAttr=\"keep\"");
         xml.Should().NotContain("validSmartTagTypeAttr=\"keep\"");
-        xml.Should().Contain("validWorkbookProtectionAttr=\"keep\"");
+        xml.Should().NotContain("validWorkbookProtectionAttr=\"keep\"");
         xml.Should().NotContain("invalid ");
     }
 
