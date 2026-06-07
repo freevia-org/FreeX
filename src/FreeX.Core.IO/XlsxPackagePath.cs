@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Text;
 
 namespace FreeX.Core.IO;
@@ -111,6 +112,17 @@ public static class XlsxPackagePath
         }
 
         return string.Join('/', parts);
+    }
+
+    public static bool IsWorksheetXmlEntry(ZipArchiveEntry entry) =>
+        IsXmlEntryInDirectory(entry, "xl/worksheets/");
+
+    public static bool IsXmlEntryInDirectory(ZipArchiveEntry entry, string directory)
+    {
+        var path = NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+        return path.StartsWith(directory, StringComparison.OrdinalIgnoreCase) &&
+               path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+               !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
     }
 
     public static string GetImageContentType(string path)

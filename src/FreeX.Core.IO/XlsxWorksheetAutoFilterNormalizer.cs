@@ -154,7 +154,7 @@ internal static class XlsxWorksheetAutoFilterNormalizer
 
     public static void NormalizeWorksheets(ZipArchive archive)
     {
-        foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
+        foreach (var worksheetEntry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry).ToList())
         {
             var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
             var root = worksheetXml.Root;
@@ -414,11 +414,4 @@ internal static class XlsxWorksheetAutoFilterNormalizer
             : null;
     }
 
-    private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
-    {
-        var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
-        return path.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
-               path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
-               !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
-    }
 }
