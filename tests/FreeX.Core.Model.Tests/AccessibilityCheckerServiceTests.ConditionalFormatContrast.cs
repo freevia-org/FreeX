@@ -2813,6 +2813,87 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDynamicArrayShaperScalarComparisons()
+    {
+        AssertFormulaDynamicArrayFunctionContrastLocations(
+            "INDEX(SEQUENCE(3,2,10,5),2,1)=20",
+            FormulaMatrixArrayAllLocations);
+        AssertFormulaDynamicArrayFunctionContrastLocations(
+            "INDEX(TAKE($P$1:$R$2,1),1,2)=2",
+            FormulaMatrixArrayAllLocations);
+        AssertFormulaDynamicArrayFunctionContrastLocations(
+            "INDEX(DROP($P$1:$R$2,1),1,2)=5",
+            FormulaMatrixArrayAllLocations);
+        AssertFormulaDynamicArrayFunctionContrastLocations(
+            "INDEX(EXPAND($K$1:$K$1,2,2,9),2,2)=9",
+            FormulaMatrixArrayAllLocations);
+        AssertFormulaDynamicArrayFunctionContrastLocations(
+            "INDEX(CHOOSECOLS($P$1:$R$2,3,1),2,1)=6",
+            FormulaMatrixArrayAllLocations);
+        AssertFormulaDynamicArrayFunctionContrastLocations(
+            "INDEX(CHOOSEROWS($P$1:$R$2,2),1,3)=6",
+            FormulaMatrixArrayAllLocations);
+        AssertFormulaDynamicArrayFunctionContrastLocations(
+            "INDEX(TOCOL($P$1:$R$2),4,1)=4",
+            FormulaMatrixArrayAllLocations);
+        AssertFormulaDynamicArrayFunctionContrastLocations(
+            "INDEX(TOROW($P$1:$R$2,0,TRUE),1,4)=5",
+            FormulaMatrixArrayAllLocations);
+        AssertFormulaDynamicArrayFunctionContrastLocations(
+            "INDEX(WRAPROWS(TOROW($P$1:$R$2),4),2,2)=6",
+            FormulaMatrixArrayAllLocations);
+        AssertFormulaDynamicArrayFunctionContrastLocations(
+            "INDEX(WRAPCOLS(TOCOL($P$1:$R$2),4),2,2)=6",
+            FormulaMatrixArrayAllLocations);
+        AssertFormulaDynamicArrayFunctionContrastLocations(
+            "INDEX(HSTACK($C$1:$D$1,$F$1:$F$1),1,3)=5",
+            FormulaMatrixArrayAllLocations);
+        AssertFormulaDynamicArrayFunctionContrastLocations(
+            "INDEX(VSTACK($C$1:$D$1,$F$1:$G$1),2,2)=6",
+            FormulaMatrixArrayAllLocations);
+        AssertFormulaDynamicArrayFunctionContrastLocations(
+            "INDEX(FILTER($P$1:$R$2,{TRUE;FALSE}),1,3)=3",
+            FormulaMatrixArrayAllLocations);
+        AssertFormulaDynamicArrayFunctionContrastLocations(
+            "INDEX(SORT({2,1;4,3},2,-1),1,1)=4",
+            FormulaMatrixArrayAllLocations);
+        AssertFormulaDynamicArrayFunctionContrastLocations(
+            "INDEX(SORTBY($P$1:$R$2,{2;1}),1,1)=4",
+            FormulaMatrixArrayAllLocations);
+        AssertFormulaDynamicArrayFunctionContrastLocations(
+            "INDEX(UNIQUE({1;2;1}),2,1)=2",
+            FormulaMatrixArrayAllLocations);
+        AssertFormulaDynamicArrayFunctionContrastLocations(
+            "INDEX(TRIMRANGE($L$1:$O$3),2,2)=4",
+            FormulaMatrixArrayAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDynamicArrayAggregateOperands()
+    {
+        AssertFormulaDynamicArrayFunctionContrastLocations("SUM(SEQUENCE(3))=6", FormulaMatrixArrayAllLocations);
+        AssertFormulaDynamicArrayFunctionContrastLocations("SUM(TAKE($P$1:$R$2,1))=6", FormulaMatrixArrayAllLocations);
+        AssertFormulaDynamicArrayFunctionContrastLocations("SUM(DROP($P$1:$R$2,1))=15", FormulaMatrixArrayAllLocations);
+        AssertFormulaDynamicArrayFunctionContrastLocations(
+            "SUM(TOCOL(UNIQUE(VSTACK({1;2;1},{3}))))=6",
+            FormulaMatrixArrayAllLocations);
+        AssertFormulaDynamicArrayFunctionContrastLocations(
+            "SUM(FILTER($P$1:$R$2,{TRUE;FALSE}))=6",
+            FormulaMatrixArrayAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatDynamicArrayUnsupportedShapesOrDeferredFunctions()
+    {
+        AssertFormulaDynamicArrayFunctionContrastLocations("SEQUENCE(2)>0");
+        AssertFormulaDynamicArrayFunctionContrastLocations("SUM(SEQUENCE(10001))>0");
+        AssertFormulaDynamicArrayFunctionContrastLocations("FILTER($P$1:$R$2,$P$1:$R$2>2)>0");
+        AssertFormulaDynamicArrayFunctionContrastLocations("RANDARRAY(1)>0");
+        AssertFormulaDynamicArrayFunctionContrastLocations("BYROW($P$1:$R$2,1)>0");
+        AssertFormulaDynamicArrayFunctionContrastLocations("MAP($P$1:$Q$1,1)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatNormalDistributionScalarFunctions()
     {
         AssertFormulaNormalDistributionFunctionContrastLocations("AND($G1,NORMDIST($A1,$C1,$D1,TRUE)>0.8)", "B2", "B4");
@@ -8173,6 +8254,17 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     private static void AssertFormulaMatrixArrayFunctionContrastLocations(string formulaText, params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaMatrixArrayFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaDynamicArrayFunctionContrastLocations(string formulaText, params string[] expectedLocations)
     {
         var workbook = CreateFormulaMatrixArrayFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
