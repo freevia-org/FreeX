@@ -9,7 +9,12 @@ internal static class XlsxWorksheetOleControlNormalizer
     private static readonly XNamespace RelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace PackageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
+    private const string OleObjectRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject";
+    private const string OleObjectContentType = "application/vnd.openxmlformats-officedocument.oleObject";
+    private const string DrawingRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing";
+    private const string DrawingContentType = "application/vnd.openxmlformats-officedocument.drawing+xml";
     private const string ControlPropertiesRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/ctrlProp";
+    private const string LegacyControlPropertiesRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/control";
     private const string ControlPropertiesContentType = "application/vnd.ms-excel.controlproperties+xml";
 
     private static readonly HashSet<string> NoAttributes = [];
@@ -48,6 +53,21 @@ internal static class XlsxWorksheetOleControlNormalizer
         "cf"
     ];
 
+    private static readonly HashSet<string> ObjectPropertiesAttributes =
+    [
+        "locked",
+        "defaultSize",
+        "print",
+        "disabled",
+        "uiObject",
+        "autoFill",
+        "autoLine",
+        "autoPict",
+        "macro",
+        "altText",
+        "dde"
+    ];
+
     private static readonly HashSet<string> OleUpdateValues =
     [
         "OLEUPDATE_ALWAYS",
@@ -67,6 +87,7 @@ internal static class XlsxWorksheetOleControlNormalizer
                 continue;
 
             var changed = NormalizeWorksheetRoot(root);
+            changed |= RebindOleObjectRelationships(archive, worksheetEntry.FullName, worksheetXml);
             changed |= RebindControlPropertiesRelationships(archive, worksheetEntry.FullName, worksheetXml);
             if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
@@ -178,12 +199,53 @@ internal static class XlsxWorksheetOleControlNormalizer
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(oleObject, OleObjectAttributes, RelNs + "id");
         changed |= RemoveUnexpectedChildElements(oleObject, WorksheetNs + "objectPr");
+        changed |= NormalizeObjectProperties(oleObject);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "shapeId", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "autoLoad", XlsxXmlNormalizationHelpers.NormalizeBoolean);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "oleUpdate", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, OleUpdateValues));
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "progId", NormalizeOptionalText);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "dvAspect", NormalizeOptionalText);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "link", NormalizeOptionalText);
+        return changed;
+    }
+
+    private static bool NormalizeObjectProperties(XElement oleObject)
+    {
+        var changed = false;
+        var keptObjectProperties = false;
+        foreach (var objectProperties in oleObject.Elements(WorksheetNs + "objectPr").ToList())
+        {
+            if (keptObjectProperties)
+            {
+                objectProperties.Remove();
+                changed = true;
+                continue;
+            }
+
+            changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(objectProperties, ObjectPropertiesAttributes, RelNs + "id");
+            changed |= RemoveUnexpectedChildElements(objectProperties, WorksheetNs + "anchor");
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(objectProperties, "locked", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(objectProperties, "defaultSize", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(objectProperties, "print", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(objectProperties, "disabled", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(objectProperties, "uiObject", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(objectProperties, "autoFill", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(objectProperties, "autoLine", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(objectProperties, "autoPict", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(objectProperties, "dde", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(objectProperties, "macro", NormalizeOptionalText);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(objectProperties, "altText", NormalizeOptionalText);
+
+            if (objectProperties.Attribute(RelNs + "id") is null && !objectProperties.HasAttributes && !objectProperties.HasElements)
+            {
+                objectProperties.Remove();
+                changed = true;
+                continue;
+            }
+
+            keptObjectProperties = true;
+        }
+
         return changed;
     }
 
@@ -245,6 +307,210 @@ internal static class XlsxWorksheetOleControlNormalizer
         element.Attribute(RelNs + "id") is null ||
         element.Attribute("shapeId") is null;
 
+    private static bool RebindOleObjectRelationships(
+        ZipArchive archive,
+        string worksheetPath,
+        XDocument worksheetXml)
+    {
+        var oleObjectsContainer = worksheetXml.Root?.Element(WorksheetNs + "oleObjects");
+        var oleObjects = oleObjectsContainer?
+            .Elements(WorksheetNs + "oleObject")
+            .ToList()
+            ?? [];
+
+        var relationshipsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
+        var relationshipsXml = archive.GetEntry(relationshipsPath) is { } relationshipsEntry
+            ? XlsxPackageXmlEditor.LoadXml(relationshipsEntry)
+            : new XDocument(new XElement(PackageRelNs + "Relationships"));
+
+        var relationshipsChanged = RemoveInvalidPackageRelationships(
+            relationshipsXml,
+            worksheetPath,
+            archive,
+            IsOleObjectRelationshipType,
+            IsValidOleObjectRelationship);
+
+        var oleObjectRelationships = relationshipsXml.Root?
+            .Elements(PackageRelNs + "Relationship")
+            .Where(relationship => IsValidOleObjectRelationship(worksheetPath, relationship, archive))
+            .ToList()
+            ?? [];
+
+        if (oleObjects.Count == 0)
+        {
+            if (relationshipsChanged)
+                XlsxPackageXmlEditor.ReplaceXml(archive, relationshipsPath, relationshipsXml);
+
+            return false;
+        }
+
+        var oleObjectParts = archive.Entries
+            .Select(entry => XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/')))
+            .Where(IsOleObjectPart)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var usedRelationshipIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var nextOleObjectPartIndex = 0;
+        var worksheetChanged = false;
+        foreach (var oleObject in oleObjects.ToList())
+        {
+            var relationship = FindUnusedValidPackageRelationship(
+                oleObjectRelationships,
+                [oleObject.Attribute(RelNs + "id")?.Value],
+                usedRelationshipIds);
+            if (relationship is null)
+                relationship = FindNextUnusedPackageRelationship(oleObjectRelationships, usedRelationshipIds);
+
+            if (relationship is null)
+            {
+                while (nextOleObjectPartIndex < oleObjectParts.Count &&
+                       oleObjectRelationships.Any(candidate =>
+                           string.Equals(
+                               ResolveRelationshipTarget(worksheetPath, candidate),
+                               oleObjectParts[nextOleObjectPartIndex],
+                               StringComparison.OrdinalIgnoreCase)))
+                {
+                    nextOleObjectPartIndex++;
+                }
+
+                if (nextOleObjectPartIndex < oleObjectParts.Count)
+                {
+                    var targetPart = oleObjectParts[nextOleObjectPartIndex++];
+                    relationship = AddPackageRelationship(
+                        relationshipsXml,
+                        worksheetPath,
+                        targetPart,
+                        OleObjectRelationshipType);
+                    oleObjectRelationships.Add(relationship);
+                    relationshipsChanged = true;
+                }
+            }
+
+            if (relationship is null)
+            {
+                oleObject.Remove();
+                worksheetChanged = true;
+                continue;
+            }
+
+            var reboundId = relationship.Attribute("Id")?.Value;
+            if (string.IsNullOrWhiteSpace(reboundId))
+            {
+                oleObject.Remove();
+                worksheetChanged = true;
+                continue;
+            }
+
+            usedRelationshipIds.Add(reboundId);
+            worksheetChanged |= SetRelationshipId(oleObject, reboundId);
+            EnsureOleObjectContentType(archive, relationship, worksheetPath);
+        }
+
+        worksheetChanged |= RebindObjectPropertiesRelationships(
+            archive,
+            worksheetPath,
+            relationshipsXml,
+            oleObjectsContainer?.Elements(WorksheetNs + "oleObject").ToList() ?? [],
+            ref relationshipsChanged);
+
+        if (oleObjectsContainer is not null && !oleObjectsContainer.Elements(WorksheetNs + "oleObject").Any())
+        {
+            oleObjectsContainer.Remove();
+            worksheetChanged = true;
+        }
+
+        if (relationshipsChanged)
+            XlsxPackageXmlEditor.ReplaceXml(archive, relationshipsPath, relationshipsXml);
+
+        return worksheetChanged;
+    }
+
+    private static bool RebindObjectPropertiesRelationships(
+        ZipArchive archive,
+        string worksheetPath,
+        XDocument relationshipsXml,
+        IReadOnlyList<XElement> oleObjects,
+        ref bool relationshipsChanged)
+    {
+        var objectPropertiesElements = oleObjects
+            .SelectMany(oleObject => oleObject.Elements(WorksheetNs + "objectPr"))
+            .Where(objectProperties => objectProperties.Attribute(RelNs + "id") is not null)
+            .ToList();
+        if (objectPropertiesElements.Count == 0)
+            return false;
+
+        var drawingRelationships = relationshipsXml.Root?
+            .Elements(PackageRelNs + "Relationship")
+            .Where(relationship => IsValidDrawingRelationship(worksheetPath, relationship, archive))
+            .ToList()
+            ?? [];
+        var drawingParts = archive.Entries
+            .Select(entry => XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/')))
+            .Where(IsDrawingPart)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var nextDrawingPartIndex = 0;
+        var worksheetChanged = false;
+        foreach (var objectProperties in objectPropertiesElements)
+        {
+            var relationshipId = objectProperties.Attribute(RelNs + "id")?.Value;
+            var relationship = string.IsNullOrWhiteSpace(relationshipId)
+                ? null
+                : drawingRelationships.FirstOrDefault(candidate =>
+                    string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.OrdinalIgnoreCase));
+
+            if (relationship is null)
+            {
+                relationshipsChanged |= RemoveInvalidObjectPropertiesRelationship(
+                    relationshipsXml,
+                    worksheetPath,
+                    archive,
+                    relationshipId);
+                relationship = drawingRelationships.FirstOrDefault();
+            }
+
+            if (relationship is null)
+            {
+                while (nextDrawingPartIndex < drawingParts.Count &&
+                       drawingRelationships.Any(candidate =>
+                           string.Equals(
+                               ResolveRelationshipTarget(worksheetPath, candidate),
+                               drawingParts[nextDrawingPartIndex],
+                               StringComparison.OrdinalIgnoreCase)))
+                {
+                    nextDrawingPartIndex++;
+                }
+
+                if (nextDrawingPartIndex < drawingParts.Count)
+                {
+                    var targetPart = drawingParts[nextDrawingPartIndex++];
+                    relationship = AddPackageRelationship(
+                        relationshipsXml,
+                        worksheetPath,
+                        targetPart,
+                        DrawingRelationshipType);
+                    drawingRelationships.Add(relationship);
+                    relationshipsChanged = true;
+                }
+            }
+
+            var reboundId = relationship?.Attribute("Id")?.Value;
+            if (string.IsNullOrWhiteSpace(reboundId))
+            {
+                objectProperties.SetAttributeValue(RelNs + "id", null);
+                worksheetChanged = true;
+                continue;
+            }
+
+            worksheetChanged |= SetRelationshipId(objectProperties, reboundId);
+            EnsureDrawingContentType(archive, relationship!, worksheetPath);
+        }
+
+        return worksheetChanged;
+    }
+
     private static bool RebindControlPropertiesRelationships(
         ZipArchive archive,
         string worksheetPath,
@@ -254,43 +520,50 @@ internal static class XlsxWorksheetOleControlNormalizer
             .Element(WorksheetNs + "controls")?
             .Elements(WorksheetNs + "control")
             .ToList();
-        if (controls is null || controls.Count == 0)
-            return false;
-
-        var controlPropertiesParts = archive.Entries
-            .Select(entry => XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/')))
-            .Where(path => path.StartsWith("xl/ctrlProps/", StringComparison.OrdinalIgnoreCase) &&
-                           path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
-            .Order(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        if (controlPropertiesParts.Count == 0)
-            return false;
-
         var relationshipsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
         var relationshipsXml = archive.GetEntry(relationshipsPath) is { } relationshipsEntry
             ? XlsxPackageXmlEditor.LoadXml(relationshipsEntry)
             : new XDocument(new XElement(PackageRelNs + "Relationships"));
 
-        var relationshipsChanged = false;
+        var relationshipsChanged = RemoveInvalidPackageRelationships(
+            relationshipsXml,
+            worksheetPath,
+            archive,
+            IsControlPropertiesRelationshipType,
+            IsControlPropertiesRelationship);
+
         var controlPropertiesRelationships = relationshipsXml.Root?
             .Elements(PackageRelNs + "Relationship")
             .Where(relationship => IsControlPropertiesRelationship(worksheetPath, relationship, archive))
             .ToList()
             ?? [];
 
+        if (controls is null || controls.Count == 0)
+        {
+            if (relationshipsChanged)
+                XlsxPackageXmlEditor.ReplaceXml(archive, relationshipsPath, relationshipsXml);
+
+            return false;
+        }
+
+        var controlPropertiesParts = archive.Entries
+            .Select(entry => XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/')))
+            .Where(IsControlPropertiesPart)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
         var usedRelationshipIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var nextControlPropertiesPartIndex = 0;
         var worksheetChanged = false;
-        foreach (var control in controls)
+        foreach (var control in controls.ToList())
         {
-            var relationshipId = control.Attribute(RelNs + "id")?.Value;
-            var relationship = FindUnusedValidControlRelationship(
+            var relationship = FindUnusedValidPackageRelationship(
                 controlPropertiesRelationships,
-                relationshipId,
+                EnumerateRelationshipIds(control, WorksheetNs + "controlPr"),
                 usedRelationshipIds);
             if (relationship is null)
             {
-                relationship = FindNextUnusedControlRelationship(controlPropertiesRelationships, usedRelationshipIds);
+                relationship = FindNextUnusedPackageRelationship(controlPropertiesRelationships, usedRelationshipIds);
             }
 
             if (relationship is null)
@@ -305,18 +578,33 @@ internal static class XlsxWorksheetOleControlNormalizer
                     nextControlPropertiesPartIndex++;
                 }
 
-                if (nextControlPropertiesPartIndex >= controlPropertiesParts.Count)
-                    continue;
+                if (nextControlPropertiesPartIndex < controlPropertiesParts.Count)
+                {
+                    var targetPart = controlPropertiesParts[nextControlPropertiesPartIndex++];
+                    relationship = AddPackageRelationship(
+                        relationshipsXml,
+                        worksheetPath,
+                        targetPart,
+                        ControlPropertiesRelationshipType);
+                    controlPropertiesRelationships.Add(relationship);
+                    relationshipsChanged = true;
+                }
+            }
 
-                var targetPart = controlPropertiesParts[nextControlPropertiesPartIndex++];
-                relationship = AddControlPropertiesRelationship(relationshipsXml, worksheetPath, targetPart);
-                controlPropertiesRelationships.Add(relationship);
-                relationshipsChanged = true;
+            if (relationship is null)
+            {
+                control.Remove();
+                worksheetChanged = true;
+                continue;
             }
 
             var reboundId = relationship.Attribute("Id")?.Value;
             if (string.IsNullOrWhiteSpace(reboundId))
+            {
+                control.Remove();
+                worksheetChanged = true;
                 continue;
+            }
 
             usedRelationshipIds.Add(reboundId);
             worksheetChanged |= SetRelationshipId(control, reboundId);
@@ -325,25 +613,46 @@ internal static class XlsxWorksheetOleControlNormalizer
             EnsureControlPropertiesContentType(archive, relationship, worksheetPath);
         }
 
+        var controlsContainer = worksheetXml.Root?.Element(WorksheetNs + "controls");
+        if (controlsContainer is not null && !controlsContainer.Elements(WorksheetNs + "control").Any())
+        {
+            controlsContainer.Remove();
+            worksheetChanged = true;
+        }
+
         if (relationshipsChanged)
             XlsxPackageXmlEditor.ReplaceXml(archive, relationshipsPath, relationshipsXml);
 
         return worksheetChanged;
     }
 
-    private static XElement? FindUnusedValidControlRelationship(
-        IReadOnlyList<XElement> relationships,
-        string? relationshipId,
-        ISet<string> usedRelationshipIds)
+    private static IEnumerable<string?> EnumerateRelationshipIds(XElement element, XName nestedRelationshipElementName)
     {
-        if (string.IsNullOrWhiteSpace(relationshipId) || usedRelationshipIds.Contains(relationshipId))
-            return null;
-
-        return relationships.FirstOrDefault(relationship =>
-            string.Equals(relationship.Attribute("Id")?.Value, relationshipId, StringComparison.OrdinalIgnoreCase));
+        yield return element.Attribute(RelNs + "id")?.Value;
+        foreach (var nestedElement in element.Elements(nestedRelationshipElementName))
+            yield return nestedElement.Attribute(RelNs + "id")?.Value;
     }
 
-    private static XElement? FindNextUnusedControlRelationship(
+    private static XElement? FindUnusedValidPackageRelationship(
+        IReadOnlyList<XElement> relationships,
+        IEnumerable<string?> relationshipIds,
+        ISet<string> usedRelationshipIds)
+    {
+        foreach (var relationshipId in relationshipIds)
+        {
+            if (string.IsNullOrWhiteSpace(relationshipId) || usedRelationshipIds.Contains(relationshipId))
+                continue;
+
+            var relationship = relationships.FirstOrDefault(candidate =>
+                string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.OrdinalIgnoreCase));
+            if (relationship is not null)
+                return relationship;
+        }
+
+        return null;
+    }
+
+    private static XElement? FindNextUnusedPackageRelationship(
         IReadOnlyList<XElement> relationships,
         ISet<string> usedRelationshipIds)
         => relationships.FirstOrDefault(relationship =>
@@ -352,10 +661,11 @@ internal static class XlsxWorksheetOleControlNormalizer
             return !string.IsNullOrWhiteSpace(relationshipId) && !usedRelationshipIds.Contains(relationshipId);
         });
 
-    private static XElement AddControlPropertiesRelationship(
+    private static XElement AddPackageRelationship(
         XDocument relationshipsXml,
         string worksheetPath,
-        string controlPropertiesPart)
+        string targetPart,
+        string relationshipType)
     {
         var root = relationshipsXml.Root;
         if (root is null)
@@ -367,8 +677,8 @@ internal static class XlsxWorksheetOleControlNormalizer
         var relationship = new XElement(
             PackageRelNs + "Relationship",
             new XAttribute("Id", XlsxPackageXmlEditor.NextRelationshipId(relationshipsXml, PackageRelNs)),
-            new XAttribute("Type", ControlPropertiesRelationshipType),
-            new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(worksheetPath, controlPropertiesPart)));
+            new XAttribute("Type", relationshipType),
+            new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(worksheetPath, targetPart)));
         root.Add(relationship);
         return relationship;
     }
@@ -390,20 +700,125 @@ internal static class XlsxWorksheetOleControlNormalizer
         if (string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
             return false;
 
+        if (!IsControlPropertiesRelationshipType(relationship))
+            return false;
+
+        var targetPart = ResolveRelationshipTarget(worksheetPath, relationship);
+        return IsControlPropertiesPart(targetPart) &&
+               archive.GetEntry(targetPart) is not null;
+    }
+
+    private static bool IsOleObjectRelationship(
+        string worksheetPath,
+        XElement relationship,
+        ZipArchive archive)
+    {
+        if (string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (!IsOleObjectRelationshipType(relationship))
+            return false;
+
+        var targetPart = ResolveRelationshipTarget(worksheetPath, relationship);
+        return IsOleObjectPart(targetPart) &&
+               archive.GetEntry(targetPart) is not null;
+    }
+
+    private static bool IsValidDrawingRelationship(
+        string worksheetPath,
+        XElement relationship,
+        ZipArchive archive)
+    {
+        if (string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (!IsDrawingRelationshipType(relationship))
+            return false;
+
+        var targetPart = ResolveRelationshipTarget(worksheetPath, relationship);
+        return IsDrawingPart(targetPart) &&
+               archive.GetEntry(targetPart) is not null;
+    }
+
+    private static bool IsValidOleObjectRelationship(
+        string worksheetPath,
+        XElement relationship,
+        ZipArchive archive)
+        => IsOleObjectRelationship(worksheetPath, relationship, archive);
+
+    private static bool IsControlPropertiesRelationshipType(XElement relationship)
+    {
         var relationshipType = relationship.Attribute("Type")?.Value;
-        if (!string.Equals(relationshipType, ControlPropertiesRelationshipType, StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(
-                relationshipType,
-                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/control",
-                StringComparison.OrdinalIgnoreCase))
+        return string.Equals(relationshipType, ControlPropertiesRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(relationshipType, LegacyControlPropertiesRelationshipType, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsOleObjectRelationshipType(XElement relationship)
+        => string.Equals(relationship.Attribute("Type")?.Value, OleObjectRelationshipType, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsDrawingRelationshipType(XElement relationship)
+        => string.Equals(relationship.Attribute("Type")?.Value, DrawingRelationshipType, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsControlPropertiesPart(string path) =>
+        path.StartsWith("xl/ctrlProps/", StringComparison.OrdinalIgnoreCase) &&
+        path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsOleObjectPart(string path) =>
+        path.StartsWith("xl/embeddings/", StringComparison.OrdinalIgnoreCase) &&
+        !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase) &&
+        !path.EndsWith("/", StringComparison.Ordinal);
+
+    private static bool IsDrawingPart(string path) =>
+        path.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase) &&
+        path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+        !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
+
+    private static bool RemoveInvalidPackageRelationships(
+        XDocument relationshipsXml,
+        string worksheetPath,
+        ZipArchive archive,
+        Func<XElement, bool> isOwnedRelationshipType,
+        Func<string, XElement, ZipArchive, bool> isValidRelationship)
+    {
+        var changed = false;
+        foreach (var relationship in relationshipsXml.Root?
+                     .Elements(PackageRelNs + "Relationship")
+                     .Where(isOwnedRelationshipType)
+                     .ToList()
+                 ?? [])
+        {
+            if (isValidRelationship(worksheetPath, relationship, archive))
+                continue;
+
+            relationship.Remove();
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool RemoveInvalidObjectPropertiesRelationship(
+        XDocument relationshipsXml,
+        string worksheetPath,
+        ZipArchive archive,
+        string? relationshipId)
+    {
+        if (string.IsNullOrWhiteSpace(relationshipId))
+            return false;
+
+        var relationship = relationshipsXml.Root?
+            .Elements(PackageRelNs + "Relationship")
+            .FirstOrDefault(candidate =>
+                string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.OrdinalIgnoreCase));
+        if (relationship is null ||
+            !IsDrawingRelationshipType(relationship) ||
+            IsValidDrawingRelationship(worksheetPath, relationship, archive))
         {
             return false;
         }
 
-        var targetPart = ResolveRelationshipTarget(worksheetPath, relationship);
-        return targetPart.StartsWith("xl/ctrlProps/", StringComparison.OrdinalIgnoreCase) &&
-               targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
-               archive.GetEntry(targetPart) is not null;
+        relationship.Remove();
+        return true;
     }
 
     private static string ResolveRelationshipTarget(string worksheetPath, XElement relationship)
@@ -422,6 +837,29 @@ internal static class XlsxWorksheetOleControlNormalizer
         var targetPart = ResolveRelationshipTarget(worksheetPath, relationship);
         if (!string.IsNullOrWhiteSpace(targetPart))
             XlsxPackageXmlEditor.EnsureSpecificContentType(archive, targetPart, ControlPropertiesContentType);
+    }
+
+    private static void EnsureOleObjectContentType(
+        ZipArchive archive,
+        XElement relationship,
+        string worksheetPath)
+    {
+        var targetPart = ResolveRelationshipTarget(worksheetPath, relationship);
+        if (!string.IsNullOrWhiteSpace(targetPart) &&
+            targetPart.EndsWith(".bin", StringComparison.OrdinalIgnoreCase))
+        {
+            XlsxPackageXmlEditor.EnsureSpecificContentType(archive, targetPart, OleObjectContentType);
+        }
+    }
+
+    private static void EnsureDrawingContentType(
+        ZipArchive archive,
+        XElement relationship,
+        string worksheetPath)
+    {
+        var targetPart = ResolveRelationshipTarget(worksheetPath, relationship);
+        if (!string.IsNullOrWhiteSpace(targetPart))
+            XlsxPackageXmlEditor.EnsureSpecificContentType(archive, targetPart, DrawingContentType);
     }
 
     private static bool RemoveUnexpectedChildElements(XElement element, XName allowedChildName)
