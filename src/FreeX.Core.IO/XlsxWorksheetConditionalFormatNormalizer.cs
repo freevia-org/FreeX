@@ -73,9 +73,35 @@ internal static class XlsxWorksheetConditionalFormatNormalizer
         changed |= RemoveDuplicateChildren(rule, "colorScale");
         changed |= RemoveDuplicateChildren(rule, "dataBar");
         changed |= RemoveDuplicateChildren(rule, "iconSet");
+        changed |= RemovePayloadExtensionLists(rule);
         changed |= NormalizeExtensionLists(rule);
         changed |= NormalizeChildOrder(rule, CfRuleChildOrder);
         return changed;
+    }
+
+    private static bool RemovePayloadExtensionLists(XElement rule)
+    {
+        var changed = false;
+        foreach (var payload in rule.Elements(WorksheetNs + "colorScale")
+                     .Concat(rule.Elements(WorksheetNs + "dataBar"))
+                     .Concat(rule.Elements(WorksheetNs + "iconSet")))
+        {
+            changed |= RemoveExtensionLists(payload);
+        }
+
+        return changed;
+    }
+
+    private static bool RemoveExtensionLists(XElement parent)
+    {
+        var extensionLists = parent.Elements(WorksheetNs + "extLst").ToList();
+        if (extensionLists.Count == 0)
+            return false;
+
+        foreach (var extensionList in extensionLists)
+            extensionList.Remove();
+
+        return true;
     }
 
     private static bool NormalizeExtensionLists(XElement parent)
