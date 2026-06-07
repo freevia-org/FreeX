@@ -12,8 +12,13 @@ internal static partial class XlsxPivotTableWriter
         string.IsNullOrWhiteSpace(value) ? null : new XAttribute(name, value.Trim());
 
     private static XAttribute? ToOptionalIntAttribute(string name, int? value) =>
-        value is { } intValue ? new XAttribute(name, intValue.ToString(CultureInfo.InvariantCulture)) : null;
+        OptionalFormattedAttribute(
+            name,
+            value is { } intValue ? intValue.ToString(CultureInfo.InvariantCulture) : null);
 
     private static XAttribute? ToOptionalBoolAttribute(string name, bool? value) =>
-        value is { } boolValue ? new XAttribute(name, boolValue ? "1" : "0") : null;
+        OptionalFormattedAttribute(name, value is { } boolValue ? boolValue ? "1" : "0" : null);
+
+    private static XAttribute? OptionalFormattedAttribute(string name, string? value) =>
+        value is null ? null : new XAttribute(name, value);
 }

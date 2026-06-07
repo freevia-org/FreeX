@@ -107,7 +107,7 @@ public sealed partial class PivotWorkflowDialogTests
                 var picker = WpfTestTree.FindVisualDescendants<Button>(dialog)
                     .Single(button => AutomationProperties.GetName(button) == "Select PivotTable source range");
 
-                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                DialogSourceTestSupport.ClickButton(picker);
 
                 requests.Should().Equal(new PivotTableDataSourceRangeSelectionRequest(
                     "Sales!A1:E200",

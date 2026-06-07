@@ -15,7 +15,7 @@ public sealed class XlsxStylesheetMetadataPreserverTests
     [Fact]
     public void Preserve_DoesNotInjectFontColorIntoPositionallyMismatchedDifferentialStyle()
     {
-        using var sourcePackage = CreatePackage(("xl/styles.xml", StyleSheet(
+        using var sourcePackage = XlsxPackageTestFixtures.CreatePackage(("xl/styles.xml", StyleSheet(
             // Source dxf[0]: red font on a pink fill, carrying a native attribute so the source counts as
             // preservable stylesheet metadata.
             """
@@ -24,7 +24,7 @@ public sealed class XlsxStylesheetMetadataPreserverTests
               <fill><patternFill patternType="solid"><fgColor rgb="FFF4CCCC"/></patternFill></fill>
             </dxf>
             """)));
-        using var targetPackage = CreatePackage(("xl/styles.xml", StyleSheet(
+        using var targetPackage = XlsxPackageTestFixtures.CreatePackage(("xl/styles.xml", StyleSheet(
             // Rebuilt dxf[0] at the same index is an unrelated rule: green fill, no font.
             """
             <dxf>
@@ -48,14 +48,14 @@ public sealed class XlsxStylesheetMetadataPreserverTests
     public void Preserve_MergesNativeMetadataIntoPositionallyMatchedDifferentialStyle()
     {
         XNamespace fx = "urn:freex-test";
-        using var sourcePackage = CreatePackage(("xl/styles.xml", StyleSheet(
+        using var sourcePackage = XlsxPackageTestFixtures.CreatePackage(("xl/styles.xml", StyleSheet(
             $"""
             <dxf nativeDxfAttr="kept">
               <font><color rgb="FF112233"/></font>
               <dxfNativeChild xmlns="{fx}" id="dxf-child"/>
             </dxf>
             """)));
-        using var targetPackage = CreatePackage(("xl/styles.xml", StyleSheet(
+        using var targetPackage = XlsxPackageTestFixtures.CreatePackage(("xl/styles.xml", StyleSheet(
             // Same visible style (font color FF112233) but missing the native attribute and child.
             """
             <dxf>
@@ -89,8 +89,7 @@ public sealed class XlsxStylesheetMetadataPreserverTests
     {
         package.Position = 0;
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        using var stream = archive.GetEntry("xl/styles.xml")!.Open();
-        return XDocument.Load(stream);
+        return XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/styles.xml", "xl/styles.xml");
     }
 
     private static string StyleSheet(string dxfXml) =>
@@ -100,6 +99,4 @@ public sealed class XlsxStylesheetMetadataPreserverTests
         </styleSheet>
         """;
 
-    private static MemoryStream CreatePackage(params (string Path, string Xml)[] entries)
-        => XlsxPackageTestFixtures.CreatePackage(entries);
 }

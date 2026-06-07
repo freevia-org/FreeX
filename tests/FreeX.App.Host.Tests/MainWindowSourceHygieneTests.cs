@@ -8,7 +8,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void ViewportAndScrollbarController_LivesOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("MainWindow.xaml"))!;
+        var appHostDirectory = DialogSourceTestSupport.FindHostSourceDirectory("MainWindow.xaml");
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var viewportSourcePath = Path.Combine(appHostDirectory, "MainWindow.Viewport.cs");
 
@@ -40,7 +40,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void LiveUiE2eAppProcessLaunch_IsCentralizedInSharedHarness()
     {
-        var testsDirectory = new DirectoryInfo(WorkspaceFileLocator.Find("tests", "FreeX.App.Host.Tests", "FormulaEditingUiE2eTests.cs")).Parent!;
+        var testsDirectory = new DirectoryInfo(WorkspaceFileLocator.FindAppHostTestsDirectory());
         var testSources = testsDirectory
             .EnumerateFiles("*.cs", SearchOption.AllDirectories)
             .Where(file => !string.Equals(file.Name, "MainWindowSourceHygieneTests.cs", StringComparison.Ordinal))
@@ -89,7 +89,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void AppChrome_DoesNotUseLegacyGreenThemeConstants()
     {
-        var appHostDirectory = Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("MainWindow.xaml"))!;
+        var appHostDirectory = DialogSourceTestSupport.FindHostSourceDirectory("MainWindow.xaml");
         var legacyFragments = new[]
         {
             "#217346",
@@ -160,7 +160,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void StartupController_LivesOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("MainWindow.xaml"))!;
+        var appHostDirectory = DialogSourceTestSupport.FindHostSourceDirectory("MainWindow.xaml");
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var startupSourcePath = Path.Combine(appHostDirectory, "MainWindow.Startup.cs");
 

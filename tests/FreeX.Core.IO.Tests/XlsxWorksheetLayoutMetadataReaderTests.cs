@@ -19,22 +19,23 @@ public sealed class XlsxWorksheetLayoutMetadataReaderTests
     }
 
     [Fact]
-    public void ReadWorksheetSheetPropertiesMetadata_PreservesUnmodeledAttributesAndChildren()
+    public void ReadWorksheetSheetPropertiesMetadata_PreservesOnlySchemaNativeAttributes()
     {
         XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var sheetProperties = new XElement(ns + "sheetPr",
             new XAttribute("codeName", "Sheet1"),
-            new XAttribute("customAttr", "kept"),
+            new XAttribute("filterMode", "1"),
+            new XAttribute("customAttr", "dropped"),
             new XElement(ns + "outlinePr", new XAttribute("summaryBelow", "1")),
             new XElement(ns + "nativeChild", new XAttribute("value", "kept")));
 
         var metadata = XlsxWorksheetLayoutMetadataReader.ReadWorksheetSheetPropertiesMetadata(sheetProperties);
 
         metadata.Should().NotBeNull();
-        BagAttr(metadata, "sheetPr", "customAttr").Should().Be("kept");
+        BagAttr(metadata, "sheetPr", "filterMode").Should().Be("1");
+        BagAttr(metadata, "sheetPr", "customAttr").Should().BeNull();
         BagAttr(metadata, "sheetPr", "codeName").Should().BeNull("codeName is modeled separately");
-        BagChildren(metadata, "sheetPr").Should().ContainSingle(xml => xml.Contains("nativeChild", StringComparison.Ordinal));
-        BagChildren(metadata, "sheetPr").Should().NotContain(xml => xml.Contains("outlinePr", StringComparison.Ordinal));
+        BagChildren(metadata, "sheetPr").Should().BeEmpty();
     }
 
     [Fact]
@@ -59,10 +60,10 @@ public sealed class XlsxWorksheetLayoutMetadataReaderTests
     }
 
     [Fact]
-    public void ReadWorksheetProtectionMetadata_PreservesHashAttributesAndChildren()
+    public void ReadWorksheetProtectionMetadata_PreservesOnlySchemaNativeAttributes()
     {
         var protection = XElement.Parse("""
-            <sheetProtection sheet="1" password="ABCD" algorithmName="SHA-512">
+            <sheetProtection sheet="1" password="ABCD" algorithmName="SHA-512" customAttr="dropped">
               <extLst custom="kept" />
             </sheetProtection>
             """);
@@ -71,9 +72,10 @@ public sealed class XlsxWorksheetLayoutMetadataReaderTests
 
         metadata.Should().NotBeNull();
         BagAttr(metadata, "sheetProtection", "algorithmName").Should().Be("SHA-512");
+        BagAttr(metadata, "sheetProtection", "customAttr").Should().BeNull();
         BagAttr(metadata, "sheetProtection", "sheet").Should().BeNull("sheet is modeled separately");
         BagAttr(metadata, "sheetProtection", "password").Should().BeNull("password is modeled separately");
-        BagChildren(metadata, "sheetProtection").Should().ContainSingle(xml => xml.Contains("extLst", StringComparison.Ordinal));
+        BagChildren(metadata, "sheetProtection").Should().BeEmpty();
     }
 
     // ── NativeXmlPreserveBag test helpers ────────────────────────────────────

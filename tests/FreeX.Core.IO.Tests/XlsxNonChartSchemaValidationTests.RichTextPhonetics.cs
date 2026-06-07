@@ -81,7 +81,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
-        var sharedStringsXml = LoadPackageXml(archive.GetEntry("xl/sharedStrings.xml")!);
+        var sharedStringsXml = LoadPackageXml(archive, "xl/sharedStrings.xml");
         var sharedString = sharedStringsXml.Root!
             .Elements(worksheetNs + "si")
             .Single(element => element.Element(worksheetNs + "t")?.Value == "Rich phonetic");
@@ -115,7 +115,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var cell = worksheetXml.Root!
             .Element(worksheetNs + "sheetData")!
             .Descendants(worksheetNs + "c")

@@ -2,24 +2,12 @@ using System.Windows;
 using FluentAssertions;
 using FreeX.App.Host;
 using FreeX.Core.Model;
+using static FreeX.App.Host.Tests.WorkbookWindowRegistryTestSupport;
 
 namespace FreeX.App.Host.Tests;
 
 public sealed class WorkbookWindowRegistryArrangeAllTests
 {
-    private static (WorkbookWindowRegistry Registry, TestWorkbookWindow[] Windows) RegisterWindows(int count)
-    {
-        var registry = new WorkbookWindowRegistry();
-        var windows = new TestWorkbookWindow[count];
-        for (var i = 0; i < count; i++)
-        {
-            windows[i] = new TestWorkbookWindow();
-            registry.Register(windows[i]);
-        }
-
-        return (registry, windows);
-    }
-
     [Fact]
     public void ArrangeVisibleWindows_AppliesTheChosenLayoutToVisibleWindowsInRegistrationOrder()
     {

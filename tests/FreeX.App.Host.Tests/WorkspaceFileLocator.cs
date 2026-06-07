@@ -1,34 +1,28 @@
-using System.IO;
-
 namespace FreeX.App.Host.Tests;
 
 internal static class WorkspaceFileLocator
 {
-    public static string Find(params string[] relativeParts)
-    {
-        foreach (var root in CandidateRoots())
-        {
-            var directory = new DirectoryInfo(root);
-            while (directory is not null)
-            {
-                var candidate = Path.Combine(new[] { directory.FullName }.Concat(relativeParts).ToArray());
-                if (File.Exists(candidate))
-                    return candidate;
+    public static string Find(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.Find(relativeParts);
 
-                directory = directory.Parent;
-            }
-        }
+    public static string FindWorkspaceRoot() =>
+        TestWorkspaceFileLocator.FindContainingDirectory("FreeX.slnx");
 
-        throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
-    }
+    public static string FindDocsDirectory() =>
+        TestWorkspaceFileLocator.FindContainingDirectory("docs", "README.md");
 
-    private static IEnumerable<string> CandidateRoots()
-    {
-        var envRoot = Environment.GetEnvironmentVariable("FREEX_REPO_ROOT");
-        if (!string.IsNullOrWhiteSpace(envRoot))
-            yield return envRoot;
+    public static string FindToolScript(string fileName) =>
+        Find("tools", fileName);
 
-        yield return Environment.CurrentDirectory;
-        yield return AppContext.BaseDirectory;
-    }
+    public static string FindAppHostTestsDirectory() =>
+        TestWorkspaceFileLocator.FindContainingDirectory("tests", "FreeX.App.Host.Tests", "FormulaEditingUiE2eTests.cs");
+
+    public static string FindWithFailureMessage(string message, params string[] relativeParts) =>
+        TestWorkspaceFileLocator.FindWithFailureMessage(message, relativeParts);
+
+    public static string ReadAllText(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
+
+    public static string[] ReadAllLines(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.ReadAllLines(relativeParts);
 }

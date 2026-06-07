@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -111,41 +110,32 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
                 changed = true;
             }
 
-            changed |= SetAttributeIfDifferent(
+            changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(
                 breakElement,
                 "max",
                 defaultSpanMaxText);
-            changed |= SetAttributeIfDifferent(breakElement, "man", "1");
+            changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(
+                breakElement,
+                "man",
+                "1");
         }
 
         if (metadata is not null)
         {
-            foreach (var attribute in metadata.NativeAttributes)
-            {
-                if (string.IsNullOrWhiteSpace(attribute.Key) ||
-                    string.Equals(attribute.Key, "count", StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                changed |= TrySetNativeAttributeIfDifferent(pageBreaks, attribute.Key, attribute.Value);
-            }
+            changed |= XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfDifferent(
+                pageBreaks,
+                metadata.NativeAttributes,
+                ["count"]);
 
             foreach (var (breakId, attributes) in metadata.BreakNativeAttributes)
             {
                 if (!breaksById.TryGetValue(breakId.ToString(CultureInfo.InvariantCulture), out var breakElement))
                     continue;
 
-                foreach (var attribute in attributes)
-                {
-                    if (string.IsNullOrWhiteSpace(attribute.Key) ||
-                        string.Equals(attribute.Key, "id", StringComparison.Ordinal))
-                    {
-                        continue;
-                    }
-
-                    changed |= TrySetNativeAttributeIfDifferent(breakElement, attribute.Key, attribute.Value);
-                }
+                changed |= XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfDifferent(
+                    breakElement,
+                    attributes,
+                    ["id"]);
             }
         }
 
@@ -158,15 +148,19 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
                 manualBreakCount++;
         }
 
-        changed |= SetAttributeIfDifferent(pageBreaks, "count", breakCount.ToString(CultureInfo.InvariantCulture));
+        changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(
+            pageBreaks,
+            "count",
+            breakCount.ToString(CultureInfo.InvariantCulture));
         if (metadata?.NativeAttributes.ContainsKey("manualBreakCount") != true)
         {
-            changed |= SetAttributeIfDifferent(
+            changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(
                 pageBreaks,
                 "manualBreakCount",
                 manualBreakCount.ToString(CultureInfo.InvariantCulture));
         }
 
+        changed |= XlsxWorksheetPageBreakNormalizer.NormalizeElement(pageBreaks);
         return changed;
     }
 
@@ -227,30 +221,5 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
         }
 
         return breaksById;
-    }
-
-    private static bool SetAttributeIfDifferent(XElement element, XName name, string value)
-    {
-        if (string.Equals(element.Attribute(name)?.Value, value, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(name, value);
-        return true;
-    }
-
-    private static bool TrySetNativeAttributeIfDifferent(XElement element, string name, string value)
-    {
-        try
-        {
-            return SetAttributeIfDifferent(element, XName.Get(name), value);
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (XmlException)
-        {
-            return false;
-        }
     }
 }

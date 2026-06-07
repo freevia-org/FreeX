@@ -50,40 +50,18 @@ internal static class XlsxWorksheetProtectionMetadataWriter
                 InsertSheetProtection(root, worksheetNs, protection);
             }
 
-            var hasAdvancedHash = false;
             if (metadata is not null)
             {
-                var (protAttrs, protChildren) = XmlNativeBagSerializer.Deserialize(metadata.Get("sheetProtection"));
-                hasAdvancedHash = protAttrs.ContainsKey("hashValue");
-                foreach (var attribute in protAttrs)
-                {
-                    if (string.IsNullOrWhiteSpace(attribute.Key) ||
-                        string.Equals(attribute.Key, "sheet", StringComparison.Ordinal) ||
-                        string.Equals(attribute.Key, "password", StringComparison.Ordinal))
-                    {
-                        continue;
-                    }
-
-                    XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(protection, attribute.Key, attribute.Value);
-                }
-
-                protection.Elements().Remove();
-                foreach (var childXml in protChildren)
-                {
-                    if (string.IsNullOrWhiteSpace(childXml))
-                        continue;
-
-                    try
-                    {
-                        protection.Add(XElement.Parse(childXml));
-                    }
-                    catch
-                    {
-                        // Skip malformed native payloads in authored native JSON files.
-                    }
-                }
+                var (protAttrs, _) = XmlNativeBagSerializer.Deserialize(metadata.Get("sheetProtection"));
+                XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(protection, protAttrs, ["sheet", "password"]);
             }
 
+            if (sheet.IsProtected)
+                protection.SetAttributeValue("sheet", "1");
+
+            XlsxWorksheetProtectionNormalizer.NormalizeElement(protection);
+
+            var hasAdvancedHash = protection.Attribute("hashValue") is not null;
             if (hasAdvancedHash)
                 protection.Attribute("password")?.Remove();
             else if (hasProtectionPassword)
@@ -91,9 +69,7 @@ internal static class XlsxWorksheetProtectionMetadataWriter
                     "password",
                     XlsxWorkbookMetadataXmlHelper.ToLegacyPasswordHash(sheet.ProtectionPassword!));
 
-            if (sheet.IsProtected)
-                protection.SetAttributeValue("sheet", "1");
-
+            XlsxWorksheetProtectionNormalizer.NormalizeElement(protection);
             session.MarkDirty(worksheetEdit);
         }
     }

@@ -142,35 +142,7 @@ internal static class XlsxWorkbookMetadataReader
                 return null;
 
             var workbookXml = LoadXml(workbookEntry);
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            var protection = workbookXml.Root?.Element(workbookNs + "workbookProtection");
-            if (protection is null)
-                return null;
-
-            var attrs = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var attribute in protection.Attributes())
-            {
-                if (attribute.IsNamespaceDeclaration ||
-                    string.Equals(attribute.Name.LocalName, "lockStructure", StringComparison.Ordinal) ||
-                    string.Equals(attribute.Name.LocalName, "workbookPassword", StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                attrs[attribute.Name.ToString()] = attribute.Value;
-            }
-
-            var children = protection.Elements()
-                .Select(element => element.ToString(SaveOptions.DisableFormatting))
-                .ToList();
-
-            var serialized = XmlNativeBagSerializer.Serialize(attrs, children);
-            if (serialized is null)
-                return null;
-
-            var bag = new NativeXmlPreserveBag();
-            bag.Set("workbookProtection", serialized);
-            return bag;
+            return LoadProtectionMetadata(workbookXml);
         }
         catch
         {
@@ -209,34 +181,7 @@ internal static class XlsxWorkbookMetadataReader
                 return null;
 
             var workbookXml = LoadXml(workbookEntry);
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            var workbookProperties = workbookXml.Root?.Element(workbookNs + "workbookPr");
-            if (workbookProperties is null)
-                return null;
-
-            var attrs = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var attribute in workbookProperties.Attributes())
-            {
-                if (attribute.IsNamespaceDeclaration ||
-                    string.Equals(attribute.Name.LocalName, "date1904", StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                attrs[attribute.Name.ToString()] = attribute.Value;
-            }
-
-            var children = workbookProperties.Elements()
-                .Select(element => element.ToString(SaveOptions.DisableFormatting))
-                .ToList();
-
-            var serialized = XmlNativeBagSerializer.Serialize(attrs, children);
-            if (serialized is null)
-                return null;
-
-            var bag = new NativeXmlPreserveBag();
-            bag.Set("workbookPr", serialized);
-            return bag;
+            return LoadWorkbookProperties(workbookXml);
         }
         catch
         {
@@ -481,36 +426,12 @@ internal static class XlsxWorkbookMetadataReader
     }
 
     private static NativeXmlPreserveBag? LoadProtectionMetadata(XDocument workbookXml)
-    {
-        var protection = workbookXml.Root?.Element(WorkbookNs + "workbookProtection");
-        if (protection is null)
-            return null;
-
-        var attrs = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var attribute in protection.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                string.Equals(attribute.Name.LocalName, "lockStructure", StringComparison.Ordinal) ||
-                string.Equals(attribute.Name.LocalName, "workbookPassword", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            attrs[attribute.Name.ToString()] = attribute.Value;
-        }
-
-        var children = protection.Elements()
-            .Select(element => element.ToString(SaveOptions.DisableFormatting))
-            .ToList();
-
-        var serialized = XmlNativeBagSerializer.Serialize(attrs, children);
-        if (serialized is null)
-            return null;
-
-        var bag = new NativeXmlPreserveBag();
-        bag.Set("workbookProtection", serialized);
-        return bag;
-    }
+        => ReadNativeBag(
+            workbookXml.Root?.Element(WorkbookNs + "workbookProtection"),
+            "workbookProtection",
+            attribute =>
+                !string.Equals(attribute.Name.LocalName, "lockStructure", StringComparison.Ordinal) &&
+                !string.Equals(attribute.Name.LocalName, "workbookPassword", StringComparison.Ordinal));
 
     private static bool LoadUses1904DateSystem(XDocument workbookXml) =>
         XlsxXmlAttributeReader.ReadBoolAttribute(
@@ -518,25 +439,30 @@ internal static class XlsxWorkbookMetadataReader
             "date1904");
 
     private static NativeXmlPreserveBag? LoadWorkbookProperties(XDocument workbookXml)
+        => ReadNativeBag(
+            workbookXml.Root?.Element(WorkbookNs + "workbookPr"),
+            "workbookPr",
+            attribute => !string.Equals(attribute.Name.LocalName, "date1904", StringComparison.Ordinal));
+
+    private static NativeXmlPreserveBag? ReadNativeBag(
+        XElement? element,
+        string bagName,
+        Func<XAttribute, bool> shouldPreserveAttribute)
     {
-        var workbookProperties = workbookXml.Root?.Element(WorkbookNs + "workbookPr");
-        if (workbookProperties is null)
+        if (element is null)
             return null;
 
         var attrs = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var attribute in workbookProperties.Attributes())
+        foreach (var attribute in element.Attributes())
         {
-            if (attribute.IsNamespaceDeclaration ||
-                string.Equals(attribute.Name.LocalName, "date1904", StringComparison.Ordinal))
-            {
+            if (attribute.IsNamespaceDeclaration || !shouldPreserveAttribute(attribute))
                 continue;
-            }
 
             attrs[attribute.Name.ToString()] = attribute.Value;
         }
 
-        var children = workbookProperties.Elements()
-            .Select(element => element.ToString(SaveOptions.DisableFormatting))
+        var children = element.Elements()
+            .Select(child => child.ToString(SaveOptions.DisableFormatting))
             .ToList();
 
         var serialized = XmlNativeBagSerializer.Serialize(attrs, children);
@@ -544,7 +470,7 @@ internal static class XlsxWorkbookMetadataReader
             return null;
 
         var bag = new NativeXmlPreserveBag();
-        bag.Set("workbookPr", serialized);
+        bag.Set(bagName, serialized);
         return bag;
     }
 

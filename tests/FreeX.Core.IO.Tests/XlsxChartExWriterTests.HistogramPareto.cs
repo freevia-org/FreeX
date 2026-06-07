@@ -29,7 +29,7 @@ public sealed partial class XlsxChartExWriterTests
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
-        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        var chartXml = LoadChartXml(archive);
         var data = chartXml.Descendants(ChartExNs + "data").Should().ContainSingle().Subject;
         data.Elements(ChartExNs + "strDim").Should().BeEmpty();
         data.Elements(ChartExNs + "numDim").Should().ContainSingle()
@@ -46,7 +46,7 @@ public sealed partial class XlsxChartExWriterTests
                 HistogramBinningMode.BinWidth, BinWidth: 5, OverflowThreshold: 25));
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
-        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        var chartXml = LoadChartXml(archive);
         var binning = chartXml.Descendants(ChartExNs + "binning").Should().ContainSingle().Subject;
         binning.Attribute("intervalClosed")!.Value.Should().Be("r");
         chartXml.Descendants(ChartExNs + "binCount").Should().BeEmpty();
@@ -59,7 +59,7 @@ public sealed partial class XlsxChartExWriterTests
         var saved = SaveWorkbookWithChart(ChartType.Pareto);
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
-        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        var chartXml = LoadChartXml(archive);
         var plotArea = chartXml.Root!
             .Element(ChartExNs + "chart")!
             .Element(ChartExNs + "plotArea")!;

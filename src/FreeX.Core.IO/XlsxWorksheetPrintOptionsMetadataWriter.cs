@@ -36,39 +36,17 @@ internal static class XlsxWorksheetPrintOptionsMetadataWriter
             }
 
             var (poAttrs, poChildren) = XmlNativeBagSerializer.Deserialize(metadata.Get("printOptions"));
-            foreach (var attribute in poAttrs)
-            {
-                if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledPrintOptionsAttribute(attribute.Key))
-                    continue;
+            XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(
+                printOptions,
+                poAttrs,
+                ["gridLines", "headings", "horizontalCentered", "verticalCentered"]);
 
-                XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(printOptions, attribute.Key, attribute.Value);
-            }
+            XlsxWorksheetNativeMetadataHelpers.ReplaceChildrenFromNativeXml(printOptions, poChildren);
 
-            if (poChildren.Count > 0)
-            {
-                printOptions.Elements().Remove();
-                foreach (var childXml in poChildren)
-                {
-                    if (string.IsNullOrWhiteSpace(childXml))
-                        continue;
-
-                    try
-                    {
-                        printOptions.Add(XElement.Parse(childXml));
-                    }
-                    catch
-                    {
-                        // Skip malformed native payloads in authored native JSON files.
-                    }
-                }
-            }
-
+            XlsxWorksheetPageLayoutNormalizer.NormalizePrintOptions(printOptions);
             session.MarkDirty(worksheetEdit);
         }
     }
-
-    private static bool IsModeledPrintOptionsAttribute(string name) =>
-        name is "gridLines" or "headings" or "horizontalCentered" or "verticalCentered";
 
     private static void InsertPrintOptions(XElement root, XNamespace worksheetNs, XElement printOptions)
     {

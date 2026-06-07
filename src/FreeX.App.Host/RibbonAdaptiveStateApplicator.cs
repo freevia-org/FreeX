@@ -7,6 +7,7 @@ namespace FreeX.App.Host;
 internal static class RibbonAdaptiveStateApplicator
 {
     private const double IconOnlySplitButtonDropdownColumnWidth = 14;
+    private const double IconOnlySplitButtonCompactWidth = 38;
     private const double SmallSplitButtonDropdownColumnWidth = 20;
     private const double LargeSplitButtonDropdownChevronTopMargin = 7;
 
@@ -99,15 +100,31 @@ internal static class RibbonAdaptiveStateApplicator
             var buttonSnapshot = snapshot.Buttons[buttonIndex];
             if (buttonSnapshot.HasCompactWidths)
             {
+                var targetWidth = level switch
+                {
+                    MainWindow.RibbonCompactLevel.Full => buttonSnapshot.FullWidth,
+                    MainWindow.RibbonCompactLevel.SmallWithLabels => buttonSnapshot.IsLargeButton ? double.NaN : buttonSnapshot.FullWidth,
+                    _ => buttonSnapshot.CompactWidth
+                };
+                if (level == MainWindow.RibbonCompactLevel.IconOnly &&
+                    buttonSnapshot.HasDropdownChevron)
+                {
+                    targetWidth = Math.Max(targetWidth, IconOnlySplitButtonCompactWidth);
+                }
+
                 SetIfChanged(
                     buttonSnapshot.Button,
                     FrameworkElement.WidthProperty,
-                    level switch
-                    {
-                        MainWindow.RibbonCompactLevel.Full => buttonSnapshot.FullWidth,
-                        MainWindow.RibbonCompactLevel.SmallWithLabels => buttonSnapshot.IsLargeButton ? double.NaN : buttonSnapshot.FullWidth,
-                        _ => buttonSnapshot.CompactWidth
-                    });
+                    targetWidth);
+            }
+            else if (level == MainWindow.RibbonCompactLevel.IconOnly &&
+                     buttonSnapshot.HasDropdownChevron &&
+                     buttonSnapshot.Button is FrameworkElement { Width: var currentWidth })
+            {
+                SetIfChanged(
+                    buttonSnapshot.Button,
+                    FrameworkElement.WidthProperty,
+                    Math.Max(currentWidth is > 0 ? currentWidth : 0, IconOnlySplitButtonCompactWidth));
             }
 
             ApplyButton(buttonSnapshot, level);
@@ -207,6 +224,7 @@ internal static class RibbonAdaptiveStateApplicator
                 hasContentLayout: true,
                 RibbonCommandContentLayout.Small,
                 isLargeButton: false,
+                hasDropdownChevron: GetSmallButtonDropdownColumn(contentGrid) is not null,
                 hasCompactWidths: false,
                 fullWidth: 0,
                 compactWidth: 0,
@@ -254,6 +272,7 @@ internal static class RibbonAdaptiveStateApplicator
                 hasContentLayout: true,
                 RibbonCommandContentLayout.Large,
                 isLargeButton: true,
+                hasDropdownChevron: HasDropdownChevron(contentStack),
                 hasCompactWidths: false,
                 fullWidth: 0,
                 compactWidth: 0,

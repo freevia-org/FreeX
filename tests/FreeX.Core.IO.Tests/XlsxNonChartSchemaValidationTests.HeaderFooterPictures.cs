@@ -64,6 +64,28 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         ReadHeaderFooterImageBytes(saved, sourceVmlPath).Should().Equal(sourceImageBytes);
     }
 
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidHeaderFooterLegacyDrawingMarkerForSchemaValidity()
+    {
+        using var source = CreateExcelAuthoredHeaderFooterPictureSourcePackage();
+        SetHeaderFooterLegacyDrawingMarkerInvalidMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertHeaderFooterLegacyDrawingMarkerSanitized(saved);
+        AssertHeaderFooterPicturePackage(saved);
+    }
+
     private static Workbook CreateHeaderFooterPictureSourceWorkbook()
     {
         var workbook = new Workbook("HeaderFooterPicturePatchSave");
@@ -140,7 +162,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             new XAttribute("Target", "../drawings/vmlDrawing1.vml")));
         ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
 
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         InsertLegacyDrawingHeaderFooterInOrder(worksheetXml.Root!, worksheetNs, new XElement(
             worksheetNs + "legacyDrawingHF",
             new XAttribute(relNs + "id", "rIdHeaderFooterDrawing1")));
@@ -154,6 +176,26 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             archive,
             "/xl/media/headerFooterImage1.png",
             "image/png");
+    }
+
+    private static void SetHeaderFooterLegacyDrawingMarkerInvalidMetadata(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        var root = worksheetXml.Root!;
+        var legacyDrawing = root.Element(worksheetNs + "legacyDrawingHF")!;
+        legacyDrawing.SetAttributeValue("customLegacyDrawingFlag", "removed");
+        legacyDrawing.Add(new XElement(worksheetNs + "nativeLegacyDrawingChild"));
+        root.Add(new XElement(
+            worksheetNs + "legacyDrawingHF",
+            new XAttribute(relNs + "id", "rIdHeaderFooterDrawing1"),
+            new XAttribute("customDuplicateMarkerFlag", "removed")));
+
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
     }
 
     private static void InsertLegacyDrawingHeaderFooterInOrder(
@@ -206,6 +248,22 @@ public sealed partial class XlsxNonChartSchemaValidationTests
                 element.Attribute("Id")?.Value == relationshipId &&
                 element.Attribute("Type")?.Value == vmlRelationshipType);
         return XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, relationship.Attribute("Target")!.Value);
+    }
+
+    private static void AssertHeaderFooterLegacyDrawingMarkerSanitized(Stream stream)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+        var worksheet = ReadPackageRootElement(stream, "xl/worksheets/sheet1.xml");
+        var legacyDrawing = worksheet.Elements(worksheetNs + "legacyDrawingHF")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        legacyDrawing.Attribute(relNs + "id")!.Value.Should().Be("rIdHeaderFooterDrawing1");
+        legacyDrawing.Attribute("customLegacyDrawingFlag").Should().BeNull();
+        legacyDrawing.Attribute("customDuplicateMarkerFlag").Should().BeNull();
+        legacyDrawing.Elements().Should().BeEmpty();
     }
 
     private static byte[] ReadHeaderFooterImageBytes(Stream stream, string vmlPath)

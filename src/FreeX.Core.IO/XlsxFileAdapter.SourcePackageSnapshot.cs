@@ -389,12 +389,29 @@ public sealed partial class XlsxFileAdapter
         private const string ChartExRelationshipType = "http://schemas.microsoft.com/office/2014/relationships/chartEx";
         private const string ChartExStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartStyle";
         private const string ChartExColorStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartColorStyle";
+        private const string DiagramDataRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData";
+        private const string DiagramLayoutRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout";
+        private const string DiagramQuickStyleRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle";
+        private const string DiagramColorsRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors";
+        private const string DiagramDataContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml";
+        private const string DiagramLayoutContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml";
+        private const string DiagramStyleContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml";
+        private const string DiagramColorsContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml";
         private const string ImageRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
         private const string PivotTableRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable";
         private const string PivotCacheDefinitionRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition";
         private const string PivotCacheRecordsRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords";
         private const string CommentsRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
         private const string VmlDrawingRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
+        private const string SingleCellTableRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableSingleCells";
+        private const string RdRichValueRelationshipType = "http://schemas.microsoft.com/office/2017/06/relationships/rdRichValue";
+        private const string RdRichValueStructureRelationshipType = "http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueStructure";
+        private const string RdArrayRelationshipType = "http://schemas.microsoft.com/office/2017/06/relationships/rdArray";
+        private const string RdSupportingPropertyBagRelationshipType = "http://schemas.microsoft.com/office/2017/06/relationships/rdSupportingPropertyBag";
+        private const string RdSupportingPropertyBagStructureRelationshipType = "http://schemas.microsoft.com/office/2017/06/relationships/rdSupportingPropertyBagStructure";
+        private const string RdRichValueTypesRelationshipType = "http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueTypes";
+        private const string RichStylesRelationshipType = "http://schemas.microsoft.com/office/2017/06/relationships/richStyles";
+        private const string RichValueRelRelationshipType = "http://schemas.microsoft.com/office/2022/10/relationships/richValueRel";
 
         public static XlsxSourcePackage Capture(Stream stream, Workbook workbook)
             => Capture(stream, workbook, allowBufferReuse: false);
@@ -836,7 +853,63 @@ public sealed partial class XlsxFileAdapter
             using (var archive = new ZipArchive(patchedPackage, ZipArchiveMode.Update, leaveOpen: true))
             {
                 NormalizePatchCustomViews(archive, workbook, SourceHasCustomViews);
+                NormalizePatchWorkbookViews(archive);
+                NormalizePatchWorkbookCalculationProperties(archive);
+                NormalizePatchWorkbookExternalReferences(archive);
+                NormalizePatchWorkbookDefinedNames(archive);
+                NormalizePatchWorkbookOleSize(archive);
+                NormalizePatchWorkbookPivotCaches(archive);
+                NormalizePatchPivotTableDefinitions(archive);
+                NormalizePatchWorkbookWebPublishing(archive);
+                NormalizePatchWorkbookWebPublishObjects(archive);
+                NormalizePatchWorkbookExtensionList(archive);
+                NormalizePatchWorkbookProperties(archive);
+                NormalizePatchWorkbookFileVersion(archive);
+                NormalizePatchWorkbookFileSharing(archive);
+                NormalizePatchWorkbookFileRecoveryProperties(archive);
+                NormalizePatchWorkbookFunctionGroups(archive);
+                NormalizePatchWorkbookSmartTags(archive);
+                NormalizePatchWorkbookProtection(archive);
                 NormalizePatchSharedStrings(archive);
+                NormalizePatchInlineStringFonts(archive);
+                NormalizePatchThemeTypefaces(archive);
+                NormalizePatchLegacyCommentFonts(archive);
+                NormalizePatchStylesheetDifferentialStyles(archive);
+                NormalizePatchStylesheetTableStyles(archive);
+                NormalizePatchStylesheetExtensionLists(archive);
+                NormalizePatchWorksheetGridXml(archive);
+                NormalizePatchWorksheetMergeCells(archive);
+                NormalizePatchWorksheetDimension(archive);
+                NormalizePatchWorksheetCalculationProperties(archive);
+                NormalizePatchWorksheetSheetFormat(archive);
+                NormalizePatchWorksheetSheetProperties(archive);
+                NormalizePatchWorksheetSheetViews(archive);
+                NormalizePatchWorksheetProtection(archive);
+                NormalizePatchWorksheetProtectedRanges(archive);
+                NormalizePatchWorksheetScenarios(archive);
+                NormalizePatchWorksheetSmartTags(archive);
+                NormalizePatchWorksheetPhoneticProperties(archive);
+                NormalizePatchWorksheetCellWatches(archive);
+                NormalizePatchWorksheetCustomProperties(archive);
+                NormalizePatchWorksheetIgnoredErrors(archive);
+                NormalizePatchWorksheetHyperlinks(archive);
+                NormalizePatchWorksheetConditionalFormats(archive);
+                NormalizePatchWorksheetDataValidations(archive);
+                NormalizePatchWorksheetExtensionLists(archive);
+                NormalizePatchWorksheetWebPublishItems(archive);
+                NormalizePatchWorksheetOleControls(archive);
+                NormalizePatchWorksheetRelationshipMarkers(archive);
+                NormalizePatchWorksheetPageLayout(archive);
+                NormalizePatchWorksheetPageBreaks(archive);
+                NormalizePatchWorksheetSingleXmlCells(archive);
+                NormalizePatchSingleCellTableParts(archive);
+                NormalizePatchWorksheetAutoFilters(archive);
+                NormalizePatchStructuredTableAutoFilters(archive);
+                NormalizePatchStructuredTableSortStates(archive);
+                NormalizePatchStructuredTableMetadata(archive);
+                NormalizePatchExternalLinks(archive);
+                NormalizePatchWorksheetSortStates(archive);
+                NormalizePatchWorksheetDataConsolidation(archive);
                 if (SourceOfficeRevisionAttributes is { HasAny: true } officeRevisionAttributes)
                     NormalizePatchOfficeRevisionAttributes(archive, officeRevisionAttributes);
 
@@ -927,6 +1000,18 @@ public sealed partial class XlsxFileAdapter
                     XlsxPackageXmlEditor.ReplaceXml(archive, commentPartPath, commentsXml);
                 }
 
+                NormalizePatchWorksheetSheetProperties(archive);
+                NormalizePatchWorksheetSingleXmlCells(archive);
+                NormalizePatchWorksheetProtection(archive);
+                NormalizePatchWorksheetProtectedRanges(archive);
+                NormalizePatchWorksheetScenarios(archive);
+                NormalizePatchWorksheetSmartTags(archive);
+                NormalizePatchWorksheetWebPublishItems(archive);
+                NormalizePatchWorksheetOleControls(archive);
+                NormalizePatchWorksheetRelationshipMarkers(archive);
+                NormalizePatchSingleCellTableParts(archive);
+                XlsxPackageMetadataMerger.NormalizeCustomXmlPackageGraph(archive);
+
                 if (invalidatesCalcChain)
                 {
                     XlsxExcelCompatibilityNormalizer.RemoveCalcChain(archive);
@@ -1010,13 +1095,64 @@ public sealed partial class XlsxFileAdapter
 
         private static void NormalizePatchCustomViews(ZipArchive archive, Workbook workbook, bool sourceHasCustomViews)
         {
-            if (!sourceHasCustomViews || workbook.CustomViews.Count > 0)
+            if (!sourceHasCustomViews)
                 return;
 
-            var changed = RemovePatchWorkbookCustomViews(archive);
-            changed |= RemovePatchWorksheetCustomViews(archive);
+            var changed = workbook.CustomViews.Count > 0
+                ? NormalizePatchCustomWorkbookViews(archive) | NormalizePatchWorksheetCustomSheetViewExtensionLists(archive)
+                : RemovePatchWorkbookCustomViews(archive) | RemovePatchWorksheetCustomViews(archive);
             if (changed)
                 XlsxExcelCompatibilityNormalizer.RemoveCalcChain(archive);
+        }
+
+        private static bool NormalizePatchCustomWorkbookViews(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return false;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var root = workbookXml.Root;
+            if (root is null)
+                return false;
+
+            var changed = false;
+            foreach (var customWorkbookViews in root.Elements(workbookNs + "customWorkbookViews").ToList())
+            {
+                changed |= XlsxWorkbookCustomViewNormalizer.NormalizeCustomWorkbookViewsElement(customWorkbookViews);
+                if (!XlsxWorkbookCustomViewNormalizer.ShouldRemoveCustomWorkbookViewsElement(customWorkbookViews))
+                    continue;
+
+                customWorkbookViews.Remove();
+                changed = true;
+            }
+
+            if (!changed)
+                return false;
+
+            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+            return true;
+        }
+
+        private static bool NormalizePatchWorksheetCustomSheetViewExtensionLists(ZipArchive archive)
+        {
+            var changed = false;
+            foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
+            {
+                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+                var root = worksheetXml.Root;
+                if (root is null ||
+                    !XlsxWorksheetCustomSheetViewExtensionListNormalizer.NormalizeWorksheetRoot(root))
+                {
+                    continue;
+                }
+
+                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+                changed = true;
+            }
+
+            return changed;
         }
 
         private static bool RemovePatchWorkbookCustomViews(ZipArchive archive)
@@ -1067,24 +1203,600 @@ public sealed partial class XlsxFileAdapter
             return changed;
         }
 
-        private static void NormalizePatchSharedStrings(ZipArchive archive)
+        private static void NormalizePatchWorkbookViews(ZipArchive archive)
         {
-            var sharedStringsEntry = archive.GetEntry("xl/sharedStrings.xml");
-            if (sharedStringsEntry is null)
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
                 return;
 
-            var sharedStringsXml = XlsxPackageXmlEditor.LoadXml(sharedStringsEntry);
-            var root = sharedStringsXml.Root;
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var bookViews = workbookXml.Root?.Element(workbookNs + "bookViews");
+            if (bookViews is not null &&
+                XlsxWorkbookViewNormalizer.NormalizeBookViewsElement(bookViews))
+            {
+                XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
+            }
+        }
+
+        private static void NormalizePatchWorkbookCalculationProperties(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var calcPr = workbookXml.Root?.Element(workbookNs + "calcPr");
+            if (calcPr is not null &&
+                XlsxWorkbookCalculationPropertyNormalizer.NormalizeElement(calcPr))
+            {
+                XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
+            }
+        }
+
+        private static void NormalizePatchWorkbookExternalReferences(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var root = workbookXml.Root;
+            if (root is null)
+                return;
+
+            if (XlsxWorkbookExternalReferencesNormalizer.NormalizeWorkbookRoot(root, workbookNs))
+                XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
+        }
+
+        private static void NormalizePatchWorkbookDefinedNames(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var root = workbookXml.Root;
             if (root is null)
                 return;
 
             var changed = false;
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            foreach (var richTextFont in root.Descendants(workbookNs + "rFont"))
-                changed |= XlsxFontNameSanitizer.SanitizeValAttribute(richTextFont);
+            foreach (var definedNames in root.Elements(workbookNs + "definedNames").ToList())
+            {
+                changed |= XlsxWorkbookDefinedNameNormalizer.NormalizeDefinedNamesElement(definedNames);
+                if (!XlsxWorkbookDefinedNameNormalizer.ShouldRemoveDefinedNamesElement(definedNames))
+                    continue;
+
+                definedNames.Remove();
+                changed = true;
+            }
 
             if (changed)
-                XlsxPackageXmlEditor.ReplaceXml(archive, "xl/sharedStrings.xml", sharedStringsXml);
+                XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
+        }
+
+        private static void NormalizePatchWorkbookOleSize(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var root = workbookXml.Root;
+            if (root is null)
+                return;
+
+            if (XlsxWorkbookOleSizeNormalizer.NormalizeWorkbookRoot(root, workbookNs))
+                XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
+        }
+
+        private static void NormalizePatchWorkbookPivotCaches(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var root = workbookXml.Root;
+            if (root is null)
+                return;
+
+            if (XlsxWorkbookPivotCachesNormalizer.NormalizeWorkbookRoot(root, workbookNs))
+                XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
+        }
+
+        private static void NormalizePatchPivotTableDefinitions(ZipArchive archive) =>
+            XlsxExcelCompatibilityNormalizer.NormalizeLegacyPivotTableDefinitionAttributes(archive);
+
+        private static void NormalizePatchWorkbookWebPublishing(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var root = workbookXml.Root;
+            if (root is null)
+                return;
+
+            if (XlsxWorkbookWebPublishingNormalizer.NormalizeWorkbookRoot(root, workbookNs))
+                XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
+        }
+
+        private static void NormalizePatchWorkbookWebPublishObjects(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var root = workbookXml.Root;
+            if (root is null)
+                return;
+
+            if (XlsxWorkbookWebPublishObjectsNormalizer.NormalizeWorkbookRoot(root, workbookNs))
+                XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
+        }
+
+        private static void NormalizePatchWorkbookExtensionList(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var root = workbookXml.Root;
+            if (root is null)
+                return;
+
+            if (XlsxWorkbookExtensionListNormalizer.NormalizeWorkbookRoot(root, workbookNs))
+                XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
+        }
+
+        private static void NormalizePatchWorkbookProperties(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var workbookPr = workbookXml.Root?.Element(workbookNs + "workbookPr");
+            if (workbookPr is not null &&
+                XlsxWorkbookPropertiesNormalizer.NormalizeElement(workbookPr))
+            {
+                XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
+            }
+        }
+
+        private static void NormalizePatchWorkbookFileSharing(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var fileSharing = workbookXml.Root?.Element(workbookNs + "fileSharing");
+            if (fileSharing is not null &&
+                XlsxWorkbookFileSharingNormalizer.NormalizeElement(fileSharing))
+            {
+                XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
+            }
+        }
+
+        private static void NormalizePatchWorkbookFileVersion(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var fileVersion = workbookXml.Root?.Element(workbookNs + "fileVersion");
+            if (fileVersion is not null &&
+                XlsxWorkbookFileVersionNormalizer.NormalizeElement(fileVersion))
+            {
+                XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
+            }
+        }
+
+        private static void NormalizePatchWorkbookFileRecoveryProperties(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var changed = false;
+            foreach (var fileRecoveryPr in workbookXml.Root?.Elements(workbookNs + "fileRecoveryPr") ?? [])
+                changed |= XlsxWorkbookFileRecoveryPropertyNormalizer.NormalizeElement(fileRecoveryPr);
+
+            if (changed)
+                XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
+        }
+
+        private static void NormalizePatchWorkbookFunctionGroups(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var functionGroups = workbookXml.Root?.Element(workbookNs + "functionGroups");
+            if (functionGroups is not null &&
+                XlsxWorkbookFunctionGroupsNormalizer.NormalizeElement(functionGroups))
+            {
+                XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
+            }
+        }
+
+        private static void NormalizePatchWorkbookSmartTags(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var changed = false;
+            if (workbookXml.Root?.Element(workbookNs + "smartTagPr") is { } smartTagPr)
+                changed |= XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagPropertiesElement(smartTagPr);
+
+            if (workbookXml.Root?.Element(workbookNs + "smartTagTypes") is { } smartTagTypes)
+            {
+                changed |= XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagTypesElement(smartTagTypes);
+                if (XlsxWorkbookSmartTagNormalizer.ShouldRemoveSmartTagTypesElement(smartTagTypes))
+                {
+                    smartTagTypes.Remove();
+                    changed = true;
+                }
+            }
+
+            if (changed)
+                XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
+        }
+
+        private static void NormalizePatchWorkbookProtection(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var workbookProtection = workbookXml.Root?.Element(workbookNs + "workbookProtection");
+            if (workbookProtection is not null &&
+                XlsxWorkbookProtectionNormalizer.NormalizeElement(workbookProtection))
+            {
+                XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
+            }
+        }
+
+        private static void NormalizePatchSharedStrings(ZipArchive archive)
+        {
+            XlsxRichTextFontNormalizer.NormalizeSharedStrings(archive);
+            XlsxSharedStringPackageGraphNormalizer.NormalizePackage(archive);
+        }
+
+        private static void NormalizePatchInlineStringFonts(ZipArchive archive)
+        {
+            XlsxRichTextFontNormalizer.NormalizeWorksheetInlineStrings(archive);
+        }
+
+        private static void NormalizePatchThemeTypefaces(ZipArchive archive)
+        {
+            XlsxThemeTypefaceNormalizer.NormalizePackage(archive);
+        }
+
+        private static void NormalizePatchLegacyCommentFonts(ZipArchive archive)
+        {
+            XlsxLegacyCommentFontNormalizer.NormalizePackage(archive);
+        }
+
+        private static void NormalizePatchStylesheetDifferentialStyles(ZipArchive archive)
+        {
+            var stylesEntry = archive.GetEntry("xl/styles.xml");
+            if (stylesEntry is null)
+                return;
+
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var stylesXml = XlsxPackageXmlEditor.LoadXml(stylesEntry);
+            var differentialStyles = stylesXml.Root?.Element(workbookNs + "dxfs");
+            if (differentialStyles is null ||
+                !XlsxStylesheetSchemaNormalizer.NormalizeDifferentialStyles(differentialStyles, workbookNs))
+            {
+                return;
+            }
+
+            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/styles.xml", stylesXml);
+        }
+
+        private static void NormalizePatchStylesheetTableStyles(ZipArchive archive)
+        {
+            var stylesEntry = archive.GetEntry("xl/styles.xml");
+            if (stylesEntry is null)
+                return;
+
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var stylesXml = XlsxPackageXmlEditor.LoadXml(stylesEntry);
+            var tableStyles = stylesXml.Root?.Element(workbookNs + "tableStyles");
+            if (tableStyles is null ||
+                !XlsxStylesheetSchemaNormalizer.NormalizeTableStyles(tableStyles, workbookNs))
+            {
+                return;
+            }
+
+            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/styles.xml", stylesXml);
+        }
+
+        private static void NormalizePatchStylesheetExtensionLists(ZipArchive archive)
+        {
+            var stylesEntry = archive.GetEntry("xl/styles.xml");
+            if (stylesEntry is null)
+                return;
+
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var stylesXml = XlsxPackageXmlEditor.LoadXml(stylesEntry);
+            var root = stylesXml.Root;
+            if (root is null ||
+                !XlsxStylesheetSchemaNormalizer.NormalizeStylesheetExtensionLists(root, workbookNs))
+            {
+                return;
+            }
+
+            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/styles.xml", stylesXml);
+        }
+
+        private static void NormalizePatchWorksheetPhoneticProperties(ZipArchive archive)
+            => XlsxWorksheetPhoneticPropertyNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetCellWatches(ZipArchive archive)
+            => XlsxWorksheetCellWatchesNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetCustomProperties(ZipArchive archive)
+            => XlsxWorksheetCustomPropertiesNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetIgnoredErrors(ZipArchive archive)
+            => XlsxWorksheetIgnoredErrorsNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetHyperlinks(ZipArchive archive)
+            => XlsxWorksheetHyperlinkNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetConditionalFormats(ZipArchive archive)
+            => XlsxWorksheetConditionalFormatNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetDataValidations(ZipArchive archive)
+            => XlsxWorksheetDataValidationNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetExtensionLists(ZipArchive archive)
+            => XlsxWorksheetExtensionListNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetWebPublishItems(ZipArchive archive)
+            => XlsxWorksheetWebPublishItemsNormalizer.NormalizePackage(archive);
+
+        private static void NormalizePatchWorksheetOleControls(ZipArchive archive)
+            => XlsxWorksheetOleControlNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetRelationshipMarkers(ZipArchive archive)
+            => XlsxWorksheetRelationshipMarkerNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetSingleXmlCells(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
+            {
+                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+                var root = worksheetXml.Root;
+                if (root is null)
+                    continue;
+
+                var singleXmlCells = root.Elements(workbookNs + "singleXmlCells").ToList();
+                if (singleXmlCells.Count == 0 ||
+                    !HasPartBackedSingleXmlCells(archive, worksheetEntry.FullName))
+                {
+                    continue;
+                }
+
+                foreach (var element in singleXmlCells)
+                    element.Remove();
+                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+            }
+
+            XlsxWorksheetSingleXmlCellMapper.NormalizePackage(archive);
+        }
+
+        private static void NormalizePatchWorksheetPageLayout(ZipArchive archive)
+            => XlsxWorksheetPageLayoutNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetGridXml(ZipArchive archive) =>
+            XlsxWorksheetGridXmlNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetMergeCells(ZipArchive archive) =>
+            XlsxWorksheetMergeCellsNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetDimension(ZipArchive archive) =>
+            XlsxWorksheetDimensionNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetCalculationProperties(ZipArchive archive) =>
+            XlsxWorksheetCalculationPropertyNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetSheetFormat(ZipArchive archive) =>
+            XlsxWorksheetSheetFormatNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetSheetProperties(ZipArchive archive) =>
+            XlsxWorksheetSheetPropertiesNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetProtection(ZipArchive archive) =>
+            XlsxWorksheetProtectionNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetProtectedRanges(ZipArchive archive) =>
+            XlsxWorksheetProtectedRangeNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetScenarios(ZipArchive archive) =>
+            XlsxWorksheetScenarioNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetSmartTags(ZipArchive archive) =>
+            XlsxWorksheetSmartTagNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetPageBreaks(ZipArchive archive)
+            => XlsxWorksheetPageBreakNormalizer.NormalizeWorksheets(archive);
+
+        private static bool HasPartBackedSingleXmlCells(ZipArchive archive, string worksheetPath)
+        {
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            var relationshipsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(worksheetPath));
+            if (relationshipsEntry is null)
+                return false;
+
+            try
+            {
+                var relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
+                return relationshipsXml.Root?
+                    .Elements(packageRelNs + "Relationship")
+                    .Any(relationship =>
+                    {
+                        if (!string.Equals(
+                                relationship.Attribute("Type")?.Value,
+                                SingleCellTableRelationshipType,
+                                StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(
+                                relationship.Attribute("TargetMode")?.Value,
+                                "External",
+                                StringComparison.OrdinalIgnoreCase))
+                        {
+                            return false;
+                        }
+
+                        var target = relationship.Attribute("Target")?.Value;
+                        return !string.IsNullOrWhiteSpace(target) &&
+                               archive.GetEntry(XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, target)) is not null;
+                    }) == true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static void NormalizePatchSingleCellTableParts(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            foreach (var singleCellTableEntry in archive.Entries.Where(IsSingleCellTableXmlEntry).ToList())
+            {
+                var tableXml = XlsxPackageXmlEditor.LoadXml(singleCellTableEntry);
+                var root = tableXml.Root;
+                if (root is null || root.Name != workbookNs + "singleXmlCells")
+                    continue;
+
+                var attributes = root.Attributes()
+                    .Where(attribute => !attribute.IsNamespaceDeclaration)
+                    .ToList();
+                if (attributes.Count == 0)
+                    continue;
+
+                foreach (var attribute in attributes)
+                    attribute.Remove();
+                XlsxPackageXmlEditor.ReplaceXml(archive, singleCellTableEntry.FullName, tableXml);
+            }
+        }
+
+        private static void NormalizePatchWorksheetSheetViews(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
+            {
+                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+                var root = worksheetXml.Root;
+                if (root is null)
+                    continue;
+
+                var sheetViews = root.Element(workbookNs + "sheetViews");
+                if (sheetViews is not null &&
+                    XlsxWorksheetSheetViewNormalizer.NormalizeSheetViewsElement(sheetViews))
+                {
+                    XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+                }
+            }
+        }
+
+        private static void NormalizePatchWorksheetSortStates(ZipArchive archive)
+            => XlsxWorksheetSortStateNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetAutoFilters(ZipArchive archive)
+            => XlsxWorksheetAutoFilterNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchStructuredTableAutoFilters(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            foreach (var tableEntry in archive.Entries.Where(IsStructuredTableXmlEntry).ToList())
+            {
+                var tableXml = XlsxPackageXmlEditor.LoadXml(tableEntry);
+                var root = tableXml.Root;
+                if (root is null)
+                    continue;
+
+                var autoFilter = root.Element(workbookNs + "autoFilter");
+                if (autoFilter is not null &&
+                    XlsxWorksheetAutoFilterNormalizer.NormalizeElement(autoFilter))
+                {
+                    XlsxPackageXmlEditor.ReplaceXml(archive, tableEntry.FullName, tableXml);
+                }
+            }
+        }
+
+        private static void NormalizePatchStructuredTableSortStates(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            foreach (var tableEntry in archive.Entries.Where(IsStructuredTableXmlEntry).ToList())
+            {
+                var tableXml = XlsxPackageXmlEditor.LoadXml(tableEntry);
+                var root = tableXml.Root;
+                if (root is null)
+                    continue;
+
+                var sortState = root.Element(workbookNs + "sortState");
+                if (sortState is not null &&
+                    XlsxWorksheetSortStateNormalizer.NormalizeElement(sortState))
+                {
+                    XlsxPackageXmlEditor.ReplaceXml(archive, tableEntry.FullName, tableXml);
+                }
+            }
+        }
+
+        private static void NormalizePatchStructuredTableMetadata(ZipArchive archive)
+            => XlsxStructuredTableSchemaNormalizer.NormalizePackage(archive);
+
+        private static void NormalizePatchExternalLinks(ZipArchive archive)
+            => XlsxExternalLinkSchemaNormalizer.NormalizePackage(archive);
+
+        private static void NormalizePatchWorksheetDataConsolidation(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
+            {
+                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+                var root = worksheetXml.Root;
+                if (root is null)
+                    continue;
+
+                var dataConsolidate = root.Element(workbookNs + "dataConsolidate");
+                if (dataConsolidate is not null &&
+                    XlsxWorksheetDataConsolidationNormalizer.NormalizeElement(dataConsolidate))
+                {
+                    XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+                }
+            }
         }
 
         private static void NormalizePatchOfficeRevisionAttributes(
@@ -1688,6 +2400,9 @@ public sealed partial class XlsxFileAdapter
             var allowedChartPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var allowedPivotPackagePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var officeRevisionWorksheetPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (!RichDataPackageGraphAllowsCellPatchSave(archive, packageRelNs, out blockReason))
+                return false;
+
             foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry))
             {
                 var worksheetPath = XlsxPackagePath.NormalizeZipPath(worksheetEntry.FullName.Replace('\\', '/'));
@@ -1785,6 +2500,12 @@ public sealed partial class XlsxFileAdapter
             foreach (var entry in archive.Entries)
             {
                 var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+                if (XlsxDigitalSignaturePackagePolicy.IsDigitalSignaturePackagePath(path))
+                {
+                    blockReason = "package_guard_digital_signatures";
+                    return false;
+                }
+
                 if (TryGetPatchUnsafePackagePartReason(
                         path,
                         allowedVmlDrawingPaths,
@@ -1793,6 +2514,13 @@ public sealed partial class XlsxFileAdapter
                         allowedPivotPackagePaths,
                         out blockReason))
                 {
+                    return false;
+                }
+
+                if (path.EndsWith(".rels", StringComparison.OrdinalIgnoreCase) &&
+                    XlsxDigitalSignaturePackagePolicy.HasDigitalSignatureRelationship(entry))
+                {
+                    blockReason = "package_guard_digital_signatures";
                     return false;
                 }
 
@@ -1970,6 +2698,7 @@ public sealed partial class XlsxFileAdapter
             XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
             XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
             XNamespace chartExNs = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+            const string diagramGraphicDataUri = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
             XNamespace markupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
             if (drawingRoot.Name != spreadsheetDrawingNs + "wsDr" ||
                 drawingXml.Descendants(spreadsheetDrawingNs + "cxnSp").Any() ||
@@ -1981,6 +2710,10 @@ public sealed partial class XlsxFileAdapter
             var chartElements = drawingXml
                 .Descendants()
                 .Where(element => element.Name == chartNs + "chart" || element.Name == chartExNs + "chart")
+                .ToList();
+            var diagramGraphicDataElements = drawingXml
+                .Descendants(drawingNs + "graphicData")
+                .Where(element => string.Equals(element.Attribute("uri")?.Value, diagramGraphicDataUri, StringComparison.Ordinal))
                 .ToList();
             var pictureElements = drawingXml.Descendants(spreadsheetDrawingNs + "pic").ToList();
             var sourceShapeElements = drawingXml
@@ -2019,12 +2752,15 @@ public sealed partial class XlsxFileAdapter
                 var chartCount = anchor
                     .Descendants()
                     .Count(element => element.Name == chartNs + "chart" || element.Name == chartExNs + "chart");
+                var diagramCount = anchor
+                    .Descendants(drawingNs + "graphicData")
+                    .Count(element => string.Equals(element.Attribute("uri")?.Value, diagramGraphicDataUri, StringComparison.Ordinal));
                 var pictureCount = anchor.Descendants(spreadsheetDrawingNs + "pic").Count();
                 var shapeCount = anchor
                     .Descendants(spreadsheetDrawingNs + "sp")
                     .Count(element => !element.Ancestors(markupCompatNs + "Fallback").Any());
-                if (chartCount + pictureCount + shapeCount == 0 ||
-                    anchor.Descendants(spreadsheetDrawingNs + "graphicFrame").Count() != chartCount)
+                if (chartCount + diagramCount + pictureCount + shapeCount == 0 ||
+                    anchor.Descendants(spreadsheetDrawingNs + "graphicFrame").Count() != chartCount + diagramCount)
                 {
                     return false;
                 }
@@ -2087,6 +2823,27 @@ public sealed partial class XlsxFileAdapter
                 allowedChartPaths.Add(chartPath);
             }
 
+            foreach (var graphicDataElement in diagramGraphicDataElements)
+            {
+                var relationshipIds = graphicDataElement
+                    .DescendantsAndSelf()
+                    .Attributes()
+                    .Where(attribute => attribute.Name.Namespace == relNs)
+                    .Select(attribute => attribute.Value)
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .ToArray();
+                if (relationshipIds.Length == 0 ||
+                    !TryAddPatchSafeDiagramPackagePaths(
+                        archive,
+                        drawingPath,
+                        relationshipElements,
+                        relationshipIds,
+                        referencedRelationshipIds))
+                {
+                    return false;
+                }
+            }
+
             foreach (var pictureElement in pictureElements)
             {
                 var imageRelId = pictureElement
@@ -2124,6 +2881,125 @@ public sealed partial class XlsxFileAdapter
             allowedDrawingPackagePaths.Add(drawingPath);
             allowedDrawingPackagePaths.Add(drawingRelsPath);
             return true;
+        }
+
+        private static bool TryAddPatchSafeDiagramPackagePaths(
+            ZipArchive archive,
+            string drawingPath,
+            IReadOnlyList<XElement> relationshipElements,
+            IReadOnlyList<string> relationshipIds,
+            HashSet<string> referencedRelationshipIds)
+        {
+            var contentTypes = TryReadPackageContentTypes(archive);
+            if (contentTypes is null)
+                return false;
+
+            var relationshipTypesById = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var id in relationshipIds)
+            {
+                var relationship = relationshipElements.FirstOrDefault(element =>
+                    string.Equals(element.Attribute("Id")?.Value, id, StringComparison.Ordinal));
+                var type = relationship?.Attribute("Type")?.Value;
+                if (string.Equals(type, DiagramDataRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(type, DiagramLayoutRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(type, DiagramQuickStyleRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(type, DiagramColorsRelationshipType, StringComparison.OrdinalIgnoreCase))
+                {
+                    relationshipTypesById[id] = type!;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+
+            var seenTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (relationshipId, relationshipType) in relationshipTypesById)
+            {
+                if (!seenTypes.Add(relationshipType) ||
+                    !referencedRelationshipIds.Add(relationshipId) ||
+                    !TryGetRelationship(relationshipElements, relationshipId, relationshipType, out var target))
+                {
+                    return false;
+                }
+
+                var diagramPath = XlsxPackagePath.ResolveRelationshipTarget(drawingPath, target);
+                if (!diagramPath.StartsWith("xl/diagrams/", StringComparison.OrdinalIgnoreCase) ||
+                    diagramPath.Contains("/_rels/", StringComparison.OrdinalIgnoreCase) ||
+                    !diagramPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ||
+                    archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(diagramPath)) is not null ||
+                    archive.GetEntry(diagramPath) is not { } diagramEntry ||
+                    !DiagramPartHasExpectedContentType(contentTypes, diagramPath, relationshipType))
+                {
+                    return false;
+                }
+
+                try
+                {
+                    var diagramXml = XlsxPackageXmlEditor.LoadXml(diagramEntry);
+                    if (diagramXml.Root is null)
+                        return false;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+
+            return seenTypes.Contains(DiagramDataRelationshipType);
+        }
+
+        private static Dictionary<string, string>? TryReadPackageContentTypes(ZipArchive archive)
+        {
+            var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+            if (contentTypesEntry is null)
+                return null;
+
+            try
+            {
+                XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+                var contentTypesXml = XlsxPackageXmlEditor.LoadXml(contentTypesEntry);
+                return contentTypesXml.Root?
+                    .Elements(contentTypeNs + "Override")
+                    .Select(element => (
+                        PartName: NormalizeContentTypePartName(element.Attribute("PartName")?.Value),
+                        ContentType: element.Attribute("ContentType")?.Value))
+                    .Where(pair => !string.IsNullOrWhiteSpace(pair.PartName) && !string.IsNullOrWhiteSpace(pair.ContentType))
+                    .ToDictionary(pair => pair.PartName!, pair => pair.ContentType!, StringComparer.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string? NormalizeContentTypePartName(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            return XlsxPackagePath.NormalizeZipPath(value.Trim().Replace('\\', '/').TrimStart('/'));
+        }
+
+        private static bool DiagramPartHasExpectedContentType(
+            IReadOnlyDictionary<string, string> contentTypes,
+            string diagramPath,
+            string relationshipType)
+        {
+            if (!contentTypes.TryGetValue(diagramPath, out var contentType))
+                return false;
+
+            var expectedContentType = relationshipType switch
+            {
+                DiagramDataRelationshipType => DiagramDataContentType,
+                DiagramLayoutRelationshipType => DiagramLayoutContentType,
+                DiagramQuickStyleRelationshipType => DiagramStyleContentType,
+                DiagramColorsRelationshipType => DiagramColorsContentType,
+                _ => null
+            };
+
+            return !string.IsNullOrWhiteSpace(expectedContentType) &&
+                   string.Equals(contentType, expectedContentType, StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool TryAddPatchSafeChartExPackagePaths(
@@ -2815,6 +3691,262 @@ public sealed partial class XlsxFileAdapter
             }
         }
 
+        private static bool RichDataPackageGraphAllowsCellPatchSave(
+            ZipArchive archive,
+            XNamespace packageRelNs,
+            out string? blockReason)
+        {
+            blockReason = null;
+            var hasRichDataParts = archive.Entries.Any(entry =>
+                XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'))
+                    .StartsWith("xl/richData/", StringComparison.OrdinalIgnoreCase));
+            if (!hasRichDataParts)
+                return true;
+
+            var contentTypes = ReadContentTypeOverrides(archive);
+            if (!RichDataContentTypesAreValid(archive, contentTypes))
+            {
+                blockReason = "package_guard_rich_data_content_types";
+                return false;
+            }
+
+            foreach (var entry in archive.Entries.Where(entry =>
+                         entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)))
+            {
+                if (!RichDataRelationshipsAreValid(archive, entry, packageRelNs))
+                {
+                    blockReason = "package_guard_rich_data_relationships";
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static IReadOnlyDictionary<string, string> ReadContentTypeOverrides(ZipArchive archive)
+        {
+            var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var entry = archive.GetEntry("[Content_Types].xml");
+            if (entry is null)
+                return result;
+
+            try
+            {
+                XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+                var xml = XlsxPackageXmlEditor.LoadXml(entry);
+                foreach (var element in xml.Root?.Elements(contentTypeNs + "Override") ?? [])
+                {
+                    var partName = element.Attribute("PartName")?.Value;
+                    var contentType = element.Attribute("ContentType")?.Value;
+                    if (string.IsNullOrWhiteSpace(partName) || string.IsNullOrWhiteSpace(contentType))
+                        continue;
+
+                    var normalized = XlsxPackagePath.NormalizeZipPath(partName.Trim().TrimStart('/').Replace('\\', '/'));
+                    if (!string.IsNullOrWhiteSpace(normalized))
+                        result[normalized] = contentType.Trim();
+                }
+            }
+            catch
+            {
+                result.Clear();
+            }
+
+            return result;
+        }
+
+        private static bool RichDataContentTypesAreValid(
+            ZipArchive archive,
+            IReadOnlyDictionary<string, string> contentTypes)
+        {
+            foreach (var entry in archive.Entries)
+            {
+                var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+                if (!TryGetKnownRichDataContentType(path, out var expectedContentType))
+                    continue;
+
+                if (!contentTypes.TryGetValue(path, out var contentType) ||
+                    !string.Equals(contentType, expectedContentType, StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool RichDataRelationshipsAreValid(
+            ZipArchive archive,
+            ZipArchiveEntry relationshipEntry,
+            XNamespace packageRelNs)
+        {
+            var relationshipPartPath = XlsxPackagePath.NormalizeZipPath(relationshipEntry.FullName.Replace('\\', '/'));
+            var sourcePartPath = RelationshipPartToSourcePart(relationshipPartPath);
+            var sourceIsRichData = sourcePartPath.StartsWith("xl/richData/", StringComparison.OrdinalIgnoreCase);
+
+            XDocument relationshipsXml;
+            try
+            {
+                relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipEntry);
+            }
+            catch
+            {
+                return !sourceIsRichData;
+            }
+
+            if (relationshipsXml.Root?.Name != packageRelNs + "Relationships")
+                return !sourceIsRichData;
+
+            foreach (var relationship in relationshipsXml.Root.Elements(packageRelNs + "Relationship"))
+            {
+                if (!IsStructurallyValidPackageRelationship(relationship))
+                    return !sourceIsRichData;
+
+                var relationshipType = relationship.Attribute("Type")?.Value.Trim() ?? "";
+                var isRichDataRelationship = IsRichDataRelationshipType(relationshipType);
+                if (!sourceIsRichData && !isRichDataRelationship)
+                    continue;
+
+                if (relationship.Attribute("TargetMode") is { } targetMode &&
+                    string.Equals(targetMode.Value.Trim(), "External", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (sourceIsRichData && !string.Equals(relationshipType, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink", StringComparison.OrdinalIgnoreCase))
+                        return false;
+
+                    continue;
+                }
+
+                var target = relationship.Attribute("Target")?.Value;
+                if (string.IsNullOrWhiteSpace(target))
+                    return false;
+
+                var targetPath = XlsxPackagePath.ResolveRelationshipTarget(sourcePartPath, target.Trim().Replace('\\', '/'));
+                if (archive.GetEntry(targetPath) is null)
+                    return false;
+
+                if (isRichDataRelationship &&
+                    (!targetPath.StartsWith("xl/richData/", StringComparison.OrdinalIgnoreCase) ||
+                     !RichDataRelationshipTargetMatchesType(relationshipType, targetPath)))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool IsStructurallyValidPackageRelationship(XElement relationship)
+        {
+            if (relationship.Attributes().Any(attribute =>
+                    !attribute.IsNamespaceDeclaration &&
+                    attribute.Name.NamespaceName.Length != 0))
+            {
+                return false;
+            }
+
+            if (relationship.Attributes().Any(attribute =>
+                    !attribute.IsNamespaceDeclaration &&
+                    attribute.Name.LocalName is not "Id" and not "Type" and not "Target" and not "TargetMode"))
+            {
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(relationship.Attribute("Id")?.Value) ||
+                string.IsNullOrWhiteSpace(relationship.Attribute("Type")?.Value) ||
+                string.IsNullOrWhiteSpace(relationship.Attribute("Target")?.Value))
+            {
+                return false;
+            }
+
+            var targetMode = relationship.Attribute("TargetMode")?.Value;
+            return string.IsNullOrWhiteSpace(targetMode) ||
+                   string.Equals(targetMode.Trim(), "External", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(targetMode.Trim(), "Internal", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsRichDataRelationshipType(string relationshipType) =>
+            string.Equals(relationshipType, RdRichValueRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(relationshipType, RdRichValueStructureRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(relationshipType, RdArrayRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(relationshipType, RdSupportingPropertyBagRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(relationshipType, RdSupportingPropertyBagStructureRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(relationshipType, RdRichValueTypesRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(relationshipType, RichStylesRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(relationshipType, RichValueRelRelationshipType, StringComparison.OrdinalIgnoreCase);
+
+        private static bool RichDataRelationshipTargetMatchesType(string relationshipType, string targetPath) =>
+            (string.Equals(relationshipType, RdRichValueRelationshipType, StringComparison.OrdinalIgnoreCase) &&
+             PathMatchesKnownRichDataPart(targetPath, "rdrichvalue.xml")) ||
+            (string.Equals(relationshipType, RdRichValueStructureRelationshipType, StringComparison.OrdinalIgnoreCase) &&
+             PathMatchesKnownRichDataPart(targetPath, "rdrichvaluestructure.xml")) ||
+            (string.Equals(relationshipType, RdArrayRelationshipType, StringComparison.OrdinalIgnoreCase) &&
+             PathMatchesKnownRichDataPart(targetPath, "rdarray.xml")) ||
+            (string.Equals(relationshipType, RdSupportingPropertyBagRelationshipType, StringComparison.OrdinalIgnoreCase) &&
+             PathMatchesKnownRichDataPart(targetPath, "rdsupportingpropertybag.xml")) ||
+            (string.Equals(relationshipType, RdSupportingPropertyBagStructureRelationshipType, StringComparison.OrdinalIgnoreCase) &&
+             PathMatchesKnownRichDataPart(targetPath, "rdsupportingpropertybagstructure.xml")) ||
+            (string.Equals(relationshipType, RdRichValueTypesRelationshipType, StringComparison.OrdinalIgnoreCase) &&
+             PathMatchesKnownRichDataPart(targetPath, "rdRichValueTypes.xml")) ||
+            (string.Equals(relationshipType, RichStylesRelationshipType, StringComparison.OrdinalIgnoreCase) &&
+             PathMatchesKnownRichDataPart(targetPath, "richStyles.xml")) ||
+            (string.Equals(relationshipType, RichValueRelRelationshipType, StringComparison.OrdinalIgnoreCase) &&
+             PathMatchesKnownRichDataPart(targetPath, "richValueRel.xml"));
+
+        private static bool TryGetKnownRichDataContentType(string path, out string contentType)
+        {
+            contentType = "";
+            var fileName = Path.GetFileName(path);
+            if (!path.StartsWith("xl/richData/", StringComparison.OrdinalIgnoreCase) ||
+                path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            contentType = fileName switch
+            {
+                _ when string.Equals(fileName, "rdrichvalue.xml", StringComparison.OrdinalIgnoreCase) =>
+                    "application/vnd.ms-excel.rdrichvalue+xml",
+                _ when string.Equals(fileName, "rdrichvaluestructure.xml", StringComparison.OrdinalIgnoreCase) =>
+                    "application/vnd.ms-excel.rdrichvaluestructure+xml",
+                _ when string.Equals(fileName, "rdarray.xml", StringComparison.OrdinalIgnoreCase) =>
+                    "application/vnd.ms-excel.rdarray+xml",
+                _ when string.Equals(fileName, "rdsupportingpropertybag.xml", StringComparison.OrdinalIgnoreCase) =>
+                    "application/vnd.ms-excel.rdsupportingpropertybag+xml",
+                _ when string.Equals(fileName, "rdsupportingpropertybagstructure.xml", StringComparison.OrdinalIgnoreCase) =>
+                    "application/vnd.ms-excel.rdsupportingpropertybagstructure+xml",
+                _ when string.Equals(fileName, "rdRichValueTypes.xml", StringComparison.OrdinalIgnoreCase) =>
+                    "application/vnd.ms-excel.rdrichvaluetypes+xml",
+                _ when string.Equals(fileName, "richStyles.xml", StringComparison.OrdinalIgnoreCase) =>
+                    "application/vnd.ms-excel.richstyles+xml",
+                _ when string.Equals(fileName, "richValueRel.xml", StringComparison.OrdinalIgnoreCase) =>
+                    "application/vnd.ms-excel.richvaluerel+xml",
+                _ => ""
+            };
+
+            return contentType.Length != 0;
+        }
+
+        private static bool PathMatchesKnownRichDataPart(string path, string fileName) =>
+            string.Equals(
+                XlsxPackagePath.NormalizeZipPath(path.Replace('\\', '/')),
+                $"xl/richData/{fileName}",
+                StringComparison.OrdinalIgnoreCase);
+
+        private static string RelationshipPartToSourcePart(string relationshipPartPath)
+        {
+            var normalized = XlsxPackagePath.NormalizeZipPath(relationshipPartPath.Replace('\\', '/'));
+            if (string.Equals(normalized, "_rels/.rels", StringComparison.OrdinalIgnoreCase))
+                return "";
+
+            const string relsSegment = "/_rels/";
+            var relsIndex = normalized.IndexOf(relsSegment, StringComparison.OrdinalIgnoreCase);
+            if (relsIndex < 0 || !normalized.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
+                return normalized;
+
+            var directory = normalized[..relsIndex];
+            var fileName = normalized[(relsIndex + relsSegment.Length)..^".rels".Length];
+            return string.IsNullOrEmpty(directory) ? fileName : $"{directory}/{fileName}";
+        }
+
         private sealed record XlsxWorksheetPackageGuardInfo(
             bool HasCustomProperties,
             bool HasQueryTableParts,
@@ -2995,6 +4127,23 @@ public sealed partial class XlsxFileAdapter
         {
             var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
             return path.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                   path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+                   !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsStructuredTableXmlEntry(ZipArchiveEntry entry)
+        {
+            var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+            return path.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase) &&
+                   path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+                   !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase) &&
+                   !path.StartsWith("xl/tables/tableSingleCells", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsSingleCellTableXmlEntry(ZipArchiveEntry entry)
+        {
+            var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+            return path.StartsWith("xl/tables/tableSingleCells", StringComparison.OrdinalIgnoreCase) &&
                    path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
                    !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
         }
@@ -5707,25 +6856,25 @@ public sealed partial class XlsxFileAdapter
                     break;
                 case TextValue text:
                     cell.SetAttributeValue("t", "inlineStr");
-                    cell.Add(new XElement(
+                    AddCellValueElement(cell, worksheetNs, new XElement(
                         worksheetNs + "is",
                         CreateInlineTextElement(worksheetNs, text.Value)));
                     break;
                 case BoolValue boolean:
                     cell.SetAttributeValue("t", "b");
-                    cell.Add(new XElement(worksheetNs + "v", boolean.Value ? "1" : "0"));
+                    AddCellValueElement(cell, worksheetNs, new XElement(worksheetNs + "v", boolean.Value ? "1" : "0"));
                     break;
                 case ErrorValue error:
                     cell.SetAttributeValue("t", "e");
-                    cell.Add(new XElement(worksheetNs + "v", error.Code));
+                    AddCellValueElement(cell, worksheetNs, new XElement(worksheetNs + "v", error.Code));
                     break;
                 case DateTimeValue dateTime:
                     cell.Attribute("t")?.Remove();
-                    cell.Add(new XElement(worksheetNs + "v", FormatNumber(dateTime.Value)));
+                    AddCellValueElement(cell, worksheetNs, new XElement(worksheetNs + "v", FormatNumber(dateTime.Value)));
                     break;
                 case NumberValue number:
                     cell.Attribute("t")?.Remove();
-                    cell.Add(new XElement(worksheetNs + "v", FormatNumber(number.Value)));
+                    AddCellValueElement(cell, worksheetNs, new XElement(worksheetNs + "v", FormatNumber(number.Value)));
                     break;
             }
         }
@@ -5770,25 +6919,34 @@ public sealed partial class XlsxFileAdapter
                     break;
                 case TextValue text:
                     cell.SetAttributeValue("t", "str");
-                    cell.Add(new XElement(worksheetNs + "v", text.Value));
+                    AddCellValueElement(cell, worksheetNs, new XElement(worksheetNs + "v", text.Value));
                     break;
                 case BoolValue boolean:
                     cell.SetAttributeValue("t", "b");
-                    cell.Add(new XElement(worksheetNs + "v", boolean.Value ? "1" : "0"));
+                    AddCellValueElement(cell, worksheetNs, new XElement(worksheetNs + "v", boolean.Value ? "1" : "0"));
                     break;
                 case ErrorValue error:
                     cell.SetAttributeValue("t", "e");
-                    cell.Add(new XElement(worksheetNs + "v", error.Code));
+                    AddCellValueElement(cell, worksheetNs, new XElement(worksheetNs + "v", error.Code));
                     break;
                 case DateTimeValue dateTime:
                     cell.Attribute("t")?.Remove();
-                    cell.Add(new XElement(worksheetNs + "v", FormatNumber(dateTime.Value)));
+                    AddCellValueElement(cell, worksheetNs, new XElement(worksheetNs + "v", FormatNumber(dateTime.Value)));
                     break;
                 case NumberValue number:
                     cell.Attribute("t")?.Remove();
-                    cell.Add(new XElement(worksheetNs + "v", FormatNumber(number.Value)));
+                    AddCellValueElement(cell, worksheetNs, new XElement(worksheetNs + "v", FormatNumber(number.Value)));
                     break;
             }
+        }
+
+        private static void AddCellValueElement(XElement cell, XNamespace worksheetNs, XElement valueElement)
+        {
+            var extensionList = cell.Element(worksheetNs + "extLst");
+            if (extensionList is null)
+                cell.Add(valueElement);
+            else
+                extensionList.AddBeforeSelf(valueElement);
         }
 
         private static bool InsertLiteralCell(
@@ -5816,7 +6974,7 @@ public sealed partial class XlsxFileAdapter
             ScalarValue value,
             string? sourceStyleIndex)
         {
-            if (cell.Elements().Any())
+            if (cell.Elements().Any(child => child.Name != worksheetNs + "extLst"))
                 return false;
 
             ApplyCellStyle(cell, sourceStyleIndex);
@@ -5877,7 +7035,11 @@ public sealed partial class XlsxFileAdapter
                 }
             }
 
-            rowElement.Add(cellElement);
+            var extensionList = rowElement.Element(worksheetNs + "extLst");
+            if (extensionList is null)
+                rowElement.Add(cellElement);
+            else
+                extensionList.AddBeforeSelf(cellElement);
         }
 
         private static void UpdateDimension(

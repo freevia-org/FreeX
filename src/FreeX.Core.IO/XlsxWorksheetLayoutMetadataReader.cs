@@ -6,89 +6,69 @@ namespace FreeX.Core.IO;
 internal static class XlsxWorksheetLayoutMetadataReader
 {
     public static NativeXmlPreserveBag? ReadWorksheetDimensionMetadata(XElement? dimension)
-    {
-        if (dimension is null)
-            return null;
-
-        var attrs = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var attribute in dimension.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration || string.Equals(attribute.Name.LocalName, "ref", StringComparison.Ordinal))
-                continue;
-
-            attrs[attribute.Name.ToString()] = attribute.Value;
-        }
-
-        var serialized = XmlNativeBagSerializer.Serialize(attrs);
-        if (serialized is null)
-            return null;
-
-        var bag = new NativeXmlPreserveBag();
-        bag.Set("dimension", serialized);
-        return bag;
-    }
+        => ReadMetadata(
+            dimension,
+            "dimension",
+            attribute => !string.Equals(attribute.Name.LocalName, "ref", StringComparison.Ordinal));
 
     public static NativeXmlPreserveBag? ReadWorksheetSheetPropertiesMetadata(XElement? sheetProperties)
+        => ReadMetadata(sheetProperties, "sheetPr", IsPreservableSheetPropertiesAttribute);
+
+    private static NativeXmlPreserveBag? ReadMetadata(
+        XElement? element,
+        string bagName,
+        Func<XAttribute, bool> shouldPreserveAttribute,
+        Func<XElement, bool>? shouldPreserveChild = null)
     {
-        if (sheetProperties is null)
+        if (element is null)
             return null;
 
         var attrs = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var attribute in sheetProperties.Attributes())
+        foreach (var attribute in element.Attributes())
         {
-            if (attribute.IsNamespaceDeclaration || IsModeledSheetPropertiesAttribute(attribute.Name.LocalName))
+            if (attribute.IsNamespaceDeclaration || !shouldPreserveAttribute(attribute))
                 continue;
 
             attrs[attribute.Name.ToString()] = attribute.Value;
         }
 
-        var children = sheetProperties.Elements()
-            .Where(element => !IsModeledSheetPropertiesElement(element.Name.LocalName))
-            .Select(element => element.ToString(SaveOptions.DisableFormatting))
-            .ToList();
+        var children = shouldPreserveChild is null
+            ? null
+            : element.Elements()
+                .Where(shouldPreserveChild)
+                .Select(child => child.ToString(SaveOptions.DisableFormatting))
+                .ToList();
 
         var serialized = XmlNativeBagSerializer.Serialize(attrs, children);
         if (serialized is null)
             return null;
 
         var bag = new NativeXmlPreserveBag();
-        bag.Set("sheetPr", serialized);
+        bag.Set(bagName, serialized);
         return bag;
     }
 
     private static bool IsModeledSheetPropertiesAttribute(string name) =>
         name is "codeName";
 
-    private static bool IsModeledSheetPropertiesElement(string name) =>
-        name is "tabColor" or "outlinePr" or "pageSetUpPr";
+    private static bool IsPreservableSheetPropertiesAttribute(XAttribute attribute) =>
+        attribute.Name.NamespaceName.Length == 0 &&
+        !IsModeledSheetPropertiesAttribute(attribute.Name.LocalName) &&
+        attribute.Name.LocalName is "syncHorizontal" or
+            "syncVertical" or
+            "syncRef" or
+            "transitionEvaluation" or
+            "transitionEntry" or
+            "published" or
+            "filterMode" or
+            "enableFormatConditionsCalculation";
 
     public static NativeXmlPreserveBag? ReadWorksheetPrimaryViewMetadata(XElement? sheetView)
-    {
-        if (sheetView is null)
-            return null;
-
-        var attrs = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var attribute in sheetView.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration || IsModeledPrimaryViewAttribute(attribute.Name.LocalName))
-                continue;
-
-            attrs[attribute.Name.ToString()] = attribute.Value;
-        }
-
-        var children = sheetView.Elements()
-            .Where(element => !IsModeledPrimaryViewElement(element.Name.LocalName))
-            .Select(element => element.ToString(SaveOptions.DisableFormatting))
-            .ToList();
-
-        var serialized = XmlNativeBagSerializer.Serialize(attrs, children);
-        if (serialized is null)
-            return null;
-
-        var bag = new NativeXmlPreserveBag();
-        bag.Set("sheetView", serialized);
-        return bag;
-    }
+        => ReadMetadata(
+            sheetView,
+            "sheetView",
+            attribute => !IsModeledPrimaryViewAttribute(attribute.Name.LocalName),
+            element => !IsModeledPrimaryViewElement(element.Name.LocalName));
 
     private static bool IsModeledPrimaryViewAttribute(string name) =>
         name is "workbookViewId" or "view" or "showGridLines" or "showRowColHeaders" or "showRuler" or
@@ -98,32 +78,11 @@ internal static class XlsxWorksheetLayoutMetadataReader
         name is "pane";
 
     public static NativeXmlPreserveBag? ReadWorksheetHeaderFooterMetadata(XElement? headerFooter)
-    {
-        if (headerFooter is null)
-            return null;
-
-        var attrs = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var attribute in headerFooter.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration || IsModeledHeaderFooterAttribute(attribute.Name.LocalName))
-                continue;
-
-            attrs[attribute.Name.ToString()] = attribute.Value;
-        }
-
-        var children = headerFooter.Elements()
-            .Where(element => !IsModeledHeaderFooterElement(element.Name.LocalName))
-            .Select(element => element.ToString(SaveOptions.DisableFormatting))
-            .ToList();
-
-        var serialized = XmlNativeBagSerializer.Serialize(attrs, children);
-        if (serialized is null)
-            return null;
-
-        var bag = new NativeXmlPreserveBag();
-        bag.Set("headerFooter", serialized);
-        return bag;
-    }
+        => ReadMetadata(
+            headerFooter,
+            "headerFooter",
+            attribute => !IsModeledHeaderFooterAttribute(attribute.Name.LocalName),
+            element => !IsModeledHeaderFooterElement(element.Name.LocalName));
 
     private static bool IsModeledHeaderFooterAttribute(string name) =>
         name is "differentOddEven" or "differentFirst" or "scaleWithDoc" or "alignWithMargins";
@@ -132,121 +91,41 @@ internal static class XlsxWorksheetLayoutMetadataReader
         name is "oddHeader" or "oddFooter" or "evenHeader" or "evenFooter" or "firstHeader" or "firstFooter";
 
     public static NativeXmlPreserveBag? ReadWorksheetPageMarginsMetadata(XElement? pageMargins)
-    {
-        if (pageMargins is null)
-            return null;
-
-        var attrs = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var attribute in pageMargins.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration || IsModeledPageMarginsAttribute(attribute.Name.LocalName))
-                continue;
-
-            attrs[attribute.Name.ToString()] = attribute.Value;
-        }
-
-        var children = pageMargins.Elements()
-            .Select(element => element.ToString(SaveOptions.DisableFormatting))
-            .ToList();
-
-        var serialized = XmlNativeBagSerializer.Serialize(attrs, children);
-        if (serialized is null)
-            return null;
-
-        var bag = new NativeXmlPreserveBag();
-        bag.Set("pageMargins", serialized);
-        return bag;
-    }
+        => ReadMetadata(
+            pageMargins,
+            "pageMargins",
+            attribute => !IsModeledPageMarginsAttribute(attribute.Name.LocalName),
+            element => true);
 
     private static bool IsModeledPageMarginsAttribute(string name) =>
         name is "left" or "right" or "top" or "bottom" or "header" or "footer";
 
     public static NativeXmlPreserveBag? ReadWorksheetSheetFormatMetadata(XElement? sheetFormatProperties)
-    {
-        if (sheetFormatProperties is null)
-            return null;
-
-        var attrs = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var attribute in sheetFormatProperties.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration || IsModeledSheetFormatAttribute(attribute.Name.LocalName))
-                continue;
-
-            attrs[attribute.Name.ToString()] = attribute.Value;
-        }
-
-        var children = sheetFormatProperties.Elements()
-            .Select(element => element.ToString(SaveOptions.DisableFormatting))
-            .ToList();
-
-        var serialized = XmlNativeBagSerializer.Serialize(attrs, children);
-        if (serialized is null)
-            return null;
-
-        var bag = new NativeXmlPreserveBag();
-        bag.Set("sheetFormatPr", serialized);
-        return bag;
-    }
+        => ReadMetadata(
+            sheetFormatProperties,
+            "sheetFormatPr",
+            attribute => !IsModeledSheetFormatAttribute(attribute.Name.LocalName),
+            element => true);
 
     private static bool IsModeledSheetFormatAttribute(string name) =>
         name is "defaultColWidth" or "defaultRowHeight";
 
     public static NativeXmlPreserveBag? ReadWorksheetPrintOptionsMetadata(XElement? printOptions)
-    {
-        if (printOptions is null)
-            return null;
-
-        var attrs = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var attribute in printOptions.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration || IsModeledPrintOptionsAttribute(attribute.Name.LocalName))
-                continue;
-
-            attrs[attribute.Name.ToString()] = attribute.Value;
-        }
-
-        var children = printOptions.Elements()
-            .Select(element => element.ToString(SaveOptions.DisableFormatting))
-            .ToList();
-
-        var serialized = XmlNativeBagSerializer.Serialize(attrs, children);
-        if (serialized is null)
-            return null;
-
-        var bag = new NativeXmlPreserveBag();
-        bag.Set("printOptions", serialized);
-        return bag;
-    }
+        => ReadMetadata(
+            printOptions,
+            "printOptions",
+            attribute => !IsModeledPrintOptionsAttribute(attribute.Name.LocalName),
+            element => true);
 
     private static bool IsModeledPrintOptionsAttribute(string name) =>
         name is "gridLines" or "headings" or "horizontalCentered" or "verticalCentered";
 
     public static NativeXmlPreserveBag? ReadWorksheetPageSetupMetadata(XElement? pageSetup)
-    {
-        if (pageSetup is null)
-            return null;
-
-        var attrs = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var attribute in pageSetup.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration || IsModeledPageSetupAttribute(attribute.Name.LocalName))
-                continue;
-
-            attrs[attribute.Name.ToString()] = attribute.Value;
-        }
-
-        var children = pageSetup.Elements()
-            .Select(element => element.ToString(SaveOptions.DisableFormatting))
-            .ToList();
-
-        var serialized = XmlNativeBagSerializer.Serialize(attrs, children);
-        if (serialized is null)
-            return null;
-
-        var bag = new NativeXmlPreserveBag();
-        bag.Set("pageSetup", serialized);
-        return bag;
-    }
+        => ReadMetadata(
+            pageSetup,
+            "pageSetup",
+            attribute => !IsModeledPageSetupAttribute(attribute.Name.LocalName),
+            element => true);
 
     private static bool IsModeledPageSetupAttribute(string name) =>
         name is "paperSize" or "scale" or "firstPageNumber" or "fitToWidth" or "fitToHeight" or
@@ -255,33 +134,28 @@ internal static class XlsxWorksheetLayoutMetadataReader
             "copies";
 
     public static NativeXmlPreserveBag? ReadWorksheetProtectionMetadata(XElement? protection)
-    {
-        if (protection is null)
-            return null;
+        => ReadMetadata(protection, "sheetProtection", IsPreservableProtectionAttribute);
 
-        var attrs = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var attribute in protection.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                string.Equals(attribute.Name.LocalName, "sheet", StringComparison.Ordinal) ||
-                string.Equals(attribute.Name.LocalName, "password", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            attrs[attribute.Name.ToString()] = attribute.Value;
-        }
-
-        var children = protection.Elements()
-            .Select(element => element.ToString(SaveOptions.DisableFormatting))
-            .ToList();
-
-        var serialized = XmlNativeBagSerializer.Serialize(attrs, children);
-        if (serialized is null)
-            return null;
-
-        var bag = new NativeXmlPreserveBag();
-        bag.Set("sheetProtection", serialized);
-        return bag;
-    }
+    private static bool IsPreservableProtectionAttribute(XAttribute attribute) =>
+        attribute.Name.NamespaceName.Length == 0 &&
+        attribute.Name.LocalName is not "sheet" and not "password" &&
+        attribute.Name.LocalName is "algorithmName" or
+            "hashValue" or
+            "saltValue" or
+            "spinCount" or
+            "objects" or
+            "scenarios" or
+            "formatCells" or
+            "formatColumns" or
+            "formatRows" or
+            "insertColumns" or
+            "insertRows" or
+            "insertHyperlinks" or
+            "deleteColumns" or
+            "deleteRows" or
+            "selectLockedCells" or
+            "sort" or
+            "autoFilter" or
+            "pivotTables" or
+            "selectUnlockedCells";
 }

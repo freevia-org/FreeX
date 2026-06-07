@@ -22,6 +22,25 @@ internal static class XlsxWorksheetThreadedCommentMapper
 
     public static bool HasThreadedComments(Sheet sheet) => sheet.ThreadedComments.Count > 0;
 
+    public static IReadOnlySet<string> GetSourcePackagePartExclusions(ZipArchive archive, Workbook workbook)
+    {
+        if (!workbook.Sheets.Any(HasThreadedComments))
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in archive.Entries)
+        {
+            var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+            if (!IsThreadedCommentOrPersonPart(path))
+                continue;
+
+            excluded.Add(path);
+            excluded.Add(XlsxPackagePath.GetRelationshipPartPath(path));
+        }
+
+        return excluded;
+    }
+
     public static IReadOnlyList<(uint Row, uint Col, ThreadedComment Comment)> Read(
         ZipArchive archive,
         string worksheetPath)
@@ -388,6 +407,10 @@ internal static class XlsxWorksheetThreadedCommentMapper
 
     private static string NormalizeAuthor(string? author) =>
         string.IsNullOrWhiteSpace(author) ? "FreeX" : author.Trim();
+
+    private static bool IsThreadedCommentOrPersonPart(string path) =>
+        path.StartsWith("xl/threadedComments/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/persons/", StringComparison.OrdinalIgnoreCase);
 
     private static string? NormalizeId(string? id) =>
         string.IsNullOrWhiteSpace(id) ? null : id.Trim();

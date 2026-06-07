@@ -159,7 +159,25 @@ public sealed class XlsxLoadPackageStreamTests
             HasConditionalFormattingBlocks: false,
             HasUnsupportedConditionalFormattingBlocks: false,
             HasWorksheetDynamicFilters: false,
+            HasWorksheetGridXmlSchemaIssues: false,
+            HasWorksheetPageLayoutSchemaIssues: false,
+            HasWorksheetPageBreakSchemaIssues: false,
+            HasWorksheetAutoFilterSchemaIssues: false,
+            HasStructuredTableAutoFilterSchemaIssues: false,
+            HasStructuredTableSortStateSchemaIssues: false,
+            HasStructuredTableMetadataSchemaIssues: false,
             HasDocumentPropertiesPackageGraphIssues: false,
+            HasWorksheetSheetViewSchemaIssues: false,
+            HasWorkbookViewSchemaIssues: false,
+            HasWorkbookCalculationPropertySchemaIssues: false,
+            HasWorkbookFileSharingSchemaIssues: false,
+            HasWorkbookFileRecoveryPropertySchemaIssues: false,
+            HasWorkbookProtectionSchemaIssues: false,
+            HasWorkbookWebPublishingSchemaIssues: false,
+            HasWorkbookSmartTagSchemaIssues: false,
+            HasWorkbookNativeMetadataSchemaIssues: false,
+            HasWorksheetRelationshipMarkerSchemaIssues: false,
+            HasWorksheetNativeMetadataSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
         var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
@@ -179,12 +197,12 @@ public sealed class XlsxLoadPackageStreamTests
             archive.GetEntry("xl/media/image1.png").Should().NotBeNull();
 
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+            var worksheetXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
             worksheetXml.Root!.Elements(worksheetNs + "drawing").Should().BeEmpty();
             worksheetXml.Root!.Elements(worksheetNs + "legacyDrawing").Should().ContainSingle();
 
             XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-            var relsXml = LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
+            var relsXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
             relsXml.Root!.Elements(packageRelNs + "Relationship")
                 .Select(relationship => relationship.Attribute("Target")?.Value)
                 .Should()
@@ -195,7 +213,7 @@ public sealed class XlsxLoadPackageStreamTests
                 .Contain("../drawings/vmlDrawing1.vml");
 
             XNamespace contentTypesNs = "http://schemas.openxmlformats.org/package/2006/content-types";
-            var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+            var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "[Content_Types].xml");
             contentTypesXml.Root!.Elements(contentTypesNs + "Override")
                 .Select(element => element.Attribute("PartName")?.Value)
                 .Should()
@@ -219,7 +237,25 @@ public sealed class XlsxLoadPackageStreamTests
             HasConditionalFormattingBlocks: false,
             HasUnsupportedConditionalFormattingBlocks: false,
             HasWorksheetDynamicFilters: false,
+            HasWorksheetGridXmlSchemaIssues: false,
+            HasWorksheetPageLayoutSchemaIssues: false,
+            HasWorksheetPageBreakSchemaIssues: false,
+            HasWorksheetAutoFilterSchemaIssues: false,
+            HasStructuredTableAutoFilterSchemaIssues: false,
+            HasStructuredTableSortStateSchemaIssues: false,
+            HasStructuredTableMetadataSchemaIssues: false,
             HasDocumentPropertiesPackageGraphIssues: false,
+            HasWorksheetSheetViewSchemaIssues: false,
+            HasWorkbookViewSchemaIssues: false,
+            HasWorkbookCalculationPropertySchemaIssues: false,
+            HasWorkbookFileSharingSchemaIssues: false,
+            HasWorkbookFileRecoveryPropertySchemaIssues: false,
+            HasWorkbookProtectionSchemaIssues: false,
+            HasWorkbookWebPublishingSchemaIssues: false,
+            HasWorkbookSmartTagSchemaIssues: false,
+            HasWorkbookNativeMetadataSchemaIssues: false,
+            HasWorksheetRelationshipMarkerSchemaIssues: false,
+            HasWorksheetNativeMetadataSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
         var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
@@ -251,7 +287,25 @@ public sealed class XlsxLoadPackageStreamTests
             HasConditionalFormattingBlocks: false,
             HasUnsupportedConditionalFormattingBlocks: false,
             HasWorksheetDynamicFilters: false,
+            HasWorksheetGridXmlSchemaIssues: false,
+            HasWorksheetPageLayoutSchemaIssues: false,
+            HasWorksheetPageBreakSchemaIssues: false,
+            HasWorksheetAutoFilterSchemaIssues: false,
+            HasStructuredTableAutoFilterSchemaIssues: false,
+            HasStructuredTableSortStateSchemaIssues: false,
+            HasStructuredTableMetadataSchemaIssues: false,
             HasDocumentPropertiesPackageGraphIssues: false,
+            HasWorksheetSheetViewSchemaIssues: false,
+            HasWorkbookViewSchemaIssues: false,
+            HasWorkbookCalculationPropertySchemaIssues: false,
+            HasWorkbookFileSharingSchemaIssues: false,
+            HasWorkbookFileRecoveryPropertySchemaIssues: false,
+            HasWorkbookProtectionSchemaIssues: false,
+            HasWorkbookWebPublishingSchemaIssues: false,
+            HasWorkbookSmartTagSchemaIssues: false,
+            HasWorkbookNativeMetadataSchemaIssues: false,
+            HasWorksheetRelationshipMarkerSchemaIssues: false,
+            HasWorksheetNativeMetadataSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
         using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
@@ -279,7 +333,25 @@ public sealed class XlsxLoadPackageStreamTests
             HasConditionalFormattingBlocks: false,
             HasUnsupportedConditionalFormattingBlocks: false,
             HasWorksheetDynamicFilters: false,
+            HasWorksheetGridXmlSchemaIssues: false,
+            HasWorksheetPageLayoutSchemaIssues: false,
+            HasWorksheetPageBreakSchemaIssues: false,
+            HasWorksheetAutoFilterSchemaIssues: false,
+            HasStructuredTableAutoFilterSchemaIssues: false,
+            HasStructuredTableSortStateSchemaIssues: false,
+            HasStructuredTableMetadataSchemaIssues: false,
             HasDocumentPropertiesPackageGraphIssues: false,
+            HasWorksheetSheetViewSchemaIssues: false,
+            HasWorkbookViewSchemaIssues: false,
+            HasWorkbookCalculationPropertySchemaIssues: false,
+            HasWorkbookFileSharingSchemaIssues: false,
+            HasWorkbookFileRecoveryPropertySchemaIssues: false,
+            HasWorkbookProtectionSchemaIssues: false,
+            HasWorkbookWebPublishingSchemaIssues: false,
+            HasWorkbookSmartTagSchemaIssues: false,
+            HasWorkbookNativeMetadataSchemaIssues: false,
+            HasWorksheetRelationshipMarkerSchemaIssues: false,
+            HasWorksheetNativeMetadataSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
         using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
@@ -302,12 +374,12 @@ public sealed class XlsxLoadPackageStreamTests
         archive.GetEntry("xl/media/image1.png").Should().NotBeNull();
 
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        var worksheetXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         worksheetXml.Root!.Elements(worksheetNs + "drawing").Should().BeEmpty();
         worksheetXml.Root!.Elements(worksheetNs + "legacyDrawing").Should().ContainSingle();
 
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-        var relsXml = LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
+        var relsXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
         relsXml.Root!.Elements(packageRelNs + "Relationship")
             .Select(relationship => relationship.Attribute("Target")?.Value)
             .Should()
@@ -318,7 +390,7 @@ public sealed class XlsxLoadPackageStreamTests
             .Contain("../drawings/vmlDrawing1.vml");
 
         XNamespace contentTypesNs = "http://schemas.openxmlformats.org/package/2006/content-types";
-        var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+        var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "[Content_Types].xml");
         contentTypesXml.Root!.Elements(contentTypesNs + "Override")
             .Select(element => element.Attribute("PartName")?.Value)
             .Should()
@@ -336,7 +408,25 @@ public sealed class XlsxLoadPackageStreamTests
             HasConditionalFormattingBlocks: false,
             HasUnsupportedConditionalFormattingBlocks: false,
             HasWorksheetDynamicFilters: false,
+            HasWorksheetGridXmlSchemaIssues: false,
+            HasWorksheetPageLayoutSchemaIssues: false,
+            HasWorksheetPageBreakSchemaIssues: false,
+            HasWorksheetAutoFilterSchemaIssues: false,
+            HasStructuredTableAutoFilterSchemaIssues: false,
+            HasStructuredTableSortStateSchemaIssues: false,
+            HasStructuredTableMetadataSchemaIssues: false,
             HasDocumentPropertiesPackageGraphIssues: false,
+            HasWorksheetSheetViewSchemaIssues: false,
+            HasWorkbookViewSchemaIssues: false,
+            HasWorkbookCalculationPropertySchemaIssues: false,
+            HasWorkbookFileSharingSchemaIssues: false,
+            HasWorkbookFileRecoveryPropertySchemaIssues: false,
+            HasWorkbookProtectionSchemaIssues: false,
+            HasWorkbookWebPublishingSchemaIssues: false,
+            HasWorkbookSmartTagSchemaIssues: false,
+            HasWorkbookNativeMetadataSchemaIssues: false,
+            HasWorksheetRelationshipMarkerSchemaIssues: false,
+            HasWorksheetNativeMetadataSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
         var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
@@ -365,7 +455,7 @@ public sealed class XlsxLoadPackageStreamTests
         sanitized.Should().NotBeSameAs(package);
         using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: false);
         XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-        var relationships = LoadPackageXml(archive, "_rels/.rels")
+        var relationships = XlsxPackageTestFixtures.LoadPackageXml(archive, "_rels/.rels")
             .Root!
             .Elements(relationshipNs + "Relationship")
             .Where(relationship => string.Equals(
@@ -377,6 +467,340 @@ public sealed class XlsxLoadPackageStreamTests
         relationships[0].Attribute("Type")!.Value.Should().Be(
             "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties");
         relationships[0].Attribute("Target")!.Value.Should().Be("docProps/core.xml");
+    }
+
+    [Fact]
+    public void ClosedXmlLoadSanitizer_NormalizesMisdirectedDocumentPropertyRootRelationships()
+    {
+        using var package = CreatePackageWithMisdirectedDocumentPropertyRootRelationship();
+
+        using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(package);
+
+        sanitized.Should().NotBeSameAs(package);
+        using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationships = XlsxPackageTestFixtures.LoadPackageXml(archive, "_rels/.rels")
+            .Root!
+            .Elements(relationshipNs + "Relationship")
+            .Where(relationship => string.Equals(
+                relationship.Attribute("Type")?.Value,
+                "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties",
+                StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        relationships.Should().ContainSingle();
+        relationships[0].Attribute("Target")!.Value.Should().Be("docProps/core.xml");
+        relationships[0].Attribute("TargetMode").Should().BeNull();
+    }
+
+    [Fact]
+    public void ClosedXmlLoadSanitizer_NormalizesWorksheetRelationshipMarkers()
+    {
+        using var package = CreatePackageWithWorksheet(
+            """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <sheetData>
+                <row r="1"><c r="A1"><v>1</v></c></row>
+              </sheetData>
+              <picture r:id="rIdPicture1" customPictureFlag="removed">
+                <nativePictureChild/>
+              </picture>
+              <picture r:id="rIdPicture1" customDuplicatePictureFlag="removed"/>
+            </worksheet>
+            """,
+            includeLargePayload: false);
+
+        using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(package);
+
+        sanitized.Should().NotBeSameAs(package);
+        using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var worksheetXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        var picture = worksheetXml.Root!
+            .Elements(worksheetNs + "picture")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        picture.Attribute(relNs + "id")!.Value.Should().Be("rIdPicture1");
+        picture.Attribute("customPictureFlag").Should().BeNull();
+        picture.Attribute("customDuplicatePictureFlag").Should().BeNull();
+        picture.Elements().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ClosedXmlLoadSanitizer_NormalizesWorksheetNativeMetadata()
+    {
+        using var package = CreatePackageWithWorksheet(
+            """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <sheetData>
+                <row r="1"><c r="A1"><v>1</v></c></row>
+              </sheetData>
+              <customProperties customPropertiesFlag="removed">
+                <customPr name=" FreeXProperty " id=" 2 " customPropertyFlag="removed">
+                  <nativeCustomPropertyChild/>
+                </customPr>
+                <customPr name="Removed" id="not-a-number"/>
+                <nativeCustomPropertiesChild/>
+              </customProperties>
+              <ignoredErrors customIgnoredErrorsFlag="removed">
+                <ignoredError sqref=" a1 a1 b2:c3 " numberStoredAsText="true" evalError="maybe" customIgnoredErrorFlag="removed">
+                  <nativeIgnoredErrorChild/>
+                </ignoredError>
+                <ignoredError sqref="not-a-ref" numberStoredAsText="1"/>
+                <nativeIgnoredErrorsChild/>
+              </ignoredErrors>
+              <webPublishItems count="not-a-number" customWebPublishItemsFlag="removed">
+                <webPublishItem id=" 1 " divId=" FreeXWebPublish " sourceType="range" sourceRef=" A1:B2 " destinationFile=" report.htm " autoRepublish="true" customWebPublishItemFlag="removed">
+                  <nativeWebPublishItemChild/>
+                </webPublishItem>
+                <webPublishItem id="not-a-number" divId="Removed" destinationFile="removed.htm"/>
+                <nativeWebPublishItemsChild/>
+              </webPublishItems>
+            </worksheet>
+            """,
+            includeLargePayload: false);
+
+        using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(package);
+
+        sanitized.Should().NotBeSameAs(package);
+        using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+
+        var customProperties = worksheetXml.Root!.Element(worksheetNs + "customProperties")!;
+        customProperties.Attribute("customPropertiesFlag").Should().BeNull();
+        customProperties.Element(worksheetNs + "nativeCustomPropertiesChild").Should().BeNull();
+        var customProperty = customProperties.Elements(worksheetNs + "customPr")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        customProperty.Attribute("name")!.Value.Should().Be(" FreeXProperty ");
+        customProperty.Attribute("id")!.Value.Should().Be("2");
+        customProperty.Attribute("customPropertyFlag").Should().BeNull();
+        customProperty.Elements().Should().BeEmpty();
+
+        var ignoredErrors = worksheetXml.Root!.Element(worksheetNs + "ignoredErrors")!;
+        ignoredErrors.Attribute("customIgnoredErrorsFlag").Should().BeNull();
+        ignoredErrors.Element(worksheetNs + "nativeIgnoredErrorsChild").Should().BeNull();
+        var ignoredError = ignoredErrors.Elements(worksheetNs + "ignoredError")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        ignoredError.Attribute("sqref")!.Value.Should().Be("A1 B2:C3");
+        ignoredError.Attribute("numberStoredAsText")!.Value.Should().Be("1");
+        ignoredError.Attribute("evalError").Should().BeNull();
+        ignoredError.Attribute("customIgnoredErrorFlag").Should().BeNull();
+        ignoredError.Elements().Should().BeEmpty();
+
+        var webPublishItems = worksheetXml.Root!.Element(worksheetNs + "webPublishItems")!;
+        webPublishItems.Attribute("count")!.Value.Should().Be("1");
+        webPublishItems.Attribute("customWebPublishItemsFlag").Should().BeNull();
+        webPublishItems.Element(worksheetNs + "nativeWebPublishItemsChild").Should().BeNull();
+        var webPublishItem = webPublishItems.Elements(worksheetNs + "webPublishItem")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        webPublishItem.Attribute("id")!.Value.Should().Be("1");
+        webPublishItem.Attribute("divId")!.Value.Should().Be("FreeXWebPublish");
+        webPublishItem.Attribute("sourceType")!.Value.Should().Be("range");
+        webPublishItem.Attribute("sourceRef")!.Value.Should().Be("A1:B2");
+        webPublishItem.Attribute("destinationFile")!.Value.Should().Be("report.htm");
+        webPublishItem.Attribute("autoRepublish")!.Value.Should().Be("true");
+        webPublishItem.Attribute("customWebPublishItemFlag").Should().BeNull();
+        webPublishItem.Elements().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ClosedXmlLoadSanitizer_NormalizesWorkbookWebPublishingMetadata()
+    {
+        using var package = CreatePackageWithWorkbook(
+            """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <sheets/>
+              <webPublishing css="true" targetScreenSize="800x600" dpi=" 96 " customWebPublishingFlag="removed">
+                <nativeWebPublishingChild/>
+              </webPublishing>
+              <webPublishObjects count="not-a-number" customWebPublishObjectsFlag="removed">
+                <webPublishObject id=" 1 " divId=" FreeXWebPublish " sourceObject=" Sheet1 " destinationFile=" report.htm " customWebPublishObjectFlag="removed">
+                  <nativeWebPublishObjectChild/>
+                </webPublishObject>
+                <webPublishObject id="not-a-number" divId="Removed" sourceObject="Sheet1" destinationFile="removed.htm"/>
+                <nativeWebPublishObjectsChild/>
+              </webPublishObjects>
+            </workbook>
+            """);
+
+        using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(package);
+
+        sanitized.Should().NotBeSameAs(package);
+        using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/workbook.xml");
+        var webPublishing = workbookXml.Root!.Element(workbookNs + "webPublishing")!;
+        webPublishing.Attribute("css")!.Value.Should().Be("true");
+        webPublishing.Attribute("dpi")!.Value.Should().Be("96");
+        webPublishing.Attribute("customWebPublishingFlag").Should().BeNull();
+        webPublishing.Elements().Should().BeEmpty();
+
+        var webPublishObjects = workbookXml.Root!.Element(workbookNs + "webPublishObjects")!;
+        webPublishObjects.Attribute("count")!.Value.Should().Be("1");
+        webPublishObjects.Attribute("customWebPublishObjectsFlag").Should().BeNull();
+        webPublishObjects.Element(workbookNs + "nativeWebPublishObjectsChild").Should().BeNull();
+        var webPublishObject = webPublishObjects.Elements(workbookNs + "webPublishObject")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        webPublishObject.Attribute("id")!.Value.Should().Be("1");
+        webPublishObject.Attribute("divId")!.Value.Should().Be("FreeXWebPublish");
+        webPublishObject.Attribute("sourceObject")!.Value.Should().Be("Sheet1");
+        webPublishObject.Attribute("destinationFile")!.Value.Should().Be("report.htm");
+        webPublishObject.Attribute("customWebPublishObjectFlag").Should().BeNull();
+        webPublishObject.Elements().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ClosedXmlLoadSanitizer_NormalizesWorkbookSmartTagMetadata()
+    {
+        using var package = CreatePackageWithWorkbook(
+            """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <sheets/>
+              <smartTagPr embed=" 1 " show="all" customSmartTagFlag="removed">
+                <nativeSmartTagChild/>
+              </smartTagPr>
+              <smartTagTypes customSmartTagTypesFlag="removed">
+                <smartTagType namespaceUri=" urn:freeX " name=" Smart " url=" https://example.invalid " customSmartTagTypeFlag="removed">
+                  <nativeSmartTagTypeChild/>
+                </smartTagType>
+                <smartTagType name="Removed"/>
+                <nativeSmartTagTypesChild/>
+              </smartTagTypes>
+            </workbook>
+            """);
+
+        using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(package);
+
+        sanitized.Should().NotBeSameAs(package);
+        using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/workbook.xml");
+
+        var smartTagPr = workbookXml.Root!.Element(workbookNs + "smartTagPr")!;
+        smartTagPr.Attribute("embed")!.Value.Should().Be("1");
+        smartTagPr.Attribute("show")!.Value.Should().Be("all");
+        smartTagPr.Attribute("customSmartTagFlag").Should().BeNull();
+        smartTagPr.Elements().Should().BeEmpty();
+
+        var smartTagTypes = workbookXml.Root!.Element(workbookNs + "smartTagTypes")!;
+        smartTagTypes.Attribute("customSmartTagTypesFlag").Should().BeNull();
+        smartTagTypes.Element(workbookNs + "nativeSmartTagTypesChild").Should().BeNull();
+        var smartTagType = smartTagTypes.Elements(workbookNs + "smartTagType")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        smartTagType.Attribute("namespaceUri")!.Value.Should().Be("urn:freeX");
+        smartTagType.Attribute("name")!.Value.Should().Be("Smart");
+        smartTagType.Attribute("url")!.Value.Should().Be("https://example.invalid");
+        smartTagType.Attribute("customSmartTagTypeFlag").Should().BeNull();
+        smartTagType.Elements().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ClosedXmlLoadSanitizer_NormalizesWorkbookNativeMetadata()
+    {
+        using var package = CreatePackageWithWorkbook(
+            """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <fileVersion appName="xl" lastEdited="7" lowestEdited="7" rupBuild="28129" customVersionFlag="removed">
+                <nativeFileVersionChild/>
+              </fileVersion>
+              <workbookPr date1904="maybe" defaultThemeVersion="not-a-number" customWorkbookPrFlag="removed">
+                <nativeWorkbookPrChild/>
+              </workbookPr>
+              <sheets/>
+              <functionGroups builtInGroupCount="not-a-number" customFunctionGroupsFlag="removed">
+                <functionGroup name="FreeXNativeFunctions" customFunctionGroupFlag="removed">
+                  <nativeFunctionGroupChild/>
+                </functionGroup>
+                <nativeFunctionGroupsChild/>
+              </functionGroups>
+              <definedNames customDefinedNamesFlag="removed">
+                <definedName name=" DynamicSalesRange " hidden="maybe" customDefinedNameFlag="removed">Sheet1!$A$1<nativeDefinedNameChild/></definedName>
+                <nativeDefinedNamesChild/>
+              </definedNames>
+              <oleSize ref=" a1:d12 " customOleSizeFlag="removed">
+                <nativeOleSizeChild/>
+              </oleSize>
+              <extLst customWorkbookExtLstFlag="removed">
+                <ext uri=" {00112233-4455-6677-8899-AABBCCDDEEFF} " customWorkbookExtFlag="removed">
+                  <futureMetadata xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main" name="FreeXWorkbookNativeMetadata"/>
+                </ext>
+                <ext uri=" "/>
+                <nativeWorkbookExtLstChild/>
+              </extLst>
+            </workbook>
+            """);
+
+        using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(package);
+
+        sanitized.Should().NotBeSameAs(package);
+        using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/workbook.xml");
+
+        var fileVersion = workbookXml.Root!.Element(workbookNs + "fileVersion")!;
+        fileVersion.Attribute("appName")!.Value.Should().Be("xl");
+        fileVersion.Attribute("customVersionFlag").Should().BeNull();
+        fileVersion.Elements().Should().BeEmpty();
+
+        var workbookPr = workbookXml.Root!.Element(workbookNs + "workbookPr")!;
+        workbookPr.Attribute("date1904").Should().BeNull();
+        workbookPr.Attribute("defaultThemeVersion").Should().BeNull();
+        workbookPr.Attribute("customWorkbookPrFlag").Should().BeNull();
+        workbookPr.Elements().Should().BeEmpty();
+
+        var functionGroups = workbookXml.Root!.Element(workbookNs + "functionGroups")!;
+        functionGroups.Attribute("builtInGroupCount").Should().BeNull();
+        functionGroups.Attribute("customFunctionGroupsFlag").Should().BeNull();
+        functionGroups.Element(workbookNs + "nativeFunctionGroupsChild").Should().BeNull();
+        var functionGroup = functionGroups.Elements(workbookNs + "functionGroup")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        functionGroup.Attribute("name")!.Value.Should().Be("FreeXNativeFunctions");
+        functionGroup.Attribute("customFunctionGroupFlag").Should().BeNull();
+        functionGroup.Elements().Should().BeEmpty();
+
+        var definedNames = workbookXml.Root!.Element(workbookNs + "definedNames")!;
+        definedNames.Attribute("customDefinedNamesFlag").Should().BeNull();
+        definedNames.Element(workbookNs + "nativeDefinedNamesChild").Should().BeNull();
+        var definedName = definedNames.Elements(workbookNs + "definedName")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        definedName.Attribute("name")!.Value.Should().Be("DynamicSalesRange");
+        definedName.Attribute("hidden").Should().BeNull();
+        definedName.Attribute("customDefinedNameFlag").Should().BeNull();
+        definedName.Value.Should().Be("Sheet1!$A$1");
+        definedName.Elements().Should().BeEmpty();
+
+        var oleSize = workbookXml.Root!.Element(workbookNs + "oleSize")!;
+        oleSize.Attribute("ref")!.Value.Should().Be("A1:D12");
+        oleSize.Attribute("customOleSizeFlag").Should().BeNull();
+        oleSize.Elements().Should().BeEmpty();
+
+        var extensionList = workbookXml.Root!.Element(workbookNs + "extLst")!;
+        extensionList.Attribute("customWorkbookExtLstFlag").Should().BeNull();
+        extensionList.Element(workbookNs + "nativeWorkbookExtLstChild").Should().BeNull();
+        var extension = extensionList.Elements(workbookNs + "ext")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        extension.Attribute("uri")!.Value.Should().Be("{00112233-4455-6677-8899-AABBCCDDEEFF}");
+        extension.Attribute("customWorkbookExtFlag").Should().BeNull();
     }
 
     [Fact]
@@ -409,7 +833,25 @@ public sealed class XlsxLoadPackageStreamTests
             HasConditionalFormattingBlocks: false,
             HasUnsupportedConditionalFormattingBlocks: false,
             HasWorksheetDynamicFilters: false,
+            HasWorksheetGridXmlSchemaIssues: false,
+            HasWorksheetPageLayoutSchemaIssues: false,
+            HasWorksheetPageBreakSchemaIssues: false,
+            HasWorksheetAutoFilterSchemaIssues: false,
+            HasStructuredTableAutoFilterSchemaIssues: false,
+            HasStructuredTableSortStateSchemaIssues: false,
+            HasStructuredTableMetadataSchemaIssues: false,
             HasDocumentPropertiesPackageGraphIssues: false,
+            HasWorksheetSheetViewSchemaIssues: false,
+            HasWorkbookViewSchemaIssues: false,
+            HasWorkbookCalculationPropertySchemaIssues: false,
+            HasWorkbookFileSharingSchemaIssues: false,
+            HasWorkbookFileRecoveryPropertySchemaIssues: false,
+            HasWorkbookProtectionSchemaIssues: false,
+            HasWorkbookWebPublishingSchemaIssues: false,
+            HasWorkbookSmartTagSchemaIssues: false,
+            HasWorkbookNativeMetadataSchemaIssues: false,
+            HasWorksheetRelationshipMarkerSchemaIssues: false,
+            HasWorksheetNativeMetadataSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 "xl/worksheets/sheet1.xml"
@@ -426,12 +868,12 @@ public sealed class XlsxLoadPackageStreamTests
             sanitized.Should().NotBeSameAs(package);
             using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: true);
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            LoadPackageXml(archive, "xl/worksheets/sheet1.xml")
+            XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/sheet1.xml")
                 .Root!
                 .Element(worksheetNs + "mergeCells")
                 .Should()
                 .BeNull();
-            LoadPackageXml(archive, "xl/worksheets/sheet2.xml")
+            XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/sheet2.xml")
                 .Root!
                 .Element(worksheetNs + "mergeCells")
                 .Should()
@@ -682,6 +1124,18 @@ public sealed class XlsxLoadPackageStreamTests
     private static MemoryStream CreatePackageWithWorksheet(string worksheetXml, bool includeLargePayload)
         => CreatePackageWithWorksheets([("xl/worksheets/sheet1.xml", worksheetXml)], includeLargePayload);
 
+    private static MemoryStream CreatePackageWithWorkbook(string workbookXml)
+    {
+        var package = new MemoryStream();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WritePackageEntry(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
     private static MemoryStream CreatePackageWithMalformedDocumentPropertyRootRelationship()
     {
         var package = new MemoryStream();
@@ -702,6 +1156,45 @@ public sealed class XlsxLoadPackageStreamTests
                 "docProps/core.xml",
                 """
                 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"/>
+                """);
+            WritePackageEntry(
+                archive,
+                "xl/workbook.xml",
+                """
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
+    private static MemoryStream CreatePackageWithMisdirectedDocumentPropertyRootRelationship()
+    {
+        var package = new MemoryStream();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WritePackageEntry(
+                archive,
+                "_rels/.rels",
+                """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdWorkbook" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="/xl/workbook.xml"/>
+                  <Relationship Id="rIdCoreSidecar" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="/package/services/metadata/core-properties/microsoft.azureiplabel.xml"/>
+                  <Relationship Id="rIdCore" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="/docProps/core.xml"/>
+                </Relationships>
+                """);
+            WritePackageEntry(
+                archive,
+                "docProps/core.xml",
+                """
+                <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"/>
+                """);
+            WritePackageEntry(
+                archive,
+                "package/services/metadata/core-properties/microsoft.azureiplabel.xml",
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"/>
                 """);
             WritePackageEntry(
                 archive,
@@ -919,18 +1412,18 @@ public sealed class XlsxLoadPackageStreamTests
         archive.GetEntry("xl/charts/chart1.xml").Should().BeNull();
 
         XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var chartsheetXml = LoadPackageXml(archive, "xl/chartsheets/sheet1.xml");
+        var chartsheetXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/chartsheets/sheet1.xml");
         chartsheetXml.Root!.Elements(sheetNs + "drawing").Should().BeEmpty();
 
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-        var relsXml = LoadPackageXml(archive, "xl/chartsheets/_rels/sheet1.xml.rels");
+        var relsXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/chartsheets/_rels/sheet1.xml.rels");
         relsXml.Root!.Elements(packageRelNs + "Relationship")
             .Select(relationship => relationship.Attribute("Target")?.Value)
             .Should()
             .NotContain("../drawings/drawing1.xml");
 
         XNamespace contentTypesNs = "http://schemas.openxmlformats.org/package/2006/content-types";
-        var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+        var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "[Content_Types].xml");
         contentTypesXml.Root!.Elements(contentTypesNs + "Override")
             .Select(element => element.Attribute("PartName")?.Value)
             .Should()
@@ -1026,20 +1519,13 @@ public sealed class XlsxLoadPackageStreamTests
     {
         package.Position = 0;
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        using var worksheetStream = archive.GetEntry(worksheetPath)!.Open();
-        var worksheet = XDocument.Load(worksheetStream);
+        var worksheet = XlsxPackageTestFixtures.LoadPackageXml(archive, worksheetPath, worksheetPath);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var references = worksheet.Descendants(worksheetNs + "c")
             .Select(cell => cell.Attribute("r")!.Value)
             .ToArray();
         package.Position = 0;
         return references;
-    }
-
-    private static XDocument LoadPackageXml(ZipArchive archive, string path)
-    {
-        using var stream = archive.GetEntry(path)!.Open();
-        return XDocument.Load(stream);
     }
 
     private sealed class NonMemoryReadStream(byte[] buffer) : Stream

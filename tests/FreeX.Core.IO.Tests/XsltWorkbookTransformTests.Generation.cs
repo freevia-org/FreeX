@@ -169,7 +169,7 @@ public sealed partial class XsltWorkbookTransformTests
         using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
 
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
-        var formulaCell = XDocument.Load(transformed).Descendants(ss + "Cell").ElementAt(2);
+        var formulaCell = LoadTransformedXml(transformed).Descendants(ss + "Cell").ElementAt(2);
 
         formulaCell.Attribute(ss + "Formula")!.Value.Should().Be("=SUM(RC[-2]:RC[-1])");
         formulaCell.Attribute(ss + "StyleID")!.Value.Should().Be("total");
@@ -213,7 +213,7 @@ public sealed partial class XsltWorkbookTransformTests
         using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
 
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
-        var document = XDocument.Load(transformed);
+        var document = LoadTransformedXml(transformed);
         var worksheet = document.Root!.Element(ss + "Worksheet");
         var dataCells = worksheet!.Descendants(ss + "Data").ToArray();
 
@@ -480,7 +480,7 @@ public sealed partial class XsltWorkbookTransformTests
         using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
 
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
-        var document = XDocument.Load(transformed);
+        var document = LoadTransformedXml(transformed);
         var rows = document.Root!.Descendants(ss + "Row").ToArray();
 
         rows.Should().HaveCount(2);
@@ -529,7 +529,7 @@ public sealed partial class XsltWorkbookTransformTests
         using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
 
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
-        var values = XDocument.Load(transformed).Descendants(ss + "Data").Select(cell => cell.Value).ToArray();
+        var values = LoadTransformedXml(transformed).Descendants(ss + "Data").Select(cell => cell.Value).ToArray();
 
         values.Should().Equal("Alpha - Beta", "Total: 42.5");
     }

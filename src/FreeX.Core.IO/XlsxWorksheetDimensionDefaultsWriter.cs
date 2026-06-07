@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.IO.Compression;
-using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -57,12 +56,21 @@ internal static class XlsxWorksheetDimensionDefaultsWriter
             }
 
             if (IsNonDefaultColumnWidth(sheet.DefaultColumnWidth))
-                changed |= SetAttributeIfDifferent(sheetFormat, "defaultColWidth", FormatDouble(sheet.DefaultColumnWidth));
+                changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(
+                    sheetFormat,
+                    "defaultColWidth",
+                    FormatDouble(sheet.DefaultColumnWidth));
 
             if (IsNonDefaultRowHeight(sheet.DefaultRowHeight))
             {
-                changed |= SetAttributeIfDifferent(sheetFormat, "defaultRowHeight", FormatDouble(sheet.DefaultRowHeight * (72.0 / 96.0)));
-                changed |= SetAttributeIfDifferent(sheetFormat, "customHeight", "1");
+                changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(
+                    sheetFormat,
+                    "defaultRowHeight",
+                    FormatDouble(sheet.DefaultRowHeight * (72.0 / 96.0)));
+                changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(
+                    sheetFormat,
+                    "customHeight",
+                    "1");
             }
 
             changed |= ApplyNativeSheetFormatMetadata(sheetFormat, sheet.SheetFormatMetadata);
@@ -94,28 +102,4 @@ internal static class XlsxWorksheetDimensionDefaultsWriter
     private static string FormatDouble(double value) =>
         value.ToString("0.########", CultureInfo.InvariantCulture);
 
-    private static bool SetAttributeIfDifferent(XElement element, XName name, string value)
-    {
-        if (string.Equals(element.Attribute(name)?.Value, value, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(name, value);
-        return true;
-    }
-
-    private static bool TrySetNativeAttributeIfDifferent(XElement element, string name, string value)
-    {
-        try
-        {
-            return SetAttributeIfDifferent(element, XName.Get(name), value);
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (XmlException)
-        {
-            return false;
-        }
-    }
 }

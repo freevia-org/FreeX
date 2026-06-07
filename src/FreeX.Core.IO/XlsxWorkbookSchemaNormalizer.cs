@@ -15,6 +15,38 @@ internal static class XlsxWorkbookSchemaNormalizer
     public static void Normalize(ZipArchive archive)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XlsxWorksheetDimensionNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetCalculationPropertyNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetSheetFormatNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetSheetPropertiesNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetSheetViewNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetProtectionNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetProtectedRangeNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetScenarioNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetSmartTagNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetCustomSheetViewExtensionListNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetPhoneticPropertyNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetCellWatchesNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetCustomPropertiesNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetIgnoredErrorsNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetHyperlinkNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetConditionalFormatNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetAutoFilterNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetSortStateNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetDataConsolidationNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetDataValidationNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetExtensionListNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetWebPublishItemsNormalizer.NormalizePackage(archive);
+        XlsxWorksheetOleControlNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetRelationshipMarkerNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetPageLayoutNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetPageBreakNormalizer.NormalizeWorksheets(archive);
+        XlsxRichTextFontNormalizer.NormalizePackage(archive);
+        XlsxThemeTypefaceNormalizer.NormalizePackage(archive);
+        XlsxLegacyCommentFontNormalizer.NormalizePackage(archive);
+        XlsxStructuredTableSchemaNormalizer.NormalizePackage(archive);
+        XlsxConnectionQueryTableSchemaNormalizer.NormalizePackage(archive);
+        XlsxWorksheetSingleXmlCellMapper.NormalizePackage(archive);
         NormalizeWorksheets(archive, workbookNs);
 
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
@@ -204,6 +236,63 @@ internal static class XlsxWorkbookSchemaNormalizer
         if (root is null)
             return false;
 
+        var changed = false;
+        if (root.Element(workbookNs + "fileSharing") is { } fileSharing)
+            changed |= XlsxWorkbookFileSharingNormalizer.NormalizeElement(fileSharing);
+        if (root.Element(workbookNs + "workbookPr") is { } workbookPr)
+            changed |= XlsxWorkbookPropertiesNormalizer.NormalizeElement(workbookPr);
+        if (root.Element(workbookNs + "workbookProtection") is { } workbookProtection)
+            changed |= XlsxWorkbookProtectionNormalizer.NormalizeElement(workbookProtection);
+        if (root.Element(workbookNs + "bookViews") is { } bookViews)
+            changed |= XlsxWorkbookViewNormalizer.NormalizeBookViewsElement(bookViews);
+        foreach (var customWorkbookViews in root.Elements(workbookNs + "customWorkbookViews").ToList())
+        {
+            changed |= XlsxWorkbookCustomViewNormalizer.NormalizeCustomWorkbookViewsElement(customWorkbookViews);
+            if (XlsxWorkbookCustomViewNormalizer.ShouldRemoveCustomWorkbookViewsElement(customWorkbookViews))
+            {
+                customWorkbookViews.Remove();
+                changed = true;
+            }
+        }
+
+        changed |= XlsxWorkbookExternalReferencesNormalizer.NormalizeWorkbookRoot(root, workbookNs);
+
+        foreach (var definedNames in root.Elements(workbookNs + "definedNames").ToList())
+        {
+            changed |= XlsxWorkbookDefinedNameNormalizer.NormalizeDefinedNamesElement(definedNames);
+            if (XlsxWorkbookDefinedNameNormalizer.ShouldRemoveDefinedNamesElement(definedNames))
+            {
+                definedNames.Remove();
+                changed = true;
+            }
+        }
+
+        changed |= XlsxWorkbookOleSizeNormalizer.NormalizeWorkbookRoot(root, workbookNs);
+        changed |= XlsxWorkbookPivotCachesNormalizer.NormalizeWorkbookRoot(root, workbookNs);
+        changed |= XlsxWorkbookWebPublishingNormalizer.NormalizeWorkbookRoot(root, workbookNs);
+        changed |= XlsxWorkbookWebPublishObjectsNormalizer.NormalizeWorkbookRoot(root, workbookNs);
+        changed |= XlsxWorkbookExtensionListNormalizer.NormalizeWorkbookRoot(root, workbookNs);
+
+        if (root.Element(workbookNs + "fileVersion") is { } fileVersion)
+            changed |= XlsxWorkbookFileVersionNormalizer.NormalizeElement(fileVersion);
+        if (root.Element(workbookNs + "calcPr") is { } calcPr)
+            changed |= XlsxWorkbookCalculationPropertyNormalizer.NormalizeElement(calcPr);
+        foreach (var fileRecoveryPr in root.Elements(workbookNs + "fileRecoveryPr"))
+            changed |= XlsxWorkbookFileRecoveryPropertyNormalizer.NormalizeElement(fileRecoveryPr);
+        if (root.Element(workbookNs + "functionGroups") is { } functionGroups)
+            changed |= XlsxWorkbookFunctionGroupsNormalizer.NormalizeElement(functionGroups);
+        if (root.Element(workbookNs + "smartTagPr") is { } smartTagPr)
+            changed |= XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagPropertiesElement(smartTagPr);
+        if (root.Element(workbookNs + "smartTagTypes") is { } smartTagTypes)
+        {
+            changed |= XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagTypesElement(smartTagTypes);
+            if (XlsxWorkbookSmartTagNormalizer.ShouldRemoveSmartTagTypesElement(smartTagTypes))
+            {
+                smartTagTypes.Remove();
+                changed = true;
+            }
+        }
+
         var orderedChildren = root.Elements()
             .Select((element, index) => new { Element = element, Index = index })
             .OrderBy(item => WorkbookChildOrder(item.Element, workbookNs))
@@ -211,7 +300,7 @@ internal static class XlsxWorkbookSchemaNormalizer
             .Select(item => item.Element)
             .ToList();
         if (orderedChildren.Count == 0 || root.Elements().SequenceEqual(orderedChildren))
-            return false;
+            return changed;
 
         root.ReplaceNodes(orderedChildren);
         return true;

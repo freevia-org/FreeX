@@ -10,7 +10,7 @@ public sealed class CommandInventoryDocumentTests
     public void CommandSurfaceCoverageSummary_IsGeneratedFromInventory()
     {
         var inventory = LoadInventory();
-        var doc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "parity/command-surface.md"));
+        var doc = WorkspaceFileLocator.ReadAllText("docs", "parity/command-surface.md");
 
         ExtractGeneratedBlock(doc, "command-inventory:coverage-summary").Should().Be(
             BuildCoverageSummary(inventory.CommandSurfaceTabs, boldCoverageHeader: true));
@@ -20,7 +20,7 @@ public sealed class CommandInventoryDocumentTests
     public void CommandSurfaceTabCoverageCallouts_MatchInventoryTabCounts()
     {
         var inventory = LoadInventory();
-        var doc = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "parity/command-surface.md"));
+        var doc = WorkspaceFileLocator.ReadAllLines("docs", "parity/command-surface.md");
 
         var callouts = doc
             .Where(line => line.StartsWith("> **Tab coverage:", StringComparison.Ordinal))
@@ -48,7 +48,7 @@ public sealed class CommandInventoryDocumentTests
     public void MenuToolbarCoverageSummary_IsGeneratedFromInventory()
     {
         var inventory = LoadInventory();
-        var doc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "parity/menu-toolbar.md"));
+        var doc = WorkspaceFileLocator.ReadAllText("docs", "parity/menu-toolbar.md");
 
         ExtractGeneratedBlock(doc, "command-inventory:coverage-summary").Should().Be(
             BuildCoverageSummary(inventory.MenuToolbarTabs, boldCoverageHeader: false));
@@ -58,7 +58,7 @@ public sealed class CommandInventoryDocumentTests
     public void UiTestCatalog_CommandInventoryCountsMatchInventory()
     {
         var inventory = LoadInventory();
-        var catalog = File.ReadAllText(WorkspaceFileLocator.Find("docs", "testing/ui-test-catalog.md"));
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
         var commandSurfaceInScope = inventory.CommandSurfaceTabs.Sum(tab => tab.Implemented + tab.Partial);
         var menuToolbarInScope = inventory.MenuToolbarTabs.Sum(tab => tab.Implemented + tab.Partial);
 
@@ -88,7 +88,7 @@ public sealed class CommandInventoryDocumentTests
     public void CommandSurfaceFileBackstageRows_AreGeneratedFromInventory()
     {
         var inventory = LoadInventory();
-        var doc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "parity/command-surface.md"));
+        var doc = WorkspaceFileLocator.ReadAllText("docs", "parity/command-surface.md");
         var section = inventory.CommandSurfaceRows.Single(section => section.Name == "File/Backstage");
 
         ExtractGeneratedBlock(doc, "command-inventory:command-surface:file-backstage").Should().Be(
@@ -99,7 +99,7 @@ public sealed class CommandInventoryDocumentTests
     public void MenuToolbarFileBackstageRows_AreGeneratedFromInventory()
     {
         var inventory = LoadInventory();
-        var doc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "parity/menu-toolbar.md"));
+        var doc = WorkspaceFileLocator.ReadAllText("docs", "parity/menu-toolbar.md");
         var section = inventory.MenuToolbarRows.Single(section => section.Name == "File/Backstage");
 
         ExtractGeneratedBlock(doc, "command-inventory:menu-toolbar:file-backstage").Should().Be(
@@ -110,8 +110,8 @@ public sealed class CommandInventoryDocumentTests
     public void QuickAccessToolbarRows_AreGeneratedFromInventory()
     {
         var inventory = LoadInventory();
-        var commandSurfaceDoc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "parity/command-surface.md"));
-        var menuToolbarDoc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "parity/menu-toolbar.md"));
+        var commandSurfaceDoc = WorkspaceFileLocator.ReadAllText("docs", "parity/command-surface.md");
+        var menuToolbarDoc = WorkspaceFileLocator.ReadAllText("docs", "parity/menu-toolbar.md");
         var commandSurfaceSection = inventory.CommandSurfaceRows.Single(section => section.Name == "QAT");
         var menuToolbarSection = inventory.MenuToolbarRows.Single(section => section.Name == "QAT");
 
@@ -125,8 +125,8 @@ public sealed class CommandInventoryDocumentTests
     public void HomeRows_AreGeneratedFromInventory()
     {
         var inventory = LoadInventory();
-        var commandSurfaceDoc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "parity/command-surface.md"));
-        var menuToolbarDoc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "parity/menu-toolbar.md"));
+        var commandSurfaceDoc = WorkspaceFileLocator.ReadAllText("docs", "parity/command-surface.md");
+        var menuToolbarDoc = WorkspaceFileLocator.ReadAllText("docs", "parity/menu-toolbar.md");
         var commandSurfaceSection = inventory.CommandSurfaceRows.Single(section => section.Name == "Home");
         var menuToolbarSection = inventory.MenuToolbarRows.Single(section => section.Name == "Home");
 
@@ -140,8 +140,8 @@ public sealed class CommandInventoryDocumentTests
     public void AllCommandRowSections_AreGeneratedFromInventory()
     {
         var inventory = LoadInventory();
-        var commandSurfaceDoc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "parity/command-surface.md"));
-        var menuToolbarDoc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "parity/menu-toolbar.md"));
+        var commandSurfaceDoc = WorkspaceFileLocator.ReadAllText("docs", "parity/command-surface.md");
+        var menuToolbarDoc = WorkspaceFileLocator.ReadAllText("docs", "parity/menu-toolbar.md");
 
         foreach (var section in inventory.CommandSurfaceRows)
         {
@@ -158,8 +158,7 @@ public sealed class CommandInventoryDocumentTests
 
     private static CommandInventory LoadInventory()
     {
-        var path = WorkspaceFileLocator.Find("docs", "parity/command-inventory.json");
-        var json = File.ReadAllText(path);
+        var json = WorkspaceFileLocator.ReadAllText("docs", "parity", "command-inventory.json");
         var inventory = JsonSerializer.Deserialize<CommandInventory>(
             json,
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true })

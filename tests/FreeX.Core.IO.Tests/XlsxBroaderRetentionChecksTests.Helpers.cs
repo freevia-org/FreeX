@@ -53,17 +53,10 @@ public sealed partial class XlsxBroaderRetentionChecksTests
     }
 
     private static XDocument LoadXml(ZipArchive archive, string entryName)
-    {
-        var entry = archive.GetEntry(entryName);
-        entry.Should().NotBeNull($"package entry {entryName} should exist");
-        return LoadXml(entry!);
-    }
+        => XlsxPackageTestFixtures.LoadPackageXml(archive, entryName, $"package entry {entryName} should exist");
 
     private static XDocument LoadXml(ZipArchiveEntry entry)
-    {
-        using var stream = entry.Open();
-        return XDocument.Load(stream);
-    }
+        => XlsxPackageTestFixtures.LoadPackageXml(entry);
 
     private static void ReplaceXml(ZipArchive archive, string entryName, XDocument document)
     {

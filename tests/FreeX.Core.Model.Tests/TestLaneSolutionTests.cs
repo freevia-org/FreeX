@@ -1,4 +1,3 @@
-using System.IO;
 using System.Xml.Linq;
 using FluentAssertions;
 
@@ -9,9 +8,9 @@ public sealed class TestLaneSolutionTests
     [Fact]
     public void DefaultTestLane_ExcludesUiTestProjects()
     {
-        var defaultLaneProjects = ReadSolutionProjects(WorkspaceFileLocator.FindFromWorkspaceRoot(
+        var defaultLaneProjects = ReadSolutionProjects(TestWorkspaceFileLocator.FindFromWorkspaceRoot(
             "FreeX.DefaultTests.slnx"));
-        var uiLaneProjects = ReadSolutionProjects(WorkspaceFileLocator.FindFromWorkspaceRoot(
+        var uiLaneProjects = ReadSolutionProjects(TestWorkspaceFileLocator.FindFromWorkspaceRoot(
             "FreeX.UiTests.slnx"));
 
         defaultLaneProjects.Should().BeEquivalentTo(new[]
@@ -35,10 +34,9 @@ public sealed class TestLaneSolutionTests
     [Fact]
     public void DefaultAgentVerification_DocumentsNonUiTestLane()
     {
-        var agents = File.ReadAllText(WorkspaceFileLocator.FindFromWorkspaceRoot("AGENTS.md"));
-        var readme = File.ReadAllText(WorkspaceFileLocator.FindFromWorkspaceRoot("README.md"));
-        var plan = File.ReadAllText(WorkspaceFileLocator.FindFromWorkspaceRoot(
-            "docs", "release/test-distribution.md"));
+        var agents = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot("AGENTS.md");
+        var readme = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot("README.md");
+        var plan = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot("docs", "release/test-distribution.md");
 
         agents.Should().Contain("default agent verification path");
         agents.Should().Contain("dotnet test FreeX.DefaultTests.slnx");

@@ -95,7 +95,7 @@ public sealed partial class LocalizationResourceTests
     [Fact]
     public void LocalizedSelectorItems_DoNotExposeAccessKeyUnderscoresAsVisibleText()
     {
-        var hostDirectory = Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("OptionsDialog.xaml"))!;
+        var hostDirectory = DialogSourceTestSupport.FindHostSourceDirectory("OptionsDialog.xaml");
         var offenders = Directory
             .EnumerateFiles(hostDirectory, "*.xaml", SearchOption.AllDirectories)
             .SelectMany(file => LocalizedSelectorItemPattern()

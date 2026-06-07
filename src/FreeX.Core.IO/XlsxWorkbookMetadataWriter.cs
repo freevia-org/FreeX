@@ -108,6 +108,7 @@ internal static class XlsxWorkbookMetadataWriter
         }
 
         workbookProperties.SetAttributeValue("date1904", workbook.Uses1904DateSystem ? "1" : null);
+        XlsxWorkbookPropertiesNormalizer.NormalizeElement(workbookProperties);
         return true;
     }
 
@@ -146,6 +147,7 @@ internal static class XlsxWorkbookMetadataWriter
         primaryView.SetAttributeValue("tabRatio", XlsxWorkbookMetadataXmlHelper.ClampWorkbookViewInteger(workbook.SheetTabRatio, 0, 1000));
         primaryView.SetAttributeValue("firstSheet", XlsxWorkbookMetadataXmlHelper.ClampWorkbookViewInteger(workbook.FirstVisibleSheetIndex, 0, Math.Max(0, workbook.Sheets.Count - 1)));
         primaryView.SetAttributeValue("activeTab", XlsxWorkbookMetadataXmlHelper.ClampWorkbookViewInteger(workbook.ActiveSheetIndex, 0, Math.Max(0, workbook.Sheets.Count - 1)));
+        XlsxWorkbookViewNormalizer.NormalizeWorkbookViewElement(primaryView);
 
         return true;
     }
@@ -179,6 +181,7 @@ internal static class XlsxWorkbookMetadataWriter
         fileSharing.SetAttributeValue(
             "reservationPassword",
             string.IsNullOrWhiteSpace(workbook.FileSharing.ReservationPassword) ? null : workbook.FileSharing.ReservationPassword);
+        XlsxWorkbookFileSharingNormalizer.NormalizeElement(fileSharing);
 
         InsertFileSharingInOrder(root, fileSharing);
 
@@ -201,19 +204,19 @@ internal static class XlsxWorkbookMetadataWriter
         var recoveryElements = workbook.FileRecoveryProperties.Select(item =>
         {
             var element = new XElement(WorkbookNs + "fileRecoveryPr");
-            foreach (var attribute in item.NativeAttributes)
-            {
-                if (!string.IsNullOrWhiteSpace(attribute.Key) &&
-                    attribute.Key is not "autoRecover" and not "crashSave" and not "dataExtractLoad" and not "repairLoad")
-                {
-                    XlsxWorkbookMetadataXmlHelper.TrySetNativeAttribute(element, attribute.Key, attribute.Value);
-                }
-            }
+            XlsxWorkbookMetadataXmlHelper.ApplyNativeAttributes(
+                element,
+                item.NativeAttributes,
+                "autoRecover",
+                "crashSave",
+                "dataExtractLoad",
+                "repairLoad");
 
             SetBooleanAttribute(element, "autoRecover", item.AutoRecover);
             SetBooleanAttribute(element, "crashSave", item.CrashSave);
             SetBooleanAttribute(element, "dataExtractLoad", item.DataExtractLoad);
             SetBooleanAttribute(element, "repairLoad", item.RepairLoad);
+            XlsxWorkbookFileRecoveryPropertyNormalizer.NormalizeElement(element);
             return element;
         }).ToArray();
 
@@ -245,20 +248,21 @@ internal static class XlsxWorkbookMetadataWriter
         }
 
         var fileVersion = new XElement(WorkbookNs + "fileVersion");
-        foreach (var attribute in workbook.FileVersion.NativeAttributes)
-        {
-            if (!string.IsNullOrWhiteSpace(attribute.Key) &&
-                attribute.Key is not "appName" and not "lastEdited" and not "lowestEdited" and not "rupBuild" and not "codeName")
-            {
-                XlsxWorkbookMetadataXmlHelper.TrySetNativeAttribute(fileVersion, attribute.Key, attribute.Value);
-            }
-        }
+        XlsxWorkbookMetadataXmlHelper.ApplyNativeAttributes(
+            fileVersion,
+            workbook.FileVersion.NativeAttributes,
+            "appName",
+            "lastEdited",
+            "lowestEdited",
+            "rupBuild",
+            "codeName");
 
         fileVersion.SetAttributeValue("appName", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(workbook.FileVersion.AppName));
         fileVersion.SetAttributeValue("lastEdited", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(workbook.FileVersion.LastEdited));
         fileVersion.SetAttributeValue("lowestEdited", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(workbook.FileVersion.LowestEdited));
         fileVersion.SetAttributeValue("rupBuild", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(workbook.FileVersion.RupBuild));
         fileVersion.SetAttributeValue("codeName", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(workbook.FileVersion.CodeName));
+        XlsxWorkbookFileVersionNormalizer.NormalizeElement(fileVersion);
 
         root.AddFirst(fileVersion);
         return true;
@@ -278,25 +282,22 @@ internal static class XlsxWorkbookMetadataWriter
         }
 
         var functionGroups = new XElement(WorkbookNs + "functionGroups");
-        foreach (var attribute in workbook.FunctionGroups.NativeAttributes)
-        {
-            if (!string.IsNullOrWhiteSpace(attribute.Key) && attribute.Key != "builtInGroupCount")
-                XlsxWorkbookMetadataXmlHelper.TrySetNativeAttribute(functionGroups, attribute.Key, attribute.Value);
-        }
+        XlsxWorkbookMetadataXmlHelper.ApplyNativeAttributes(
+            functionGroups,
+            workbook.FunctionGroups.NativeAttributes,
+            "builtInGroupCount");
 
         functionGroups.SetAttributeValue("builtInGroupCount", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(workbook.FunctionGroups.BuiltInGroupCount));
         foreach (var group in workbook.FunctionGroups.Groups)
         {
             var element = new XElement(WorkbookNs + "functionGroup");
-            foreach (var attribute in group.NativeAttributes)
-            {
-                if (!string.IsNullOrWhiteSpace(attribute.Key) && attribute.Key != "name")
-                    XlsxWorkbookMetadataXmlHelper.TrySetNativeAttribute(element, attribute.Key, attribute.Value);
-            }
+            XlsxWorkbookMetadataXmlHelper.ApplyNativeAttributes(element, group.NativeAttributes, "name");
 
             element.SetAttributeValue("name", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(group.Name));
             functionGroups.Add(element);
         }
+
+        XlsxWorkbookFunctionGroupsNormalizer.NormalizeElement(functionGroups);
 
         var oleSize = root.Element(WorkbookNs + "oleSize");
         if (oleSize is not null)
@@ -324,33 +325,27 @@ internal static class XlsxWorkbookMetadataWriter
         }
 
         var smartTagProperties = new XElement(WorkbookNs + "smartTagPr");
-        foreach (var attribute in workbook.SmartTags.PropertiesNativeAttributes)
-        {
-            if (!string.IsNullOrWhiteSpace(attribute.Key) && attribute.Key is not "embed" and not "show")
-                XlsxWorkbookMetadataXmlHelper.TrySetNativeAttribute(smartTagProperties, attribute.Key, attribute.Value);
-        }
+        XlsxWorkbookMetadataXmlHelper.ApplyNativeAttributes(
+            smartTagProperties,
+            workbook.SmartTags.PropertiesNativeAttributes,
+            "embed",
+            "show");
 
         smartTagProperties.SetAttributeValue("embed", workbook.SmartTags.Embed is { } embed ? embed ? "1" : "0" : null);
         smartTagProperties.SetAttributeValue("show", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(workbook.SmartTags.Show));
 
         var smartTagTypes = new XElement(WorkbookNs + "smartTagTypes");
-        foreach (var attribute in workbook.SmartTags.TypesNativeAttributes)
-        {
-            if (!string.IsNullOrWhiteSpace(attribute.Key))
-                XlsxWorkbookMetadataXmlHelper.TrySetNativeAttribute(smartTagTypes, attribute.Key, attribute.Value);
-        }
+        XlsxWorkbookMetadataXmlHelper.ApplyNativeAttributes(smartTagTypes, workbook.SmartTags.TypesNativeAttributes);
 
         foreach (var type in workbook.SmartTags.Types)
         {
             var element = new XElement(WorkbookNs + "smartTagType");
-            foreach (var attribute in type.NativeAttributes)
-            {
-                if (!string.IsNullOrWhiteSpace(attribute.Key) &&
-                    attribute.Key is not "namespaceUri" and not "name" and not "url")
-                {
-                    XlsxWorkbookMetadataXmlHelper.TrySetNativeAttribute(element, attribute.Key, attribute.Value);
-                }
-            }
+            XlsxWorkbookMetadataXmlHelper.ApplyNativeAttributes(
+                element,
+                type.NativeAttributes,
+                "namespaceUri",
+                "name",
+                "url");
 
             element.SetAttributeValue("namespaceUri", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(type.NamespaceUri));
             element.SetAttributeValue("name", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(type.Name));
@@ -358,11 +353,17 @@ internal static class XlsxWorkbookMetadataWriter
             smartTagTypes.Add(element);
         }
 
+        XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagPropertiesElement(smartTagProperties);
+        XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagTypesElement(smartTagTypes);
+
         var extensionList = root.Element(WorkbookNs + "extLst");
+        XElement[] elements = XlsxWorkbookSmartTagNormalizer.ShouldRemoveSmartTagTypesElement(smartTagTypes)
+            ? [smartTagProperties]
+            : [smartTagProperties, smartTagTypes];
         if (extensionList is not null)
-            extensionList.AddBeforeSelf(smartTagProperties, smartTagTypes);
+            extensionList.AddBeforeSelf(elements);
         else
-            root.Add(smartTagProperties, smartTagTypes);
+            root.Add(elements);
 
         return true;
     }
@@ -393,6 +394,7 @@ internal static class XlsxWorkbookMetadataWriter
             protection.SetAttributeValue("lockStructure", "1");
         if (!string.IsNullOrWhiteSpace(workbook.StructureProtectionPassword))
             protection.SetAttributeValue("workbookPassword", XlsxWorkbookMetadataXmlHelper.ToLegacyPasswordHash(workbook.StructureProtectionPassword));
+        XlsxWorkbookProtectionNormalizer.NormalizeElement(protection);
 
         InsertWorkbookProtectionInOrder(root, protection);
 
@@ -461,6 +463,7 @@ internal static class XlsxWorkbookMetadataWriter
         calcPr.SetAttributeValue(
             "iterateDelta",
             workbook.MaxCalculationChange is { } maxChange ? maxChange.ToString(CultureInfo.InvariantCulture) : null);
+        XlsxWorkbookCalculationPropertyNormalizer.NormalizeElement(calcPr);
 
         return true;
 

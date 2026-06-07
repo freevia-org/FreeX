@@ -1,4 +1,3 @@
-using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -11,7 +10,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_Reads3DColumnChartAsRenderable()
     {
         var sheetId = SheetId.New();
-        var chartXml = XDocument.Parse(BuildSingleSeriesChartXml("bar3DChart"));
+        var chartXml = ParseChartXml(BuildSingleSeriesChartXml("bar3DChart"));
 
         XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
             .Should().BeTrue();
@@ -29,7 +28,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_Reads3DBarChartAsRenderable()
     {
         var sheetId = SheetId.New();
-        var chartXml = XDocument.Parse(BuildSingleSeriesChartXml("bar3DChart", """<c:barDir val="bar"/>"""));
+        var chartXml = ParseChartXml(BuildSingleSeriesChartXml("bar3DChart", """<c:barDir val="bar"/>"""));
 
         XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
             .Should().BeTrue();
@@ -47,7 +46,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_Reads3DPieChartAsRenderable()
     {
         var sheetId = SheetId.New();
-        var chartXml = XDocument.Parse(BuildSingleSeriesChartXml("pie3DChart"));
+        var chartXml = ParseChartXml(BuildSingleSeriesChartXml("pie3DChart"));
 
         XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
             .Should().BeTrue();
@@ -65,7 +64,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_Reads3DAreaChartAsRenderable()
     {
         var sheetId = SheetId.New();
-        var chartXml = XDocument.Parse(BuildSingleSeriesChartXml("area3DChart"));
+        var chartXml = ParseChartXml(BuildSingleSeriesChartXml("area3DChart"));
 
         XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
             .Should().BeTrue();
@@ -83,7 +82,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_Reads3DLineChartAsRenderable()
     {
         var sheetId = SheetId.New();
-        var chartXml = XDocument.Parse(BuildSingleSeriesChartXml("line3DChart"));
+        var chartXml = ParseChartXml(BuildSingleSeriesChartXml("line3DChart"));
 
         XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
             .Should().BeTrue();

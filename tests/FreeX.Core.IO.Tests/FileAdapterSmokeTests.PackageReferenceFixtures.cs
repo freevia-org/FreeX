@@ -25,8 +25,17 @@ public partial class FileAdapterSmokeTests
 
             var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
             workbookXml.Root!.Elements(workbookNs + "externalReferences").Remove();
+            var externalReference = new XElement(
+                workbookNs + "externalReference",
+                new XAttribute(relNs + "id", " rIdFreeXExternalLink "),
+                new XAttribute("customExternalReferenceFlag", "removed"),
+                new XElement(workbookNs + "nativeExternalReferenceChild"));
             workbookXml.Root!.Add(new XElement(
                 workbookNs + "externalReferences",
+                new XAttribute("customExternalReferencesFlag", "removed"),
+                externalReference,
+                new XElement(workbookNs + "nativeExternalReferencesChild"),
+                new XElement(workbookNs + "externalReference", new XAttribute(relNs + "id", " ")),
                 new XElement(workbookNs + "externalReference", new XAttribute(relNs + "id", "rIdFreeXExternalLink"))));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
 
@@ -144,6 +153,87 @@ public partial class FileAdapterSmokeTests
         packageStream.Position = 0;
     }
 
+    private static void RewritePrinterSettingsRelationship(
+        MemoryStream packageStream,
+        string relationshipId,
+        string relationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings")
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Element(worksheetNs + "pageSetup")!.SetAttributeValue(relNs + "id", relationshipId);
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+            var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+            var worksheetRelsXml = LoadPackageXml(archive.GetEntry(worksheetRelsPath)!);
+            var relationship = worksheetRelsXml.Root!
+                .Elements(packageRelNs + "Relationship")
+                .Single(rel => string.Equals(rel.Attribute("Target")?.Value, "../printerSettings/printerSettings1.bin", StringComparison.Ordinal));
+            relationship.SetAttributeValue("Id", relationshipId);
+            relationship.SetAttributeValue("Type", relationshipType);
+            ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddEmbeddedOlePackage(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "oleObjects",
+                new XElement(
+                    worksheetNs + "oleObject",
+                    new XAttribute("progId", "Package"),
+                    new XAttribute("dvAspect", "DVASPECT_CONTENT"),
+                    new XAttribute("shapeId", "1025"),
+                    new XAttribute(relNs + "id", "rIdEmbeddedOle1"),
+                    new XElement(
+                        worksheetNs + "objectPr",
+                        new XAttribute("defaultSize", "1"),
+                        new XAttribute("autoFill", "0"),
+                        new XAttribute("autoLine", "0")))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+            var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+            var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+                ? LoadPackageXml(worksheetRelsEntry)
+                : new XDocument(new XElement(packageRelNs + "Relationships"));
+            worksheetRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdEmbeddedOle1"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject"),
+                new XAttribute("Target", "../embeddings/oleObject1.bin")));
+            ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+            archive.GetEntry("xl/embeddings/oleObject1.bin")?.Delete();
+            var oleEntry = archive.CreateEntry("xl/embeddings/oleObject1.bin");
+            using (var oleStream = oleEntry.Open())
+                oleStream.Write([0x46, 0x58, 0x4C, 0x4F, 0x4C, 0x45]);
+
+            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(
+                contentTypesXml,
+                contentTypeNs,
+                "/xl/embeddings/oleObject1.bin",
+                "application/vnd.openxmlformats-officedocument.oleObject");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
     private static void AddHeaderFooterLegacyDrawingPackage(MemoryStream packageStream)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
@@ -210,6 +300,30 @@ public partial class FileAdapterSmokeTests
                 "/xl/media/headerFooterImage1.png",
                 "image/png");
             ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void RewriteHeaderFooterLegacyDrawingRelationshipId(MemoryStream packageStream, string relationshipId)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Element(worksheetNs + "legacyDrawingHF")!.SetAttributeValue(relNs + "id", relationshipId);
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+            var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+            var worksheetRelsXml = LoadPackageXml(archive.GetEntry(worksheetRelsPath)!);
+            var relationship = worksheetRelsXml.Root!
+                .Elements(packageRelNs + "Relationship")
+                .Single(rel => string.Equals(rel.Attribute("Target")?.Value, "../drawings/vmlDrawing1.vml", StringComparison.Ordinal));
+            relationship.SetAttributeValue("Id", relationshipId);
+            ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
         }
 
         packageStream.Position = 0;

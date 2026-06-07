@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -8,7 +7,7 @@ public sealed class TesterReleaseReadinessPreflightTests
     [Fact]
     public void ReadinessPreflight_ValidatesReleaseMetadataAndAccessibilityGate()
     {
-        var script = File.ReadAllText(WorkspaceFileLocator.Find("tools", "Test-TesterReleaseReadiness.ps1"));
+        var script = WorkspaceFileLocator.ReadAllText("tools", "Test-TesterReleaseReadiness.ps1");
 
         script.Should().Contain("release/progress.json is missing required property");
         script.Should().Contain("release/progress.json overallCompletion must be between 0 and 100.");
@@ -24,7 +23,7 @@ public sealed class TesterReleaseReadinessPreflightTests
     [Fact]
     public void DistributionPlan_DocumentsReadinessPreflight()
     {
-        var plan = File.ReadAllText(WorkspaceFileLocator.Find("docs", "release/test-distribution.md"));
+        var plan = WorkspaceFileLocator.ReadAllText("docs", "release/test-distribution.md");
 
         plan.Should().Contain("tools/Test-TesterReleaseReadiness.ps1");
         plan.Should().Contain("-PublicPreviewCandidate");
@@ -40,9 +39,8 @@ public sealed class TesterReleaseReadinessPreflightTests
     [Fact]
     public void ReadinessPreflight_PassesForInternalTesterBuild()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-TesterReleaseReadiness.ps1");
-        var repoRoot = Path.GetDirectoryName(WorkspaceFileLocator.Find("FreeX.slnx"))!;
-        var result = PowerShellScriptRunner.Run(scriptPath, repoRoot, "-RunNumber 42");
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        var result = PowerShellScriptRunner.RunToolScript("Test-TesterReleaseReadiness.ps1", repoRoot, "-RunNumber 42");
 
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Tester release readiness preflight passed.");
@@ -54,9 +52,11 @@ public sealed class TesterReleaseReadinessPreflightTests
     [Fact]
     public void ReadinessPreflight_BlocksPublicPreviewWhenAccessibilityGateIsIncomplete()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-TesterReleaseReadiness.ps1");
-        var repoRoot = Path.GetDirectoryName(WorkspaceFileLocator.Find("FreeX.slnx"))!;
-        var result = PowerShellScriptRunner.Run(scriptPath, repoRoot, "-RunNumber 42 -PublicPreviewCandidate");
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        var result = PowerShellScriptRunner.RunToolScript(
+            "Test-TesterReleaseReadiness.ps1",
+            repoRoot,
+            "-RunNumber 42 -PublicPreviewCandidate");
 
         result.ExitCode.Should().NotBe(0);
         result.Error.Should().Contain("Public-preview preflight requires completed accessibility gate inputs");
@@ -69,9 +69,11 @@ public sealed class TesterReleaseReadinessPreflightTests
     [Fact]
     public void ReadinessPreflight_AllowsPublicPreviewWhenAccessibilityGateIsComplete()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-TesterReleaseReadiness.ps1");
-        var repoRoot = Path.GetDirectoryName(WorkspaceFileLocator.Find("FreeX.slnx"))!;
-        var result = PowerShellScriptRunner.Run(scriptPath, repoRoot, "-RunNumber 42 -PublicPreviewCandidate -AccessibilityKeyboardOnly -AccessibilityScreenReader -AccessibilityUiaCatalog -AccessibilityKnownIssues");
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        var result = PowerShellScriptRunner.RunToolScript(
+            "Test-TesterReleaseReadiness.ps1",
+            repoRoot,
+            "-RunNumber 42 -PublicPreviewCandidate -AccessibilityKeyboardOnly -AccessibilityScreenReader -AccessibilityUiaCatalog -AccessibilityKnownIssues");
 
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Tester release readiness preflight passed.");

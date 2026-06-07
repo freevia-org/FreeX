@@ -571,6 +571,7 @@ internal static partial class XlsxCorpusFixtureFactory
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
         XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace diagramNs = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
 
         var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
         if (contentTypesEntry is not null)
@@ -630,7 +631,13 @@ internal static partial class XlsxCorpusFixtureFactory
                             drawingNs + "graphic",
                             new XElement(
                                 drawingNs + "graphicData",
-                                new XAttribute("uri", "http://schemas.openxmlformats.org/drawingml/2006/diagram")))),
+                                new XAttribute("uri", "http://schemas.openxmlformats.org/drawingml/2006/diagram"),
+                                new XElement(
+                                    diagramNs + "relIds",
+                                    new XAttribute(officeRelNs + "dm", "rIdFreeXDiagramData1"),
+                                    new XAttribute(officeRelNs + "lo", "rIdFreeXDiagramLayout1"),
+                                    new XAttribute(officeRelNs + "qs", "rIdFreeXDiagramQuickStyle1"),
+                                    new XAttribute(officeRelNs + "cs", "rIdFreeXDiagramColors1"))))),
                     new XElement(spreadsheetDrawingNs + "clientData")))));
 
         var drawingRelsPath = "xl/drawings/_rels/drawing1.xml.rels";
@@ -652,6 +659,11 @@ internal static partial class XlsxCorpusFixtureFactory
             "rIdFreeXDiagramQuickStyle1",
             "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle",
             "../diagrams/quickStyle1.xml");
+        EnsureRelationship(
+            drawingRelsXml,
+            "rIdFreeXDiagramColors1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors",
+            "../diagrams/colors1.xml");
         ReplacePackageXml(archive, drawingRelsPath, drawingRelsXml);
     }
 
@@ -816,9 +828,7 @@ internal static partial class XlsxCorpusFixtureFactory
         var extensionNs = isSlicer ? slicerNs : timelineNs;
         var extensionPrefix = isSlicer ? "x14" : "x15";
 
-        XDocument contentTypes;
-        using (var stream = contentTypesEntry.Open())
-            contentTypes = XDocument.Load(stream);
+        var contentTypes = LoadPackageXml(contentTypesEntry);
         if (contentTypes.Root?.Elements(contentTypeNs + "Override").Any(element =>
                 string.Equals(element.Attribute("PartName")?.Value, "/xl/drawings/drawing1.xml", StringComparison.OrdinalIgnoreCase)) != true)
         {
@@ -857,9 +867,7 @@ internal static partial class XlsxCorpusFixtureFactory
         ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
 
         var drawingRelId = "rIdFreeXFloatingDrawing1";
-        XDocument worksheetXml;
-        using (var stream = worksheetEntry.Open())
-            worksheetXml = XDocument.Load(stream);
+        var worksheetXml = LoadPackageXml(worksheetEntry);
         var root = worksheetXml.Root;
         if (root is not null && root.Element(worksheetNs + "drawing") is null)
             root.Add(new XElement(worksheetNs + "drawing", new XAttribute(officeRelNs + "id", drawingRelId)));

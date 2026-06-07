@@ -8,7 +8,7 @@ public sealed class ToolScriptsPreflightTests
     [Fact]
     public void ToolScriptsPreflight_ParsesAllPowerShellTools()
     {
-        var script = File.ReadAllText(WorkspaceFileLocator.Find("tools", "Test-ToolScripts.ps1"));
+        var script = WorkspaceFileLocator.ReadAllText("tools", "Test-ToolScripts.ps1");
 
         script.Should().Contain("Get-ChildItem -LiteralPath $resolvedScriptDirectory -Filter \"*.ps1\" -File");
         script.Should().Contain("[System.Management.Automation.Language.Parser]::ParseFile");
@@ -24,26 +24,20 @@ public sealed class ToolScriptsPreflightTests
         using var temp = new TestTemporaryDirectory();
 
         File.WriteAllText(Path.Combine(temp.Path, "Test-MissingFailFast.ps1"), "Write-Host \"ok\"");
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ToolScripts.ps1");
-        using var workingDirectory = new TestTemporaryDirectory();
 
-        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-ScriptDirectory \"{temp.Path}\"");
-        var combinedOutput = (result.Output + result.Error)
-            .Replace("\r", string.Empty, StringComparison.Ordinal)
-            .Replace("\n", string.Empty, StringComparison.Ordinal);
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-ToolScripts.ps1",
+            $"-ScriptDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("PowerShell fail-fast validation failed");
-        combinedOutput.Should().Contain("Test-MissingFailFast.ps1");
+        result.CombinedOutput.Should().Contain("PowerShell fail-fast validation failed");
+        result.NormalizedCombinedOutput.Should().Contain("Test-MissingFailFast.ps1");
     }
 
     [Fact]
     public void ToolScriptsPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ToolScripts.ps1");
-        using var workingDirectory = new TestTemporaryDirectory();
-
-        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, "");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory("Test-ToolScripts.ps1");
 
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Validated ");
@@ -56,13 +50,13 @@ public sealed class ToolScriptsPreflightTests
         using var temp = new TestTemporaryDirectory();
 
         File.WriteAllText(Path.Combine(temp.Path, "broken.ps1"), "param(`nif (`n");
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ToolScripts.ps1");
-        using var workingDirectory = new TestTemporaryDirectory();
 
-        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-ScriptDirectory \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-ToolScripts.ps1",
+            $"-ScriptDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("PowerShell syntax validation failed");
+        result.CombinedOutput.Should().Contain("PowerShell syntax validation failed");
     }
 
 }

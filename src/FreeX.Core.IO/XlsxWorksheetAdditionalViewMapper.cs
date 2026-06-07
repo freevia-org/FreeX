@@ -19,7 +19,7 @@ internal static class XlsxWorksheetAdditionalViewMapper
                 .Select(ReadView)
                 .ToList()
         };
-        ReadNativeAttributes(sheetViews, model.NativeAttributes, []);
+        XlsxWorksheetNativeMetadataHelpers.ReadNativeAttributes(sheetViews, model.NativeAttributes, []);
 
         return model.NativeAttributes.Count == 0 && model.Views.Count == 0
             ? null
@@ -57,7 +57,7 @@ internal static class XlsxWorksheetAdditionalViewMapper
                 changed = true;
             }
 
-            ApplyNativeAttributes(sheetViews, additionalViews.NativeAttributes, []);
+            XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(sheetViews, additionalViews.NativeAttributes, []);
             changed |= additionalViews.NativeAttributes.Count > 0;
             foreach (var view in sheetViews.Elements(WorksheetNs + "sheetView").Where(IsAdditionalView).ToList())
             {
@@ -87,76 +87,30 @@ internal static class XlsxWorksheetAdditionalViewMapper
             WorkbookViewId = element.Attribute("workbookViewId")?.Value,
             NativeXml = element.ToString(SaveOptions.DisableFormatting)
         };
-        ReadNativeAttributes(element, model.NativeAttributes, ["workbookViewId"]);
+        XlsxWorksheetNativeMetadataHelpers.ReadNativeAttributes(element, model.NativeAttributes, ["workbookViewId"]);
         return model;
     }
 
     private static XElement? ToXml(WorksheetAdditionalViewModel model)
     {
-        if (!string.IsNullOrWhiteSpace(model.NativeXml))
+        if (XlsxWorksheetNativeMetadataHelpers.TryParseNativeElement(
+                model.NativeXml,
+                WorksheetNs + "sheetView",
+                XlsxWorksheetSheetViewNormalizer.NormalizeSheetViewElement) is { } nativeElement)
         {
-            try
-            {
-                var nativeElement = XElement.Parse(model.NativeXml);
-                if (nativeElement.Name == WorksheetNs + "sheetView")
-                    return nativeElement;
-            }
-            catch
-            {
-                // Fall back to the structured model below.
-            }
+            return IsAdditionalView(nativeElement) ? nativeElement : null;
         }
 
         if (string.IsNullOrWhiteSpace(model.WorkbookViewId) && model.NativeAttributes.Count == 0)
             return null;
 
         var element = new XElement(WorksheetNs + "sheetView");
-        ApplyNativeAttributes(element, model.NativeAttributes, ["workbookViewId"]);
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(element, model.NativeAttributes, ["workbookViewId"]);
         element.SetAttributeValue("workbookViewId", model.WorkbookViewId);
-        return element;
+        XlsxWorksheetSheetViewNormalizer.NormalizeSheetViewElement(element);
+        return IsAdditionalView(element) ? element : null;
     }
 
     private static bool IsAdditionalView(XElement element) =>
         !string.Equals(element.Attribute("workbookViewId")?.Value ?? "0", "0", StringComparison.Ordinal);
-
-    private static void ReadNativeAttributes(
-        XElement element,
-        Dictionary<string, string> target,
-        IReadOnlyCollection<string> modeledNames)
-    {
-        foreach (var attribute in element.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration || modeledNames.Contains(attribute.Name.LocalName, StringComparer.Ordinal))
-                continue;
-
-            target[attribute.Name.ToString()] = attribute.Value;
-        }
-    }
-
-    private static void ApplyNativeAttributes(
-        XElement element,
-        Dictionary<string, string> attributes,
-        IReadOnlyCollection<string> modeledNames)
-    {
-        foreach (var attribute in attributes)
-        {
-            if (string.IsNullOrWhiteSpace(attribute.Key) || modeledNames.Contains(attribute.Key, StringComparer.Ordinal))
-                continue;
-
-            if (TryGetAttributeName(attribute.Key) is { } attributeName)
-                element.SetAttributeValue(attributeName, attribute.Value);
-        }
-    }
-
-    private static XName? TryGetAttributeName(string key)
-    {
-        try
-        {
-            return XName.Get(key);
-        }
-        catch
-        {
-            return null;
-        }
-    }
 }

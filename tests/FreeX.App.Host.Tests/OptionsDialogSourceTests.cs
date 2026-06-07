@@ -99,14 +99,7 @@ public sealed partial class OptionsDialogSourceTests
 
 
     private static MouseButtonEventArgs CreateMouseDoubleClickEvent() =>
-
-        new(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
-
-        {
-
-            RoutedEvent = Control.MouseDoubleClickEvent
-
-        };
+        DialogSourceTestSupport.CreateMouseDoubleClickEvent();
 
 
 
@@ -160,25 +153,7 @@ public sealed partial class OptionsDialogSourceTests
 
         var okButton = GetControl<Button>(dialog, "OkBtn");
 
-        try
-
-        {
-
-            okButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-
-        }
-
-        catch (InvalidOperationException invalidOperation)
-
-            when (invalidOperation.Message.Contains("DialogResult", StringComparison.Ordinal))
-
-        {
-
-            // The handler commits Result before setting DialogResult. Direct modeless invocation in
-
-            // tests reaches that WPF guard after exercising the same save path as the dialog button.
-
-        }
+        DialogSourceTestSupport.ClickButtonAllowingNonModalDialogResult(okButton);
 
     }
 }

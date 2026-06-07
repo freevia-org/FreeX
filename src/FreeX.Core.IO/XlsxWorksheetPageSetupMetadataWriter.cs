@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -74,6 +73,7 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
         changed |= SetOptionalIntAttribute(pageSetup, "copies", sheet.PrintCopies);
         changed |= SetOptionalIntAttribute(pageSetup, "verticalDpi", sheet.PrintQualityVerticalDpi);
         changed |= ApplyNativePageSetupMetadata(pageSetup, sheet.PageSetupMetadata);
+        changed |= XlsxWorksheetPageLayoutNormalizer.NormalizePageSetup(pageSetup);
         return changed;
     }
 
@@ -112,6 +112,7 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
         var changed = false;
         changed |= SetOptionalBoolAttribute(pageSetupProperties, "fitToPage", sheet.FitToPage);
         changed |= SetOptionalBoolAttribute(pageSetupProperties, "autoPageBreaks", sheet.AutoPageBreaks);
+        changed |= XlsxWorksheetPageLayoutNormalizer.NormalizeSheetPropertiesPageLayout(sheetProperties!);
         return changed;
     }
 
@@ -142,43 +143,23 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
         changed |= SetOptionalBoolAttribute(outlineProperties, "summaryRight", sheet.OutlineSummaryRight);
         changed |= SetOptionalBoolAttribute(outlineProperties, "showOutlineSymbols", sheet.ShowOutlineSymbols);
         changed |= SetOptionalBoolAttribute(outlineProperties, "applyStyles", sheet.ApplyOutlineStyles);
+        changed |= XlsxWorksheetPageLayoutNormalizer.NormalizeSheetPropertiesPageLayout(sheetProperties!);
         return changed;
     }
 
     private static bool SetOptionalBoolAttribute(XElement element, XName name, bool? value) =>
-        value is { } flag
-            ? SetAttributeIfDifferent(element, name, flag ? "1" : "0")
-            : RemoveAttributeIfPresent(element, name);
+        SetOptionalAttribute(element, name, value is { } flag ? flag ? "1" : "0" : null);
 
     private static bool SetOptionalIntAttribute(XElement element, XName name, int? value) =>
-        value is > 0
-            ? SetAttributeIfDifferent(element, name, value.Value.ToString(CultureInfo.InvariantCulture))
+        SetOptionalAttribute(
+            element,
+            name,
+            value is > 0 ? value.Value.ToString(CultureInfo.InvariantCulture) : null);
+
+    private static bool SetOptionalAttribute(XElement element, XName name, string? value) =>
+        value is not null
+            ? XlsxXmlNormalizationHelpers.SetAttributeIfChanged(element, name, value)
             : RemoveAttributeIfPresent(element, name);
-
-    private static bool SetAttributeIfDifferent(XElement element, XName name, string value)
-    {
-        if (string.Equals(element.Attribute(name)?.Value, value, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(name, value);
-        return true;
-    }
-
-    private static bool TrySetNativeAttributeIfDifferent(XElement element, string name, string value)
-    {
-        try
-        {
-            return SetAttributeIfDifferent(element, XName.Get(name), value);
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (XmlException)
-        {
-            return false;
-        }
-    }
 
     private static bool RemoveAttributeIfPresent(XElement element, XName name)
     {

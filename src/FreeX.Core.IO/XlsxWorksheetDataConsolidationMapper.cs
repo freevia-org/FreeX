@@ -80,18 +80,15 @@ internal static class XlsxWorksheetDataConsolidationMapper
 
     private static XElement? ToXml(WorksheetDataConsolidationModel model)
     {
-        if (!string.IsNullOrWhiteSpace(model.NativeXml))
+        if (XlsxWorksheetNativeMetadataHelpers.TryParseNativeElement(
+                model.NativeXml,
+                WorksheetNs + "dataConsolidate",
+                XlsxWorksheetDataConsolidationNormalizer.NormalizeElement) is { } nativeElement)
         {
-            try
-            {
-                var nativeElement = XElement.Parse(model.NativeXml);
-                if (nativeElement.Name == WorksheetNs + "dataConsolidate")
-                    return nativeElement;
-            }
-            catch
-            {
-                // Fall back to the structured model below.
-            }
+            if (!nativeElement.HasAttributes && !nativeElement.HasElements)
+                return null;
+
+            return nativeElement;
         }
 
         var element = new XElement(WorksheetNs + "dataConsolidate");
@@ -109,6 +106,7 @@ internal static class XlsxWorksheetDataConsolidationMapper
                 model.References.Select(ToXml)));
         }
 
+        XlsxWorksheetDataConsolidationNormalizer.NormalizeElement(element);
         return element.HasAttributes || element.HasElements ? element : null;
     }
 

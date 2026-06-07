@@ -44,7 +44,7 @@ public sealed partial class XsltWorkbookTransformTests
         using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
 
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
-        var cell = XDocument.Load(transformed).Descendants(ss + "Cell").Single();
+        var cell = LoadTransformedXml(transformed).Descendants(ss + "Cell").Single();
         var comment = cell.Element(ss + "Comment")!;
 
         cell.Element(ss + "Data")!.Value.Should().Be("Total");
@@ -85,7 +85,7 @@ public sealed partial class XsltWorkbookTransformTests
         using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
 
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
-        var formulaCell = XDocument.Load(transformed).Descendants(ss + "Cell").ElementAt(2);
+        var formulaCell = LoadTransformedXml(transformed).Descendants(ss + "Cell").ElementAt(2);
 
         formulaCell.Attribute(ss + "Formula")!.Value.Should().Be("=SUM(RC[-2]:RC[-1])");
         formulaCell.Element(ss + "Data")!.Value.Should().Be("19.75");
@@ -123,7 +123,7 @@ public sealed partial class XsltWorkbookTransformTests
         using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
 
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
-        var cells = XDocument.Load(transformed).Descendants(ss + "Cell").ToList();
+        var cells = LoadTransformedXml(transformed).Descendants(ss + "Cell").ToList();
 
         cells[0].Attribute(ss + "MergeAcross")!.Value.Should().Be("1");
         cells[0].Attribute(ss + "MergeDown")!.Value.Should().Be("2");
@@ -161,7 +161,7 @@ public sealed partial class XsltWorkbookTransformTests
         using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
 
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
-        var worksheets = XDocument.Load(transformed).Descendants(ss + "Worksheet").ToList();
+        var worksheets = LoadTransformedXml(transformed).Descendants(ss + "Worksheet").ToList();
 
         worksheets.Select(sheet => sheet.Attribute(ss + "Name")!.Value)
             .Should().Equal("Hidden report", "Audit stash");
@@ -202,7 +202,7 @@ public sealed partial class XsltWorkbookTransformTests
         using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
 
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
-        var document = XDocument.Load(transformed);
+        var document = LoadTransformedXml(transformed);
         var column = document.Descendants(ss + "Column").Single();
         var row = document.Descendants(ss + "Row").Single();
         var cell = document.Descendants(ss + "Cell").Single();
@@ -254,7 +254,7 @@ public sealed partial class XsltWorkbookTransformTests
         using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
 
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
-        var document = XDocument.Load(transformed);
+        var document = LoadTransformedXml(transformed);
         var column = document.Descendants(ss + "Column").Single();
         var rows = document.Descendants(ss + "Row").ToList();
 
@@ -307,7 +307,7 @@ public sealed partial class XsltWorkbookTransformTests
 
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
         XNamespace x = "urn:schemas-microsoft-com:office:excel";
-        var worksheet = XDocument.Load(transformed).Descendants(ss + "Worksheet").Single();
+        var worksheet = LoadTransformedXml(transformed).Descendants(ss + "Worksheet").Single();
         var options = worksheet.Element(x + "WorksheetOptions")!;
 
         worksheet.Attribute(ss + "Name")!.Value.Should().Be("Frozen report");
@@ -357,7 +357,7 @@ public sealed partial class XsltWorkbookTransformTests
         using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
 
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
-        var document = XDocument.Load(transformed);
+        var document = LoadTransformedXml(transformed);
         var namedRange = document.Descendants(ss + "NamedRange").Single();
 
         namedRange.Attribute(ss + "Name")!.Value.Should().Be("GeneratedRows");
@@ -402,7 +402,7 @@ public sealed partial class XsltWorkbookTransformTests
         using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
 
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
-        var data = XDocument.Load(transformed).Descendants(ss + "Data").ToList();
+        var data = LoadTransformedXml(transformed).Descendants(ss + "Data").ToList();
 
         data.Select(element => element.Attribute(ss + "Type")!.Value)
             .Should().Equal("String", "Number", "Boolean", "DateTime", "Error");
@@ -443,7 +443,7 @@ public sealed partial class XsltWorkbookTransformTests
         using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
 
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
-        var cell = XDocument.Load(transformed).Descendants(ss + "Cell").Single();
+        var cell = LoadTransformedXml(transformed).Descendants(ss + "Cell").Single();
 
         cell.Attribute(ss + "HRef")!.Value.Should().Be("https://example.com/review");
         cell.Attribute(ss + "HRefScreenTip")!.Value.Should().Be("Open review");
@@ -483,7 +483,7 @@ public sealed partial class XsltWorkbookTransformTests
         using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
 
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
-        var cell = XDocument.Load(transformed).Descendants(ss + "Cell").Single();
+        var cell = LoadTransformedXml(transformed).Descendants(ss + "Cell").Single();
 
         cell.Attribute(ss + "HRef")!.Value.Should().Be("#'Q1 Summary'!A1");
         cell.Attribute(ss + "HRefScreenTip")!.Value.Should().Be("Open summary");
@@ -523,7 +523,7 @@ public sealed partial class XsltWorkbookTransformTests
         using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
 
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
-        var cell = XDocument.Load(transformed).Descendants(ss + "Cell").Single();
+        var cell = LoadTransformedXml(transformed).Descendants(ss + "Cell").Single();
 
         cell.Attribute(ss + "HRef")!.Value.Should().Be("mailto:finance@example.com");
         cell.Attribute(ss + "HRefScreenTip")!.Value.Should().Be("Send email");
@@ -658,7 +658,7 @@ public sealed partial class XsltWorkbookTransformTests
         using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
 
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
-        var document = XDocument.Load(transformed);
+        var document = LoadTransformedXml(transformed);
 
         document.Descendants(ss + "Style")
             .Select(element => element.Attribute(ss + "ID")!.Value)
@@ -712,7 +712,7 @@ public sealed partial class XsltWorkbookTransformTests
         using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
 
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
-        var document = XDocument.Load(transformed);
+        var document = LoadTransformedXml(transformed);
         var styles = document.Descendants(ss + "Style").ToList();
         var cell = document.Descendants(ss + "Cell").Single();
 
@@ -757,4 +757,9 @@ public sealed partial class XsltWorkbookTransformTests
             .And.Contain("<ss:Data ss:Type=\"String\">87,5%</ss:Data>");
     }
 
+    private static XDocument LoadTransformedXml(Stream transformed)
+    {
+        transformed.Position = 0;
+        return XDocument.Load(transformed);
+    }
 }

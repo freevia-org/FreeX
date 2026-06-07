@@ -59,10 +59,7 @@ public sealed partial class ProtectionDialogTests
             dialog.Dispatcher.BeginInvoke(() =>
             {
                 existingRangesBox.SelectedIndex = 0;
-                var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
-                {
-                    RoutedEvent = Control.MouseDoubleClickEvent
-                };
+                var doubleClick = DialogSourceTestSupport.CreateMouseDoubleClickEvent();
                 existingRangesBox.RaiseEvent(doubleClick);
                 doubleClick.Handled.Should().BeTrue();
 
@@ -89,10 +86,7 @@ public sealed partial class ProtectionDialogTests
             var existingRangesBox = DialogSourceTestSupport.GetPrivateField<ListBox>(dialog, "_existingRangesBox");
 
             existingRangesBox.SelectedItem = null;
-            var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
-            {
-                RoutedEvent = Control.MouseDoubleClickEvent
-            };
+            var doubleClick = DialogSourceTestSupport.CreateMouseDoubleClickEvent();
             existingRangesBox.RaiseEvent(doubleClick);
 
             doubleClick.Handled.Should().BeFalse();

@@ -91,10 +91,7 @@ public sealed class NamedRangeDialogXamlTests
             var namesList = GetControl<ListView>(dialog, "NamesList");
 
             namesList.SelectedItem = null;
-            var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
-            {
-                RoutedEvent = Control.MouseDoubleClickEvent
-            };
+            var doubleClick = DialogSourceTestSupport.CreateMouseDoubleClickEvent();
 
             namesList.RaiseEvent(doubleClick);
 
@@ -405,7 +402,7 @@ public sealed class NamedRangeDialogXamlTests
             try
             {
                 var picker = DialogSourceTestSupport.GetPrivateField<Button>(dialog, "_rangePickerButton");
-                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                DialogSourceTestSupport.ClickButton(picker);
 
                 requests.Should().Equal(new NamedRangeSelectionRequest(
                     NamedRangeSelectionTarget.DefinitionRefersTo,
@@ -508,11 +505,7 @@ public sealed class NamedRangeDialogXamlTests
 
     private static T GetControl<T>(NamedRangeDialog dialog, string name)
         where T : class
-    {
-        var field = typeof(NamedRangeDialog).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
-        field.Should().NotBeNull();
-        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
-    }
+        => DialogSourceTestSupport.GetPrivateField<T>(dialog, name);
 
     private static string ReadNamedRangeDialogSource() =>
         DialogSourceTestSupport.ReadHostSources(
@@ -521,11 +514,7 @@ public sealed class NamedRangeDialogXamlTests
             "NamedRangeDialogPlanner.cs");
 
     private static void InvokePrivate(NamedRangeDialog dialog, string methodName)
-    {
-        var method = typeof(NamedRangeDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
-    }
+        => DialogSourceTestSupport.InvokePrivateHandler(dialog, methodName);
 
     private static ICommandBus CreateCommandBus(Workbook workbook) =>
         new CommandBus(_ => new TestCommandContext(workbook));

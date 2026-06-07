@@ -485,7 +485,7 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void UiTestCatalog_PageSetupRowNoLongerListsCenterAndPageOrderProofAsRemaining()
     {
-        var catalog = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "testing/ui-test-catalog.md"));
+        var catalog = WorkspaceFileLocator.ReadAllLines("docs", "testing/ui-test-catalog.md");
         var pageSetupRow = catalog.Single(line => line.StartsWith("| UI-CMD-PAGE-003 |", StringComparison.Ordinal));
 
         pageSetupRow.Should().Contain("Center on Page and Page Order dialog choices flow through the command builder into the worksheet model");
@@ -510,17 +510,6 @@ public sealed class PageSetupDialogXamlTests
     }
 
     private static void InvokePrivateAllowingNonModalDialogResult(PageSetupDialog dialog, string methodName)
-    {
-        var method = typeof(PageSetupDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        try
-        {
-            method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
-        }
-        catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException invalidOperation &&
-                                                   invalidOperation.Message.Contains("DialogResult", StringComparison.Ordinal))
-        {
-        }
-    }
+        => DialogSourceTestSupport.InvokePrivateHandlerAllowingNonModalDialogResult(dialog, methodName);
 
 }

@@ -24,8 +24,5 @@ public sealed partial class ChartDialogTests
             "ChartTypeDialogs.Change.cs");
 
     private static MouseButtonEventArgs CreateMouseDoubleClickEvent() =>
-        new(Mouse.PrimaryDevice, 0, MouseButton.Left)
-        {
-            RoutedEvent = Control.MouseDoubleClickEvent
-        };
+        DialogSourceTestSupport.CreateMouseDoubleClickEvent();
 }

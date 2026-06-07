@@ -14,7 +14,7 @@ public sealed partial class XlsxChartExWriterTests
         var saved = SaveWorkbookWithChart(ChartType.BoxAndWhisker, endCol: 3);
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
-        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        var chartXml = LoadChartXml(archive);
         var chartData = chartXml.Root!.Element(ChartExNs + "chartData")!;
         var data = chartData.Elements(ChartExNs + "data").ToList();
         data.Should().HaveCount(2);
@@ -67,7 +67,7 @@ public sealed partial class XlsxChartExWriterTests
         var saved = SaveBoxAndWhiskerAllNumericColumnsWorkbook();
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
-        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        var chartXml = LoadChartXml(archive);
         var data = chartXml.Root!
             .Element(ChartExNs + "chartData")!
             .Elements(ChartExNs + "data")

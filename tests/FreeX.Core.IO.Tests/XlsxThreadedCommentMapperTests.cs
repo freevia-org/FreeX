@@ -16,7 +16,7 @@ public sealed class XlsxThreadedCommentMapperTests
     public void Save_WritesRootThreadedCommentPackageParts()
     {
         var createdAt = new DateTimeOffset(2026, 6, 2, 10, 30, 0, TimeSpan.Zero);
-        using var package = SaveWorkbook(CreateWorkbook(createdAt));
+        using var package = XlsxPackageTestHelper.SaveWorkbook(CreateWorkbook(createdAt));
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
         var threadedCommentsXml = LoadXml(archive, "xl/threadedComments/threadedComment1.xml");
@@ -64,7 +64,7 @@ public sealed class XlsxThreadedCommentMapperTests
     public void SaveLoad_RoundTripsRootThreadedComment()
     {
         var createdAt = new DateTimeOffset(2026, 6, 2, 10, 30, 0, TimeSpan.Zero);
-        using var package = SaveWorkbook(CreateWorkbook(createdAt));
+        using var package = XlsxPackageTestHelper.SaveWorkbook(CreateWorkbook(createdAt));
 
         package.Position = 0;
         var loaded = new XlsxFileAdapter().Load(package);
@@ -83,7 +83,7 @@ public sealed class XlsxThreadedCommentMapperTests
     [Fact]
     public void Save_WritesThreadedCommentRepliesAsParentedPackageElements()
     {
-        using var package = SaveWorkbook(CreateWorkbookWithReplies());
+        using var package = XlsxPackageTestHelper.SaveWorkbook(CreateWorkbookWithReplies());
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
         var threadedCommentsXml = LoadXml(archive, "xl/threadedComments/threadedComment1.xml");
@@ -128,12 +128,12 @@ public sealed class XlsxThreadedCommentMapperTests
     [Fact]
     public void SaveLoadSaveLoad_RoundTripsThreadedCommentRepliesAndResolvedMetadata()
     {
-        using var firstPackage = SaveWorkbook(CreateWorkbookWithReplies());
+        using var firstPackage = XlsxPackageTestHelper.SaveWorkbook(CreateWorkbookWithReplies());
 
         firstPackage.Position = 0;
         var loaded = new XlsxFileAdapter().Load(firstPackage);
 
-        using var secondPackage = SaveWorkbook(loaded);
+        using var secondPackage = XlsxPackageTestHelper.SaveWorkbook(loaded);
         secondPackage.Position = 0;
         var reloaded = new XlsxFileAdapter().Load(secondPackage);
         var sheet = reloaded.GetSheetAt(0);
@@ -205,20 +205,8 @@ public sealed class XlsxThreadedCommentMapperTests
         return workbook;
     }
 
-    private static MemoryStream SaveWorkbook(Workbook workbook)
-    {
-        var stream = new MemoryStream();
-        new XlsxFileAdapter().Save(workbook, stream);
-        stream.Position = 0;
-        return stream;
-    }
-
-    private static XDocument LoadXml(ZipArchive archive, string path)
-    {
-        var entry = archive.GetEntry(path);
-        entry.Should().NotBeNull(path);
-        return XlsxPackageXmlEditor.LoadXml(entry!);
-    }
+    private static XDocument LoadXml(ZipArchive archive, string path) =>
+        XlsxPackageTestFixtures.LoadPackageXml(archive, path, path);
 
     private static string? AttributeValue(XElement element, string name) =>
         element.Attribute(name)?.Value;

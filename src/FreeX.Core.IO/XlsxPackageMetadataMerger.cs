@@ -5,6 +5,19 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxPackageMetadataMerger
 {
+    private const string SpreadsheetRelationshipPrefix = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/";
+    private const string ExternalLinkPathRelationshipType = SpreadsheetRelationshipPrefix + "externalLinkPath";
+    private const string ImageRelationshipType = SpreadsheetRelationshipPrefix + "image";
+    private const string PackageRelationshipType = SpreadsheetRelationshipPrefix + "package";
+    private const string PivotCacheDefinitionRelationshipType = SpreadsheetRelationshipPrefix + "pivotCacheDefinition";
+    private const string PivotCacheRecordsRelationshipType = SpreadsheetRelationshipPrefix + "pivotCacheRecords";
+    private const string ChartExStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartStyle";
+    private const string ChartExColorStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartColorStyle";
+    private const string SlicerRelationshipType = "http://schemas.microsoft.com/office/2007/relationships/slicer";
+    private const string SlicerCacheRelationshipType = "http://schemas.microsoft.com/office/2007/relationships/slicerCache";
+    private const string TimelineRelationshipType = "http://schemas.microsoft.com/office/2010/relationships/Timeline";
+    private const string TimelineCacheRelationshipType = "http://schemas.microsoft.com/office/2010/relationships/TimelineCache";
+
     public static IReadOnlySet<string> CopyUnknownPackageParts(
         ZipArchive sourceArchive,
         ZipArchive targetArchive,
@@ -28,6 +41,8 @@ internal static class XlsxPackageMetadataMerger
             if (IsExcludedSourcePart(sourceEntryName, excludedSourceParts))
                 continue;
             if (IsPackageMetadataEntry(sourceEntryName))
+                continue;
+            if (IsInvalidCustomXmlSidecar(sourceEntryName, sourceEntry))
                 continue;
             if (!existingPartNames.Add(sourceEntryName))
                 continue;
@@ -110,6 +125,14 @@ internal static class XlsxPackageMetadataMerger
                 mergedOverride.SetAttributeValue("PartName", $"/{normalizedPartName}");
                 targetRoot.Add(mergedOverride);
                 changed = true;
+                continue;
+            }
+
+            if (TryNormalizeContentTypePartName(partName, out normalizedPartName) &&
+                targetPartNames.Contains(normalizedPartName) &&
+                TryPreserveMacroEnabledWorkbookContentType(targetRoot, sourceOverride, normalizedPartName, contentTypeNs))
+            {
+                changed = true;
             }
         }
 
@@ -173,6 +196,7 @@ internal static class XlsxPackageMetadataMerger
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             var changed = false;
+            Dictionary<string, string>? copiedPartRelationshipIdMap = null;
             foreach (var sourceRelationship in sourceRoot.Elements(relationshipNs + "Relationship"))
             {
                 if (!IsStructurallyValidPackageRelationship(sourceRelationship) ||
@@ -190,7 +214,16 @@ internal static class XlsxPackageMetadataMerger
                 var copy = new XElement(sourceRelationship);
                 var id = copy.Attribute("Id")?.Value;
                 if (!string.IsNullOrWhiteSpace(id) && existingIds.Contains(id))
+                {
                     copy.SetAttributeValue("Id", XlsxPackageXmlEditor.NextRelationshipId(targetXml, relationshipNs));
+                    var remappedId = copy.Attribute("Id")?.Value;
+                    if (!string.IsNullOrWhiteSpace(remappedId) &&
+                        ShouldRebindRelationshipReferenceOnCopiedPart(sourceRelationship))
+                    {
+                        copiedPartRelationshipIdMap ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                        copiedPartRelationshipIdMap[id] = remappedId;
+                    }
+                }
                 targetRoot.Add(copy);
                 var copiedId = copy.Attribute("Id")?.Value;
                 if (!string.IsNullOrWhiteSpace(copiedId))
@@ -199,8 +232,34 @@ internal static class XlsxPackageMetadataMerger
             }
 
             if (changed)
+            {
                 WriteXml(targetIndex, targetEntry.FullName, targetXml, targetEntry.LastWriteTime, SaveOptions.DisableFormatting);
+                RebindCopiedPartRelationshipReferences(
+                    targetIndex,
+                    sourceEntry.FullName,
+                    generatedEntriesBeforeMerge,
+                    copiedPartRelationshipIdMap);
+            }
         }
+    }
+
+    public static void NormalizeCustomXmlPackageGraph(ZipArchive archive)
+    {
+        var targetIndex = ArchiveEntryIndex.Create(archive);
+        var invalidPropertiesParts = targetIndex.EntryNames()
+            .Where(IsCustomXmlPropertiesPart)
+            .Where(entryName =>
+                targetIndex.Get(entryName) is { } entry &&
+                IsInvalidCustomXmlSidecar(entryName, entry))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (invalidPropertiesParts.Count == 0)
+            return;
+
+        foreach (var entryName in invalidPropertiesParts)
+            targetIndex.Delete(entryName);
+
+        RemoveContentTypeOverrides(targetIndex, invalidPropertiesParts);
+        RemoveRelationshipsTargetingParts(targetIndex, invalidPropertiesParts);
     }
 
     private static XDocument? CreateFilteredRelationshipPart(
@@ -279,6 +338,122 @@ internal static class XlsxPackageMetadataMerger
         string.Equals(entryName, "[Content_Types].xml", StringComparison.OrdinalIgnoreCase) ||
         entryName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase);
 
+    private static bool IsInvalidCustomXmlSidecar(string entryName, ZipArchiveEntry entry)
+    {
+        if (!IsCustomXmlItemPart(entryName) && !IsCustomXmlPropertiesPart(entryName))
+            return false;
+
+        XDocument xml;
+        try
+        {
+            xml = XlsxPackageXmlEditor.LoadXml(entry);
+        }
+        catch
+        {
+            return true;
+        }
+
+        return IsCustomXmlPropertiesPart(entryName) && !IsValidCustomXmlProperties(xml);
+    }
+
+    private static bool IsCustomXmlItemPart(string entryName) =>
+        entryName.StartsWith("customXml/item", StringComparison.OrdinalIgnoreCase) &&
+        entryName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+        !IsCustomXmlPropertiesPart(entryName);
+
+    private static bool IsCustomXmlPropertiesPart(string entryName) =>
+        entryName.StartsWith("customXml/itemProps", StringComparison.OrdinalIgnoreCase) &&
+        entryName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsValidCustomXmlProperties(XDocument xml)
+    {
+        XNamespace customXmlNs = "http://schemas.openxmlformats.org/officeDocument/2006/customXml";
+        var root = xml.Root;
+        var itemId = root?.Attribute(customXmlNs + "itemID")?.Value ??
+                     root?.Attribute("itemID")?.Value;
+        return root?.Name == customXmlNs + "datastoreItem" &&
+               !string.IsNullOrWhiteSpace(itemId);
+    }
+
+    private static void RemoveContentTypeOverrides(
+        ArchiveEntryIndex targetIndex,
+        IReadOnlySet<string> removedPartNames)
+    {
+        var contentTypesEntry = targetIndex.Get("[Content_Types].xml");
+        if (contentTypesEntry is null)
+            return;
+
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        var contentTypesXml = XlsxPackageXmlEditor.LoadXml(contentTypesEntry);
+        var root = contentTypesXml.Root;
+        if (root is null)
+            return;
+
+        var changed = false;
+        foreach (var element in root.Elements(contentTypeNs + "Override").ToList())
+        {
+            if (!TryNormalizeContentTypePartName(element.Attribute("PartName")?.Value, out var partName) ||
+                !removedPartNames.Contains(partName))
+            {
+                continue;
+            }
+
+            element.Remove();
+            changed = true;
+        }
+
+        if (changed)
+            WriteXml(targetIndex, "[Content_Types].xml", contentTypesXml, contentTypesEntry.LastWriteTime, SaveOptions.DisableFormatting);
+    }
+
+    private static void RemoveRelationshipsTargetingParts(
+        ArchiveEntryIndex targetIndex,
+        IReadOnlySet<string> removedPartNames)
+    {
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        foreach (var relationshipPartPath in targetIndex.EntryNames()
+                     .Where(entryName => entryName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
+                     .ToList())
+        {
+            var relationshipEntry = targetIndex.Get(relationshipPartPath);
+            if (relationshipEntry is null)
+                continue;
+
+            var relationshipXml = XlsxPackageXmlEditor.LoadXml(relationshipEntry);
+            var root = relationshipXml.Root;
+            if (root is null)
+                continue;
+
+            var sourcePart = RelationshipPartToSourcePart(relationshipPartPath);
+            var changed = false;
+            foreach (var relationship in root.Elements(relationshipNs + "Relationship").ToList())
+            {
+                if (IsExternalRelationship(relationship))
+                    continue;
+
+                var target = NormalizeRelationshipTarget(relationship);
+                if (string.IsNullOrWhiteSpace(target))
+                    continue;
+
+                var targetPart = XlsxPackagePath.ResolveRelationshipTarget(sourcePart, target);
+                if (removedPartNames.Contains(targetPart))
+                {
+                    relationship.Remove();
+                    changed = true;
+                }
+            }
+
+            if (!changed)
+                continue;
+
+            if (root.Elements(relationshipNs + "Relationship").Any())
+                WriteXml(targetIndex, relationshipPartPath, relationshipXml, relationshipEntry.LastWriteTime, SaveOptions.DisableFormatting);
+            else
+                targetIndex.Delete(relationshipPartPath);
+        }
+    }
+
     private static bool TryNormalizeCopyableEntryName(string entryName, out string normalized)
     {
         normalized = "";
@@ -325,6 +500,39 @@ internal static class XlsxPackageMetadataMerger
     private static string NormalizeContentTypeExtension(string value) =>
         value.Trim().TrimStart('.');
 
+    private static bool TryPreserveMacroEnabledWorkbookContentType(
+        XElement targetRoot,
+        XElement sourceOverride,
+        string normalizedPartName,
+        XNamespace contentTypeNs)
+    {
+        if (!string.Equals(normalizedPartName, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var sourceContentType = sourceOverride.Attribute("ContentType")?.Value;
+        if (!string.Equals(
+                sourceContentType,
+                "application/vnd.ms-excel.sheet.macroEnabled.main+xml",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var targetOverride = targetRoot
+            .Elements(contentTypeNs + "Override")
+            .FirstOrDefault(element =>
+                TryNormalizeContentTypePartName(element.Attribute("PartName")?.Value, out var targetPartName) &&
+                string.Equals(targetPartName, normalizedPartName, StringComparison.OrdinalIgnoreCase));
+        if (targetOverride is null ||
+            string.Equals(targetOverride.Attribute("ContentType")?.Value, sourceContentType, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        targetOverride.SetAttributeValue("ContentType", sourceContentType);
+        return true;
+    }
+
     private static bool ShouldPreserveRelationship(
         string relationshipPartPath,
         XElement relationship,
@@ -352,8 +560,395 @@ internal static class XlsxPackageMetadataMerger
             return false;
 
         return !string.IsNullOrWhiteSpace(targetPart) &&
-               !generatedEntriesBeforeMerge.Contains(targetPart) &&
-               targetIndex.Contains(targetPart);
+               targetIndex.Contains(targetPart) &&
+               (!generatedEntriesBeforeMerge.Contains(targetPart) ||
+                IsChartExStyleColorPackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
+                IsDataModelPackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
+                IsQueryTablePackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
+                IsXmlMapsPackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
+                IsPivotCacheRecordsPackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
+                IsSlicerTimelinePackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
+                IsCustomXmlPackageGraphRelationship(relationshipPartPath, relationship, targetPart));
+    }
+
+    private static bool IsSlicerTimelinePackageGraphRelationship(
+        string relationshipPartPath,
+        XElement relationship,
+        string targetPart)
+    {
+        var sourcePart = RelationshipPartToSourcePart(relationshipPartPath);
+        var relationshipType = NormalizeRelationshipType(relationship);
+        if (string.Equals(sourcePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return (targetPart.StartsWith("xl/slicerCaches/", StringComparison.OrdinalIgnoreCase) &&
+                    targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(relationshipType, SlicerCacheRelationshipType, StringComparison.OrdinalIgnoreCase)) ||
+                   (targetPart.StartsWith("xl/timelineCaches/", StringComparison.OrdinalIgnoreCase) &&
+                    targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(relationshipType, TimelineCacheRelationshipType, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (sourcePart.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+            sourcePart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return (targetPart.StartsWith("xl/slicers/", StringComparison.OrdinalIgnoreCase) &&
+                    targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(relationshipType, SlicerRelationshipType, StringComparison.OrdinalIgnoreCase)) ||
+                   (targetPart.StartsWith("xl/timelines/", StringComparison.OrdinalIgnoreCase) &&
+                    targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(relationshipType, TimelineRelationshipType, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return (sourcePart.StartsWith("xl/slicers/", StringComparison.OrdinalIgnoreCase) &&
+                sourcePart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+                targetPart.StartsWith("xl/slicerCaches/", StringComparison.OrdinalIgnoreCase) &&
+                targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(relationshipType, SlicerCacheRelationshipType, StringComparison.OrdinalIgnoreCase)) ||
+               (sourcePart.StartsWith("xl/timelines/", StringComparison.OrdinalIgnoreCase) &&
+                sourcePart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+                targetPart.StartsWith("xl/timelineCaches/", StringComparison.OrdinalIgnoreCase) &&
+                targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(relationshipType, TimelineCacheRelationshipType, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsQueryTablePackageGraphRelationship(
+        string relationshipPartPath,
+        XElement relationship,
+        string targetPart)
+    {
+        if (!targetPart.StartsWith("xl/queryTables/", StringComparison.OrdinalIgnoreCase) ||
+            !targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var sourcePart = RelationshipPartToSourcePart(relationshipPartPath);
+        return sourcePart.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+               sourcePart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(
+                   NormalizeRelationshipType(relationship),
+                   SpreadsheetRelationshipPrefix + "queryTable",
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsChartExStyleColorPackageGraphRelationship(
+        string relationshipPartPath,
+        XElement relationship,
+        string targetPart)
+    {
+        var sourcePart = RelationshipPartToSourcePart(relationshipPartPath);
+        if (!sourcePart.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase) ||
+            !sourcePart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ||
+            !targetPart.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase) ||
+            !targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var relationshipType = NormalizeRelationshipType(relationship);
+        return string.Equals(relationshipType, ChartExStyleRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(relationshipType, ChartExColorStyleRelationshipType, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsPivotCacheRecordsPackageGraphRelationship(
+        string relationshipPartPath,
+        XElement relationship,
+        string targetPart)
+    {
+        if (!targetPart.StartsWith("xl/pivotCache/pivotCacheRecords", StringComparison.OrdinalIgnoreCase) ||
+            !targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var sourcePart = RelationshipPartToSourcePart(relationshipPartPath);
+        if (!sourcePart.StartsWith("xl/pivotCache/pivotCacheDefinition", StringComparison.OrdinalIgnoreCase) ||
+            !sourcePart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return string.Equals(
+            NormalizeRelationshipType(relationship),
+            PivotCacheRecordsRelationshipType,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsXmlMapsPackageGraphRelationship(
+        string relationshipPartPath,
+        XElement relationship,
+        string targetPart)
+    {
+        if (!string.Equals(targetPart, "xl/xmlMaps.xml", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (!string.Equals(
+                RelationshipPartToSourcePart(relationshipPartPath),
+                "xl/workbook.xml",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return string.Equals(
+            NormalizeRelationshipType(relationship),
+            SpreadsheetRelationshipPrefix + "xmlMaps",
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsCustomXmlPackageGraphRelationship(
+        string relationshipPartPath,
+        XElement relationship,
+        string targetPart)
+    {
+        var relationshipType = NormalizeRelationshipType(relationship);
+        var sourcePart = RelationshipPartToSourcePart(relationshipPartPath);
+        if (string.Equals(sourcePart, "", StringComparison.Ordinal))
+        {
+            return IsCustomXmlItemPart(targetPart) &&
+                   string.Equals(
+                       relationshipType,
+                       SpreadsheetRelationshipPrefix + "customXml",
+                       StringComparison.OrdinalIgnoreCase);
+        }
+
+        return IsCustomXmlItemPart(sourcePart) &&
+               IsCustomXmlPropertiesPart(targetPart) &&
+               string.Equals(
+                   relationshipType,
+                   SpreadsheetRelationshipPrefix + "customXmlProps",
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsDataModelPackageGraphRelationship(
+        string relationshipPartPath,
+        XElement relationship,
+        string targetPart)
+    {
+        if (IsDataModelPackagePart(targetPart))
+            return true;
+
+        if (!string.Equals(
+                RelationshipPartToSourcePart(relationshipPartPath),
+                "xl/workbook.xml",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var relationshipType = NormalizeRelationshipType(relationship);
+        return string.Equals(targetPart, "xl/connections.xml", StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(
+                   relationshipType,
+                   SpreadsheetRelationshipPrefix + "connections",
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsDataModelPackagePart(string targetPart)
+    {
+        if (!targetPart.StartsWith("xl/model/", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return true;
+    }
+
+    private static bool ShouldRebindRelationshipReferenceOnCopiedPart(XElement relationship)
+    {
+        var relationshipType = NormalizeRelationshipType(relationship);
+        return string.Equals(relationshipType, ExternalLinkPathRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(relationshipType, ImageRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(relationshipType, PackageRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(relationshipType, PivotCacheDefinitionRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(relationshipType, PivotCacheRecordsRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(relationshipType, SlicerRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(relationshipType, SlicerCacheRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(relationshipType, TimelineRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(relationshipType, TimelineCacheRelationshipType, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void RebindCopiedPartRelationshipReferences(
+        ArchiveEntryIndex targetIndex,
+        string relationshipPartPath,
+        IReadOnlySet<string> generatedEntriesBeforeMerge,
+        IReadOnlyDictionary<string, string>? relationshipIdMap)
+    {
+        if (relationshipIdMap is null || relationshipIdMap.Count == 0)
+            return;
+
+        var sourcePart = RelationshipPartToSourcePart(relationshipPartPath);
+        if (string.IsNullOrWhiteSpace(sourcePart) ||
+            !sourcePart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (generatedEntriesBeforeMerge.Contains(sourcePart))
+        {
+            if (IsPivotCacheDefinitionPart(sourcePart))
+                RebindGeneratedPivotCacheRecordsRelationshipReference(targetIndex, sourcePart, relationshipIdMap);
+
+            RebindGeneratedWorksheetPictureRelationshipReference(targetIndex, sourcePart, relationshipIdMap);
+            RebindGeneratedSlicerTimelineRelationshipReferences(targetIndex, sourcePart, relationshipIdMap);
+            return;
+        }
+
+        var targetEntry = targetIndex.Get(sourcePart);
+        if (targetEntry is null)
+            return;
+
+        XDocument xml;
+        try
+        {
+            xml = XlsxPackageXmlEditor.LoadXml(targetEntry);
+        }
+        catch
+        {
+            return;
+        }
+
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var changed = false;
+        foreach (var attribute in xml.Descendants().Attributes().Where(attribute => attribute.Name.Namespace == relNs))
+        {
+            if (!relationshipIdMap.TryGetValue(attribute.Value, out var replacementId))
+                continue;
+
+            attribute.Value = replacementId;
+            changed = true;
+        }
+
+        if (changed)
+            WriteXml(targetIndex, sourcePart, xml, targetEntry.LastWriteTime, SaveOptions.DisableFormatting);
+    }
+
+    private static bool IsPivotCacheDefinitionPart(string sourcePart) =>
+        sourcePart.StartsWith("xl/pivotCache/pivotCacheDefinition", StringComparison.OrdinalIgnoreCase) &&
+        sourcePart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
+
+    private static void RebindGeneratedPivotCacheRecordsRelationshipReference(
+        ArchiveEntryIndex targetIndex,
+        string sourcePart,
+        IReadOnlyDictionary<string, string> relationshipIdMap)
+    {
+        var targetEntry = targetIndex.Get(sourcePart);
+        if (targetEntry is null)
+            return;
+
+        XDocument xml;
+        try
+        {
+            xml = XlsxPackageXmlEditor.LoadXml(targetEntry);
+        }
+        catch
+        {
+            return;
+        }
+
+        XNamespace pivotNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var root = xml.Root;
+        if (root?.Name != pivotNs + "pivotCacheDefinition")
+            return;
+
+        var idAttribute = root.Attribute(relNs + "id");
+        if (idAttribute is null ||
+            !relationshipIdMap.TryGetValue(idAttribute.Value, out var replacementId))
+        {
+            return;
+        }
+
+        idAttribute.Value = replacementId;
+        WriteXml(targetIndex, sourcePart, xml, targetEntry.LastWriteTime, SaveOptions.DisableFormatting);
+    }
+
+    private static void RebindGeneratedWorksheetPictureRelationshipReference(
+        ArchiveEntryIndex targetIndex,
+        string sourcePart,
+        IReadOnlyDictionary<string, string> relationshipIdMap)
+    {
+        if (!sourcePart.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var targetEntry = targetIndex.Get(sourcePart);
+        if (targetEntry is null)
+            return;
+
+        XDocument xml;
+        try
+        {
+            xml = XlsxPackageXmlEditor.LoadXml(targetEntry);
+        }
+        catch
+        {
+            return;
+        }
+
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var changed = false;
+        foreach (var picture in xml.Root?.Elements(worksheetNs + "picture") ?? [])
+        {
+            var idAttribute = picture.Attribute(relNs + "id");
+            if (idAttribute is null ||
+                !relationshipIdMap.TryGetValue(idAttribute.Value, out var replacementId))
+            {
+                continue;
+            }
+
+            idAttribute.Value = replacementId;
+            changed = true;
+        }
+
+        if (changed)
+            WriteXml(targetIndex, sourcePart, xml, targetEntry.LastWriteTime, SaveOptions.DisableFormatting);
+    }
+
+    private static void RebindGeneratedSlicerTimelineRelationshipReferences(
+        ArchiveEntryIndex targetIndex,
+        string sourcePart,
+        IReadOnlyDictionary<string, string> relationshipIdMap)
+    {
+        var isWorkbook = string.Equals(sourcePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase);
+        var isWorksheet = sourcePart.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                          sourcePart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
+        if (!isWorkbook && !isWorksheet)
+            return;
+
+        var targetEntry = targetIndex.Get(sourcePart);
+        if (targetEntry is null)
+            return;
+
+        XDocument xml;
+        try
+        {
+            xml = XlsxPackageXmlEditor.LoadXml(targetEntry);
+        }
+        catch
+        {
+            return;
+        }
+
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var referenceNames = isWorkbook
+            ? new HashSet<string>(["slicerCache", "timelineCacheRef"], StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(["slicer", "timelineRef"], StringComparer.OrdinalIgnoreCase);
+        var changed = false;
+        foreach (var reference in xml.Descendants()
+                     .Where(element => referenceNames.Contains(element.Name.LocalName)))
+        {
+            var idAttribute = reference.Attribute(relNs + "id");
+            if (idAttribute is null ||
+                !relationshipIdMap.TryGetValue(idAttribute.Value, out var replacementId))
+            {
+                continue;
+            }
+
+            idAttribute.Value = replacementId;
+            changed = true;
+        }
+
+        if (changed)
+            WriteXml(targetIndex, sourcePart, xml, targetEntry.LastWriteTime, SaveOptions.DisableFormatting);
     }
 
     private static bool IsStructurallyValidPackageRelationship(XElement relationship)

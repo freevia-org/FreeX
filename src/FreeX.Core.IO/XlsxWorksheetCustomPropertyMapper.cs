@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
 using System.Text;
-using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -166,13 +165,7 @@ internal static class XlsxWorksheetCustomPropertyMapper
     private static NativeXmlPreserveBag? ReadMetadata(XElement customProperty)
     {
         var attrs = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var attribute in customProperty.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration || IsModeledAttribute(attribute.Name.LocalName))
-                continue;
-
-            attrs[attribute.Name.ToString()] = attribute.Value;
-        }
+        XlsxWorksheetNativeMetadataHelpers.ReadNativeAttributes(customProperty, attrs, ModeledCustomPropertyAttributes);
 
         var children = customProperty.Elements()
             .Select(element => element.ToString(SaveOptions.DisableFormatting))
@@ -285,25 +278,5 @@ internal static class XlsxWorksheetCustomPropertyMapper
         using var stream = entry.Open();
         var bytes = Encoding.Unicode.GetBytes(property.Name);
         stream.Write(bytes, 0, bytes.Length);
-    }
-
-    private static bool IsModeledAttribute(string name) =>
-        name is "name" or "id";
-
-    private static bool TrySetNativeAttribute(XElement element, string name, string value)
-    {
-        try
-        {
-            element.SetAttributeValue(XName.Get(name), value);
-            return true;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (XmlException)
-        {
-            return false;
-        }
     }
 }

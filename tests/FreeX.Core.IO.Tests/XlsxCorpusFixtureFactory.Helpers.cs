@@ -38,7 +38,7 @@ internal static partial class XlsxCorpusFixtureFactory
     private static XDocument LoadPackageXml(ZipArchiveEntry entry)
     {
         using var stream = entry.Open();
-        return XDocument.Load(stream);
+        return XDocument.Load(stream, LoadOptions.PreserveWhitespace);
     }
 
     private static void ReplacePackageXml(ZipArchive archive, string entryName, XDocument document)
@@ -125,7 +125,6 @@ internal static partial class XlsxCorpusFixtureFactory
 
     private static byte[] ReadFixtureBytes(string fileName)
     {
-        var path = TestWorkspaceFiles.FindWorkspaceFile("tests", "FreeX.Core.IO.Tests", "Fixtures", fileName);
-        return File.ReadAllBytes(path);
+        return TestWorkspaceFiles.ReadWorkspaceBytes("tests", "FreeX.Core.IO.Tests", "Fixtures", fileName);
     }
 }

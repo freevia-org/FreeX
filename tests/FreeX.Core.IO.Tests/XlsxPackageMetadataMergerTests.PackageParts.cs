@@ -17,15 +17,10 @@ public sealed partial class XlsxPackageMetadataMergerTests
     [InlineData(" xl/media/padded.bin")]
     public void CopyUnknownPackageParts_SkipsHostileEntryNames(string hostileEntryName)
     {
-        using var sourcePackage = new MemoryStream();
-        using (var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Create, leaveOpen: true))
-        {
-            WritePackageEntry(sourceArchive, "xl/media/safe.bin", "safe");
-            WritePackageEntry(sourceArchive, hostileEntryName, "evil");
-        }
-
-        sourcePackage.Position = 0;
-        using var targetPackage = new MemoryStream();
+        using var sourcePackage = XlsxPackageTestFixtures.CreatePackage(
+            ("xl/media/safe.bin", "safe"),
+            (hostileEntryName, "evil"));
+        using var targetPackage = XlsxPackageTestFixtures.CreatePackage();
         using var source = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
         using var target = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
 
@@ -44,21 +39,11 @@ public sealed partial class XlsxPackageMetadataMergerTests
     [Fact]
     public void CopyUnknownPackageParts_SkipsCaseCollidingPart_ButCopiesGenuinelyNewParts()
     {
-        using var sourcePackage = new MemoryStream();
-        using (var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Create, leaveOpen: true))
-        {
-            WritePackageEntry(sourceArchive, "xl/drawings/vmlDrawing1.vml", "<xml>excel camelCase</xml>");
-            WritePackageEntry(sourceArchive, "xl/customXml/item1.xml", "<root/>");
-        }
-
-        sourcePackage.Position = 0;
-        using var targetPackage = new MemoryStream();
-        using (var seed = new ZipArchive(targetPackage, ZipArchiveMode.Create, leaveOpen: true))
-        {
-            WritePackageEntry(seed, "xl/drawings/vmldrawing1.vml", "<xml>closedxml lowercase</xml>");
-        }
-
-        targetPackage.Position = 0;
+        using var sourcePackage = XlsxPackageTestFixtures.CreatePackage(
+            ("xl/drawings/vmlDrawing1.vml", "<xml>excel camelCase</xml>"),
+            ("xl/customXml/item1.xml", "<root/>"));
+        using var targetPackage = XlsxPackageTestFixtures.CreatePackage(
+            ("xl/drawings/vmldrawing1.vml", "<xml>closedxml lowercase</xml>"));
         using (var source = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true))
         using (var target = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true))
         {
@@ -77,20 +62,8 @@ public sealed partial class XlsxPackageMetadataMergerTests
     [Fact]
     public void CopyUnknownPackageParts_SkipsGeneratedPartWithCaseEquivalentName()
     {
-        using var sourcePackage = new MemoryStream();
-        using (var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Create, leaveOpen: true))
-        {
-            WritePackageEntry(sourceArchive, "xl/drawings/vmlDrawing2.vml", "source");
-        }
-
-        sourcePackage.Position = 0;
-        using var targetPackage = new MemoryStream();
-        using (var generatedArchive = new ZipArchive(targetPackage, ZipArchiveMode.Create, leaveOpen: true))
-        {
-            WritePackageEntry(generatedArchive, "xl/drawings/vmldrawing2.vml", "generated");
-        }
-
-        targetPackage.Position = 0;
+        using var sourcePackage = XlsxPackageTestFixtures.CreatePackage(("xl/drawings/vmlDrawing2.vml", "source"));
+        using var targetPackage = XlsxPackageTestFixtures.CreatePackage(("xl/drawings/vmldrawing2.vml", "generated"));
         using var source = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
         using var target = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
 
@@ -98,5 +71,34 @@ public sealed partial class XlsxPackageMetadataMergerTests
 
         generatedEntriesBeforeMerge.Should().Contain("xl/drawings/vmldrawing2.vml");
         target.Entries.Select(entry => entry.FullName).Should().Equal("xl/drawings/vmldrawing2.vml");
+    }
+
+    [Fact]
+    public void CopyUnknownPackageParts_SkipsInvalidCustomXmlPropertiesPart()
+    {
+        using var sourcePackage = XlsxPackageTestFixtures.CreatePackage(
+            ("customXml/item1.xml", "<root xmlns=\"urn:freex:customXml\"/>"),
+            ("customXml/itemProps1.xml", "<notDatastoreItem/>"));
+        using var targetPackage = XlsxPackageTestFixtures.CreatePackage();
+        using var source = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var target = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        XlsxPackageMetadataMerger.CopyUnknownPackageParts(source, target);
+
+        target.GetEntry("customXml/item1.xml").Should().NotBeNull();
+        target.GetEntry("customXml/itemProps1.xml").Should().BeNull();
+    }
+
+    [Fact]
+    public void CopyUnknownPackageParts_SkipsMalformedCustomXmlItemPart()
+    {
+        using var sourcePackage = XlsxPackageTestFixtures.CreatePackage(("customXml/item1.xml", "<root>"));
+        using var targetPackage = XlsxPackageTestFixtures.CreatePackage();
+        using var source = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var target = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        XlsxPackageMetadataMerger.CopyUnknownPackageParts(source, target);
+
+        target.GetEntry("customXml/item1.xml").Should().BeNull();
     }
 }

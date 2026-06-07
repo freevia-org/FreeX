@@ -34,13 +34,8 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     private static GridRange Range(Sheet sheet, uint startRow, uint startCol, uint endRow, uint endCol) =>
         new(new CellAddress(sheet.Id, startRow, startCol), new CellAddress(sheet.Id, endRow, endCol));
 
-    private static MemoryStream Save(Workbook workbook)
-    {
-        var stream = new MemoryStream();
-        new XlsxFileAdapter().Save(workbook, stream);
-        stream.Position = 0;
-        return stream;
-    }
+    private static MemoryStream Save(Workbook workbook) =>
+        XlsxPackageTestHelper.SaveWorkbook(workbook);
 
     private static Workbook CreateExcelAuthoredSchemaRegressionWorkbook()
     {
@@ -105,7 +100,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         XNamespace revisionNs = "http://schemas.microsoft.com/office/spreadsheetml/2014/revision";
         XNamespace revision2Ns = "http://schemas.microsoft.com/office/spreadsheetml/2015/revision2";
 
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         workbookXml.Root!.SetAttributeValue(XNamespace.Xmlns + "mc", markupCompatNs.NamespaceName);
         workbookXml.Root.SetAttributeValue(XNamespace.Xmlns + "xr2", revision2Ns.NamespaceName);
         workbookXml.Root.SetAttributeValue(markupCompatNs + "Ignorable", AppendIgnorablePrefix(workbookXml.Root.Attribute(markupCompatNs + "Ignorable")?.Value, "xr2"));
@@ -115,7 +110,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .SetAttributeValue(revision2Ns + "uid", "{48973FB0-6DDF-407F-BFF1-05D2BBB0F9CF}");
         ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
 
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         worksheetXml.Root!.SetAttributeValue(XNamespace.Xmlns + "mc", markupCompatNs.NamespaceName);
         worksheetXml.Root.SetAttributeValue(XNamespace.Xmlns + "xr", revisionNs.NamespaceName);
         worksheetXml.Root.SetAttributeValue(markupCompatNs + "Ignorable", AppendIgnorablePrefix(worksheetXml.Root.Attribute(markupCompatNs + "Ignorable")?.Value, "xr"));
@@ -132,7 +127,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
+        var stylesXml = LoadPackageXml(archive, "xl/styles.xml");
         stylesXml.Root!
             .Element(workbookNs + "dxfs")!
             .ReplaceWith(new XElement(
@@ -209,7 +204,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         const string lowercaseGuid = "{a9519446-ebd3-4d7e-9dba-8858ead6d331}";
 
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         workbookXml.Root!.Add(new XElement(
             workbookNs + "customWorkbookViews",
             new XElement(
@@ -221,7 +216,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
                 new XAttribute("personalView", "0"))));
         ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
 
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         worksheetXml.Root!.Add(new XElement(
             workbookNs + "customSheetViews",
             new XElement(
@@ -237,7 +232,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var sharedStringsXml = LoadPackageXml(archive.GetEntry("xl/sharedStrings.xml")!);
+        var sharedStringsXml = LoadPackageXml(archive, "xl/sharedStrings.xml");
         var sharedString = sharedStringsXml.Root!
             .Elements(workbookNs + "si")
             .Single(element => element.Element(workbookNs + "t")?.Value == "Rich font");
@@ -255,14 +250,14 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     {
         using var stream = Save(workbook);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
-        return LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        return LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
     }
 
-    private static XDocument LoadPackageXml(ZipArchiveEntry entry)
-    {
-        using var stream = entry.Open();
-        return XDocument.Load(stream);
-    }
+    private static XDocument LoadPackageXml(ZipArchiveEntry entry) =>
+        XlsxPackageTestFixtures.LoadPackageXml(entry);
+
+    private static XDocument LoadPackageXml(ZipArchive archive, string entryName) =>
+        XlsxPackageTestFixtures.LoadPackageXml(archive, entryName, entryName);
 
     private static void ReplacePackageXml(ZipArchive archive, string entryName, XDocument document)
     {

@@ -103,11 +103,24 @@ public sealed class XlsxSchemaValidationTests
     }
 
     [Theory]
+    [InlineData(ChartType.Bubble)]
+    [InlineData(ChartType.Radar)]
+    [InlineData(ChartType.Stock)]
+    [InlineData(ChartType.Surface)]
+    [InlineData(ChartType.Doughnut)]
+    public void XlsxAdapter_Save_ProducesSchemaValidAdditionalClassicChartWorkbook(ChartType chartType)
+    {
+        var workbook = CreateWorkbookWithAdditionalClassicChart(chartType);
+
+        SchemaErrors(workbook).Should().BeEmpty();
+    }
+
+    [Theory]
     [InlineData(ChartType.Histogram)]
     [InlineData(ChartType.Waterfall)]
     public void XlsxAdapter_Save_WritesExcelOpenableChartExPackageStructure(ChartType chartType)
     {
-        using var saved = Save(CreateWorkbookWithChart(chartType));
+        using var saved = XlsxPackageTestHelper.SaveWorkbook(CreateWorkbookWithChart(chartType));
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
 
         var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
@@ -144,7 +157,7 @@ public sealed class XlsxSchemaValidationTests
     [Fact]
     public void LoadedWorkbookPatchSave_WithClassicChart_ProducesSchemaValidWorkbook()
     {
-        using var source = Save(CreateWorkbookWithChart(ChartType.Column));
+        using var source = XlsxPackageTestHelper.SaveWorkbook(CreateWorkbookWithChart(ChartType.Column));
         var sourceChartPart = ReadPackageEntryBytes(source, "xl/charts/chart1.xml");
         var sourceDrawingPart = ReadPackageEntryBytes(source, "xl/drawings/drawing1.xml");
         source.Position = 0;
@@ -171,7 +184,7 @@ public sealed class XlsxSchemaValidationTests
     [Fact]
     public void LoadedWorkbookPatchSave_WithChartEx_ProducesSchemaValidWorkbook()
     {
-        using var source = Save(CreateWorkbookWithChart(ChartType.Histogram));
+        using var source = XlsxPackageTestHelper.SaveWorkbook(CreateWorkbookWithChart(ChartType.Histogram));
         var chartPart = FindSingleEntryByContentType(source, ChartExContentType);
         var colorStylePart = FindSingleEntryByContentType(source, ChartExColorStyleContentType);
         var stylePart = FindSingleEntryByContentType(source, ChartExStyleContentType);
@@ -212,7 +225,7 @@ public sealed class XlsxSchemaValidationTests
     [Fact]
     public void LoadedWorkbookPatchSave_WithPivotChart_ProducesSchemaValidWorkbook()
     {
-        using var source = Save(CreatePivotChartWorkbook());
+        using var source = XlsxPackageTestHelper.SaveWorkbook(CreatePivotChartWorkbook());
         var sourceParts = new[]
         {
             "xl/workbook.xml",
@@ -268,6 +281,101 @@ public sealed class XlsxSchemaValidationTests
             LegendPosition = ChartLegendPosition.Bottom,
         });
         return workbook;
+    }
+
+    private static Workbook CreateWorkbookWithAdditionalClassicChart(ChartType chartType)
+    {
+        var workbook = new Workbook($"Additional{chartType}ChartValid");
+        var sheet = workbook.AddSheet("Data");
+
+        switch (chartType)
+        {
+            case ChartType.Bubble:
+                sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Revenue"));
+                sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Margin"));
+                sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Market Size"));
+                for (uint row = 2; row <= 4; row++)
+                {
+                    var offset = row - 1;
+                    sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(offset * 100));
+                    sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(offset * 12));
+                    sheet.SetCell(new CellAddress(sheet.Id, row, 3), new NumberValue(offset * 30));
+                }
+
+                sheet.Charts.Add(new ChartModel
+                {
+                    Type = ChartType.Bubble,
+                    Title = "Bubble",
+                    FirstColIsCategories = false,
+                    DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 3)),
+                    BubbleScale = 150,
+                    ShowNegativeBubbles = true,
+                    BubbleSizeRepresents = ChartBubbleSizeRepresents.Width
+                });
+                return workbook;
+
+            case ChartType.Stock:
+                string[] stockHeaders = ["Date", "High", "Low", "Close"];
+                for (var index = 0; index < stockHeaders.Length; index++)
+                    sheet.SetCell(new CellAddress(sheet.Id, 1, (uint)index + 1), new TextValue(stockHeaders[index]));
+
+                for (uint row = 2; row <= 4; row++)
+                {
+                    sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue($"Day {row - 1}"));
+                    sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(15 + row));
+                    sheet.SetCell(new CellAddress(sheet.Id, row, 3), new NumberValue(9 + row));
+                    sheet.SetCell(new CellAddress(sheet.Id, row, 4), new NumberValue(13 + row));
+                }
+
+                sheet.Charts.Add(new ChartModel
+                {
+                    Type = ChartType.Stock,
+                    Title = "Stock",
+                    DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 4)),
+                    ShowHighLowLines = true
+                });
+                return workbook;
+
+            case ChartType.Doughnut:
+                sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Segment"));
+                sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Share"));
+                sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("North"));
+                sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("South"));
+                sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("West"));
+                sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+                sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+                sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+                sheet.Charts.Add(new ChartModel
+                {
+                    Type = ChartType.Doughnut,
+                    Title = "Doughnut",
+                    DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 2)),
+                    FirstSliceAngle = 35,
+                    DoughnutHoleSize = 0.6
+                });
+                return workbook;
+
+            default:
+                sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+                sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Series A"));
+                sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Series B"));
+                sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+                sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+                sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+                sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+                sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+                sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+                sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(15));
+                sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(18));
+                sheet.SetCell(new CellAddress(sheet.Id, 4, 3), new NumberValue(27));
+                sheet.Charts.Add(new ChartModel
+                {
+                    Type = chartType,
+                    Title = chartType.ToString(),
+                    DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 3))
+                });
+                return workbook;
+        }
     }
 
     private static Workbook CreatePivotChartWorkbook()
@@ -331,17 +439,9 @@ public sealed class XlsxSchemaValidationTests
         return workbook;
     }
 
-    private static MemoryStream Save(Workbook workbook)
-    {
-        var stream = new MemoryStream();
-        new XlsxFileAdapter().Save(workbook, stream);
-        stream.Position = 0;
-        return stream;
-    }
-
     private static System.Collections.Generic.List<string> SchemaErrors(Workbook workbook)
     {
-        using var stream = Save(workbook);
+        using var stream = XlsxPackageTestHelper.SaveWorkbook(workbook);
         return SchemaErrors(stream);
     }
 

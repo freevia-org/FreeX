@@ -1,6 +1,5 @@
 using System.IO.Compression;
 using System.Text;
-using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -203,6 +202,7 @@ internal static class XlsxDataValidationNativeMetadataMapper
                 }
             }
 
+            changed |= XlsxWorksheetDataValidationNormalizer.NormalizeElement(dataValidations);
             if (changed)
                 session.MarkDirty(edit);
         }
@@ -234,6 +234,7 @@ internal static class XlsxDataValidationNativeMetadataMapper
         }
 
         dataValidations.SetAttributeValue(CountAttributeName, count.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        XlsxWorksheetDataValidationNormalizer.NormalizeElement(dataValidations);
         return true;
     }
 
@@ -515,31 +516,17 @@ internal static class XlsxDataValidationNativeMetadataMapper
     {
         var changed = false;
         if (source.NativeContainerAttributes is { Count: > 0 } attributes)
-        {
-            foreach (var (name, value) in attributes)
-                changed |= TrySetNativeAttributeIfMissing(dataValidations, name, value);
-        }
+            changed |= XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(dataValidations, attributes);
 
         if (source.NativeContainerChildXmls is { Count: > 0 } childXmls)
         {
             foreach (var nativeChildXml in childXmls)
             {
-                if (string.IsNullOrWhiteSpace(nativeChildXml))
-                    continue;
-
-                try
-                {
-                    var nativeChild = XElement.Parse(nativeChildXml);
-                    if (nativeChild.Name.Namespace == worksheetNs && nativeChild.Name.LocalName != "dataValidation")
-                    {
-                        dataValidations.Add(nativeChild);
-                        changed = true;
-                    }
-                }
-                catch
-                {
-                    // Ignore malformed native data-validation container payloads from older saves.
-                }
+                changed |= TryAddNativeWorksheetElement(
+                    dataValidations,
+                    nativeChildXml,
+                    worksheetNs,
+                    "dataValidation");
             }
         }
 
@@ -553,60 +540,44 @@ internal static class XlsxDataValidationNativeMetadataMapper
     {
         var changed = false;
         if (source.NativeAttributes is { Count: > 0 } attributes)
-        {
-            foreach (var (name, value) in attributes)
-                changed |= TrySetNativeAttributeIfMissing(validationElement, name, value);
-        }
+            changed |= XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(validationElement, attributes);
 
         if (source.NativeChildXmls is { Count: > 0 } childXmls)
         {
             foreach (var nativeChildXml in childXmls)
             {
-                if (string.IsNullOrWhiteSpace(nativeChildXml))
-                    continue;
-
-                try
-                {
-                    var nativeChild = XElement.Parse(nativeChildXml);
-                    if (nativeChild.Name.Namespace == worksheetNs)
-                    {
-                        validationElement.Add(nativeChild);
-                        changed = true;
-                    }
-                }
-                catch
-                {
-                    // Ignore malformed native data-validation payloads from older saves.
-                }
+                changed |= TryAddNativeWorksheetElement(validationElement, nativeChildXml, worksheetNs);
             }
         }
 
         return changed;
     }
 
-    private static bool TrySetNativeAttributeIfMissing(XElement element, string name, string value)
+    private static bool TryAddNativeWorksheetElement(
+        XElement target,
+        string? xml,
+        XNamespace worksheetNs,
+        params string[] excludedLocalNames)
     {
-        if (string.IsNullOrWhiteSpace(name))
+        if (string.IsNullOrWhiteSpace(xml))
             return false;
 
         try
         {
-            var attributeName = XName.Get(name);
-            if (element.Attribute(attributeName) is not null)
+            var element = XElement.Parse(xml);
+            if (element.Name.Namespace != worksheetNs || excludedLocalNames.Contains(element.Name.LocalName))
                 return false;
 
-            element.SetAttributeValue(attributeName, value);
+            target.Add(element);
             return true;
         }
-        catch (ArgumentException)
+        catch
         {
-            return false;
-        }
-        catch (XmlException)
-        {
+            // Ignore malformed native data-validation payloads from older saves.
             return false;
         }
     }
+
 }
 
 internal sealed record DataValidationNativeMetadata(

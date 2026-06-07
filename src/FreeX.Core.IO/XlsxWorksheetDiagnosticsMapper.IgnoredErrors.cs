@@ -58,13 +58,7 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
             return null;
 
         var model = new WorksheetIgnoredErrorsMetadataModel();
-        foreach (var attribute in ignoredErrors.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration)
-                continue;
-
-            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
-        }
+        XlsxWorksheetNativeMetadataHelpers.ReadNativeAttributes(ignoredErrors, model.NativeAttributes, []);
 
         foreach (var ignoredError in ignoredErrors.Elements(worksheetNs + "ignoredError"))
         {
@@ -133,13 +127,8 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
             var root = edit.Root;
             root.Element(workbookNs + "ignoredErrors")?.Remove();
             var ignoredErrors = new XElement(workbookNs + "ignoredErrors");
-            foreach (var attribute in sheet.IgnoredErrorsMetadata?.NativeAttributes ?? [])
-            {
-                if (string.IsNullOrWhiteSpace(attribute.Key))
-                    continue;
-
-                TrySetNativeAttribute(ignoredErrors, attribute.Key, attribute.Value);
-            }
+            if (sheet.IgnoredErrorsMetadata is not null)
+                XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(ignoredErrors, sheet.IgnoredErrorsMetadata.NativeAttributes, []);
 
             foreach (var run in ignoredErrorRuns)
             {
@@ -152,13 +141,10 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
                     new XAttribute("emptyCellReference", "1"));
                 if (run.NativeAttributes is not null)
                 {
-                    foreach (var attribute in run.NativeAttributes)
-                    {
-                        if (ShouldSkipIgnoredErrorNativeAttribute(attribute.Key))
-                            continue;
-
-                        TrySetNativeAttribute(ignoredError, attribute.Key, attribute.Value);
-                    }
+                    XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(
+                        ignoredError,
+                        run.NativeAttributes,
+                        ["sqref", "numberStoredAsText", "evalError", "formula", "emptyCellReference"]);
                 }
 
                 ignoredErrors.Add(ignoredError);

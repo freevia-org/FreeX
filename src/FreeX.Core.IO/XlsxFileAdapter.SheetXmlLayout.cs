@@ -97,6 +97,7 @@ public sealed partial class XlsxFileAdapter
         bool HasClosedXmlUnsupportedConditionalFormatting,
         bool HasUnsupportedConditionalFormatting,
         bool HasWorksheetDynamicFilters,
+        bool HasWorksheetRelationshipMarkerSchemaIssues,
         IReadOnlyList<string> TableRelationshipIds,
         string? CodeName);
 
@@ -194,17 +195,8 @@ public sealed partial class XlsxFileAdapter
         XNamespace packageRelNs) =>
         XlsxRelationshipReader.LoadTargets(archive, relsPath, sourcePart, packageRelNs);
 
-    private static int? ReadIntAttribute(XElement element, string attributeName) =>
-        XlsxXmlAttributeReader.ReadIntAttribute(element, attributeName);
-
-    private static double? ReadDoubleAttribute(XElement element, string attributeName) =>
-        XlsxXmlAttributeReader.ReadDoubleAttribute(element, attributeName);
-
     private static WorksheetAutoFilterModel? ReadWorksheetAutoFilter(XElement? autoFilter) =>
         XlsxWorksheetAutoFilterMapper.Read(autoFilter);
-
-    private static bool ReadBoolAttribute(XElement? element, string attributeName, bool defaultValue = false) =>
-        XlsxXmlAttributeReader.ReadBoolAttribute(element, attributeName, defaultValue);
 
     private static CfThresholdType FromCfvoType(string? type) =>
         type?.ToLowerInvariant() switch
@@ -322,6 +314,9 @@ public sealed partial class XlsxFileAdapter
             XlsxConditionalFormatRuleSupport.HasUnsupportedRule(worksheetXml, worksheetNs, allowBlankType: false);
         var hasUnsupportedConditionalFormatting =
             XlsxConditionalFormatRuleSupport.HasUnsupportedRule(worksheetXml, worksheetNs, allowBlankType: true);
+        var hasWorksheetRelationshipMarkerSchemaIssues =
+            worksheetXml.Root is { } worksheetRoot &&
+            XlsxWorksheetRelationshipMarkerNormalizer.NormalizeWorksheetRoot(new XElement(worksheetRoot));
         var tableRelationshipIds = ReadTableRelationshipIds(worksheetXml, worksheetNs, relNs);
 
         return new SheetXmlLayout(
@@ -338,7 +333,8 @@ public sealed partial class XlsxFileAdapter
             !IsFalse(sheetView?.Attribute("showRuler")?.Value),
             ParseZoomPercent(sheetView?.Attribute("zoomScale")?.Value),
             IsTruthy(sheetView?.Attribute("showFormulas")?.Value),
-            ParseOptionalDouble(sheetFormatPr?.Attribute("defaultColWidth")?.Value),
+            XlsxWorksheetXmlValueParser.ParsePositiveFiniteDouble(
+                sheetFormatPr?.Attribute("defaultColWidth")?.Value),
             ReadDefaultRowHeight(sheetFormatPr, stylesXml),
             XlsxWorksheetLayoutMetadataReader.ReadWorksheetSheetFormatMetadata(sheetFormatPr),
             XlsxWorksheetLayoutMetadataReader.ReadWorksheetDimensionMetadata(dimension),
@@ -411,6 +407,7 @@ public sealed partial class XlsxFileAdapter
             hasClosedXmlUnsupportedConditionalFormatting,
             hasUnsupportedConditionalFormatting,
             hasWorksheetDynamicFilters,
+            hasWorksheetRelationshipMarkerSchemaIssues,
             tableRelationshipIds,
             codeName);
     }
@@ -691,17 +688,13 @@ public sealed partial class XlsxFileAdapter
     private static int ParseZoomPercent(string? value) =>
         int.TryParse(value, out var zoom) && zoom is >= 10 and <= 400 ? zoom : 100;
 
-    private static double? ParseOptionalDouble(string? value) =>
-        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) &&
-        double.IsFinite(parsed) &&
-        parsed > 0
-            ? parsed
-            : null;
-
     private static double? ReadDefaultRowHeight(XElement? sheetFormatPr, XDocument? stylesXml)
     {
-        if (ParseOptionalDouble(sheetFormatPr?.Attribute("defaultRowHeight")?.Value) is not { } rowHeightPoints)
+        if (XlsxWorksheetXmlValueParser.ParsePositiveFiniteDouble(
+            sheetFormatPr?.Attribute("defaultRowHeight")?.Value) is not { } rowHeightPoints)
+        {
             return null;
+        }
 
         if (!IsTruthy(sheetFormatPr?.Attribute("customHeight")?.Value) &&
             IsAptosNarrowNormalStyle(stylesXml) &&
@@ -735,7 +728,8 @@ public sealed partial class XlsxFileAdapter
             return (null, null);
 
         var fontName = font.Element(ns + "name")?.Attribute("val")?.Value;
-        var fontSize = ParseOptionalDouble(font.Element(ns + "sz")?.Attribute("val")?.Value);
+        var fontSize = XlsxWorksheetXmlValueParser.ParsePositiveFiniteDouble(
+            font.Element(ns + "sz")?.Attribute("val")?.Value);
         return (fontName, fontSize);
     }
 

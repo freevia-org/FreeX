@@ -36,39 +36,17 @@ internal static class XlsxWorksheetPageMarginsMetadataWriter
             }
 
             var (pmAttrs, pmChildren) = XmlNativeBagSerializer.Deserialize(metadata.Get("pageMargins"));
-            foreach (var attribute in pmAttrs)
-            {
-                if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledPageMarginsAttribute(attribute.Key))
-                    continue;
+            XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(
+                pageMargins,
+                pmAttrs,
+                ["left", "right", "top", "bottom", "header", "footer"]);
 
-                XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(pageMargins, attribute.Key, attribute.Value);
-            }
+            XlsxWorksheetNativeMetadataHelpers.ReplaceChildrenFromNativeXml(pageMargins, pmChildren);
 
-            if (pmChildren.Count > 0)
-            {
-                pageMargins.Elements().Remove();
-                foreach (var childXml in pmChildren)
-                {
-                    if (string.IsNullOrWhiteSpace(childXml))
-                        continue;
-
-                    try
-                    {
-                        pageMargins.Add(XElement.Parse(childXml));
-                    }
-                    catch
-                    {
-                        // Skip malformed native payloads in authored native JSON files.
-                    }
-                }
-            }
-
+            XlsxWorksheetPageLayoutNormalizer.NormalizePageMargins(pageMargins);
             session.MarkDirty(worksheetEdit);
         }
     }
-
-    private static bool IsModeledPageMarginsAttribute(string name) =>
-        name is "left" or "right" or "top" or "bottom" or "header" or "footer";
 
     private static void InsertPageMargins(XElement root, XNamespace worksheetNs, XElement pageMargins)
     {

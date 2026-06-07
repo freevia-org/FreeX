@@ -486,7 +486,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         }
 
         if (XlsxWorksheetXmlValueParser.IsTruthy(col.Attribute("customWidth")?.Value) &&
-            ParseOptionalDouble(col.Attribute("width")?.Value) is { } width &&
+            XlsxWorksheetXmlValueParser.ParsePositiveFiniteDouble(col.Attribute("width")?.Value) is { } width &&
             width > 0)
         {
             // A column carrying a style at a near-default width is a styling-only entry, not a real
@@ -504,7 +504,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
     private static bool TryReadRowHeight(string? rawHeight, string? rawCustomHeight, out double height)
     {
         height = 0;
-        if (ParseOptionalDouble(rawHeight) is not { } xlsxHeight || xlsxHeight <= 0)
+        if (XlsxWorksheetXmlValueParser.ParsePositiveFiniteDouble(rawHeight) is not { } xlsxHeight || xlsxHeight <= 0)
             return false;
 
         if (XlsxWorksheetXmlValueParser.IsTruthy(rawCustomHeight))
@@ -532,13 +532,6 @@ internal static class XlsxWorksheetRowColumnLayoutReader
 
     private static double RowHeightPointsToPixels(double points) =>
         Math.Round(points * PointsToDips, MidpointRounding.AwayFromZero);
-
-    private static double? ParseOptionalDouble(string? value) =>
-        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) &&
-        double.IsFinite(parsed) &&
-        parsed > 0
-            ? parsed
-            : null;
 
     private static bool HasAnyNonNamespaceAttribute(XmlReader reader)
     {

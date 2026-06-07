@@ -199,28 +199,7 @@ public sealed partial class NativeJsonAdapter
         chart.WaterfallTotalPointIndices = SanitizeWaterfallTotalPointIndices(chart.Type, chart.WaterfallTotalPointIndices);
 
         var seriesCount = ChartTypeSupport.GetDataSeriesCount(chart);
-        chart.SecondaryAxisSeriesIndexes = chart.SecondaryAxisSeriesIndexes
-            .Where(index => index > 0 && index < seriesCount)
-            .Distinct()
-            .Order()
-            .ToList();
-        if (!ChartTypeSupport.SupportsSecondaryAxis(chart.Type)
-            || (chart.ShowSecondaryAxis && chart.SecondaryAxisSeriesIndexes.Count == 0))
-        {
-            chart.ShowSecondaryAxis = false;
-            chart.SecondaryAxisSeriesIndexes = [];
-        }
-        chart.ComboLineSeriesIndexes = chart.ComboLineSeriesIndexes
-            .Where(index => index > 0 && index < seriesCount)
-            .Distinct()
-            .Order()
-            .ToList();
-        if (!ChartTypeSupport.SupportsComboLineOverlay(chart)
-            || (chart.UseComboLineForSecondarySeries && chart.ComboLineSeriesIndexes.Count == 0))
-        {
-            chart.UseComboLineForSecondarySeries = false;
-            chart.ComboLineSeriesIndexes = [];
-        }
+        ChartSeriesIndexSanitizer.SanitizeSecondaryAxisAndComboLineIndexes(chart, seriesCount);
         chart.SeriesFormats = chart.SeriesFormats
             .Where(format => format.SeriesIndex >= 0 && format.SeriesIndex < seriesCount)
             .GroupBy(format => format.SeriesIndex)

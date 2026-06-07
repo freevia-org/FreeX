@@ -506,18 +506,6 @@ public sealed class PivotFilterDialogXamlTests
     }
 
     private static void InvokeDialogHandler(object dialog, string methodName)
-    {
-        var method = dialog.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull($"handler {methodName} should exist");
-        try
-        {
-            method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
-        }
-        catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException invalidOperation
-            && invalidOperation.Message.Contains("DialogResult"))
-        {
-            // Modeless direct invocation still runs the handler through the behavior under test.
-        }
-    }
+        => DialogSourceTestSupport.InvokePrivateHandlerAllowingNonModalDialogResult(dialog, methodName);
 
 }

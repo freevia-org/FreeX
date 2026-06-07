@@ -7,31 +7,7 @@ internal static class XlsxChartSanitizer
     public static void SanitizeLoadedChart(ChartModel chart)
     {
         var seriesCount = ChartTypeSupport.GetDataSeriesCount(chart);
-        chart.SecondaryAxisSeriesIndexes = chart.SecondaryAxisSeriesIndexes
-            .Where(index => index > 0 && index < seriesCount)
-            .Distinct()
-            .Order()
-            .ToList();
-
-        if (!ChartTypeSupport.SupportsSecondaryAxis(chart.Type)
-            || (chart.ShowSecondaryAxis && chart.SecondaryAxisSeriesIndexes.Count == 0))
-        {
-            chart.ShowSecondaryAxis = false;
-            chart.SecondaryAxisSeriesIndexes = [];
-        }
-
-        chart.ComboLineSeriesIndexes = chart.ComboLineSeriesIndexes
-            .Where(index => index > 0 && index < seriesCount)
-            .Distinct()
-            .Order()
-            .ToList();
-
-        if (!ChartTypeSupport.SupportsComboLineOverlay(chart)
-            || (chart.UseComboLineForSecondarySeries && chart.ComboLineSeriesIndexes.Count == 0))
-        {
-            chart.UseComboLineForSecondarySeries = false;
-            chart.ComboLineSeriesIndexes = [];
-        }
+        ChartSeriesIndexSanitizer.SanitizeSecondaryAxisAndComboLineIndexes(chart, seriesCount);
 
         if (!ChartTypeSupport.SupportsTrendlines(chart.Type))
         {

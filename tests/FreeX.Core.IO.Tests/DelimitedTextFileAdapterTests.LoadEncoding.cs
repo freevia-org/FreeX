@@ -28,9 +28,7 @@ public sealed partial class DelimitedTextFileAdapterTests
     public void Load_ReadsUtf8BomTextExport()
     {
         var adapter = new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t');
-        var bytes = Encoding.UTF8.GetPreamble()
-            .Concat(Encoding.UTF8.GetBytes("Name\tAmount\tFlag\r\nCafe\t42\tTRUE\r\n"))
-            .ToArray();
+        var bytes = EncodedTextPayloads.WithBom(Encoding.UTF8, "Name\tAmount\tFlag\r\nCafe\t42\tTRUE\r\n");
         using var stream = new MemoryStream(bytes);
 
         var workbook = adapter.Load(stream);
@@ -46,9 +44,7 @@ public sealed partial class DelimitedTextFileAdapterTests
     public void Load_ReadsExcelUnicodeTextExportWithUtf16Bom()
     {
         var adapter = new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t');
-        var bytes = Encoding.Unicode.GetPreamble()
-            .Concat(Encoding.Unicode.GetBytes("Name\tAmount\tFlag\r\nCaf\u00e9\t42\tTRUE\r\n"))
-            .ToArray();
+        var bytes = EncodedTextPayloads.WithBom(Encoding.Unicode, "Name\tAmount\tFlag\r\nCaf\u00e9\t42\tTRUE\r\n");
         using var stream = new MemoryStream(bytes);
 
         var workbook = adapter.Load(stream);
@@ -64,9 +60,7 @@ public sealed partial class DelimitedTextFileAdapterTests
     public void Load_ReadsBigEndianUtf16TextExportWithBom()
     {
         var adapter = new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t');
-        var bytes = Encoding.BigEndianUnicode.GetPreamble()
-            .Concat(Encoding.BigEndianUnicode.GetBytes("Name\tAmount\tFlag\r\nCaf\u00e9\t42\tTRUE\r\n"))
-            .ToArray();
+        var bytes = EncodedTextPayloads.WithBom(Encoding.BigEndianUnicode, "Name\tAmount\tFlag\r\nCaf\u00e9\t42\tTRUE\r\n");
         using var stream = new MemoryStream(bytes);
 
         var workbook = adapter.Load(stream);

@@ -1,5 +1,3 @@
-using System.Reflection;
-using System.Windows;
 using System.Windows.Controls;
 using System.Xml.Linq;
 using FluentAssertions;
@@ -221,9 +219,5 @@ public sealed class GoalSeekDialogXamlTests
     }
 
     private static void InvokePrivate(GoalSeekDialog dialog, string methodName, object sender)
-    {
-        var method = typeof(GoalSeekDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        method!.Invoke(dialog, [sender, new RoutedEventArgs()]);
-    }
+        => DialogSourceTestSupport.InvokePrivateHandler(dialog, methodName, sender);
 }

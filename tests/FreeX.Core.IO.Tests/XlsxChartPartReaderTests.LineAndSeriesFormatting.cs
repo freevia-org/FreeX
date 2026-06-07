@@ -1,4 +1,3 @@
-using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -11,7 +10,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_ReadsLineGuideMetadata()
     {
         var sheetId = new SheetId(Guid.NewGuid());
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
                           xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
               <c:chart>
@@ -74,7 +73,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_ReadsBarSeriesLineMetadata()
     {
         var sheetId = new SheetId(Guid.NewGuid());
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
                           xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
               <c:chart>
@@ -117,7 +116,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_ReadsConcreteSeriesFill()
     {
         var sheetId = new SheetId(Guid.NewGuid());
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
                           xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
               <c:chart>
@@ -146,7 +145,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_ReadsSeriesInvertIfNegativeFormatting()
     {
         var sheetId = new SheetId(Guid.NewGuid());
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
               <c:chart>
                 <c:plotArea>
@@ -174,7 +173,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_ReadsLineSeriesSmoothFormatting()
     {
         var sheetId = new SheetId(Guid.NewGuid());
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
               <c:chart>
                 <c:plotArea>
@@ -201,7 +200,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_ReadsLineMarkerBorderFormatting()
     {
         var sheetId = new SheetId(Guid.NewGuid());
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
                           xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
               <c:chart>

@@ -127,7 +127,7 @@ public sealed partial class UiTestCatalogInventoryTests
     [Fact]
     public void NextCatalogTasks_RecordSourceBasedInventoryGuardAsExisting()
     {
-        var catalog = File.ReadAllText(WorkspaceFileLocator.Find("docs", "testing/ui-test-catalog.md"));
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
 
         catalog.Should().NotContain(
             "Generate a machine-readable row list from `parity/command-surface.md`",
@@ -138,7 +138,7 @@ public sealed partial class UiTestCatalogInventoryTests
     [Fact]
     public void ScreenshotHarnessCatalogRow_DocumentsInAppRibbonTourPath()
     {
-        var catalog = File.ReadAllText(WorkspaceFileLocator.Find("docs", "testing/ui-test-catalog.md"));
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
         var row = catalog
             .Split(Environment.NewLine)
             .Single(line => line.StartsWith("| UI-CMD-HARNESS-001 |", StringComparison.Ordinal));
@@ -181,7 +181,7 @@ public sealed partial class UiTestCatalogInventoryTests
     [Fact]
     public void ExcelScreenshotScript_ChecksForegroundOwnershipBeforeEveryGlobalInput()
     {
-        var lines = File.ReadAllLines(WorkspaceFileLocator.Find("tools", "screenshot_excel.ps1"));
+        var lines = WorkspaceFileLocator.ReadAllLines("tools", "screenshot_excel.ps1");
 
         for (var index = 0; index < lines.Length; index++)
         {
@@ -204,7 +204,7 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static IReadOnlyDictionary<string, InventorySnapshotRow> ReadInventorySnapshot()
     {
-        var lines = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "testing/ui-test-catalog.md"));
+        var lines = WorkspaceFileLocator.ReadAllLines("docs", "testing/ui-test-catalog.md");
         var heading = Array.IndexOf(lines, "## Inventory Snapshot");
         heading.Should().BeGreaterThanOrEqualTo(0);
 
@@ -225,7 +225,7 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static CommandInventory ReadCommandInventory()
     {
-        var json = File.ReadAllText(WorkspaceFileLocator.Find("docs", "parity/command-inventory.json"));
+        var json = WorkspaceFileLocator.ReadAllText("docs", "parity/command-inventory.json");
         return JsonSerializer.Deserialize<CommandInventory>(
             json,
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
@@ -234,7 +234,7 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static CommandCoverageSummary ReadCommandCoverageSummary(string fileName)
     {
-        var lines = File.ReadAllLines(WorkspaceFileLocator.Find("docs", fileName));
+        var lines = WorkspaceFileLocator.ReadAllLines("docs", fileName);
         var total = lines
             .Select(SplitMarkdownRow)
             .Single(columns => columns.Count >= 6 && columns[0] == "**TOTAL**");
@@ -249,7 +249,7 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static ShortcutSummary ReadShortcutSummary()
     {
-        var lines = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "parity/shortcuts.md"));
+        var lines = WorkspaceFileLocator.ReadAllLines("docs", "parity/shortcuts.md");
 
         return new ShortcutSummary(
             ReadShortcutSummaryCount(lines, "Parity"),
@@ -261,7 +261,7 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static IReadOnlyList<ShortcutRow> ReadShortcutRows()
     {
-        var lines = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "parity/shortcuts.md"));
+        var lines = WorkspaceFileLocator.ReadAllLines("docs", "parity/shortcuts.md");
         var tableStart = Array.FindIndex(lines, line => line.StartsWith("| Area | Excel Shortcut |", StringComparison.Ordinal));
         tableStart.Should().BeGreaterThanOrEqualTo(0);
 
@@ -307,8 +307,7 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static IReadOnlyList<string> ReadDialogTypeNames()
     {
-        var hostDirectory = Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("MainWindow.xaml"))
-            ?? throw new DirectoryNotFoundException("Could not locate FreeX.App.Host.");
+        var hostDirectory = DialogSourceTestSupport.FindHostSourceDirectory("MainWindow.xaml");
         var dialogNames = new SortedSet<string>(StringComparer.Ordinal);
 
         foreach (var sourceFile in Directory.EnumerateFiles(hostDirectory, "*.cs", SearchOption.TopDirectoryOnly))
@@ -353,7 +352,7 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static IReadOnlyList<string> ReadDocumentedScreenshotToolScripts()
     {
-        var catalog = File.ReadAllText(WorkspaceFileLocator.Find("docs", "testing/ui-test-catalog.md"));
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
         var scripts = ScreenshotToolPath()
             .Matches(catalog)
             .Select(match => match.Groups["script"].Value)
@@ -363,14 +362,14 @@ public sealed partial class UiTestCatalogInventoryTests
 
         foreach (var script in scripts)
         {
-            File.Exists(WorkspaceFileLocator.Find("tools", script)).Should().BeTrue();
+            File.Exists(WorkspaceFileLocator.FindToolScript(script)).Should().BeTrue();
         }
 
         return scripts;
     }
 
     private static string ReadScreenshotToolScript(string scriptName) =>
-        File.ReadAllText(WorkspaceFileLocator.Find("tools", scriptName));
+        WorkspaceFileLocator.ReadAllText("tools", scriptName);
 
     private static string PreviousExecutableLine(IReadOnlyList<string> lines, int index)
     {
@@ -388,8 +387,7 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static int ReadUiEvidenceScreenshotCount()
     {
-        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))
-            ?? throw new DirectoryNotFoundException("Could not locate docs.");
+        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
         var artifactDirectory = Path.Combine(docsDirectory, "ui-test-artifacts");
 
         return Directory

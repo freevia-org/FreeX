@@ -3,39 +3,32 @@ namespace FreeX.Core.IO.Tests;
 internal static class TestWorkspaceFiles
 {
     internal static string FindWorkspaceFile(params string[] relativeParts) =>
-        FindFileUpward(AppContext.BaseDirectory, relativeParts)
-        ?? throw new FileNotFoundException(
-            "Could not locate workspace file.",
-            Path.Combine(relativeParts));
+        TestWorkspaceFileLocator.Find(relativeParts);
 
-    internal static string FindRepoFile(params string[] relativeParts)
-    {
-        var currentDirectory = Directory.GetCurrentDirectory();
-        return FindFileUpward(currentDirectory, relativeParts)
-            ?? Path.Combine([currentDirectory, .. relativeParts]);
-    }
+    internal static string FindRepoFile(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.FindFromCurrentDirectoryOrFallback(relativeParts);
+
+    internal static string FindWorkspaceFileDirectory(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.FindContainingDirectory(relativeParts);
+
+    internal static string ReadWorkspaceText(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
+
+    internal static string[] ReadWorkspaceLines(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.ReadAllLines(relativeParts);
+
+    internal static byte[] ReadWorkspaceBytes(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.ReadAllBytes(relativeParts);
+
+    internal static string ReadRepoText(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.ReadAllTextFromCurrentDirectoryOrFallback(relativeParts);
 
     internal static string ReadCoreIoSource(string fileName) =>
-        File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", fileName));
+        ReadWorkspaceText("src", "FreeX.Core.IO", fileName);
 
     internal static string ReadCoreIoRepoSource(string fileName) =>
-        File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", fileName));
+        ReadRepoText("src", "FreeX.Core.IO", fileName);
 
     internal static string ReadCoreModelRepoSource(string fileName) =>
-        File.ReadAllText(FindRepoFile("src", "FreeX.Core.Model", fileName));
-
-    private static string? FindFileUpward(string root, string[] relativeParts)
-    {
-        var directory = new DirectoryInfo(root);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine([directory.FullName, .. relativeParts]);
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = directory.Parent;
-        }
-
-        return null;
-    }
+        ReadRepoText("src", "FreeX.Core.Model", fileName);
 }

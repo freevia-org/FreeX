@@ -4,6 +4,8 @@ namespace FreeX.Core.Commands;
 
 internal static class DrawingShapeCommandGuards
 {
+    private const string DrawingShapeNotFoundMessage = "Drawing shape was not found.";
+
     public static CommandOutcome? RejectIfEditObjectsBlocked(Sheet sheet) =>
         CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects);
 
@@ -18,12 +20,12 @@ internal static class DrawingShapeCommandGuards
         hadExplicitOrder = false;
         var entry = new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, shapeId);
         if (!DrawingObjectZOrder.ContainsObject(sheet, entry))
-            return new CommandOutcome(false, "Drawing shape was not found.");
+            return new CommandOutcome(false, DrawingShapeNotFoundMessage);
 
         var normalizedOrder = DrawingObjectZOrder.GetNormalizedOrder(sheet);
         var index = FindIndex(normalizedOrder, entry);
         if (index < 0)
-            return new CommandOutcome(false, "Drawing shape was not found.");
+            return new CommandOutcome(false, DrawingShapeNotFoundMessage);
 
         var targetIndex = index + direction;
         if (targetIndex < 0 || targetIndex >= normalizedOrder.Count)

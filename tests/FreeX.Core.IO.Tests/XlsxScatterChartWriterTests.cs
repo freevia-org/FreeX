@@ -14,7 +14,7 @@ public sealed class XlsxScatterChartWriterTests
     [Fact]
     public void Save_DefaultScatterSuppressesConnectorLines()
     {
-        using var saved = Save(CreateScatterWorkbook());
+        using var saved = XlsxPackageTestHelper.SaveWorkbook(CreateScatterWorkbook());
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
 
         var scatterChart = LoadScatterChart(archive);
@@ -35,7 +35,7 @@ public sealed class XlsxScatterChartWriterTests
     [Fact]
     public void Save_ScatterKeepsConnectorLinesWhenSeriesRequestsLineOrSmoothing()
     {
-        using var saved = Save(CreateScatterWorkbook(
+        using var saved = XlsxPackageTestHelper.SaveWorkbook(CreateScatterWorkbook(
         [
             new ChartSeriesFormat(0, StrokeColor: new CellColor(20, 110, 180)),
             new ChartSeriesFormat(1, Smooth: true)
@@ -87,21 +87,9 @@ public sealed class XlsxScatterChartWriterTests
         return workbook;
     }
 
-    private static MemoryStream Save(Workbook workbook)
-    {
-        var saved = new MemoryStream();
-        new XlsxFileAdapter().Save(workbook, saved);
-        saved.Position = 0;
-        return saved;
-    }
-
     private static XElement LoadScatterChart(ZipArchive archive)
     {
-        var entry = archive.GetEntry("xl/charts/chart1.xml");
-        entry.Should().NotBeNull();
-
-        using var stream = entry!.Open();
-        var chartXml = XDocument.Load(stream);
+        var chartXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/charts/chart1.xml", "xl/charts/chart1.xml");
         return chartXml.Descendants(ChartNs + "scatterChart").Should().ContainSingle().Subject;
     }
 }

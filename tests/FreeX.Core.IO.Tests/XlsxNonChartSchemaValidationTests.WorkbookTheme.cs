@@ -1,4 +1,5 @@
 using System.IO;
+using System.IO.Compression;
 using System.Xml.Linq;
 using DocumentFormat.OpenXml;
 using FluentAssertions;
@@ -17,6 +18,45 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorkbookThemePackage(saved);
+    }
+
+    [Fact]
+    public void WorkbookThemePackage_SanitizesOverlongTypefaceNamesForSchemaValidity()
+    {
+        var workbook = new Workbook("WorkbookThemeTypefaceSanitize")
+        {
+            Theme = WorkbookTheme.Office
+                .WithName("FreeX Typeface Sanitize")
+                .WithFonts("\"Google Sans\", Roboto, sans-serif", "\"Aptos Display\", Arial, sans-serif")
+        };
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("theme fonts"));
+
+        using var saved = Save(workbook);
+
+        SchemaErrors(saved).Should().BeEmpty();
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var fontScheme = ReadPackageRootElement(saved, "xl/theme/theme1.xml")
+            .Element(drawingNs + "themeElements")!
+            .Element(drawingNs + "fontScheme")!;
+        fontScheme.Element(drawingNs + "majorFont")!
+            .Element(drawingNs + "latin")!
+            .Attribute("typeface")!
+            .Value
+            .Should()
+            .Be("Google Sans");
+        fontScheme.Element(drawingNs + "minorFont")!
+            .Element(drawingNs + "latin")!
+            .Attribute("typeface")!
+            .Value
+            .Should()
+            .Be("Aptos Display");
+        fontScheme.Element(drawingNs + "majorFont")!
+            .Element(drawingNs + "ea")!
+            .Attribute("typeface")!
+            .Value
+            .Should()
+            .BeEmpty();
     }
 
     [Fact]
@@ -61,6 +101,51 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceContentTypes.ToString(SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesThemeTypefaceNamesForSchemaValidity()
+    {
+        using var source = Save(CreateWorkbookThemeSourceWorkbook());
+        SetThemeMajorLatinTypeface(source, "\"Google Sans\", Roboto, sans-serif");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadThemeMajorLatinTypeface(saved).Should().Be("Google Sans");
+    }
+
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesThemeTypefaceNamesForSchemaValidity()
+    {
+        using var source = Save(CreateWorkbookThemeSourceWorkbook());
+        SetThemeMajorLatinTypeface(source, "\"Google Sans\", Roboto, sans-serif");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadThemeMajorLatinTypeface(saved).Should().Be("Google Sans");
     }
 
     private static Workbook CreateWorkbookThemeSourceWorkbook()
@@ -114,5 +199,32 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Value
             .Should()
             .Be("FreeX Effects");
+    }
+
+    private static void SetThemeMajorLatinTypeface(MemoryStream stream, string typeface)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var themeXml = LoadPackageXml(archive, "xl/theme/theme1.xml");
+        themeXml.Root!
+            .Element(drawingNs + "themeElements")!
+            .Element(drawingNs + "fontScheme")!
+            .Element(drawingNs + "majorFont")!
+            .Element(drawingNs + "latin")!
+            .SetAttributeValue("typeface", typeface);
+        ReplacePackageXml(archive, "xl/theme/theme1.xml", themeXml);
+    }
+
+    private static string ReadThemeMajorLatinTypeface(Stream stream)
+    {
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        return ReadPackageRootElement(stream, "xl/theme/theme1.xml")
+            .Element(drawingNs + "themeElements")!
+            .Element(drawingNs + "fontScheme")!
+            .Element(drawingNs + "majorFont")!
+            .Element(drawingNs + "latin")!
+            .Attribute("typeface")!
+            .Value;
     }
 }

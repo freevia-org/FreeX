@@ -156,6 +156,41 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void IconOnlySplitButtonsKeepEnoughWidthForIconAndChevron()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var createContent = typeof(MainWindow)
+                .GetMethod("CreateRibbonCommandContent", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "CreateRibbonCommandContent");
+            var ensureChevron = typeof(MainWindow)
+                .GetMethod("EnsureRibbonDropdownChevron", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "EnsureRibbonDropdownChevron");
+            var setCompact = typeof(MainWindow)
+                .GetMethod("SetRibbonButtonCompact", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "SetRibbonButtonCompact");
+            var compactLevel = typeof(MainWindow).GetNestedType("RibbonCompactLevel", BindingFlags.NonPublic)
+                ?? throw new MissingMemberException(nameof(MainWindow), "RibbonCompactLevel");
+            var iconOnly = Enum.Parse(compactLevel, "IconOnly");
+            var content = (Grid)createContent.Invoke(null, ["Fill", "Fill", RibbonCommandLayoutKind.Small])!;
+            var button = new Button
+            {
+                Content = content,
+                Width = 74,
+                Height = 24
+            };
+
+            ensureChevron.Invoke(null, [button]);
+            RibbonMetadata.SetCompactWidths(button, 74, 24);
+
+            setCompact.Invoke(null, [button, iconOnly]);
+
+            button.Width.Should().BeGreaterThanOrEqualTo(38,
+                "icon-only split buttons need separate room for the 24px command icon and the chevron lane");
+        });
+    }
+
+    [Fact]
     public void SmallRibbonMenuButtonDropdownZoneAlignsChevronLaneToRightEdge()
     {
         StaTestRunner.Run(() =>

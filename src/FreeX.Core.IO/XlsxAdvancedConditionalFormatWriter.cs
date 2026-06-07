@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.IO.Compression;
-using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -116,29 +115,13 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         ConditionalFormat cf,
         XNamespace worksheetNs)
     {
-        if (cf.NativeContainerAttributes is { } attributes)
-        {
-            foreach (var (name, value) in attributes)
-                TrySetNativeAttributeIfMissing(element, name, value);
-        }
+        AddNativeAttributes(element, cf.NativeContainerAttributes);
 
         if (cf.NativeContainerChildXmls is { } childXmls)
         {
             foreach (var nativeChildXml in childXmls)
             {
-                if (string.IsNullOrWhiteSpace(nativeChildXml))
-                    continue;
-
-                try
-                {
-                    var nativeChild = XElement.Parse(nativeChildXml);
-                    if (nativeChild.Name.Namespace == worksheetNs && nativeChild.Name.LocalName != "cfRule")
-                        element.Add(nativeChild);
-                }
-                catch
-                {
-                    // Ignore malformed native conditional-format container payloads from older saves.
-                }
+                TryAddNativeElement(element, nativeChildXml, worksheetNs, ["cfRule"]);
             }
         }
 
@@ -248,29 +231,13 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 break;
         }
 
-        if (cf.NativeAttributes is { } attributes)
-        {
-            foreach (var (name, value) in attributes)
-                TrySetNativeAttributeIfMissing(rule, name, value);
-        }
+        AddNativeAttributes(rule, cf.NativeAttributes);
 
         if (cf.NativeChildXmls is { } childXmls)
         {
             foreach (var nativeChildXml in childXmls)
             {
-                if (string.IsNullOrWhiteSpace(nativeChildXml))
-                    continue;
-
-                try
-                {
-                    var nativeChild = XElement.Parse(nativeChildXml);
-                    if (nativeChild.Name.Namespace == worksheetNs)
-                        rule.Add(nativeChild);
-                }
-                catch
-                {
-                    // Ignore malformed native conditional-format payloads from older saves.
-                }
+                TryAddNativeElement(rule, nativeChildXml, worksheetNs);
             }
         }
 
@@ -285,14 +252,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         var modeledDataBarAttributes = cf.RuleType == CfRuleType.DataBar
             ? XlsxAdvancedConditionalFormatMetadata.ModeledDataBarPayloadAttributes(cf)
             : [];
-        if (cf.NativePayloadAttributes is { } attributes)
-        {
-            foreach (var (name, value) in attributes)
-            {
-                if (!modeledDataBarAttributes.Contains(name))
-                    TrySetNativeAttributeIfMissing(payload, name, value);
-            }
-        }
+        AddNativeAttributes(payload, cf.NativePayloadAttributes, modeledDataBarAttributes);
 
         var modeledDataBarChildren = cf.RuleType == CfRuleType.DataBar
             ? XlsxAdvancedConditionalFormatMetadata.ModeledDataBarPayloadChildren(cf)
@@ -301,22 +261,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         {
             foreach (var nativeChildXml in childXmls)
             {
-                if (string.IsNullOrWhiteSpace(nativeChildXml))
-                    continue;
-
-                try
-                {
-                    var nativeChild = XElement.Parse(nativeChildXml);
-                    if (nativeChild.Name.Namespace == worksheetNs &&
-                        !modeledDataBarChildren.Contains(nativeChild.Name.LocalName))
-                    {
-                        payload.Add(nativeChild);
-                    }
-                }
-                catch
-                {
-                    // Ignore malformed native conditional-format payload metadata from older saves.
-                }
+                TryAddNativeElement(payload, nativeChildXml, worksheetNs, modeledDataBarChildren);
             }
         }
 
@@ -345,27 +290,46 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
     private static bool IsValidIconOverride(CfIconOverride icon) =>
         !string.IsNullOrWhiteSpace(icon.IconSet) && icon.IconId >= 0;
 
-    private static bool TrySetNativeAttributeIfMissing(XElement element, string name, string value)
+    private static void AddNativeAttributes(
+        XElement element,
+        IReadOnlyDictionary<string, string>? attributes,
+        IReadOnlyCollection<string>? excludedAttributeNames = null)
     {
-        if (string.IsNullOrWhiteSpace(name))
-            return false;
+        if (attributes is null)
+            return;
+
+        foreach (var (name, value) in attributes)
+        {
+            if (excludedAttributeNames?.Contains(name) == true)
+                continue;
+
+            XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttributeIfMissing(element, name, value);
+        }
+    }
+
+    private static void TryAddNativeElement(
+        XElement target,
+        string? xml,
+        XNamespace expectedNamespace,
+        IReadOnlyCollection<string>? excludedLocalNames = null)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
+            return;
 
         try
         {
-            var attributeName = XName.Get(name);
-            if (element.Attribute(attributeName) is not null)
-                return false;
+            var element = XElement.Parse(xml);
+            if (element.Name.Namespace != expectedNamespace ||
+                excludedLocalNames?.Contains(element.Name.LocalName) == true)
+            {
+                return;
+            }
 
-            element.SetAttributeValue(attributeName, value);
-            return true;
+            target.Add(element);
         }
-        catch (ArgumentException)
+        catch
         {
-            return false;
-        }
-        catch (XmlException)
-        {
-            return false;
+            // Ignore malformed native conditional-format payloads from older saves.
         }
     }
 
@@ -513,22 +477,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
 
         foreach (var nativeChildXml in cf.NativePayloadChildXmls)
         {
-            if (string.IsNullOrWhiteSpace(nativeChildXml))
-                continue;
-
-            try
-            {
-                var nativeChild = XElement.Parse(nativeChildXml);
-                if (nativeChild.Name.Namespace == x14Ns &&
-                    !modeledChildren.Contains(nativeChild.Name.LocalName))
-                {
-                    dataBar.Add(nativeChild);
-                }
-            }
-            catch
-            {
-                // Ignore malformed native x14 data-bar payload metadata from older saves.
-            }
+            TryAddNativeElement(dataBar, nativeChildXml, x14Ns, modeledChildren);
         }
     }
 

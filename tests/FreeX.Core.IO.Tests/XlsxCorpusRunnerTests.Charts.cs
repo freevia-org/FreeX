@@ -63,9 +63,7 @@ public partial class XlsxCorpusRunnerTests
         var chartEntry = archive.Entries.FirstOrDefault(e => e.FullName.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase) && e.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase));
         chartEntry.Should().NotBeNull("generated-chart-series-count-003 must contain at least one chart part under xl/charts/");
 
-        XDocument chartXml;
-        using (var stream = chartEntry!.Open())
-            chartXml = XDocument.Load(stream);
+        var chartXml = LoadPackageXml(chartEntry!);
 
         XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
         var serElements = chartXml.Descendants()
@@ -81,7 +79,7 @@ public partial class XlsxCorpusRunnerTests
         using var package = XlsxCorpusFixtureFactory.CreateKnownGapPackage("generated-unsupported-chart-001");
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: false);
 
-        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!).ToString();
+        var chartXml = LoadPackageXml(archive, "xl/charts/chart1.xml").ToString();
 
         chartXml.Should().Contain("mapChart");
         chartXml.Should().NotContain("treemapChart", "treemap charts have a renderable chartEx writer path now and should not anchor the unsupported-chart fixture");

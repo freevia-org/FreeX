@@ -15,7 +15,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     {
         using var stream = Save(CreateSparklineSourceWorkbook());
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
 
         worksheetXml.Root!
             .Elements()
@@ -63,6 +63,43 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Be(sourceExtensionList.ToString(SaveOptions.DisableFormatting));
     }
 
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorksheetExtensionListForSchemaValidity()
+    {
+        using var source = Save(CreateSparklineSourceWorkbook());
+        var sourceUri = SetWorksheetExtensionListInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 7), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        SchemaErrors(saved).Should().BeEmpty();
+
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var extensionList = ReadWorksheetChildElement(saved, "extLst");
+        extensionList.Attribute("customWorksheetExtLstFlag").Should().BeNull();
+        extensionList.Element(worksheetNs + "nativeWorksheetExtLstChild").Should().BeNull();
+
+        var extension = extensionList
+            .Elements(worksheetNs + "ext")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        extension.Attribute("uri")!.Value.Should().Be(sourceUri);
+        extension.Attribute("customWorksheetExtFlag").Should().BeNull();
+        extension.ToString(SaveOptions.DisableFormatting).Should().Contain("sparklineGroups");
+    }
+
     private static Workbook CreateSparklineSourceWorkbook()
     {
         var workbook = new Workbook("SparklinePatchSave");
@@ -94,5 +131,30 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         });
 
         return workbook;
+    }
+
+    private static string SetWorksheetExtensionListInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        var extensionList = worksheetXml.Root!.Element(worksheetNs + "extLst")!;
+        extensionList.SetAttributeValue("customWorksheetExtLstFlag", "removed");
+        extensionList.Add(new XElement(worksheetNs + "nativeWorksheetExtLstChild"));
+
+        var extension = extensionList.Element(worksheetNs + "ext")!;
+        var uri = extension.Attribute("uri")!.Value;
+        extension.SetAttributeValue("uri", $" {uri} ");
+        extension.SetAttributeValue("customWorksheetExtFlag", "removed");
+        extensionList.Add(new XElement(worksheetNs + "ext", new XAttribute("uri", " ")));
+        extensionList.Add(new XElement(worksheetNs + "ext", new XAttribute("uri", uri)));
+        worksheetXml.Root.Add(new XElement(
+            worksheetNs + "extLst",
+            new XElement(worksheetNs + "ext", new XAttribute("uri", "{FREEX-DUPLICATE-WORKSHEET-EXTLST}"))));
+
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        return uri;
     }
 }

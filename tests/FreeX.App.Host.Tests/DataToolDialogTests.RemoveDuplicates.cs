@@ -52,7 +52,7 @@ public sealed partial class DataToolDialogTests
                 buttons["_Select All"].IsEnabled.Should().BeFalse();
                 buttons["_Unselect All"].IsEnabled.Should().BeTrue();
 
-                buttons["_Unselect All"].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                DialogSourceTestSupport.ClickButton(buttons["_Unselect All"]);
 
                 boxes.Should().AllSatisfy(box => box.IsChecked.Should().BeFalse());
                 buttons["_Select All"].IsEnabled.Should().BeTrue();

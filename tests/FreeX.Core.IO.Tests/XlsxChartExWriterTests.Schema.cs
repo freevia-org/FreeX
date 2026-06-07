@@ -27,7 +27,7 @@ public sealed partial class XlsxChartExWriterTests
 
         using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
         {
-            var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+            var chartXml = LoadChartXml(archive);
             chartXml.Root!.Name.Should().Be(ChartExNs + "chartSpace");
             chartXml.Root.Elements().Select(element => element.Name).Take(2)
                 .Should().Equal(ChartExNs + "chartData", ChartExNs + "chart");
@@ -79,7 +79,7 @@ public sealed partial class XlsxChartExWriterTests
                 paretoLine.Elements(ChartExNs + "axisId").Should().BeEmpty();
             }
 
-            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            var contentTypesXml = LoadSchemaXml(archive, "[Content_Types].xml");
             var chartContentTypeOverrides = contentTypesXml.Root!
                 .Elements(ContentTypesNs + "Override")
                 .Where(element =>
@@ -101,7 +101,7 @@ public sealed partial class XlsxChartExWriterTests
                     element.Attribute("ContentType")?.Value == ChartExColorStyleContentType)
                 .Should().ContainSingle();
 
-            var drawingRelsXml = LoadPackageXml(archive.GetEntry("xl/drawings/_rels/drawing1.xml.rels")!);
+            var drawingRelsXml = LoadSchemaXml(archive, "xl/drawings/_rels/drawing1.xml.rels");
             var chartExRelationships = drawingRelsXml.Root!
                 .Elements(PackageRelNs + "Relationship")
                 .Where(element =>
@@ -110,7 +110,7 @@ public sealed partial class XlsxChartExWriterTests
                 .ToList();
             chartExRelationships.Should().ContainSingle();
 
-            var chartRelsXml = LoadPackageXml(archive.GetEntry("xl/charts/_rels/chart1.xml.rels")!);
+            var chartRelsXml = LoadSchemaXml(archive, "xl/charts/_rels/chart1.xml.rels");
             chartRelsXml.Root!
                 .Elements(PackageRelNs + "Relationship")
                 .Where(element =>
@@ -124,11 +124,11 @@ public sealed partial class XlsxChartExWriterTests
                     element.Attribute("Target")?.Value == "colors1.xml")
                 .Should().ContainSingle();
 
-            var styleXml = LoadPackageXml(archive.GetEntry("xl/charts/style1.xml")!);
+            var styleXml = LoadSchemaXml(archive, "xl/charts/style1.xml");
             styleXml.Root!.Name.Should().Be(ChartStyleNs + "chartStyle");
             AssertExcelNativeChartExStyle(styleXml);
 
-            var colorsXml = LoadPackageXml(archive.GetEntry("xl/charts/colors1.xml")!);
+            var colorsXml = LoadSchemaXml(archive, "xl/charts/colors1.xml");
             colorsXml.Root!.Name.Should().Be(ChartStyleNs + "colorStyle");
             colorsXml.Root.Attribute("meth")!.Value.Should().Be("cycle");
             colorsXml.Root.Attribute("id")!.Value.Should().Be("10");
@@ -136,7 +136,7 @@ public sealed partial class XlsxChartExWriterTests
                 .Should().Equal("accent1", "accent2", "accent3", "accent4", "accent5", "accent6");
             AssertExcelNativeChartExColorStyle(colorsXml);
 
-            var drawingXml = LoadPackageXml(archive.GetEntry("xl/drawings/drawing1.xml")!);
+            var drawingXml = LoadSchemaXml(archive, "xl/drawings/drawing1.xml");
             drawingXml.Root!.Elements(SpreadsheetDrawingNs + "twoCellAnchor").Should().ContainSingle();
             drawingXml.Root.Elements(SpreadsheetDrawingNs + "absoluteAnchor").Should().BeEmpty();
             var alternateContent = drawingXml.Descendants(MarkupCompatNs + "AlternateContent").Should().ContainSingle().Subject;
@@ -179,7 +179,7 @@ public sealed partial class XlsxChartExWriterTests
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         archive.Entries.Select(entry => entry.FullName).Should().NotContain(name => name.StartsWith("xl/charts/", StringComparison.Ordinal));
 
-        var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+        var contentTypesXml = LoadSchemaXml(archive, "[Content_Types].xml");
         var chartContentTypeOverrides = contentTypesXml.Root!
             .Elements(ContentTypesNs + "Override")
             .Where(element =>
@@ -189,4 +189,6 @@ public sealed partial class XlsxChartExWriterTests
         chartContentTypeOverrides.Should().BeEmpty();
     }
 
+    private static XDocument LoadSchemaXml(ZipArchive archive, string entryName) =>
+        XlsxPackageTestFixtures.LoadPackageXml(archive, entryName, entryName);
 }

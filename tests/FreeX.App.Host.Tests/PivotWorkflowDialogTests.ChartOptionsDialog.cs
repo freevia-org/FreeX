@@ -1,5 +1,4 @@
 using System.IO;
-using System.Reflection;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -103,9 +102,7 @@ public sealed partial class PivotWorkflowDialogTests
         StaTestRunner.Run(() =>
         {
             var dialog = new PivotChartOptionsDialog(chart);
-            var gallery = (ListBox)typeof(PivotChartOptionsDialog)
-                .GetField("_styleGallery", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .GetValue(dialog)!;
+            var gallery = DialogSourceTestSupport.GetPrivateField<ListBox>(dialog, "_styleGallery");
             var styleOptions = gallery.Items.Cast<ChartStyleOption>().ToList();
 
             styleOptions.Should().HaveCount(49);

@@ -19,7 +19,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     }
 
     [Fact]
-    public void Plan_CompressesGroupsFromRightToLeftBeforeCollapsing()
+    public void Plan_FallsBackToSmallLabelsAcrossGroupsBeforeIconOnly()
     {
         var groups = new[]
         {
@@ -32,8 +32,8 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
 
         states.Should().Equal(
             RibbonAdaptiveGroupState.Full,
-            RibbonAdaptiveGroupState.Full,
-            RibbonAdaptiveGroupState.IconOnly);
+            RibbonAdaptiveGroupState.SmallWithLabels,
+            RibbonAdaptiveGroupState.SmallWithLabels);
     }
 
     [Fact]
@@ -50,8 +50,8 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
         var states = RibbonAdaptiveLayoutPlanner.Plan(270, groups);
 
         states.Should().Equal(
-            RibbonAdaptiveGroupState.Full,
-            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.IconOnly,
+            RibbonAdaptiveGroupState.IconOnly,
             RibbonAdaptiveGroupState.Collapsed,
             RibbonAdaptiveGroupState.Collapsed);
     }
@@ -75,13 +75,31 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     }
 
     [Fact]
+    public void Plan_SkipsFallbackStatesThatDoNotSaveWidth()
+    {
+        var groups = new[]
+        {
+            new RibbonAdaptiveGroup("Clipboard", 100, 100, 62, 50),
+            new RibbonAdaptiveGroup("Font", 200, 200, 96, 52),
+            new RibbonAdaptiveGroup("Alignment", 180, 180, 88, 56)
+        };
+
+        var states = RibbonAdaptiveLayoutPlanner.Plan(450, groups);
+
+        states.Should().Equal(
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.IconOnly);
+    }
+
+    [Fact]
     public void Plan_SourceAvoidsLinqScaffoldingOnRepeatedFitChecks()
     {
         var source = DialogSourceTestSupport.ReadHostSources("RibbonAdaptiveLayoutPlanner.cs");
         source.Should().Contain("Array.Fill(states, RibbonAdaptiveGroupState.Full)");
-        source.Should().Contain("for (var index = groups.Count - 1; index >= 0; index--)");
+        source.Should().Contain("TryFallbackNextGroup(states, groups, ref width)");
+        source.Should().Contain("targetWidth >= currentWidth - 0.5");
         source.Should().Contain("for (var index = 0; index < groups.Count; index++)");
-        source.Should().Contain("ReplaceWidth(width, group");
         source.Should().NotContain("Enumerable.Repeat");
         source.Should().NotContain(".Select(");
         source.Should().NotContain(".Sum()");

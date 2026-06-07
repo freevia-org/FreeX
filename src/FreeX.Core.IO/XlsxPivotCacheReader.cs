@@ -14,14 +14,18 @@ internal static class XlsxPivotCacheReader
         XNamespace relNs)
     {
         var result = new List<PivotCacheModel>();
+        var seenCacheIds = new HashSet<int>();
+        var seenRelationshipIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var pivotCacheElement in workbookXml.Root?
                      .Element(workbookNs + "pivotCaches")?
                      .Elements(workbookNs + "pivotCache") ?? [])
         {
             var cacheIdAttribute = XlsxXmlAttributeReader.ReadIntAttribute(pivotCacheElement, "cacheId");
-            var relId = pivotCacheElement.Attribute(relNs + "id")?.Value;
+            var relId = pivotCacheElement.Attribute(relNs + "id")?.Value.Trim();
             if (cacheIdAttribute is null or < 0 ||
                 string.IsNullOrWhiteSpace(relId) ||
+                !seenCacheIds.Add(cacheIdAttribute.Value) ||
+                !seenRelationshipIds.Add(relId) ||
                 !workbookRels.TryGetValue(relId, out var cachePath))
             {
                 continue;
@@ -135,17 +139,8 @@ internal static class XlsxPivotCacheReader
         return PivotCacheSourceType.Unknown;
     }
 
-    private const string FreeXPivotExtensionNamespace = "urn:freex:pivot:2026";
-
     // Returns the FreeX cacheProps element from the pivotCacheDefinition extLst, or null when absent.
-    private static XElement? ReadFreeXCacheProps(XElement root, XNamespace workbookNs)
-    {
-        XNamespace freeXNs = FreeXPivotExtensionNamespace;
-        return root.Element(workbookNs + "extLst")?
-            .Elements(workbookNs + "ext")
-            .Select(ext => ext.Element(freeXNs + "cacheProps"))
-            .FirstOrDefault(props => props is not null);
-    }
-
+    private static XElement? ReadFreeXCacheProps(XElement root, XNamespace workbookNs) =>
+        XlsxPivotExtensionReader.ReadElement(root, workbookNs, "cacheProps");
 }
 

@@ -85,18 +85,15 @@ internal static class XlsxWorksheetSortStateMapper
 
     private static XElement? ToXml(WorksheetSortStateModel model)
     {
-        if (!string.IsNullOrWhiteSpace(model.NativeXml))
+        if (XlsxWorksheetNativeMetadataHelpers.TryParseNativeElement(
+                model.NativeXml,
+                WorksheetNs + "sortState",
+                XlsxWorksheetSortStateNormalizer.NormalizeElement) is { } nativeElement)
         {
-            try
-            {
-                var nativeElement = XElement.Parse(model.NativeXml);
-                if (nativeElement.Name == WorksheetNs + "sortState")
-                    return nativeElement;
-            }
-            catch
-            {
-                // Fall back to the structured model below.
-            }
+            if (!nativeElement.HasAttributes && !nativeElement.HasElements)
+                return null;
+
+            return nativeElement;
         }
 
         var element = new XElement(WorksheetNs + "sortState");
@@ -108,6 +105,7 @@ internal static class XlsxWorksheetSortStateMapper
         foreach (var condition in model.Conditions.Select(ToXml))
             element.Add(condition);
 
+        XlsxWorksheetSortStateNormalizer.NormalizeElement(element);
         return element.HasAttributes || element.HasElements ? element : null;
     }
 

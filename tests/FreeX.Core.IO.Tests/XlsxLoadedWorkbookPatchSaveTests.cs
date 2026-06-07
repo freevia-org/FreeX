@@ -72,6 +72,211 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void Save_LoadedWorkbookWithWorkbookMetadataPart_PreservesMetadataPackageGraphAndCellIndexes()
+    {
+        var sourceBytes = AddWorkbookMetadataPackageParts(CreateSourcePackage());
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("patched metadata-backed value"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        ReadPackageEntry(savedBytes, "xl/metadata.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/metadata.xml"));
+        ReadContentTypeOverrides(savedBytes)
+            .Should()
+            .Contain("/xl/metadata.xml");
+        WorkbookRelationshipsContain(
+                savedBytes,
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata",
+                "metadata.xml")
+            .Should()
+            .BeTrue();
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "A1")
+            .Should()
+            .Be("patched metadata-backed value");
+        ReadCellAttribute(savedBytes, "xl/worksheets/sheet1.xml", "A1", "cm")
+            .Should()
+            .Be("1");
+        ReadCellAttribute(savedBytes, "xl/worksheets/sheet1.xml", "A1", "vm")
+            .Should()
+            .Be("1");
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithOfficeAddIn_PreservesWebExtensionPackageGraph()
+    {
+        var sourceBytes = AddOfficeWebExtensionPackageGraph(CreateSourcePackage());
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("patched add-in workbook value"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        ReadPackageEntry(savedBytes, "xl/webextensions/taskpanes.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/webextensions/taskpanes.xml"));
+        ReadPackageEntry(savedBytes, "xl/webextensions/_rels/taskpanes.xml.rels")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/webextensions/_rels/taskpanes.xml.rels"));
+        ReadPackageEntry(savedBytes, "xl/webextensions/webextension1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/webextensions/webextension1.xml"));
+        ReadContentTypeOverrides(savedBytes)
+            .Should()
+            .Contain(new[]
+            {
+                "/xl/webextensions/taskpanes.xml",
+                "/xl/webextensions/webextension1.xml"
+            });
+        WorkbookRelationshipsContain(
+                savedBytes,
+                "http://schemas.microsoft.com/office/2011/relationships/webextensiontaskpanes",
+                "webextensions/taskpanes.xml")
+            .Should()
+            .BeTrue();
+        PackageRelationshipsContain(
+                savedBytes,
+                "xl/webextensions/_rels/taskpanes.xml.rels",
+                "http://schemas.microsoft.com/office/2011/relationships/webextension",
+                "webextension1.xml")
+            .Should()
+            .BeTrue();
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "A1")
+            .Should()
+            .Be("patched add-in workbook value");
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithXmlMaps_PreservesMapInfoPackageGraph()
+    {
+        var sourceBytes = AddWorkbookXmlMapsPackageGraph(CreateSourcePackage());
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("patched xml map workbook value"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        ReadPackageEntry(savedBytes, "xl/xmlMaps.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/xmlMaps.xml"));
+        ReadContentTypeOverrides(savedBytes)
+            .Should()
+            .Contain("/xl/xmlMaps.xml");
+        WorkbookRelationshipsContain(
+                savedBytes,
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/xmlMaps",
+                "xmlMaps.xml")
+            .Should()
+            .BeTrue();
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "A1")
+            .Should()
+            .Be("patched xml map workbook value");
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithRichDataGraph_PreservesRichDataPartsRelationshipsAndContentTypes()
+    {
+        var sourceBytes = AddRichDataPackageParts(CreateSourcePackage());
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("patched rich data workbook"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        foreach (var path in new[]
+                 {
+                     "xl/metadata.xml",
+                     "xl/richData/rdrichvalue.xml",
+                     "xl/richData/rdrichvaluestructure.xml",
+                     "xl/richData/rdRichValueTypes.xml",
+                     "xl/richData/richValueRel.xml",
+                     "xl/richData/_rels/richValueRel.xml.rels",
+                     "xl/media/image1.png"
+                 })
+        {
+            ReadPackageEntry(savedBytes, path)
+                .Should()
+                .Equal(ReadPackageEntry(sourceBytes, path));
+        }
+
+        ReadContentTypeOverrides(savedBytes)
+            .Should()
+            .Contain(new[]
+            {
+                "/xl/metadata.xml",
+                "/xl/richData/rdrichvalue.xml",
+                "/xl/richData/rdrichvaluestructure.xml",
+                "/xl/richData/rdRichValueTypes.xml",
+                "/xl/richData/richValueRel.xml"
+            });
+        WorkbookRelationshipsContain(
+                savedBytes,
+                "http://schemas.microsoft.com/office/2017/06/relationships/rdRichValue",
+                "richData/rdrichvalue.xml")
+            .Should()
+            .BeTrue();
+        WorkbookRelationshipsContain(
+                savedBytes,
+                "http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueStructure",
+                "richData/rdrichvaluestructure.xml")
+            .Should()
+            .BeTrue();
+        WorkbookRelationshipsContain(
+                savedBytes,
+                "http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueTypes",
+                "richData/rdRichValueTypes.xml")
+            .Should()
+            .BeTrue();
+        WorkbookRelationshipsContain(
+                savedBytes,
+                "http://schemas.microsoft.com/office/2022/10/relationships/richValueRel",
+                "richData/richValueRel.xml")
+            .Should()
+            .BeTrue();
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "A1")
+            .Should()
+            .Be("patched rich data workbook");
+    }
+
+    [Fact]
     public void Save_LoadedWorkbookWithUnpreparedDirectEdit_FallsBackInsteadOfCapturingEditAsBaseline()
     {
         var sourceBytes = CreateSourcePackage();
@@ -106,6 +311,68 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourceCopy);
         adapter.LastSaveDiagnostics.PathLabel.Should().Be("source_copy");
         adapter.LastSaveDiagnostics.Reason.Should().Be("model_unchanged");
+    }
+
+    [Fact]
+    public void Save_LoadedUnchangedWorkbookWithDigitalSignatures_CopiesSourcePackage()
+    {
+        var sourceBytes = AddDigitalSignaturePackageGraph(CreateSourcePackage());
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourceCopy);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("model_unchanged");
+        saved.ToArray().Should().Equal(sourceBytes);
+    }
+
+    [Fact]
+    public void Save_LoadedEditedWorkbookWithDigitalSignatures_RemovesInvalidatedSignaturePackageGraph()
+    {
+        var sourceBytes = AddDigitalSignaturePackageGraph(CreateSourcePackage());
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("edited signed workbook"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("package_guard_digital_signatures");
+        PackageHasEntry(savedBytes, "_xmlsignatures/origin.sigs").Should().BeFalse();
+        PackageHasEntry(savedBytes, "_xmlsignatures/sig1.xml").Should().BeFalse();
+        PackageHasEntry(savedBytes, "_xmlsignatures/_rels/origin.sigs.rels").Should().BeFalse();
+        ReadContentTypeOverrides(savedBytes)
+            .Should()
+            .NotContain(new[]
+            {
+                "/_xmlsignatures/origin.sigs",
+                "/_xmlsignatures/sig1.xml"
+            });
+        RootRelationshipsContain(
+                savedBytes,
+                "http://schemas.openxmlformats.org/package/2006/relationships/digital-signature/origin",
+                "_xmlsignatures/origin.sigs")
+            .Should()
+            .BeFalse();
+        using var reload = new MemoryStream(savedBytes, writable: false);
+        adapter.Load(reload)
+            .GetSheetAt(0)
+            .GetCell(1, 1)!
+            .Value
+            .Should()
+            .Be(new TextValue("edited signed workbook"));
     }
 
     [Fact]
@@ -496,7 +763,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
             .Equal(ReadPackageEntry(sourceBytes, "xl/styles.xml"));
         ReadMergeCellsAttribute(savedBytes, "xl/worksheets/sheet1.xml", "nativeMergeContainerAttr")
             .Should()
-            .Be("kept");
+            .BeNull();
         ReadMergeCellsAttribute(savedBytes, "xl/worksheets/sheet1.xml", "count")
             .Should()
             .Be("2");
@@ -505,7 +772,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
             .Equal("C1:D1", "A3:B4");
         ReadMergeCellAttribute(savedBytes, "xl/worksheets/sheet1.xml", "C1:D1", "nativeMergeCellAttr")
             .Should()
-            .Be("kept-C1-D1");
+            .BeNull();
         ReadMergeCellAttribute(savedBytes, "xl/worksheets/sheet1.xml", "A3:B4", "nativeMergeCellAttr")
             .Should()
             .BeNull();
@@ -553,7 +820,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
             .Equal(ReadPackageEntry(sourceBytes, "xl/styles.xml"));
         ReadHyperlinksAttribute(savedBytes, "xl/worksheets/sheet1.xml", "nativeHyperlinksAttr")
             .Should()
-            .Be("kept");
+            .BeNull();
         ReadHyperlinkAttribute(savedBytes, "xl/worksheets/sheet1.xml", "A1", "location")
             .Should()
             .Be("Data!C3");
@@ -565,7 +832,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
             .Be("Jump display");
         ReadHyperlinkAttribute(savedBytes, "xl/worksheets/sheet1.xml", "A1", "customAttr")
             .Should()
-            .Be("kept-link");
+            .BeNull();
 
         using var reloadStream = new MemoryStream(savedBytes, writable: false);
         var reloadedSheet = adapter.Load(reloadStream).GetSheetAt(0);
@@ -988,6 +1255,62 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         saved.Length.Should().BeGreaterThan(0);
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
         adapter.LastSaveDiagnostics.Reason.Should().Be("change_chart_source_cell");
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithSmartArtDiagramAndOutsideCellEdit_PreservesDiagramPackageGraph()
+    {
+        var sourceBytes = CreateSmartArtDiagramSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new TextValue("smartart outside patched"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        adapter.LastSaveDiagnostics.CellChangeCount.Should().Be(1);
+        ReadPackageEntry(savedBytes, "xl/drawings/drawing1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/drawings/drawing1.xml"));
+        ReadPackageEntry(savedBytes, "xl/drawings/_rels/drawing1.xml.rels")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/drawings/_rels/drawing1.xml.rels"));
+        ReadPackageEntry(savedBytes, "xl/diagrams/data1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/diagrams/data1.xml"));
+        ReadPackageEntry(savedBytes, "xl/diagrams/layout1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/diagrams/layout1.xml"));
+        ReadPackageEntry(savedBytes, "xl/diagrams/quickStyle1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/diagrams/quickStyle1.xml"));
+        ReadPackageEntry(savedBytes, "xl/diagrams/colors1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/diagrams/colors1.xml"));
+        ReadContentTypeOverrides(savedBytes).Should().Contain([
+            "/xl/diagrams/data1.xml",
+            "/xl/diagrams/layout1.xml",
+            "/xl/diagrams/quickStyle1.xml",
+            "/xl/diagrams/colors1.xml"]);
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "D4")
+            .Should()
+            .Be("smartart outside patched");
+
+        using var reloadStream = new MemoryStream(savedBytes, writable: false);
+        adapter.Load(reloadStream)
+            .GetSheetAt(0)
+            .GetCell(4, 4)!
+            .Value
+            .Should()
+            .Be(new TextValue("smartart outside patched"));
     }
 
     [Fact]
@@ -1862,6 +2185,426 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
             workbook.SaveAs(stream);
         }
 
+        return RemoveEmptyWorkbookDefinedNames(stream.ToArray());
+    }
+
+    private static byte[] AddWorkbookMetadataPackageParts(byte[] sourceBytes)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(sourceBytes, 0, sourceBytes.Length);
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace xdaNs = "http://schemas.microsoft.com/office/spreadsheetml/2017/dynamicarray";
+
+            var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+            contentTypesXml.Root!
+                .Elements(contentTypeNs + "Override")
+                .Where(element => string.Equals((string?)element.Attribute("PartName"), "/xl/metadata.xml", StringComparison.OrdinalIgnoreCase))
+                .Remove();
+            contentTypesXml.Root.Add(new XElement(
+                contentTypeNs + "Override",
+                new XAttribute("PartName", "/xl/metadata.xml"),
+                new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml")));
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var workbookRelationshipsXml = LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
+            workbookRelationshipsXml.Root!.Add(new XElement(
+                relationshipNs + "Relationship",
+                new XAttribute("Id", "rIdFreeXMetadata"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata"),
+                new XAttribute("Target", "metadata.xml")));
+            ReplacePackageXml(archive, "xl/_rels/workbook.xml.rels", workbookRelationshipsXml);
+
+            var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+            var metadataCell = worksheetXml
+                .Descendants(workbookNs + "c")
+                .Single(element => element.Attribute("r")?.Value == "A1");
+            metadataCell.SetAttributeValue("cm", "1");
+            metadataCell.SetAttributeValue("vm", "1");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+            var metadataXml = new XDocument(new XElement(
+                workbookNs + "metadata",
+                new XAttribute(XNamespace.Xmlns + "xda", xdaNs.NamespaceName),
+                new XElement(
+                    workbookNs + "metadataTypes",
+                    new XAttribute("count", "1"),
+                    new XElement(
+                        workbookNs + "metadataType",
+                        new XAttribute("name", "XLDAPR"),
+                        new XAttribute("minSupportedVersion", "120000"),
+                        new XAttribute("copy", "1"),
+                        new XAttribute("pasteAll", "1"),
+                        new XAttribute("pasteValues", "1"),
+                        new XAttribute("merge", "1"),
+                        new XAttribute("splitFirst", "1"),
+                        new XAttribute("rowColShift", "1"),
+                        new XAttribute("clearFormats", "1"),
+                        new XAttribute("clearComments", "1"),
+                        new XAttribute("assign", "1"),
+                        new XAttribute("coerce", "1"),
+                        new XAttribute("cellMeta", "1"))),
+                new XElement(
+                    workbookNs + "futureMetadata",
+                    new XAttribute("name", "XLDAPR"),
+                    new XAttribute("count", "1"),
+                    new XElement(
+                        workbookNs + "bk",
+                        new XElement(
+                            workbookNs + "extLst",
+                            new XElement(
+                                workbookNs + "ext",
+                                new XAttribute("uri", "{bdbb8cdc-fa1e-496e-a857-3c3f30c029c3}"),
+                                new XElement(
+                                    xdaNs + "dynamicArrayProperties",
+                                    new XAttribute("fDynamic", "1"),
+                                    new XAttribute("fCollapsed", "0")))))),
+                new XElement(
+                    workbookNs + "cellMetadata",
+                    new XAttribute("count", "1"),
+                    new XElement(
+                        workbookNs + "bk",
+                        new XElement(
+                            workbookNs + "rc",
+                            new XAttribute("t", "1"),
+                            new XAttribute("v", "0")))),
+                new XElement(
+                    workbookNs + "valueMetadata",
+                    new XAttribute("count", "1"),
+                    new XElement(
+                        workbookNs + "bk",
+                        new XElement(
+                            workbookNs + "rc",
+                            new XAttribute("t", "1"),
+                            new XAttribute("v", "0"))))));
+            ReplacePackageXml(archive, "xl/metadata.xml", metadataXml);
+        }
+
+        return stream.ToArray();
+    }
+
+    private static byte[] AddDigitalSignaturePackageGraph(byte[] sourceBytes)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(sourceBytes, 0, sourceBytes.Length);
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+            var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+            contentTypesXml.Root!
+                .Elements(contentTypeNs + "Override")
+                .Where(element =>
+                    string.Equals((string?)element.Attribute("PartName"), "/_xmlsignatures/origin.sigs", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals((string?)element.Attribute("PartName"), "/_xmlsignatures/sig1.xml", StringComparison.OrdinalIgnoreCase))
+                .Remove();
+            contentTypesXml.Root.Add(
+                new XElement(
+                    contentTypeNs + "Override",
+                    new XAttribute("PartName", "/_xmlsignatures/origin.sigs"),
+                    new XAttribute("ContentType", "application/vnd.openxmlformats-package.digital-signature-origin")),
+                new XElement(
+                    contentTypeNs + "Override",
+                    new XAttribute("PartName", "/_xmlsignatures/sig1.xml"),
+                    new XAttribute("ContentType", "application/vnd.openxmlformats-package.digital-signature-xmlsignature+xml")));
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var rootRelationshipsXml = LoadPackageXml(archive, "_rels/.rels");
+            rootRelationshipsXml.Root!.Add(new XElement(
+                relationshipNs + "Relationship",
+                new XAttribute("Id", "rIdSignatureOrigin"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/package/2006/relationships/digital-signature/origin"),
+                new XAttribute("Target", "_xmlsignatures/origin.sigs")));
+            ReplacePackageXml(archive, "_rels/.rels", rootRelationshipsXml);
+
+            ReplacePackageXml(
+                archive,
+                "_xmlsignatures/origin.sigs",
+                new XDocument(new XElement("SignatureOrigin")));
+            ReplacePackageXml(
+                archive,
+                "_xmlsignatures/sig1.xml",
+                new XDocument(new XElement("Signature")));
+            ReplacePackageXml(
+                archive,
+                "_xmlsignatures/_rels/origin.sigs.rels",
+                new XDocument(new XElement(
+                    relationshipNs + "Relationships",
+                    new XElement(
+                        relationshipNs + "Relationship",
+                        new XAttribute("Id", "rIdSignature1"),
+                        new XAttribute("Type", "http://schemas.openxmlformats.org/package/2006/relationships/digital-signature/signature"),
+                        new XAttribute("Target", "sig1.xml")))));
+        }
+
+        return stream.ToArray();
+    }
+
+    private static byte[] AddOfficeWebExtensionPackageGraph(byte[] sourceBytes)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(sourceBytes, 0, sourceBytes.Length);
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+            var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+            contentTypesXml.Root!
+                .Elements(contentTypeNs + "Override")
+                .Where(element =>
+                    string.Equals((string?)element.Attribute("PartName"), "/xl/webextensions/taskpanes.xml", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals((string?)element.Attribute("PartName"), "/xl/webextensions/webextension1.xml", StringComparison.OrdinalIgnoreCase))
+                .Remove();
+            contentTypesXml.Root.Add(
+                new XElement(
+                    contentTypeNs + "Override",
+                    new XAttribute("PartName", "/xl/webextensions/taskpanes.xml"),
+                    new XAttribute("ContentType", "application/vnd.ms-office.webextensiontaskpanes+xml")),
+                new XElement(
+                    contentTypeNs + "Override",
+                    new XAttribute("PartName", "/xl/webextensions/webextension1.xml"),
+                    new XAttribute("ContentType", "application/vnd.ms-office.webextension+xml")));
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var workbookRelationshipsXml = LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
+            workbookRelationshipsXml.Root!.Add(new XElement(
+                relationshipNs + "Relationship",
+                new XAttribute("Id", "rIdFreeXOfficeAddinTaskpanes"),
+                new XAttribute("Type", "http://schemas.microsoft.com/office/2011/relationships/webextensiontaskpanes"),
+                new XAttribute("Target", "webextensions/taskpanes.xml")));
+            ReplacePackageXml(archive, "xl/_rels/workbook.xml.rels", workbookRelationshipsXml);
+
+            ReplacePackageXml(
+                archive,
+                "xl/webextensions/taskpanes.xml",
+                new XDocument(new XElement(
+                    XNamespace.Get("http://schemas.microsoft.com/office/webextensions/taskpanes/2010/11") + "taskpanes",
+                    new XElement(
+                        XNamespace.Get("http://schemas.microsoft.com/office/webextensions/taskpanes/2010/11") + "taskpane",
+                        new XAttribute("dockstate", "right"),
+                        new XAttribute("visibility", "0"),
+                        new XAttribute("width", "350"),
+                        new XAttribute("row", "4"),
+                        new XElement(
+                            XNamespace.Get("http://schemas.microsoft.com/office/webextensions/taskpanes/2010/11") + "webextensionref",
+                            new XAttribute(XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships") + "id", "rIdWebExtension1"))))));
+            ReplacePackageXml(
+                archive,
+                "xl/webextensions/_rels/taskpanes.xml.rels",
+                new XDocument(new XElement(
+                    relationshipNs + "Relationships",
+                    new XElement(
+                        relationshipNs + "Relationship",
+                        new XAttribute("Id", "rIdWebExtension1"),
+                        new XAttribute("Type", "http://schemas.microsoft.com/office/2011/relationships/webextension"),
+                        new XAttribute("Target", "webextension1.xml")))));
+            ReplacePackageXml(
+                archive,
+                "xl/webextensions/webextension1.xml",
+                new XDocument(new XElement(
+                    XNamespace.Get("http://schemas.microsoft.com/office/webextensions/webextension/2010/11") + "webextension",
+                    new XElement(
+                        XNamespace.Get("http://schemas.microsoft.com/office/webextensions/webextension/2010/11") + "reference",
+                        new XAttribute("id", "wa104379955"),
+                        new XAttribute("version", "1.0.0.0"),
+                        new XAttribute("store", "en-US"),
+                        new XAttribute("storeType", "OMEX")),
+                    new XElement(XNamespace.Get("http://schemas.microsoft.com/office/webextensions/webextension/2010/11") + "alternateReferences"),
+                    new XElement(XNamespace.Get("http://schemas.microsoft.com/office/webextensions/webextension/2010/11") + "properties"),
+                    new XElement(XNamespace.Get("http://schemas.microsoft.com/office/webextensions/webextension/2010/11") + "bindings"),
+                    new XElement(XNamespace.Get("http://schemas.microsoft.com/office/webextensions/webextension/2010/11") + "snapshot", "AAAA"))));
+        }
+
+        return stream.ToArray();
+    }
+
+    private static byte[] AddWorkbookXmlMapsPackageGraph(byte[] sourceBytes)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(sourceBytes, 0, sourceBytes.Length);
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+            var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+            contentTypesXml.Root!
+                .Elements(contentTypeNs + "Override")
+                .Where(element => string.Equals(
+                    (string?)element.Attribute("PartName"),
+                    "/xl/xmlMaps.xml",
+                    StringComparison.OrdinalIgnoreCase))
+                .Remove();
+            contentTypesXml.Root.Add(new XElement(
+                contentTypeNs + "Override",
+                new XAttribute("PartName", "/xl/xmlMaps.xml"),
+                new XAttribute("ContentType", "application/xml")));
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var workbookRelationshipsXml = LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
+            workbookRelationshipsXml.Root!.Add(new XElement(
+                relationshipNs + "Relationship",
+                new XAttribute("Id", "rIdFreeXXmlMaps"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/xmlMaps"),
+                new XAttribute("Target", "xmlMaps.xml")));
+            ReplacePackageXml(archive, "xl/_rels/workbook.xml.rels", workbookRelationshipsXml);
+
+            ReplacePackageXml(
+                archive,
+                "xl/xmlMaps.xml",
+                new XDocument(new XElement(
+                    workbookNs + "MapInfo",
+                    new XAttribute("SelectionNamespaces", "xmlns:fx='urn:freex:xml-map'"),
+                    new XElement(
+                        workbookNs + "Schema",
+                        new XAttribute("ID", "schema1"),
+                        new XAttribute("SchemaRef", "customXml/item1.xml")),
+                    new XElement(
+                        workbookNs + "Map",
+                        new XAttribute("ID", "1"),
+                        new XAttribute("Name", "FreeXXmlMap"),
+                        new XAttribute("RootElement", "root"),
+                        new XAttribute("SchemaID", "schema1"),
+                        new XAttribute("ShowImportExportValidationErrors", "1")))));
+        }
+
+        return stream.ToArray();
+    }
+
+    private static byte[] AddRichDataPackageParts(byte[] sourceBytes)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(sourceBytes, 0, sourceBytes.Length);
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace richDataNs = "http://schemas.microsoft.com/office/spreadsheetml/2017/richdata";
+            XNamespace richData2Ns = "http://schemas.microsoft.com/office/spreadsheetml/2017/richdata2";
+
+            var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+            AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/metadata.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml");
+            AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/richData/rdrichvalue.xml", "application/vnd.ms-excel.rdrichvalue+xml");
+            AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/richData/rdrichvaluestructure.xml", "application/vnd.ms-excel.rdrichvaluestructure+xml");
+            AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/richData/rdRichValueTypes.xml", "application/vnd.ms-excel.rdrichvaluetypes+xml");
+            AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/richData/richValueRel.xml", "application/vnd.ms-excel.richvaluerel+xml");
+            AddContentTypeDefault(contentTypesXml, contentTypeNs, "png", "image/png");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var workbookRelationshipsXml = LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
+            workbookRelationshipsXml.Root!.Add(
+                new XElement(
+                    relationshipNs + "Relationship",
+                    new XAttribute("Id", "rIdFreeXRichMetadata"),
+                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata"),
+                    new XAttribute("Target", "metadata.xml")),
+                new XElement(
+                    relationshipNs + "Relationship",
+                    new XAttribute("Id", "rIdFreeXRichValue"),
+                    new XAttribute("Type", "http://schemas.microsoft.com/office/2017/06/relationships/rdRichValue"),
+                    new XAttribute("Target", "richData/rdrichvalue.xml")),
+                new XElement(
+                    relationshipNs + "Relationship",
+                    new XAttribute("Id", "rIdFreeXRichValueStructure"),
+                    new XAttribute("Type", "http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueStructure"),
+                    new XAttribute("Target", "richData/rdrichvaluestructure.xml")),
+                new XElement(
+                    relationshipNs + "Relationship",
+                    new XAttribute("Id", "rIdFreeXRichValueTypes"),
+                    new XAttribute("Type", "http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueTypes"),
+                    new XAttribute("Target", "richData/rdRichValueTypes.xml")),
+                new XElement(
+                    relationshipNs + "Relationship",
+                    new XAttribute("Id", "rIdFreeXRichValueRel"),
+                    new XAttribute("Type", "http://schemas.microsoft.com/office/2022/10/relationships/richValueRel"),
+                    new XAttribute("Target", "richData/richValueRel.xml")));
+            ReplacePackageXml(archive, "xl/_rels/workbook.xml.rels", workbookRelationshipsXml);
+
+            ReplacePackageXml(
+                archive,
+                "xl/metadata.xml",
+                new XDocument(
+                    new XElement(
+                        workbookNs + "metadata",
+                        new XAttribute(XNamespace.Xmlns + "xlrd", richDataNs.NamespaceName),
+                        new XElement(
+                            workbookNs + "metadataTypes",
+                            new XAttribute("count", "1"),
+                            new XElement(
+                                workbookNs + "metadataType",
+                                new XAttribute("name", "XLRICHVALUE"),
+                                new XAttribute("minSupportedVersion", "120000"),
+                                new XAttribute("copy", "1"),
+                                new XAttribute("pasteAll", "1"),
+                                new XAttribute("pasteValues", "1"),
+                                new XAttribute("merge", "1"),
+                                new XAttribute("splitFirst", "1"),
+                                new XAttribute("rowColShift", "1"),
+                                new XAttribute("clearFormats", "1"),
+                                new XAttribute("clearComments", "1"),
+                                new XAttribute("assign", "1"),
+                                new XAttribute("coerce", "1"))),
+                        new XElement(workbookNs + "futureMetadata", new XAttribute("name", "XLRICHVALUE"), new XAttribute("count", "0")),
+                        new XElement(workbookNs + "valueMetadata", new XAttribute("count", "0")))));
+
+            ReplacePackageXml(
+                archive,
+                "xl/richData/rdrichvalue.xml",
+                new XDocument(
+                    new XElement(
+                        richDataNs + "rvData",
+                        new XAttribute("count", "1"),
+                        new XElement(
+                            richDataNs + "rv",
+                            new XAttribute("s", "0"),
+                            new XElement(richDataNs + "v", "0"),
+                            new XElement(richDataNs + "v", "5")))));
+            ReplacePackageXml(
+                archive,
+                "xl/richData/rdrichvaluestructure.xml",
+                new XDocument(
+                    new XElement(
+                        richDataNs + "rvStructures",
+                        new XAttribute("count", "1"),
+                        new XElement(
+                            richDataNs + "s",
+                            new XAttribute("t", "_localImage"),
+                            new XElement(richDataNs + "k", new XAttribute("n", "_rvRel:LocalImageIdentifier"), new XAttribute("t", "i")),
+                            new XElement(richDataNs + "k", new XAttribute("n", "CalcOrigin"), new XAttribute("t", "i"))))));
+            ReplacePackageXml(
+                archive,
+                "xl/richData/rdRichValueTypes.xml",
+                new XDocument(
+                    new XElement(
+                        richData2Ns + "rvTypesInfo",
+                        new XElement(
+                            richData2Ns + "global",
+                            new XElement(richData2Ns + "keyFlags")))));
+            ReplacePackageXml(
+                archive,
+                "xl/richData/richValueRel.xml",
+                new XDocument(new XElement(richDataNs + "richValueRels", new XAttribute("count", "1"))));
+            ReplacePackageXml(
+                archive,
+                "xl/richData/_rels/richValueRel.xml.rels",
+                new XDocument(
+                    new XElement(
+                        relationshipNs + "Relationships",
+                        new XElement(
+                            relationshipNs + "Relationship",
+                            new XAttribute("Id", "rIdFreeXRichImage"),
+                            new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"),
+                            new XAttribute("Target", "../media/image1.png")))));
+            WritePackageBytes(archive, "xl/media/image1.png", [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+        }
+
         return stream.ToArray();
     }
 
@@ -1880,7 +2623,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
             workbook.SaveAs(stream);
         }
 
-        return stream.ToArray();
+        return RemoveEmptyWorkbookDefinedNames(stream.ToArray());
     }
 
     private static byte[] AddOfficeRevisionUidAttributes(byte[] sourceBytes)
@@ -2015,11 +2758,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         stream.Write(sourceBytes, 0, sourceBytes.Length);
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
         {
-            var sharedStringsEntry = archive.GetEntry("xl/sharedStrings.xml");
-            sharedStringsEntry.Should().NotBeNull();
-            XDocument sharedStringsXml;
-            using (var sharedStringsStream = sharedStringsEntry!.Open())
-                sharedStringsXml = XDocument.Load(sharedStringsStream);
+            var sharedStringsXml = LoadPackageXml(archive, "xl/sharedStrings.xml");
 
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
             var sharedString = sharedStringsXml.Root!
@@ -2033,10 +2772,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
                     new XElement(workbookNs + "sz", new XAttribute("val", "11"))),
                 new XElement(workbookNs + "t", "original value")));
 
-            sharedStringsEntry.Delete();
-            var replacement = archive.CreateEntry("xl/sharedStrings.xml");
-            using var replacementStream = replacement.Open();
-            sharedStringsXml.Save(replacementStream, System.Xml.Linq.SaveOptions.DisableFormatting);
+            ReplacePackageXml(archive, "xl/sharedStrings.xml", sharedStringsXml);
         }
 
         return stream.ToArray();
@@ -2087,18 +2823,11 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         stream.Write(sourceBytes, 0, sourceBytes.Length);
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
         {
-            var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
-            worksheetEntry.Should().NotBeNull();
-            XDocument worksheetXml;
-            using (var worksheetStream = worksheetEntry!.Open())
-                worksheetXml = XDocument.Load(worksheetStream);
+            var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
 
             update(worksheetXml);
 
-            worksheetEntry.Delete();
-            var replacement = archive.CreateEntry("xl/worksheets/sheet1.xml");
-            using var replacementStream = replacement.Open();
-            worksheetXml.Save(replacementStream, System.Xml.Linq.SaveOptions.DisableFormatting);
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
         return stream.ToArray();
@@ -2110,11 +2839,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         stream.Write(sourceBytes, 0, sourceBytes.Length);
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
         {
-            var workbookEntry = archive.GetEntry("xl/workbook.xml");
-            workbookEntry.Should().NotBeNull();
-            XDocument workbookXml;
-            using (var workbookStream = workbookEntry!.Open())
-                workbookXml = XDocument.Load(workbookStream);
+            var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
 
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
             workbookXml.Root!.Add(new XElement(
@@ -2129,10 +2854,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
                     new XAttribute("includePrintSettings", "1"),
                     new XAttribute("includeHiddenRowCol", "1"))));
 
-            workbookEntry.Delete();
-            var replacement = archive.CreateEntry("xl/workbook.xml");
-            using var replacementStream = replacement.Open();
-            workbookXml.Save(replacementStream, System.Xml.Linq.SaveOptions.DisableFormatting);
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
         return stream.ToArray();
@@ -2142,10 +2864,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     {
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-        var entry = archive.GetEntry("xl/workbook.xml");
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        var document = XDocument.Load(entryStream);
+        var document = LoadPackageXml(archive, "xl/workbook.xml");
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         return document.Root!.Element(workbookNs + "customWorkbookViews");
     }
@@ -2154,10 +2873,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     {
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-        var entry = archive.GetEntry(worksheetPath);
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        var document = XDocument.Load(entryStream);
+        var document = LoadPackageXml(archive, worksheetPath);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         return document.Root!.Element(worksheetNs + "customSheetViews");
     }
@@ -2166,10 +2882,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     {
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-        var entry = archive.GetEntry("xl/sharedStrings.xml");
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        var document = XDocument.Load(entryStream);
+        var document = LoadPackageXml(archive, "xl/sharedStrings.xml");
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         return document.Root!
             .Elements(workbookNs + "si")
@@ -2195,6 +2908,32 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
             workbook.SaveAs(stream);
         }
 
+        return RemoveEmptyWorkbookDefinedNames(stream.ToArray());
+    }
+
+    private static byte[] RemoveEmptyWorkbookDefinedNames(byte[] sourceBytes)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(sourceBytes, 0, sourceBytes.Length);
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
+            var changed = false;
+            foreach (var definedNames in workbookXml.Root!.Elements(workbookNs + "definedNames").ToList())
+            {
+                if (definedNames.HasElements || definedNames.Attributes().Any(attribute => !attribute.IsNamespaceDeclaration))
+                    continue;
+
+                definedNames.Remove();
+                changed = true;
+            }
+
+            if (changed)
+                ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
         return stream.ToArray();
     }
 
@@ -2214,11 +2953,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         stream.Position = 0;
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
         {
-            var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
-            worksheetEntry.Should().NotBeNull();
-            XDocument worksheetXml;
-            using (var worksheetStream = worksheetEntry!.Open())
-                worksheetXml = XDocument.Load(worksheetStream);
+            var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
 
             var worksheetNs = worksheetXml.Root!.Name.Namespace;
             var mergeCells = worksheetXml.Root.Element(worksheetNs + "mergeCells");
@@ -2233,13 +2968,10 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
                     mergeCell.SetAttributeValue("nativeMergeCellAttr", "kept-C1-D1");
             }
 
-            worksheetEntry.Delete();
-            var replacement = archive.CreateEntry("xl/worksheets/sheet1.xml");
-            using var replacementStream = replacement.Open();
-            worksheetXml.Save(replacementStream, System.Xml.Linq.SaveOptions.DisableFormatting);
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
-        return stream.ToArray();
+        return RemoveEmptyWorkbookDefinedNames(stream.ToArray());
     }
 
     private static byte[] CreateInternalHyperlinkSourcePackage()
@@ -2697,6 +3429,138 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         return package.ToArray();
     }
 
+    private static byte[] CreateSmartArtDiagramSourcePackage()
+    {
+        using var package = XlsxPackageTestFixtures.CreatePackage(
+            (
+                "[Content_Types].xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+                  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+                  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+                  <Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>
+                  <Override PartName="/xl/diagrams/data1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml"/>
+                  <Override PartName="/xl/diagrams/layout1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml"/>
+                  <Override PartName="/xl/diagrams/quickStyle1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml"/>
+                  <Override PartName="/xl/diagrams/colors1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml"/>
+                </Types>
+                """),
+            (
+                "_rels/.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+                </Relationships>
+                """),
+            (
+                "xl/workbook.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheets>
+                    <sheet name="Data" sheetId="1" r:id="rId1"/>
+                  </sheets>
+                </workbook>
+                """),
+            (
+                "xl/_rels/workbook.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+                  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+                </Relationships>
+                """),
+            (
+                "xl/styles.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <fonts count="1"><font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/><scheme val="minor"/></font></fonts>
+                  <fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>
+                  <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+                  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+                  <cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>
+                  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+                  <dxfs count="0"/>
+                  <tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/>
+                </styleSheet>
+                """),
+            (
+                "xl/worksheets/sheet1.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <dimension ref="A1:D4"/>
+                  <sheetData>
+                    <row r="1"><c r="A1" t="inlineStr"><is><t>original value</t></is></c></row>
+                    <row r="4"><c r="D4" t="inlineStr"><is><t>outside</t></is></c></row>
+                  </sheetData>
+                  <drawing r:id="rId1"/>
+                </worksheet>
+                """),
+            (
+                "xl/worksheets/_rels/sheet1.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>
+                </Relationships>
+                """),
+            (
+                "xl/drawings/drawing1.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                          xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"
+                          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <xdr:absoluteAnchor>
+                    <xdr:pos x="0" y="0"/>
+                    <xdr:ext cx="1828800" cy="914400"/>
+                    <xdr:graphicFrame macro="">
+                      <xdr:nvGraphicFramePr>
+                        <xdr:cNvPr id="2" name="FreeX SmartArt"/>
+                        <xdr:cNvGraphicFramePr/>
+                      </xdr:nvGraphicFramePr>
+                      <xdr:xfrm>
+                        <a:off x="0" y="0"/>
+                        <a:ext cx="1828800" cy="914400"/>
+                      </xdr:xfrm>
+                      <a:graphic>
+                        <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/diagram">
+                          <dgm:relIds r:dm="rIdDiagramData1" r:lo="rIdDiagramLayout1" r:qs="rIdDiagramQuickStyle1" r:cs="rIdDiagramColors1"/>
+                        </a:graphicData>
+                      </a:graphic>
+                    </xdr:graphicFrame>
+                    <xdr:clientData/>
+                  </xdr:absoluteAnchor>
+                </xdr:wsDr>
+                """),
+            (
+                "xl/drawings/_rels/drawing1.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdDiagramData1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData" Target="../diagrams/data1.xml"/>
+                  <Relationship Id="rIdDiagramLayout1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout" Target="../diagrams/layout1.xml"/>
+                  <Relationship Id="rIdDiagramQuickStyle1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle" Target="../diagrams/quickStyle1.xml"/>
+                  <Relationship Id="rIdDiagramColors1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors" Target="../diagrams/colors1.xml"/>
+                </Relationships>
+                """),
+            ("xl/diagrams/data1.xml", """<dgm:dataModel xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"/>"""),
+            ("xl/diagrams/layout1.xml", """<dgm:layoutDef xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"/>"""),
+            ("xl/diagrams/quickStyle1.xml", """<dgm:styleDef xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"/>"""),
+            ("xl/diagrams/colors1.xml", """<dgm:colorsDef xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"/>"""));
+
+        return package.ToArray();
+    }
+
     private static byte[] CreateChartExSourcePackage()
     {
         var workbook = new Workbook("ChartExPatch");
@@ -3073,13 +3937,8 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         return bytes.ToArray();
     }
 
-    private static XDocument LoadPackageXml(ZipArchive archive, string path)
-    {
-        var entry = archive.GetEntry(path);
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        return XDocument.Load(entryStream);
-    }
+    private static XDocument LoadPackageXml(ZipArchive archive, string path) =>
+        XlsxPackageTestFixtures.LoadPackageXml(archive, path);
 
     private static void ReplacePackageXml(ZipArchive archive, string path, XDocument document)
     {
@@ -3087,6 +3946,49 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         var replacement = archive.CreateEntry(path);
         using var replacementStream = replacement.Open();
         document.Save(replacementStream, System.Xml.Linq.SaveOptions.DisableFormatting);
+    }
+
+    private static void AddContentTypeOverride(
+        XDocument contentTypesXml,
+        XNamespace contentTypeNs,
+        string partName,
+        string contentType)
+    {
+        contentTypesXml.Root!
+            .Elements(contentTypeNs + "Override")
+            .Where(element => string.Equals((string?)element.Attribute("PartName"), partName, StringComparison.OrdinalIgnoreCase))
+            .Remove();
+        contentTypesXml.Root.Add(new XElement(
+            contentTypeNs + "Override",
+            new XAttribute("PartName", partName),
+            new XAttribute("ContentType", contentType)));
+    }
+
+    private static void AddContentTypeDefault(
+        XDocument contentTypesXml,
+        XNamespace contentTypeNs,
+        string extension,
+        string contentType)
+    {
+        if (contentTypesXml.Root!
+            .Elements(contentTypeNs + "Default")
+            .Any(element => string.Equals((string?)element.Attribute("Extension"), extension, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        contentTypesXml.Root.Add(new XElement(
+            contentTypeNs + "Default",
+            new XAttribute("Extension", extension),
+            new XAttribute("ContentType", contentType)));
+    }
+
+    private static void WritePackageBytes(ZipArchive archive, string path, byte[] bytes)
+    {
+        archive.GetEntry(path)?.Delete();
+        var replacement = archive.CreateEntry(path);
+        using var replacementStream = replacement.Open();
+        replacementStream.Write(bytes, 0, bytes.Length);
     }
 
     private static string? ReadMarkupCompatibilityIgnorable(byte[] packageBytes, string path)
@@ -3172,6 +4074,45 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
             .ToList();
     }
 
+    private static bool WorkbookRelationshipsContain(byte[] packageBytes, string type, string target)
+    {
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var document = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
+        var ns = document.Root!.Name.Namespace;
+        return document.Root!
+            .Elements(ns + "Relationship")
+            .Any(element =>
+                string.Equals(element.Attribute("Type")?.Value, type, StringComparison.Ordinal) &&
+                string.Equals(element.Attribute("Target")?.Value, target, StringComparison.Ordinal));
+    }
+
+    private static bool RootRelationshipsContain(byte[] packageBytes, string type, string target)
+    {
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var document = XlsxPackageTestFixtures.LoadPackageXml(archive, "_rels/.rels");
+        var ns = document.Root!.Name.Namespace;
+        return document.Root!
+            .Elements(ns + "Relationship")
+            .Any(element =>
+                string.Equals(element.Attribute("Type")?.Value, type, StringComparison.Ordinal) &&
+                string.Equals(element.Attribute("Target")?.Value, target, StringComparison.Ordinal));
+    }
+
+    private static bool PackageRelationshipsContain(byte[] packageBytes, string relationshipsPath, string type, string target)
+    {
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var document = XlsxPackageTestFixtures.LoadPackageXml(archive, relationshipsPath);
+        var ns = document.Root!.Name.Namespace;
+        return document.Root!
+            .Elements(ns + "Relationship")
+            .Any(element =>
+                string.Equals(element.Attribute("Type")?.Value, type, StringComparison.Ordinal) &&
+                string.Equals(element.Attribute("Target")?.Value, target, StringComparison.Ordinal));
+    }
+
     private static string? ReadCellText(byte[] packageBytes, string worksheetPath, string reference)
     {
         var cell = ReadCellElement(packageBytes, worksheetPath, reference);
@@ -3206,14 +4147,14 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     private static string? ReadCellStyleIndex(byte[] packageBytes, string worksheetPath, string reference) =>
         ReadCellElement(packageBytes, worksheetPath, reference).Attribute("s")?.Value;
 
+    private static string? ReadCellAttribute(byte[] packageBytes, string worksheetPath, string reference, string attributeName) =>
+        ReadCellElement(packageBytes, worksheetPath, reference).Attribute(attributeName)?.Value;
+
     private static string? ReadPrimarySheetViewAttribute(byte[] packageBytes, string worksheetPath, string attributeName)
     {
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-        var entry = archive.GetEntry(worksheetPath);
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        var document = XDocument.Load(entryStream);
+        var document = LoadPackageXml(archive, worksheetPath);
         var ns = document.Root!.Name.Namespace;
         return document.Root!
             .Element(ns + "sheetViews")
@@ -3227,10 +4168,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     {
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-        var entry = archive.GetEntry(worksheetPath);
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        var document = XDocument.Load(entryStream);
+        var document = LoadPackageXml(archive, worksheetPath);
         var ns = document.Root!.Name.Namespace;
         return document
             .Descendants(ns + "row")
@@ -3243,10 +4181,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     {
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-        var entry = archive.GetEntry(worksheetPath);
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        var document = XDocument.Load(entryStream);
+        var document = LoadPackageXml(archive, worksheetPath);
         var ns = document.Root!.Name.Namespace;
         foreach (var element in document.Descendants(ns + "col"))
         {
@@ -3305,10 +4240,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     {
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-        var entry = archive.GetEntry(worksheetPath);
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        var document = XDocument.Load(entryStream);
+        var document = LoadPackageXml(archive, worksheetPath);
         var ns = document.Root!.Name.Namespace;
         return document.Root.Element(ns + "mergeCells");
     }
@@ -3341,10 +4273,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     {
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-        var entry = archive.GetEntry(worksheetPath);
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        var document = XDocument.Load(entryStream);
+        var document = LoadPackageXml(archive, worksheetPath);
         var ns = document.Root!.Name.Namespace;
         return document.Root.Element(ns + "hyperlinks");
     }
@@ -3372,10 +4301,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     {
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-        var entry = archive.GetEntry(commentsPath);
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        var document = XDocument.Load(entryStream);
+        var document = LoadPackageXml(archive, commentsPath);
         var ns = document.Root!.Name.Namespace;
         var comment = document
             .Descendants(ns + "comment")
@@ -3395,10 +4321,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     {
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-        var entry = archive.GetEntry(worksheetPath);
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        var document = XDocument.Load(entryStream);
+        var document = LoadPackageXml(archive, worksheetPath);
         var ns = document.Root!.Name.Namespace;
         return document.Root.Element(ns + "dimension")?.Attribute("ref")?.Value;
     }
@@ -3414,10 +4337,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     {
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-        var entry = archive.GetEntry(worksheetPath);
-        entry.Should().NotBeNull();
-        using var entryStream = entry!.Open();
-        var document = XDocument.Load(entryStream);
+        var document = LoadPackageXml(archive, worksheetPath);
         var ns = document.Root!.Name.Namespace;
         var cell = document
             .Descendants(ns + "c")

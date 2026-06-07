@@ -12,8 +12,8 @@ public sealed class XlsxSharedStringMetadataPreserverTests
     [Fact]
     public void PreserveRichTextAndPhonetics_PlainSourceSkipsTargetLoad()
     {
-        using var sourcePackage = CreatePackage(("xl/sharedStrings.xml", CreatePlainSharedStringsXml(1_000)));
-        using var targetPackage = CreatePackage(("xl/sharedStrings.xml", "<not-valid-xml"));
+        using var sourcePackage = XlsxPackageTestFixtures.CreatePackage(("xl/sharedStrings.xml", CreatePlainSharedStringsXml(1_000)));
+        using var targetPackage = XlsxPackageTestFixtures.CreatePackage(("xl/sharedStrings.xml", "<not-valid-xml"));
         using var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
         using var targetArchive = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
 
@@ -25,7 +25,7 @@ public sealed class XlsxSharedStringMetadataPreserverTests
     [Fact]
     public void PreserveRichTextAndPhonetics_RichSourceStillReplacesMatchingTargetString()
     {
-        using var sourcePackage = CreatePackage(("xl/sharedStrings.xml", """
+        using var sourcePackage = XlsxPackageTestFixtures.CreatePackage(("xl/sharedStrings.xml", """
             <sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <si>
                 <r><t>Rich </t></r>
@@ -34,7 +34,7 @@ public sealed class XlsxSharedStringMetadataPreserverTests
               </si>
             </sst>
             """));
-        using var targetPackage = CreatePackage(("xl/sharedStrings.xml", """
+        using var targetPackage = XlsxPackageTestFixtures.CreatePackage(("xl/sharedStrings.xml", """
             <sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <si><t>Rich phonetic</t></si>
             </sst>
@@ -47,8 +47,7 @@ public sealed class XlsxSharedStringMetadataPreserverTests
 
         targetPackage.Position = 0;
         using var verifyArchive = new ZipArchive(targetPackage, ZipArchiveMode.Read, leaveOpen: true);
-        using var entryStream = verifyArchive.GetEntry("xl/sharedStrings.xml")!.Open();
-        var xml = XDocument.Load(entryStream);
+        var xml = XlsxPackageTestFixtures.LoadPackageXml(verifyArchive, "xl/sharedStrings.xml", "xl/sharedStrings.xml");
         var sharedString = xml.Root!.Element(WorkbookNs + "si")!;
 
         sharedString.Elements(WorkbookNs + "r").Should().HaveCount(2);
@@ -58,7 +57,7 @@ public sealed class XlsxSharedStringMetadataPreserverTests
     [Fact]
     public void PreserveRichTextAndPhonetics_SanitizesCssFontFamilyRunNames()
     {
-        using var sourcePackage = CreatePackage(("xl/sharedStrings.xml", """
+        using var sourcePackage = XlsxPackageTestFixtures.CreatePackage(("xl/sharedStrings.xml", """
             <sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <si>
                 <r>
@@ -68,7 +67,7 @@ public sealed class XlsxSharedStringMetadataPreserverTests
               </si>
             </sst>
             """));
-        using var targetPackage = CreatePackage(("xl/sharedStrings.xml", """
+        using var targetPackage = XlsxPackageTestFixtures.CreatePackage(("xl/sharedStrings.xml", """
             <sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <si><t>Rich font</t></si>
             </sst>
@@ -81,8 +80,7 @@ public sealed class XlsxSharedStringMetadataPreserverTests
 
         targetPackage.Position = 0;
         using var verifyArchive = new ZipArchive(targetPackage, ZipArchiveMode.Read, leaveOpen: true);
-        using var entryStream = verifyArchive.GetEntry("xl/sharedStrings.xml")!.Open();
-        var xml = XDocument.Load(entryStream);
+        var xml = XlsxPackageTestFixtures.LoadPackageXml(verifyArchive, "xl/sharedStrings.xml", "xl/sharedStrings.xml");
 
         xml.Root!
             .Element(WorkbookNs + "si")!
@@ -114,9 +112,6 @@ public sealed class XlsxSharedStringMetadataPreserverTests
         plainTextReader.Should().NotContain(".ToList()");
         plainTextReader.Should().NotContain(".Select(");
     }
-
-    private static MemoryStream CreatePackage(params (string Path, string Xml)[] entries)
-        => XlsxPackageTestFixtures.CreatePackage(entries);
 
     private static string CreatePlainSharedStringsXml(int count)
     {

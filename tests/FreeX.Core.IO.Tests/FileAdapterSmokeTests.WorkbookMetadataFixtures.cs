@@ -16,9 +16,12 @@ public partial class FileAdapterSmokeTests
             var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
             workbookXml.Root!.Add(new XElement(
                 workbookNs + "extLst",
+                new XAttribute("customWorkbookExtLstFlag", "removed"),
+                new XElement(workbookNs + "nativeWorkbookExtLstChild"),
                 new XElement(
                     workbookNs + "ext",
-                    new XAttribute("uri", "{00112233-4455-6677-8899-AABBCCDDEEFF}"),
+                    new XAttribute("uri", " {00112233-4455-6677-8899-AABBCCDDEEFF} "),
+                    new XAttribute("customWorkbookExtFlag", "removed"),
                     new XElement(
                         x15Ns + "futureMetadata",
                         new XAttribute(XNamespace.Xmlns + "x15", x15Ns),
@@ -38,15 +41,19 @@ public partial class FileAdapterSmokeTests
             var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
             workbookXml.Root!.Add(new XElement(
                 workbookNs + "webPublishObjects",
-                new XAttribute("count", "1"),
+                new XAttribute("count", " 1 "),
+                new XAttribute("customWebPublishObjectsFlag", "removed"),
+                new XElement(workbookNs + "nativeWebPublishObjectsChild"),
                 new XElement(
                     workbookNs + "webPublishObject",
-                    new XAttribute("id", "1"),
-                    new XAttribute("divId", "FreeXWebPublish"),
+                    new XAttribute("id", " 1 "),
+                    new XAttribute("divId", " FreeXWebPublish "),
                     new XAttribute("sourceObject", "Data"),
                     new XAttribute("destinationFile", "https://example.invalid/report.htm"),
                     new XAttribute("title", "Report"),
-                    new XAttribute("autoRepublish", "0"))));
+                    new XAttribute("autoRepublish", "0"),
+                    new XAttribute("customWebPublishObjectFlag", "removed"),
+                    new XElement(workbookNs + "nativeWebPublishObjectChild"))));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
@@ -68,7 +75,9 @@ public partial class FileAdapterSmokeTests
                 new XAttribute("vml", "1"),
                 new XAttribute("allowPng", "1"),
                 new XAttribute("targetScreenSize", "800x600"),
-                new XAttribute("dpi", "96")));
+                new XAttribute("dpi", " 96 "),
+                new XAttribute("customWebPublishingFlag", "removed"),
+                new XElement(workbookNs + "nativeWebPublishingChild")));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
@@ -80,6 +89,7 @@ public partial class FileAdapterSmokeTests
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
             XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
             XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
 
@@ -94,18 +104,47 @@ public partial class FileAdapterSmokeTests
                 contentTypeNs,
                 "/xl/revisions/revisionLog1.xml",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.revisionLog+xml");
+            AddContentTypeOverride(
+                contentTypesXml,
+                contentTypeNs,
+                "/xl/revisions/usernames.xml",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.userNames+xml");
             ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
 
             var workbookRelsPath = "xl/_rels/workbook.xml.rels";
             var workbookRelsXml = LoadPackageXml(archive.GetEntry(workbookRelsPath)!);
+            var worksheetRelationship = workbookRelsXml.Root!
+                .Elements(packageRelNs + "Relationship")
+                .FirstOrDefault(relationship =>
+                    relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet");
+            var sourceWorksheetRelationshipId = worksheetRelationship?.Attribute("Id")?.Value;
+            if (!string.IsNullOrWhiteSpace(sourceWorksheetRelationshipId))
+            {
+                worksheetRelationship!.SetAttributeValue("Id", "rIdSourceWorksheet");
+            }
+
             workbookRelsXml.Root!.Add(new XElement(
                 packageRelNs + "Relationship",
-                new XAttribute("Id", "rIdFreeXRevisionHeaders"),
+                new XAttribute("Id", "rId1"),
                 new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/revisionHeaders"),
                 new XAttribute("Target", "revisionHeaders/revisionHeader1.xml")));
+            workbookRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdFreeXRevisionUserNames"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/usernames"),
+                new XAttribute("Target", "revisions/usernames.xml")));
             ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
 
             var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            if (!string.IsNullOrWhiteSpace(sourceWorksheetRelationshipId))
+            {
+                foreach (var sheetElement in workbookXml.Root!.Elements(workbookNs + "sheets").Elements(workbookNs + "sheet"))
+                {
+                    if (sheetElement.Attribute(officeRelNs + "id")?.Value == sourceWorksheetRelationshipId)
+                        sheetElement.SetAttributeValue(officeRelNs + "id", "rIdSourceWorksheet");
+                }
+            }
+
             workbookXml.Root!.AddFirst(new XElement(
                 workbookNs + "revisionPtr",
                 new XAttribute("revIDLastSave", "1"),
@@ -122,8 +161,43 @@ public partial class FileAdapterSmokeTests
                         new XAttribute("guid", "{00112233-4455-6677-8899-AABBCCDDEEFF}"),
                         new XAttribute("dateTime", "2026-05-20T00:00:00Z"),
                         new XAttribute("maxSheetId", "1")))));
+            ReplacePackageXml(archive, "xl/revisionHeaders/_rels/revisionHeader1.xml.rels", new XDocument(
+                new XElement(
+                    packageRelNs + "Relationships",
+                    new XElement(
+                        packageRelNs + "Relationship",
+                        new XAttribute("Id", "rIdFreeXRevisionLog"),
+                        new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/revisionLog"),
+                        new XAttribute("Target", "../revisions/revisionLog1.xml")))));
             ReplacePackageXml(archive, "xl/revisions/revisionLog1.xml", new XDocument(
                 new XElement(workbookNs + "revisions")));
+            ReplacePackageXml(archive, "xl/revisions/usernames.xml", new XDocument(
+                new XElement(
+                    workbookNs + "users",
+                    new XElement(
+                        workbookNs + "user",
+                        new XAttribute("guid", "{11111111-2222-3333-4444-555555555555}"),
+                        new XAttribute("name", "FreeX Revision User"),
+                        new XAttribute("dateTime", "2026-05-20T00:00:00Z")))));
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddDanglingWorkbookRevisionPointer(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.AddFirst(new XElement(
+                workbookNs + "revisionPtr",
+                new XAttribute("revIDLastSave", "1"),
+                new XAttribute("documentId", "FreeXDanglingRevisionDoc"),
+                new XAttribute("coauthVersionLast", "1"),
+                new XAttribute("coauthVersionMax", "1")));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
         packageStream.Position = 0;
@@ -138,7 +212,9 @@ public partial class FileAdapterSmokeTests
             var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
             workbookXml.Root!.Add(new XElement(
                 workbookNs + "oleSize",
-                new XAttribute("ref", "A1:D12")));
+                new XAttribute("ref", " a1:d12 "),
+                new XAttribute("customOleSizeFlag", "removed"),
+                new XElement(workbookNs + "nativeOleSizeChild")));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
@@ -156,14 +232,20 @@ public partial class FileAdapterSmokeTests
             if (definedNames is null)
             {
                 definedNames = new XElement(workbookNs + "definedNames");
-                workbookXml.Root!.Add(definedNames);
+                var sheets = workbookXml.Root!.Element(workbookNs + "sheets");
+                if (sheets is not null)
+                    sheets.AddAfterSelf(definedNames);
+                else
+                    workbookXml.Root!.Add(definedNames);
             }
 
             definedNames.Add(new XElement(
                 workbookNs + "definedName",
                 new XAttribute("name", "DynamicSalesRange"),
                 new XAttribute("hidden", "1"),
-                "1+1"));
+                new XAttribute("customDefinedNameFlag", "removed"),
+                "1+1",
+                new XElement(workbookNs + "nativeDefinedNameChild")));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 

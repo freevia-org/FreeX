@@ -35,44 +35,12 @@ internal static class XlsxWorksheetSheetPropertiesMetadataWriter
                 root.AddFirst(sheetProperties);
             }
 
-            var (spAttrs, spChildren) = XmlNativeBagSerializer.Deserialize(metadata.Get("sheetPr"));
-            foreach (var attribute in spAttrs)
-            {
-                if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledSheetPropertiesAttribute(attribute.Key))
-                    continue;
+            var (spAttrs, _) = XmlNativeBagSerializer.Deserialize(metadata.Get("sheetPr"));
+            XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(sheetProperties, spAttrs, ["codeName"]);
 
-                XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(sheetProperties, attribute.Key, attribute.Value);
-            }
-
-            if (spChildren.Count > 0)
-            {
-                sheetProperties.Elements()
-                    .Where(element => !IsModeledSheetPropertiesElement(element.Name.LocalName))
-                    .Remove();
-
-                foreach (var childXml in spChildren)
-                {
-                    if (string.IsNullOrWhiteSpace(childXml))
-                        continue;
-
-                    try
-                    {
-                        sheetProperties.Add(XElement.Parse(childXml));
-                    }
-                    catch
-                    {
-                        // Skip malformed native payloads in authored native JSON files.
-                    }
-                }
-            }
+            XlsxWorksheetSheetPropertiesNormalizer.NormalizeElement(sheetProperties);
 
             session.MarkDirty(worksheetEdit);
         }
     }
-
-    private static bool IsModeledSheetPropertiesAttribute(string name) =>
-        name is "codeName";
-
-    private static bool IsModeledSheetPropertiesElement(string name) =>
-        name is "tabColor" or "outlinePr" or "pageSetUpPr";
 }

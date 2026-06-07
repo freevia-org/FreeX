@@ -8,7 +8,7 @@ public sealed class ShortcutParityMatrixTests
     [Fact]
     public void ShortcutParityMatrix_CoverageSummaryMatchesRows()
     {
-        var matrix = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "parity/shortcuts.md"));
+        var matrix = WorkspaceFileLocator.ReadAllLines("docs", "parity/shortcuts.md");
         var summary = ReadCoverageSummary(matrix);
         var matrixStart = Array.FindIndex(matrix, line => line.StartsWith("| Area | Excel Shortcut |", StringComparison.Ordinal));
         matrixStart.Should().BeGreaterThanOrEqualTo(0);
@@ -35,7 +35,7 @@ public sealed class ShortcutParityMatrixTests
     [Fact]
     public void ShortcutParityMatrix_NextWorkBacklogKeepsCurrentPriorityOrder()
     {
-        var matrix = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "parity/shortcuts.md"));
+        var matrix = WorkspaceFileLocator.ReadAllLines("docs", "parity/shortcuts.md");
         var nextWork = ReadNextWorkItems(matrix);
         var nextWorkIntro = ReadNextWorkIntro(matrix);
 
@@ -58,8 +58,8 @@ public sealed class ShortcutParityMatrixTests
     [Fact]
     public void UiTestCatalog_ShortcutInventoryCountsMatchShortcutMatrix()
     {
-        var matrix = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "parity/shortcuts.md"));
-        var catalog = File.ReadAllText(WorkspaceFileLocator.Find("docs", "testing/ui-test-catalog.md"));
+        var matrix = WorkspaceFileLocator.ReadAllLines("docs", "parity/shortcuts.md");
+        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
         var summary = ReadCoverageSummary(matrix);
 
         catalog.Should().Contain(
@@ -70,8 +70,8 @@ public sealed class ShortcutParityMatrixTests
     [Fact]
     public void NewestStatusReport_ShortcutSnapshotMatchesShortcutMatrixSummary()
     {
-        var matrix = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "parity/shortcuts.md"));
-        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var matrix = WorkspaceFileLocator.ReadAllLines("docs", "parity/shortcuts.md");
+        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
         var newestStatusReport = Directory
             .GetFiles(Path.Combine(docsDirectory, "history"), "status-*.md")
             .Order(StringComparer.Ordinal)

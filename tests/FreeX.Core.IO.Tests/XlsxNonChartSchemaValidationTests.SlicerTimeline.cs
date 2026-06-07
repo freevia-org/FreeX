@@ -120,6 +120,19 @@ public sealed partial class XlsxNonChartSchemaValidationTests
                 SlicerTimelineAttributeValue(element, "Type") == "http://schemas.microsoft.com/office/2010/relationships/Timeline" &&
                 SlicerTimelineAttributeValue(element, "Target") == "../timelines/timeline1.xml");
 
+        ReadPackageRootElement(stream, "xl/slicers/_rels/slicer1.xml.rels")
+            .Elements(packageRelationshipNs + "Relationship")
+            .Should()
+            .ContainSingle(element =>
+                SlicerTimelineAttributeValue(element, "Type") == "http://schemas.microsoft.com/office/2007/relationships/slicerCache" &&
+                SlicerTimelineAttributeValue(element, "Target") == "../slicerCaches/slicerCache1.xml");
+        ReadPackageRootElement(stream, "xl/timelines/_rels/timeline1.xml.rels")
+            .Elements(packageRelationshipNs + "Relationship")
+            .Should()
+            .ContainSingle(element =>
+                SlicerTimelineAttributeValue(element, "Type") == "http://schemas.microsoft.com/office/2010/relationships/TimelineCache" &&
+                SlicerTimelineAttributeValue(element, "Target") == "../timelineCaches/timelineCache1.xml");
+
         ReadWorkbookChildElement(stream, "extLst")
             .Descendants()
             .Select(element => element.Name.LocalName)

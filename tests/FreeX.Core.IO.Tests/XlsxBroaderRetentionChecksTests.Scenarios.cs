@@ -49,44 +49,44 @@ public sealed partial class XlsxBroaderRetentionChecksTests
         var savedDimensionRef = worksheetXml.Root!.Element(MainNs + "dimension")!.Attribute("ref")!.Value;
         savedDimensionRef.Should().NotBe("A1:C2");
         savedDimensionRef.Should().EndWith("5");
-        worksheetXml.Root!.Element(MainNs + "dimension")!.Attribute("nativeDimensionAttr")!.Value.Should().Be("kept");
+        worksheetXml.Root!.Element(MainNs + "dimension")!.Attribute("nativeDimensionAttr").Should().BeNull();
 
         var sheetPr = worksheetXml.Root.Element(MainNs + "sheetPr");
         sheetPr.Should().NotBeNull();
         sheetPr!.Attribute("filterMode")!.Value.Should().Be("1");
-        sheetPr.Element(FxNs + "sheetPrNativeChild")!.Attribute("id")!.Value.Should().Be("sheet-pr");
+        sheetPr.Element(FxNs + "sheetPrNativeChild").Should().BeNull();
 
         var sheetFormat = worksheetXml.Root.Element(MainNs + "sheetFormatPr");
         sheetFormat.Should().NotBeNull();
         sheetFormat!.Attribute("baseColWidth")!.Value.Should().Be("12");
-        sheetFormat.Attribute("nativeSheetFormatAttr")!.Value.Should().Be("kept");
-        sheetFormat.Element(FxNs + "sheetFormatNativeChild")!.Attribute("id")!.Value.Should().Be("sheet-format");
+        sheetFormat.Attribute("nativeSheetFormatAttr").Should().BeNull();
+        sheetFormat.Element(FxNs + "sheetFormatNativeChild").Should().BeNull();
 
         var printOptions = worksheetXml.Root.Element(MainNs + "printOptions");
         printOptions.Should().NotBeNull();
         printOptions!.Attribute("gridLines")?.Value.Should().NotBe("1");
         printOptions.Attribute("gridLinesSet")!.Value.Should().Be("1");
-        printOptions.Attribute("nativePrintOptionsAttr")!.Value.Should().Be("kept");
+        printOptions.Attribute("nativePrintOptionsAttr").Should().BeNull();
 
         var row2 = worksheetXml.Root.Element(MainNs + "sheetData")!
             .Elements(MainNs + "row")
             .Single(row => row.Attribute("r")?.Value == "2");
-        row2.Attribute("customRowAttr")!.Value.Should().Be("row-native");
-        row2.Element(FxNs + "rowNativeChild")!.Attribute("id")!.Value.Should().Be("row-child");
+        row2.Attribute("customRowAttr").Should().BeNull();
+        row2.Element(FxNs + "rowNativeChild").Should().BeNull();
         row2.Element(MainNs + "extLst")!.ToString(SaveOptions.DisableFormatting).Should().Contain("{FREEX-ROW-EXT}");
 
         var cellA2 = row2.Elements(MainNs + "c").Single(cell => cell.Attribute("r")?.Value == "A2");
-        cellA2.Attribute("cm")!.Value.Should().Be("2");
-        cellA2.Attribute("vm")!.Value.Should().Be("1");
-        cellA2.Attribute("customCellAttr")!.Value.Should().Be("cell-native");
-        cellA2.Element(FxNs + "cellNativeChild")!.Attribute("id")!.Value.Should().Be("cell-child");
+        cellA2.Attribute("cm").Should().BeNull();
+        cellA2.Attribute("vm").Should().BeNull();
+        cellA2.Attribute("customCellAttr").Should().BeNull();
+        cellA2.Element(FxNs + "cellNativeChild").Should().BeNull();
         cellA2.Element(MainNs + "extLst")!.ToString(SaveOptions.DisableFormatting).Should().Contain("{FREEX-CELL-EXT}");
         var formula = cellA2.Element(MainNs + "f");
         formula.Should().NotBeNull();
         formula!.Attribute("t")!.Value.Should().Be("array");
         formula.Attribute("ref")!.Value.Should().Be("A2:A2");
         formula.Attribute("ca")!.Value.Should().Be("1");
-        formula.Attribute("customFormulaAttr")!.Value.Should().Be("formula-native");
+        formula.Attribute("customFormulaAttr").Should().BeNull();
 
         worksheetText.Should().Contain("protectedRanges");
         worksheetText.Should().Contain("name=\"EditableInput\"");
@@ -96,11 +96,11 @@ public sealed partial class XlsxBroaderRetentionChecksTests
         worksheetText.Should().Contain("nativeUnsupportedRange=\"kept\"");
 
         worksheetText.Should().Contain("ignoredErrors");
-        worksheetText.Should().Contain("nativeIgnoredErrorsAttr=\"kept\"");
+        worksheetText.Should().NotContain("nativeIgnoredErrorsAttr=\"kept\"");
         worksheetText.Should().Contain("twoDigitTextYear=\"1\"");
         worksheetText.Should().Contain("cellWatches");
-        worksheetText.Should().Contain("nativeCellWatchesAttr=\"kept\"");
-        worksheetText.Should().Contain("nativeWatchAttr=\"kept\"");
+        worksheetText.Should().NotContain("nativeCellWatchesAttr=\"kept\"");
+        worksheetText.Should().NotContain("nativeWatchAttr=\"kept\"");
         worksheetText.Should().Contain("{FREEX-WORKSHEET-EXT}");
 
         var worksheetRels = LoadXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");

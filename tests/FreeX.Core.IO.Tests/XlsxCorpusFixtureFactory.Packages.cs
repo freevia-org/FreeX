@@ -55,9 +55,10 @@ internal static partial class XlsxCorpusFixtureFactory
             </Properties>
             """)),
         "generated-smartart-diagrams-001" => CreatePackage(
-            ("xl/diagrams/data1.xml", "<dgm:dataModel/>"),
-            ("xl/diagrams/layout1.xml", "<dgm:layoutDef/>"),
-            ("xl/diagrams/quickStyle1.xml", "<dgm:styleDef/>")),
+            ("xl/diagrams/data1.xml", """<dgm:dataModel xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"/>"""),
+            ("xl/diagrams/layout1.xml", """<dgm:layoutDef xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"/>"""),
+            ("xl/diagrams/quickStyle1.xml", """<dgm:styleDef xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"/>"""),
+            ("xl/diagrams/colors1.xml", """<dgm:colorsDef xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"/>""")),
         "generated-printer-settings-001" => CreatePackage(("xl/printerSettings/printerSettings1.bin", ReadFixtureBytes("PrinterSettings1.bin"))),
         "generated-calc-chain-001" => CreatePackage(
             ("xl/worksheets/sheet1.xml", """
@@ -1010,9 +1011,7 @@ internal static partial class XlsxCorpusFixtureFactory
         if (contentTypesEntry is null)
             return;
 
-        XDocument contentTypes;
-        using (var stream = contentTypesEntry.Open())
-            contentTypes = XDocument.Load(stream);
+        var contentTypes = LoadPackageXml(contentTypesEntry);
 
         foreach (var partName in partNames.Where(part => !part.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)))
         {
@@ -1052,6 +1051,7 @@ internal static partial class XlsxCorpusFixtureFactory
             "xl/diagrams/data1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
             "xl/diagrams/layout1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml",
             "xl/diagrams/quickStyle1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml",
+            "xl/diagrams/colors1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml",
             "xl/printerSettings/printerSettings1.bin" => "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings",
             "xl/calcChain.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml",
             "xl/chartsheets/sheet1.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml",

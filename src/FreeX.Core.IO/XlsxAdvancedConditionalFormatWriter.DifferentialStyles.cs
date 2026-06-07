@@ -118,32 +118,17 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
 
         MergeDifferentialStyleElementNativeMetadata(dxf, style, workbookNs);
 
-        if (style.NativeDifferentialAttributes is { } attributes)
-        {
-            foreach (var (name, value) in attributes)
-                TrySetNativeAttributeIfMissing(dxf, name, value);
-        }
+        AddNativeAttributes(dxf, style.NativeDifferentialAttributes);
 
         if (style.NativeDifferentialChildXmls is { } childXmls)
         {
             foreach (var nativeChildXml in childXmls)
             {
-                if (string.IsNullOrWhiteSpace(nativeChildXml))
-                    continue;
-
-                try
-                {
-                    var nativeChild = XElement.Parse(nativeChildXml);
-                    if (nativeChild.Name.Namespace == workbookNs &&
-                        nativeChild.Name.LocalName is not "font" and not "numFmt" and not "fill" and not "alignment" and not "border" and not "protection")
-                    {
-                        dxf.Add(nativeChild);
-                    }
-                }
-                catch
-                {
-                    // Ignore malformed native differential-style payloads from older saves.
-                }
+                TryAddNativeElement(
+                    dxf,
+                    nativeChildXml,
+                    workbookNs,
+                    ["font", "numFmt", "fill", "alignment", "border", "protection"]);
             }
         }
 
@@ -161,13 +146,12 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
 
         foreach (var (localName, sourceXml) in style.NativeDifferentialElementXmls)
         {
-            if (string.IsNullOrWhiteSpace(localName) || string.IsNullOrWhiteSpace(sourceXml))
+            if (string.IsNullOrWhiteSpace(localName))
                 continue;
 
             try
             {
-                var sourceElement = XElement.Parse(sourceXml);
-                if (sourceElement.Name.Namespace != workbookNs || !IsModeledDifferentialStyleElement(sourceElement.Name.LocalName))
+                if (TryCreateNativeDifferentialStyleElement(sourceXml, workbookNs) is not { } sourceElement)
                     continue;
 
                 var targetElement = dxf.Element(workbookNs + localName);
@@ -180,6 +164,26 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             {
                 // Ignore malformed nested dxf metadata from older saves.
             }
+        }
+    }
+
+    private static XElement? TryCreateNativeDifferentialStyleElement(string? sourceXml, XNamespace workbookNs)
+    {
+        if (string.IsNullOrWhiteSpace(sourceXml))
+            return null;
+
+        try
+        {
+            var sourceElement = XElement.Parse(sourceXml);
+            return sourceElement.Name.Namespace == workbookNs &&
+                   IsModeledDifferentialStyleElement(sourceElement.Name.LocalName)
+                ? sourceElement
+                : null;
+        }
+        catch
+        {
+            // Ignore malformed nested dxf metadata from older saves.
+            return null;
         }
     }
 

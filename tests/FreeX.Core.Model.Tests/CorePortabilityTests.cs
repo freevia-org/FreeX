@@ -23,7 +23,7 @@ public sealed class CorePortabilityTests
     [Fact]
     public void CoreProjects_RemainPortableAndFreeOfWpfWindowsDependencies()
     {
-        var repoRoot = Path.GetDirectoryName(WorkspaceFileLocator.FindFromWorkspaceRoot("FreeX.slnx"))
+        var repoRoot = Path.GetDirectoryName(TestWorkspaceFileLocator.FindFromWorkspaceRoot("FreeX.slnx"))
             ?? throw new DirectoryNotFoundException("Could not locate workspace root.");
         var srcRoot = Path.Combine(repoRoot, "src");
 

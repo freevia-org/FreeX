@@ -44,13 +44,10 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
             }
 
             var (pvAttrs, pvChildren) = XmlNativeBagSerializer.Deserialize(metadata.Get("sheetView"));
-            foreach (var attribute in pvAttrs)
-            {
-                if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledPrimaryViewAttribute(attribute.Key))
-                    continue;
-
-                XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(sheetView, attribute.Key, attribute.Value);
-            }
+            XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(
+                sheetView,
+                pvAttrs,
+                ["workbookViewId", "view", "showGridLines", "showRowColHeaders", "showRuler", "zoomScale", "showFormulas", "topLeftCell"]);
 
             if (pvChildren.Count > 0)
             {
@@ -62,37 +59,39 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
 
                 foreach (var childXml in pvChildren)
                 {
-                    if (string.IsNullOrWhiteSpace(childXml))
-                        continue;
-
-                    try
-                    {
-                        var nativeChild = XElement.Parse(childXml);
-                        if (nativeChild.Name == WorksheetNs + "selection")
-                        {
-                            MergeMatchingSelectionNativeAttributes(sheetView, nativeChild);
-                            continue;
-                        }
-
-                        sheetView.Add(nativeChild);
-                    }
-                    catch
-                    {
-                        // Skip malformed native payloads in authored native JSON files.
-                    }
+                    TryApplyNativePrimaryViewChild(sheetView, childXml);
                 }
             }
 
+            XlsxWorksheetSheetViewNormalizer.NormalizeSheetViewElement(sheetView);
             session.MarkDirty(worksheetEdit);
         }
     }
 
-    private static bool IsModeledPrimaryViewAttribute(string name) =>
-        name is "workbookViewId" or "view" or "showGridLines" or "showRowColHeaders" or "showRuler" or
-            "zoomScale" or "showFormulas" or "topLeftCell";
-
     private static bool IsModeledPrimaryViewElement(string name) =>
         name is "pane" or "selection";
+
+    private static void TryApplyNativePrimaryViewChild(XElement sheetView, string? childXml)
+    {
+        if (string.IsNullOrWhiteSpace(childXml))
+            return;
+
+        try
+        {
+            var nativeChild = XElement.Parse(childXml);
+            if (nativeChild.Name == WorksheetNs + "selection")
+            {
+                MergeMatchingSelectionNativeAttributes(sheetView, nativeChild);
+                return;
+            }
+
+            sheetView.Add(nativeChild);
+        }
+        catch
+        {
+            // Skip malformed native payloads in authored native JSON files.
+        }
+    }
 
     private static void PruneSelectionsForModeledActiveCell(XElement sheetView, Sheet sheet)
     {

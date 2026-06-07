@@ -135,47 +135,46 @@ internal static class XlsxStructuredTableWriter
             root.SetAttributeValue("published", published ? "1" : "0");
         if (!string.IsNullOrWhiteSpace(table.Comment))
             root.SetAttributeValue("comment", table.Comment);
-        foreach (var (name, value) in table.NativeAttributes ?? new Dictionary<string, string>())
-        {
-            TrySetNativeAttributeIfMissing(root, name, value);
-        }
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(root, table.NativeAttributes);
 
         if (table.HasAutoFilter)
             root.Add(ToAutoFilterXml(table, workbookNs));
-        if (!string.IsNullOrWhiteSpace(table.NativeSortStateXml))
-        {
-            try
-            {
-                var sortState = XElement.Parse(table.NativeSortStateXml);
-                if (sortState.Name == workbookNs + "sortState")
-                    root.Add(sortState);
-            }
-            catch
-            {
-                // Ignore malformed native table sort payloads from older saves.
-            }
-        }
+        if (TryCreateNativeSortState(table.NativeSortStateXml, workbookNs) is { } sortState)
+            root.Add(sortState);
         root.Add(new XElement(
             workbookNs + "tableColumns",
             new XAttribute("count", columns.Count.ToString(CultureInfo.InvariantCulture)),
             columns.Select(column => ToColumnXml(column, workbookNs))));
         if (ShouldWriteStyleInfo(table))
             root.Add(ToStyleInfoXml(table, workbookNs));
-        foreach (var nativeChildXml in (table.NativeChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
+        foreach (var nativeChildXml in table.NativeChildXmls ?? [])
         {
-            try
-            {
-                var nativeChild = XElement.Parse(nativeChildXml);
-                if (nativeChild.Name.Namespace == workbookNs)
-                    root.Add(nativeChild);
-            }
-            catch
-            {
-                // Ignore malformed native table payloads from older saves.
-            }
+            TryAddNativeTableElement(root, nativeChildXml, workbookNs);
         }
 
+        XlsxStructuredTableSchemaNormalizer.NormalizeElement(root, tablePath);
         return new XDocument(root);
+    }
+
+    private static XElement? TryCreateNativeSortState(string? nativeXml, XNamespace workbookNs)
+    {
+        if (string.IsNullOrWhiteSpace(nativeXml))
+            return null;
+
+        try
+        {
+            var sortState = XElement.Parse(nativeXml);
+            if (sortState.Name != workbookNs + "sortState")
+                return null;
+
+            XlsxWorksheetSortStateNormalizer.NormalizeElement(sortState);
+            return sortState;
+        }
+        catch
+        {
+            // Ignore malformed native table sort payloads from older saves.
+            return null;
+        }
     }
 
     private static XElement ToColumnXml(StructuredTableColumnModel column, XNamespace workbookNs)
@@ -193,26 +192,11 @@ internal static class XlsxStructuredTableWriter
                 ? null
                 : new XElement(workbookNs + "totalsRowFormula", column.TotalsRowFormula));
 
-        foreach (var (name, value) in column.NativeAttributes ?? new Dictionary<string, string>())
-        {
-            TrySetNativeAttributeIfMissing(element, name, value);
-        }
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, column.NativeAttributes);
 
-        foreach (var nativeChildXml in (column.NativeChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
+        foreach (var nativeChildXml in column.NativeChildXmls ?? [])
         {
-            try
-            {
-                var nativeChild = XElement.Parse(nativeChildXml);
-                if (nativeChild.Name.Namespace == workbookNs &&
-                    nativeChild.Name.LocalName is not "calculatedColumnFormula" and not "totalsRowFormula")
-                {
-                    element.Add(nativeChild);
-                }
-            }
-            catch
-            {
-                // Ignore malformed native table-column payloads from older saves.
-            }
+            TryAddNativeTableElement(element, nativeChildXml, workbookNs, "calculatedColumnFormula", "totalsRowFormula");
         }
 
         return element;
@@ -229,23 +213,11 @@ internal static class XlsxStructuredTableWriter
         if (!string.IsNullOrWhiteSpace(table.StyleName))
             element.SetAttributeValue("name", table.StyleName);
 
-        foreach (var (name, value) in table.NativeStyleInfoAttributes ?? new Dictionary<string, string>())
-        {
-            TrySetNativeAttributeIfMissing(element, name, value);
-        }
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, table.NativeStyleInfoAttributes);
 
-        foreach (var nativeChildXml in (table.NativeStyleInfoChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
+        foreach (var nativeChildXml in table.NativeStyleInfoChildXmls ?? [])
         {
-            try
-            {
-                var nativeChild = XElement.Parse(nativeChildXml);
-                if (nativeChild.Name.Namespace == workbookNs)
-                    element.Add(nativeChild);
-            }
-            catch
-            {
-                // Ignore malformed native table-style payloads from older saves.
-            }
+            TryAddNativeTableElement(element, nativeChildXml, workbookNs);
         }
 
         return element;
@@ -260,36 +232,28 @@ internal static class XlsxStructuredTableWriter
         (table.NativeStyleInfoAttributes?.Count > 0) ||
         (table.NativeStyleInfoChildXmls?.Count > 0);
 
-    private static XElement ToAutoFilterXml(StructuredTableModel table, XNamespace workbookNs) =>
-        AddAutoFilterNativeMetadata(new XElement(
+    private static XElement ToAutoFilterXml(StructuredTableModel table, XNamespace workbookNs)
+    {
+        var element = AddAutoFilterNativeMetadata(new XElement(
             workbookNs + "autoFilter",
             new XAttribute("ref", table.Range.ToString()),
             table.FilterColumns.Select(filterColumn => ToFilterColumnXml(filterColumn, workbookNs))),
             table,
             workbookNs);
+        XlsxWorksheetAutoFilterNormalizer.NormalizeElement(element);
+        return element;
+    }
 
     private static XElement AddAutoFilterNativeMetadata(
         XElement element,
         StructuredTableModel table,
         XNamespace workbookNs)
     {
-        foreach (var (name, value) in table.NativeAutoFilterAttributes ?? new Dictionary<string, string>())
-        {
-            TrySetNativeAttributeIfMissing(element, name, value);
-        }
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, table.NativeAutoFilterAttributes);
 
-        foreach (var nativeChildXml in (table.NativeAutoFilterChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
+        foreach (var nativeChildXml in table.NativeAutoFilterChildXmls ?? [])
         {
-            try
-            {
-                var nativeChild = XElement.Parse(nativeChildXml);
-                if (nativeChild.Name.Namespace == workbookNs && nativeChild.Name.LocalName != "filterColumn")
-                    element.Add(nativeChild);
-            }
-            catch
-            {
-                // Ignore malformed native table AutoFilter payloads from older saves.
-            }
+            TryAddNativeTableElement(element, nativeChildXml, workbookNs, "filterColumn");
         }
 
         return element;
@@ -300,10 +264,7 @@ internal static class XlsxStructuredTableWriter
         var element = new XElement(
             workbookNs + "filterColumn",
             new XAttribute("colId", filterColumn.ColumnId.ToString(CultureInfo.InvariantCulture)));
-        foreach (var (name, value) in filterColumn.NativeAttributes ?? new Dictionary<string, string>())
-        {
-            TrySetNativeAttributeIfMissing(element, name, value);
-        }
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, filterColumn.NativeAttributes);
 
         var hasCustomFilters = filterColumn.CustomFilters.Count > 0;
         if (!hasCustomFilters && (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank))
@@ -324,26 +285,14 @@ internal static class XlsxStructuredTableWriter
             else if (filterColumn.CustomFiltersAnd)
                 customFilters.SetAttributeValue("and", "1");
 
-            foreach (var (name, value) in filterColumn.NativeCustomFiltersAttributes ?? new Dictionary<string, string>())
-            {
-                TrySetNativeAttributeIfMissing(customFilters, name, value);
-            }
+            XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(customFilters, filterColumn.NativeCustomFiltersAttributes);
 
             element.Add(customFilters);
         }
 
-        foreach (var nativeFilterXml in filterColumn.NativeFilterXmls.Where(xml => !string.IsNullOrWhiteSpace(xml)))
+        foreach (var nativeFilterXml in filterColumn.NativeFilterXmls)
         {
-            try
-            {
-                var nativeFilter = XElement.Parse(nativeFilterXml);
-                if (nativeFilter.Name.Namespace == workbookNs && nativeFilter.Name.LocalName != "filters" && nativeFilter.Name.LocalName != "customFilters")
-                    element.Add(nativeFilter);
-            }
-            catch
-            {
-                // Ignore malformed native filter payloads from older saves; value filters above remain valid.
-            }
+            TryAddNativeTableElement(element, nativeFilterXml, workbookNs, "filters", "customFilters");
         }
 
         return element;
@@ -357,10 +306,7 @@ internal static class XlsxStructuredTableWriter
         if (filter.Value is not null)
             element.SetAttributeValue("val", filter.Value);
 
-        foreach (var (name, value) in filter.NativeAttributes ?? new Dictionary<string, string>())
-        {
-            TrySetNativeAttributeIfMissing(element, name, value);
-        }
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, filter.NativeAttributes);
 
         return element;
     }
@@ -388,20 +334,27 @@ internal static class XlsxStructuredTableWriter
             : 1;
     }
 
-    private static void TrySetNativeAttributeIfMissing(XElement element, string name, string value)
+    private static void TryAddNativeTableElement(
+        XElement target,
+        string? xml,
+        XNamespace workbookNs,
+        params string[] excludedLocalNames)
     {
-        if (string.IsNullOrWhiteSpace(name))
+        if (string.IsNullOrWhiteSpace(xml))
             return;
 
         try
         {
-            var attributeName = XName.Get(name);
-            if (element.Attribute(attributeName) is null)
-                element.SetAttributeValue(attributeName, value);
+            var element = XElement.Parse(xml);
+            if (element.Name.Namespace != workbookNs || excludedLocalNames.Contains(element.Name.LocalName))
+                return;
+
+            target.Add(element);
         }
         catch
         {
-            // Ignore malformed native table attribute names from authored metadata.
+            // Ignore malformed native table payloads from older saves.
         }
     }
+
 }

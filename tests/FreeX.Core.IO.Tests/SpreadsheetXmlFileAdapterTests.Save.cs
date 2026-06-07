@@ -20,8 +20,7 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
         var adapter = new SpreadsheetXmlFileAdapter();
         adapter.Save(workbook, stream);
 
-        stream.Position = 0;
-        var document = XDocument.Load(stream);
+        var document = LoadSpreadsheetXml(stream);
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
         var data = document.Descendants(ss + "Data").ToArray();
         data.Select(element => element.Attribute(ss + "Type")!.Value).Should().Equal("String", "String", "String");
@@ -47,8 +46,7 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
         var adapter = new SpreadsheetXmlFileAdapter();
         adapter.Save(workbook, stream);
 
-        stream.Position = 0;
-        var document = XDocument.Load(stream);
+        var document = LoadSpreadsheetXml(stream);
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
         var data = document.Descendants(ss + "Data").ToArray();
         data.Select(element => element.Attribute(ss + "Type")!.Value).Should().Equal("String", "String", "String");
@@ -73,8 +71,7 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
         var adapter = new SpreadsheetXmlFileAdapter();
         adapter.Save(workbook, stream);
 
-        stream.Position = 0;
-        var document = XDocument.Load(stream);
+        var document = LoadSpreadsheetXml(stream);
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
         var data = document.Descendants(ss + "Data").ToArray();
         data.Select(element => element.Attribute(ss + "Type")!.Value).Should().Equal("String", "String");
@@ -130,9 +127,7 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
         using var stream = new MemoryStream();
         var adapter = new SpreadsheetXmlFileAdapter();
         adapter.Save(workbook, stream);
-        stream.Position = 0;
-
-        var document = XDocument.Load(stream);
+        var document = LoadSpreadsheetXml(stream);
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
         var namedRange = document.Descendants(ss + "NamedRange").Should().ContainSingle().Which;
         namedRange.Attribute(ss + "Name")!.Value.Should().Be("SalesData");
@@ -165,8 +160,7 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
         using var stream = new MemoryStream();
         new SpreadsheetXmlFileAdapter().Save(workbook, stream);
 
-        stream.Position = 0;
-        var document = XDocument.Load(stream);
+        var document = LoadSpreadsheetXml(stream);
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
         var namedRange = document.Descendants(ss + "NamedRange").Should().ContainSingle().Which;
         namedRange.Attribute(ss + "Name")!.Value.Should().Be("ValidName");
@@ -190,9 +184,7 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
         using var stream = new MemoryStream();
         var adapter = new SpreadsheetXmlFileAdapter();
         adapter.Save(workbook, stream);
-        stream.Position = 0;
-
-        var document = XDocument.Load(stream);
+        var document = LoadSpreadsheetXml(stream);
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
         var styles = document.Descendants(ss + "Style").ToList();
         styles.Should().HaveCount(2);
@@ -231,9 +223,7 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
         using var stream = new MemoryStream();
         var adapter = new SpreadsheetXmlFileAdapter();
         adapter.Save(workbook, stream);
-        stream.Position = 0;
-
-        var document = XDocument.Load(stream);
+        var document = LoadSpreadsheetXml(stream);
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
         var formulaCell = document.Descendants(ss + "Cell")
             .Single(cell => cell.Attribute(ss + "Formula")?.Value == "=SUM(A1:B1)");
@@ -263,9 +253,7 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
         using var stream = new MemoryStream();
         var adapter = new SpreadsheetXmlFileAdapter();
         adapter.Save(workbook, stream);
-        stream.Position = 0;
-
-        var document = XDocument.Load(stream);
+        var document = LoadSpreadsheetXml(stream);
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
         var rows = document.Descendants(ss + "Row").ToList();
         rows.Select(row => row.Attribute(ss + "Index")!.Value).Should().Equal("1", "2");
@@ -319,9 +307,7 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
 
         using var stream = new MemoryStream();
         new SpreadsheetXmlFileAdapter().Save(workbook, stream);
-        stream.Position = 0;
-
-        var document = XDocument.Load(stream);
+        var document = LoadSpreadsheetXml(stream);
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
         var cells = document.Descendants(ss + "Cell").ToList();
         var mergedHeadingCell = cells.Single(cell => cell.Element(ss + "Data")?.Value == "Merged heading");
@@ -357,8 +343,7 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
         using var stream = new MemoryStream();
         new SpreadsheetXmlFileAdapter().Save(workbook, stream);
 
-        stream.Position = 0;
-        var document = XDocument.Load(stream);
+        var document = LoadSpreadsheetXml(stream);
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
         var cells = document.Descendants(ss + "Cell").ToList();
         cells.Should().ContainSingle();
@@ -413,9 +398,7 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
         using var stream = new MemoryStream();
         var adapter = new SpreadsheetXmlFileAdapter();
         adapter.Save(workbook, stream);
-        stream.Position = 0;
-
-        var document = XDocument.Load(stream);
+        var document = LoadSpreadsheetXml(stream);
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
         var reportCell = document.Descendants(ss + "Cell")
             .Single(cell => cell.Element(ss + "Data")?.Value == "Report");
@@ -448,9 +431,7 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
         using var stream = new MemoryStream();
         var adapter = new SpreadsheetXmlFileAdapter();
         adapter.Save(workbook, stream);
-        stream.Position = 0;
-
-        var document = XDocument.Load(stream);
+        var document = LoadSpreadsheetXml(stream);
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
         var linkCell = document.Descendants(ss + "Cell")
             .Single(cell => cell.Attribute(ss + "HRef")?.Value == "https://example.com/blank");
@@ -482,9 +463,7 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
         using var stream = new MemoryStream();
         var adapter = new SpreadsheetXmlFileAdapter();
         adapter.Save(workbook, stream);
-        stream.Position = 0;
-
-        var document = XDocument.Load(stream);
+        var document = LoadSpreadsheetXml(stream);
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
         var comments = document.Descendants(ss + "Comment").ToList();
         comments.Should().HaveCount(2);
@@ -513,9 +492,7 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
         using var stream = new MemoryStream();
         var adapter = new SpreadsheetXmlFileAdapter();
         adapter.Save(workbook, stream);
-        stream.Position = 0;
-
-        var document = XDocument.Load(stream);
+        var document = LoadSpreadsheetXml(stream);
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
         var worksheets = document.Root!.Elements(ss + "Worksheet").ToList();
         worksheets[0].Attribute(ss + "Visible").Should().BeNull();
@@ -544,9 +521,7 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
         using var stream = new MemoryStream();
         var adapter = new SpreadsheetXmlFileAdapter();
         adapter.Save(workbook, stream);
-        stream.Position = 0;
-
-        var document = XDocument.Load(stream);
+        var document = LoadSpreadsheetXml(stream);
         XNamespace x = "urn:schemas-microsoft-com:office:excel";
         var options = document.Descendants(x + "WorksheetOptions").Single();
         options.Element(x + "DoNotDisplayGridlines").Should().NotBeNull();
@@ -578,9 +553,7 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
         using var stream = new MemoryStream();
         var adapter = new SpreadsheetXmlFileAdapter();
         adapter.Save(workbook, stream);
-        stream.Position = 0;
-
-        var document = XDocument.Load(stream);
+        var document = LoadSpreadsheetXml(stream);
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
         var rows = document.Descendants(ss + "Row").ToList();
         var tallRow = rows.Single(row => row.Attribute(ss + "Index")?.Value == "2");
@@ -608,9 +581,7 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
         using var stream = new MemoryStream();
         var adapter = new SpreadsheetXmlFileAdapter();
         adapter.Save(workbook, stream);
-        stream.Position = 0;
-
-        var document = XDocument.Load(stream);
+        var document = LoadSpreadsheetXml(stream);
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
         var columns = document.Descendants(ss + "Column").ToList();
         var wideColumn = columns.Single(column => column.Attribute(ss + "Index")?.Value == "2");
@@ -665,10 +636,14 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
 
         stream.Position.Should().Be(stream.Length);
         stream.Length.Should().BeLessThan(largeLength);
-        stream.Position = 0;
-        var document = XDocument.Load(stream);
+        var document = LoadSpreadsheetXml(stream);
         XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
         document.Descendants(ss + "Data").Single().Value.Should().Be("Gamma");
     }
 
+    private static XDocument LoadSpreadsheetXml(Stream stream)
+    {
+        stream.Position = 0;
+        return XDocument.Load(stream);
+    }
 }

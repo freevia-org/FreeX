@@ -1,4 +1,3 @@
-using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 using System.Globalization;
@@ -64,22 +63,35 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
             autoFilter.FilterColumns.Count > 0 ||
             autoFilter.NativeAttributes?.Count > 0 ||
             autoFilter.NativeChildXmls?.Count > 0;
-        if (!hasModeledMetadata && !string.IsNullOrWhiteSpace(autoFilter.NativeXml))
-        {
-            try
-            {
-                var element = XElement.Parse(autoFilter.NativeXml);
-                return element.Name == worksheetNs + "autoFilter" ? element : null;
-            }
-            catch
-            {
-                // Fall back to a range-only AutoFilter when legacy native JSON contains malformed XML.
-            }
-        }
+        if (!hasModeledMetadata && TryCreateNativeAutoFilter(autoFilter.NativeXml, worksheetNs, out var nativeAutoFilter))
+            return nativeAutoFilter;
 
         return string.IsNullOrWhiteSpace(autoFilter.Reference)
             ? null
             : ToModeledAutoFilterXml(autoFilter, worksheetNs);
+    }
+
+    private static bool TryCreateNativeAutoFilter(string? nativeXml, XNamespace worksheetNs, out XElement? autoFilter)
+    {
+        autoFilter = null;
+        if (string.IsNullOrWhiteSpace(nativeXml))
+            return false;
+
+        try
+        {
+            var element = XElement.Parse(nativeXml);
+            if (element.Name != worksheetNs + "autoFilter")
+                return true;
+
+            XlsxWorksheetAutoFilterNormalizer.NormalizeElement(element);
+            autoFilter = element;
+            return true;
+        }
+        catch
+        {
+            // Fall back to a range-only AutoFilter when legacy native JSON contains malformed XML.
+            return false;
+        }
     }
 
     private static XElement ToModeledAutoFilterXml(WorksheetAutoFilterModel autoFilter, XNamespace worksheetNs)
@@ -90,10 +102,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
             autoFilter.FilterColumns
                 .Where(filterColumn => filterColumn.ColumnId >= 0)
                 .Select(filterColumn => ToFilterColumnXml(filterColumn, worksheetNs)));
-        foreach (var (name, value) in autoFilter.NativeAttributes ?? new Dictionary<string, string>())
-        {
-            TrySetNativeAttributeIfMissing(element, name, value);
-        }
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, autoFilter.NativeAttributes);
 
         foreach (var nativeChildXml in autoFilter.NativeChildXmls ?? [])
         {
@@ -101,6 +110,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
                 element.Add(nativeChild);
         }
 
+        XlsxWorksheetAutoFilterNormalizer.NormalizeElement(element);
         return element;
     }
 
@@ -109,10 +119,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
         var element = new XElement(
             worksheetNs + "filterColumn",
             new XAttribute("colId", filterColumn.ColumnId.ToString(CultureInfo.InvariantCulture)));
-        foreach (var (name, value) in filterColumn.NativeAttributes ?? new Dictionary<string, string>())
-        {
-            TrySetNativeAttributeIfMissing(element, name, value);
-        }
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, filterColumn.NativeAttributes);
 
         var hasCustomFilters = filterColumn.CustomFilters.Count > 0;
         var hasTop10 = filterColumn.Top10 is not null;
@@ -130,10 +137,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
                 filterColumn.IncludeBlank ? new XAttribute("blank", "1") : null,
                 filterColumn.Values.Select(value => new XElement(worksheetNs + "filter", new XAttribute("val", value))),
                 filterColumn.DateGroups.Select(dateGroup => ToDateGroupItemXml(dateGroup, worksheetNs)));
-            foreach (var (name, value) in filterColumn.NativeFiltersAttributes ?? new Dictionary<string, string>())
-            {
-                TrySetNativeAttributeIfMissing(filters, name, value);
-            }
+            XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(filters, filterColumn.NativeFiltersAttributes);
 
             element.Add(filters);
         }
@@ -148,10 +152,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
             else if (filterColumn.CustomFiltersAnd)
                 customFilters.SetAttributeValue("and", "1");
 
-            foreach (var (name, value) in filterColumn.NativeCustomFiltersAttributes ?? new Dictionary<string, string>())
-            {
-                TrySetNativeAttributeIfMissing(customFilters, name, value);
-            }
+            XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(customFilters, filterColumn.NativeCustomFiltersAttributes);
 
             element.Add(customFilters);
         }
@@ -187,10 +188,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
         else if (!colorFilter.CellColor)
             element.SetAttributeValue("cellColor", "0");
 
-        foreach (var (name, value) in colorFilter.NativeAttributes ?? new Dictionary<string, string>())
-        {
-            TrySetNativeAttributeIfMissing(element, name, value);
-        }
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, colorFilter.NativeAttributes);
 
         return element;
     }
@@ -205,10 +203,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
         else if (iconFilter.IconId is not null)
             element.SetAttributeValue("iconId", iconFilter.IconId.Value.ToString(CultureInfo.InvariantCulture));
 
-        foreach (var (name, value) in iconFilter.NativeAttributes ?? new Dictionary<string, string>())
-        {
-            TrySetNativeAttributeIfMissing(element, name, value);
-        }
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, iconFilter.NativeAttributes);
 
         return element;
     }
@@ -225,10 +220,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
         if (!string.IsNullOrWhiteSpace(dateGroup.DateTimeGrouping))
             element.SetAttributeValue("dateTimeGrouping", dateGroup.DateTimeGrouping);
 
-        foreach (var (name, value) in dateGroup.NativeAttributes ?? new Dictionary<string, string>())
-        {
-            TrySetNativeAttributeIfMissing(element, name, value);
-        }
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, dateGroup.NativeAttributes);
 
         return element;
     }
@@ -254,10 +246,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
         else if (dynamicFilter.MaxValue is not null)
             element.SetAttributeValue("maxVal", dynamicFilter.MaxValue.Value.ToString(CultureInfo.InvariantCulture));
 
-        foreach (var (name, value) in dynamicFilter.NativeAttributes ?? new Dictionary<string, string>())
-        {
-            TrySetNativeAttributeIfMissing(element, name, value);
-        }
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, dynamicFilter.NativeAttributes);
 
         return element;
     }
@@ -287,10 +276,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
         else if (top10.FilterValue is not null)
             element.SetAttributeValue("filterVal", top10.FilterValue.Value.ToString(CultureInfo.InvariantCulture));
 
-        foreach (var (name, value) in top10.NativeAttributes ?? new Dictionary<string, string>())
-        {
-            TrySetNativeAttributeIfMissing(element, name, value);
-        }
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, top10.NativeAttributes);
 
         return element;
     }
@@ -303,10 +289,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
         if (customFilter.Value is not null)
             element.SetAttributeValue("val", customFilter.Value);
 
-        foreach (var (name, value) in customFilter.NativeAttributes ?? new Dictionary<string, string>())
-        {
-            TrySetNativeAttributeIfMissing(element, name, value);
-        }
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, customFilter.NativeAttributes);
 
         return element;
     }
@@ -326,25 +309,6 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
         catch
         {
             return null;
-        }
-    }
-
-    private static void TrySetNativeAttributeIfMissing(XElement element, string name, string value)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-            return;
-
-        try
-        {
-            var attributeName = XName.Get(name);
-            if (element.Attribute(attributeName) is null)
-                element.SetAttributeValue(attributeName, value);
-        }
-        catch (ArgumentException)
-        {
-        }
-        catch (XmlException)
-        {
         }
     }
 

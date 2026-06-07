@@ -17,24 +17,11 @@ public sealed partial class CsvFileAdapterTests
         this.output = output;
     }
 
-    public static TheoryData<byte[]> Utf32BomCsvPayloads() => new()
-    {
-        Encoding.UTF32.GetPreamble().Concat(Encoding.UTF32.GetBytes("TRUE,42\r\n")).ToArray(),
-        new UTF32Encoding(bigEndian: true, byteOrderMark: true)
-            .GetPreamble()
-            .Concat(new UTF32Encoding(bigEndian: true, byteOrderMark: true).GetBytes("TRUE,42\r\n"))
-            .ToArray()
-    };
+    public static TheoryData<byte[]> Utf32BomCsvPayloads() =>
+        EncodedTextPayloads.Utf32BomPayloads("TRUE,42\r\n");
 
-    public static TheoryData<byte[]> Utf16BomCsvPayloads() => new()
-    {
-        Encoding.Unicode.GetPreamble()
-            .Concat(Encoding.Unicode.GetBytes("Name,Amount,Flag\r\nCaf\u00e9,42,TRUE\r\n"))
-            .ToArray(),
-        Encoding.BigEndianUnicode.GetPreamble()
-            .Concat(Encoding.BigEndianUnicode.GetBytes("Name,Amount,Flag\r\nCaf\u00e9,42,TRUE\r\n"))
-            .ToArray()
-    };
+    public static TheoryData<byte[]> Utf16BomCsvPayloads() =>
+        EncodedTextPayloads.Utf16BomPayloads("Name,Amount,Flag\r\nCaf\u00e9,42,TRUE\r\n");
 
     private static Workbook CreateDenseWorkbook(int rowCount, int colCount)
     {

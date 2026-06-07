@@ -11,7 +11,7 @@ public sealed class XlsxWorkbookThemeReaderTests
     [Fact]
     public void Load_ReturnsOfficeThemeWhenThemePartIsMissing()
     {
-        using var package = CreatePackage();
+        using var package = XlsxPackageTestFixtures.CreatePackage();
 
         var theme = XlsxWorkbookThemeReader.Load(package);
 
@@ -42,7 +42,7 @@ public sealed class XlsxWorkbookThemeReaderTests
     [Fact]
     public void Load_ReadsThemeNameFontsEffectsAndColorScheme()
     {
-        using var package = CreatePackage(("xl/theme/theme1.xml", """
+        using var package = XlsxPackageTestFixtures.CreatePackage(("xl/theme/theme1.xml", """
             <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
             <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="FreeX Test Theme">
               <a:themeElements>
@@ -84,7 +84,7 @@ public sealed class XlsxWorkbookThemeReaderTests
     [Fact]
     public void Load_ReadsFormatSchemeOuterShadowEffectDefaults()
     {
-        using var package = CreatePackage(("xl/theme/theme1.xml", NativeThemeWithDeepSchemesXml));
+        using var package = XlsxPackageTestFixtures.CreatePackage(("xl/theme/theme1.xml", NativeThemeWithDeepSchemesXml));
 
         var theme = XlsxWorkbookThemeReader.Load(package);
 
@@ -99,7 +99,7 @@ public sealed class XlsxWorkbookThemeReaderTests
     [Fact]
     public void Load_ReadsFormatSchemePresetShadowEffectDefaults()
     {
-        using var package = CreatePackage(("xl/theme/theme1.xml", NativeThemeWithPresetShadowXml));
+        using var package = XlsxPackageTestFixtures.CreatePackage(("xl/theme/theme1.xml", NativeThemeWithPresetShadowXml));
 
         var theme = XlsxWorkbookThemeReader.Load(package);
 
@@ -114,7 +114,7 @@ public sealed class XlsxWorkbookThemeReaderTests
     [Fact]
     public void Load_ReadsFormatSchemeGlowEffectDefaults()
     {
-        using var package = CreatePackage(("xl/theme/theme1.xml", NativeThemeWithGlowXml));
+        using var package = XlsxPackageTestFixtures.CreatePackage(("xl/theme/theme1.xml", NativeThemeWithGlowXml));
 
         var theme = XlsxWorkbookThemeReader.Load(package);
 
@@ -129,7 +129,7 @@ public sealed class XlsxWorkbookThemeReaderTests
     [Fact]
     public void Load_ReadsFormatSchemeSoftEdgeEffectDefaults()
     {
-        using var package = CreatePackage(("xl/theme/theme1.xml", NativeThemeWithSoftEdgeXml));
+        using var package = XlsxPackageTestFixtures.CreatePackage(("xl/theme/theme1.xml", NativeThemeWithSoftEdgeXml));
 
         var theme = XlsxWorkbookThemeReader.Load(package);
 
@@ -142,7 +142,7 @@ public sealed class XlsxWorkbookThemeReaderTests
     [Fact]
     public void Load_ReadsFormatSchemeInnerShadowEffectDefaults()
     {
-        using var package = CreatePackage(("xl/theme/theme1.xml", NativeThemeWithInnerShadowXml));
+        using var package = XlsxPackageTestFixtures.CreatePackage(("xl/theme/theme1.xml", NativeThemeWithInnerShadowXml));
 
         var theme = XlsxWorkbookThemeReader.Load(package);
 
@@ -158,7 +158,7 @@ public sealed class XlsxWorkbookThemeReaderTests
     [Fact]
     public void Load_ReadsFormatSchemeBevelAndThreeDRotationEffectDefaults()
     {
-        using var package = CreatePackage(("xl/theme/theme1.xml", NativeThemeWithBevelAndThreeDRotationXml));
+        using var package = XlsxPackageTestFixtures.CreatePackage(("xl/theme/theme1.xml", NativeThemeWithBevelAndThreeDRotationXml));
 
         var theme = XlsxWorkbookThemeReader.Load(package);
 
@@ -173,7 +173,7 @@ public sealed class XlsxWorkbookThemeReaderTests
     [Fact]
     public void LoadSave_PreservesThemeSupplementElementsBesideThemeElements()
     {
-        using var package = CreatePackage(("xl/theme/theme1.xml", """
+        using var package = XlsxPackageTestFixtures.CreatePackage(("xl/theme/theme1.xml", """
             <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
             <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Supplement Theme">
               <a:themeElements>
@@ -263,8 +263,7 @@ public sealed class XlsxWorkbookThemeReaderTests
         package.Position = 0;
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: false);
-        using var reader = new StreamReader(archive.GetEntry("xl/theme/theme1.xml")!.Open());
-        var savedXml = reader.ReadToEnd();
+        var savedXml = LoadThemeXml(archive);
 
         savedXml.Should().Contain("objectDefaults");
         savedXml.Should().Contain("schemeClr val=\"accent1\"");
@@ -276,7 +275,7 @@ public sealed class XlsxWorkbookThemeReaderTests
     [Fact]
     public void Save_WritesModeledObjectDefaultsWhenSupplementXmlIsMissing()
     {
-        using var package = CreatePackage();
+        using var package = XlsxPackageTestFixtures.CreatePackage();
         var theme = WorkbookTheme.Office.WithSupplementalMetadata(
             alternateColorSchemes: [],
             hasObjectDefaults: true,
@@ -296,8 +295,7 @@ public sealed class XlsxWorkbookThemeReaderTests
         package.Position = 0;
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: false);
-        using var reader = new StreamReader(archive.GetEntry("xl/theme/theme1.xml")!.Open());
-        var savedXml = reader.ReadToEnd();
+        var savedXml = LoadThemeXml(archive);
 
         savedXml.Should().Contain("objectDefaults");
         savedXml.Should().Contain("spDef");
@@ -312,7 +310,7 @@ public sealed class XlsxWorkbookThemeReaderTests
     [Fact]
     public void Save_WritesModeledAlternateColorSchemesWhenSupplementXmlIsMissing()
     {
-        using var package = CreatePackage();
+        using var package = XlsxPackageTestFixtures.CreatePackage();
         var theme = WorkbookTheme.Office.WithSupplementalMetadata(
             [
                 new WorkbookThemeAlternateColorScheme(
@@ -329,8 +327,7 @@ public sealed class XlsxWorkbookThemeReaderTests
         package.Position = 0;
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: false);
-        using var reader = new StreamReader(archive.GetEntry("xl/theme/theme1.xml")!.Open());
-        var savedXml = reader.ReadToEnd();
+        var savedXml = LoadThemeXml(archive);
 
         savedXml.Should().Contain("extraClrSchemeLst");
         savedXml.Should().Contain("Modeled Alternate");
@@ -343,7 +340,7 @@ public sealed class XlsxWorkbookThemeReaderTests
     [Fact]
     public void XlsxNativeJsonBridge_PreservesNativeThemeSchemeDetails()
     {
-        using var source = CreatePackage(("xl/theme/theme1.xml", NativeThemeWithDeepSchemesXml));
+        using var source = XlsxPackageTestFixtures.CreatePackage(("xl/theme/theme1.xml", NativeThemeWithDeepSchemesXml));
         var workbook = new Workbook("ThemeBridge")
         {
             Theme = XlsxWorkbookThemeReader.Load(source)
@@ -375,7 +372,7 @@ public sealed class XlsxWorkbookThemeReaderTests
             new CellColor(68, 85, 102),
             1.5));
 
-        using var target = CreatePackage();
+        using var target = XlsxPackageTestFixtures.CreatePackage();
         XlsxWorkbookThemeWriter.Save(target, loaded.Theme);
         target.Position = 0;
 
@@ -426,7 +423,7 @@ public sealed class XlsxWorkbookThemeReaderTests
     [Fact]
     public void Save_PreservesNativeFormatSchemeDetailsWhenEffectNameChanges()
     {
-        using var source = CreatePackage(("xl/theme/theme1.xml", NativeThemeWithDeepSchemesXml));
+        using var source = XlsxPackageTestFixtures.CreatePackage(("xl/theme/theme1.xml", NativeThemeWithDeepSchemesXml));
         var theme = XlsxWorkbookThemeReader.Load(source)
             .WithEffects("Renamed Effects");
 
@@ -434,7 +431,7 @@ public sealed class XlsxWorkbookThemeReaderTests
         theme.EffectDefaults.Should().NotBeNull();
         theme.EffectDefaults!.ShadowOffsetY.Should().Be(2);
 
-        using var target = CreatePackage();
+        using var target = XlsxPackageTestFixtures.CreatePackage();
         XlsxWorkbookThemeWriter.Save(target, theme);
         target.Position = 0;
 
@@ -460,7 +457,7 @@ public sealed class XlsxWorkbookThemeReaderTests
     [Fact]
     public void Save_IgnoresMalformedOrWrongNamespaceThemeSupplementXml()
     {
-        using var package = CreatePackage();
+        using var package = XlsxPackageTestFixtures.CreatePackage();
         var theme = WorkbookTheme.Office.WithNativeThemeSupplementXml("""
             <wrong:objectDefaults xmlns:wrong="urn:not-drawingml"/>
             <a:objectDefaults xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
@@ -472,8 +469,7 @@ public sealed class XlsxWorkbookThemeReaderTests
         package.Position = 0;
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: false);
-        using var reader = new StreamReader(archive.GetEntry("xl/theme/theme1.xml")!.Open());
-        var savedXml = reader.ReadToEnd();
+        var savedXml = LoadThemeXml(archive);
 
         savedXml.Should().Contain("objectDefaults");
         savedXml.Should().NotContain("urn:not-drawingml");
@@ -492,25 +488,12 @@ public sealed class XlsxWorkbookThemeReaderTests
 
     private static XDocument LoadThemeDocument(ZipArchive archive)
     {
-        using var reader = new StreamReader(archive.GetEntry("xl/theme/theme1.xml")!.Open());
-        return XDocument.Load(reader);
+        return XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/theme/theme1.xml", "xl/theme/theme1.xml");
     }
 
-    private static MemoryStream CreatePackage(params (string Path, string Content)[] entries)
+    private static string LoadThemeXml(ZipArchive archive)
     {
-        var stream = new MemoryStream();
-        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
-        {
-            foreach (var (path, content) in entries)
-            {
-                var entry = archive.CreateEntry(path);
-                using var writer = new StreamWriter(entry.Open());
-                writer.Write(content);
-            }
-        }
-
-        stream.Position = 0;
-        return stream;
+        return LoadThemeDocument(archive).ToString(SaveOptions.DisableFormatting);
     }
 
     private const string NativeThemeWithDeepSchemesXml = """

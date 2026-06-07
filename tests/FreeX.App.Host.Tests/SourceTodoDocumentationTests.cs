@@ -9,7 +9,7 @@ public sealed partial class SourceTodoDocumentationTests
     [Fact]
     public void SourceText_DoesNotContainMojibake()
     {
-        var repoDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("FreeX.slnx"))!;
+        var repoDirectory = WorkspaceFileLocator.FindWorkspaceRoot();
         var sourceDirectory = Path.Combine(repoDirectory, "src");
         var invalidLines = Directory
             .EnumerateFiles(sourceDirectory, "*.*", SearchOption.AllDirectories)
@@ -24,7 +24,7 @@ public sealed partial class SourceTodoDocumentationTests
     [Fact]
     public void DocumentationText_DoesNotContainMojibake()
     {
-        var repoDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("FreeX.slnx"))!;
+        var repoDirectory = WorkspaceFileLocator.FindWorkspaceRoot();
         var docsDirectory = Path.Combine(repoDirectory, "docs");
         var invalidLines = Directory
             .EnumerateFiles(docsDirectory, "*.md", SearchOption.AllDirectories)
@@ -37,7 +37,7 @@ public sealed partial class SourceTodoDocumentationTests
     [Fact]
     public void SourceDeferredWorkMarkers_LinkToTrackingDocumentation()
     {
-        var repoDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("FreeX.slnx"))!;
+        var repoDirectory = WorkspaceFileLocator.FindWorkspaceRoot();
         var sourceDirectory = Path.Combine(repoDirectory, "src");
         var invalidMarkers = Directory
             .EnumerateFiles(sourceDirectory, "*.cs", SearchOption.AllDirectories)

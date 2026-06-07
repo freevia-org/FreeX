@@ -208,8 +208,7 @@ public sealed class RibbonIconFactorySvgTests
     [Fact]
     public void AppHostProject_CopiesSvgCommandIconsInsteadOfPreRenderedPngs()
     {
-        var projectFile = DialogSourceTestSupport.FindHostSourceFile("FreeX.App.Host.csproj");
-        var project = File.ReadAllText(projectFile);
+        var project = DialogSourceTestSupport.ReadHostSourceFile("FreeX.App.Host.csproj");
 
         project.Should().Contain(@"Resources\CommandIconsSvg\**\*.svg");
         project.Should().NotContain(@"Resources\CommandIcons\**\*.png");
@@ -219,7 +218,7 @@ public sealed class RibbonIconFactorySvgTests
     public void HomeRibbonLargeCommandArtwork_UsesDistinctSvgFiles()
     {
         var iconDirectory = Path.Combine(
-            Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("FreeX.App.Host.csproj"))!,
+            DialogSourceTestSupport.FindHostSourceDirectory("FreeX.App.Host.csproj"),
             "Resources",
             "CommandIconsSvg");
 
@@ -244,7 +243,7 @@ public sealed class RibbonIconFactorySvgTests
             {
                 var path = Path.Combine(iconDirectory, fileName);
                 File.Exists(path).Should().BeTrue(path);
-                var text = File.ReadAllText(path)
+                var text = DialogSourceTestSupport.ReadHostSourceFile("Resources", "CommandIconsSvg", fileName)
                     .ReplaceLineEndings(string.Empty);
                 return (fileName, text);
             })
@@ -260,12 +259,7 @@ public sealed class RibbonIconFactorySvgTests
     [Fact]
     public void HelpIcon_UsesCenteredPathQuestionMark()
     {
-        var iconPath = DialogSourceTestSupport.FindHostSourceFile(
-            "Resources",
-            "CommandIconsSvg",
-            "help.svg");
-
-        var svg = File.ReadAllText(iconPath);
+        var svg = DialogSourceTestSupport.ReadHostSourceFile("Resources", "CommandIconsSvg", "help.svg");
 
         svg.Should().Contain("width=\"32\"");
         svg.Should().Contain("viewBox=\"0 0 32 32\"");
@@ -278,7 +272,7 @@ public sealed class RibbonIconFactorySvgTests
     public void SizeSpecificSvgCommandIcons_DoNotUseDocumentPlaceholderArtwork()
     {
         var iconDirectory = Path.Combine(
-            Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("FreeX.App.Host.csproj"))!,
+            DialogSourceTestSupport.FindHostSourceDirectory("FreeX.App.Host.csproj"),
             "Resources",
             "CommandIconsSvg");
 
@@ -308,7 +302,7 @@ public sealed class RibbonIconFactorySvgTests
     public void CommandIconAssets_OnlyUseSizeVariantsForPixelCrispAlignmentLines()
     {
         var iconDirectory = Path.Combine(
-            Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("FreeX.App.Host.csproj"))!,
+            DialogSourceTestSupport.FindHostSourceDirectory("FreeX.App.Host.csproj"),
             "Resources",
             "CommandIconsSvg");
 
@@ -338,9 +332,9 @@ public sealed class RibbonIconFactorySvgTests
 
         foreach (var fileName in allowedSizeSpecificFiles)
         {
-            var smallText = File.ReadAllText(Path.Combine(iconDirectory, fileName));
+            var smallText = DialogSourceTestSupport.ReadHostSourceFile("Resources", "CommandIconsSvg", fileName);
             var baseFileName = fileName.Replace("-small.svg", ".svg", StringComparison.OrdinalIgnoreCase);
-            var baseText = File.ReadAllText(Path.Combine(iconDirectory, baseFileName));
+            var baseText = DialogSourceTestSupport.ReadHostSourceFile("Resources", "CommandIconsSvg", baseFileName);
 
             smallText.Should().Contain("height=\"1\"");
             smallText.Should().NotContain("height=\"2\"");
@@ -353,7 +347,7 @@ public sealed class RibbonIconFactorySvgTests
     public void CommandIconAssets_DoNotContainEmptyShellSvgs()
     {
         var iconDirectory = Path.Combine(
-            Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("FreeX.App.Host.csproj"))!,
+            DialogSourceTestSupport.FindHostSourceDirectory("FreeX.App.Host.csproj"),
             "Resources",
             "CommandIconsSvg");
 
@@ -370,8 +364,7 @@ public sealed class RibbonIconFactorySvgTests
     [Fact]
     public void RibbonIconVariantGenerator_ProcessesBaseIconsDeterministicallyAndReportsActualCount()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "generate-ribbon-icon-variants.ps1");
-        var script = File.ReadAllText(scriptPath);
+        var script = WorkspaceFileLocator.ReadAllText("tools", "generate-ribbon-icon-variants.ps1");
 
         script.Should().Contain("Sort-Object Name");
         script.Should().Contain("$generatedCount = 0");
@@ -412,12 +405,7 @@ public sealed class RibbonIconFactorySvgTests
     [InlineData("shape-gradient.svg")]
     public void AcceptedIconReviewCommands_HaveDedicatedNonblankSvgArtwork(string fileName)
     {
-        var iconPath = DialogSourceTestSupport.FindHostSourceFile(
-            "Resources",
-            "CommandIconsSvg",
-            fileName);
-
-        var svg = File.ReadAllText(iconPath);
+        var svg = DialogSourceTestSupport.ReadHostSourceFile("Resources", "CommandIconsSvg", fileName);
 
         svg.Should().Contain("<svg");
         svg.Should().MatchRegex("<(path|rect|circle|ellipse|line)\\b");

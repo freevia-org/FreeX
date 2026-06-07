@@ -40,9 +40,6 @@ public static class FileSavePlanner
             return false;
 
         var savePath = currentFilePath.Trim();
-        if (ContainsInvalidPathCharacter(savePath))
-            return false;
-
         if (!TryGetExtension(savePath, out var extension))
             return false;
 
@@ -54,15 +51,15 @@ public static class FileSavePlanner
         return true;
     }
 
-    private static bool ContainsInvalidPathCharacter(string path) =>
+    private static bool ContainsInvalidPathCharacters(string path) =>
+        path.Contains('\0', StringComparison.Ordinal) ||
         path.IndexOfAny(Path.GetInvalidPathChars()) >= 0;
 
     private static bool TryGetExtension(string path, out string extension)
     {
         try
         {
-            if (path.Contains('\0', StringComparison.Ordinal) ||
-                path.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+            if (ContainsInvalidPathCharacters(path))
             {
                 extension = "";
                 return false;
@@ -94,8 +91,7 @@ public static class FileSavePlanner
         try
         {
             var trimmed = path.Trim();
-            if (trimmed.Contains('\0', StringComparison.Ordinal) ||
-                trimmed.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+            if (ContainsInvalidPathCharacters(trimmed))
             {
                 return false;
             }

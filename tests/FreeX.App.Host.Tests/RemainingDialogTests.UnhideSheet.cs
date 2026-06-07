@@ -96,10 +96,7 @@ public sealed partial class RemainingDialogTests
             dialog.Dispatcher.BeginInvoke(() =>
             {
                 sheetBox.SelectedItem = "Hidden 2";
-                var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
-                {
-                    RoutedEvent = Control.MouseDoubleClickEvent
-                };
+                var doubleClick = DialogSourceTestSupport.CreateMouseDoubleClickEvent();
                 sheetBox.RaiseEvent(doubleClick);
                 doubleClick.Handled.Should().BeTrue();
 
@@ -124,10 +121,7 @@ public sealed partial class RemainingDialogTests
             var sheetBox = GetField<ListBox>(dialog, "_sheetBox");
             sheetBox.SelectedItem = null;
 
-            var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
-            {
-                RoutedEvent = Control.MouseDoubleClickEvent
-            };
+            var doubleClick = DialogSourceTestSupport.CreateMouseDoubleClickEvent();
 
             sheetBox.RaiseEvent(doubleClick);
 

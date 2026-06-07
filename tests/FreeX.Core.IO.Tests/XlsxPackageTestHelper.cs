@@ -15,6 +15,11 @@ internal static class XlsxPackageTestHelper
         var sheet = workbook.AddSheet("Sheet1");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
 
+        return SaveWorkbook(workbook);
+    }
+
+    public static MemoryStream SaveWorkbook(Workbook workbook)
+    {
         var package = new MemoryStream();
         new XlsxFileAdapter().Save(workbook, package);
         package.Position = 0;
@@ -35,8 +40,7 @@ internal static class XlsxPackageTestHelper
     {
         package.Position = 0;
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        using var reader = new StreamReader(archive.GetEntry(path)!.Open());
-        return XDocument.Load(reader);
+        return XlsxPackageTestFixtures.LoadPackageXml(archive, path, path);
     }
 
     public static void PatchWorksheetXml(MemoryStream package, Action<XDocument> patchDocument) =>
@@ -48,9 +52,7 @@ internal static class XlsxPackageTestHelper
         using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
         {
             var entry = archive.GetEntry(path)!;
-            XDocument document;
-            using (var reader = new StreamReader(entry.Open()))
-                document = XDocument.Load(reader);
+            var document = XlsxPackageTestFixtures.LoadPackageXml(entry);
 
             patchDocument(document);
 
