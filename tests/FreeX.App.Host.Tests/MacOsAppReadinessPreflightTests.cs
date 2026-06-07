@@ -35,6 +35,9 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_new_sheet_menu_item=true");
         script.Should().Contain("native_rename_sheet_menu_item=true");
         script.Should().Contain("native_duplicate_sheet_menu_item=true");
+        script.Should().Contain("native_tab_color_menu_item=true");
+        script.Should().Contain("native_tab_color_clear_item=true");
+        script.Should().Contain("native_tab_color_swatch_count=69");
         script.Should().Contain("native_delete_sheet_menu_item=true");
         script.Should().Contain("HasNativeNewWorkbookMenuItem &&");
         script.Should().Contain("HasNativeOpenRecentMenuItem &&");
@@ -42,6 +45,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("HasNativeSelectAllMenuItem &&");
         script.Should().Contain("HasNativeCloseWorkbookMenuItem &&");
         script.Should().Contain("HasNativeRenameSheetMenuItem &&");
+        script.Should().Contain("HasNativeTabColorMenuItem &&");
         script.Should().Contain("HasNativeDeleteSheetMenuItem &&");
         script.Should().Contain("native_help_menu=true");
         script.Should().Contain("native_help_online_menu_item=true");
@@ -116,6 +120,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("AutomationProperties.SetAutomationId(nameBox, `\"RenameSheetNameBox`\");");
         script.Should().Contain("var validationError = _session.Workbook.ValidateSheetName(proposedName, _session.ActiveSheet.Id);");
         script.Should().Contain("var result = _session.DuplicateActiveSheet();");
+        script.Should().Contain("var result = _session.SetActiveSheetTabColor(color);");
         script.Should().Contain("var result = _session.DeleteActiveSheet();");
         script.Should().Contain("_showGridlinesMenuItem.Header = `\"Gridlines`\";");
         script.Should().Contain("_showHeadingsMenuItem.Header = `\"Headings`\";");
@@ -148,6 +153,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("public int ZoomPercent => ActiveSheet.ZoomPercent;");
         script.Should().Contain("public WorkbookCellEditResult SetZoomPercent(int zoomPercent)");
         script.Should().Contain("new SetWorksheetZoomCommand(ActiveSheet.Id, zoomPercent)");
+        script.Should().Contain("public WorkbookCellEditResult SetActiveSheetTabColor(CellColor? color)");
+        script.Should().Contain("new SetSheetTabColorCommand(ActiveSheet.Id, color)");
         script.Should().Contain("public WorkbookCellEditResult AddSheet()");
         script.Should().Contain("public WorkbookCellEditResult RenameActiveSheet(string? name)");
         script.Should().Contain("new RenameSheetCommand(ActiveSheet.Id, newName)");
@@ -443,6 +450,9 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_duplicate_sheet_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_move_sheet_left_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_move_sheet_right_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_tab_color_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_tab_color_clear_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_tab_color_swatch_count=69" "$artifact_root/launch.txt"
                       grep -q "native_hide_sheet_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_unhide_sheet_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_delete_sheet_menu_item=true" "$artifact_root/launch.txt"
@@ -672,6 +682,15 @@ public sealed class MacOsAppReadinessPreflightTests
                     _duplicateSheetMenuItem.Click += (_, _) => DuplicateActiveSheet();
                     _moveSheetLeftMenuItem.Click += (_, _) => MoveActiveSheetLeft();
                     _moveSheetRightMenuItem.Click += (_, _) => MoveActiveSheetRight();
+                    _tabColorMenuItem.Header = "Tab Color";
+                    _tabColorMenuItem.Menu = CreateNativeSheetTabColorMenu();
+                    sheetMenu.Items.Add(_tabColorMenuItem);
+                    _tabColorMenuItem.IsEnabled = isIdle;
+                    tab.TabColor is { } tabColor ? Brush(tabColor) : Brushes.Transparent;
+                    var clearColorItem = new NativeMenuItem { Header = "No Color" };
+                    clearColorItem.Click += (_, _) => ApplyActiveSheetTabColor(null);
+                    ApplyActiveSheetTabColor(swatch.Color);
+                    var result = _session.SetActiveSheetTabColor(color);
                     _hideSheetMenuItem.Click += (_, _) => HideActiveSheet();
                     _unhideSheetMenuItem.Click += async (_, _) => await UnhideSheetAsync();
                     _deleteSheetMenuItem.Click += (_, _) => DeleteActiveSheet();
@@ -786,6 +805,9 @@ public sealed class MacOsAppReadinessPreflightTests
                 private async Task PasteSpecialExternalTextFromClipboardAsync(string label) => await Task.CompletedTask;
                 private async Task UnhideSheetAsync() => await Task.CompletedTask;
                 private async Task<WorkbookHiddenSheet?> ShowUnhideSheetDialogAsync(IReadOnlyList<WorkbookHiddenSheet> hiddenSheets) => await Task.FromResult<WorkbookHiddenSheet?>(null);
+                private NativeMenu CreateNativeSheetTabColorMenu() => new();
+                private NativeMenuItem CreateNativeSheetTabColorSwatchMenuItem(CellColorSwatch swatch) => new();
+                private void ApplyActiveSheetTabColor(CellColor? color) { }
                 private void ToggleShowGridlines() { }
                 private void ToggleShowHeadings() { }
                 private void ZoomIn() => ApplyZoomPercent(_session.ZoomPercent + ZoomStepPercent, "Zoom In failed.");
@@ -837,6 +859,9 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativeRenameSheetMenuItem &&
                     HasNativeMoveSheetLeftMenuItem &&
                     HasNativeMoveSheetRightMenuItem &&
+                    HasNativeTabColorMenuItem &&
+                    HasNativeClearTabColorMenuItem &&
+                    NativeTabColorSwatchCount == CellColorPalettePlanner.BuildDefaultSwatches().Count &&
                     HasNativeHideSheetMenuItem &&
                     HasNativeUnhideSheetMenuItem &&
                     HasNativeDeleteSheetMenuItem &&
@@ -881,6 +906,9 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativeRenameSheetMenuItem { get; }
                 private bool HasNativeMoveSheetLeftMenuItem { get; }
                 private bool HasNativeMoveSheetRightMenuItem { get; }
+                private bool HasNativeTabColorMenuItem { get; }
+                private bool HasNativeClearTabColorMenuItem { get; }
+                private int NativeTabColorSwatchCount { get; }
                 private bool HasNativeHideSheetMenuItem { get; }
                 private bool HasNativeUnhideSheetMenuItem { get; }
                 private bool HasNativeDeleteSheetMenuItem { get; }
@@ -912,7 +940,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativePasteSpecialPictureMenuItem { get; }
                 private bool HasNativePasteSpecialLinkedPictureMenuItem { get; }
                 public int NativeCellStylesPresetCount { get; }
-                public string Report => "native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+                public string Report => "native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
             }
             """);
 
@@ -985,6 +1013,8 @@ public sealed class MacOsAppReadinessPreflightTests
                 /*
                 public IReadOnlyList<WorkbookHiddenSheet> HiddenSheets =>
                 public bool CanHideActiveSheet =>
+                public WorkbookCellEditResult SetActiveSheetTabColor(CellColor? color)
+                new SetSheetTabColorCommand(ActiveSheet.Id, color)
                 public WorkbookCellEditResult HideActiveSheet()
                 new SetSheetHiddenCommand(sheetId, hidden: true)
                 public WorkbookCellEditResult UnhideSheet(SheetId sheetId)

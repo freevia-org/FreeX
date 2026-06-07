@@ -139,6 +139,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _duplicateSheetMenuItem = new();
     private readonly NativeMenuItem _moveSheetLeftMenuItem = new();
     private readonly NativeMenuItem _moveSheetRightMenuItem = new();
+    private readonly NativeMenuItem _tabColorMenuItem = new();
     private readonly NativeMenuItem _hideSheetMenuItem = new();
     private readonly NativeMenuItem _unhideSheetMenuItem = new();
     private readonly NativeMenuItem _deleteSheetMenuItem = new();
@@ -376,6 +377,9 @@ public sealed class MainWindow : Window
 
         _moveSheetRightMenuItem.Header = "Move Sheet Right";
         _moveSheetRightMenuItem.Click += (_, _) => MoveActiveSheetRight();
+
+        _tabColorMenuItem.Header = "Tab Color";
+        _tabColorMenuItem.Menu = CreateNativeSheetTabColorMenu();
 
         _hideSheetMenuItem.Header = "Hide Sheet";
         _hideSheetMenuItem.Click += (_, _) => HideActiveSheet();
@@ -662,6 +666,7 @@ public sealed class MainWindow : Window
         sheetMenu.Items.Add(_duplicateSheetMenuItem);
         sheetMenu.Items.Add(_moveSheetLeftMenuItem);
         sheetMenu.Items.Add(_moveSheetRightMenuItem);
+        sheetMenu.Items.Add(_tabColorMenuItem);
         sheetMenu.Items.Add(new NativeMenuItemSeparator());
         sheetMenu.Items.Add(_hideSheetMenuItem);
         sheetMenu.Items.Add(_unhideSheetMenuItem);
@@ -1162,6 +1167,7 @@ public sealed class MainWindow : Window
             isIdle &&
             activeSheetTabIndex >= 0 &&
             activeSheetTabIndex < _session.SheetTabs.Count - 1;
+        _tabColorMenuItem.IsEnabled = isIdle;
         _hideSheetMenuItem.IsEnabled = isIdle && _session.CanHideActiveSheet;
         _unhideSheetMenuItem.IsEnabled = isIdle && _session.HiddenSheets.Count > 0;
         _deleteSheetMenuItem.IsEnabled = isIdle;
@@ -1241,6 +1247,35 @@ public sealed class MainWindow : Window
 
         foreach (var tab in _session.SheetTabs)
         {
+            var content = new AvaloniaGrid
+            {
+                RowDefinitions =
+                {
+                    new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
+                    new RowDefinition { Height = new GridLength(3) },
+                },
+            };
+            var label = new TextBlock
+            {
+                Text = tab.Name,
+                FontSize = 12,
+                FontWeight = tab.IsActive ? FontWeight.SemiBold : FontWeight.Normal,
+                Foreground = tab.IsActive ? SelectionHeaderForeground : HeaderForeground,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                TextAlignment = TextAlignment.Center,
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            };
+            var tabColorRule = new Border
+            {
+                Background = tab.TabColor is { } tabColor ? Brush(tabColor) : Brushes.Transparent,
+                IsHitTestVisible = false,
+            };
+            AvaloniaGrid.SetRow(label, 0);
+            AvaloniaGrid.SetRow(tabColorRule, 1);
+            content.Children.Add(label);
+            content.Children.Add(tabColorRule);
+
             var button = new Button
             {
                 MinWidth = 72,
@@ -1250,15 +1285,7 @@ public sealed class MainWindow : Window
                 Background = tab.IsActive ? SelectionHeaderBackground : Brushes.White,
                 BorderBrush = tab.IsActive ? SelectionBorder : ToolbarBorder,
                 BorderThickness = new Thickness(1),
-                Content = new TextBlock
-                {
-                    Text = tab.Name,
-                    FontSize = 12,
-                    FontWeight = tab.IsActive ? FontWeight.SemiBold : FontWeight.Normal,
-                    Foreground = tab.IsActive ? SelectionHeaderForeground : HeaderForeground,
-                    TextTrimming = TextTrimming.CharacterEllipsis,
-                    TextAlignment = TextAlignment.Center,
-                },
+                Content = content,
             };
             button.Click += (_, _) => SelectSheet(tab.Id);
             panel.Children.Add(button);
@@ -2199,6 +2226,26 @@ public sealed class MainWindow : Window
         return menuItem;
     }
 
+    private NativeMenu CreateNativeSheetTabColorMenu()
+    {
+        var menu = new NativeMenu();
+        var clearColorItem = new NativeMenuItem { Header = "No Color" };
+        clearColorItem.Click += (_, _) => ApplyActiveSheetTabColor(null);
+        menu.Items.Add(clearColorItem);
+
+        foreach (var swatch in CellColorPalettePlanner.BuildDefaultSwatches())
+            menu.Items.Add(CreateNativeSheetTabColorSwatchMenuItem(swatch));
+
+        return menu;
+    }
+
+    private NativeMenuItem CreateNativeSheetTabColorSwatchMenuItem(CellColorSwatch swatch)
+    {
+        var menuItem = new NativeMenuItem { Header = swatch.Hex };
+        menuItem.Click += (_, _) => ApplyActiveSheetTabColor(swatch.Color);
+        return menuItem;
+    }
+
     private void ApplySelectedRangePaletteColor(CellColor color, ColorPaletteTarget target)
     {
         switch (target)
@@ -2212,6 +2259,28 @@ public sealed class MainWindow : Window
             default:
                 throw new ArgumentOutOfRangeException(nameof(target), target, null);
         }
+    }
+
+    private void ApplyActiveSheetTabColor(CellColor? color)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        ClearSelectedDrawingObject();
+        var sheetName = _session.ActiveSheet.Name;
+        var result = _session.SetActiveSheetTabColor(color);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Tab Color failed.");
+            return;
+        }
+
+        RefreshShell(color is null
+            ? $"Cleared tab color for {sheetName}"
+            : $"Colored tab {sheetName}");
     }
 
     private static Border CreateColorSwatchIcon(CellColor color) =>
@@ -4072,6 +4141,7 @@ public sealed class MainWindow : Window
         var nativeOpenRecentItemCount = CountNativeOpenRecentItems(_openRecentMenuItem.Menu);
         var nativeFillColorSwatchCount = CountNativeColorPaletteSwatches(_fillColorMenuItem.Menu);
         var nativeFontColorSwatchCount = CountNativeColorPaletteSwatches(_fontColorMenuItem.Menu);
+        var nativeTabColorSwatchCount = CountNativeColorPaletteSwatches(_tabColorMenuItem.Menu);
 
         return new MacOsLaunchSmokeSnapshot(
             WindowShown: IsVisible,
@@ -4102,6 +4172,9 @@ public sealed class MainWindow : Window
             HasNativeDuplicateSheetMenuItem: HasNativeMenuItem(_duplicateSheetMenuItem, "Duplicate Sheet", requireGesture: false),
             HasNativeMoveSheetLeftMenuItem: HasNativeMenuItem(_moveSheetLeftMenuItem, "Move Sheet Left", requireGesture: false),
             HasNativeMoveSheetRightMenuItem: HasNativeMenuItem(_moveSheetRightMenuItem, "Move Sheet Right", requireGesture: false),
+            HasNativeTabColorMenuItem: HasNativeMenuItem(_tabColorMenuItem, "Tab Color", requireGesture: false),
+            HasNativeClearTabColorMenuItem: HasNativeSubmenuItem(_tabColorMenuItem.Menu, "No Color"),
+            NativeTabColorSwatchCount: nativeTabColorSwatchCount,
             HasNativeHideSheetMenuItem: HasNativeMenuItem(_hideSheetMenuItem, "Hide Sheet", requireGesture: false),
             HasNativeUnhideSheetMenuItem: HasNativeMenuItem(_unhideSheetMenuItem, "Unhide Sheet...", requireGesture: false),
             HasNativeDeleteSheetMenuItem: HasNativeMenuItem(_deleteSheetMenuItem, "Delete Sheet", requireGesture: false),

@@ -42,7 +42,9 @@ public sealed class WorkbookSheetSelectionServiceTests
     {
         var workbook = new Workbook();
         var summary = workbook.AddSheet("Summary");
+        summary.TabColor = new CellColor(0, 112, 192);
         var details = workbook.AddSheet("Details");
+        details.TabColor = new CellColor(0, 176, 80);
         var hidden = workbook.AddSheet("Hidden");
         hidden.IsVeryHidden = true;
 
@@ -52,8 +54,8 @@ public sealed class WorkbookSheetSelectionServiceTests
         selection.Index.Should().Be(1);
         workbook.ActiveSheetIndex.Should().Be(1);
         selection.Tabs.Should().Equal(
-            new WorkbookSheetTab(summary.Id, "Summary", IsActive: false),
-            new WorkbookSheetTab(details.Id, "Details", IsActive: true));
+            new WorkbookSheetTab(summary.Id, "Summary", IsActive: false, summary.TabColor),
+            new WorkbookSheetTab(details.Id, "Details", IsActive: true, details.TabColor));
     }
 
     [Fact]

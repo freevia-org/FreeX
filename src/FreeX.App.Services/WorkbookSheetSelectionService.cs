@@ -5,7 +5,8 @@ namespace FreeX.App.Services;
 public sealed record WorkbookSheetTab(
     SheetId Id,
     string Name,
-    bool IsActive);
+    bool IsActive,
+    CellColor? TabColor = null);
 
 public sealed record WorkbookHiddenSheet(
     SheetId Id,
@@ -56,7 +57,7 @@ public sealed class WorkbookSheetSelectionService
             .Select(index =>
             {
                 var sheet = workbook.Sheets[index];
-                return new WorkbookSheetTab(sheet.Id, sheet.Name, sheet.Id == activeSheet.Id);
+                return new WorkbookSheetTab(sheet.Id, sheet.Name, sheet.Id == activeSheet.Id, sheet.TabColor);
             })
             .ToList();
 

@@ -316,6 +316,27 @@ public sealed class WorkbookSession
     public WorkbookCellEditResult MoveActiveSheetRight() =>
         MoveActiveSheetBy(offset: 1);
 
+    public WorkbookCellEditResult SetActiveSheetTabColor(CellColor? color)
+    {
+        if (ActiveSheet.TabColor == color)
+        {
+            return new WorkbookCellEditResult(
+                true,
+                null,
+                [],
+                RecalcReport: null);
+        }
+
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new SetSheetTabColorCommand(ActiveSheet.Id, color));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
+        return result;
+    }
+
     public WorkbookCellEditResult SetShowFormulas(bool showFormulas)
     {
         if (ActiveSheet.ShowFormulas == showFormulas)

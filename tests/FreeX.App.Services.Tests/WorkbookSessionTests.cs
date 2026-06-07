@@ -3398,8 +3398,8 @@ public sealed class WorkbookSessionTests
         session.ActiveSheet.Should().BeSameAs(copy);
         workbook.ActiveSheetIndex.Should().Be(1);
         session.SheetTabs.Should().Equal(
-            new WorkbookSheetTab(source.Id, "Sheet1", IsActive: false),
-            new WorkbookSheetTab(copy.Id, "Sheet1 (2)", IsActive: true));
+            new WorkbookSheetTab(source.Id, "Sheet1", IsActive: false, source.TabColor),
+            new WorkbookSheetTab(copy.Id, "Sheet1 (2)", IsActive: true, copy.TabColor));
 
         var undo = session.UndoLastEdit();
 
@@ -3584,6 +3584,110 @@ public sealed class WorkbookSessionTests
         left.ErrorMessage.Should().Contain("protected");
         workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Sheet1", "Details");
         session.ActiveSheet.Should().BeSameAs(details);
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SetActiveSheetTabColor_SetsColorPreservesSelectionAndUndoRedo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var selectedCell = new CellAddress(sheet.Id, 3, 2);
+        sheet.SetCell(selectedCell, new TextValue("selected"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(selectedCell);
+        var tabColor = new CellColor(0, 176, 80);
+
+        var result = session.SetActiveSheetTabColor(tabColor);
+
+        result.Success.Should().BeTrue();
+        sheet.TabColor.Should().Be(tabColor);
+        session.SheetTabs.Should().ContainSingle()
+            .Which.Should().Be(new WorkbookSheetTab(sheet.Id, "Sheet1", IsActive: true, tabColor));
+        session.ActiveCell.Should().Be(selectedCell);
+        session.SelectedRange.Should().Be(new GridRange(selectedCell, selectedCell));
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.TabColor.Should().BeNull();
+        session.SheetTabs.Should().ContainSingle()
+            .Which.TabColor.Should().BeNull();
+        session.ActiveCell.Should().Be(selectedCell);
+        session.CanRedo.Should().BeTrue();
+
+        var redo = session.RedoLastEdit();
+
+        redo.Success.Should().BeTrue();
+        sheet.TabColor.Should().Be(tabColor);
+        session.SheetTabs.Should().ContainSingle()
+            .Which.TabColor.Should().Be(tabColor);
+        session.ActiveCell.Should().Be(selectedCell);
+    }
+
+    [Fact]
+    public void SetActiveSheetTabColor_ClearsColorAndNoOpsSameStateWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var originalColor = new CellColor(255, 0, 0);
+        sheet.TabColor = originalColor;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var noOp = session.SetActiveSheetTabColor(originalColor);
+
+        noOp.Success.Should().BeTrue();
+        sheet.TabColor.Should().Be(originalColor);
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+
+        var clear = session.SetActiveSheetTabColor(null);
+
+        clear.Success.Should().BeTrue();
+        sheet.TabColor.Should().BeNull();
+        session.SheetTabs.Should().ContainSingle()
+            .Which.TabColor.Should().BeNull();
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.TabColor.Should().Be(originalColor);
+        session.SheetTabs.Should().ContainSingle()
+            .Which.TabColor.Should().Be(originalColor);
+    }
+
+    [Fact]
+    public void SetActiveSheetTabColor_RejectsProtectedWorkbookWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        workbook.IsStructureProtected = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var result = session.SetActiveSheetTabColor(new CellColor(0, 112, 192));
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("protected");
+        sheet.TabColor.Should().BeNull();
+        session.SheetTabs.Should().ContainSingle()
+            .Which.TabColor.Should().BeNull();
         session.IsDirty.Should().BeFalse();
         session.CanUndo.Should().BeFalse();
     }

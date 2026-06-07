@@ -86,6 +86,9 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeDuplicateSheetMenuItem,
     bool HasNativeMoveSheetLeftMenuItem,
     bool HasNativeMoveSheetRightMenuItem,
+    bool HasNativeTabColorMenuItem,
+    bool HasNativeClearTabColorMenuItem,
+    int NativeTabColorSwatchCount,
     bool HasNativeHideSheetMenuItem,
     bool HasNativeUnhideSheetMenuItem,
     bool HasNativeDeleteSheetMenuItem,
@@ -189,6 +192,9 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeDuplicateSheetMenuItem &&
         HasNativeMoveSheetLeftMenuItem &&
         HasNativeMoveSheetRightMenuItem &&
+        HasNativeTabColorMenuItem &&
+        HasNativeClearTabColorMenuItem &&
+        NativeTabColorSwatchCount == CellColorPalettePlanner.BuildDefaultSwatches().Count &&
         HasNativeHideSheetMenuItem &&
         HasNativeUnhideSheetMenuItem &&
         HasNativeDeleteSheetMenuItem &&
@@ -340,6 +346,9 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_duplicate_sheet_menu_item={FormatBool(snapshot.HasNativeDuplicateSheetMenuItem)}",
                 $"native_move_sheet_left_menu_item={FormatBool(snapshot.HasNativeMoveSheetLeftMenuItem)}",
                 $"native_move_sheet_right_menu_item={FormatBool(snapshot.HasNativeMoveSheetRightMenuItem)}",
+                $"native_tab_color_menu_item={FormatBool(snapshot.HasNativeTabColorMenuItem)}",
+                $"native_tab_color_clear_item={FormatBool(snapshot.HasNativeClearTabColorMenuItem)}",
+                $"native_tab_color_swatch_count={snapshot.NativeTabColorSwatchCount}",
                 $"native_hide_sheet_menu_item={FormatBool(snapshot.HasNativeHideSheetMenuItem)}",
                 $"native_unhide_sheet_menu_item={FormatBool(snapshot.HasNativeUnhideSheetMenuItem)}",
                 $"native_delete_sheet_menu_item={FormatBool(snapshot.HasNativeDeleteSheetMenuItem)}",
