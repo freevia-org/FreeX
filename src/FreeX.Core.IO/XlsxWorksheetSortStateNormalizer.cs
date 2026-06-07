@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
 
@@ -18,9 +17,9 @@ internal static class XlsxWorksheetSortStateNormalizer
         var changed = false;
         changed |= RemoveUnexpectedChildren(sortState, SortStateChildren);
         changed |= NormalizeExtensionLists(sortState);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sortState, "columnSort", NormalizeBoolean);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sortState, "caseSensitive", NormalizeBoolean);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sortState, "sortMethod", value => NormalizeToken(value, ValidSortMethods));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sortState, "columnSort", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sortState, "caseSensitive", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sortState, "sortMethod", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, ValidSortMethods));
 
         foreach (var condition in sortState.Elements(WorksheetNs + "sortCondition").ToList())
         {
@@ -31,10 +30,10 @@ internal static class XlsxWorksheetSortStateNormalizer
                 continue;
             }
 
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(condition, "descending", NormalizeBoolean);
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(condition, "sortBy", value => NormalizeToken(value, ValidSortByValues));
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(condition, "dxfId", NormalizeUnsignedIntOrNull);
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(condition, "iconId", NormalizeUnsignedIntOrNull);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(condition, "descending", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(condition, "sortBy", value => XlsxXmlNormalizationHelpers.NormalizeToken(value, ValidSortByValues));
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(condition, "dxfId", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(condition, "iconId", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
             changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(condition);
         }
 
@@ -123,31 +122,6 @@ internal static class XlsxWorksheetSortStateNormalizer
         child.Name == WorksheetNs + "sortCondition" ? 0 :
         child.Name == WorksheetNs + "extLst" ? 100 :
         90;
-
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed switch
-        {
-            "0" or "1" => trimmed,
-            "true" or "false" => trimmed,
-            _ => null
-        };
-    }
-
-    private static string? NormalizeUnsignedIntOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed.ToString(CultureInfo.InvariantCulture)
-            : null;
-    }
-
-    private static string? NormalizeToken(string? value, IReadOnlySet<string> allowedValues)
-    {
-        var trimmed = value?.Trim();
-        return trimmed is not null && allowedValues.Contains(trimmed) ? trimmed : null;
-    }
 
     private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
     {
