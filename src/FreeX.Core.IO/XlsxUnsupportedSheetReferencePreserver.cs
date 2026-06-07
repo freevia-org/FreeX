@@ -46,7 +46,7 @@ internal static class XlsxUnsupportedSheetReferencePreserver
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var usedSheetIds = targetSheets
             .Elements(workbookNs + "sheet")
-            .Select(sheet => ReadIntAttribute(sheet, "sheetId"))
+            .Select(sheet => XlsxXmlAttributeReader.ReadIntAttribute(sheet, "sheetId"))
             .Where(id => id is > 0)
             .Select(id => id!.Value)
             .ToHashSet();
@@ -101,14 +101,6 @@ internal static class XlsxUnsupportedSheetReferencePreserver
 
         XlsxPackageXmlEditor.ReplaceXml(targetArchive, "xl/workbook.xml", targetWorkbookXml);
         XlsxPackageXmlEditor.ReplaceXml(targetArchive, "xl/_rels/workbook.xml.rels", targetWorkbookRelsXml);
-    }
-
-    private static int? ReadIntAttribute(XElement element, string name)
-    {
-        var value = element.Attribute(name)?.Value;
-        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed
-            : null;
     }
 
     private static bool IsWorksheetRelationshipType(string relationshipType) =>
