@@ -105,6 +105,8 @@ shasum -a 256 -c freex-<runtime>-macos-app.zip.sha256
 
 The expected result is `<zip-name>: OK`.
 
+Before public-preview promotion, complete the macOS/Avalonia accessibility evidence requirement in [planning/macos-accessibility-evidence.md](../planning/macos-accessibility-evidence.md). Hosted checks cover packaging, signing, notarization, LaunchServices, menu, dialog, and workbook smoke prerequisites; human macOS validation must still record keyboard-only and VoiceOver coverage plus reviewed known accessibility issues.
+
 ## Public Distribution Blockers
 
 Do not present the macOS artifact as a public release until all of these are true:
@@ -115,6 +117,7 @@ Do not present the macOS artifact as a public release until all of these are tru
 - A release-channel path exists; the current workflow uploads Actions artifacts only and has `contents: read`.
 - The tester instructions no longer require internal-only Control-click or right-click open guidance for notarization failures.
 - Human macOS validation covers Finder open, Gatekeeper launch, checksum verification, basic workbook open/save, and any accessibility checks required for the candidate.
+- The macOS/Avalonia accessibility evidence requirement from [planning/macos-accessibility-evidence.md](../planning/macos-accessibility-evidence.md) is complete, including human keyboard-only and VoiceOver validation with known accessibility issues reviewed.
 
 ## Reference Links
 
