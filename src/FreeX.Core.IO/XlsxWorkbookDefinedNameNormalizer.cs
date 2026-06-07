@@ -58,7 +58,7 @@ internal static class XlsxWorkbookDefinedNameNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(definedNames, NoAttributes);
-        changed |= RemoveUnexpectedChildElements(definedNames, WorkbookNs + "definedName");
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(definedNames, WorkbookNs + "definedName");
 
         foreach (var definedName in definedNames.Elements(WorkbookNs + "definedName").ToList())
         {
@@ -94,18 +94,6 @@ internal static class XlsxWorkbookDefinedNameNormalizer
 
     private static bool ShouldRemoveDefinedNameElement(XElement definedName) =>
         string.IsNullOrWhiteSpace(definedName.Attribute("name")?.Value);
-
-    private static bool RemoveUnexpectedChildElements(XElement element, XName allowedChildName)
-    {
-        var changed = false;
-        foreach (var child in element.Elements().Where(child => child.Name != allowedChildName).ToList())
-        {
-            child.Remove();
-            changed = true;
-        }
-
-        return changed;
-    }
 
     private static string? NormalizeOptionalText(string? value)
     {

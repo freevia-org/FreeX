@@ -50,7 +50,7 @@ internal static class XlsxWorkbookExternalReferencesNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(externalReferences, Array.Empty<XName>());
-        changed |= RemoveUnexpectedChildElements(externalReferences, WorkbookNs + "externalReference");
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(externalReferences, WorkbookNs + "externalReference");
 
         foreach (var externalReference in externalReferences.Elements(WorkbookNs + "externalReference").ToList())
         {
@@ -72,18 +72,6 @@ internal static class XlsxWorkbookExternalReferencesNormalizer
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(externalReference, RelationshipNs + "id");
         changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(externalReference);
         changed |= NormalizeRelationshipId(externalReference);
-        return changed;
-    }
-
-    private static bool RemoveUnexpectedChildElements(XElement element, XName allowedChildName)
-    {
-        var changed = false;
-        foreach (var child in element.Elements().Where(child => child.Name != allowedChildName).ToList())
-        {
-            child.Remove();
-            changed = true;
-        }
-
         return changed;
     }
 
