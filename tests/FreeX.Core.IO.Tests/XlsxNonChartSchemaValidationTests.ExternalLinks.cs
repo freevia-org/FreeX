@@ -107,6 +107,61 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         externalReference.Elements().Should().BeEmpty();
     }
 
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidExternalLinkSidecarForSchemaValidity()
+    {
+        using var source = CreateExternalLinkSourcePackage();
+        SetExternalLinkSidecarInvalidPayload(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertExternalLinkPackage(saved);
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var externalLink = ReadPackageRootElement(saved, "xl/externalLinks/externalLink1.xml");
+        externalLink.Attributes().Where(attribute => !attribute.IsNamespaceDeclaration).Should().BeEmpty();
+        externalLink.Element(workbookNs + "nativeExternalLinkChild").Should().BeNull();
+        externalLink.Elements(workbookNs + "externalBook").Should().ContainSingle();
+
+        var externalBook = externalLink.Element(workbookNs + "externalBook")!;
+        externalBook.Attribute(relNs + "id")!.Value.Should().Be("rIdFreeXExternalBook");
+        externalBook.Attribute("customExternalBookFlag").Should().BeNull();
+        externalBook.Element(workbookNs + "nativeExternalBookChild").Should().BeNull();
+
+        var sheetNames = externalBook.Element(workbookNs + "sheetNames")!;
+        sheetNames.Attributes().Where(attribute => !attribute.IsNamespaceDeclaration).Should().BeEmpty();
+        var sheetName = sheetNames.Elements(workbookNs + "sheetName").Should().ContainSingle().Subject;
+        sheetName.Attribute("val")!.Value.Should().Be("LinkedSheet");
+        sheetName.Attribute("customSheetNameFlag").Should().BeNull();
+        sheetName.Elements().Should().BeEmpty();
+
+        var definedName = externalBook
+            .Element(workbookNs + "definedNames")!
+            .Elements(workbookNs + "definedName")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        definedName.Attribute("name")!.Value.Should().Be("ExternalName");
+        definedName.Attribute("refersTo")!.Value.Should().Be("LinkedSheet!$A$1");
+        definedName.Attribute("sheetId")!.Value.Should().Be("0");
+        definedName.Attribute("customDefinedNameFlag").Should().BeNull();
+        definedName.Elements().Should().BeEmpty();
+    }
+
     private static MemoryStream CreateExternalLinkSourcePackage()
     {
         var workbook = new Workbook("ExternalLinkPatchSave");
@@ -268,5 +323,50 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         externalReferences.Add(new XElement(workbookNs + "externalReference", new XAttribute(relNs + "id", "rIdFreeXExternalLink")));
 
         ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+    }
+
+    private static void SetExternalLinkSidecarInvalidPayload(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+        var externalLinkXml = LoadPackageXml(archive, "xl/externalLinks/externalLink1.xml");
+        var externalLink = externalLinkXml.Root!;
+        externalLink.SetAttributeValue("customExternalLinkFlag", "removed");
+        externalLink.AddFirst(new XElement(workbookNs + "nativeExternalLinkChild"));
+
+        var externalBook = externalLink.Element(workbookNs + "externalBook")!;
+        externalBook.SetAttributeValue(relNs + "id", " rIdFreeXExternalBook ");
+        externalBook.SetAttributeValue("customExternalBookFlag", "removed");
+        externalBook.AddFirst(new XElement(workbookNs + "nativeExternalBookChild"));
+
+        var sheetNames = externalBook.Element(workbookNs + "sheetNames")!;
+        sheetNames.SetAttributeValue("count", "1");
+        sheetNames.Add(new XElement(workbookNs + "nativeSheetNamesChild"));
+        var sheetName = sheetNames.Element(workbookNs + "sheetName")!;
+        sheetName.SetAttributeValue("val", " LinkedSheet ");
+        sheetName.SetAttributeValue("customSheetNameFlag", "removed");
+        sheetName.Add(new XElement(workbookNs + "nativeSheetNameChild"));
+        sheetNames.Add(new XElement(workbookNs + "sheetName", new XAttribute("val", " ")));
+
+        externalBook.Add(new XElement(
+            workbookNs + "definedNames",
+            new XAttribute("count", "1"),
+            new XElement(
+                workbookNs + "definedName",
+                new XAttribute("name", " ExternalName "),
+                new XAttribute("refersTo", " LinkedSheet!$A$1 "),
+                new XAttribute("sheetId", " 0 "),
+                new XAttribute("customDefinedNameFlag", "removed"),
+                new XElement(workbookNs + "nativeDefinedNameChild")),
+            new XElement(workbookNs + "definedName", new XAttribute("name", " ")),
+            new XElement(workbookNs + "nativeDefinedNamesChild")));
+        externalLink.Add(new XElement(
+            workbookNs + "externalBook",
+            new XAttribute(relNs + "id", "rIdDuplicateExternalBook")));
+
+        ReplacePackageXml(archive, "xl/externalLinks/externalLink1.xml", externalLinkXml);
     }
 }

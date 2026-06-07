@@ -890,6 +890,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchStructuredTableAutoFilters(archive);
                 NormalizePatchStructuredTableSortStates(archive);
                 NormalizePatchStructuredTableMetadata(archive);
+                NormalizePatchExternalLinks(archive);
                 NormalizePatchWorksheetSortStates(archive);
                 NormalizePatchWorksheetDataConsolidation(archive);
                 if (SourceOfficeRevisionAttributes is { HasAny: true } officeRevisionAttributes)
@@ -1753,6 +1754,9 @@ public sealed partial class XlsxFileAdapter
 
         private static void NormalizePatchStructuredTableMetadata(ZipArchive archive)
             => XlsxStructuredTableSchemaNormalizer.NormalizePackage(archive);
+
+        private static void NormalizePatchExternalLinks(ZipArchive archive)
+            => XlsxExternalLinkSchemaNormalizer.NormalizePackage(archive);
 
         private static void NormalizePatchWorksheetDataConsolidation(ZipArchive archive)
         {

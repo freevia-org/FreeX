@@ -100,6 +100,7 @@ public sealed partial class XlsxFileAdapter
         XlsxThemeTypefaceNormalizer.NormalizePackage(generatedArchive);
         XlsxLegacyCommentFontNormalizer.NormalizePackage(generatedArchive);
         XlsxStructuredTableSchemaNormalizer.NormalizePackage(generatedArchive);
+        XlsxExternalLinkSchemaNormalizer.NormalizePackage(generatedArchive);
         XlsxWorksheetSingleXmlCellMapper.NormalizePackage(generatedArchive);
         return sourceParts;
     }
