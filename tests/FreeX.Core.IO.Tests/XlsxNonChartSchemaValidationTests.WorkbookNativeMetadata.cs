@@ -214,7 +214,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var webPublishing = workbookXml.Root!.Element(workbookNs + "webPublishing")!;
         webPublishing.SetAttributeValue("dpi", " 96 ");
         webPublishing.SetAttributeValue("codePage", " 65001 ");

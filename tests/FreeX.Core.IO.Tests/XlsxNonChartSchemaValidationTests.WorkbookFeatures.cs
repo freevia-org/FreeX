@@ -707,7 +707,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var fileVersion = workbookXml.Root!.Element(workbookNs + "fileVersion")!;
         fileVersion.SetAttributeValue("customVersionFlag", "removed");
         fileVersion.Add(new XElement(workbookNs + "nativeFileVersionChild"));
@@ -736,7 +736,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var fileSharing = workbookXml.Root!.Element(workbookNs + "fileSharing")!;
         fileSharing.SetAttributeValue("readOnlyRecommended", "maybe");
         fileSharing.SetAttributeValue("revisionsPassword", "removed");
@@ -767,7 +767,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var fileRecoveryPr = workbookXml.Root!.Element(workbookNs + "fileRecoveryPr")!;
         fileRecoveryPr.SetAttributeValue("autoRecover", "maybe");
         fileRecoveryPr.SetAttributeValue("crashSave", "maybe");
@@ -805,7 +805,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var functionGroups = workbookXml.Root!.Element(workbookNs + "functionGroups")!;
         functionGroups.SetAttributeValue("builtInGroupCount", "not-a-number");
         functionGroups.SetAttributeValue("customFunctionGroupsFlag", "removed");
@@ -852,7 +852,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var workbookPr = workbookXml.Root!.Element(workbookNs + "workbookPr")!;
         workbookPr.SetAttributeValue("date1904", "maybe");
         workbookPr.SetAttributeValue("showObjects", "invalid");
@@ -901,7 +901,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var protection = workbookXml.Root!.Element(workbookNs + "workbookProtection")!;
         protection.SetAttributeValue("lockStructure", "maybe");
         protection.SetAttributeValue("lockWindows", "maybe");
@@ -965,7 +965,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var calcPr = workbookXml.Root!.Element(workbookNs + "calcPr")!;
         calcPr.SetAttributeValue("calcId", "not-a-number");
         calcPr.SetAttributeValue("refMode", "invalid");
@@ -983,7 +983,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var definedNames = workbookXml.Root!.Element(workbookNs + "definedNames");
         if (definedNames is null)
         {
@@ -1039,7 +1039,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var bookViews = workbookXml.Root!
             .Element(workbookNs + "bookViews")!;
         bookViews.SetAttributeValue("customBookViewsFlag", "removed");
