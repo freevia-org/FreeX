@@ -10,13 +10,18 @@ internal static partial class XlsxChartXmlWriter
 
     private static XElement? ToPivotFormatsXml(ChartModel chart, XNamespace chartNs)
     {
-        if (string.IsNullOrWhiteSpace(chart.PivotFormatsXml))
+        return TryParseNativePivotFormatsXml(chart.PivotFormatsXml, chartNs + "pivotFmts");
+    }
+
+    private static XElement? TryParseNativePivotFormatsXml(string? xml, XName expectedName)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
             return null;
 
         try
         {
-            var element = XElement.Parse(chart.PivotFormatsXml);
-            return element.Name == chartNs + "pivotFmts"
+            var element = XElement.Parse(xml);
+            return element.Name == expectedName
                 ? element
                 : null;
         }
