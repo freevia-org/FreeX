@@ -1408,6 +1408,9 @@ public static partial class AccessibilityCheckerService
             case "FV":
                 kind = ConditionalFormulaScalarFunctionKind.Fv;
                 return true;
+            case "FVSCHEDULE":
+                kind = ConditionalFormulaScalarFunctionKind.FvSchedule;
+                return true;
             case "NPER":
                 kind = ConditionalFormulaScalarFunctionKind.Nper;
                 return true;
@@ -1437,6 +1440,12 @@ public static partial class AccessibilityCheckerService
                 return true;
             case "XIRR":
                 kind = ConditionalFormulaScalarFunctionKind.Xirr;
+                return true;
+            case "ACCRINT":
+                kind = ConditionalFormulaScalarFunctionKind.Accrint;
+                return true;
+            case "ACCRINTM":
+                kind = ConditionalFormulaScalarFunctionKind.Accrintm;
                 return true;
             case "DISC":
                 kind = ConditionalFormulaScalarFunctionKind.Disc;
@@ -1584,6 +1593,12 @@ public static partial class AccessibilityCheckerService
                 return true;
             case "DOLLAR":
                 kind = ConditionalFormulaScalarFunctionKind.Dollar;
+                return true;
+            case "DOLLARDE":
+                kind = ConditionalFormulaScalarFunctionKind.Dollarde;
+                return true;
+            case "DOLLARFR":
+                kind = ConditionalFormulaScalarFunctionKind.Dollarfr;
                 return true;
             case "LEN":
                 kind = ConditionalFormulaScalarFunctionKind.Len;
@@ -2088,6 +2103,9 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Days or
             ConditionalFormulaScalarFunctionKind.Effect or
             ConditionalFormulaScalarFunctionKind.Nominal or
+            ConditionalFormulaScalarFunctionKind.FvSchedule or
+            ConditionalFormulaScalarFunctionKind.Dollarde or
+            ConditionalFormulaScalarFunctionKind.Dollarfr or
             ConditionalFormulaScalarFunctionKind.Decimal => argumentCount == 2,
             ConditionalFormulaScalarFunctionKind.LeftB or
             ConditionalFormulaScalarFunctionKind.RightB => argumentCount is 1 or 2,
@@ -2151,6 +2169,8 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Mirr => argumentCount == 3,
             ConditionalFormulaScalarFunctionKind.Xnpv => argumentCount == 3,
             ConditionalFormulaScalarFunctionKind.Xirr => argumentCount is 2 or 3,
+            ConditionalFormulaScalarFunctionKind.Accrint => argumentCount is >= 6 and <= 8,
+            ConditionalFormulaScalarFunctionKind.Accrintm => argumentCount is >= 3 and <= 5,
             ConditionalFormulaScalarFunctionKind.Disc or
             ConditionalFormulaScalarFunctionKind.Intrate or
             ConditionalFormulaScalarFunctionKind.Received or
@@ -3030,6 +3050,7 @@ public static partial class AccessibilityCheckerService
         Pmt,
         Pv,
         Fv,
+        FvSchedule,
         Nper,
         Rate,
         Ipmt,
@@ -3040,6 +3061,8 @@ public static partial class AccessibilityCheckerService
         Mirr,
         Xnpv,
         Xirr,
+        Accrint,
+        Accrintm,
         Disc,
         Intrate,
         Received,
@@ -3089,6 +3112,8 @@ public static partial class AccessibilityCheckerService
         Text,
         Fixed,
         Dollar,
+        Dollarde,
+        Dollarfr,
         Len,
         LenB,
         Upper,
@@ -4062,6 +4087,11 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Xnpv:
                 case ConditionalFormulaScalarFunctionKind.Xirr:
                     return TryEvaluateFormulaFinancialCashFlowFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.FvSchedule:
+                case ConditionalFormulaScalarFunctionKind.Dollarde:
+                case ConditionalFormulaScalarFunctionKind.Dollarfr:
+                case ConditionalFormulaScalarFunctionKind.Accrint:
+                case ConditionalFormulaScalarFunctionKind.Accrintm:
                 case ConditionalFormulaScalarFunctionKind.Disc:
                 case ConditionalFormulaScalarFunctionKind.Intrate:
                 case ConditionalFormulaScalarFunctionKind.Received:
@@ -10642,8 +10672,20 @@ public static partial class AccessibilityCheckerService
             var arguments = new ScalarValue[function.Arguments.Count];
             for (var i = 0; i < function.Arguments.Count; i++)
             {
-                if (!TryResolveFormulaOperand(function.Arguments[i], rowOffset, colOffset, out var argument) ||
-                    argument is RangeValue)
+                var allowRangeArgument = function.Kind == ConditionalFormulaScalarFunctionKind.FvSchedule && i == 1;
+                ScalarValue argument;
+                if (function.Arguments[i].Kind == ConditionalFormulaOperandKind.ReferenceRange)
+                {
+                    if (!allowRangeArgument ||
+                        !TryMaterializeFormulaReferenceRange(function.Arguments[i], rowOffset, colOffset, out var range))
+                    {
+                        return false;
+                    }
+
+                    argument = range;
+                }
+                else if (!TryResolveFormulaOperand(function.Arguments[i], rowOffset, colOffset, out argument) ||
+                    argument is RangeValue && !allowRangeArgument)
                 {
                     return false;
                 }
@@ -10659,6 +10701,67 @@ public static partial class AccessibilityCheckerService
 
             switch (function.Kind)
             {
+                case ConditionalFormulaScalarFunctionKind.FvSchedule:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var fvSchedulePrincipal, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialFvScheduleScalar(fvSchedulePrincipal, arguments[1]);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Dollarde:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var dollardeDollar, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var dollardeFraction, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialDollardeScalar(dollardeDollar, dollardeFraction);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Dollarfr:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var dollarfrDollar, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var dollarfrFraction, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialDollarfrScalar(dollarfrDollar, dollarfrFraction);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Accrint:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var accrintIssue, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var accrintFirstInterest, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var accrintSettlement, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var accrintRate, out value) ||
+                        !TryGetFormulaFinancialOptionalNumber(arguments, 4, 1000d, out var accrintPar, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[5], out var accrintRawFrequency, out value) ||
+                        !TryGetFormulaFinancialOptionalBasis(arguments, 6, out var accrintBasis, out value) ||
+                        !TryGetFormulaFinancialOptionalBool(arguments, 7, defaultValue: true, out var accrintCalcMethod, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialAccrintScalar(
+                        accrintIssue,
+                        accrintFirstInterest,
+                        accrintSettlement,
+                        accrintRate,
+                        accrintPar,
+                        accrintRawFrequency,
+                        accrintBasis,
+                        accrintCalcMethod);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Accrintm:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var accrintmIssue, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var accrintmSettlement, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var accrintmRate, out value) ||
+                        !TryGetFormulaFinancialOptionalNumber(arguments, 3, 1000d, out var accrintmPar, out value) ||
+                        !TryGetFormulaFinancialOptionalBasis(arguments, 4, out var accrintmBasis, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialAccrintmScalar(accrintmIssue, accrintmSettlement, accrintmRate, accrintmPar, accrintmBasis);
+                    return true;
                 case ConditionalFormulaScalarFunctionKind.Disc:
                     if (!TryGetFormulaFinancialNumber(arguments[0], out var discSettlement, out value) ||
                         !TryGetFormulaFinancialNumber(arguments[1], out var discMaturity, out value) ||
@@ -11128,6 +11231,144 @@ public static partial class AccessibilityCheckerService
                     boolean = false;
                     return false;
             }
+        }
+
+        private static ScalarValue FormulaFinancialFvScheduleScalar(double principal, ScalarValue scheduleSource)
+        {
+            if (!double.IsFinite(principal))
+                return ErrorValue.Num;
+
+            var result = principal;
+            if (scheduleSource is RangeValue scheduleRange)
+            {
+                if (!TryCollectFormulaFinancialRangeNumbers(scheduleRange, out var rates, out var scheduleError))
+                    return scheduleError ?? ErrorValue.Value;
+
+                for (var i = 0; i < rates.Count; i++)
+                {
+                    if (!double.IsFinite(rates[i]))
+                        return ErrorValue.Num;
+
+                    result *= 1d + rates[i];
+                }
+
+                return FormulaFinancialNumberResult(result);
+            }
+
+            if (!TryGetFormulaFinancialNumber(scheduleSource, out var rate, out var rateError))
+                return rateError;
+
+            return double.IsFinite(rate)
+                ? FormulaFinancialNumberResult(result * (1d + rate))
+                : ErrorValue.Num;
+        }
+
+        private static ScalarValue FormulaFinancialDollardeScalar(double dollar, double rawFraction) =>
+            FormulaFinancialDollarFractionScalar(dollar, rawFraction, convertFractionToDecimal: true);
+
+        private static ScalarValue FormulaFinancialDollarfrScalar(double dollar, double rawFraction) =>
+            FormulaFinancialDollarFractionScalar(dollar, rawFraction, convertFractionToDecimal: false);
+
+        private static ScalarValue FormulaFinancialDollarFractionScalar(
+            double dollar,
+            double rawFraction,
+            bool convertFractionToDecimal)
+        {
+            if (!double.IsFinite(dollar) || !double.IsFinite(rawFraction))
+                return ErrorValue.Num;
+
+            if (rawFraction < 0d)
+                return ErrorValue.Num;
+
+            var fraction = Math.Truncate(rawFraction);
+            if (fraction == 0d)
+                return ErrorValue.DivByZero;
+
+            var integerPart = Math.Truncate(dollar);
+            var fractionalPart = dollar - integerPart;
+            var digits = (int)Math.Ceiling(Math.Log10(fraction));
+            if (digits < 1)
+                digits = 1;
+
+            var scale = Math.Pow(10d, digits);
+            var result = convertFractionToDecimal
+                ? integerPart + fractionalPart * scale / fraction
+                : integerPart + fractionalPart * fraction / scale;
+            return FormulaFinancialNumberResult(result);
+        }
+
+        private static ScalarValue FormulaFinancialAccrintScalar(
+            double issue,
+            double firstInterest,
+            double settlement,
+            double rate,
+            double par,
+            double rawFrequency,
+            int basis,
+            bool calcMethod)
+        {
+            if (!double.IsFinite(issue) ||
+                !double.IsFinite(firstInterest) ||
+                !double.IsFinite(settlement) ||
+                !double.IsFinite(rate) ||
+                !double.IsFinite(par) ||
+                !double.IsFinite(rawFrequency))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (rate <= 0d || par <= 0d || !TryGetFormulaFinancialCouponFrequency(rawFrequency, out _))
+                return ErrorValue.Num;
+
+            if (!TryGetFormulaFinancialDate(issue, out var issueDate) ||
+                !TryGetFormulaFinancialDate(firstInterest, out var firstInterestDate) ||
+                !TryGetFormulaFinancialDate(settlement, out var settlementDate) ||
+                issueDate >= settlementDate ||
+                firstInterestDate < issueDate)
+            {
+                return ErrorValue.Num;
+            }
+
+            var accrualStart = !calcMethod && settlementDate > firstInterestDate
+                ? firstInterestDate
+                : issueDate;
+            var dayCountFraction = FormulaFinancialDayCountFraction(accrualStart, settlementDate, basis);
+            if (!double.IsFinite(dayCountFraction) || dayCountFraction < 0d)
+                return ErrorValue.Num;
+
+            return FormulaFinancialNumberResult(par * rate * dayCountFraction);
+        }
+
+        private static ScalarValue FormulaFinancialAccrintmScalar(
+            double issue,
+            double settlement,
+            double rate,
+            double par,
+            int basis)
+        {
+            if (!double.IsFinite(issue) ||
+                !double.IsFinite(settlement) ||
+                !double.IsFinite(rate) ||
+                !double.IsFinite(par))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (rate <= 0d || par <= 0d)
+                return ErrorValue.Num;
+
+            if (!TryGetFormulaFinancialDate(issue, out var issueDate) ||
+                !TryGetFormulaFinancialDate(settlement, out var settlementDate) ||
+                issueDate >= settlementDate)
+            {
+                return ErrorValue.Num;
+            }
+
+            var dayCountFraction = FormulaFinancialDayCountFraction(issueDate, settlementDate, basis);
+            if (!double.IsFinite(dayCountFraction) || dayCountFraction < 0d)
+                return ErrorValue.Num;
+
+            return FormulaFinancialNumberResult(par * rate * dayCountFraction);
         }
 
         private static ScalarValue FormulaFinancialSlnScalar(double cost, double salvage, double life)
