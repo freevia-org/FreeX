@@ -104,6 +104,7 @@ public sealed partial class XlsxFileAdapter
         XlsxWorksheetPageBreakNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxRichTextFontNormalizer.NormalizePackage(generatedArchive);
         XlsxSharedStringPackageGraphNormalizer.NormalizePackage(generatedArchive);
+        XlsxDocumentThumbnailPackageGraphNormalizer.NormalizePackage(generatedArchive);
         XlsxThemeTypefaceNormalizer.NormalizePackage(generatedArchive);
         XlsxLegacyCommentFontNormalizer.NormalizePackage(generatedArchive);
         XlsxStructuredTableSchemaNormalizer.NormalizePackage(generatedArchive);
