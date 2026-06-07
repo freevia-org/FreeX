@@ -260,6 +260,54 @@ public sealed partial class XlsxPackageMetadataMergerTests
                 </Relationships>
                 """));
 
+    private static MemoryStream CreatePackageWithDrawingImageRelationshipIdCollisionSource() =>
+        XlsxPackageTestFixtures.CreatePackage(
+            ("[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Default Extension="png" ContentType="image/png"/>
+                </Types>
+                """),
+            ("xl/drawings/drawing1.xml", """
+                <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <xdr:twoCellAnchor>
+                    <xdr:pic>
+                      <xdr:blipFill>
+                        <a:blip r:embed="rIdImage"/>
+                      </xdr:blipFill>
+                    </xdr:pic>
+                  </xdr:twoCellAnchor>
+                </xdr:wsDr>
+                """),
+            ("xl/drawings/_rels/drawing1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdImage"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+                                Target="../media/image1.png"/>
+                </Relationships>
+                """),
+            ("xl/media/image1.png", "image"));
+
+    private static MemoryStream CreatePackageWithDrawingImageRelationshipIdCollisionTarget() =>
+        XlsxPackageTestFixtures.CreatePackage(
+            ("[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                </Types>
+                """),
+            ("xl/drawings/_rels/drawing1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdImage"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/package"
+                                Target="../embeddings/package1.bin"/>
+                </Relationships>
+                """),
+            ("xl/embeddings/package1.bin", "package"));
+
     private static MemoryStream CreatePackageWithWhitespacePaddedCorePropertiesRelationship() =>
         XlsxPackageTestFixtures.CreatePackage(
             ("[Content_Types].xml", """
