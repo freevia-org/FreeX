@@ -4,6 +4,8 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxWorkbookSmartTagNormalizer
 {
+    private static readonly HashSet<string> EmptyAttributes = [];
+
     private static readonly HashSet<string> SmartTagPropertyAttributes =
     [
         "embed",
@@ -27,17 +29,17 @@ internal static class XlsxWorkbookSmartTagNormalizer
     public static bool NormalizeSmartTagPropertiesElement(XElement smartTagPr)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(smartTagPr, SmartTagPropertyAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(smartTagPr, SmartTagPropertyAttributes);
         changed |= RemoveAllNodes(smartTagPr);
-        changed |= NormalizeAttribute(smartTagPr, "embed", NormalizeBoolean);
-        changed |= NormalizeAttribute(smartTagPr, "show", NormalizeShow);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(smartTagPr, "embed", NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(smartTagPr, "show", NormalizeShow);
         return changed;
     }
 
     public static bool NormalizeSmartTagTypesElement(XElement smartTagTypes)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(smartTagTypes, []);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(smartTagTypes, EmptyAttributes);
 
         foreach (var child in smartTagTypes.Elements().ToList())
         {
@@ -68,29 +70,11 @@ internal static class XlsxWorkbookSmartTagNormalizer
     private static bool NormalizeSmartTagType(XElement smartTagType)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(smartTagType, SmartTagTypeAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(smartTagType, SmartTagTypeAttributes);
         changed |= RemoveAllNodes(smartTagType);
-        changed |= NormalizeAttribute(smartTagType, "namespaceUri", NormalizeNonEmptyText);
-        changed |= NormalizeAttribute(smartTagType, "name", NormalizeNonEmptyText);
-        changed |= NormalizeAttribute(smartTagType, "url", NormalizeOptionalText);
-        return changed;
-    }
-
-    private static bool RemoveUnknownAttributes(XElement element, HashSet<string> allowedAttributes)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                (attribute.Name.NamespaceName.Length == 0 && allowedAttributes.Contains(attribute.Name.LocalName)))
-            {
-                continue;
-            }
-
-            attribute.Remove();
-            changed = true;
-        }
-
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(smartTagType, "namespaceUri", NormalizeNonEmptyText);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(smartTagType, "name", NormalizeNonEmptyText);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(smartTagType, "url", NormalizeOptionalText);
         return changed;
     }
 
@@ -100,29 +84,6 @@ internal static class XlsxWorkbookSmartTagNormalizer
             return false;
 
         element.RemoveNodes();
-        return true;
-    }
-
-    private static bool NormalizeAttribute(
-        XElement element,
-        string attributeName,
-        Func<string?, string?> normalize)
-    {
-        var attribute = element.Attribute(attributeName);
-        var normalized = normalize(attribute?.Value);
-        if (normalized is null)
-        {
-            if (attribute is null)
-                return false;
-
-            attribute.Remove();
-            return true;
-        }
-
-        if (attribute is not null && string.Equals(attribute.Value, normalized, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(attributeName, normalized);
         return true;
     }
 
