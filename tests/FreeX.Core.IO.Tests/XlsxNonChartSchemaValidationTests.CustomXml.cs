@@ -63,6 +63,31 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void LoadedWorkbookFullSave_WithValidCustomXmlPackageGraph_PreservesRelationshipsAndContentTypes()
+    {
+        using var source = CreateCustomXmlSourcePackageWithSecondItem();
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var newSheet = workbook.AddSheet("New Sheet");
+        newSheet.SetCell(new CellAddress(newSheet.Id, 1, 1), new TextValue("forces full save"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("change_sheet_count");
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertCustomXmlPackage(saved);
+        AssertSecondCustomXmlPackageItem(saved);
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithInvalidCustomXmlProperties_DropsInvalidSidecarGraph()
     {
         using var source = CreateCustomXmlSourcePackage();
@@ -103,6 +128,75 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         AddCustomXmlPackage(stream);
         stream.Position = 0;
         return stream;
+    }
+
+    private static MemoryStream CreateCustomXmlSourcePackageWithSecondItem()
+    {
+        var stream = CreateCustomXmlSourcePackage();
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace customXmlNs = "http://schemas.openxmlformats.org/officeDocument/2006/customXml";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+            WritePackageEntry(archive, "customXml/item2.xml", """
+                <root xmlns="urn:freex:customXml">
+                  <value>retained-second-custom-xml</value>
+                </root>
+                """);
+            ReplacePackageXml(archive, "customXml/itemProps2.xml", new XDocument(
+                new XElement(
+                    customXmlNs + "datastoreItem",
+                    new XAttribute(customXmlNs + "itemID", "{11111111-2222-3333-4444-555555555555}"))));
+            ReplacePackageXml(archive, "customXml/_rels/item2.xml.rels", new XDocument(
+                new XElement(
+                    packageRelNs + "Relationships",
+                    new XElement(
+                        packageRelNs + "Relationship",
+                        new XAttribute("Id", "rIdFreeXSecondItemProps"),
+                        new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps"),
+                        new XAttribute("Target", "itemProps2.xml")))));
+            AddPackageContentTypeOverride(
+                archive,
+                "/customXml/itemProps2.xml",
+                "application/vnd.openxmlformats-officedocument.customXmlProperties+xml");
+            AddCustomXmlPackageRootRelationship(
+                archive,
+                "rIdFreeXSecondCustomXml",
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml",
+                "customXml/item2.xml");
+        }
+
+        stream.Position = 0;
+        return stream;
+    }
+
+    private static void AddCustomXmlPackageRootRelationship(
+        ZipArchive archive,
+        string id,
+        string type,
+        string target)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationshipsXml = LoadPackageXml(archive, "_rels/.rels");
+        var matching = relationshipsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                string.Equals(relationship.Attribute("Id")?.Value, id, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(
+                    relationship.Attribute("Target")?.Value.TrimStart('/'),
+                    target.TrimStart('/'),
+                    StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        foreach (var relationship in matching)
+            relationship.Remove();
+
+        relationshipsXml.Root!.Add(new XElement(
+            packageRelNs + "Relationship",
+            new XAttribute("Id", id),
+            new XAttribute("Type", type),
+            new XAttribute("Target", target)));
+        ReplacePackageXml(archive, "_rels/.rels", relationshipsXml);
     }
 
     private static void AddCustomXmlPackage(MemoryStream stream)
@@ -182,6 +276,42 @@ public sealed partial class XlsxNonChartSchemaValidationTests
                 relationship.Attribute("Target")?.Value == "itemProps1.xml")
             .Should()
             .ContainSingle();
+    }
+
+    private static void AssertSecondCustomXmlPackageItem(Stream stream)
+    {
+        XNamespace customXmlNs = "http://schemas.openxmlformats.org/officeDocument/2006/customXml";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        ReadPackageEntryText(stream, "customXml/item2.xml")
+            .Should()
+            .Contain("retained-second-custom-xml");
+        ReadPackageRootElement(stream, "customXml/itemProps2.xml")
+            .Attribute(customXmlNs + "itemID")!
+            .Value
+            .Should()
+            .Be("{11111111-2222-3333-4444-555555555555}");
+        ReadPackageRootElement(stream, "customXml/itemProps2.xml")
+            .Name
+            .Should()
+            .Be(customXmlNs + "datastoreItem");
+        ReadPackageRootElement(stream, "_rels/.rels")
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Id")?.Value == "rIdFreeXSecondCustomXml" &&
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml" &&
+                relationship.Attribute("Target")?.Value == "customXml/item2.xml")
+            .Should()
+            .ContainSingle();
+        ReadPackageRootElement(stream, "customXml/_rels/item2.xml.rels")
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Id")?.Value == "rIdFreeXSecondItemProps" &&
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps" &&
+                relationship.Attribute("Target")?.Value == "itemProps2.xml")
+            .Should()
+            .ContainSingle();
+        ContentTypeOverridePartNames(stream).Should().Contain("/customXml/itemProps2.xml");
     }
 
     private static void WritePackageEntry(ZipArchive archive, string entryName, string content)

@@ -454,7 +454,8 @@ internal static class XlsxPackageMetadataMerger
                targetIndex.Contains(targetPart) &&
                (!generatedEntriesBeforeMerge.Contains(targetPart) ||
                 IsDataModelPackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
-                IsXmlMapsPackageGraphRelationship(relationshipPartPath, relationship, targetPart));
+                IsXmlMapsPackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
+                IsCustomXmlPackageGraphRelationship(relationshipPartPath, relationship, targetPart));
     }
 
     private static bool IsXmlMapsPackageGraphRelationship(
@@ -477,6 +478,30 @@ internal static class XlsxPackageMetadataMerger
             NormalizeRelationshipType(relationship),
             SpreadsheetRelationshipPrefix + "xmlMaps",
             StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsCustomXmlPackageGraphRelationship(
+        string relationshipPartPath,
+        XElement relationship,
+        string targetPart)
+    {
+        var relationshipType = NormalizeRelationshipType(relationship);
+        var sourcePart = RelationshipPartToSourcePart(relationshipPartPath);
+        if (string.Equals(sourcePart, "", StringComparison.Ordinal))
+        {
+            return IsCustomXmlItemPart(targetPart) &&
+                   string.Equals(
+                       relationshipType,
+                       SpreadsheetRelationshipPrefix + "customXml",
+                       StringComparison.OrdinalIgnoreCase);
+        }
+
+        return IsCustomXmlItemPart(sourcePart) &&
+               IsCustomXmlPropertiesPart(targetPart) &&
+               string.Equals(
+                   relationshipType,
+                   SpreadsheetRelationshipPrefix + "customXmlProps",
+                   StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsDataModelPackageGraphRelationship(
