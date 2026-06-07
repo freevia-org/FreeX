@@ -322,7 +322,15 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 if (targetRoot.Element(sourceBlock.Name) is not null)
                     continue;
 
-                targetRoot.Add(new XElement(sourceBlock));
+                targetRoot.Add(CreateReboundRetainedWorksheetBlock(
+                    sourceBlock,
+                    sourceArchive,
+                    targetArchive,
+                    sourceWorksheetPath,
+                    targetWorksheetPath,
+                    workbookNs,
+                    relNs,
+                    packageRelNs));
                 changed = true;
             }
 
@@ -374,6 +382,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
         XlsxSourcePackagePreservationContext? context = null,
         IReadOnlySet<string>? worksheetsWithPreservableSourceMetadata = null)
     {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
         {
             if (!targetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
@@ -629,7 +638,15 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 if (targetRoot.Element(sourceBlock.Name) is not null)
                     continue;
 
-                targetRoot.Add(new XElement(sourceBlock));
+                targetRoot.Add(CreateReboundRetainedWorksheetBlock(
+                    sourceBlock,
+                    sourceArchive,
+                    targetArchive,
+                    sourceWorksheetPath,
+                    targetWorksheetPath,
+                    workbookNs,
+                    relNs,
+                    packageRelNs));
                 changed = true;
             }
 
@@ -670,6 +687,112 @@ internal static partial class XlsxWorksheetMetadataPreserver
             return !XlsxHeaderFooterPictureReaderWriter.HasPictures(sheet);
 
         return false;
+    }
+
+    private static XElement CreateReboundRetainedWorksheetBlock(
+        XElement sourceBlock,
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        string sourceWorksheetPath,
+        string targetWorksheetPath,
+        XNamespace workbookNs,
+        XNamespace relNs,
+        XNamespace packageRelNs)
+    {
+        var copy = new XElement(sourceBlock);
+        if (copy.Name == workbookNs + "picture")
+            RebindWorksheetPictureRelationshipId(copy, sourceArchive, targetArchive, sourceWorksheetPath, targetWorksheetPath, relNs, packageRelNs);
+
+        return copy;
+    }
+
+    private static void RebindWorksheetPictureRelationshipId(
+        XElement picture,
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        string sourceWorksheetPath,
+        string targetWorksheetPath,
+        XNamespace relNs,
+        XNamespace packageRelNs)
+    {
+        var sourceRelId = picture.Attribute(relNs + "id")?.Value;
+        if (string.IsNullOrWhiteSpace(sourceRelId))
+            return;
+
+        var sourceRelationship = FindRelationshipById(sourceArchive, sourceWorksheetPath, sourceRelId, packageRelNs);
+        if (sourceRelationship is null)
+            return;
+
+        var targetRelationship = FindMatchingRelationship(targetArchive, targetWorksheetPath, sourceWorksheetPath, sourceRelationship, packageRelNs);
+        var targetRelId = targetRelationship?.Attribute("Id")?.Value;
+        if (!string.IsNullOrWhiteSpace(targetRelId))
+            picture.SetAttributeValue(relNs + "id", targetRelId);
+    }
+
+    private static XElement? FindRelationshipById(
+        ZipArchive archive,
+        string sourcePartPath,
+        string relationshipId,
+        XNamespace packageRelNs)
+    {
+        var relsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(sourcePartPath));
+        if (relsEntry is null)
+            return null;
+
+        var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
+        return relsXml.Root?
+            .Elements(packageRelNs + "Relationship")
+            .FirstOrDefault(relationship => string.Equals(
+                relationship.Attribute("Id")?.Value,
+                relationshipId,
+                StringComparison.Ordinal));
+    }
+
+    private static XElement? FindMatchingRelationship(
+        ZipArchive archive,
+        string targetWorksheetPath,
+        string sourceWorksheetPath,
+        XElement sourceRelationship,
+        XNamespace packageRelNs)
+    {
+        var relsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath));
+        if (relsEntry is null)
+            return null;
+
+        var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
+        var sourceType = sourceRelationship.Attribute("Type")?.Value;
+        var sourceTarget = sourceRelationship.Attribute("Target")?.Value;
+        var sourceTargetMode = sourceRelationship.Attribute("TargetMode")?.Value;
+        if (string.IsNullOrWhiteSpace(sourceType) || string.IsNullOrWhiteSpace(sourceTarget))
+            return null;
+
+        var sourceResolvedTarget = string.Equals(sourceTargetMode, "External", StringComparison.OrdinalIgnoreCase)
+            ? sourceTarget.Trim()
+            : XlsxPackagePath.ResolveRelationshipTarget(sourceWorksheetPath, sourceTarget);
+
+        return relsXml.Root?
+            .Elements(packageRelNs + "Relationship")
+            .FirstOrDefault(relationship =>
+                string.Equals(relationship.Attribute("Type")?.Value, sourceType, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(relationship.Attribute("TargetMode")?.Value ?? "", sourceTargetMode ?? "", StringComparison.OrdinalIgnoreCase) &&
+                RelationshipTargetsMatch(targetWorksheetPath, relationship, sourceResolvedTarget));
+    }
+
+    private static bool RelationshipTargetsMatch(
+        string targetWorksheetPath,
+        XElement targetRelationship,
+        string sourceResolvedTarget)
+    {
+        var target = targetRelationship.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target))
+            return false;
+
+        var targetMode = targetRelationship.Attribute("TargetMode")?.Value;
+        var resolvedTarget = string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase)
+            ? target.Trim()
+            : XlsxPackagePath.ResolveRelationshipTarget(targetWorksheetPath, target);
+
+        return string.Equals(resolvedTarget, sourceResolvedTarget, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsEmpty(WorksheetSingleXmlCellsModel model) =>

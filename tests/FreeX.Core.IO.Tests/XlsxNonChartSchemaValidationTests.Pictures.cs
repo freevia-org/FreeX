@@ -56,6 +56,68 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         ReadWorksheetPictureImageBytes(saved).Should().Equal(sourceImageBytes);
     }
 
+    [Fact]
+    public void LoadedWorkbookFullSave_RebindsWorksheetPictureRelationshipWhenAuthoredDrawingUsesSourceId()
+    {
+        var workbook = new Workbook("WorksheetPictureRelationshipCollision");
+        var sheet = workbook.AddSheet("Data");
+        SeedNumericGrid(sheet);
+
+        using var source = Save(workbook);
+        AddExternalWorksheetPictureReference(source, "rId1");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.Pictures.Add(new PictureModel
+        {
+            Name = "Authored picture",
+            Anchor = new CellAddress(loadedSheet.Id, 2, 2),
+            Kind = PictureKind.Image,
+            ImageBytes = MinimalPngBytes(),
+            ContentType = "image/png",
+            Width = 96,
+            Height = 64,
+            AltText = "Authored picture"
+        });
+
+        using var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+        SchemaErrors(saved).Should().BeEmpty();
+
+        saved.Position = 0;
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        var drawingRelId = worksheetXml.Root!
+            .Element(worksheetNs + "drawing")!
+            .Attribute(relNs + "id")!
+            .Value;
+        drawingRelId.Should().Be("rId1");
+
+        var pictureRelId = worksheetXml.Root!
+            .Element(worksheetNs + "picture")!
+            .Attribute(relNs + "id")!
+            .Value;
+        pictureRelId.Should().NotBe("rId1");
+
+        var worksheetRelationships = LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
+        var relationshipsById = worksheetRelationships.Root!
+            .Elements(packageRelNs + "Relationship")
+            .ToDictionary(element => element.Attribute("Id")!.Value, StringComparer.OrdinalIgnoreCase);
+
+        relationshipsById[drawingRelId].Attribute("Type")!.Value.Should().Be("http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing");
+        relationshipsById[pictureRelId].Attribute("Type")!.Value.Should().Be("http://schemas.openxmlformats.org/officeDocument/2006/relationships/image");
+        relationshipsById[pictureRelId].Attribute("Target")!.Value.Should().Be("https://example.invalid/background.png");
+        relationshipsById[pictureRelId].Attribute("TargetMode")!.Value.Should().Be("External");
+    }
+
     private static Workbook CreateWorksheetPictureSourceWorkbook()
     {
         var workbook = new Workbook("WorksheetPicturePatchSave");
@@ -73,6 +135,34 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             AltText = "Authored picture"
         });
         return workbook;
+    }
+
+    private static void AddExternalWorksheetPictureReference(MemoryStream packageStream, string relationshipId)
+    {
+        packageStream.Position = 0;
+        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+        var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+            ? LoadPackageXml(worksheetRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        worksheetRelsXml.Root!.Add(new XElement(
+            packageRelNs + "Relationship",
+            new XAttribute("Id", relationshipId),
+            new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"),
+            new XAttribute("Target", "https://example.invalid/background.png"),
+            new XAttribute("TargetMode", "External")));
+        ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        worksheetXml.Root!.Add(new XElement(
+            worksheetNs + "picture",
+            new XAttribute(relNs + "id", relationshipId)));
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        packageStream.Position = 0;
     }
 
     private static byte[] ReadWorksheetPictureImageBytes(Stream stream)
