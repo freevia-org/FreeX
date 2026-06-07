@@ -60,12 +60,8 @@ public partial class XlsxCorpusRunnerTests
         worksheetEntry.Should().NotBeNull();
         worksheetRelsEntry.Should().NotBeNull();
 
-        XDocument worksheetXml;
-        using (var stream = worksheetEntry!.Open())
-            worksheetXml = XDocument.Load(stream);
-        XDocument worksheetRelsXml;
-        using (var stream = worksheetRelsEntry!.Open())
-            worksheetRelsXml = XDocument.Load(stream);
+        var worksheetXml = LoadPackageXml(worksheetEntry!);
+        var worksheetRelsXml = LoadPackageXml(worksheetRelsEntry!);
 
         XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -101,9 +97,7 @@ public partial class XlsxCorpusRunnerTests
         connectionsEntry.Should().NotBeNull();
         webPublishItemsEntry.Should().NotBeNull();
 
-        XDocument connectionsXml;
-        using (var stream = connectionsEntry!.Open())
-            connectionsXml = XDocument.Load(stream);
+        var connectionsXml = LoadPackageXml(connectionsEntry!);
 
         XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var webPr = connectionsXml
@@ -125,12 +119,8 @@ public partial class XlsxCorpusRunnerTests
         workbookEntry.Should().NotBeNull();
         workbookRelsEntry.Should().NotBeNull();
 
-        XDocument workbookXml;
-        using (var stream = workbookEntry!.Open())
-            workbookXml = XDocument.Load(stream);
-        XDocument workbookRelsXml;
-        using (var stream = workbookRelsEntry!.Open())
-            workbookRelsXml = XDocument.Load(stream);
+        var workbookXml = LoadPackageXml(workbookEntry!);
+        var workbookRelsXml = LoadPackageXml(workbookRelsEntry!);
 
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -167,9 +157,7 @@ public partial class XlsxCorpusRunnerTests
         workbookRelsEntry.Should().NotBeNull();
 
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-        XDocument workbookRelsXml;
-        using (var stream = workbookRelsEntry!.Open())
-            workbookRelsXml = XDocument.Load(stream);
+        var workbookRelsXml = LoadPackageXml(workbookRelsEntry!);
 
         workbookRelsXml.Root!
             .Elements(packageRelNs + "Relationship")
@@ -191,12 +179,8 @@ public partial class XlsxCorpusRunnerTests
         workbookRelsEntry.Should().NotBeNull();
 
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-        XDocument worksheetRelsXml;
-        using (var stream = worksheetRelsEntry!.Open())
-            worksheetRelsXml = XDocument.Load(stream);
-        XDocument workbookRelsXml;
-        using (var stream = workbookRelsEntry!.Open())
-            workbookRelsXml = XDocument.Load(stream);
+        var worksheetRelsXml = LoadPackageXml(worksheetRelsEntry!);
+        var workbookRelsXml = LoadPackageXml(workbookRelsEntry!);
 
         worksheetRelsXml.Root!
             .Elements(packageRelNs + "Relationship")
@@ -229,15 +213,9 @@ public partial class XlsxCorpusRunnerTests
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
-        XDocument worksheetXml;
-        using (var stream = worksheetEntry!.Open())
-            worksheetXml = XDocument.Load(stream);
-        XDocument worksheetRelsXml;
-        using (var stream = worksheetRelsEntry!.Open())
-            worksheetRelsXml = XDocument.Load(stream);
-        XDocument activeXRelsXml;
-        using (var stream = activeXRelsEntry!.Open())
-            activeXRelsXml = XDocument.Load(stream);
+        var worksheetXml = LoadPackageXml(worksheetEntry!);
+        var worksheetRelsXml = LoadPackageXml(worksheetRelsEntry!);
+        var activeXRelsXml = LoadPackageXml(activeXRelsEntry!);
 
         var control = worksheetXml.Root!
             .Element(sheetNs + "controls")!
@@ -271,9 +249,7 @@ public partial class XlsxCorpusRunnerTests
         packageRelsEntry.Should().NotBeNull();
 
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-        XDocument packageRelsXml;
-        using (var stream = packageRelsEntry!.Open())
-            packageRelsXml = XDocument.Load(stream);
+        var packageRelsXml = LoadPackageXml(packageRelsEntry!);
 
         packageRelsXml.Root!
             .Elements(packageRelNs + "Relationship")
@@ -295,12 +271,8 @@ public partial class XlsxCorpusRunnerTests
         taskpanesRelsEntry.Should().NotBeNull();
 
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-        XDocument packageRelsXml;
-        using (var stream = packageRelsEntry!.Open())
-            packageRelsXml = XDocument.Load(stream);
-        XDocument taskpanesRelsXml;
-        using (var stream = taskpanesRelsEntry!.Open())
-            taskpanesRelsXml = XDocument.Load(stream);
+        var packageRelsXml = LoadPackageXml(packageRelsEntry!);
+        var taskpanesRelsXml = LoadPackageXml(taskpanesRelsEntry!);
 
         packageRelsXml.Root!
             .Elements(packageRelNs + "Relationship")
@@ -337,21 +309,11 @@ public partial class XlsxCorpusRunnerTests
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
-        XDocument workbookXml;
-        using (var stream = workbookEntry!.Open())
-            workbookXml = XDocument.Load(stream);
-        XDocument workbookRelsXml;
-        using (var stream = workbookRelsEntry!.Open())
-            workbookRelsXml = XDocument.Load(stream);
-        XDocument worksheetXml;
-        using (var stream = worksheetEntry!.Open())
-            worksheetXml = XDocument.Load(stream);
-        XDocument externalLinkXml;
-        using (var stream = externalLinkEntry!.Open())
-            externalLinkXml = XDocument.Load(stream);
-        XDocument externalLinkRelsXml;
-        using (var stream = externalLinkRelsEntry!.Open())
-            externalLinkRelsXml = XDocument.Load(stream);
+        var workbookXml = LoadPackageXml(workbookEntry!);
+        var workbookRelsXml = LoadPackageXml(workbookRelsEntry!);
+        var worksheetXml = LoadPackageXml(worksheetEntry!);
+        var externalLinkXml = LoadPackageXml(externalLinkEntry!);
+        var externalLinkRelsXml = LoadPackageXml(externalLinkRelsEntry!);
 
         var externalReferenceId = workbookXml.Root!
             .Element(sheetNs + "externalReferences")!
@@ -416,15 +378,9 @@ public partial class XlsxCorpusRunnerTests
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
-        XDocument worksheetXml;
-        using (var stream = worksheetEntry!.Open())
-            worksheetXml = XDocument.Load(stream);
-        XDocument worksheetRelsXml;
-        using (var stream = worksheetRelsEntry!.Open())
-            worksheetRelsXml = XDocument.Load(stream);
-        XDocument drawingRelsXml;
-        using (var stream = drawingRelsEntry!.Open())
-            drawingRelsXml = XDocument.Load(stream);
+        var worksheetXml = LoadPackageXml(worksheetEntry!);
+        var worksheetRelsXml = LoadPackageXml(worksheetRelsEntry!);
+        var drawingRelsXml = LoadPackageXml(drawingRelsEntry!);
 
         var drawingRelationshipId = worksheetXml.Root!
             .Element(sheetNs + "drawing")!
@@ -468,9 +424,7 @@ public partial class XlsxCorpusRunnerTests
 
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
-        XDocument workbookRelsXml;
-        using (var stream = workbookRelsEntry!.Open())
-            workbookRelsXml = XDocument.Load(stream);
+        var workbookRelsXml = LoadPackageXml(workbookRelsEntry!);
 
         workbookRelsXml.Root!
             .Elements(packageRelNs + "Relationship")
@@ -498,9 +452,7 @@ public partial class XlsxCorpusRunnerTests
         richValueDataRelsEntry.Should().NotBeNull();
 
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-        XDocument richValueDataRelsXml;
-        using (var stream = richValueDataRelsEntry!.Open())
-            richValueDataRelsXml = XDocument.Load(stream);
+        var richValueDataRelsXml = LoadPackageXml(richValueDataRelsEntry!);
 
         richValueDataRelsXml.Root!
             .Elements(packageRelNs + "Relationship")
@@ -571,9 +523,7 @@ public partial class XlsxCorpusRunnerTests
         var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
         worksheetEntry.Should().NotBeNull("generated-cf-retention-package-003 must contain xl/worksheets/sheet1.xml");
 
-        XDocument worksheetXml;
-        using (var stream = worksheetEntry!.Open())
-            worksheetXml = XDocument.Load(stream);
+        var worksheetXml = LoadPackageXml(worksheetEntry!);
 
         XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var cfRules = worksheetXml.Descendants(sheetNs + "cfRule").ToArray();
