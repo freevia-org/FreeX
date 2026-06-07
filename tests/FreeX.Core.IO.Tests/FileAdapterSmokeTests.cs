@@ -3347,7 +3347,7 @@ public partial class FileAdapterSmokeTests
         primaryView.Attribute("showGridLines")!.Value.Should().Be("0");
         additionalView.Attribute("view")!.Value.Should().Be("pageBreakPreview");
         additionalView.Attribute("showGridLines").Should().BeNull();
-        additionalView.Attribute("customSheetViewFlag")!.Value.Should().Be("kept");
+        additionalView.Attribute("customSheetViewFlag").Should().BeNull();
     }
 
     [Fact]
@@ -14616,7 +14616,7 @@ public partial class FileAdapterSmokeTests
         hasAdditionalSheetView.Should().BeTrue();
         sheetViews.Elements(worksheetNs + "sheetView")
             .Single(view => view.Attribute("workbookViewId")?.Value == "1")
-            .Attribute("customSheetViewFlag")!.Value.Should().Be("kept");
+            .Attribute("customSheetViewFlag").Should().BeNull();
     }
 
     [Fact]
@@ -14694,7 +14694,7 @@ public partial class FileAdapterSmokeTests
             .Single(view => view.Attribute("workbookViewId")?.Value == "1");
         sheetView.Attribute("view")!.Value.Should().Be("pageBreakPreview");
         sheetView.Attribute("topLeftCell")!.Value.Should().Be("C3");
-        sheetView.Attribute("customSheetViewFlag")!.Value.Should().Be("kept");
+        sheetView.Attribute("customSheetViewFlag").Should().BeNull();
         sheetView.Attribute("wrongNamespace").Should().BeNull();
     }
 
@@ -14733,7 +14733,7 @@ public partial class FileAdapterSmokeTests
             .Element(worksheetNs + "sheetViews")!
             .Elements(worksheetNs + "sheetView")
             .Single(view => view.Attribute("workbookViewId")?.Value == "1");
-        sheetView.Attribute("customSheetViewFlag")!.Value.Should().Be("kept");
+        sheetView.Attribute("customSheetViewFlag").Should().BeNull();
         sheetView.Attributes().Select(attribute => attribute.Name.LocalName)
             .Should().NotContain("bad attribute name");
     }
@@ -14846,7 +14846,7 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void XlsxAdapter_LoadedWorkbookSave_MergesExistingWorksheetSheetViewChildNativeMetadata()
+    public void XlsxAdapter_LoadedWorkbookSave_SanitizesExistingWorksheetSheetViewChildNativeMetadata()
     {
         var workbook = new Workbook("ExistingWorksheetSheetViewChildMetadata");
         var sheet = workbook.AddSheet("Sheet1");
@@ -14879,15 +14879,13 @@ public partial class FileAdapterSmokeTests
             .Single(element => element.Attribute("workbookViewId")?.Value == "0");
         var panes = sheetView.Elements(worksheetNs + "pane").ToList();
         panes.Should().ContainSingle();
-        panes.Single().Attribute("customPaneAttr").Should().NotBeNull();
-        panes.Single().Attribute("customPaneAttr")!.Value.Should().Be("pane-native");
+        panes.Single().Attribute("customPaneAttr").Should().BeNull();
 
         var selections = sheetView.Elements(worksheetNs + "selection")
             .Where(element => element.Attribute("pane")?.Value == "bottomRight")
             .ToList();
         selections.Should().ContainSingle();
-        selections.Single().Attribute("customSelectionAttr").Should().NotBeNull();
-        selections.Single().Attribute("customSelectionAttr")!.Value.Should().Be("selection-native");
+        selections.Single().Attribute("customSelectionAttr").Should().BeNull();
     }
 
     [Fact]
