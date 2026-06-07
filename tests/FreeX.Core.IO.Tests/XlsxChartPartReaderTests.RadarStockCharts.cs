@@ -1,4 +1,3 @@
-using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -13,7 +12,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_ReadsRadarAndStockChartFamilies(string chartElementName, ChartType expectedType)
     {
         var sheetId = SheetId.New();
-        var chartXml = XDocument.Parse($$"""
+        var chartXml = ParseChartXml($$"""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
                           xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
                           xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
@@ -53,7 +52,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_ReadsVolumeOpenHighLowCloseStockChart()
     {
         var sheetId = SheetId.New();
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
                           xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
               <c:chart>
