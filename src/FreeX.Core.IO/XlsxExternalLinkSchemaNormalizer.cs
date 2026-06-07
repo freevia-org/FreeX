@@ -33,7 +33,7 @@ internal static class XlsxExternalLinkSchemaNormalizer
     public static bool NormalizeExternalLinkRoot(XElement externalLink)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(externalLink, []);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(externalLink, Array.Empty<XName>());
 
         var keptPayload = false;
         var keptExtensionList = false;
@@ -93,7 +93,7 @@ internal static class XlsxExternalLinkSchemaNormalizer
     private static bool NormalizeExternalBookElement(XElement externalBook)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(externalBook, [RelationshipNs + "id"]);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(externalBook, RelationshipNs + "id");
         changed |= NormalizeRelationshipId(externalBook);
 
         foreach (var child in externalBook.Elements().ToList())
@@ -134,7 +134,7 @@ internal static class XlsxExternalLinkSchemaNormalizer
     private static bool NormalizeSheetNamesElement(XElement sheetNames)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(sheetNames, []);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(sheetNames, Array.Empty<XName>());
         foreach (var child in sheetNames.Elements().ToList())
         {
             if (child.Name != WorkbookNs + "sheetName")
@@ -158,16 +158,16 @@ internal static class XlsxExternalLinkSchemaNormalizer
     private static bool NormalizeSheetNameElement(XElement sheetName)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(sheetName, [XName.Get("val")]);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(sheetName, XName.Get("val"));
         changed |= NormalizeOptionalTextAttribute(sheetName, "val");
-        changed |= RemoveAllNodes(sheetName);
+        changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(sheetName);
         return changed;
     }
 
     private static bool NormalizeDefinedNamesElement(XElement definedNames)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(definedNames, []);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(definedNames, Array.Empty<XName>());
         foreach (var child in definedNames.Elements().ToList())
         {
             if (child.Name != WorkbookNs + "definedName")
@@ -191,11 +191,15 @@ internal static class XlsxExternalLinkSchemaNormalizer
     private static bool NormalizeDefinedNameElement(XElement definedName)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(definedName, [XName.Get("name"), XName.Get("refersTo"), XName.Get("sheetId")]);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(
+            definedName,
+            XName.Get("name"),
+            XName.Get("refersTo"),
+            XName.Get("sheetId"));
         changed |= NormalizeOptionalTextAttribute(definedName, "name");
         changed |= NormalizeOptionalTextAttribute(definedName, "refersTo");
-        changed |= NormalizeAttribute(definedName, "sheetId", NormalizeUnsignedIntOrNull);
-        changed |= RemoveAllNodes(definedName);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(definedName, "sheetId", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(definedName);
         return changed;
     }
 
@@ -235,55 +239,12 @@ internal static class XlsxExternalLinkSchemaNormalizer
         return XlsxXmlNormalizationHelpers.SetAttributeIfChanged(element, attributeName, trimmed);
     }
 
-    private static bool NormalizeAttribute(
-        XElement element,
-        string attributeName,
-        Func<string?, string?> normalize)
-    {
-        var attribute = element.Attribute(attributeName);
-        var normalized = normalize(attribute?.Value);
-        if (normalized is null)
-        {
-            if (attribute is null)
-                return false;
-
-            attribute.Remove();
-            return true;
-        }
-
-        return XlsxXmlNormalizationHelpers.SetAttributeIfChanged(element, attributeName, normalized);
-    }
-
     private static string? NormalizeUnsignedIntOrNull(string? value)
     {
         var trimmed = value?.Trim();
         return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
             ? parsed.ToString(CultureInfo.InvariantCulture)
             : null;
-    }
-
-    private static bool RemoveUnknownAttributes(XElement element, params XName[] allowedNames)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration || allowedNames.Contains(attribute.Name))
-                continue;
-
-            attribute.Remove();
-            changed = true;
-        }
-
-        return changed;
-    }
-
-    private static bool RemoveAllNodes(XElement element)
-    {
-        if (!element.Nodes().Any())
-            return false;
-
-        element.RemoveNodes();
-        return true;
     }
 
     private static bool NormalizeChildOrder(XElement parent, Func<XElement, int> orderSelector)

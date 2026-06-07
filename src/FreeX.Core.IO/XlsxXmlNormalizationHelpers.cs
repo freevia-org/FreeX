@@ -22,6 +22,21 @@ internal static class XlsxXmlNormalizationHelpers
         return changed;
     }
 
+    public static bool RemoveUnknownAttributes(XElement element, params XName[] allowedNames)
+    {
+        var changed = false;
+        foreach (var attribute in element.Attributes().ToList())
+        {
+            if (attribute.IsNamespaceDeclaration || allowedNames.Contains(attribute.Name))
+                continue;
+
+            attribute.Remove();
+            changed = true;
+        }
+
+        return changed;
+    }
+
     public static bool RemoveAllNodes(XElement element)
     {
         if (!element.Nodes().Any())
