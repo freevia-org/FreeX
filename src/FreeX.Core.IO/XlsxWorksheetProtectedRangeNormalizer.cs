@@ -66,7 +66,7 @@ internal static class XlsxWorksheetProtectedRangeNormalizer
     private static bool NormalizeProtectedRangesElement(XElement protectedRanges)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(protectedRanges, NoAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(protectedRanges, NoAttributes);
         changed |= RemoveUnexpectedChildElements(protectedRanges, WorksheetNs + "protectedRange");
 
         foreach (var protectedRange in protectedRanges.Elements(WorksheetNs + "protectedRange").ToList())
@@ -88,38 +88,20 @@ internal static class XlsxWorksheetProtectedRangeNormalizer
     private static bool NormalizeProtectedRangeElement(XElement protectedRange)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(protectedRange, ProtectedRangeAttributes);
-        changed |= NormalizeAttribute(protectedRange, "password", NormalizeLegacyPasswordHashOrNull);
-        changed |= NormalizeAttribute(protectedRange, "sqref", NormalizeSqref);
-        changed |= NormalizeAttribute(protectedRange, "name", NormalizeOptionalText);
-        changed |= NormalizeAttribute(protectedRange, "hashValue", NormalizeBase64BinaryOrNull);
-        changed |= NormalizeAttribute(protectedRange, "saltValue", NormalizeBase64BinaryOrNull);
-        changed |= NormalizeAttribute(protectedRange, "spinCount", NormalizeUnsignedIntOrNull);
-        changed |= RemoveAllChildren(protectedRange);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(protectedRange, ProtectedRangeAttributes);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protectedRange, "password", NormalizeLegacyPasswordHashOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protectedRange, "sqref", NormalizeSqref);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protectedRange, "name", NormalizeOptionalText);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protectedRange, "hashValue", NormalizeBase64BinaryOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protectedRange, "saltValue", NormalizeBase64BinaryOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protectedRange, "spinCount", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElements(protectedRange);
         return changed;
     }
 
     private static bool ShouldRemoveProtectedRangeElement(XElement protectedRange) =>
         string.IsNullOrWhiteSpace(protectedRange.Attribute("sqref")?.Value) ||
         string.IsNullOrWhiteSpace(protectedRange.Attribute("name")?.Value);
-
-    private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedAttributes)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                (attribute.Name.NamespaceName.Length == 0 && allowedAttributes.Contains(attribute.Name.LocalName)))
-            {
-                continue;
-            }
-
-            attribute.Remove();
-            changed = true;
-        }
-
-        return changed;
-    }
 
     private static bool RemoveUnexpectedChildElements(XElement element, XName allowedChildName)
     {
@@ -131,38 +113,6 @@ internal static class XlsxWorksheetProtectedRangeNormalizer
         }
 
         return changed;
-    }
-
-    private static bool RemoveAllChildren(XElement element)
-    {
-        if (!element.HasElements)
-            return false;
-
-        element.Elements().Remove();
-        return true;
-    }
-
-    private static bool NormalizeAttribute(
-        XElement element,
-        string attributeName,
-        Func<string?, string?> normalize)
-    {
-        var attribute = element.Attribute(attributeName);
-        var normalized = normalize(attribute?.Value);
-        if (normalized is null)
-        {
-            if (attribute is null)
-                return false;
-
-            attribute.Remove();
-            return true;
-        }
-
-        if (attribute is not null && string.Equals(attribute.Value, normalized, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(attributeName, normalized);
-        return true;
     }
 
     private static string? NormalizeOptionalText(string? value)

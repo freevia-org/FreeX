@@ -45,6 +45,14 @@ internal static class XlsxXmlNormalizationHelpers
         string attributeName,
         Func<string?, string?> normalize)
     {
+        return NormalizeAttribute(element, XName.Get(attributeName), normalize);
+    }
+
+    public static bool NormalizeAttribute(
+        XElement element,
+        XName attributeName,
+        Func<string?, string?> normalize)
+    {
         var attribute = element.Attribute(attributeName);
         var normalized = normalize(attribute?.Value);
         if (normalized is null)
