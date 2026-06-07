@@ -483,6 +483,119 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void ReplaceNextValue_ReplacesNextActiveSheetValueSelectsCellAndSupportsUndoRedo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        var a3 = new CellAddress(sheet.Id, 3, 1);
+        sheet.SetCell(a1, new TextValue("foo one"));
+        sheet.SetCell(c1, new TextValue("foo two"));
+        sheet.SetCell(a3, new TextValue("foo three"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.ReplaceNextValue("foo", "bar");
+
+        result.Success.Should().BeTrue();
+        result.ReplacedCount.Should().Be(1);
+        result.ReplacedRange.Should().Be(new GridRange(c1, c1));
+        result.MatchIndex.Should().Be(2);
+        result.MatchCount.Should().Be(3);
+        session.SelectedRange.Should().Be(new GridRange(c1, c1));
+        session.ActiveCell.Should().Be(c1);
+        session.LastFindText.Should().Be("foo");
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        sheet.GetCell(a1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("foo one");
+        sheet.GetCell(c1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("bar two");
+        sheet.GetCell(a3)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("foo three");
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.GetCell(c1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("foo two");
+        session.CanRedo.Should().BeTrue();
+
+        var redo = session.RedoLastEdit();
+
+        redo.Success.Should().BeTrue();
+        sheet.GetCell(c1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("bar two");
+    }
+
+    [Fact]
+    public void ReplaceNextValue_ReplacesCurrentFoundValueThenNextCallAdvances()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(a1, new TextValue("foo one"));
+        sheet.SetCell(b1, new TextValue("foo two"));
+        sheet.SetCell(c1, new TextValue("foo three"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var found = session.FindNext("foo");
+        var firstReplace = session.ReplaceNextValue("foo", "bar");
+        var secondReplace = session.ReplaceNextValue("foo", "bar");
+
+        found.SelectedRange.Should().Be(new GridRange(b1, b1));
+        firstReplace.Success.Should().BeTrue();
+        firstReplace.ReplacedRange.Should().Be(new GridRange(b1, b1));
+        secondReplace.Success.Should().BeTrue();
+        secondReplace.ReplacedRange.Should().Be(new GridRange(c1, c1));
+        sheet.GetCell(a1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("foo one");
+        sheet.GetCell(b1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("bar two");
+        sheet.GetCell(c1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("bar three");
+        session.SelectedRange.Should().Be(new GridRange(c1, c1));
+        session.IsDirty.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ReplaceNextValue_FormulaMatchSelectsWithoutDirtyingWorkbook()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var formulaCell = Cell.FromFormula("A2");
+        formulaCell.Value = new TextValue("foo calculated");
+        sheet.SetCell(a1, formulaCell);
+        sheet.SetCell(b1, new TextValue("foo value"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(b1);
+
+        var result = session.ReplaceNextValue("foo", "bar");
+
+        result.Success.Should().BeTrue();
+        result.ReplacedCount.Should().Be(0);
+        result.ReplacedRange.Should().Be(new GridRange(a1, a1));
+        result.MatchIndex.Should().Be(1);
+        result.MatchCount.Should().Be(2);
+        session.SelectedRange.Should().Be(new GridRange(a1, a1));
+        session.ActiveCell.Should().Be(a1);
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+        sheet.GetCell(a1)!.FormulaText.Should().Be("A2");
+        sheet.GetCell(a1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("foo calculated");
+        sheet.GetCell(b1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("foo value");
+    }
+
+    [Fact]
     public void CreateOpened_CreatesTemplateSessionWithOpenMetadata()
     {
         var path = Path.Combine(Path.GetTempPath(), "Budget.xltx");

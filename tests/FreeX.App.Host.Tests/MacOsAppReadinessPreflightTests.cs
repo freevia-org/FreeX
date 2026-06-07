@@ -209,6 +209,12 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("public static class CellTextOrientationLayoutPlanner");
         script.Should().Contain("public static bool ShouldClip(");
         script.Should().Contain("CreateNativePasteSpecialMenu()");
+        script.Should().Contain("private enum ReplaceDialogAction");
+        script.Should().Contain("ReplaceDialogResult(string FindText, string ReplaceText, ReplaceDialogAction Action)");
+        script.Should().Contain("`\"ReplaceButton`\"");
+        script.Should().Contain("_session.ReplaceNextValue(replacement.FindText, replacement.ReplaceText)");
+        script.Should().Contain("public WorkbookReplaceResult ReplaceNextValue(");
+        script.Should().Contain("GetReplaceTargetIndex(matches, options.SearchOrder, sameSearch)");
         script.Should().Contain("_bordersButton.Flyout = CreateBorderPresetFlyout();");
         script.Should().Contain("_bordersMenuItem.Menu = CreateNativeBorderPresetMenu();");
         script.Should().Contain("PasteSpecialClipboardAtActiveCell(text, mode, options)");
@@ -1019,7 +1025,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     private readonly NativeMenuItem _replaceMenuItem = new();
                     private readonly NativeMenuItem _goToMenuItem = new();
                     private readonly NativeMenuItem _goToSpecialMenuItem = new();
-                    private sealed record ReplaceDialogResult(string FindText, string ReplaceText);
+                    private enum ReplaceDialogAction
+                    private sealed record ReplaceDialogResult(string FindText, string ReplaceText, ReplaceDialogAction Action);
                     private sealed record GoToSpecialDialogResult(GoToSpecialKind Kind, GoToSpecialOptions Options);
                     private sealed record GoToSpecialChoice(GoToSpecialKind Kind, string Label)
                     _findMenuItem.Header = "Find...";
@@ -1059,6 +1066,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     "FindTextBox"
                     "ReplaceFindTextBox"
                     "ReplaceWithTextBox"
+                    "ReplaceButton"
                     "ReplaceAllButton"
                     "GoToReferenceBox"
                     "GoToSpecialKindBox"
@@ -1068,7 +1076,9 @@ public sealed class MacOsAppReadinessPreflightTests
                     "GoToSpecialErrorsBox"
                     "GoToSpecialOkButton"
                     var result = _session.FindNext(searchText);
-                    var result = _session.ReplaceAllValues(replacement.FindText, replacement.ReplaceText);
+                    replacement.Action == ReplaceDialogAction.ReplaceAll
+                    _session.ReplaceNextValue(replacement.FindText, replacement.ReplaceText)
+                    _session.ReplaceAllValues(replacement.FindText, replacement.ReplaceText)
                     var result = _session.GoToReference(reference);
                     var result = _session.GoToSpecial(kind, options);
                     result.SelectedRanges.Count == 1
@@ -1990,6 +2000,11 @@ public sealed class MacOsAppReadinessPreflightTests
                 if (keepSourceColumnWidths)
                 public string LastFindText => _lastFindText ??
                 public IReadOnlyList<GridRange> SelectedRanges { get; private set; } = [];
+                public WorkbookReplaceResult ReplaceNextValue(
+                var options = CreateActiveSheetFindOptions(FindLookIn.Values);
+                GetReplaceTargetIndex(matches, options.SearchOrder, sameSearch)
+                new EditCellsCommand(ActiveSheet.Id, [(match.Address, newCell)])
+                return WorkbookReplaceResult.Replaced(1, replacedRange, index + 1, matches.Count);
                 public WorkbookNavigationResult GoToReference(string reference)
                 public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
                 GoToSpecialService.Find(Workbook, ActiveSheet, SelectedRange, kind, ActiveCell, options)

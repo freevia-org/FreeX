@@ -2345,7 +2345,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _replaceMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _goToMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _goToSpecialMenuItem = new();");
-        source.Should().Contain("private sealed record ReplaceDialogResult(string FindText, string ReplaceText);");
+        source.Should().Contain("private enum ReplaceDialogAction");
+        source.Should().Contain("private sealed record ReplaceDialogResult(string FindText, string ReplaceText, ReplaceDialogAction Action);");
         source.Should().Contain("private sealed record GoToSpecialDialogResult(GoToSpecialKind Kind, GoToSpecialOptions Options);");
         source.Should().Contain("private sealed record GoToSpecialChoice(GoToSpecialKind Kind, string Label)");
         source.Should().Contain("_findMenuItem.Header = \"Find...\";");
@@ -2387,6 +2388,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"FindTextBox\"");
         source.Should().Contain("\"ReplaceFindTextBox\"");
         source.Should().Contain("\"ReplaceWithTextBox\"");
+        source.Should().Contain("\"ReplaceButton\"");
         source.Should().Contain("\"ReplaceAllButton\"");
         source.Should().Contain("\"GoToReferenceBox\"");
         source.Should().Contain("\"GoToSpecialKindBox\"");
@@ -2398,7 +2400,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("new(GoToSpecialKind.Blanks, \"Blanks\")");
         source.Should().Contain("new(GoToSpecialKind.VisibleCellsOnly, \"Visible cells only\")");
         source.Should().Contain("var result = _session.FindNext(searchText);");
-        source.Should().Contain("var result = _session.ReplaceAllValues(replacement.FindText, replacement.ReplaceText);");
+        source.Should().Contain("replacement.Action == ReplaceDialogAction.ReplaceAll");
+        source.Should().Contain("_session.ReplaceNextValue(replacement.FindText, replacement.ReplaceText)");
+        source.Should().Contain("_session.ReplaceAllValues(replacement.FindText, replacement.ReplaceText)");
         source.Should().Contain("var result = _session.GoToReference(reference);");
         source.Should().Contain("var result = _session.GoToSpecial(kind, options);");
         source.Should().Contain("result.SelectedRanges.Count == 1");
@@ -2412,6 +2416,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("e.Key == Key.G && HasOnlyControlModifier(e.KeyModifiers)");
         source.Should().Contain("HasNativeGoToSpecialMenuItem: HasNativeMenuItem(_goToSpecialMenuItem, \"Go To Special...\", requireGesture: false)");
         sessionSource.Should().Contain("public IReadOnlyList<GridRange> SelectedRanges { get; private set; } = [];");
+        sessionSource.Should().Contain("public WorkbookReplaceResult ReplaceNextValue(");
+        sessionSource.Should().Contain("var options = CreateActiveSheetFindOptions(FindLookIn.Values);");
+        sessionSource.Should().Contain("GetReplaceTargetIndex(matches, options.SearchOrder, sameSearch)");
+        sessionSource.Should().Contain("new EditCellsCommand(ActiveSheet.Id, [(match.Address, newCell)])");
+        sessionSource.Should().Contain("return WorkbookReplaceResult.Replaced(1, replacedRange, index + 1, matches.Count);");
         sessionSource.Should().Contain("public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)");
         sessionSource.Should().Contain("GoToSpecialService.Find(Workbook, ActiveSheet, SelectedRange, kind, ActiveCell, options)");
         sessionSource.Should().Contain("SelectionRangeService.CompressAddresses(matches)");

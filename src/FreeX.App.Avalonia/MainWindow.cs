@@ -58,7 +58,13 @@ public sealed class MainWindow : Window
         StatusBar
     }
 
-    private sealed record ReplaceDialogResult(string FindText, string ReplaceText);
+    private enum ReplaceDialogAction
+    {
+        Replace,
+        ReplaceAll
+    }
+
+    private sealed record ReplaceDialogResult(string FindText, string ReplaceText, ReplaceDialogAction Action);
     private sealed record GoToSpecialDialogResult(GoToSpecialKind Kind, GoToSpecialOptions Options);
     private sealed record GoToSpecialChoice(GoToSpecialKind Kind, string Label)
     {
@@ -3887,16 +3893,26 @@ public sealed class MainWindow : Window
         if (replacement is null)
             return;
 
-        var result = _session.ReplaceAllValues(replacement.FindText, replacement.ReplaceText);
+        var result = replacement.Action == ReplaceDialogAction.ReplaceAll
+            ? _session.ReplaceAllValues(replacement.FindText, replacement.ReplaceText)
+            : _session.ReplaceNextValue(replacement.FindText, replacement.ReplaceText);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Replace All failed.");
+            ShowEditIssue(result.ErrorMessage ?? "Replace failed.");
+            return;
+        }
+
+        if (replacement.Action == ReplaceDialogAction.ReplaceAll)
+        {
+            RefreshShell(result.ReplacedCount == 0
+                ? "No matches found."
+                : $"Replaced {result.ReplacedCount} cells");
             return;
         }
 
         RefreshShell(result.ReplacedCount == 0
-            ? "No matches found."
-            : $"Replaced {result.ReplacedCount} cells");
+            ? result.MatchCount == 0 ? "No matches found." : "No replaceable match found."
+            : $"Replaced {FormatRangeReference(result.ReplacedRange!.Value)} ({result.MatchIndex} of {result.MatchCount})");
     }
 
     private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync()
@@ -3906,7 +3922,7 @@ public sealed class MainWindow : Window
         {
             Title = "Replace",
             Width = 420,
-            Height = 220,
+            Height = 230,
             MinWidth = 360,
             MinHeight = 200,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -3929,6 +3945,14 @@ public sealed class MainWindow : Window
         AutomationProperties.SetName(replaceBox, "Replace with");
         AutomationProperties.SetAutomationId(replaceBox, "ReplaceWithTextBox");
 
+        var replaceButton = new Button
+        {
+            Content = "Replace",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(replaceButton, "ReplaceButton");
+
         var replaceAllButton = new Button
         {
             Content = "Replace All",
@@ -3945,16 +3969,17 @@ public sealed class MainWindow : Window
         };
         AutomationProperties.SetAutomationId(cancelButton, "ReplaceCancelButton");
 
-        void Accept()
+        void Accept(ReplaceDialogAction action)
         {
-            result = new ReplaceDialogResult(findBox.Text ?? "", replaceBox.Text ?? "");
+            result = new ReplaceDialogResult(findBox.Text ?? "", replaceBox.Text ?? "", action);
             dialog.Close();
         }
 
-        replaceAllButton.Click += (_, _) => Accept();
+        replaceButton.Click += (_, _) => Accept(ReplaceDialogAction.Replace);
+        replaceAllButton.Click += (_, _) => Accept(ReplaceDialogAction.ReplaceAll);
         cancelButton.Click += (_, _) => dialog.Close();
-        findBox.KeyDown += (_, e) => HandleReplaceDialogKey(e, Accept, () => dialog.Close());
-        replaceBox.KeyDown += (_, e) => HandleReplaceDialogKey(e, Accept, () => dialog.Close());
+        findBox.KeyDown += (_, e) => HandleReplaceDialogKey(e, () => Accept(ReplaceDialogAction.Replace), () => dialog.Close());
+        replaceBox.KeyDown += (_, e) => HandleReplaceDialogKey(e, () => Accept(ReplaceDialogAction.Replace), () => dialog.Close());
 
         var buttonRow = new StackPanel
         {
@@ -3964,6 +3989,7 @@ public sealed class MainWindow : Window
             Children =
             {
                 cancelButton,
+                replaceButton,
                 replaceAllButton,
             },
         };
