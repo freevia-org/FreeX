@@ -7823,7 +7823,7 @@ internal static class ExcelOpenSmoke
         WorksheetAutoFilterColumnReference filterColumnReference,
         HashSet<int> seenFilterColumns,
         List<string> issues,
-        bool allowExtensionList = true)
+        bool allowExtensionList = false)
     {
         var filterColumn = filterColumnReference.Element;
         var description = $"{autoFilterDescription} filterColumn #{filterColumnReference.Ordinal}";
@@ -7903,7 +7903,7 @@ internal static class ExcelOpenSmoke
         string filterColumnDescription,
         XElement filterColumn,
         List<string> issues,
-        bool allowExtensionList = true)
+        bool allowExtensionList = false)
     {
         string[] childNames = allowExtensionList
             ?
@@ -9671,10 +9671,8 @@ internal static class ExcelOpenSmoke
         AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "dxfId", condition.Attribute("dxfId")?.Value, issues);
         AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "iconId", condition.Attribute("iconId")?.Value, issues);
 
-        foreach (var unexpectedChild in condition.Elements().Where(element => element.Name != SpreadsheetNs + "extLst"))
-        {
-            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
-        }
+        if (condition.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
     }
 
     private static bool IsKnownSortByValue(string value) =>
