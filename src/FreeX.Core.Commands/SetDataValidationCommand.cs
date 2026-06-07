@@ -101,7 +101,7 @@ public sealed class ClearDataValidationCommand : IWorkbookCommand
         {
             var rule = sheet.DataValidations[i];
             var allRanges = new[] { rule.AppliesTo }.Concat(rule.AdditionalRanges).ToArray();
-            if (!allRanges.Any(range => Intersects(range, _range)))
+            if (!allRanges.Any(range => range.Overlaps(_range)))
                 continue;
 
             _removed.Add((i, rule));
@@ -137,16 +137,9 @@ public sealed class ClearDataValidationCommand : IWorkbookCommand
             sheet.DataValidations.Insert(Math.Min(index, sheet.DataValidations.Count), rule);
     }
 
-    private static bool Intersects(GridRange a, GridRange b) =>
-        a.Start.Sheet == b.Start.Sheet &&
-        a.Start.Row <= b.End.Row &&
-        a.End.Row >= b.Start.Row &&
-        a.Start.Col <= b.End.Col &&
-        a.End.Col >= b.Start.Col;
-
     private static IEnumerable<GridRange> Subtract(GridRange source, GridRange remove)
     {
-        if (!Intersects(source, remove))
+        if (!source.Overlaps(remove))
         {
             yield return source;
             yield break;
