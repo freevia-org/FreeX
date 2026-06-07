@@ -30,7 +30,7 @@ public sealed partial class XsltWorkbookTransformTests
         new(Encoding.UTF8.GetBytes(value));
 
     private static MemoryStream Utf16StreamFromString(string value) =>
-        new(Encoding.Unicode.GetPreamble().Concat(Encoding.Unicode.GetBytes(value)).ToArray());
+        new(EncodedTextPayloads.WithBom(Encoding.Unicode, value));
 
     private static Stream NonSeekableStreamFromString(string value) =>
         new NonSeekableReadStream(StreamFromString(value));
