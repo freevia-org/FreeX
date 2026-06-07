@@ -175,6 +175,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookProtectionSchemaIssues: false,
             HasWorkbookWebPublishingSchemaIssues: false,
             HasWorkbookSmartTagSchemaIssues: false,
+            HasWorkbookNativeMetadataSchemaIssues: false,
             HasWorksheetRelationshipMarkerSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
@@ -251,6 +252,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookProtectionSchemaIssues: false,
             HasWorkbookWebPublishingSchemaIssues: false,
             HasWorkbookSmartTagSchemaIssues: false,
+            HasWorkbookNativeMetadataSchemaIssues: false,
             HasWorksheetRelationshipMarkerSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
@@ -299,6 +301,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookProtectionSchemaIssues: false,
             HasWorkbookWebPublishingSchemaIssues: false,
             HasWorkbookSmartTagSchemaIssues: false,
+            HasWorkbookNativeMetadataSchemaIssues: false,
             HasWorksheetRelationshipMarkerSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
@@ -343,6 +346,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookProtectionSchemaIssues: false,
             HasWorkbookWebPublishingSchemaIssues: false,
             HasWorkbookSmartTagSchemaIssues: false,
+            HasWorkbookNativeMetadataSchemaIssues: false,
             HasWorksheetRelationshipMarkerSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
@@ -416,6 +420,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookProtectionSchemaIssues: false,
             HasWorkbookWebPublishingSchemaIssues: false,
             HasWorkbookSmartTagSchemaIssues: false,
+            HasWorkbookNativeMetadataSchemaIssues: false,
             HasWorksheetRelationshipMarkerSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
@@ -591,6 +596,101 @@ public sealed class XlsxLoadPackageStreamTests
     }
 
     [Fact]
+    public void ClosedXmlLoadSanitizer_NormalizesWorkbookNativeMetadata()
+    {
+        using var package = CreatePackageWithWorkbook(
+            """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <fileVersion appName="xl" lastEdited="7" lowestEdited="7" rupBuild="28129" customVersionFlag="removed">
+                <nativeFileVersionChild/>
+              </fileVersion>
+              <workbookPr date1904="maybe" defaultThemeVersion="not-a-number" customWorkbookPrFlag="removed">
+                <nativeWorkbookPrChild/>
+              </workbookPr>
+              <sheets/>
+              <functionGroups builtInGroupCount="not-a-number" customFunctionGroupsFlag="removed">
+                <functionGroup name="FreeXNativeFunctions" customFunctionGroupFlag="removed">
+                  <nativeFunctionGroupChild/>
+                </functionGroup>
+                <nativeFunctionGroupsChild/>
+              </functionGroups>
+              <definedNames customDefinedNamesFlag="removed">
+                <definedName name=" DynamicSalesRange " hidden="maybe" customDefinedNameFlag="removed">Sheet1!$A$1<nativeDefinedNameChild/></definedName>
+                <nativeDefinedNamesChild/>
+              </definedNames>
+              <oleSize ref=" a1:d12 " customOleSizeFlag="removed">
+                <nativeOleSizeChild/>
+              </oleSize>
+              <extLst customWorkbookExtLstFlag="removed">
+                <ext uri=" {00112233-4455-6677-8899-AABBCCDDEEFF} " customWorkbookExtFlag="removed">
+                  <futureMetadata xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main" name="FreeXWorkbookNativeMetadata"/>
+                </ext>
+                <ext uri=" "/>
+                <nativeWorkbookExtLstChild/>
+              </extLst>
+            </workbook>
+            """);
+
+        using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(package);
+
+        sanitized.Should().NotBeSameAs(package);
+        using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/workbook.xml");
+
+        var fileVersion = workbookXml.Root!.Element(workbookNs + "fileVersion")!;
+        fileVersion.Attribute("appName")!.Value.Should().Be("xl");
+        fileVersion.Attribute("customVersionFlag").Should().BeNull();
+        fileVersion.Elements().Should().BeEmpty();
+
+        var workbookPr = workbookXml.Root!.Element(workbookNs + "workbookPr")!;
+        workbookPr.Attribute("date1904").Should().BeNull();
+        workbookPr.Attribute("defaultThemeVersion").Should().BeNull();
+        workbookPr.Attribute("customWorkbookPrFlag").Should().BeNull();
+        workbookPr.Elements().Should().BeEmpty();
+
+        var functionGroups = workbookXml.Root!.Element(workbookNs + "functionGroups")!;
+        functionGroups.Attribute("builtInGroupCount").Should().BeNull();
+        functionGroups.Attribute("customFunctionGroupsFlag").Should().BeNull();
+        functionGroups.Element(workbookNs + "nativeFunctionGroupsChild").Should().BeNull();
+        var functionGroup = functionGroups.Elements(workbookNs + "functionGroup")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        functionGroup.Attribute("name")!.Value.Should().Be("FreeXNativeFunctions");
+        functionGroup.Attribute("customFunctionGroupFlag").Should().BeNull();
+        functionGroup.Elements().Should().BeEmpty();
+
+        var definedNames = workbookXml.Root!.Element(workbookNs + "definedNames")!;
+        definedNames.Attribute("customDefinedNamesFlag").Should().BeNull();
+        definedNames.Element(workbookNs + "nativeDefinedNamesChild").Should().BeNull();
+        var definedName = definedNames.Elements(workbookNs + "definedName")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        definedName.Attribute("name")!.Value.Should().Be("DynamicSalesRange");
+        definedName.Attribute("hidden").Should().BeNull();
+        definedName.Attribute("customDefinedNameFlag").Should().BeNull();
+        definedName.Value.Should().Be("Sheet1!$A$1");
+        definedName.Elements().Should().BeEmpty();
+
+        var oleSize = workbookXml.Root!.Element(workbookNs + "oleSize")!;
+        oleSize.Attribute("ref")!.Value.Should().Be("A1:D12");
+        oleSize.Attribute("customOleSizeFlag").Should().BeNull();
+        oleSize.Elements().Should().BeEmpty();
+
+        var extensionList = workbookXml.Root!.Element(workbookNs + "extLst")!;
+        extensionList.Attribute("customWorkbookExtLstFlag").Should().BeNull();
+        extensionList.Element(workbookNs + "nativeWorkbookExtLstChild").Should().BeNull();
+        var extension = extensionList.Elements(workbookNs + "ext")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        extension.Attribute("uri")!.Value.Should().Be("{00112233-4455-6677-8899-AABBCCDDEEFF}");
+        extension.Attribute("customWorkbookExtFlag").Should().BeNull();
+    }
+
+    [Fact]
     public void ClosedXmlLoadSanitizer_RemovesMergeCellsFromHintedWorksheets()
     {
         using var package = CreatePackageWithWorksheets(
@@ -636,6 +736,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookProtectionSchemaIssues: false,
             HasWorkbookWebPublishingSchemaIssues: false,
             HasWorkbookSmartTagSchemaIssues: false,
+            HasWorkbookNativeMetadataSchemaIssues: false,
             HasWorksheetRelationshipMarkerSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
