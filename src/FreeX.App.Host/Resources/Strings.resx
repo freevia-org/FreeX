@@ -3480,6 +3480,9 @@
   <data name="MainWindow_Content_Feedback" xml:space="preserve">
     <value>Feedback</value>
   </data>
+  <data name="MainWindow_Content_FieldHeaders" xml:space="preserve">
+    <value>Field Headers</value>
+  </data>
   <data name="MainWindow_Content_FieldList" xml:space="preserve">
     <value>Field List</value>
   </data>
@@ -3740,6 +3743,9 @@
   </data>
   <data name="MainWindow_Content_PivotTableName" xml:space="preserve">
     <value>PivotTable Name</value>
+  </data>
+  <data name="MainWindow_Content_PlusMinusButtons" xml:space="preserve">
+    <value>+/- Buttons</value>
   </data>
   <data name="MainWindow_Content_PlotBorder" xml:space="preserve">
     <value>Plot Border</value>
@@ -6156,6 +6162,12 @@
   <data name="MainWindow_TooltipDescription_ShowOrHideTheFormulaBar" xml:space="preserve">
     <value>Show or hide the formula bar.</value>
   </data>
+  <data name="MainWindow_TooltipDescription_ShowOrHideExpandCollapseButtonsForTheSelectedPivotTable" xml:space="preserve">
+    <value>Show or hide expand and collapse buttons for the selected PivotTable.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_ShowOrHideFieldCaptionsAndFilterDropDownsForTheSelectedPivotTable" xml:space="preserve">
+    <value>Show or hide field captions and filter drop-downs for the selected PivotTable.</value>
+  </data>
   <data name="MainWindow_TooltipDescription_ShowOrHideThePivotTableFieldsTaskPane" xml:space="preserve">
     <value>Show or hide the PivotTable Fields task pane.</value>
   </data>
@@ -6600,6 +6612,9 @@
   <data name="MainWindow_TooltipTitle_Feedback" xml:space="preserve">
     <value>Feedback</value>
   </data>
+  <data name="MainWindow_TooltipTitle_FieldHeaders" xml:space="preserve">
+    <value>Field Headers</value>
+  </data>
   <data name="MainWindow_TooltipTitle_FieldList" xml:space="preserve">
     <value>Field List</value>
   </data>
@@ -6932,6 +6947,9 @@
   </data>
   <data name="MainWindow_TooltipTitle_PivotTableName" xml:space="preserve">
     <value>PivotTable Name</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_PlusMinusButtons" xml:space="preserve">
+    <value>+/- Buttons</value>
   </data>
   <data name="MainWindow_TooltipTitle_PivotTableOptions" xml:space="preserve">
     <value>PivotTable Options</value>
