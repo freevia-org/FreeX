@@ -843,6 +843,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchWorkbookFileSharing(archive);
                 NormalizePatchWorkbookFileRecoveryProperties(archive);
                 NormalizePatchWorkbookFunctionGroups(archive);
+                NormalizePatchWorkbookSmartTags(archive);
                 NormalizePatchWorkbookProtection(archive);
                 NormalizePatchSharedStrings(archive);
                 NormalizePatchInlineStringFonts(archive);
@@ -1199,6 +1200,32 @@ public sealed partial class XlsxFileAdapter
             {
                 XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
             }
+        }
+
+        private static void NormalizePatchWorkbookSmartTags(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var changed = false;
+            if (workbookXml.Root?.Element(workbookNs + "smartTagPr") is { } smartTagPr)
+                changed |= XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagPropertiesElement(smartTagPr);
+
+            if (workbookXml.Root?.Element(workbookNs + "smartTagTypes") is { } smartTagTypes)
+            {
+                changed |= XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagTypesElement(smartTagTypes);
+                if (XlsxWorkbookSmartTagNormalizer.ShouldRemoveSmartTagTypesElement(smartTagTypes))
+                {
+                    smartTagTypes.Remove();
+                    changed = true;
+                }
+            }
+
+            if (changed)
+                XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
         }
 
         private static void NormalizePatchWorkbookProtection(ZipArchive archive)

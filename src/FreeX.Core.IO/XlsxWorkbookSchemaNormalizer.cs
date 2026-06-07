@@ -219,6 +219,17 @@ internal static class XlsxWorkbookSchemaNormalizer
             changed |= XlsxWorkbookFileVersionNormalizer.NormalizeElement(fileVersion);
         if (root.Element(workbookNs + "functionGroups") is { } functionGroups)
             changed |= XlsxWorkbookFunctionGroupsNormalizer.NormalizeElement(functionGroups);
+        if (root.Element(workbookNs + "smartTagPr") is { } smartTagPr)
+            changed |= XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagPropertiesElement(smartTagPr);
+        if (root.Element(workbookNs + "smartTagTypes") is { } smartTagTypes)
+        {
+            changed |= XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagTypesElement(smartTagTypes);
+            if (XlsxWorkbookSmartTagNormalizer.ShouldRemoveSmartTagTypesElement(smartTagTypes))
+            {
+                smartTagTypes.Remove();
+                changed = true;
+            }
+        }
 
         var orderedChildren = root.Elements()
             .Select((element, index) => new { Element = element, Index = index })
