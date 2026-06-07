@@ -335,6 +335,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _boldMenuItem = new();
     private readonly NativeMenuItem _italicMenuItem = new();
     private readonly NativeMenuItem _underlineMenuItem = new();
+    private MacOsLaunchSmokeLiveCommandKeySnapshot _launchSmokeLiveCommandKeySnapshot = MacOsLaunchSmokeLiveCommandKeySnapshot.Empty;
     private readonly NativeMenuItem _doubleUnderlineMenuItem = new();
     private readonly NativeMenuItem _strikethroughMenuItem = new();
     private readonly NativeMenuItem _increaseFontSizeMenuItem = new();
@@ -712,15 +713,15 @@ public sealed class MainWindow : Window
 
         _boldMenuItem.Header = "Bold";
         _boldMenuItem.Gesture = new KeyGesture(Key.B, KeyModifiers.Meta);
-        _boldMenuItem.Click += (_, _) => ToggleSelectedRangeBold();
+        _boldMenuItem.Click += (_, _) => ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: true);
 
         _italicMenuItem.Header = "Italic";
         _italicMenuItem.Gesture = new KeyGesture(Key.I, KeyModifiers.Meta);
-        _italicMenuItem.Click += (_, _) => ToggleSelectedRangeItalic();
+        _italicMenuItem.Click += (_, _) => ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: true);
 
         _underlineMenuItem.Header = "Underline";
         _underlineMenuItem.Gesture = new KeyGesture(Key.U, KeyModifiers.Meta);
-        _underlineMenuItem.Click += (_, _) => ToggleSelectedRangeUnderline();
+        _underlineMenuItem.Click += (_, _) => ToggleSelectedRangeUnderline(trackLaunchSmokeLiveCommandKey: true);
 
         _doubleUnderlineMenuItem.Header = "Double Underline";
         _doubleUnderlineMenuItem.Click += (_, _) => ToggleSelectedRangeDoubleUnderline();
@@ -6857,17 +6858,41 @@ public sealed class MainWindow : Window
 
     private void ToggleSelectedRangeBold()
     {
-        ApplySelectedRangeBold(!_session.IsSelectedRangeStartBold);
+        ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: false);
+    }
+
+    private void ToggleSelectedRangeBold(bool trackLaunchSmokeLiveCommandKey)
+    {
+        var before = _session.IsSelectedRangeStartBold;
+        ApplySelectedRangeBold(!before);
+        if (trackLaunchSmokeLiveCommandKey)
+            RecordLaunchSmokeLiveCommandKey(Key.B, before, _session.IsSelectedRangeStartBold);
     }
 
     private void ToggleSelectedRangeItalic()
     {
-        ApplySelectedRangeItalic(!_session.IsSelectedRangeStartItalic);
+        ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: false);
+    }
+
+    private void ToggleSelectedRangeItalic(bool trackLaunchSmokeLiveCommandKey)
+    {
+        var before = _session.IsSelectedRangeStartItalic;
+        ApplySelectedRangeItalic(!before);
+        if (trackLaunchSmokeLiveCommandKey)
+            RecordLaunchSmokeLiveCommandKey(Key.I, before, _session.IsSelectedRangeStartItalic);
     }
 
     private void ToggleSelectedRangeUnderline()
     {
-        ApplySelectedRangeUnderline(!_session.IsSelectedRangeStartUnderline);
+        ToggleSelectedRangeUnderline(trackLaunchSmokeLiveCommandKey: false);
+    }
+
+    private void ToggleSelectedRangeUnderline(bool trackLaunchSmokeLiveCommandKey)
+    {
+        var before = _session.IsSelectedRangeStartUnderline;
+        ApplySelectedRangeUnderline(!before);
+        if (trackLaunchSmokeLiveCommandKey)
+            RecordLaunchSmokeLiveCommandKey(Key.U, before, _session.IsSelectedRangeStartUnderline);
     }
 
     private void ToggleSelectedRangeDoubleUnderline()
@@ -7647,6 +7672,48 @@ public sealed class MainWindow : Window
         controls.SearchBox.SelectedIndex == 0 &&
         controls.LookInBox.SelectedIndex == defaultLookInIndex;
 
+    internal MacOsLaunchSmokeLiveCommandKeySnapshot BeginLaunchSmokeLiveCommandKeyProbe()
+    {
+        _launchSmokeLiveCommandKeySnapshot = MacOsLaunchSmokeLiveCommandKeySnapshot.Ready(
+            _session.IsSelectedRangeStartBold,
+            _session.IsSelectedRangeStartItalic,
+            _session.IsSelectedRangeStartUnderline);
+        return _launchSmokeLiveCommandKeySnapshot;
+    }
+
+    internal MacOsLaunchSmokeLiveCommandKeySnapshot CreateLaunchSmokeLiveCommandKeySnapshot() =>
+        _launchSmokeLiveCommandKeySnapshot;
+
+    private void RecordLaunchSmokeLiveCommandKey(Key key, bool before, bool after)
+    {
+        if (!_launchSmokeLiveCommandKeySnapshot.IsReady)
+            return;
+
+        var changed = before != after;
+        _launchSmokeLiveCommandKeySnapshot = key switch
+        {
+            Key.B => _launchSmokeLiveCommandKeySnapshot with
+            {
+                HasBoldCommandKey = true,
+                HasBoldStateChange = _launchSmokeLiveCommandKeySnapshot.HasBoldStateChange || changed,
+                CurrentBoldState = after
+            },
+            Key.I => _launchSmokeLiveCommandKeySnapshot with
+            {
+                HasItalicCommandKey = true,
+                HasItalicStateChange = _launchSmokeLiveCommandKeySnapshot.HasItalicStateChange || changed,
+                CurrentItalicState = after
+            },
+            Key.U => _launchSmokeLiveCommandKeySnapshot with
+            {
+                HasUnderlineCommandKey = true,
+                HasUnderlineStateChange = _launchSmokeLiveCommandKeySnapshot.HasUnderlineStateChange || changed,
+                CurrentUnderlineState = after
+            },
+            _ => _launchSmokeLiveCommandKeySnapshot
+        };
+    }
+
     internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot()
     {
         var hasNativeFileMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
@@ -8225,17 +8292,17 @@ public sealed class MainWindow : Window
         else if (e.Key == Key.B && HasOnlyCommandModifier(e.KeyModifiers))
         {
             e.Handled = true;
-            ToggleSelectedRangeBold();
+            ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: true);
         }
         else if (e.Key == Key.I && HasOnlyCommandModifier(e.KeyModifiers))
         {
             e.Handled = true;
-            ToggleSelectedRangeItalic();
+            ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: true);
         }
         else if (e.Key == Key.U && HasOnlyCommandModifier(e.KeyModifiers))
         {
             e.Handled = true;
-            ToggleSelectedRangeUnderline();
+            ToggleSelectedRangeUnderline(trackLaunchSmokeLiveCommandKey: true);
         }
         else if (e.Key == Key.D && HasOnlyControlModifier(e.KeyModifiers))
         {

@@ -363,10 +363,12 @@ jobs:
             SWIFT
             rm -f "$launch_smoke_report"
             /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$unzip_root/FreeX.app"
-            open -W -n -b io.github.tony-xmelon.freex "$launch_smoke_file" --args --macos-launch-smoke "$launch_smoke_report" --macos-launch-smoke-verify-image-clipboard &
+            open -W -n -b io.github.tony-xmelon.freex "$launch_smoke_file" --args --macos-launch-smoke "$launch_smoke_report" --macos-launch-smoke-verify-image-clipboard --macos-launch-smoke-verify-live-command-keys &
             launch_pid=$!
-            for _ in {1..60}; do
-              if [[ -f "$launch_smoke_report" ]]; then
+            live_command_key_ready=false
+            for _ in {1..90}; do
+              if [[ -f "$launch_smoke_report" ]] && grep -q "live_command_key_smoke_ready=true" "$launch_smoke_report"; then
+                live_command_key_ready=true
                 break
               fi
               if ! kill -0 "$launch_pid" 2>/dev/null; then
@@ -381,6 +383,33 @@ jobs:
               cat "$launch_smoke_report" >> "$evidence_path"
               exit 1
             fi
+            if [[ "$live_command_key_ready" != "true" ]]; then
+              wait "$launch_pid" || true
+              cat "$launch_smoke_report" >> "$evidence_path"
+              exit 1
+            fi
+            live_command_key_system_events_result=attempted
+            if ! osascript <<'APPLESCRIPT'
+            tell application id "io.github.tony-xmelon.freex" to activate
+            delay 0.5
+            tell application "System Events"
+              tell process "FreeX"
+                set frontmost to true
+              end tell
+              keystroke "b" using {command down}
+              delay 0.2
+              keystroke "i" using {command down}
+              delay 0.2
+              keystroke "u" using {command down}
+            end tell
+            APPLESCRIPT
+            then
+              live_command_key_system_events_result=blocked_or_failed
+            fi
+            {
+              echo "live_command_key_system_events_attempted=true"
+              echo "live_command_key_system_events_result=$live_command_key_system_events_result"
+            } >> "$evidence_path"
             wait "$launch_pid" || true
             cat "$launch_smoke_report" >> "$evidence_path"
             grep -q "macos_launch_smoke=passed" "$launch_smoke_report"
@@ -401,6 +430,16 @@ jobs:
             grep -q "cmd_bold_menu_gesture=true" "$launch_smoke_report"
             grep -q "cmd_italic_menu_gesture=true" "$launch_smoke_report"
             grep -q "cmd_underline_menu_gesture=true" "$launch_smoke_report"
+            grep -q "live_command_key_smoke_required=true" "$launch_smoke_report"
+            grep -q "live_command_key_smoke=passed" "$launch_smoke_report"
+            grep -q "live_command_key_smoke_attempted=true" "$launch_smoke_report"
+            grep -q "live_command_key_smoke_ready=true" "$launch_smoke_report"
+            grep -q "live_cmd_bold_received=true" "$launch_smoke_report"
+            grep -q "live_cmd_bold_state_changed=true" "$launch_smoke_report"
+            grep -q "live_cmd_italic_received=true" "$launch_smoke_report"
+            grep -q "live_cmd_italic_state_changed=true" "$launch_smoke_report"
+            grep -q "live_cmd_underline_received=true" "$launch_smoke_report"
+            grep -q "live_cmd_underline_state_changed=true" "$launch_smoke_report"
             grep -q "external_image_clipboard_paste_required=true" "$launch_smoke_report"
             grep -q "external_image_clipboard_paste=true" "$launch_smoke_report"
             grep -q "external_image_clipboard_picture_count=[1-9]" "$launch_smoke_report"

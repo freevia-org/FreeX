@@ -216,13 +216,13 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_clearHyperlinksMenuItem.Click += (_, _) => ClearSelectedRangeHyperlinks();");
         source.Should().Contain("_boldMenuItem.Header = \"Bold\";");
         source.Should().Contain("_boldMenuItem.Gesture = new KeyGesture(Key.B, KeyModifiers.Meta);");
-        source.Should().Contain("_boldMenuItem.Click += (_, _) => ToggleSelectedRangeBold();");
+        source.Should().Contain("_boldMenuItem.Click += (_, _) => ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: true);");
         source.Should().Contain("_italicMenuItem.Header = \"Italic\";");
         source.Should().Contain("_italicMenuItem.Gesture = new KeyGesture(Key.I, KeyModifiers.Meta);");
-        source.Should().Contain("_italicMenuItem.Click += (_, _) => ToggleSelectedRangeItalic();");
+        source.Should().Contain("_italicMenuItem.Click += (_, _) => ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: true);");
         source.Should().Contain("_underlineMenuItem.Header = \"Underline\";");
         source.Should().Contain("_underlineMenuItem.Gesture = new KeyGesture(Key.U, KeyModifiers.Meta);");
-        source.Should().Contain("_underlineMenuItem.Click += (_, _) => ToggleSelectedRangeUnderline();");
+        source.Should().Contain("_underlineMenuItem.Click += (_, _) => ToggleSelectedRangeUnderline(trackLaunchSmokeLiveCommandKey: true);");
         source.Should().Contain("_doubleUnderlineMenuItem.Header = \"Double Underline\";");
         source.Should().Contain("_doubleUnderlineMenuItem.Click += (_, _) => ToggleSelectedRangeDoubleUnderline();");
         source.Should().Contain("_strikethroughMenuItem.Header = \"Strikethrough\";");
@@ -589,19 +589,30 @@ public sealed class AvaloniaShellSourceTests
         appSource.Should().Contain("MacOsLaunchSmokeCoordinator.Start(mainWindow, launchSmokeOptions);");
         smokeSource.Should().Contain("public const string Argument = \"--macos-launch-smoke\";");
         smokeSource.Should().Contain("public const string VerifyImageClipboardPasteArgument = \"--macos-launch-smoke-verify-image-clipboard\";");
+        smokeSource.Should().Contain("public const string VerifyLiveCommandKeysArgument = \"--macos-launch-smoke-verify-live-command-keys\";");
         smokeSource.Should().Contain("startupArguments = filteredArguments.ToArray();");
         smokeSource.Should().Contain("verifyImageClipboardPaste = true;");
-        smokeSource.Should().Contain("new MacOsLaunchSmokeOptions(reportPath, verifyImageClipboardPaste)");
+        smokeSource.Should().Contain("verifyLiveCommandKeys = true;");
+        smokeSource.Should().Contain("new MacOsLaunchSmokeOptions(reportPath, verifyImageClipboardPaste, verifyLiveCommandKeys)");
         smokeSource.Should().Contain("mainWindow.Opened += async (_, _) => await RunAsync(mainWindow, options);");
         smokeSource.Should().Contain("mainWindow.CreateLaunchSmokeSnapshot()");
         smokeSource.Should().Contain("commandKeyEvidence = CaptureCommandKeyEvidence(mainWindow);");
+        smokeSource.Should().Contain("liveCommandKeyEvidence = mainWindow.BeginLaunchSmokeLiveCommandKeyProbe();");
+        smokeSource.Should().Contain("mainWindow.CreateLaunchSmokeLiveCommandKeySnapshot()");
         smokeSource.Should().Contain("await mainWindow.TryPasteLaunchSmokeClipboardImageAsync();");
         smokeSource.Should().Contain("IsPassed(snapshot, options, initialExternalImageClipboardPictureCount)");
-        smokeSource.Should().Contain("IsPassedWithCommandKeyEvidence(snapshot, options, initialExternalImageClipboardPictureCount, commandKeyEvidence)");
+        smokeSource.Should().Contain("IsPassedWithCommandKeyEvidence(");
         smokeSource.Should().Contain("HasExternalImageClipboardPasteEvidence(");
-        smokeSource.Should().Contain("macos_launch_smoke={(IsPassedWithCommandKeyEvidence(snapshot, options, initialExternalImageClipboardPictureCount, commandKeyEvidence) ? \"passed\" : \"failed\")}");
+        smokeSource.Should().Contain("liveCommandKeyEvidence.IsPassed");
+        smokeSource.Should().Contain("macos_launch_smoke={(IsPassedWithCommandKeyEvidence(snapshot, options, initialExternalImageClipboardPictureCount, commandKeyEvidence, liveCommandKeyEvidence) ? \"passed\" : \"failed\")}");
         smokeSource.Should().Contain("command_key_smoke={(commandKeyEvidence.IsPassed ? \"passed\" : \"failed\")}");
         smokeSource.Should().Contain("command_key_smoke_attempted={FormatBool(attemptedCommandKeyEvidence)}");
+        smokeSource.Should().Contain("live_command_key_smoke_required={FormatBool(options.VerifyLiveCommandKeys)}");
+        smokeSource.Should().Contain("live_command_key_smoke={liveCommandKeySmokeStatus}");
+        smokeSource.Should().Contain("live_command_key_smoke_ready={FormatBool(liveCommandKeyEvidence.IsReady)}");
+        smokeSource.Should().Contain("live_cmd_bold_state_changed={FormatBool(liveCommandKeyEvidence.HasBoldStateChange)}");
+        smokeSource.Should().Contain("live_cmd_italic_state_changed={FormatBool(liveCommandKeyEvidence.HasItalicStateChange)}");
+        smokeSource.Should().Contain("live_cmd_underline_state_changed={FormatBool(liveCommandKeyEvidence.HasUnderlineStateChange)}");
         smokeSource.Should().Contain("external_image_clipboard_paste_required={FormatBool(options.VerifyImageClipboardPaste)}");
         smokeSource.Should().Contain("external_image_clipboard_paste={FormatBool(imageClipboardPasteVerified)}");
         smokeSource.Should().Contain("external_image_clipboard_picture_count={snapshot.ExternalImageClipboardPictureCount}");
@@ -781,6 +792,8 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("private NativeMenu? _nativeMenu;");
         windowSource.Should().Contain("NativeMenu.SetMenu(this, _nativeMenu);");
         windowSource.Should().Contain("internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot()");
+        windowSource.Should().Contain("internal MacOsLaunchSmokeLiveCommandKeySnapshot BeginLaunchSmokeLiveCommandKeyProbe()");
+        windowSource.Should().Contain("private void RecordLaunchSmokeLiveCommandKey(Key key, bool before, bool after)");
         windowSource.Should().Contain("internal async Task<bool> TryPasteLaunchSmokeClipboardImageAsync()");
         windowSource.Should().Contain("return await TryPasteClipboardImageAsync(clipboard, _session.ActiveCell);");
         windowSource.Should().Contain("var externalImageClipboardPictures = _session.ActiveSheet.Pictures");
@@ -1601,7 +1614,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("RefreshShell($\"{(enabled ? \"Bolded\" : \"Unbolded\")} {rangeReference}\");");
         source.Should().Contain("private static bool HasOnlyCommandModifier(KeyModifiers modifiers)");
         source.Should().Contain("else if (e.Key == Key.B && HasOnlyCommandModifier(e.KeyModifiers))");
-        source.Should().Contain("ToggleSelectedRangeBold();");
+        source.Should().Contain("ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: true);");
     }
 
     [Fact]
@@ -1626,7 +1639,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("FontStyle = fontStyle,");
         source.Should().Contain("var fontStyle = style?.Italic == true ? FontStyle.Italic : FontStyle.Normal;");
         source.Should().Contain("else if (e.Key == Key.I && HasOnlyCommandModifier(e.KeyModifiers))");
-        source.Should().Contain("ToggleSelectedRangeItalic();");
+        source.Should().Contain("ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: true);");
     }
 
     [Fact]
@@ -1653,7 +1666,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("TextDecorations = textDecorations,");
         source.Should().Contain("else if (e.Key == Key.U && HasOnlyCommandModifier(e.KeyModifiers))");
         source.Should().Contain("else if (e.Key is Key.D4 or Key.NumPad4 && HasOnlyControlModifier(e.KeyModifiers))");
-        source.Should().Contain("ToggleSelectedRangeUnderline();");
+        source.Should().Contain("ToggleSelectedRangeUnderline(trackLaunchSmokeLiveCommandKey: true);");
     }
 
     [Fact]
@@ -2956,6 +2969,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("e.Key == Key.B && HasOnlyCommandModifier(e.KeyModifiers)");
         source.Should().Contain("e.Key == Key.I && HasOnlyCommandModifier(e.KeyModifiers)");
         source.Should().Contain("e.Key == Key.U && HasOnlyCommandModifier(e.KeyModifiers)");
+        source.Should().Contain("ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: true);");
+        source.Should().Contain("ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: true);");
+        source.Should().Contain("ToggleSelectedRangeUnderline(trackLaunchSmokeLiveCommandKey: true);");
         source.Should().Contain("e.Key == Key.W && HasOnlyCommandModifier(e.KeyModifiers)");
     }
 }
