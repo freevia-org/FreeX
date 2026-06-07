@@ -68,7 +68,7 @@ public static class WaterfallBarPlanner
     private static HashSet<int> ResolveTotals(int count, IReadOnlyCollection<int>? totalIndices)
     {
         if (totalIndices is null)
-            return count > 0 ? [count - 1] : [];
+            return [count - 1];
 
         return [.. totalIndices];
     }

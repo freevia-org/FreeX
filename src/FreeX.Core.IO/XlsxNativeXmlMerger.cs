@@ -48,6 +48,13 @@ internal static class XlsxNativeXmlMerger
     }
 
     public static bool MergeExtensionList(XElement? sourceExtensionList, XElement targetRoot, XNamespace workbookNs)
+        => MergeExtensionList(sourceExtensionList, targetRoot, workbookNs, null);
+
+    public static bool MergeExtensionList(
+        XElement? sourceExtensionList,
+        XElement targetRoot,
+        XNamespace workbookNs,
+        IReadOnlyDictionary<string, string>? relationshipIdMap)
     {
         if (sourceExtensionList is null)
             return false;
@@ -61,7 +68,7 @@ internal static class XlsxNativeXmlMerger
         var targetExtensionList = targetRoot.Element(workbookNs + "extLst");
         if (targetExtensionList is null)
         {
-            targetRoot.Add(new XElement(sourceExtensionList));
+            targetRoot.Add(CloneWithReboundRelationshipIds(sourceExtensionList, relationshipIdMap));
             return true;
         }
 
@@ -78,13 +85,31 @@ internal static class XlsxNativeXmlMerger
             if (!string.IsNullOrWhiteSpace(uri) && existingUris.Contains(uri))
                 continue;
 
-            targetExtensionList.Add(new XElement(sourceExtension));
+            targetExtensionList.Add(CloneWithReboundRelationshipIds(sourceExtension, relationshipIdMap));
             if (!string.IsNullOrWhiteSpace(uri))
                 existingUris.Add(uri);
             changed = true;
         }
 
         return changed;
+    }
+
+    private static XElement CloneWithReboundRelationshipIds(
+        XElement sourceElement,
+        IReadOnlyDictionary<string, string>? relationshipIdMap)
+    {
+        var clone = new XElement(sourceElement);
+        if (relationshipIdMap is null || relationshipIdMap.Count == 0)
+            return clone;
+
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        foreach (var attribute in clone.DescendantsAndSelf().Attributes().Where(attribute => attribute.Name.Namespace == relNs))
+        {
+            if (relationshipIdMap.TryGetValue(attribute.Value, out var replacementId))
+                attribute.Value = replacementId;
+        }
+
+        return clone;
     }
 
     private static string ElementIdentityKey(XElement element)

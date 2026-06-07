@@ -354,6 +354,54 @@ public sealed partial class XlsxPackageMetadataMergerTests
                 </Relationships>
                 """));
 
+    private static MemoryStream CreatePackageWithChartExternalDataPivotCacheRelationshipIdCollisionSource() =>
+        XlsxPackageTestFixtures.CreatePackage(
+            ("[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/charts/chart1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>
+                  <Override PartName="/xl/pivotCache/pivotCacheDefinition1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml"/>
+                </Types>
+                """),
+            ("xl/charts/chart1.xml", """
+                <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                              xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <c:chart/>
+                  <c:externalData r:id="rIdPivotCache">
+                    <c:autoUpdate val="0"/>
+                  </c:externalData>
+                </c:chartSpace>
+                """),
+            ("xl/charts/_rels/chart1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdPivotCache"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition"
+                                Target="../pivotCache/pivotCacheDefinition1.xml"/>
+                </Relationships>
+                """),
+            ("xl/pivotCache/pivotCacheDefinition1.xml", """
+                <pivotCacheDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """));
+
+    private static MemoryStream CreatePackageWithChartExternalDataPivotCacheRelationshipIdCollisionTarget() =>
+        XlsxPackageTestFixtures.CreatePackage(
+            ("[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Default Extension="bin" ContentType="application/vnd.openxmlformats-officedocument.oleObject"/>
+                </Types>
+                """),
+            ("xl/charts/_rels/chart1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdPivotCache"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/package"
+                                Target="../embeddings/package1.bin"/>
+                </Relationships>
+                """),
+            ("xl/embeddings/package1.bin", "package"));
+
     private static MemoryStream CreatePackageWithWhitespacePaddedCorePropertiesRelationship() =>
         XlsxPackageTestFixtures.CreatePackage(
             ("[Content_Types].xml", """

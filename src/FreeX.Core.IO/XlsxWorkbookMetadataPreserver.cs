@@ -94,7 +94,17 @@ internal static class XlsxWorkbookMetadataPreserver
             changed = true;
         if (MergeChildBlock(sourceWebPublishObjects, targetRoot, workbookNs + "webPublishObjects"))
             changed = true;
-        if (XlsxNativeXmlMerger.MergeExtensionList(sourceExtensionList, targetRoot, workbookNs))
+        var workbookExtensionRelationshipIdMap =
+            XlsxExtensionListPackageRelationshipRebinder.BuildRelationshipIdMap(
+                sourceArchive,
+                targetArchive,
+                "xl/workbook.xml",
+                "xl/workbook.xml");
+        if (XlsxNativeXmlMerger.MergeExtensionList(
+                sourceExtensionList,
+                targetRoot,
+                workbookNs,
+                workbookExtensionRelationshipIdMap))
             changed = true;
 
         if (changed)
