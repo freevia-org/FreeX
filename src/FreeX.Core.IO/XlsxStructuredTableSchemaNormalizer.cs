@@ -289,11 +289,6 @@ internal static class XlsxStructuredTableSchemaNormalizer
         return value > 0 ? value : 1;
     }
 
-    private static bool IsStructuredTableXmlEntry(ZipArchiveEntry entry)
-    {
-        var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
-        return path.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase) &&
-               path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
-               !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool IsStructuredTableXmlEntry(ZipArchiveEntry entry) =>
+        XlsxPackagePath.IsXmlEntryInDirectory(entry, "xl/tables/");
 }
