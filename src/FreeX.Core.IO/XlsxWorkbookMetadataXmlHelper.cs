@@ -57,6 +57,23 @@ internal static class XlsxWorkbookMetadataXmlHelper
         }
     }
 
+    public static void ApplyNativeAttributes(
+        XElement element,
+        IEnumerable<KeyValuePair<string, string>> attributes,
+        params string[] excludedNames)
+    {
+        foreach (var attribute in attributes)
+        {
+            if (string.IsNullOrWhiteSpace(attribute.Key) ||
+                excludedNames.Contains(attribute.Key, StringComparer.Ordinal))
+            {
+                continue;
+            }
+
+            TrySetNativeAttribute(element, attribute.Key, attribute.Value);
+        }
+    }
+
     private static bool IsLegacyPasswordHash(string value) =>
         value.Length is > 0 and <= 4 &&
         value.All(ch =>
