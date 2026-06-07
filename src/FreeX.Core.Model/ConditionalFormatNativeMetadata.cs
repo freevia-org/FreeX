@@ -13,9 +13,15 @@ public static class ConditionalFormatNativeMetadata
         var result = new List<string>();
         foreach (var xml in nativeChildXmls)
         {
+            var element = TryParseNativeChildXml(xml);
+            if (element is null)
+            {
+                result.Add(xml);
+                continue;
+            }
+
             try
             {
-                var element = XElement.Parse(xml);
                 var idExtensions = element
                     .Descendants(x14Ns + "id")
                     .Select(id => id.AncestorsAndSelf().FirstOrDefault(e => e.Name.LocalName == "ext") ?? id)
@@ -41,5 +47,17 @@ public static class ConditionalFormatNativeMetadata
         }
 
         return result.Count == 0 ? null : result;
+    }
+
+    private static XElement? TryParseNativeChildXml(string xml)
+    {
+        try
+        {
+            return XElement.Parse(xml);
+        }
+        catch
+        {
+            return null;
+        }
     }
 }
