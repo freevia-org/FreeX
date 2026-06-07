@@ -87,6 +87,34 @@ public sealed class XlsxDrawingPackageSchemaValidationTests
         targetArchive.GetEntry("xl/drawings/_rels/drawing5.xml.rels").Should().NotBeNull();
     }
 
+    [Fact]
+    public void LoadedWorkbookSave_SourceOnlyDrawingNormalizesDuplicateObjectIds()
+    {
+        using var sourcePackage = CreateSourcePackageWithDuplicateDrawingObjectIds();
+        using var targetPackage = CreateTargetPackage(hasGeneratedDrawing: false);
+        using var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var targetArchive = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        var context = XlsxSourcePackagePreservationContext.TryCreate(sourceArchive, targetArchive);
+        context.Should().NotBeNull();
+
+        var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, targetArchive);
+        XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, targetArchive, generatedEntriesBeforeMerge);
+        var drawingPaths = XlsxWorksheetDrawingPartMerger.MergeAndGetDrawingPaths(sourceArchive, targetArchive, context);
+        XlsxWorksheetDrawingReferencePreserver.Preserve(sourceArchive, targetArchive, context, drawingPaths);
+
+        XlsxDrawingSchemaNormalizer.NormalizePackage(targetArchive);
+
+        var drawingXml = LoadPackageXml(targetArchive, "xl/drawings/drawing5.xml");
+        var drawingObjectIds = drawingXml
+            .Descendants(SpreadsheetDrawingNs + "cNvPr")
+            .Select(element => int.Parse(element.Attribute("id")!.Value, System.Globalization.CultureInfo.InvariantCulture))
+            .ToList();
+
+        drawingObjectIds.Should().OnlyContain(id => id > 0);
+        drawingObjectIds.Should().OnlyHaveUniqueItems();
+    }
+
     private static MemoryStream CreateSourcePackage() =>
         CreatePackage(
             ("xl/workbook.xml", WorkbookXml()),
@@ -95,6 +123,18 @@ public sealed class XlsxDrawingPackageSchemaValidationTests
             ("xl/worksheets/_rels/sheet5.xml.rels", RelationshipsXml(
                 Relationship("rId6", DrawingRelationshipType, "../drawings/drawing5.xml"))),
             ("xl/drawings/drawing5.xml", DrawingXml("rId1", "Source Chart")),
+            ("xl/drawings/_rels/drawing5.xml.rels", RelationshipsXml(
+                Relationship("rId1", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart", "../charts/chart1.xml"))),
+            ("xl/charts/chart1.xml", ChartXml()));
+
+    private static MemoryStream CreateSourcePackageWithDuplicateDrawingObjectIds() =>
+        CreatePackage(
+            ("xl/workbook.xml", WorkbookXml()),
+            ("xl/_rels/workbook.xml.rels", WorkbookRelationshipsXml()),
+            ("xl/worksheets/sheet5.xml", WorksheetXml("<drawing r:id=\"rId6\" />")),
+            ("xl/worksheets/_rels/sheet5.xml.rels", RelationshipsXml(
+                Relationship("rId6", DrawingRelationshipType, "../drawings/drawing5.xml"))),
+            ("xl/drawings/drawing5.xml", DrawingXmlWithDuplicateObjectIds()),
             ("xl/drawings/_rels/drawing5.xml.rels", RelationshipsXml(
                 Relationship("rId1", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart", "../charts/chart1.xml"))),
             ("xl/charts/chart1.xml", ChartXml()));
@@ -200,6 +240,51 @@ public sealed class XlsxDrawingPackageSchemaValidationTests
             <c:plotArea />
           </c:chart>
         </c:chartSpace>
+        """;
+
+    private static readonly XNamespace SpreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+
+    private static string DrawingXmlWithDuplicateObjectIds() =>
+        """
+        <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+                  xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                  xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <xdr:twoCellAnchor>
+            <xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
+            <xdr:to><xdr:col>5</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>12</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>
+            <xdr:graphicFrame macro="">
+              <xdr:nvGraphicFramePr>
+                <xdr:cNvPr id="0" name="Source Chart" />
+                <xdr:cNvGraphicFramePr />
+              </xdr:nvGraphicFramePr>
+              <xdr:xfrm>
+                <a:off x="0" y="0" />
+                <a:ext cx="0" cy="0" />
+              </xdr:xfrm>
+              <a:graphic>
+                <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">
+                  <c:chart r:id="rId1" />
+                </a:graphicData>
+              </a:graphic>
+            </xdr:graphicFrame>
+            <xdr:clientData />
+          </xdr:twoCellAnchor>
+          <xdr:oneCellAnchor>
+            <xdr:from><xdr:col>6</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
+            <xdr:ext cx="952500" cy="381000" />
+            <xdr:sp>
+              <xdr:nvSpPr>
+                <xdr:cNvPr id="0" name="Source Shape" />
+                <xdr:cNvSpPr />
+              </xdr:nvSpPr>
+              <xdr:spPr>
+                <a:prstGeom prst="rect"><a:avLst /></a:prstGeom>
+              </xdr:spPr>
+            </xdr:sp>
+            <xdr:clientData />
+          </xdr:oneCellAnchor>
+        </xdr:wsDr>
         """;
 
 }
