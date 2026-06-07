@@ -723,6 +723,8 @@ public static partial class AccessibilityCheckerService
     private const int MaxFormulaPermutIterations = 10_000;
     private const int MaxFormulaPermutationAInput = int.MaxValue;
     private const int MaxFormulaFinancialDepreciationIterations = 10_000;
+    private const int MaxFormulaFinancialBondCouponIterations = 50_000;
+    private const int MaxFormulaFinancialBondYieldIterations = 200;
     private const int MaxFormulaGcdArgumentCount = 255;
     private const int MaxFormulaMultinomialArgumentCount = 255;
     private const int MaxFormulaModeArgumentCount = 255;
@@ -1365,6 +1367,24 @@ public static partial class AccessibilityCheckerService
             case "COUPPCD":
                 kind = ConditionalFormulaScalarFunctionKind.Couppcd;
                 return true;
+            case "DURATION":
+                kind = ConditionalFormulaScalarFunctionKind.Duration;
+                return true;
+            case "MDURATION":
+                kind = ConditionalFormulaScalarFunctionKind.Mduration;
+                return true;
+            case "PRICE":
+                kind = ConditionalFormulaScalarFunctionKind.Price;
+                return true;
+            case "YIELD":
+                kind = ConditionalFormulaScalarFunctionKind.Yield;
+                return true;
+            case "YIELDDISC":
+                kind = ConditionalFormulaScalarFunctionKind.Yielddisc;
+                return true;
+            case "YIELDMAT":
+                kind = ConditionalFormulaScalarFunctionKind.Yieldmat;
+                return true;
             case "PI":
                 kind = ConditionalFormulaScalarFunctionKind.Pi;
                 return true;
@@ -1988,6 +2008,12 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Coupncd or
             ConditionalFormulaScalarFunctionKind.Coupnum or
             ConditionalFormulaScalarFunctionKind.Couppcd => argumentCount is 3 or 4,
+            ConditionalFormulaScalarFunctionKind.Yielddisc => argumentCount is 4 or 5,
+            ConditionalFormulaScalarFunctionKind.Duration or
+            ConditionalFormulaScalarFunctionKind.Mduration or
+            ConditionalFormulaScalarFunctionKind.Yieldmat => argumentCount is 5 or 6,
+            ConditionalFormulaScalarFunctionKind.Price or
+            ConditionalFormulaScalarFunctionKind.Yield => argumentCount is 6 or 7,
             ConditionalFormulaScalarFunctionKind.TDistRt or
             ConditionalFormulaScalarFunctionKind.TDist2T or
             ConditionalFormulaScalarFunctionKind.TInv or
@@ -2790,6 +2816,12 @@ public static partial class AccessibilityCheckerService
         Coupncd,
         Coupnum,
         Couppcd,
+        Duration,
+        Mduration,
+        Price,
+        Yield,
+        Yielddisc,
+        Yieldmat,
         Pi,
         Arabic,
         Roman,
@@ -3578,6 +3610,12 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Coupncd:
                 case ConditionalFormulaScalarFunctionKind.Coupnum:
                 case ConditionalFormulaScalarFunctionKind.Couppcd:
+                case ConditionalFormulaScalarFunctionKind.Duration:
+                case ConditionalFormulaScalarFunctionKind.Mduration:
+                case ConditionalFormulaScalarFunctionKind.Price:
+                case ConditionalFormulaScalarFunctionKind.Yield:
+                case ConditionalFormulaScalarFunctionKind.Yielddisc:
+                case ConditionalFormulaScalarFunctionKind.Yieldmat:
                     return TryEvaluateFormulaFinancialScalarFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Pi:
                     value = new NumberValue(Math.PI);
@@ -10239,6 +10277,81 @@ public static partial class AccessibilityCheckerService
 
                     value = FormulaFinancialPdurationScalar(pdurationRate, pdurationPv, pdurationFv);
                     return true;
+                case ConditionalFormulaScalarFunctionKind.Duration:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var durationSettlement, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var durationMaturity, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var durationCoupon, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var durationYield, out value) ||
+                        !TryGetFormulaFinancialBondFrequencyAndBasis(arguments, 4, 5, out var durationFrequency, out var durationBasis, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialDurationScalar(durationSettlement, durationMaturity, durationCoupon, durationYield, durationFrequency, durationBasis);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Mduration:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var mdurationSettlement, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var mdurationMaturity, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var mdurationCoupon, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var mdurationYield, out value) ||
+                        !TryGetFormulaFinancialBondFrequencyAndBasis(arguments, 4, 5, out var mdurationFrequency, out var mdurationBasis, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialMdurationScalar(mdurationSettlement, mdurationMaturity, mdurationCoupon, mdurationYield, mdurationFrequency, mdurationBasis);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Price:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var priceSettlement, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var priceMaturity, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var priceRate, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var priceYield, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[4], out var priceRedemption, out value) ||
+                        !TryGetFormulaFinancialBondFrequencyAndBasis(arguments, 5, 6, out var priceFrequency, out var priceBasis, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialPriceScalar(priceSettlement, priceMaturity, priceRate, priceYield, priceRedemption, priceFrequency, priceBasis);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Yield:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var yieldSettlement, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var yieldMaturity, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var yieldRate, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var yieldPrice, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[4], out var yieldRedemption, out value) ||
+                        !TryGetFormulaFinancialBondFrequencyAndBasis(arguments, 5, 6, out var yieldFrequency, out var yieldBasis, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialYieldScalar(yieldSettlement, yieldMaturity, yieldRate, yieldPrice, yieldRedemption, yieldFrequency, yieldBasis);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Yielddisc:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var yielddiscSettlement, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var yielddiscMaturity, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var yielddiscPrice, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var yielddiscRedemption, out value) ||
+                        !TryGetFormulaFinancialOptionalBasis(arguments, 4, out var yielddiscBasis, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialYielddiscScalar(yielddiscSettlement, yielddiscMaturity, yielddiscPrice, yielddiscRedemption, yielddiscBasis);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Yieldmat:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var yieldmatSettlement, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var yieldmatMaturity, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var yieldmatIssue, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var yieldmatRate, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[4], out var yieldmatPrice, out value) ||
+                        !TryGetFormulaFinancialOptionalBasis(arguments, 5, out var yieldmatBasis, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialYieldmatScalar(yieldmatSettlement, yieldmatMaturity, yieldmatIssue, yieldmatRate, yieldmatPrice, yieldmatBasis);
+                    return true;
                 case ConditionalFormulaScalarFunctionKind.Coupdaybs:
                 case ConditionalFormulaScalarFunctionKind.Coupdays:
                 case ConditionalFormulaScalarFunctionKind.Coupdaysnc:
@@ -10552,6 +10665,496 @@ public static partial class AccessibilityCheckerService
                 return ErrorValue.Num;
 
             return FormulaFinancialNumberResult((Math.Log(fv) - Math.Log(pv)) / Math.Log(1d + rate));
+        }
+
+        private static ScalarValue FormulaFinancialDurationScalar(
+            double settlement,
+            double maturity,
+            double coupon,
+            double yield,
+            int frequency,
+            int basis)
+        {
+            if (!double.IsFinite(settlement) ||
+                !double.IsFinite(maturity) ||
+                !double.IsFinite(coupon) ||
+                !double.IsFinite(yield))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (coupon < 0d ||
+                yield < 0d ||
+                !TryValidateFormulaFinancialBondSchedule(settlement, maturity, frequency, basis, out var settlementDate, out var maturityDate))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (!TryGetFormulaFinancialCouponSchedule(
+                    settlementDate,
+                    maturityDate,
+                    frequency,
+                    out var previousCouponDate,
+                    out var nextCouponDate,
+                    out var couponCount))
+            {
+                return ErrorValue.Num;
+            }
+
+            var daysInPeriod = (nextCouponDate - previousCouponDate).TotalDays;
+            if (daysInPeriod <= 0d)
+                return ErrorValue.Num;
+
+            var fractionalPeriodsToNextCoupon = (nextCouponDate - settlementDate).TotalDays / daysInPeriod;
+            var couponPayment = coupon / frequency * 100d;
+            var yieldPerPeriod = yield / frequency;
+            var price = 0d;
+            var weightedTime = 0d;
+            var currentCouponDate = nextCouponDate;
+            var months = 12 / frequency;
+
+            for (var index = 0; index < couponCount; index++)
+            {
+                var periodsFromSettlement = index + fractionalPeriodsToNextCoupon;
+                var cashFlow = couponPayment;
+                if (currentCouponDate == maturityDate)
+                    cashFlow += 100d;
+
+                var presentValue = cashFlow / Math.Pow(1d + yieldPerPeriod, periodsFromSettlement);
+                price += presentValue;
+                weightedTime += periodsFromSettlement / frequency * presentValue;
+
+                try
+                {
+                    currentCouponDate = currentCouponDate.AddMonths(months);
+                }
+                catch (ArgumentOutOfRangeException)
+                {
+                    return ErrorValue.Num;
+                }
+            }
+
+            if (Math.Abs(price) < 1E-14d)
+                return ErrorValue.Num;
+
+            return FormulaFinancialNumberResult(weightedTime / price);
+        }
+
+        private static ScalarValue FormulaFinancialMdurationScalar(
+            double settlement,
+            double maturity,
+            double coupon,
+            double yield,
+            int frequency,
+            int basis)
+        {
+            var duration = FormulaFinancialDurationScalar(settlement, maturity, coupon, yield, frequency, basis);
+            if (duration is not NumberValue durationNumber)
+                return duration;
+
+            return FormulaFinancialNumberResult(durationNumber.Value / (1d + yield / frequency));
+        }
+
+        private static ScalarValue FormulaFinancialPriceScalar(
+            double settlement,
+            double maturity,
+            double rate,
+            double yield,
+            double redemption,
+            int frequency,
+            int basis)
+        {
+            if (!double.IsFinite(settlement) ||
+                !double.IsFinite(maturity) ||
+                !double.IsFinite(rate) ||
+                !double.IsFinite(yield) ||
+                !double.IsFinite(redemption))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (rate < 0d ||
+                yield < 0d ||
+                redemption <= 0d ||
+                !TryValidateFormulaFinancialBondSchedule(settlement, maturity, frequency, basis, out var settlementDate, out var maturityDate))
+            {
+                return ErrorValue.Num;
+            }
+
+            return TryCalculateFormulaFinancialBondPrice(
+                    settlementDate,
+                    maturityDate,
+                    rate,
+                    yield,
+                    redemption,
+                    frequency,
+                    out var price)
+                ? FormulaFinancialNumberResult(price)
+                : ErrorValue.Num;
+        }
+
+        private static ScalarValue FormulaFinancialYieldScalar(
+            double settlement,
+            double maturity,
+            double rate,
+            double price,
+            double redemption,
+            int frequency,
+            int basis)
+        {
+            if (!double.IsFinite(settlement) ||
+                !double.IsFinite(maturity) ||
+                !double.IsFinite(rate) ||
+                !double.IsFinite(price) ||
+                !double.IsFinite(redemption))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (rate < 0d ||
+                price <= 0d ||
+                redemption <= 0d ||
+                !TryValidateFormulaFinancialBondSchedule(settlement, maturity, frequency, basis, out var settlementDate, out var maturityDate))
+            {
+                return ErrorValue.Num;
+            }
+
+            var yield = 0.1d;
+            for (var iteration = 0; iteration < MaxFormulaFinancialBondYieldIterations; iteration++)
+            {
+                if (!TryCalculateFormulaFinancialBondPrice(
+                        settlementDate,
+                        maturityDate,
+                        rate,
+                        yield,
+                        redemption,
+                        frequency,
+                        out var calculatedPrice) ||
+                    !TryCalculateFormulaFinancialBondPrice(
+                        settlementDate,
+                        maturityDate,
+                        rate,
+                        yield + 1E-6d,
+                        redemption,
+                        frequency,
+                        out var shiftedPrice))
+                {
+                    return ErrorValue.Num;
+                }
+
+                var derivative = (shiftedPrice - calculatedPrice) / 1E-6d;
+                if (!double.IsFinite(derivative))
+                    return ErrorValue.Num;
+
+                if (Math.Abs(derivative) < 1E-14d)
+                    break;
+
+                var delta = (calculatedPrice - price) / derivative;
+                if (!double.IsFinite(delta))
+                    return ErrorValue.Num;
+
+                yield -= delta;
+                if (yield < -0.999d)
+                    yield = -0.999d;
+
+                if (Math.Abs(delta) < 1E-10d)
+                    break;
+            }
+
+            return FormulaFinancialNumberResult(yield);
+        }
+
+        private static ScalarValue FormulaFinancialYielddiscScalar(
+            double settlement,
+            double maturity,
+            double price,
+            double redemption,
+            int basis)
+        {
+            if (!double.IsFinite(settlement) ||
+                !double.IsFinite(maturity) ||
+                !double.IsFinite(price) ||
+                !double.IsFinite(redemption))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (price <= 0d ||
+                redemption <= 0d ||
+                !TryGetFormulaFinancialBondDates(settlement, maturity, out var settlementDate, out var maturityDate))
+            {
+                return ErrorValue.Num;
+            }
+
+            var dayCountFraction = FormulaFinancialDayCountFraction(settlementDate, maturityDate, basis);
+            if (!double.IsFinite(dayCountFraction) || dayCountFraction <= 0d)
+                return ErrorValue.Num;
+
+            return FormulaFinancialNumberResult((redemption / price - 1d) / dayCountFraction);
+        }
+
+        private static ScalarValue FormulaFinancialYieldmatScalar(
+            double settlement,
+            double maturity,
+            double issue,
+            double rate,
+            double price,
+            int basis)
+        {
+            if (!double.IsFinite(settlement) ||
+                !double.IsFinite(maturity) ||
+                !double.IsFinite(issue) ||
+                !double.IsFinite(rate) ||
+                !double.IsFinite(price))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (rate < 0d ||
+                price <= 0d ||
+                !TryGetFormulaFinancialBondDates(settlement, maturity, out var settlementDate, out var maturityDate) ||
+                !TryGetFormulaFinancialCouponDate(issue, out var issueDate))
+            {
+                return ErrorValue.Num;
+            }
+
+            var daysIssueToMaturity = FormulaFinancialDayCountFraction(issueDate, maturityDate, basis);
+            var daysSettlementToMaturity = FormulaFinancialDayCountFraction(settlementDate, maturityDate, basis);
+            if (!double.IsFinite(daysIssueToMaturity) ||
+                !double.IsFinite(daysSettlementToMaturity) ||
+                daysSettlementToMaturity <= 0d)
+            {
+                return ErrorValue.Num;
+            }
+
+            var numerator = (1d + rate * daysIssueToMaturity) / (price / 100d) - 1d;
+            return FormulaFinancialNumberResult(numerator / daysSettlementToMaturity);
+        }
+
+        private static bool TryValidateFormulaFinancialBondSchedule(
+            double settlement,
+            double maturity,
+            int frequency,
+            int basis,
+            out DateTime settlementDate,
+            out DateTime maturityDate)
+        {
+            settlementDate = default;
+            maturityDate = default;
+            return frequency is 1 or 2 or 4 &&
+                basis is >= 0 and <= 4 &&
+                TryGetFormulaFinancialBondDates(settlement, maturity, out settlementDate, out maturityDate);
+        }
+
+        private static bool TryGetFormulaFinancialBondDates(
+            double settlement,
+            double maturity,
+            out DateTime settlementDate,
+            out DateTime maturityDate)
+        {
+            settlementDate = default;
+            maturityDate = default;
+            return TryGetFormulaFinancialCouponDate(settlement, out settlementDate) &&
+                TryGetFormulaFinancialCouponDate(maturity, out maturityDate) &&
+                settlementDate < maturityDate;
+        }
+
+        private static bool TryCalculateFormulaFinancialBondPrice(
+            DateTime settlement,
+            DateTime maturity,
+            double couponRate,
+            double yield,
+            double redemption,
+            int frequency,
+            out double price)
+        {
+            price = 0d;
+            if (!TryGetFormulaFinancialCouponSchedule(
+                    settlement,
+                    maturity,
+                    frequency,
+                    out var previousCouponDate,
+                    out var nextCouponDate,
+                    out var couponCount))
+            {
+                return false;
+            }
+
+            var daysInPeriod = (nextCouponDate - previousCouponDate).TotalDays;
+            if (daysInPeriod <= 0d)
+                return false;
+
+            var fractionalPeriodsToNextCoupon = (nextCouponDate - settlement).TotalDays / daysInPeriod;
+            var couponPayment = couponRate / frequency * redemption;
+            var yieldPerPeriod = yield / frequency;
+            if (1d + yieldPerPeriod <= 0d)
+                return false;
+
+            for (var period = 1; period <= couponCount; period++)
+            {
+                price += couponPayment / Math.Pow(1d + yieldPerPeriod, period - 1d + fractionalPeriodsToNextCoupon);
+            }
+
+            price += redemption / Math.Pow(1d + yieldPerPeriod, couponCount - 1d + fractionalPeriodsToNextCoupon);
+            return double.IsFinite(price);
+        }
+
+        private static bool TryGetFormulaFinancialCouponSchedule(
+            DateTime settlement,
+            DateTime maturity,
+            int frequency,
+            out DateTime previousCouponDate,
+            out DateTime nextCouponDate,
+            out int couponCount)
+        {
+            previousCouponDate = default;
+            nextCouponDate = default;
+            couponCount = 0;
+            if (!TryGetFormulaFinancialCouponDateBefore(settlement, maturity, frequency, out previousCouponDate))
+                return false;
+
+            var months = 12 / frequency;
+            try
+            {
+                nextCouponDate = previousCouponDate.AddMonths(months);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return false;
+            }
+
+            var currentCouponDate = nextCouponDate;
+            while (currentCouponDate <= maturity)
+            {
+                if (couponCount >= MaxFormulaFinancialBondCouponIterations)
+                    return false;
+
+                couponCount++;
+                try
+                {
+                    currentCouponDate = currentCouponDate.AddMonths(months);
+                }
+                catch (ArgumentOutOfRangeException)
+                {
+                    return false;
+                }
+            }
+
+            if (couponCount == 0)
+                couponCount = 1;
+
+            return true;
+        }
+
+        private static bool TryGetFormulaFinancialCouponDateBefore(
+            DateTime settlement,
+            DateTime maturity,
+            int frequency,
+            out DateTime previousCouponDate)
+        {
+            previousCouponDate = maturity;
+            var months = 12 / frequency;
+            for (var iteration = 0; previousCouponDate > settlement; iteration++)
+            {
+                if (iteration >= MaxFormulaFinancialBondCouponIterations)
+                    return false;
+
+                try
+                {
+                    previousCouponDate = previousCouponDate.AddMonths(-months);
+                }
+                catch (ArgumentOutOfRangeException)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static double FormulaFinancialDayCountFraction(DateTime start, DateTime end, int basis) =>
+            basis switch
+            {
+                0 => FormulaFinancialDays360Us(start, end) / 360d,
+                1 => (end - start).TotalDays / FormulaFinancialActualYearLength(start, end),
+                2 => (end - start).TotalDays / 360d,
+                3 => (end - start).TotalDays / 365d,
+                4 => FormulaFinancialDays360European(start, end) / 360d,
+                _ => (end - start).TotalDays / 365d
+            };
+
+        private static double FormulaFinancialActualYearLength(DateTime start, DateTime end)
+        {
+            if (start.Year == end.Year)
+                return DateTime.IsLeapYear(start.Year) ? 366d : 365d;
+
+            var years = end.Year - start.Year;
+            var days = (end - start).TotalDays;
+            return days / years;
+        }
+
+        private static double FormulaFinancialDays360Us(DateTime start, DateTime end)
+        {
+            var startDay = start.Day;
+            var endDay = end.Day;
+            if (endDay == 31 && startDay >= 30)
+                endDay = 30;
+            if (startDay == 31)
+                startDay = 30;
+
+            return 360d * (end.Year - start.Year) +
+                30d * (end.Month - start.Month) +
+                (endDay - startDay);
+        }
+
+        private static double FormulaFinancialDays360European(DateTime start, DateTime end)
+        {
+            var startDay = start.Day == 31 ? 30 : start.Day;
+            var endDay = end.Day == 31 ? 30 : end.Day;
+            return 360d * (end.Year - start.Year) +
+                30d * (end.Month - start.Month) +
+                (endDay - startDay);
+        }
+
+        private static bool TryGetFormulaFinancialBondFrequencyAndBasis(
+            IReadOnlyList<ScalarValue> arguments,
+            int frequencyIndex,
+            int basisIndex,
+            out int frequency,
+            out int basis,
+            out ScalarValue error)
+        {
+            frequency = 0;
+            basis = 0;
+            if (!TryGetFormulaFinancialNumber(arguments[frequencyIndex], out var rawFrequency, out error))
+                return false;
+
+            if (!TryGetFormulaFinancialCouponFrequency(rawFrequency, out frequency))
+            {
+                error = ErrorValue.Num;
+                return false;
+            }
+
+            return TryGetFormulaFinancialOptionalBasis(arguments, basisIndex, out basis, out error);
+        }
+
+        private static bool TryGetFormulaFinancialOptionalBasis(
+            IReadOnlyList<ScalarValue> arguments,
+            int index,
+            out int basis,
+            out ScalarValue error)
+        {
+            basis = 0;
+            if (!TryGetFormulaFinancialOptionalNumber(arguments, index, 0d, out var rawBasis, out error))
+                return false;
+
+            if (!TryGetFormulaFinancialCouponBasis(rawBasis, out basis))
+            {
+                error = ErrorValue.Num;
+                return false;
+            }
+
+            return true;
         }
 
         private static bool TryGetFormulaFinancialCouponArguments(
