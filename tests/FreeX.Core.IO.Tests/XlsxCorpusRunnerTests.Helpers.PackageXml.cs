@@ -1127,9 +1127,7 @@ public partial class XlsxCorpusRunnerTests
 
     private static IEnumerable<string> ReadRelationshipTargets(ZipArchiveEntry relsEntry)
     {
-        XDocument relsXml;
-        using (var stream = relsEntry.Open())
-            relsXml = XDocument.Load(stream);
+        var relsXml = LoadPackageXml(relsEntry);
 
         XNamespace relNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         return relsXml.Root?
@@ -1143,9 +1141,7 @@ public partial class XlsxCorpusRunnerTests
 
     private static IEnumerable<string> ReadRelationshipDetails(ZipArchiveEntry relsEntry)
     {
-        XDocument relsXml;
-        using (var stream = relsEntry.Open())
-            relsXml = XDocument.Load(stream);
+        var relsXml = LoadPackageXml(relsEntry);
 
         XNamespace relNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         return relsXml.Root?
@@ -1187,9 +1183,7 @@ public partial class XlsxCorpusRunnerTests
         if (entry is null)
             return [];
 
-        XDocument contentTypesXml;
-        using (var stream = entry.Open())
-            contentTypesXml = XDocument.Load(stream);
+        var contentTypesXml = LoadPackageXml(entry);
 
         XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
         return contentTypesXml.Root?
