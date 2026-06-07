@@ -13314,7 +13314,7 @@ public partial class FileAdapterSmokeTests
         fileSharing.Should().NotBeNull();
         fileSharing!.Attribute("readOnlyRecommended")!.Value.Should().Be("1");
         fileSharing.Attribute("userName")!.Value.Should().Be("FreeXTest");
-        fileSharing.Attribute("revisionsPassword")!.Value.Should().Be("1234");
+        fileSharing.Attribute("revisionsPassword").Should().BeNull();
     }
 
     [Fact]
