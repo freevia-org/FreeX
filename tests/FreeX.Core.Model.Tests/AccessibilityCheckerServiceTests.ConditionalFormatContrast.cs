@@ -2821,6 +2821,8 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaMatrixArrayFunctionContrastLocations("MMULT($I$1:$J$1,$I$2:$I$3)=11", FormulaMatrixArrayAllLocations);
         AssertFormulaMatrixArrayFunctionContrastLocations("MINVERSE($K$1:$K$1)=0.5", FormulaMatrixArrayAllLocations);
         AssertFormulaMatrixArrayFunctionContrastLocations("TRANSPOSE($K$1:$K$1)=2", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("INDEX(MUNIT(2),2,2)=1", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("INDEX(MMULT(MUNIT(2),$C$1:$D$2),2,2)=4", FormulaMatrixArrayAllLocations);
     }
 
     [Fact]
@@ -2828,6 +2830,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         AssertFormulaMatrixArrayFunctionContrastLocations("MMULT({1,2},{3;4})=11", FormulaMatrixArrayAllLocations);
         AssertFormulaMatrixArrayFunctionContrastLocations("MDETERM({1,2;3,4})=-2", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("SUM(MUNIT(3))=3", FormulaMatrixArrayAllLocations);
         AssertFormulaMatrixArrayFunctionContrastLocations("AND(MDETERM($C$1:$D$2)<0,TRANSPOSE({2})=2)", FormulaMatrixArrayAllLocations);
         AssertFormulaMatrixArrayFunctionContrastLocations("IF(MMULT($I$1:$J$1,$I$2:$I$3)=11,TRUE,FALSE)", FormulaMatrixArrayAllLocations);
         AssertFormulaMatrixArrayFunctionContrastLocations("IFERROR(MMULT($C$1:$D$2,$I$1:$J$1),TRUE)", FormulaMatrixArrayAllLocations);
@@ -2855,6 +2858,10 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaMatrixArrayFunctionContrastLocations("MINVERSE($C$1:$D$2)>0");
         AssertFormulaMatrixArrayFunctionContrastLocations("TRANSPOSE($C$1:$D$2)>0");
         AssertFormulaMatrixArrayFunctionContrastLocations("MDETERM({1,\"x\";3,4})>0");
+        AssertFormulaMatrixArrayFunctionContrastLocations("MUNIT()>0");
+        AssertFormulaMatrixArrayFunctionContrastLocations("MUNIT(0)>0");
+        AssertFormulaMatrixArrayFunctionContrastLocations("MUNIT(\"x\")>0");
+        AssertFormulaMatrixArrayFunctionContrastLocations("SUM(MUNIT(101))>0");
     }
 
     [Fact]
@@ -5061,6 +5068,18 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatIndirectFunction()
+    {
+        AssertFormulaLookupReferenceFunctionContrastLocations("INDIRECT(\"$G$2\")=20", FormulaLookupReferenceAllLocations);
+        AssertFormulaLookupReferenceFunctionContrastLocations("INDIRECT(CONCAT(\"$G\",$A1))=20", "B2", "B4");
+        AssertFormulaLookupReferenceFunctionContrastLocations("SUM(INDIRECT(\"$G$1:$G$2\"))=30", FormulaLookupReferenceAllLocations);
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,INDIRECT(\"$F$1:$F$4\"),INDIRECT(\"$G$1:$G$4\"))=20", "B2", "B4");
+        AssertFormulaLookupReferenceFunctionContrastLocations("INDIRECT(\"RC[5]\",FALSE)=20", "B2");
+        AssertFormulaLookupReferenceFunctionContrastLocations("INDIRECT(\"'Quoted Sheet'!$A$1\")=20", FormulaLookupReferenceAllLocations);
+        AssertFormulaLookupReferenceFunctionContrastLocations("ISERROR(INDIRECT(\"Missing!$A$1\"))", FormulaLookupReferenceAllLocations);
+    }
+
+    [Fact]
     public void FindIssues_DoesNotMatchFormulaConditionalFormatLookupReferenceUnsupportedShapes()
     {
         AssertFormulaLookupReferenceFunctionContrastLocations("MATCH($C1,$F$1:$G$4,0)=1");
@@ -5076,6 +5095,11 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaLookupReferenceFunctionContrastLocations("LOOKUP($D1,$U$1:$U$4,$N$1:$N$4)=\"Band3\"");
         AssertFormulaLookupReferenceFunctionContrastLocations("OFFSET($A:$A,0,0)>0");
         AssertFormulaLookupReferenceFunctionContrastLocations("OFFSET($G$1,0,0,1,2)=20");
+        AssertFormulaLookupReferenceFunctionContrastLocations("INDIRECT(\"$G$1:$H$2\")=20");
+        AssertFormulaLookupReferenceFunctionContrastLocations("INDIRECT(\"$A:$A\")>0");
+        AssertFormulaLookupReferenceFunctionContrastLocations("INDIRECT(\"$A$1:$XFD$1048576\")>0");
+        AssertFormulaLookupReferenceFunctionContrastLocations("INDIRECT(\"[Book.xlsx]Sales!$G$2\")=20");
+        AssertFormulaLookupReferenceFunctionContrastLocations("INDIRECT(\"$G$2\",\"FALSE\")=20");
     }
 
     [Fact]
@@ -7477,6 +7501,9 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, 2, 21), new NumberValue(30));
         sheet.SetCell(new CellAddress(sheet.Id, 3, 21), new NumberValue(20));
         sheet.SetCell(new CellAddress(sheet.Id, 4, 21), new NumberValue(40));
+
+        var quotedSheet = workbook.AddSheet("Quoted Sheet");
+        quotedSheet.SetCell(new CellAddress(quotedSheet.Id, 1, 1), new NumberValue(20));
 
         return workbook;
     }
