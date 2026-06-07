@@ -1339,6 +1339,21 @@ public static partial class AccessibilityCheckerService
             case "IMCONJUGATE":
                 kind = ConditionalFormulaScalarFunctionKind.ImConjugate;
                 return true;
+            case "IMCOS":
+                kind = ConditionalFormulaScalarFunctionKind.ImCos;
+                return true;
+            case "IMCOSH":
+                kind = ConditionalFormulaScalarFunctionKind.ImCosh;
+                return true;
+            case "IMCOT":
+                kind = ConditionalFormulaScalarFunctionKind.ImCot;
+                return true;
+            case "IMCSC":
+                kind = ConditionalFormulaScalarFunctionKind.ImCsc;
+                return true;
+            case "IMCSCH":
+                kind = ConditionalFormulaScalarFunctionKind.ImCsch;
+                return true;
             case "IMEXP":
                 kind = ConditionalFormulaScalarFunctionKind.ImExp;
                 return true;
@@ -1350,6 +1365,21 @@ public static partial class AccessibilityCheckerService
                 return true;
             case "IMLOG2":
                 kind = ConditionalFormulaScalarFunctionKind.ImLog2;
+                return true;
+            case "IMSIN":
+                kind = ConditionalFormulaScalarFunctionKind.ImSin;
+                return true;
+            case "IMSINH":
+                kind = ConditionalFormulaScalarFunctionKind.ImSinh;
+                return true;
+            case "IMSEC":
+                kind = ConditionalFormulaScalarFunctionKind.ImSec;
+                return true;
+            case "IMSECH":
+                kind = ConditionalFormulaScalarFunctionKind.ImSech;
+                return true;
+            case "IMTAN":
+                kind = ConditionalFormulaScalarFunctionKind.ImTan;
                 return true;
             case "IMSQRT":
                 kind = ConditionalFormulaScalarFunctionKind.ImSqrt;
@@ -1460,11 +1490,21 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.ImAbs or
             ConditionalFormulaScalarFunctionKind.ImArgument or
             ConditionalFormulaScalarFunctionKind.ImConjugate or
+            ConditionalFormulaScalarFunctionKind.ImCos or
+            ConditionalFormulaScalarFunctionKind.ImCosh or
+            ConditionalFormulaScalarFunctionKind.ImCot or
+            ConditionalFormulaScalarFunctionKind.ImCsc or
+            ConditionalFormulaScalarFunctionKind.ImCsch or
             ConditionalFormulaScalarFunctionKind.ImExp or
             ConditionalFormulaScalarFunctionKind.ImLn or
             ConditionalFormulaScalarFunctionKind.ImLog10 or
             ConditionalFormulaScalarFunctionKind.ImLog2 or
-            ConditionalFormulaScalarFunctionKind.ImSqrt => argumentCount == 1,
+            ConditionalFormulaScalarFunctionKind.ImSin or
+            ConditionalFormulaScalarFunctionKind.ImSinh or
+            ConditionalFormulaScalarFunctionKind.ImSec or
+            ConditionalFormulaScalarFunctionKind.ImSech or
+            ConditionalFormulaScalarFunctionKind.ImSqrt or
+            ConditionalFormulaScalarFunctionKind.ImTan => argumentCount == 1,
             ConditionalFormulaScalarFunctionKind.NumberValue => argumentCount is >= 1 and <= 3,
             ConditionalFormulaScalarFunctionKind.Log or
             ConditionalFormulaScalarFunctionKind.Roman or
@@ -2215,11 +2255,21 @@ public static partial class AccessibilityCheckerService
         ImAbs,
         ImArgument,
         ImConjugate,
+        ImCos,
+        ImCosh,
+        ImCot,
+        ImCsc,
+        ImCsch,
         ImExp,
         ImLn,
         ImLog10,
         ImLog2,
+        ImSin,
+        ImSinh,
+        ImSec,
+        ImSech,
         ImSqrt,
+        ImTan,
         Delta,
         Erf,
         ErfPrecise,
@@ -2917,11 +2967,21 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.ImAbs:
                 case ConditionalFormulaScalarFunctionKind.ImArgument:
                 case ConditionalFormulaScalarFunctionKind.ImConjugate:
+                case ConditionalFormulaScalarFunctionKind.ImCos:
+                case ConditionalFormulaScalarFunctionKind.ImCosh:
+                case ConditionalFormulaScalarFunctionKind.ImCot:
+                case ConditionalFormulaScalarFunctionKind.ImCsc:
+                case ConditionalFormulaScalarFunctionKind.ImCsch:
                 case ConditionalFormulaScalarFunctionKind.ImExp:
                 case ConditionalFormulaScalarFunctionKind.ImLn:
                 case ConditionalFormulaScalarFunctionKind.ImLog10:
                 case ConditionalFormulaScalarFunctionKind.ImLog2:
+                case ConditionalFormulaScalarFunctionKind.ImSin:
+                case ConditionalFormulaScalarFunctionKind.ImSinh:
+                case ConditionalFormulaScalarFunctionKind.ImSec:
+                case ConditionalFormulaScalarFunctionKind.ImSech:
                 case ConditionalFormulaScalarFunctionKind.ImSqrt:
+                case ConditionalFormulaScalarFunctionKind.ImTan:
                     return TryEvaluateFormulaComplexFunction(function, rowOffset, colOffset, out value);
                 default:
                     return false;
@@ -3446,11 +3506,47 @@ public static partial class AccessibilityCheckerService
                 ConditionalFormulaScalarFunctionKind.ImArgument => EvaluateFormulaComplexArgument(parsed),
                 ConditionalFormulaScalarFunctionKind.ImConjugate =>
                     FormulaComplexTextResult(parsed.Real, -parsed.Imaginary, parsed.Suffix),
+                ConditionalFormulaScalarFunctionKind.ImCos => FormulaComplexTextResult(
+                    Math.Cos(parsed.Real) * Math.Cosh(parsed.Imaginary),
+                    -Math.Sin(parsed.Real) * Math.Sinh(parsed.Imaginary),
+                    parsed.Suffix),
+                ConditionalFormulaScalarFunctionKind.ImCosh => FormulaComplexTextResult(
+                    Math.Cosh(parsed.Real) * Math.Cos(parsed.Imaginary),
+                    Math.Sinh(parsed.Real) * Math.Sin(parsed.Imaginary),
+                    parsed.Suffix),
+                ConditionalFormulaScalarFunctionKind.ImCot =>
+                    FormulaComplexCotResult(parsed.Real, parsed.Imaginary, parsed.Suffix),
+                ConditionalFormulaScalarFunctionKind.ImCsc => FormulaReciprocalComplexTextResult(
+                    Math.Sin(parsed.Real) * Math.Cosh(parsed.Imaginary),
+                    Math.Cos(parsed.Real) * Math.Sinh(parsed.Imaginary),
+                    parsed.Suffix),
+                ConditionalFormulaScalarFunctionKind.ImCsch => FormulaReciprocalComplexTextResult(
+                    Math.Sinh(parsed.Real) * Math.Cos(parsed.Imaginary),
+                    Math.Cosh(parsed.Real) * Math.Sin(parsed.Imaginary),
+                    parsed.Suffix),
                 ConditionalFormulaScalarFunctionKind.ImExp => EvaluateFormulaComplexExp(parsed),
                 ConditionalFormulaScalarFunctionKind.ImLn => EvaluateFormulaComplexLog(parsed, 1.0),
                 ConditionalFormulaScalarFunctionKind.ImLog10 => EvaluateFormulaComplexLog(parsed, Math.Log(10.0)),
                 ConditionalFormulaScalarFunctionKind.ImLog2 => EvaluateFormulaComplexLog(parsed, Math.Log(2.0)),
+                ConditionalFormulaScalarFunctionKind.ImSin => FormulaComplexTextResult(
+                    Math.Sin(parsed.Real) * Math.Cosh(parsed.Imaginary),
+                    Math.Cos(parsed.Real) * Math.Sinh(parsed.Imaginary),
+                    parsed.Suffix),
+                ConditionalFormulaScalarFunctionKind.ImSinh => FormulaComplexTextResult(
+                    Math.Sinh(parsed.Real) * Math.Cos(parsed.Imaginary),
+                    Math.Cosh(parsed.Real) * Math.Sin(parsed.Imaginary),
+                    parsed.Suffix),
+                ConditionalFormulaScalarFunctionKind.ImSec => FormulaReciprocalComplexTextResult(
+                    Math.Cos(parsed.Real) * Math.Cosh(parsed.Imaginary),
+                    -Math.Sin(parsed.Real) * Math.Sinh(parsed.Imaginary),
+                    parsed.Suffix),
+                ConditionalFormulaScalarFunctionKind.ImSech => FormulaReciprocalComplexTextResult(
+                    Math.Cosh(parsed.Real) * Math.Cos(parsed.Imaginary),
+                    Math.Sinh(parsed.Real) * Math.Sin(parsed.Imaginary),
+                    parsed.Suffix),
                 ConditionalFormulaScalarFunctionKind.ImSqrt => EvaluateFormulaComplexSqrt(parsed),
+                ConditionalFormulaScalarFunctionKind.ImTan =>
+                    FormulaComplexTanResult(parsed.Real, parsed.Imaginary, parsed.Suffix),
                 _ => ErrorValue.Value
             };
             return true;
@@ -3562,6 +3658,38 @@ public static partial class AccessibilityCheckerService
                 Math.Sqrt(Math.Max(0.0, (modulus - parsed.Real) / 2.0)),
                 parsed.Imaginary);
             return FormulaComplexTextResult(real, imaginary, parsed.Suffix);
+        }
+
+        private static ScalarValue FormulaComplexTanResult(double real, double imaginary, string suffix)
+        {
+            var denominator = Math.Cos(2.0 * real) + Math.Cosh(2.0 * imaginary);
+            if (denominator == 0)
+                return ErrorValue.Num;
+
+            return FormulaComplexTextResult(
+                Math.Sin(2.0 * real) / denominator,
+                Math.Sinh(2.0 * imaginary) / denominator,
+                suffix);
+        }
+
+        private static ScalarValue FormulaComplexCotResult(double real, double imaginary, string suffix)
+        {
+            var tanDenominator = Math.Cos(2.0 * real) + Math.Cosh(2.0 * imaginary);
+            if (tanDenominator == 0)
+                return ErrorValue.Num;
+
+            var tanReal = Math.Sin(2.0 * real) / tanDenominator;
+            var tanImaginary = Math.Sinh(2.0 * imaginary) / tanDenominator;
+            return FormulaReciprocalComplexTextResult(tanReal, tanImaginary, suffix);
+        }
+
+        private static ScalarValue FormulaReciprocalComplexTextResult(double real, double imaginary, string suffix)
+        {
+            var denominator = real * real + imaginary * imaginary;
+            if (denominator == 0)
+                return ErrorValue.Num;
+
+            return FormulaComplexTextResult(real / denominator, -imaginary / denominator, suffix);
         }
 
         private static (double Real, double Imaginary, string Suffix, ErrorValue? Error) ParseFormulaComplexArgument(
