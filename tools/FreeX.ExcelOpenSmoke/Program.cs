@@ -5545,6 +5545,17 @@ internal static class ExcelOpenSmoke
             AddOptionalWorkbookMetadataBooleanIssue(description, attribute.Name.LocalName, attribute.Value, issues);
         }
 
+        foreach (var attribute in calculationProperties.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                (attribute.Name.NamespaceName.Length == 0 && IsKnownWorkbookCalculationAttribute(attribute.Name.LocalName)))
+            {
+                continue;
+            }
+
+            issues.Add($"{WorkbookPart} {description} has unsupported attribute {attribute.Name}");
+        }
+
         AddOptionalWorkbookMetadataUnsignedIntIssue(description, "calcId", calculationProperties.Attribute("calcId")?.Value, issues);
         AddOptionalWorkbookMetadataUnsignedIntIssue(description, "iterateCount", calculationProperties.Attribute("iterateCount")?.Value, issues);
         AddOptionalWorkbookMetadataUnsignedIntIssue(description, "concurrentManualCount", calculationProperties.Attribute("concurrentManualCount")?.Value, issues);
@@ -5561,6 +5572,21 @@ internal static class ExcelOpenSmoke
         if (calculationProperties.Elements().Any())
             issues.Add($"{WorkbookPart} {description} has child elements; expected attributes only");
     }
+
+    private static bool IsKnownWorkbookCalculationAttribute(string name) =>
+        name is "calcId" or
+            "calcMode" or
+            "fullCalcOnLoad" or
+            "refMode" or
+            "iterate" or
+            "iterateCount" or
+            "iterateDelta" or
+            "fullPrecision" or
+            "calcCompleted" or
+            "calcOnSave" or
+            "concurrentCalc" or
+            "concurrentManualCount" or
+            "forceFullCalc";
 
     private static bool IsKnownWorkbookCalculationBooleanAttribute(string name) =>
         name is "fullCalcOnLoad" or
