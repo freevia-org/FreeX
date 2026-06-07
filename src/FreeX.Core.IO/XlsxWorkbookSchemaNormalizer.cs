@@ -24,6 +24,7 @@ internal static class XlsxWorkbookSchemaNormalizer
         XlsxWorksheetCustomPropertiesNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetIgnoredErrorsNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetHyperlinkNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetConditionalFormatNormalizer.NormalizeWorksheets(archive);
         NormalizeWorksheets(archive, workbookNs);
 
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
