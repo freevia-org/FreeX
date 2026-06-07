@@ -38,6 +38,7 @@ public sealed partial class XlsxFileAdapter
             generatedArchive,
             generatedEntriesBeforeMerge,
             excludedSourceParts);
+        XlsxCustomRibbonPackageGraphNormalizer.NormalizePackage(generatedArchive);
         XlsxPackageMetadataMerger.NormalizeCustomXmlPackageGraph(generatedArchive);
         XlsxDocumentPropertiesPreserver.Preserve(sourceArchive, generatedArchive);
         XlsxWorkbookMetadataPreserver.Preserve(sourceArchive, generatedArchive, workbook);
