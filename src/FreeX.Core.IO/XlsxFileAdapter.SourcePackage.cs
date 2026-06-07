@@ -38,6 +38,7 @@ public sealed partial class XlsxFileAdapter
             generatedArchive,
             generatedEntriesBeforeMerge,
             excludedSourceParts);
+        XlsxPackageMetadataMerger.NormalizeCustomXmlPackageGraph(generatedArchive);
         XlsxDocumentPropertiesPreserver.Preserve(sourceArchive, generatedArchive);
         XlsxWorkbookMetadataPreserver.Preserve(sourceArchive, generatedArchive, workbook);
         XlsxStylesheetMetadataPreserver.Preserve(sourceArchive, generatedArchive);

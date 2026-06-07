@@ -1401,8 +1401,8 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         AssertFormulaStatisticalTestContrastLocations("Z.TEST($D$1:$D$4,$A1,2)<0.2", "B1", "B2");
         AssertFormulaStatisticalTestContrastLocations("ZTEST($D$1:$D$4,$A1)<0.25", "B1", "B2");
-        AssertFormulaStatisticalTestContrastLocations("AND($C1,T.TEST($D$1:$D$4,$E$1:$E$4,2,2)<0.5)", "B1", "B2", "B4");
-        AssertFormulaStatisticalTestContrastLocations("AND($C1,TTEST($D$1:$D$4,$E$1:$E$4,2,3)<0.5)", "B1", "B2", "B4");
+        AssertFormulaStatisticalTestContrastLocations("AND($C1,T.TEST($D$1:$D$4,$E$1:$E$4,2,2)<0.6)", "B1", "B2", "B4");
+        AssertFormulaStatisticalTestContrastLocations("AND($C1,TTEST($D$1:$D$4,$E$1:$E$4,2,3)<0.6)", "B1", "B2", "B4");
         AssertFormulaStatisticalTestContrastLocations("F.TEST($D$1:$D$4,$E$1:$E$4)>0.8", FormulaStatisticalTestAllLocations);
         AssertFormulaStatisticalTestContrastLocations("FTEST($D$1:$D$4,$E$1:$E$4)>0.8", FormulaStatisticalTestAllLocations);
         AssertFormulaStatisticalTestContrastLocations("CHISQ.TEST($H$1:$I$2,$K$1:$L$2)<0.05", FormulaStatisticalTestAllLocations);

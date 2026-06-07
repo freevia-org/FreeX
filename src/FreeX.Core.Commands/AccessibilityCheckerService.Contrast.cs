@@ -2548,8 +2548,8 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Sheet => argumentCount is 0 or 1,
             ConditionalFormulaScalarFunctionKind.Rows or
             ConditionalFormulaScalarFunctionKind.Columns or
-            ConditionalFormulaScalarFunctionKind.Areas or
-            ConditionalFormulaScalarFunctionKind.Sheets => argumentCount == 1,
+            ConditionalFormulaScalarFunctionKind.Areas => argumentCount == 1,
+            ConditionalFormulaScalarFunctionKind.Sheets => argumentCount is 0 or 1,
             ConditionalFormulaScalarFunctionKind.Cell or
             ConditionalFormulaScalarFunctionKind.Hyperlink => argumentCount is 1 or 2,
             ConditionalFormulaScalarFunctionKind.GetPivotData => argumentCount is >= 2 and <= 255 &&
