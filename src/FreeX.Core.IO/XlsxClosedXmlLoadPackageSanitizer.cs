@@ -2162,6 +2162,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         changed |= XlsxWorksheetCustomPropertiesNormalizer.NormalizeWorksheetRoot(root);
         changed |= XlsxWorksheetIgnoredErrorsNormalizer.NormalizeWorksheetRoot(root);
         changed |= XlsxWorksheetHyperlinkNormalizer.NormalizeWorksheetRoot(root);
+        changed |= XlsxWorksheetAutoFilterNormalizer.NormalizeWorksheetRoot(root);
+        changed |= XlsxWorksheetSortStateNormalizer.NormalizeWorksheetRoot(root);
         changed |= XlsxWorksheetDataConsolidationNormalizer.NormalizeWorksheetRoot(root);
         changed |= XlsxWorksheetExtensionListNormalizer.NormalizeWorksheetRoot(root);
         changed |= XlsxWorksheetWebPublishItemsNormalizer.NormalizeWorksheetRoot(root);

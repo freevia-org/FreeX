@@ -1752,42 +1752,10 @@ public sealed partial class XlsxFileAdapter
         }
 
         private static void NormalizePatchWorksheetSortStates(ZipArchive archive)
-        {
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
-            {
-                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-                var root = worksheetXml.Root;
-                if (root is null)
-                    continue;
-
-                var sortState = root.Element(workbookNs + "sortState");
-                if (sortState is not null &&
-                    XlsxWorksheetSortStateNormalizer.NormalizeElement(sortState))
-                {
-                    XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
-                }
-            }
-        }
+            => XlsxWorksheetSortStateNormalizer.NormalizeWorksheets(archive);
 
         private static void NormalizePatchWorksheetAutoFilters(ZipArchive archive)
-        {
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
-            {
-                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-                var root = worksheetXml.Root;
-                if (root is null)
-                    continue;
-
-                var autoFilter = root.Element(workbookNs + "autoFilter");
-                if (autoFilter is not null &&
-                    XlsxWorksheetAutoFilterNormalizer.NormalizeElement(autoFilter))
-                {
-                    XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
-                }
-            }
-        }
+            => XlsxWorksheetAutoFilterNormalizer.NormalizeWorksheets(archive);
 
         private static void NormalizePatchStructuredTableAutoFilters(ZipArchive archive)
         {

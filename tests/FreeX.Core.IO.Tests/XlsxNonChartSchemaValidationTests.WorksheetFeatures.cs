@@ -424,6 +424,51 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         customFilter.Elements().Should().BeEmpty();
     }
 
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidAutoFilterAttributesForSchemaValidity()
+    {
+        using var source = Save(CreateAutoFilterSourceWorkbook());
+        SetWorksheetAutoFilterInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var autoFilter = ReadWorksheetChildElement(saved, "autoFilter");
+        var worksheetNs = autoFilter.Name.Namespace;
+        var firstColumn = autoFilter.Elements(worksheetNs + "filterColumn").First();
+        firstColumn.Attribute("hiddenButton").Should().BeNull();
+        firstColumn.Attribute("showButton").Should().BeNull();
+        firstColumn.Attribute("customFilterColumnFlag").Should().BeNull();
+        var filters = firstColumn.Element(worksheetNs + "filters")!;
+        filters.Attribute("blank").Should().BeNull();
+        filters.Attribute("calendarType").Should().BeNull();
+        filters.Attribute("filtersFlag").Should().BeNull();
+        filters.Element(worksheetNs + "filter")!.Attribute("filterFlag").Should().BeNull();
+        filters.Element(worksheetNs + "filter")!.Elements().Should().BeEmpty();
+        filters.Elements(worksheetNs + "dateGroupItem").Should().BeEmpty();
+
+        var customFilters = autoFilter
+            .Elements(worksheetNs + "filterColumn")
+            .Skip(1)
+            .First()
+            .Element(worksheetNs + "customFilters")!;
+        customFilters.Attribute("and").Should().BeNull();
+        customFilters.Attribute("customFiltersFlag").Should().BeNull();
+        var customFilter = customFilters.Element(worksheetNs + "customFilter")!;
+        customFilter.Attribute("operator").Should().BeNull();
+        customFilter.Attribute("customFilterFlag").Should().BeNull();
+        customFilter.Elements().Should().BeEmpty();
+    }
+
 
     [Fact]
     public void WorksheetSortStateAndDataConsolidation_ProducesSchemaValidWorkbook()
@@ -526,6 +571,32 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.Save(workbook, saved);
 
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var sortState = ReadWorksheetChildElement(saved, "sortState");
+        var condition = sortState.Element(sortState.Name.Namespace + "sortCondition")!;
+        sortState.Attribute("sortMethod").Should().BeNull();
+        condition.Attribute("sortBy").Should().BeNull();
+        condition.Attribute("dxfId").Should().BeNull();
+        condition.Attribute("iconId").Should().BeNull();
+    }
+
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidSortStateAttributesForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetSortStateAndDataConsolidationSourceWorkbook());
+        SetWorksheetSortStateInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         var sortState = ReadWorksheetChildElement(saved, "sortState");
         var condition = sortState.Element(sortState.Name.Namespace + "sortCondition")!;
