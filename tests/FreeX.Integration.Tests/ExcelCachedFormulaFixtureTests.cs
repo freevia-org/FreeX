@@ -13,7 +13,7 @@ public sealed class ExcelCachedFormulaFixtureTests
 {
     public static IEnumerable<object[]> CachedFormulaFixtureFiles()
     {
-        var directory = WorkspacePathLocator.FindDirectoryFromSourceOrCurrentDirectory(
+        var directory = TestWorkspaceFileLocator.FindDirectoryFromSourceOrCurrentDirectory(
             ["test-corpus", "regressions", "formula-cached"]);
         if (!Directory.Exists(directory))
             yield break;
