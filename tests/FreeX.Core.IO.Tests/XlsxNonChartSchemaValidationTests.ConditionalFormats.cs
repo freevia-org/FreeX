@@ -16,6 +16,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 {
     private const string ConditionalFormattingExtensionUri = "{FREEX-CF-CONTAINER-EXT}";
     private const string ConditionalFormatRuleExtensionUri = "{FREEX-CF-RULE-EXT}";
+    private const string ConditionalFormatColorScalePayloadExtensionUri = "{FREEX-CF-COLORSCALE-PAYLOAD-EXT}";
+    private const string ConditionalFormatDataBarPayloadExtensionUri = "{FREEX-CF-DATABAR-PAYLOAD-EXT}";
+    private const string ConditionalFormatIconSetPayloadExtensionUri = "{FREEX-CF-ICONSET-PAYLOAD-EXT}";
 
     [Fact]
     public void ConditionalFormat_ColorScale_ProducesSchemaValidWorkbook()
@@ -215,6 +218,62 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void ConditionalFormatPayloadExtensionLists_RemovesInvalidNativeMetadataForSchemaValidity()
+    {
+        var workbook = new Workbook("ConditionalFormatPayloadExtensionListInvalidSchema");
+        var sheet = workbook.AddSheet("Data");
+        SeedNumericGrid(sheet);
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = Range(sheet, 2, 1, 5, 1),
+            Priority = 1,
+            RuleType = CfRuleType.ColorScale,
+            UseThreeColorScale = true,
+            NativePayloadChildXmls =
+            [
+                CreateInvalidExtensionListXml(ConditionalFormatColorScalePayloadExtensionUri, "FreeXColorScalePayloadExtension", "customColorScalePayloadExtLstFlag", "customColorScalePayloadExtFlag", "nativeColorScalePayloadExtLstChild"),
+                CreateDuplicateExtensionListXml("{FREEX-DUPLICATE-CF-COLORSCALE-PAYLOAD-EXTLST}")
+            ],
+        });
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = Range(sheet, 2, 2, 5, 2),
+            Priority = 2,
+            RuleType = CfRuleType.DataBar,
+            DataBarShowValue = true,
+            NativePayloadChildXmls =
+            [
+                CreateInvalidExtensionListXml(ConditionalFormatDataBarPayloadExtensionUri, "FreeXDataBarPayloadExtension", "customDataBarPayloadExtLstFlag", "customDataBarPayloadExtFlag", "nativeDataBarPayloadExtLstChild"),
+                CreateDuplicateExtensionListXml("{FREEX-DUPLICATE-CF-DATABAR-PAYLOAD-EXTLST}")
+            ],
+        });
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = Range(sheet, 2, 3, 5, 3),
+            Priority = 3,
+            RuleType = CfRuleType.IconSet,
+            IconSetStyle = "3TrafficLights1",
+            IconSetThresholds =
+            {
+                new CfThresholdModel(CfThresholdType.Percent, "0"),
+                new CfThresholdModel(CfThresholdType.Percent, "33"),
+                new CfThresholdModel(CfThresholdType.Percent, "67"),
+            },
+            NativePayloadChildXmls =
+            [
+                CreateInvalidExtensionListXml(ConditionalFormatIconSetPayloadExtensionUri, "FreeXIconSetPayloadExtension", "customIconSetPayloadExtLstFlag", "customIconSetPayloadExtFlag", "nativeIconSetPayloadExtLstChild"),
+                CreateDuplicateExtensionListXml("{FREEX-DUPLICATE-CF-ICONSET-PAYLOAD-EXTLST}")
+            ],
+        });
+
+        using var stream = Save(workbook);
+
+        SchemaErrors(stream).Should().BeEmpty();
+        AssertConditionalFormatPayloadExtensionListsRemoved(stream);
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithStandardConditionalFormats_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreateStandardConditionalFormatsSourceWorkbook());
@@ -268,6 +327,30 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SchemaErrors(saved).Should().BeEmpty();
         var conditionalFormatting = ReadWorksheetChildElements(saved, "conditionalFormatting").First();
         AssertConditionalFormatInvalidNativeMetadataSanitized(conditionalFormatting);
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidConditionalFormatPayloadExtensionListsForSchemaValidity()
+    {
+        using var source = Save(CreateStandardConditionalFormatsSourceWorkbook());
+        SetConditionalFormatPayloadExtensionListsInvalidNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 8, 8), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertConditionalFormatPayloadExtensionListsRemoved(saved);
     }
 
 
@@ -536,6 +619,60 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
     }
 
+    private static void SetConditionalFormatPayloadExtensionListsInvalidNativeMetadata(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+
+        AddInvalidPayloadExtensionList(
+            worksheetXml.Root!.Descendants(worksheetNs + "colorScale").First(),
+            worksheetNs,
+            ConditionalFormatColorScalePayloadExtensionUri,
+            "FreeXColorScalePayloadExtension",
+            "customColorScalePayloadExtLstFlag",
+            "customColorScalePayloadExtFlag",
+            "nativeColorScalePayloadExtLstChild",
+            "{FREEX-DUPLICATE-CF-COLORSCALE-PAYLOAD-EXTLST}");
+        AddInvalidPayloadExtensionList(
+            worksheetXml.Root.Descendants(worksheetNs + "dataBar").First(),
+            worksheetNs,
+            ConditionalFormatDataBarPayloadExtensionUri,
+            "FreeXDataBarPayloadExtension",
+            "customDataBarPayloadExtLstFlag",
+            "customDataBarPayloadExtFlag",
+            "nativeDataBarPayloadExtLstChild",
+            "{FREEX-DUPLICATE-CF-DATABAR-PAYLOAD-EXTLST}");
+        AddInvalidPayloadExtensionList(
+            worksheetXml.Root.Descendants(worksheetNs + "iconSet").First(),
+            worksheetNs,
+            ConditionalFormatIconSetPayloadExtensionUri,
+            "FreeXIconSetPayloadExtension",
+            "customIconSetPayloadExtLstFlag",
+            "customIconSetPayloadExtFlag",
+            "nativeIconSetPayloadExtLstChild",
+            "{FREEX-DUPLICATE-CF-ICONSET-PAYLOAD-EXTLST}");
+
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void AddInvalidPayloadExtensionList(
+        XElement payload,
+        XNamespace worksheetNs,
+        string uri,
+        string payloadName,
+        string listAttributeName,
+        string extensionAttributeName,
+        string unexpectedChildName,
+        string duplicateUri)
+    {
+        payload.Elements(worksheetNs + "extLst").Remove();
+        payload.Add(
+            CreateInvalidExtensionList(worksheetNs, uri, payloadName, listAttributeName, extensionAttributeName, unexpectedChildName),
+            new XElement(worksheetNs + "extLst", new XElement(worksheetNs + "ext", new XAttribute("uri", duplicateUri))));
+    }
+
     private static void AssertConditionalFormatInvalidNativeMetadataSanitized(XElement conditionalFormatting)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -560,6 +697,28 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             "customCfRuleExtLstFlag",
             "customCfRuleExtFlag",
             "nativeCfRuleExtLstChild");
+    }
+
+    private static void AssertConditionalFormatPayloadExtensionListsRemoved(Stream stream)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var conditionalFormattings = ReadWorksheetChildElements(stream, "conditionalFormatting");
+        AssertConditionalFormatPayloadExtensionListRemoved(conditionalFormattings, worksheetNs, "colorScale");
+        AssertConditionalFormatPayloadExtensionListRemoved(conditionalFormattings, worksheetNs, "dataBar");
+        AssertConditionalFormatPayloadExtensionListRemoved(conditionalFormattings, worksheetNs, "iconSet");
+    }
+
+    private static void AssertConditionalFormatPayloadExtensionListRemoved(
+        IReadOnlyList<XElement> conditionalFormattings,
+        XNamespace worksheetNs,
+        string payloadLocalName)
+    {
+        var payload = conditionalFormattings
+            .SelectMany(element => element.Descendants(worksheetNs + payloadLocalName))
+            .Should()
+            .ContainSingle()
+            .Subject;
+        payload.Elements(worksheetNs + "extLst").Should().BeEmpty();
     }
 
     private static XElement ReadWorksheetChildElement(Stream stream, string localName)
