@@ -1,6 +1,5 @@
 using System.IO.Compression;
 using System.Text;
-using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -586,34 +585,10 @@ internal static class XlsxDataValidationNativeMetadataMapper
         var changed = false;
         foreach (var (name, value) in attributes)
         {
-            changed |= TrySetNativeAttributeIfMissing(element, name, value);
+            changed |= XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttributeIfMissing(element, name, value);
         }
 
         return changed;
-    }
-
-    private static bool TrySetNativeAttributeIfMissing(XElement element, string name, string value)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-            return false;
-
-        try
-        {
-            var attributeName = XName.Get(name);
-            if (element.Attribute(attributeName) is not null)
-                return false;
-
-            element.SetAttributeValue(attributeName, value);
-            return true;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (XmlException)
-        {
-            return false;
-        }
     }
 }
 
