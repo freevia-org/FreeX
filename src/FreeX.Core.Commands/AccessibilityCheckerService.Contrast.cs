@@ -2066,6 +2066,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaAggregateKind.CountIfs => argumentCount is >= 2 and <= MaxFormulaConditionalAggregateArgumentCount &&
                 argumentCount % 2 == 0,
             ConditionalFormulaAggregateKind.SumProduct => argumentCount is >= 1 and <= MaxFormulaSumProductArgumentCount,
+            _ when IsFormulaDatabaseAggregate(aggregateKind) => argumentCount == 3,
             _ when IsFormulaPairwiseAggregate(aggregateKind) => argumentCount == 2,
             ConditionalFormulaAggregateKind.Large or
             ConditionalFormulaAggregateKind.Small or
@@ -2233,6 +2234,39 @@ public static partial class AccessibilityCheckerService
             case "PERCENTOF":
                 kind = ConditionalFormulaAggregateKind.PercentOf;
                 return true;
+            case "DSUM":
+                kind = ConditionalFormulaAggregateKind.DSum;
+                return true;
+            case "DAVERAGE":
+                kind = ConditionalFormulaAggregateKind.DAverage;
+                return true;
+            case "DCOUNT":
+                kind = ConditionalFormulaAggregateKind.DCount;
+                return true;
+            case "DCOUNTA":
+                kind = ConditionalFormulaAggregateKind.DCountA;
+                return true;
+            case "DMAX":
+                kind = ConditionalFormulaAggregateKind.DMax;
+                return true;
+            case "DMIN":
+                kind = ConditionalFormulaAggregateKind.DMin;
+                return true;
+            case "DPRODUCT":
+                kind = ConditionalFormulaAggregateKind.DProduct;
+                return true;
+            case "DSTDEV":
+                kind = ConditionalFormulaAggregateKind.DStdDev;
+                return true;
+            case "DSTDEVP":
+                kind = ConditionalFormulaAggregateKind.DStdDevP;
+                return true;
+            case "DVAR":
+                kind = ConditionalFormulaAggregateKind.DVar;
+                return true;
+            case "DVARP":
+                kind = ConditionalFormulaAggregateKind.DVarP;
+                return true;
             default:
                 kind = default;
                 return false;
@@ -2253,6 +2287,20 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaAggregateKind.SumIfs or
             ConditionalFormulaAggregateKind.CountIfs or
             ConditionalFormulaAggregateKind.AverageIfs;
+
+    private static bool IsFormulaDatabaseAggregate(ConditionalFormulaAggregateKind aggregateKind) =>
+        aggregateKind is
+            ConditionalFormulaAggregateKind.DSum or
+            ConditionalFormulaAggregateKind.DAverage or
+            ConditionalFormulaAggregateKind.DCount or
+            ConditionalFormulaAggregateKind.DCountA or
+            ConditionalFormulaAggregateKind.DMax or
+            ConditionalFormulaAggregateKind.DMin or
+            ConditionalFormulaAggregateKind.DProduct or
+            ConditionalFormulaAggregateKind.DStdDev or
+            ConditionalFormulaAggregateKind.DStdDevP or
+            ConditionalFormulaAggregateKind.DVar or
+            ConditionalFormulaAggregateKind.DVarP;
 
     private static bool TryCreateFormulaAggregateArgument(
         FormulaNode node,
@@ -2968,7 +3016,18 @@ public static partial class AccessibilityCheckerService
         PercentRankExc,
         ModeSngl,
         Prob,
-        PercentOf
+        PercentOf,
+        DSum,
+        DAverage,
+        DCount,
+        DCountA,
+        DMax,
+        DMin,
+        DProduct,
+        DStdDev,
+        DStdDevP,
+        DVar,
+        DVarP
     }
 
     private readonly record struct ConditionalFormulaAggregateArgument(
@@ -16388,6 +16447,337 @@ public static partial class AccessibilityCheckerService
             }
         }
 
+        private bool TryEvaluateFormulaDatabaseAggregate(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (operand.AggregateArguments is not { Count: 3 } arguments)
+                return false;
+
+            if (!TryResolveFormulaDatabaseAggregateRangeArgument(arguments[0], rowOffset, colOffset, out var database, out var databaseError))
+            {
+                value = databaseError ?? ErrorValue.Value;
+                return databaseError is not null;
+            }
+
+            if (!TryResolveFormulaDatabaseAggregateScalarArgument(arguments[1], rowOffset, colOffset, out var field, out var fieldError))
+            {
+                value = fieldError ?? ErrorValue.Value;
+                return fieldError is not null;
+            }
+
+            if (!TryResolveFormulaDatabaseAggregateRangeArgument(arguments[2], rowOffset, colOffset, out var criteria, out var criteriaError))
+            {
+                value = criteriaError ?? ErrorValue.Value;
+                return criteriaError is not null;
+            }
+
+            if (!TryResolveFormulaDatabaseAggregateFieldColumn(database, field, out var fieldColumn))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            if (!TryCollectFormulaDatabaseAggregateMatches(database, fieldColumn, criteria, out var matches, out var matchError))
+            {
+                value = matchError ?? ErrorValue.Value;
+                return matchError is not null;
+            }
+
+            value = operand.AggregateKind switch
+            {
+                ConditionalFormulaAggregateKind.DCount => new NumberValue(FormulaDatabaseAggregateNumericValues(matches).Count),
+                ConditionalFormulaAggregateKind.DCountA => new NumberValue(FormulaDatabaseAggregateNonBlankCount(matches)),
+                _ => FormulaDatabaseAggregateNumberResult(
+                    operand.AggregateKind,
+                    FormulaDatabaseAggregateNumericValues(matches))
+            };
+
+            return true;
+        }
+
+        private bool TryResolveFormulaDatabaseAggregateRangeArgument(
+            ConditionalFormulaAggregateArgument argument,
+            int rowOffset,
+            int colOffset,
+            out RangeValue range,
+            out ErrorValue? error)
+        {
+            if (!TryResolveFormulaConditionalAggregateRangeArgument(argument, rowOffset, colOffset, out range, out error))
+                return false;
+
+            if (!FormulaDatabaseAggregateIsSameSheet(range) ||
+                range.RowCount < 1 ||
+                range.ColCount < 1)
+            {
+                error = ErrorValue.Value;
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool TryResolveFormulaDatabaseAggregateScalarArgument(
+            ConditionalFormulaAggregateArgument argument,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value,
+            out ErrorValue? error)
+        {
+            error = null;
+            if (!TryResolveFormulaConditionalAggregateScalarArgument(argument, rowOffset, colOffset, out value))
+                return false;
+
+            if (value is ErrorValue scalarError)
+            {
+                error = scalarError;
+                return false;
+            }
+
+            if (value is RangeValue)
+            {
+                error = ErrorValue.Value;
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool FormulaDatabaseAggregateIsSameSheet(RangeValue range) =>
+            string.IsNullOrEmpty(range.SheetName) ||
+            string.Equals(range.SheetName, sheet.Name, StringComparison.OrdinalIgnoreCase);
+
+        private static bool TryResolveFormulaDatabaseAggregateFieldColumn(
+            RangeValue database,
+            ScalarValue field,
+            out int fieldColumn)
+        {
+            fieldColumn = 0;
+            if (TryGetFormulaDatabaseAggregateFieldIndex(field, out var fieldIndex))
+            {
+                if (fieldIndex < 1 || fieldIndex > database.ColCount)
+                    return false;
+
+                fieldColumn = fieldIndex - 1;
+                return true;
+            }
+
+            if (!TryGetFormulaDatabaseAggregateHeaderText(field, out var fieldName))
+                return false;
+
+            return TryFindFormulaDatabaseAggregateHeaderColumn(database, fieldName, out fieldColumn);
+        }
+
+        private static bool TryGetFormulaDatabaseAggregateFieldIndex(ScalarValue value, out int fieldIndex)
+        {
+            if (TryGetFormulaConditionalAggregateCellNumber(value, out var number) &&
+                double.IsFinite(number) &&
+                number >= int.MinValue &&
+                number <= int.MaxValue)
+            {
+                fieldIndex = (int)number;
+                return true;
+            }
+
+            fieldIndex = 0;
+            return false;
+        }
+
+        private static bool TryFindFormulaDatabaseAggregateHeaderColumn(
+            RangeValue database,
+            string headerText,
+            out int column)
+        {
+            for (var currentColumn = 0; currentColumn < database.ColCount; currentColumn++)
+            {
+                if (TryGetFormulaDatabaseAggregateHeaderText(database.Cells[0, currentColumn], out var candidate) &&
+                    string.Equals(candidate, headerText, StringComparison.OrdinalIgnoreCase))
+                {
+                    column = currentColumn;
+                    return true;
+                }
+            }
+
+            column = 0;
+            return false;
+        }
+
+        private static bool TryGetFormulaDatabaseAggregateHeaderText(ScalarValue value, out string text)
+        {
+            text = ValueText(value);
+            return text.Length > 0;
+        }
+
+        private static bool TryCollectFormulaDatabaseAggregateMatches(
+            RangeValue database,
+            int fieldColumn,
+            RangeValue criteria,
+            out List<ScalarValue> matches,
+            out ErrorValue? error)
+        {
+            matches = new List<ScalarValue>();
+            error = null;
+
+            if (database.RowCount < 1 ||
+                criteria.RowCount < 2 ||
+                criteria.ColCount < 1 ||
+                fieldColumn < 0 ||
+                fieldColumn >= database.ColCount)
+            {
+                error = ErrorValue.Value;
+                return false;
+            }
+
+            if (!TryCreateFormulaDatabaseAggregateCriteriaRows(database, criteria, out var criteriaRows))
+                return true;
+
+            for (var dataRow = 1; dataRow < database.RowCount; dataRow++)
+            {
+                var rowMatches = false;
+                for (var criteriaRowIndex = 0; criteriaRowIndex < criteriaRows.Count; criteriaRowIndex++)
+                {
+                    if (!criteriaRows[criteriaRowIndex].Matches(database, dataRow))
+                        continue;
+
+                    rowMatches = true;
+                    break;
+                }
+
+                if (!rowMatches)
+                    continue;
+
+                var value = database.Cells[dataRow, fieldColumn];
+                if (value is ErrorValue valueError)
+                {
+                    error = valueError;
+                    return false;
+                }
+
+                matches.Add(value);
+            }
+
+            return true;
+        }
+
+        private static bool TryCreateFormulaDatabaseAggregateCriteriaRows(
+            RangeValue database,
+            RangeValue criteria,
+            out List<FormulaDatabaseAggregateCriteriaRow> criteriaRows)
+        {
+            criteriaRows = new List<FormulaDatabaseAggregateCriteriaRow>(criteria.RowCount - 1);
+            for (var criteriaRow = 1; criteriaRow < criteria.RowCount; criteriaRow++)
+            {
+                var pairs = new List<FormulaDatabaseAggregateCriteriaPair>();
+                var impossibleRow = false;
+                for (var criteriaColumn = 0; criteriaColumn < criteria.ColCount; criteriaColumn++)
+                {
+                    var criteriaValue = criteria.Cells[criteriaRow, criteriaColumn];
+                    if (FormulaDatabaseAggregateCriteriaCellIsBlank(criteriaValue))
+                        continue;
+
+                    if (!TryGetFormulaDatabaseAggregateHeaderText(criteria.Cells[0, criteriaColumn], out var criteriaHeader))
+                        continue;
+
+                    if (!TryFindFormulaDatabaseAggregateHeaderColumn(database, criteriaHeader, out var databaseColumn))
+                    {
+                        impossibleRow = true;
+                        break;
+                    }
+
+                    pairs.Add(new FormulaDatabaseAggregateCriteriaPair(
+                        databaseColumn,
+                        FormulaConditionalCriteriaMatcher.Create(criteriaValue)));
+                }
+
+                if (!impossibleRow)
+                    criteriaRows.Add(new FormulaDatabaseAggregateCriteriaRow(pairs));
+            }
+
+            return true;
+        }
+
+        private static bool FormulaDatabaseAggregateCriteriaCellIsBlank(ScalarValue value) =>
+            value is BlankValue ||
+            value is TextValue text && text.Value.Length == 0;
+
+        private static List<double> FormulaDatabaseAggregateNumericValues(IReadOnlyList<ScalarValue> values)
+        {
+            var numbers = new List<double>(values.Count);
+            for (var i = 0; i < values.Count; i++)
+            {
+                if (TryGetFormulaConditionalAggregateCellNumber(values[i], out var number))
+                    numbers.Add(number);
+            }
+
+            return numbers;
+        }
+
+        private static int FormulaDatabaseAggregateNonBlankCount(IReadOnlyList<ScalarValue> values)
+        {
+            var count = 0;
+            for (var i = 0; i < values.Count; i++)
+            {
+                if (!FormulaDatabaseAggregateCriteriaCellIsBlank(values[i]))
+                    count++;
+            }
+
+            return count;
+        }
+
+        private static ScalarValue FormulaDatabaseAggregateNumberResult(
+            ConditionalFormulaAggregateKind aggregateKind,
+            List<double> numbers)
+        {
+            return aggregateKind switch
+            {
+                ConditionalFormulaAggregateKind.DSum => FormulaConditionalAggregateNumberResult(numbers.Sum()),
+                ConditionalFormulaAggregateKind.DAverage when numbers.Count > 0 => FormulaConditionalAggregateNumberResult(numbers.Average()),
+                ConditionalFormulaAggregateKind.DAverage => ErrorValue.DivByZero,
+                ConditionalFormulaAggregateKind.DMax when numbers.Count > 0 => FormulaConditionalAggregateNumberResult(numbers.Max()),
+                ConditionalFormulaAggregateKind.DMax => ErrorValue.Num,
+                ConditionalFormulaAggregateKind.DMin when numbers.Count > 0 => FormulaConditionalAggregateNumberResult(numbers.Min()),
+                ConditionalFormulaAggregateKind.DMin => ErrorValue.Num,
+                ConditionalFormulaAggregateKind.DProduct => FormulaConditionalAggregateNumberResult(
+                    numbers.Count == 0 ? 1d : numbers.Aggregate(1d, (product, number) => product * number)),
+                ConditionalFormulaAggregateKind.DStdDev when numbers.Count > 1 =>
+                    FormulaConditionalAggregateNumberResult(StandardDeviationFormulaNumbers(numbers, sample: true)),
+                ConditionalFormulaAggregateKind.DStdDev => ErrorValue.DivByZero,
+                ConditionalFormulaAggregateKind.DStdDevP when numbers.Count > 0 =>
+                    FormulaConditionalAggregateNumberResult(StandardDeviationFormulaNumbers(numbers, sample: false)),
+                ConditionalFormulaAggregateKind.DStdDevP => ErrorValue.DivByZero,
+                ConditionalFormulaAggregateKind.DVar when numbers.Count > 1 =>
+                    FormulaConditionalAggregateNumberResult(VarianceFormulaNumbers(numbers, sample: true)),
+                ConditionalFormulaAggregateKind.DVar => ErrorValue.DivByZero,
+                ConditionalFormulaAggregateKind.DVarP when numbers.Count > 0 =>
+                    FormulaConditionalAggregateNumberResult(VarianceFormulaNumbers(numbers, sample: false)),
+                ConditionalFormulaAggregateKind.DVarP => ErrorValue.DivByZero,
+                _ => ErrorValue.Value
+            };
+        }
+
+        private readonly record struct FormulaDatabaseAggregateCriteriaPair(
+            int DatabaseColumn,
+            FormulaConditionalCriteriaMatcher Criteria);
+
+        private readonly record struct FormulaDatabaseAggregateCriteriaRow(
+            IReadOnlyList<FormulaDatabaseAggregateCriteriaPair> Pairs)
+        {
+            public bool Matches(RangeValue database, int dataRow)
+            {
+                for (var i = 0; i < Pairs.Count; i++)
+                {
+                    var pair = Pairs[i];
+                    if (!pair.Criteria.Matches(database.Cells[dataRow, pair.DatabaseColumn]))
+                        return false;
+                }
+
+                return true;
+            }
+        }
+
         private bool TryEvaluateFormulaAggregate(
             ConditionalFormulaOperand operand,
             int rowOffset,
@@ -16395,6 +16785,9 @@ public static partial class AccessibilityCheckerService
             out ScalarValue value)
         {
             value = ErrorValue.Value;
+            if (IsFormulaDatabaseAggregate(operand.AggregateKind))
+                return TryEvaluateFormulaDatabaseAggregate(operand, rowOffset, colOffset, out value);
+
             if (IsFormulaConditionalAggregate(operand.AggregateKind))
                 return TryEvaluateFormulaConditionalAggregate(operand, rowOffset, colOffset, out value);
 
