@@ -30,6 +30,13 @@ The workflow produces downloadable GitHub Actions artifacts; it does not publish
 - `freex-<run-id>-<run-attempt>-osx-arm64-macos-app`
 - `freex-<run-id>-<run-attempt>-osx-x64-macos-app`
 
+Quick retrieval checklist:
+
+1. Pick `osx-arm64` for Apple Silicon Macs or `osx-x64` for Intel Macs.
+2. Download the matching Actions artifact wrapper from the completed workflow run.
+3. Unzip the wrapper, then verify the inner `freex-<runtime>-macos-app.zip` with its `.sha256` file.
+4. Keep `freex-<runtime>-macos-evidence.txt` and the smoke/notarization logs with any tester report.
+
 With the GitHub CLI, the same artifacts can be retrieved with:
 
 ```bash
