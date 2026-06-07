@@ -54,7 +54,7 @@ public sealed partial class XlsxBroaderRetentionChecksTests
         var sheetPr = worksheetXml.Root.Element(MainNs + "sheetPr");
         sheetPr.Should().NotBeNull();
         sheetPr!.Attribute("filterMode")!.Value.Should().Be("1");
-        sheetPr.Element(FxNs + "sheetPrNativeChild")!.Attribute("id")!.Value.Should().Be("sheet-pr");
+        sheetPr.Element(FxNs + "sheetPrNativeChild").Should().BeNull();
 
         var sheetFormat = worksheetXml.Root.Element(MainNs + "sheetFormatPr");
         sheetFormat.Should().NotBeNull();

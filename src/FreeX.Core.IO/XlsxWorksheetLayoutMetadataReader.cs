@@ -36,16 +36,13 @@ internal static class XlsxWorksheetLayoutMetadataReader
         var attrs = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var attribute in sheetProperties.Attributes())
         {
-            if (attribute.IsNamespaceDeclaration || IsModeledSheetPropertiesAttribute(attribute.Name.LocalName))
+            if (attribute.IsNamespaceDeclaration || !IsPreservableSheetPropertiesAttribute(attribute))
                 continue;
 
             attrs[attribute.Name.ToString()] = attribute.Value;
         }
 
-        var children = sheetProperties.Elements()
-            .Where(element => !IsModeledSheetPropertiesElement(element.Name.LocalName))
-            .Select(element => element.ToString(SaveOptions.DisableFormatting))
-            .ToList();
+        var children = new List<string>();
 
         var serialized = XmlNativeBagSerializer.Serialize(attrs, children);
         if (serialized is null)
@@ -59,8 +56,17 @@ internal static class XlsxWorksheetLayoutMetadataReader
     private static bool IsModeledSheetPropertiesAttribute(string name) =>
         name is "codeName";
 
-    private static bool IsModeledSheetPropertiesElement(string name) =>
-        name is "tabColor" or "outlinePr" or "pageSetUpPr";
+    private static bool IsPreservableSheetPropertiesAttribute(XAttribute attribute) =>
+        attribute.Name.NamespaceName.Length == 0 &&
+        !IsModeledSheetPropertiesAttribute(attribute.Name.LocalName) &&
+        attribute.Name.LocalName is "syncHorizontal" or
+            "syncVertical" or
+            "syncRef" or
+            "transitionEvaluation" or
+            "transitionEntry" or
+            "published" or
+            "filterMode" or
+            "enableFormatConditionsCalculation";
 
     public static NativeXmlPreserveBag? ReadWorksheetPrimaryViewMetadata(XElement? sheetView)
     {

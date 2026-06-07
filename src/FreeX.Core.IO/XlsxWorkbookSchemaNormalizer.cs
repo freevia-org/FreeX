@@ -18,6 +18,7 @@ internal static class XlsxWorkbookSchemaNormalizer
         XlsxWorksheetDimensionNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetCalculationPropertyNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetSheetFormatNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetSheetPropertiesNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetSheetViewNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetProtectedRangeNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetScenarioNormalizer.NormalizeWorksheets(archive);
