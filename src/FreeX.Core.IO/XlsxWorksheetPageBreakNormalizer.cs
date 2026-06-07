@@ -55,7 +55,7 @@ internal static class XlsxWorksheetPageBreakNormalizer
 
     private static bool NormalizeBreakElement(XElement breakElement)
     {
-        var normalizedId = NormalizeUnsignedIntOrNull(breakElement.Attribute("id")?.Value);
+        var normalizedId = XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull(breakElement.Attribute("id")?.Value);
         if (normalizedId is null)
         {
             breakElement.Remove();
@@ -65,10 +65,10 @@ internal static class XlsxWorksheetPageBreakNormalizer
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(breakElement, BreakAttributes);
         changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(breakElement, "id", normalizedId);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(breakElement, "min", NormalizeUnsignedIntOrNull);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(breakElement, "max", NormalizeUnsignedIntOrNull);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(breakElement, "man", NormalizeBoolean);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(breakElement, "pt", NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(breakElement, "min", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(breakElement, "max", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(breakElement, "man", XlsxXmlNormalizationHelpers.NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(breakElement, "pt", XlsxXmlNormalizationHelpers.NormalizeBoolean);
         return changed;
     }
 
@@ -85,25 +85,6 @@ internal static class XlsxWorksheetPageBreakNormalizer
         }
 
         return changed;
-    }
-
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed switch
-        {
-            "0" or "1" => trimmed,
-            "true" or "false" => trimmed,
-            _ => null
-        };
-    }
-
-    private static string? NormalizeUnsignedIntOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed.ToString(CultureInfo.InvariantCulture)
-            : null;
     }
 
     private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
