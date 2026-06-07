@@ -56,9 +56,16 @@ public static class BuiltInNumberFormatCatalog
     public static bool TryResolveFormatCode(int? numberFormatId, out string formatCode)
     {
         if (numberFormatId is null)
-            return ResolveGeneral(out formatCode);
+        {
+            formatCode = "General";
+            return true;
+        }
 
-        return FormatCodesById.TryGetValue(numberFormatId.Value, out formatCode!) || Missing(out formatCode);
+        if (FormatCodesById.TryGetValue(numberFormatId.Value, out formatCode!))
+            return true;
+
+        formatCode = "";
+        return false;
     }
 
     public static int? ResolveNumberFormatIdForCode(string? formatCode) =>
@@ -76,15 +83,4 @@ public static class BuiltInNumberFormatCatalog
         return NumberFormatIdsByCode.TryGetValue(trimmed, out numberFormatId);
     }
 
-    private static bool ResolveGeneral(out string formatCode)
-    {
-        formatCode = "General";
-        return true;
-    }
-
-    private static bool Missing(out string formatCode)
-    {
-        formatCode = "";
-        return false;
-    }
 }

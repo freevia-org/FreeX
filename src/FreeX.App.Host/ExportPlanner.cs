@@ -103,7 +103,7 @@ internal static partial class ExportPlanner
     public static string PdfFallbackMessage => UiText.Get("Export_PdfFallbackMessage");
 
     public static ExportFormat InferExportFormat(string path) =>
-        string.Equals(TryGetExtension(path, out var extension) ? extension : "", ".xps", StringComparison.OrdinalIgnoreCase)
+        string.Equals(PlannerPathHelpers.TryGetExtension(path, out var extension) ? extension : "", ".xps", StringComparison.OrdinalIgnoreCase)
             ? ExportFormat.Xps
             : ExportFormat.Pdf;
 
@@ -139,7 +139,7 @@ internal static partial class ExportPlanner
 
     private static string NormalizeExportPath(string path, ExportFormat format, bool forceMatchingExtension)
     {
-        if (!forceMatchingExtension && TryGetExtension(path, out _))
+        if (!forceMatchingExtension && PlannerPathHelpers.TryGetExtension(path, out _))
             return path;
 
         return TryChangeExtension(path, format == ExportFormat.Xps ? ".xps" : ".pdf", out var normalized)
@@ -147,39 +147,9 @@ internal static partial class ExportPlanner
             : path;
     }
 
-    private static bool TryGetExtension(string path, out string extension)
-    {
-        if (HasInvalidPathChars(path))
-        {
-            extension = "";
-            return false;
-        }
-
-        try
-        {
-            extension = Path.GetExtension(path) ?? "";
-            return !string.IsNullOrEmpty(extension);
-        }
-        catch (ArgumentException)
-        {
-            extension = "";
-            return false;
-        }
-        catch (NotSupportedException)
-        {
-            extension = "";
-            return false;
-        }
-        catch (PathTooLongException)
-        {
-            extension = "";
-            return false;
-        }
-    }
-
     private static bool TryChangeExtension(string path, string extension, out string normalizedPath)
     {
-        if (HasInvalidPathChars(path))
+        if (PlannerPathHelpers.HasInvalidPathChars(path))
         {
             normalizedPath = path;
             return false;
@@ -206,9 +176,6 @@ internal static partial class ExportPlanner
             return false;
         }
     }
-
-    private static bool HasInvalidPathChars(string path) =>
-        path.IndexOf('\0') >= 0;
 
     private static bool PathsEqual(string left, string right)
     {
