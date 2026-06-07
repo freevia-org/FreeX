@@ -177,6 +177,8 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _wrapTextMenuItem = new();
     private readonly NativeMenuItem _decreaseIndentMenuItem = new();
     private readonly NativeMenuItem _increaseIndentMenuItem = new();
+    private readonly NativeMenuItem _showGridlinesMenuItem = new();
+    private readonly NativeMenuItem _showHeadingsMenuItem = new();
     private readonly NativeMenuItem _freezePanesMenuItem = new();
     private readonly NativeMenuItem _freezeTopRowMenuItem = new();
     private readonly NativeMenuItem _freezeFirstColumnMenuItem = new();
@@ -511,6 +513,14 @@ public sealed class MainWindow : Window
         _alignRightMenuItem.Header = "Align Right";
         _alignRightMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Right);
 
+        _showGridlinesMenuItem.Header = "Gridlines";
+        _showGridlinesMenuItem.ToggleType = MenuItemToggleType.CheckBox;
+        _showGridlinesMenuItem.Click += (_, _) => ToggleShowGridlines();
+
+        _showHeadingsMenuItem.Header = "Headings";
+        _showHeadingsMenuItem.ToggleType = MenuItemToggleType.CheckBox;
+        _showHeadingsMenuItem.Click += (_, _) => ToggleShowHeadings();
+
         _freezePanesMenuItem.Header = "Freeze Panes";
         _freezePanesMenuItem.Click += (_, _) => FreezePanesAtActiveCell();
 
@@ -608,6 +618,9 @@ public sealed class MainWindow : Window
         formatMenu.Items.Add(_alignRightMenuItem);
 
         var viewMenu = new NativeMenu();
+        viewMenu.Items.Add(_showGridlinesMenuItem);
+        viewMenu.Items.Add(_showHeadingsMenuItem);
+        viewMenu.Items.Add(new NativeMenuItemSeparator());
         viewMenu.Items.Add(_freezePanesMenuItem);
         viewMenu.Items.Add(_freezeTopRowMenuItem);
         viewMenu.Items.Add(_freezeFirstColumnMenuItem);
@@ -1154,6 +1167,10 @@ public sealed class MainWindow : Window
         _wrapTextMenuItem.IsEnabled = _wrapTextButton.IsEnabled;
         _decreaseIndentMenuItem.IsEnabled = _decreaseIndentButton.IsEnabled;
         _increaseIndentMenuItem.IsEnabled = _increaseIndentButton.IsEnabled;
+        _showGridlinesMenuItem.IsEnabled = isIdle;
+        _showGridlinesMenuItem.IsChecked = _session.IsShowingGridlines;
+        _showHeadingsMenuItem.IsEnabled = isIdle;
+        _showHeadingsMenuItem.IsChecked = _session.IsShowingHeadings;
         _freezePanesMenuItem.IsEnabled = isIdle;
         _freezeTopRowMenuItem.IsEnabled = isIdle;
         _freezeFirstColumnMenuItem.IsEnabled = isIdle;
@@ -1212,39 +1229,49 @@ public sealed class MainWindow : Window
     private Control BuildSheetGrid()
     {
         var viewport = _session.Viewport;
+        var showHeadings = _session.ActiveSheet.ShowHeadings;
+        var headerOffset = showHeadings ? 1 : 0;
         var cellsByAddress = viewport.Cells.ToDictionary(cell => (cell.Row, cell.Col));
         var grid = new AvaloniaGrid
         {
             Background = Brushes.White,
         };
 
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(HeaderColumnWidth) });
+        if (showHeadings)
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(HeaderColumnWidth) });
         foreach (var metric in viewport.ColMetrics)
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(GetDisplayedColumnWidth(metric)) });
 
-        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(HeaderRowHeight) });
+        if (showHeadings)
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(HeaderRowHeight) });
         foreach (var metric in viewport.RowMetrics)
             grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(GetDisplayedRowHeight(metric)) });
 
-        AddGridChild(grid, CreateHeaderCell(""), 0, 0);
-        for (var colIndex = 0; colIndex < viewport.ColMetrics.Count; colIndex++)
+        if (showHeadings)
         {
-            var col = viewport.ColMetrics[colIndex].Col;
-            var selected = IsSelectedColumn(col);
-            AddGridChild(grid, CreateHeaderCell(CellAddress.NumberToColumnName(col), selected), 0, colIndex + 1);
+            AddGridChild(grid, CreateHeaderCell(""), 0, 0);
+            for (var colIndex = 0; colIndex < viewport.ColMetrics.Count; colIndex++)
+            {
+                var col = viewport.ColMetrics[colIndex].Col;
+                var selected = IsSelectedColumn(col);
+                AddGridChild(grid, CreateHeaderCell(CellAddress.NumberToColumnName(col), selected), 0, colIndex + headerOffset);
+            }
         }
 
         for (var rowIndex = 0; rowIndex < viewport.RowMetrics.Count; rowIndex++)
         {
             var row = viewport.RowMetrics[rowIndex].Row;
-            var selectedRow = IsSelectedRow(row);
-            AddGridChild(grid, CreateHeaderCell(row.ToString(), selectedRow), rowIndex + 1, 0);
+            if (showHeadings)
+            {
+                var selectedRow = IsSelectedRow(row);
+                AddGridChild(grid, CreateHeaderCell(row.ToString(), selectedRow), rowIndex + headerOffset, 0);
+            }
 
             for (var colIndex = 0; colIndex < viewport.ColMetrics.Count; colIndex++)
             {
                 var col = viewport.ColMetrics[colIndex].Col;
                 cellsByAddress.TryGetValue((row, col), out var cell);
-                AddGridChild(grid, CreateCell(cell, row, col), rowIndex + 1, colIndex + 1);
+                AddGridChild(grid, CreateCell(cell, row, col), rowIndex + headerOffset, colIndex + headerOffset);
             }
         }
 
@@ -1265,10 +1292,11 @@ public sealed class MainWindow : Window
 
     private Canvas BuildDrawingObjectOverlay(ViewportModel viewport)
     {
+        var showHeadings = _session.ActiveSheet.ShowHeadings;
         var overlay = new Canvas
         {
-            Width = CalculateDisplayedGridWidth(viewport),
-            Height = CalculateDisplayedGridHeight(viewport),
+            Width = CalculateDisplayedGridWidth(viewport, showHeadings),
+            Height = CalculateDisplayedGridHeight(viewport, showHeadings),
             ClipToBounds = true,
             IsHitTestVisible = true,
         };
@@ -1281,6 +1309,7 @@ public sealed class MainWindow : Window
             if (!TryGetDisplayedDrawingObjectBounds(
                     viewport,
                     drawingObject,
+                    showHeadings,
                     out var left,
                     out var top,
                     out var width,
@@ -1550,6 +1579,7 @@ public sealed class MainWindow : Window
     private static bool TryGetDisplayedDrawingObjectBounds(
         ViewportModel viewport,
         DrawingObjectBounds drawingObject,
+        bool showHeadings,
         out double left,
         out double top,
         out double width,
@@ -1565,8 +1595,8 @@ public sealed class MainWindow : Window
             return false;
         }
 
-        left = HeaderColumnWidth + columnLeft;
-        top = HeaderRowHeight + rowTop;
+        left = (showHeadings ? HeaderColumnWidth : 0) + columnLeft;
+        top = (showHeadings ? HeaderRowHeight : 0) + rowTop;
         width = Math.Max(1, drawingObject.Width);
         height = Math.Max(1, drawingObject.Height);
         return true;
@@ -1608,18 +1638,18 @@ public sealed class MainWindow : Window
         return false;
     }
 
-    private static double CalculateDisplayedGridWidth(ViewportModel viewport)
+    private static double CalculateDisplayedGridWidth(ViewportModel viewport, bool showHeadings)
     {
-        var width = HeaderColumnWidth;
+        var width = showHeadings ? HeaderColumnWidth : 0;
         foreach (var metric in viewport.ColMetrics)
             width += GetDisplayedColumnWidth(metric);
 
         return width;
     }
 
-    private static double CalculateDisplayedGridHeight(ViewportModel viewport)
+    private static double CalculateDisplayedGridHeight(ViewportModel viewport, bool showHeadings)
     {
-        var height = HeaderRowHeight;
+        var height = showHeadings ? HeaderRowHeight : 0;
         foreach (var metric in viewport.RowMetrics)
             height += GetDisplayedRowHeight(metric);
 
@@ -1741,7 +1771,8 @@ public sealed class MainWindow : Window
             selected,
             indentPadding,
             textRotation,
-            style);
+            style,
+            _session.ActiveSheet.ShowGridlines);
         border.Cursor = new Cursor(StandardCursorType.Hand);
         border.PointerPressed += (_, args) =>
         {
@@ -1773,7 +1804,8 @@ public sealed class MainWindow : Window
         bool selected,
         double indentPadding = 0,
         int textRotation = 0,
-        CellStyle? style = null)
+        CellStyle? style = null,
+        bool showGridlines = true)
     {
         var effectiveText = FormatTextForRotation(text, textRotation);
         var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;
@@ -1806,7 +1838,7 @@ public sealed class MainWindow : Window
         return new Border
         {
             Background = background,
-            BorderBrush = selected ? SelectionBorder : GridLine,
+            BorderBrush = selected ? SelectionBorder : showGridlines ? GridLine : Brushes.Transparent,
             BorderThickness = new Thickness(1),
             ClipToBounds = true,
             Child = content,
@@ -2429,6 +2461,46 @@ public sealed class MainWindow : Window
         }
 
         RefreshShell($"Moved {sheetName} right");
+    }
+
+    private void ToggleShowGridlines()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        ClearSelectedDrawingObject();
+        var showGridlines = !_session.IsShowingGridlines;
+        var result = _session.SetShowGridlines(showGridlines);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Gridlines failed.");
+            return;
+        }
+
+        RefreshShell(showGridlines ? "Showing gridlines" : "Hiding gridlines");
+    }
+
+    private void ToggleShowHeadings()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        ClearSelectedDrawingObject();
+        var showHeadings = !_session.IsShowingHeadings;
+        var result = _session.SetShowHeadings(showHeadings);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Headings failed.");
+            return;
+        }
+
+        RefreshShell(showHeadings ? "Showing headings" : "Hiding headings");
     }
 
     private void ToggleShowFormulas()
@@ -3966,6 +4038,8 @@ public sealed class MainWindow : Window
             HasNativeAlignMiddleMenuItem: HasNativeMenuItem(_alignMiddleMenuItem, "Align Middle", requireGesture: false),
             HasNativeAlignBottomMenuItem: HasNativeMenuItem(_alignBottomMenuItem, "Align Bottom", requireGesture: false),
             HasNativeWrapTextMenuItem: HasNativeMenuItem(_wrapTextMenuItem, "Wrap Text", requireGesture: false),
+            HasNativeShowGridlinesMenuItem: HasNativeMenuItem(_showGridlinesMenuItem, "Gridlines", requireGesture: false),
+            HasNativeShowHeadingsMenuItem: HasNativeMenuItem(_showHeadingsMenuItem, "Headings", requireGesture: false),
             HasNativeFreezePanesMenuItem: HasNativeMenuItem(_freezePanesMenuItem, "Freeze Panes", requireGesture: false),
             HasNativeFreezeTopRowMenuItem: HasNativeMenuItem(_freezeTopRowMenuItem, "Freeze Top Row", requireGesture: false),
             HasNativeFreezeFirstColumnMenuItem: HasNativeMenuItem(_freezeFirstColumnMenuItem, "Freeze First Column", requireGesture: false),

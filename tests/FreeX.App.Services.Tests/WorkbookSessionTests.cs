@@ -3136,6 +3136,81 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SetShowGridlinesAndHeadings_PreservesOtherViewOptionsSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        sheet.ShowGridlines = true;
+        sheet.ShowHeadings = false;
+        sheet.ShowRulers = false;
+        var selectedCell = new CellAddress(sheet.Id, 3, 2);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(selectedCell);
+
+        var gridlines = session.SetShowGridlines(false);
+
+        gridlines.Success.Should().BeTrue();
+        sheet.ShowGridlines.Should().BeFalse();
+        sheet.ShowHeadings.Should().BeFalse();
+        sheet.ShowRulers.Should().BeFalse();
+        session.IsShowingGridlines.Should().BeFalse();
+        session.IsShowingHeadings.Should().BeFalse();
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveCell.Should().Be(selectedCell);
+        session.SelectedRange.Should().Be(new GridRange(selectedCell, selectedCell));
+
+        var headings = session.SetShowHeadings(true);
+
+        headings.Success.Should().BeTrue();
+        sheet.ShowGridlines.Should().BeFalse();
+        sheet.ShowHeadings.Should().BeTrue();
+        sheet.ShowRulers.Should().BeFalse();
+        session.IsShowingHeadings.Should().BeTrue();
+
+        var undoHeadings = session.UndoLastEdit();
+
+        undoHeadings.Success.Should().BeTrue();
+        sheet.ShowGridlines.Should().BeFalse();
+        sheet.ShowHeadings.Should().BeFalse();
+        sheet.ShowRulers.Should().BeFalse();
+        session.IsShowingHeadings.Should().BeFalse();
+
+        var undoGridlines = session.UndoLastEdit();
+
+        undoGridlines.Success.Should().BeTrue();
+        sheet.ShowGridlines.Should().BeTrue();
+        sheet.ShowHeadings.Should().BeFalse();
+        sheet.ShowRulers.Should().BeFalse();
+        session.IsShowingGridlines.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SetShowGridlinesAndHeadings_NoOpsSameStateWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var gridlines = session.SetShowGridlines(true);
+        var headings = session.SetShowHeadings(true);
+
+        gridlines.Success.Should().BeTrue();
+        headings.Success.Should().BeTrue();
+        session.IsShowingGridlines.Should().BeTrue();
+        session.IsShowingHeadings.Should().BeTrue();
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void FreezePanesAtActiveCell_SetsFrozenRowsAndColumnsClearsSplitRefreshesViewportAndUndo()
     {
         var workbook = CreateWorkbook();

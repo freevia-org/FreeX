@@ -140,6 +140,8 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeAlignMiddleMenuItem,
     bool HasNativeAlignBottomMenuItem,
     bool HasNativeWrapTextMenuItem,
+    bool HasNativeShowGridlinesMenuItem,
+    bool HasNativeShowHeadingsMenuItem,
     bool HasNativeFreezePanesMenuItem,
     bool HasNativeFreezeTopRowMenuItem,
     bool HasNativeFreezeFirstColumnMenuItem,
@@ -237,6 +239,8 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeAlignMiddleMenuItem &&
         HasNativeAlignBottomMenuItem &&
         HasNativeWrapTextMenuItem &&
+        HasNativeShowGridlinesMenuItem &&
+        HasNativeShowHeadingsMenuItem &&
         HasNativeFreezePanesMenuItem &&
         HasNativeFreezeTopRowMenuItem &&
         HasNativeFreezeFirstColumnMenuItem &&
@@ -382,6 +386,8 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_align_middle_menu_item={FormatBool(snapshot.HasNativeAlignMiddleMenuItem)}",
                 $"native_align_bottom_menu_item={FormatBool(snapshot.HasNativeAlignBottomMenuItem)}",
                 $"native_wrap_text_menu_item={FormatBool(snapshot.HasNativeWrapTextMenuItem)}",
+                $"native_show_gridlines_menu_item={FormatBool(snapshot.HasNativeShowGridlinesMenuItem)}",
+                $"native_show_headings_menu_item={FormatBool(snapshot.HasNativeShowHeadingsMenuItem)}",
                 $"native_freeze_panes_menu_item={FormatBool(snapshot.HasNativeFreezePanesMenuItem)}",
                 $"native_freeze_top_row_menu_item={FormatBool(snapshot.HasNativeFreezeTopRowMenuItem)}",
                 $"native_freeze_first_column_menu_item={FormatBool(snapshot.HasNativeFreezeFirstColumnMenuItem)}",

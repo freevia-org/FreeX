@@ -84,6 +84,10 @@ public sealed class WorkbookSession
 
     public IReadOnlyList<WorkbookSheetTab> SheetTabs { get; private set; }
 
+    public bool IsShowingGridlines => ActiveSheet.ShowGridlines;
+
+    public bool IsShowingHeadings => ActiveSheet.ShowHeadings;
+
     public bool IsShowingFormulas => ActiveSheet.ShowFormulas;
 
     public IReadOnlyList<WorkbookHiddenSheet> HiddenSheets =>
@@ -329,6 +333,40 @@ public sealed class WorkbookSession
 
         ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
         return result;
+    }
+
+    public WorkbookCellEditResult SetShowGridlines(bool showGridlines)
+    {
+        if (ActiveSheet.ShowGridlines == showGridlines)
+        {
+            return new WorkbookCellEditResult(
+                true,
+                null,
+                [],
+                RecalcReport: null);
+        }
+
+        return SetWorksheetViewOptions(
+            showGridlines,
+            ActiveSheet.ShowHeadings,
+            ActiveSheet.ShowRulers);
+    }
+
+    public WorkbookCellEditResult SetShowHeadings(bool showHeadings)
+    {
+        if (ActiveSheet.ShowHeadings == showHeadings)
+        {
+            return new WorkbookCellEditResult(
+                true,
+                null,
+                [],
+                RecalcReport: null);
+        }
+
+        return SetWorksheetViewOptions(
+            ActiveSheet.ShowGridlines,
+            showHeadings,
+            ActiveSheet.ShowRulers);
     }
 
     public WorkbookCellEditResult FreezePanesAtActiveCell()
@@ -1376,6 +1414,18 @@ public sealed class WorkbookSession
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
             new SetFreezePanesCommand(ActiveSheet.Id, frozenRows, frozenCols));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
+        return result;
+    }
+
+    private WorkbookCellEditResult SetWorksheetViewOptions(bool showGridlines, bool showHeadings, bool showRulers)
+    {
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new SetWorksheetViewOptionsCommand(ActiveSheet.Id, showGridlines, showHeadings, showRulers));
         if (!result.Success)
             return result;
 
