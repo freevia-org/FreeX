@@ -43,21 +43,12 @@ internal static class XlsxWorkbookOleSizeNormalizer
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(oleSize, OleSizeAttributes);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleSize, "ref", NormalizeCellRange);
-        changed |= RemoveAllNodes(oleSize);
+        changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(oleSize);
         return changed;
     }
 
     public static bool ShouldRemoveElement(XElement oleSize) =>
         NormalizeCellRange(oleSize.Attribute("ref")?.Value) is null;
-
-    private static bool RemoveAllNodes(XElement element)
-    {
-        if (!element.Nodes().Any())
-            return false;
-
-        element.RemoveNodes();
-        return true;
-    }
 
     private static string? NormalizeCellRange(string? value)
     {

@@ -167,6 +167,80 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void Save_LoadedWorkbookWithRichDataGraph_PreservesRichDataPartsRelationshipsAndContentTypes()
+    {
+        var sourceBytes = AddRichDataPackageParts(CreateSourcePackage());
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("patched rich data workbook"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        foreach (var path in new[]
+                 {
+                     "xl/metadata.xml",
+                     "xl/richData/rdrichvalue.xml",
+                     "xl/richData/rdrichvaluestructure.xml",
+                     "xl/richData/rdRichValueTypes.xml",
+                     "xl/richData/richValueRel.xml",
+                     "xl/richData/_rels/richValueRel.xml.rels",
+                     "xl/media/image1.png"
+                 })
+        {
+            ReadPackageEntry(savedBytes, path)
+                .Should()
+                .Equal(ReadPackageEntry(sourceBytes, path));
+        }
+
+        ReadContentTypeOverrides(savedBytes)
+            .Should()
+            .Contain(new[]
+            {
+                "/xl/metadata.xml",
+                "/xl/richData/rdrichvalue.xml",
+                "/xl/richData/rdrichvaluestructure.xml",
+                "/xl/richData/rdRichValueTypes.xml",
+                "/xl/richData/richValueRel.xml"
+            });
+        WorkbookRelationshipsContain(
+                savedBytes,
+                "http://schemas.microsoft.com/office/2017/06/relationships/rdRichValue",
+                "richData/rdrichvalue.xml")
+            .Should()
+            .BeTrue();
+        WorkbookRelationshipsContain(
+                savedBytes,
+                "http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueStructure",
+                "richData/rdrichvaluestructure.xml")
+            .Should()
+            .BeTrue();
+        WorkbookRelationshipsContain(
+                savedBytes,
+                "http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueTypes",
+                "richData/rdRichValueTypes.xml")
+            .Should()
+            .BeTrue();
+        WorkbookRelationshipsContain(
+                savedBytes,
+                "http://schemas.microsoft.com/office/2022/10/relationships/richValueRel",
+                "richData/richValueRel.xml")
+            .Should()
+            .BeTrue();
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "A1")
+            .Should()
+            .Be("patched rich data workbook");
+    }
+
+    [Fact]
     public void Save_LoadedWorkbookWithUnpreparedDirectEdit_FallsBackInsteadOfCapturingEditAsBaseline()
     {
         var sourceBytes = CreateSourcePackage();
@@ -1083,6 +1157,62 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         saved.Length.Should().BeGreaterThan(0);
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
         adapter.LastSaveDiagnostics.Reason.Should().Be("change_chart_source_cell");
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithSmartArtDiagramAndOutsideCellEdit_PreservesDiagramPackageGraph()
+    {
+        var sourceBytes = CreateSmartArtDiagramSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new TextValue("smartart outside patched"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        adapter.LastSaveDiagnostics.CellChangeCount.Should().Be(1);
+        ReadPackageEntry(savedBytes, "xl/drawings/drawing1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/drawings/drawing1.xml"));
+        ReadPackageEntry(savedBytes, "xl/drawings/_rels/drawing1.xml.rels")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/drawings/_rels/drawing1.xml.rels"));
+        ReadPackageEntry(savedBytes, "xl/diagrams/data1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/diagrams/data1.xml"));
+        ReadPackageEntry(savedBytes, "xl/diagrams/layout1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/diagrams/layout1.xml"));
+        ReadPackageEntry(savedBytes, "xl/diagrams/quickStyle1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/diagrams/quickStyle1.xml"));
+        ReadPackageEntry(savedBytes, "xl/diagrams/colors1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/diagrams/colors1.xml"));
+        ReadContentTypeOverrides(savedBytes).Should().Contain([
+            "/xl/diagrams/data1.xml",
+            "/xl/diagrams/layout1.xml",
+            "/xl/diagrams/quickStyle1.xml",
+            "/xl/diagrams/colors1.xml"]);
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "D4")
+            .Should()
+            .Be("smartart outside patched");
+
+        using var reloadStream = new MemoryStream(savedBytes, writable: false);
+        adapter.Load(reloadStream)
+            .GetSheetAt(0)
+            .GetCell(4, 4)!
+            .Value
+            .Should()
+            .Be(new TextValue("smartart outside patched"));
     }
 
     [Fact]
@@ -2137,6 +2267,137 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         return stream.ToArray();
     }
 
+    private static byte[] AddRichDataPackageParts(byte[] sourceBytes)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(sourceBytes, 0, sourceBytes.Length);
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace richDataNs = "http://schemas.microsoft.com/office/spreadsheetml/2017/richdata";
+            XNamespace richData2Ns = "http://schemas.microsoft.com/office/spreadsheetml/2017/richdata2";
+
+            var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+            AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/metadata.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml");
+            AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/richData/rdrichvalue.xml", "application/vnd.ms-excel.rdrichvalue+xml");
+            AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/richData/rdrichvaluestructure.xml", "application/vnd.ms-excel.rdrichvaluestructure+xml");
+            AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/richData/rdRichValueTypes.xml", "application/vnd.ms-excel.rdrichvaluetypes+xml");
+            AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/richData/richValueRel.xml", "application/vnd.ms-excel.richvaluerel+xml");
+            AddContentTypeDefault(contentTypesXml, contentTypeNs, "png", "image/png");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var workbookRelationshipsXml = LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
+            workbookRelationshipsXml.Root!.Add(
+                new XElement(
+                    relationshipNs + "Relationship",
+                    new XAttribute("Id", "rIdFreeXRichMetadata"),
+                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata"),
+                    new XAttribute("Target", "metadata.xml")),
+                new XElement(
+                    relationshipNs + "Relationship",
+                    new XAttribute("Id", "rIdFreeXRichValue"),
+                    new XAttribute("Type", "http://schemas.microsoft.com/office/2017/06/relationships/rdRichValue"),
+                    new XAttribute("Target", "richData/rdrichvalue.xml")),
+                new XElement(
+                    relationshipNs + "Relationship",
+                    new XAttribute("Id", "rIdFreeXRichValueStructure"),
+                    new XAttribute("Type", "http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueStructure"),
+                    new XAttribute("Target", "richData/rdrichvaluestructure.xml")),
+                new XElement(
+                    relationshipNs + "Relationship",
+                    new XAttribute("Id", "rIdFreeXRichValueTypes"),
+                    new XAttribute("Type", "http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueTypes"),
+                    new XAttribute("Target", "richData/rdRichValueTypes.xml")),
+                new XElement(
+                    relationshipNs + "Relationship",
+                    new XAttribute("Id", "rIdFreeXRichValueRel"),
+                    new XAttribute("Type", "http://schemas.microsoft.com/office/2022/10/relationships/richValueRel"),
+                    new XAttribute("Target", "richData/richValueRel.xml")));
+            ReplacePackageXml(archive, "xl/_rels/workbook.xml.rels", workbookRelationshipsXml);
+
+            ReplacePackageXml(
+                archive,
+                "xl/metadata.xml",
+                new XDocument(
+                    new XElement(
+                        workbookNs + "metadata",
+                        new XAttribute(XNamespace.Xmlns + "xlrd", richDataNs.NamespaceName),
+                        new XElement(
+                            workbookNs + "metadataTypes",
+                            new XAttribute("count", "1"),
+                            new XElement(
+                                workbookNs + "metadataType",
+                                new XAttribute("name", "XLRICHVALUE"),
+                                new XAttribute("minSupportedVersion", "120000"),
+                                new XAttribute("copy", "1"),
+                                new XAttribute("pasteAll", "1"),
+                                new XAttribute("pasteValues", "1"),
+                                new XAttribute("merge", "1"),
+                                new XAttribute("splitFirst", "1"),
+                                new XAttribute("rowColShift", "1"),
+                                new XAttribute("clearFormats", "1"),
+                                new XAttribute("clearComments", "1"),
+                                new XAttribute("assign", "1"),
+                                new XAttribute("coerce", "1"))),
+                        new XElement(workbookNs + "futureMetadata", new XAttribute("name", "XLRICHVALUE"), new XAttribute("count", "0")),
+                        new XElement(workbookNs + "valueMetadata", new XAttribute("count", "0")))));
+
+            ReplacePackageXml(
+                archive,
+                "xl/richData/rdrichvalue.xml",
+                new XDocument(
+                    new XElement(
+                        richDataNs + "rvData",
+                        new XAttribute("count", "1"),
+                        new XElement(
+                            richDataNs + "rv",
+                            new XAttribute("s", "0"),
+                            new XElement(richDataNs + "v", "0"),
+                            new XElement(richDataNs + "v", "5")))));
+            ReplacePackageXml(
+                archive,
+                "xl/richData/rdrichvaluestructure.xml",
+                new XDocument(
+                    new XElement(
+                        richDataNs + "rvStructures",
+                        new XAttribute("count", "1"),
+                        new XElement(
+                            richDataNs + "s",
+                            new XAttribute("t", "_localImage"),
+                            new XElement(richDataNs + "k", new XAttribute("n", "_rvRel:LocalImageIdentifier"), new XAttribute("t", "i")),
+                            new XElement(richDataNs + "k", new XAttribute("n", "CalcOrigin"), new XAttribute("t", "i"))))));
+            ReplacePackageXml(
+                archive,
+                "xl/richData/rdRichValueTypes.xml",
+                new XDocument(
+                    new XElement(
+                        richData2Ns + "rvTypesInfo",
+                        new XElement(
+                            richData2Ns + "global",
+                            new XElement(richData2Ns + "keyFlags")))));
+            ReplacePackageXml(
+                archive,
+                "xl/richData/richValueRel.xml",
+                new XDocument(new XElement(richDataNs + "richValueRels", new XAttribute("count", "1"))));
+            ReplacePackageXml(
+                archive,
+                "xl/richData/_rels/richValueRel.xml.rels",
+                new XDocument(
+                    new XElement(
+                        relationshipNs + "Relationships",
+                        new XElement(
+                            relationshipNs + "Relationship",
+                            new XAttribute("Id", "rIdFreeXRichImage"),
+                            new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"),
+                            new XAttribute("Target", "../media/image1.png")))));
+            WritePackageBytes(archive, "xl/media/image1.png", [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+        }
+
+        return stream.ToArray();
+    }
+
     private static byte[] CreateDenseSourcePackage(int rowCount, int columnCount)
     {
         using var stream = new MemoryStream();
@@ -2958,6 +3219,138 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         return package.ToArray();
     }
 
+    private static byte[] CreateSmartArtDiagramSourcePackage()
+    {
+        using var package = XlsxPackageTestFixtures.CreatePackage(
+            (
+                "[Content_Types].xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+                  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+                  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+                  <Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>
+                  <Override PartName="/xl/diagrams/data1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml"/>
+                  <Override PartName="/xl/diagrams/layout1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml"/>
+                  <Override PartName="/xl/diagrams/quickStyle1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml"/>
+                  <Override PartName="/xl/diagrams/colors1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml"/>
+                </Types>
+                """),
+            (
+                "_rels/.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+                </Relationships>
+                """),
+            (
+                "xl/workbook.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheets>
+                    <sheet name="Data" sheetId="1" r:id="rId1"/>
+                  </sheets>
+                </workbook>
+                """),
+            (
+                "xl/_rels/workbook.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+                  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+                </Relationships>
+                """),
+            (
+                "xl/styles.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <fonts count="1"><font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/><scheme val="minor"/></font></fonts>
+                  <fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>
+                  <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+                  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+                  <cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>
+                  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+                  <dxfs count="0"/>
+                  <tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/>
+                </styleSheet>
+                """),
+            (
+                "xl/worksheets/sheet1.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <dimension ref="A1:D4"/>
+                  <sheetData>
+                    <row r="1"><c r="A1" t="inlineStr"><is><t>original value</t></is></c></row>
+                    <row r="4"><c r="D4" t="inlineStr"><is><t>outside</t></is></c></row>
+                  </sheetData>
+                  <drawing r:id="rId1"/>
+                </worksheet>
+                """),
+            (
+                "xl/worksheets/_rels/sheet1.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>
+                </Relationships>
+                """),
+            (
+                "xl/drawings/drawing1.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                          xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"
+                          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <xdr:absoluteAnchor>
+                    <xdr:pos x="0" y="0"/>
+                    <xdr:ext cx="1828800" cy="914400"/>
+                    <xdr:graphicFrame macro="">
+                      <xdr:nvGraphicFramePr>
+                        <xdr:cNvPr id="2" name="FreeX SmartArt"/>
+                        <xdr:cNvGraphicFramePr/>
+                      </xdr:nvGraphicFramePr>
+                      <xdr:xfrm>
+                        <a:off x="0" y="0"/>
+                        <a:ext cx="1828800" cy="914400"/>
+                      </xdr:xfrm>
+                      <a:graphic>
+                        <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/diagram">
+                          <dgm:relIds r:dm="rIdDiagramData1" r:lo="rIdDiagramLayout1" r:qs="rIdDiagramQuickStyle1" r:cs="rIdDiagramColors1"/>
+                        </a:graphicData>
+                      </a:graphic>
+                    </xdr:graphicFrame>
+                    <xdr:clientData/>
+                  </xdr:absoluteAnchor>
+                </xdr:wsDr>
+                """),
+            (
+                "xl/drawings/_rels/drawing1.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdDiagramData1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData" Target="../diagrams/data1.xml"/>
+                  <Relationship Id="rIdDiagramLayout1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout" Target="../diagrams/layout1.xml"/>
+                  <Relationship Id="rIdDiagramQuickStyle1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle" Target="../diagrams/quickStyle1.xml"/>
+                  <Relationship Id="rIdDiagramColors1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors" Target="../diagrams/colors1.xml"/>
+                </Relationships>
+                """),
+            ("xl/diagrams/data1.xml", """<dgm:dataModel xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"/>"""),
+            ("xl/diagrams/layout1.xml", """<dgm:layoutDef xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"/>"""),
+            ("xl/diagrams/quickStyle1.xml", """<dgm:styleDef xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"/>"""),
+            ("xl/diagrams/colors1.xml", """<dgm:colorsDef xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"/>"""));
+
+        return package.ToArray();
+    }
+
     private static byte[] CreateChartExSourcePackage()
     {
         var workbook = new Workbook("ChartExPatch");
@@ -3343,6 +3736,49 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         var replacement = archive.CreateEntry(path);
         using var replacementStream = replacement.Open();
         document.Save(replacementStream, System.Xml.Linq.SaveOptions.DisableFormatting);
+    }
+
+    private static void AddContentTypeOverride(
+        XDocument contentTypesXml,
+        XNamespace contentTypeNs,
+        string partName,
+        string contentType)
+    {
+        contentTypesXml.Root!
+            .Elements(contentTypeNs + "Override")
+            .Where(element => string.Equals((string?)element.Attribute("PartName"), partName, StringComparison.OrdinalIgnoreCase))
+            .Remove();
+        contentTypesXml.Root.Add(new XElement(
+            contentTypeNs + "Override",
+            new XAttribute("PartName", partName),
+            new XAttribute("ContentType", contentType)));
+    }
+
+    private static void AddContentTypeDefault(
+        XDocument contentTypesXml,
+        XNamespace contentTypeNs,
+        string extension,
+        string contentType)
+    {
+        if (contentTypesXml.Root!
+            .Elements(contentTypeNs + "Default")
+            .Any(element => string.Equals((string?)element.Attribute("Extension"), extension, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        contentTypesXml.Root.Add(new XElement(
+            contentTypeNs + "Default",
+            new XAttribute("Extension", extension),
+            new XAttribute("ContentType", contentType)));
+    }
+
+    private static void WritePackageBytes(ZipArchive archive, string path, byte[] bytes)
+    {
+        archive.GetEntry(path)?.Delete();
+        var replacement = archive.CreateEntry(path);
+        using var replacementStream = replacement.Open();
+        replacementStream.Write(bytes, 0, bytes.Length);
     }
 
     private static string? ReadMarkupCompatibilityIgnorable(byte[] packageBytes, string path)

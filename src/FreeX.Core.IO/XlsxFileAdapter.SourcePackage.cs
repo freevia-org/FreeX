@@ -50,8 +50,6 @@ public sealed partial class XlsxFileAdapter
             var drawingPaths = XlsxWorksheetDrawingPartMerger.MergeAndGetDrawingPaths(sourceArchive, generatedArchive, context);
             XlsxWorksheetDrawingReferencePreserver.Preserve(sourceArchive, generatedArchive, context, drawingPaths);
         }
-        if (sourceParts.HasPrinterSettings)
-            XlsxWorksheetPrinterSettingsReferencePreserver.Preserve(sourceArchive, generatedArchive);
         if (sourcePackage.WorksheetsWithPreservableSourceMetadata?.Count != 0)
         {
             XlsxWorksheetMetadataPreserver.Preserve(
@@ -61,6 +59,9 @@ public sealed partial class XlsxFileAdapter
                 context,
                 sourcePackage.WorksheetsWithPreservableSourceMetadata);
         }
+        XlsxWorksheetPrinterSettingsReferencePreserver.Preserve(sourceArchive, generatedArchive);
+        if (sourceParts.HasDrawings)
+            XlsxWorksheetVmlReferencePreserver.Preserve(sourceArchive, generatedArchive, context, workbook);
         if (sourceParts.HasLegacyComments)
             XlsxLegacyCommentPreserver.Preserve(sourceArchive, generatedArchive, workbook);
         if (sourceParts.HasSharedStrings)

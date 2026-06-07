@@ -84,7 +84,7 @@ internal static class XlsxWorkbookWebPublishObjectsNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(webPublishObject, WebPublishObjectAttributes);
-        changed |= RemoveAllNodes(webPublishObject);
+        changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(webPublishObject);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishObject, "id", NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(webPublishObject, "autoRepublish", NormalizeBoolean);
 
@@ -116,15 +116,6 @@ internal static class XlsxWorkbookWebPublishObjectsNormalizer
         }
 
         return changed;
-    }
-
-    private static bool RemoveAllNodes(XElement element)
-    {
-        if (!element.Nodes().Any())
-            return false;
-
-        element.RemoveNodes();
-        return true;
     }
 
     private static string? NormalizeBoolean(string? value)
