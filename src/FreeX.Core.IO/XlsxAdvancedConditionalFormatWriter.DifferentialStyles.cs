@@ -128,22 +128,11 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         {
             foreach (var nativeChildXml in childXmls)
             {
-                if (string.IsNullOrWhiteSpace(nativeChildXml))
-                    continue;
-
-                try
-                {
-                    var nativeChild = XElement.Parse(nativeChildXml);
-                    if (nativeChild.Name.Namespace == workbookNs &&
-                        nativeChild.Name.LocalName is not "font" and not "numFmt" and not "fill" and not "alignment" and not "border" and not "protection")
-                    {
-                        dxf.Add(nativeChild);
-                    }
-                }
-                catch
-                {
-                    // Ignore malformed native differential-style payloads from older saves.
-                }
+                TryAddNativeElement(
+                    dxf,
+                    nativeChildXml,
+                    workbookNs,
+                    ["font", "numFmt", "fill", "alignment", "border", "protection"]);
             }
         }
 

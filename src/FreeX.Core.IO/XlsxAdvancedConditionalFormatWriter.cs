@@ -126,19 +126,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         {
             foreach (var nativeChildXml in childXmls)
             {
-                if (string.IsNullOrWhiteSpace(nativeChildXml))
-                    continue;
-
-                try
-                {
-                    var nativeChild = XElement.Parse(nativeChildXml);
-                    if (nativeChild.Name.Namespace == worksheetNs && nativeChild.Name.LocalName != "cfRule")
-                        element.Add(nativeChild);
-                }
-                catch
-                {
-                    // Ignore malformed native conditional-format container payloads from older saves.
-                }
+                TryAddNativeElement(element, nativeChildXml, worksheetNs, ["cfRule"]);
             }
         }
 
@@ -258,19 +246,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         {
             foreach (var nativeChildXml in childXmls)
             {
-                if (string.IsNullOrWhiteSpace(nativeChildXml))
-                    continue;
-
-                try
-                {
-                    var nativeChild = XElement.Parse(nativeChildXml);
-                    if (nativeChild.Name.Namespace == worksheetNs)
-                        rule.Add(nativeChild);
-                }
-                catch
-                {
-                    // Ignore malformed native conditional-format payloads from older saves.
-                }
+                TryAddNativeElement(rule, nativeChildXml, worksheetNs);
             }
         }
 
@@ -301,22 +277,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         {
             foreach (var nativeChildXml in childXmls)
             {
-                if (string.IsNullOrWhiteSpace(nativeChildXml))
-                    continue;
-
-                try
-                {
-                    var nativeChild = XElement.Parse(nativeChildXml);
-                    if (nativeChild.Name.Namespace == worksheetNs &&
-                        !modeledDataBarChildren.Contains(nativeChild.Name.LocalName))
-                    {
-                        payload.Add(nativeChild);
-                    }
-                }
-                catch
-                {
-                    // Ignore malformed native conditional-format payload metadata from older saves.
-                }
+                TryAddNativeElement(payload, nativeChildXml, worksheetNs, modeledDataBarChildren);
             }
         }
 
@@ -366,6 +327,32 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         catch (XmlException)
         {
             return false;
+        }
+    }
+
+    private static void TryAddNativeElement(
+        XElement target,
+        string? xml,
+        XNamespace expectedNamespace,
+        IReadOnlyCollection<string>? excludedLocalNames = null)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
+            return;
+
+        try
+        {
+            var element = XElement.Parse(xml);
+            if (element.Name.Namespace != expectedNamespace ||
+                excludedLocalNames?.Contains(element.Name.LocalName) == true)
+            {
+                return;
+            }
+
+            target.Add(element);
+        }
+        catch
+        {
+            // Ignore malformed native conditional-format payloads from older saves.
         }
     }
 
@@ -513,22 +500,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
 
         foreach (var nativeChildXml in cf.NativePayloadChildXmls)
         {
-            if (string.IsNullOrWhiteSpace(nativeChildXml))
-                continue;
-
-            try
-            {
-                var nativeChild = XElement.Parse(nativeChildXml);
-                if (nativeChild.Name.Namespace == x14Ns &&
-                    !modeledChildren.Contains(nativeChild.Name.LocalName))
-                {
-                    dataBar.Add(nativeChild);
-                }
-            }
-            catch
-            {
-                // Ignore malformed native x14 data-bar payload metadata from older saves.
-            }
+            TryAddNativeElement(dataBar, nativeChildXml, x14Ns, modeledChildren);
         }
     }
 
