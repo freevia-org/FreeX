@@ -72,4 +72,33 @@ public sealed partial class XlsxPackageMetadataMergerTests
         generatedEntriesBeforeMerge.Should().Contain("xl/drawings/vmldrawing2.vml");
         target.Entries.Select(entry => entry.FullName).Should().Equal("xl/drawings/vmldrawing2.vml");
     }
+
+    [Fact]
+    public void CopyUnknownPackageParts_SkipsInvalidCustomXmlPropertiesPart()
+    {
+        using var sourcePackage = XlsxPackageTestFixtures.CreatePackage(
+            ("customXml/item1.xml", "<root xmlns=\"urn:freex:customXml\"/>"),
+            ("customXml/itemProps1.xml", "<notDatastoreItem/>"));
+        using var targetPackage = XlsxPackageTestFixtures.CreatePackage();
+        using var source = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var target = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        XlsxPackageMetadataMerger.CopyUnknownPackageParts(source, target);
+
+        target.GetEntry("customXml/item1.xml").Should().NotBeNull();
+        target.GetEntry("customXml/itemProps1.xml").Should().BeNull();
+    }
+
+    [Fact]
+    public void CopyUnknownPackageParts_SkipsMalformedCustomXmlItemPart()
+    {
+        using var sourcePackage = XlsxPackageTestFixtures.CreatePackage(("customXml/item1.xml", "<root>"));
+        using var targetPackage = XlsxPackageTestFixtures.CreatePackage();
+        using var source = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var target = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        XlsxPackageMetadataMerger.CopyUnknownPackageParts(source, target);
+
+        target.GetEntry("customXml/item1.xml").Should().BeNull();
+    }
 }
