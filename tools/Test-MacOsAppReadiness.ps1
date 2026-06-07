@@ -426,6 +426,7 @@ function Test-MacOsWorkflow {
         "native_file_menu=true",
         "native_edit_menu=true",
         "native_format_menu=true",
+        "native_help_menu=true",
         "native_cut_menu_item=true",
         "native_copy_menu_item=true",
         "native_paste_menu_item=true",
@@ -444,6 +445,11 @@ function Test-MacOsWorkflow {
         "native_vertical_text_menu_item=true",
         "native_rotate_text_up_menu_item=true",
         "native_rotate_text_down_menu_item=true",
+        "native_help_online_menu_item=true",
+        "native_send_feedback_menu_item=true",
+        "native_check_for_updates_menu_item=true",
+        "native_about_menu_item=true",
+        "native_legal_notices_menu_item=true",
         'bundle_icon=$('
     )
 
@@ -501,6 +507,15 @@ function Test-SourceWiring {
                 "TryCreateDrawingBitmap(imageBytes, out var bitmap)",
                 "AddStyledCellBorderOverlay(content, style);",
                 "private static bool HasVisibleCellBorder(CellStyle? style)",
+                "_helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, `"Help Online`");",
+                "_sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, `"Send Feedback`");",
+                "_checkForUpdatesMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, `"Check for Updates`");",
+                "_aboutMenuItem.Click += async (_, _) => await ShowAboutDialogAsync();",
+                "_legalNoticesMenuItem.Click += async (_, _) => await ShowLegalNoticesDialogAsync();",
+                "Header = `"Help`"",
+                "TopLevel.GetTopLevel(this)?.Launcher",
+                "AppHelpInfo.BuildAboutText(versionText, PlatformAboutSummary)",
+                "LegalNoticeProvider.GetDocuments().Select(document =>",
                 "internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot()"
             )
             OrderedPairs = @()
@@ -513,6 +528,7 @@ function Test-SourceWiring {
                 "HasNativeFileMenu &&",
                 "HasNativeEditMenu &&",
                 "HasNativeFormatMenu &&",
+                "HasNativeHelpMenu &&",
                 "native_cut_menu_item=",
                 "native_copy_menu_item=",
                 "native_paste_special_menu_item=",
@@ -527,7 +543,13 @@ function Test-SourceWiring {
                 "native_angle_clockwise_menu_item=",
                 "native_vertical_text_menu_item=",
                 "native_rotate_text_up_menu_item=",
-                "native_rotate_text_down_menu_item="
+                "native_rotate_text_down_menu_item=",
+                "native_help_menu=",
+                "native_help_online_menu_item=",
+                "native_send_feedback_menu_item=",
+                "native_check_for_updates_menu_item=",
+                "native_about_menu_item=",
+                "native_legal_notices_menu_item="
             )
             OrderedPairs = @()
         },

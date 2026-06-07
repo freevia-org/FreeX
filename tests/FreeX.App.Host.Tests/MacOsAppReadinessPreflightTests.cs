@@ -25,6 +25,9 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_font_color_swatch_count=69");
         script.Should().Contain("native_cell_styles_menu_item=true");
         script.Should().Contain("native_cell_styles_preset_count=33");
+        script.Should().Contain("native_help_menu=true");
+        script.Should().Contain("native_help_online_menu_item=true");
+        script.Should().Contain("native_legal_notices_menu_item=");
         script.Should().Contain("drawing_object_previews=3");
         script.Should().Contain("roundtrip_drawing_object_previews=3");
         script.Should().Contain("shasum -a 256 -c \"$zip_name.sha256\"");
@@ -46,6 +49,9 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("CreateDrawingObjectVisual(drawingObject, width, height)");
         script.Should().Contain("TryCreateDrawingBitmap(imageBytes, out var bitmap)");
         script.Should().Contain("private static bool HasVisibleCellBorder(CellStyle? style)");
+        script.Should().Contain("OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl");
+        script.Should().Contain("AppHelpInfo.BuildAboutText(versionText, PlatformAboutSummary)");
+        script.Should().Contain("LegalNoticeProvider.GetDocuments().Select(document =>");
         script.Should().Contain("Portable macOS source contains forbidden token");
     }
 
@@ -315,6 +321,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_file_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_edit_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_format_menu=true" "$artifact_root/launch.txt"
+                      grep -q "native_help_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_cut_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_copy_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_paste_menu_item=true" "$artifact_root/launch.txt"
@@ -333,6 +340,11 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_vertical_text_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_rotate_text_up_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_rotate_text_down_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_help_online_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_send_feedback_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_check_for_updates_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_about_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_legal_notices_menu_item=true" "$artifact_root/launch.txt"
                       echo "bundle_icon=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app/Contents/Info.plist")"
                   - uses: actions/upload-artifact@v7
                     with:
@@ -410,6 +422,15 @@ public sealed class MacOsAppReadinessPreflightTests
                     CreateDrawingObjectVisual(drawingObject, width, height);
                     TryCreateDrawingBitmap(imageBytes, out var bitmap);
                     AddStyledCellBorderOverlay(content, style);
+                    _helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, "Help Online");
+                    _sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, "Send Feedback");
+                    _checkForUpdatesMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, "Check for Updates");
+                    _aboutMenuItem.Click += async (_, _) => await ShowAboutDialogAsync();
+                    _legalNoticesMenuItem.Click += async (_, _) => await ShowLegalNoticesDialogAsync();
+                    var item = new NativeMenuItem { Header = "Help" };
+                    TopLevel.GetTopLevel(this)?.Launcher.ToString();
+                    AppHelpInfo.BuildAboutText(versionText, PlatformAboutSummary);
+                    LegalNoticeProvider.GetDocuments().Select(document => document.Title);
                 }
                 private static bool HasVisibleCellBorder(CellStyle? style) => true;
                 internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot() => new();
@@ -433,14 +454,15 @@ public sealed class MacOsAppReadinessPreflightTests
 
             internal sealed class MacOsLaunchSmokeSnapshot
             {
-                public bool IsPassed => HasNativeFileMenu && HasNativeEditMenu && HasNativeFormatMenu && HasNativeCellStylesMenuItem && HasNativeCopyMenuItem;
+                public bool IsPassed => HasNativeFileMenu && HasNativeEditMenu && HasNativeFormatMenu && HasNativeHelpMenu && HasNativeCellStylesMenuItem && HasNativeCopyMenuItem;
                 private bool HasNativeFileMenu { get; }
                 private bool HasNativeEditMenu { get; }
                 private bool HasNativeFormatMenu { get; }
+                private bool HasNativeHelpMenu { get; }
                 private bool HasNativeCellStylesMenuItem { get; }
                 private bool HasNativeCopyMenuItem { get; }
                 public int NativeCellStylesPresetCount { get; }
-                public string Report => "native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item=";
+                public string Report => "native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
             }
             """);
 

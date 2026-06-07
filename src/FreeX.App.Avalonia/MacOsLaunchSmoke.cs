@@ -69,6 +69,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeFileMenu,
     bool HasNativeEditMenu,
     bool HasNativeFormatMenu,
+    bool HasNativeHelpMenu,
     bool HasNativeOpenMenuItem,
     bool HasNativeSaveMenuItem,
     bool HasNativeSaveAsMenuItem,
@@ -113,6 +114,11 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeAlignLeftMenuItem,
     bool HasNativeAlignCenterMenuItem,
     bool HasNativeAlignRightMenuItem,
+    bool HasNativeHelpOnlineMenuItem,
+    bool HasNativeSendFeedbackMenuItem,
+    bool HasNativeCheckForUpdatesMenuItem,
+    bool HasNativeAboutMenuItem,
+    bool HasNativeLegalNoticesMenuItem,
     bool HasNativeQuitMenuItem)
 {
     public bool IsPassed =>
@@ -124,6 +130,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeFileMenu &&
         HasNativeEditMenu &&
         HasNativeFormatMenu &&
+        HasNativeHelpMenu &&
         HasNativeOpenMenuItem &&
         HasNativeSaveMenuItem &&
         HasNativeSaveAsMenuItem &&
@@ -168,6 +175,11 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeAlignLeftMenuItem &&
         HasNativeAlignCenterMenuItem &&
         HasNativeAlignRightMenuItem &&
+        HasNativeHelpOnlineMenuItem &&
+        HasNativeSendFeedbackMenuItem &&
+        HasNativeCheckForUpdatesMenuItem &&
+        HasNativeAboutMenuItem &&
+        HasNativeLegalNoticesMenuItem &&
         HasNativeQuitMenuItem;
 }
 
@@ -227,6 +239,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_file_menu={FormatBool(snapshot.HasNativeFileMenu)}",
                 $"native_edit_menu={FormatBool(snapshot.HasNativeEditMenu)}",
                 $"native_format_menu={FormatBool(snapshot.HasNativeFormatMenu)}",
+                $"native_help_menu={FormatBool(snapshot.HasNativeHelpMenu)}",
                 $"native_open_menu_item={FormatBool(snapshot.HasNativeOpenMenuItem)}",
                 $"native_save_menu_item={FormatBool(snapshot.HasNativeSaveMenuItem)}",
                 $"native_save_as_menu_item={FormatBool(snapshot.HasNativeSaveAsMenuItem)}",
@@ -271,6 +284,11 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_align_left_menu_item={FormatBool(snapshot.HasNativeAlignLeftMenuItem)}",
                 $"native_align_center_menu_item={FormatBool(snapshot.HasNativeAlignCenterMenuItem)}",
                 $"native_align_right_menu_item={FormatBool(snapshot.HasNativeAlignRightMenuItem)}",
+                $"native_help_online_menu_item={FormatBool(snapshot.HasNativeHelpOnlineMenuItem)}",
+                $"native_send_feedback_menu_item={FormatBool(snapshot.HasNativeSendFeedbackMenuItem)}",
+                $"native_check_for_updates_menu_item={FormatBool(snapshot.HasNativeCheckForUpdatesMenuItem)}",
+                $"native_about_menu_item={FormatBool(snapshot.HasNativeAboutMenuItem)}",
+                $"native_legal_notices_menu_item={FormatBool(snapshot.HasNativeLegalNoticesMenuItem)}",
                 $"native_quit_menu_item={FormatBool(snapshot.HasNativeQuitMenuItem)}",
             ]);
     }

@@ -53,6 +53,7 @@ public sealed class MainWindow : Window
     private const double MinimumDisplayedColumnWidth = 54;
     private const double MinimumDisplayedRowHeight = 22;
     private const string NativeWorkbookExtension = ".fxl";
+    private const string PlatformAboutSummary = "Built with .NET 10, Avalonia, ClosedXML.";
     private static readonly IBrush WindowBackground = Brush(246, 247, 249);
     private static readonly IBrush HeaderBackground = Brush(241, 243, 246);
     private static readonly IBrush HeaderForeground = Brush(73, 80, 93);
@@ -155,6 +156,11 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _wrapTextMenuItem = new();
     private readonly NativeMenuItem _decreaseIndentMenuItem = new();
     private readonly NativeMenuItem _increaseIndentMenuItem = new();
+    private readonly NativeMenuItem _helpOnlineMenuItem = new();
+    private readonly NativeMenuItem _sendFeedbackMenuItem = new();
+    private readonly NativeMenuItem _checkForUpdatesMenuItem = new();
+    private readonly NativeMenuItem _aboutMenuItem = new();
+    private readonly NativeMenuItem _legalNoticesMenuItem = new();
     private readonly NativeMenuItem _quitMenuItem = new();
     private NativeMenu? _nativeMenu;
     private WorkbookSession _session;
@@ -416,6 +422,22 @@ public sealed class MainWindow : Window
         _alignRightMenuItem.Header = "Align Right";
         _alignRightMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Right);
 
+        _helpOnlineMenuItem.Header = "Help Online";
+        _helpOnlineMenuItem.Gesture = new KeyGesture(Key.F1, default);
+        _helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, "Help Online");
+
+        _sendFeedbackMenuItem.Header = "Send Feedback";
+        _sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, "Send Feedback");
+
+        _checkForUpdatesMenuItem.Header = "Check for Updates";
+        _checkForUpdatesMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, "Check for Updates");
+
+        _aboutMenuItem.Header = "About FreeX";
+        _aboutMenuItem.Click += async (_, _) => await ShowAboutDialogAsync();
+
+        _legalNoticesMenuItem.Header = "Legal Notices";
+        _legalNoticesMenuItem.Click += async (_, _) => await ShowLegalNoticesDialogAsync();
+
         _quitMenuItem.Header = "Quit FreeX";
         _quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);
         _quitMenuItem.Click += (_, _) => TryQuitApplication();
@@ -474,6 +496,14 @@ public sealed class MainWindow : Window
         formatMenu.Items.Add(_alignCenterMenuItem);
         formatMenu.Items.Add(_alignRightMenuItem);
 
+        var helpMenu = new NativeMenu();
+        helpMenu.Items.Add(_helpOnlineMenuItem);
+        helpMenu.Items.Add(_sendFeedbackMenuItem);
+        helpMenu.Items.Add(_checkForUpdatesMenuItem);
+        helpMenu.Items.Add(new NativeMenuItemSeparator());
+        helpMenu.Items.Add(_aboutMenuItem);
+        helpMenu.Items.Add(_legalNoticesMenuItem);
+
         _nativeMenu = new NativeMenu();
         _nativeMenu.Items.Add(new NativeMenuItem
         {
@@ -489,6 +519,11 @@ public sealed class MainWindow : Window
         {
             Header = "Format",
             Menu = formatMenu,
+        });
+        _nativeMenu.Items.Add(new NativeMenuItem
+        {
+            Header = "Help",
+            Menu = helpMenu,
         });
         _nativeMenu.NeedsUpdate += (_, _) => UpdateSaveButton();
 
@@ -2841,6 +2876,9 @@ public sealed class MainWindow : Window
         var hasNativeFormatMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
             string.Equals(item.Header?.ToString(), "Format", StringComparison.Ordinal) &&
             item.Menu is not null) == true;
+        var hasNativeHelpMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
+            string.Equals(item.Header?.ToString(), "Help", StringComparison.Ordinal) &&
+            item.Menu is not null) == true;
         var nativeCellStylesPresetCount = _cellStylesMenuItem.Menu?
             .Items
             .OfType<NativeMenuItem>()
@@ -2860,6 +2898,7 @@ public sealed class MainWindow : Window
             HasNativeFileMenu: hasNativeFileMenu,
             HasNativeEditMenu: hasNativeEditMenu,
             HasNativeFormatMenu: hasNativeFormatMenu,
+            HasNativeHelpMenu: hasNativeHelpMenu,
             HasNativeOpenMenuItem: HasNativeMenuItem(_openMenuItem, "Open..."),
             HasNativeSaveMenuItem: HasNativeMenuItem(_saveMenuItem, "Save"),
             HasNativeSaveAsMenuItem: HasNativeMenuItem(_saveAsMenuItem, "Save As..."),
@@ -2904,6 +2943,11 @@ public sealed class MainWindow : Window
             HasNativeAlignLeftMenuItem: HasNativeMenuItem(_alignLeftMenuItem, "Align Left", requireGesture: false),
             HasNativeAlignCenterMenuItem: HasNativeMenuItem(_alignCenterMenuItem, "Align Center", requireGesture: false),
             HasNativeAlignRightMenuItem: HasNativeMenuItem(_alignRightMenuItem, "Align Right", requireGesture: false),
+            HasNativeHelpOnlineMenuItem: HasNativeMenuItem(_helpOnlineMenuItem, "Help Online"),
+            HasNativeSendFeedbackMenuItem: HasNativeMenuItem(_sendFeedbackMenuItem, "Send Feedback", requireGesture: false),
+            HasNativeCheckForUpdatesMenuItem: HasNativeMenuItem(_checkForUpdatesMenuItem, "Check for Updates", requireGesture: false),
+            HasNativeAboutMenuItem: HasNativeMenuItem(_aboutMenuItem, "About FreeX", requireGesture: false),
+            HasNativeLegalNoticesMenuItem: HasNativeMenuItem(_legalNoticesMenuItem, "Legal Notices", requireGesture: false),
             HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, "Quit FreeX"));
     }
 
@@ -2934,6 +2978,13 @@ public sealed class MainWindow : Window
         {
             if (_formulaBox.IsFocused)
                 return;
+
+            if (e.Key == Key.F1)
+            {
+                e.Handled = true;
+                await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, "Help Online");
+                return;
+            }
 
             if (e.Key == Key.Delete)
             {
@@ -3506,6 +3557,109 @@ public sealed class MainWindow : Window
         _statusText.Text = message;
         _statusText.Foreground = Brush(143, 74, 18);
         UpdateSaveButton();
+    }
+
+    private void ShowHelpIssue(string message)
+    {
+        _statusText.Text = message;
+        _statusText.Foreground = Brush(143, 74, 18);
+    }
+
+    private async Task OpenExternalHelpLinkAsync(string url, string title)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            ShowHelpIssue($"{title} link is blocked.");
+            return;
+        }
+
+        var launcher = TopLevel.GetTopLevel(this)?.Launcher;
+        if (launcher is null)
+        {
+            ShowHelpIssue($"{title} link cannot be opened on this platform.");
+            return;
+        }
+
+        try
+        {
+            if (!await launcher.LaunchUriAsync(uri))
+                ShowHelpIssue($"{title} link could not be opened.");
+        }
+        catch (Exception ex)
+        {
+            ShowHelpIssue($"{title} link could not be opened: {ex.Message}");
+        }
+    }
+
+    private async Task ShowAboutDialogAsync()
+    {
+        var versionText = AppHelpInfo.GetVersionText(typeof(MainWindow).Assembly);
+        await ShowTextDialogAsync(
+            "About FreeX",
+            AppHelpInfo.BuildAboutText(versionText, PlatformAboutSummary),
+            560,
+            460);
+    }
+
+    private async Task ShowLegalNoticesDialogAsync()
+    {
+        var text = string.Join(
+            Environment.NewLine + Environment.NewLine,
+            LegalNoticeProvider.GetDocuments().Select(document =>
+                $"{document.Title}{Environment.NewLine}{new string('=', document.Title.Length)}{Environment.NewLine}{document.Text.Trim()}"));
+
+        await ShowTextDialogAsync("Legal Notices", text, 860, 620);
+    }
+
+    private async Task ShowTextDialogAsync(string title, string text, double width, double height)
+    {
+        var dialog = new Window
+        {
+            Title = title,
+            Width = width,
+            Height = height,
+            MinWidth = Math.Min(width, 420),
+            MinHeight = Math.Min(height, 320),
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+
+        var closeButton = new Button
+        {
+            Content = "Close",
+            Width = 92,
+            Padding = new Thickness(10, 4),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+        };
+        closeButton.Click += (_, _) => dialog.Close();
+
+        var textBox = new TextBox
+        {
+            Text = text,
+            IsReadOnly = true,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 13,
+            Padding = new Thickness(8),
+            MinHeight = 240,
+        };
+
+        var root = new DockPanel
+        {
+            Margin = new Thickness(16),
+        };
+        DockPanel.SetDock(closeButton, Dock.Bottom);
+        root.Children.Add(closeButton);
+        root.Children.Add(new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = textBox,
+        });
+
+        dialog.Content = root;
+        await dialog.ShowDialog(this);
     }
 
     private (double Height, double Width) GetCurrentSheetViewportSize()

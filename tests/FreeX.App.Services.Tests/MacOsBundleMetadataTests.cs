@@ -139,6 +139,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"native_save_as_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_edit_menu=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_format_menu=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_help_menu=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_undo_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_redo_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_cut_menu_item=true\" \"$launch_smoke_report\"");
@@ -178,6 +179,11 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"native_align_left_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_align_center_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_align_right_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_help_online_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_send_feedback_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_check_for_updates_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_about_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_legal_notices_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_quit_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-app.zip");
         workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-app.zip.sha256");

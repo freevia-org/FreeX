@@ -100,6 +100,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _wrapTextMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _decreaseIndentMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _increaseIndentMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _helpOnlineMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _sendFeedbackMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _checkForUpdatesMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _aboutMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _legalNoticesMenuItem = new();");
         source.Should().Contain("_openMenuItem.Header = \"Open...\";");
         source.Should().Contain("_openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);");
         source.Should().Contain("_openMenuItem.Click += async (_, _) => await OpenWorkbookAsync();");
@@ -194,6 +199,17 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_alignCenterMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Center);");
         source.Should().Contain("_alignRightMenuItem.Header = \"Align Right\";");
         source.Should().Contain("_alignRightMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Right);");
+        source.Should().Contain("_helpOnlineMenuItem.Header = \"Help Online\";");
+        source.Should().Contain("_helpOnlineMenuItem.Gesture = new KeyGesture(Key.F1, default);");
+        source.Should().Contain("_helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, \"Help Online\");");
+        source.Should().Contain("_sendFeedbackMenuItem.Header = \"Send Feedback\";");
+        source.Should().Contain("_sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, \"Send Feedback\");");
+        source.Should().Contain("_checkForUpdatesMenuItem.Header = \"Check for Updates\";");
+        source.Should().Contain("_checkForUpdatesMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, \"Check for Updates\");");
+        source.Should().Contain("_aboutMenuItem.Header = \"About FreeX\";");
+        source.Should().Contain("_aboutMenuItem.Click += async (_, _) => await ShowAboutDialogAsync();");
+        source.Should().Contain("_legalNoticesMenuItem.Header = \"Legal Notices\";");
+        source.Should().Contain("_legalNoticesMenuItem.Click += async (_, _) => await ShowLegalNoticesDialogAsync();");
         source.Should().Contain("_quitMenuItem.Header = \"Quit FreeX\";");
         source.Should().Contain("_quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);");
         source.Should().Contain("_quitMenuItem.Click += (_, _) => TryQuitApplication();");
@@ -234,8 +250,14 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("formatMenu.Items.Add(_alignLeftMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_alignCenterMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_alignRightMenuItem);");
+        source.Should().Contain("helpMenu.Items.Add(_helpOnlineMenuItem);");
+        source.Should().Contain("helpMenu.Items.Add(_sendFeedbackMenuItem);");
+        source.Should().Contain("helpMenu.Items.Add(_checkForUpdatesMenuItem);");
+        source.Should().Contain("helpMenu.Items.Add(_aboutMenuItem);");
+        source.Should().Contain("helpMenu.Items.Add(_legalNoticesMenuItem);");
         source.Should().Contain("Header = \"Edit\"");
         source.Should().Contain("Header = \"Format\"");
+        source.Should().Contain("Header = \"Help\"");
         source.Should().Contain("NativeMenu.SetMenu(this, _nativeMenu);");
         source.Should().Contain("_nativeMenu.NeedsUpdate += (_, _) => UpdateSaveButton();");
         source.Should().Contain("_openMenuItem.IsEnabled = _openButton.IsEnabled;");
@@ -283,6 +305,14 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("TryQuitApplication()");
         source.Should().Contain("Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop");
         source.Should().Contain("desktop.TryShutdown(0);");
+        source.Should().Contain("private async Task OpenExternalHelpLinkAsync(string url, string title)");
+        source.Should().Contain("TopLevel.GetTopLevel(this)?.Launcher");
+        source.Should().Contain("await launcher.LaunchUriAsync(uri)");
+        source.Should().Contain("private async Task ShowAboutDialogAsync()");
+        source.Should().Contain("AppHelpInfo.BuildAboutText(versionText, PlatformAboutSummary)");
+        source.Should().Contain("private async Task ShowLegalNoticesDialogAsync()");
+        source.Should().Contain("LegalNoticeProvider.GetDocuments().Select(document =>");
+        source.Should().Contain("await dialog.ShowDialog(this);");
     }
 
     [Fact]
@@ -310,6 +340,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_file_menu={FormatBool(snapshot.HasNativeFileMenu)}");
         smokeSource.Should().Contain("native_edit_menu={FormatBool(snapshot.HasNativeEditMenu)}");
         smokeSource.Should().Contain("native_format_menu={FormatBool(snapshot.HasNativeFormatMenu)}");
+        smokeSource.Should().Contain("native_help_menu={FormatBool(snapshot.HasNativeHelpMenu)}");
         smokeSource.Should().Contain("native_undo_menu_item={FormatBool(snapshot.HasNativeUndoMenuItem)}");
         smokeSource.Should().Contain("native_redo_menu_item={FormatBool(snapshot.HasNativeRedoMenuItem)}");
         smokeSource.Should().Contain("native_cut_menu_item={FormatBool(snapshot.HasNativeCutMenuItem)}");
@@ -351,6 +382,11 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_align_left_menu_item={FormatBool(snapshot.HasNativeAlignLeftMenuItem)}");
         smokeSource.Should().Contain("native_align_center_menu_item={FormatBool(snapshot.HasNativeAlignCenterMenuItem)}");
         smokeSource.Should().Contain("native_align_right_menu_item={FormatBool(snapshot.HasNativeAlignRightMenuItem)}");
+        smokeSource.Should().Contain("native_help_online_menu_item={FormatBool(snapshot.HasNativeHelpOnlineMenuItem)}");
+        smokeSource.Should().Contain("native_send_feedback_menu_item={FormatBool(snapshot.HasNativeSendFeedbackMenuItem)}");
+        smokeSource.Should().Contain("native_check_for_updates_menu_item={FormatBool(snapshot.HasNativeCheckForUpdatesMenuItem)}");
+        smokeSource.Should().Contain("native_about_menu_item={FormatBool(snapshot.HasNativeAboutMenuItem)}");
+        smokeSource.Should().Contain("native_legal_notices_menu_item={FormatBool(snapshot.HasNativeLegalNoticesMenuItem)}");
         smokeSource.Should().Contain("desktop.TryShutdown(exitCode);");
         windowSource.Should().Contain("private readonly NativeMenuItem _quitMenuItem = new();");
         windowSource.Should().Contain("private NativeMenu? _nativeMenu;");
@@ -361,6 +397,7 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("OpenedSourcePath: _session.CurrentFilePath");
         windowSource.Should().Contain("HasNativeEditMenu: hasNativeEditMenu");
         windowSource.Should().Contain("HasNativeFormatMenu: hasNativeFormatMenu");
+        windowSource.Should().Contain("HasNativeHelpMenu: hasNativeHelpMenu");
         windowSource.Should().Contain("HasNativeUndoMenuItem: HasNativeMenuItem(_undoMenuItem, \"Undo\")");
         windowSource.Should().Contain("HasNativeRedoMenuItem: HasNativeMenuItem(_redoMenuItem, \"Redo\")");
         windowSource.Should().Contain("HasNativeCutMenuItem: HasNativeMenuItem(_cutMenuItem, \"Cut\")");
@@ -402,6 +439,11 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeAlignLeftMenuItem: HasNativeMenuItem(_alignLeftMenuItem, \"Align Left\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAlignCenterMenuItem: HasNativeMenuItem(_alignCenterMenuItem, \"Align Center\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAlignRightMenuItem: HasNativeMenuItem(_alignRightMenuItem, \"Align Right\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeHelpOnlineMenuItem: HasNativeMenuItem(_helpOnlineMenuItem, \"Help Online\")");
+        windowSource.Should().Contain("HasNativeSendFeedbackMenuItem: HasNativeMenuItem(_sendFeedbackMenuItem, \"Send Feedback\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeCheckForUpdatesMenuItem: HasNativeMenuItem(_checkForUpdatesMenuItem, \"Check for Updates\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeAboutMenuItem: HasNativeMenuItem(_aboutMenuItem, \"About FreeX\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeLegalNoticesMenuItem: HasNativeMenuItem(_legalNoticesMenuItem, \"Legal Notices\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, \"Quit FreeX\")");
     }
 
