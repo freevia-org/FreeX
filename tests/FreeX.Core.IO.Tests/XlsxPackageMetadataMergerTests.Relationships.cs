@@ -182,6 +182,52 @@ public sealed partial class XlsxPackageMetadataMergerTests
     }
 
     [Fact]
+    public void MergeRelationshipParts_RebindsCopiedExternalLinkPathReferenceWhenRelationshipIdCollides()
+    {
+        using var sourcePackage = CreatePackageWithExternalLinkPathRelationshipIdCollisionSource();
+        using var targetPackage = CreatePackageWithExternalLinkPathRelationshipIdCollisionTarget();
+        using var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var targetArchive = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, targetArchive);
+        XlsxPackageMetadataMerger.MergeContentTypes(sourceArchive, targetArchive);
+        XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, targetArchive, generatedEntriesBeforeMerge);
+
+        targetArchive.GetEntry("xl/externalLinks/externalLink1.xml").Should().NotBeNull();
+
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationshipsXml = XlsxPackageTestFixtures.LoadPackageXml(
+            targetArchive,
+            "xl/externalLinks/_rels/externalLink1.xml.rels");
+        var sourcePathRelationship = relationshipsXml.Root!
+            .Elements(relationshipNs + "Relationship")
+            .Single(element =>
+                (string?)element.Attribute("Type") == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath" &&
+                (string?)element.Attribute("Target") == "file:///C:/source.xlsx");
+        var reboundId = sourcePathRelationship.Attribute("Id")!.Value;
+
+        reboundId.Should().NotBe("rIdExternalBook");
+        relationshipsXml.Root!
+            .Elements(relationshipNs + "Relationship")
+            .Select(element => element.Attribute("Id")?.Value)
+            .OfType<string>()
+            .Should()
+            .OnlyHaveUniqueItems();
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var externalLinkXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "xl/externalLinks/externalLink1.xml");
+        externalLinkXml.Root!
+            .Elements(workbookNs + "externalBook")
+            .Should()
+            .ContainSingle(element => (string?)element.Attribute(relNs + "id") == reboundId);
+        externalLinkXml.Root!
+            .Elements(workbookNs + "externalBook")
+            .Should()
+            .NotContain(element => (string?)element.Attribute(relNs + "id") == "rIdExternalBook");
+    }
+
+    [Fact]
     public void MergeRelationshipParts_RebindsCopiedChartExternalDataPivotCacheReferenceWhenRelationshipIdCollides()
     {
         using var sourcePackage = CreatePackageWithChartExternalDataPivotCacheRelationshipIdCollisionSource();
