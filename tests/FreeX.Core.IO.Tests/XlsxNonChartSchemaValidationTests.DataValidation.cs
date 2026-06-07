@@ -250,7 +250,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         return new XElement(worksheetXml.Root!.Element(worksheetNs + "dataValidations")!);
     }
 

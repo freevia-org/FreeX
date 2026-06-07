@@ -185,7 +185,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
-        var themeXml = LoadPackageXml(archive.GetEntry("xl/theme/theme1.xml")!);
+        var themeXml = LoadPackageXml(archive, "xl/theme/theme1.xml");
         themeXml.Root!
             .Element(drawingNs + "themeElements")!
             .Element(drawingNs + "fontScheme")!

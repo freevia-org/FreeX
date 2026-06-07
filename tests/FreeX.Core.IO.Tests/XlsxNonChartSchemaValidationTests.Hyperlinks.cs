@@ -99,7 +99,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace freexNs = "urn:freex:test";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var hyperlinks = worksheetXml.Root!.Element(worksheetNs + "hyperlinks")!;
         hyperlinks.SetAttributeValue("nativeHyperlinksAttr", "kept");
         hyperlinks.Add(new XElement(freexNs + "nativeHyperlinksChild"));

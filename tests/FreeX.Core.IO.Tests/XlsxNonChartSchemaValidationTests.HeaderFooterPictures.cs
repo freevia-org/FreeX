@@ -140,7 +140,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             new XAttribute("Target", "../drawings/vmlDrawing1.vml")));
         ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
 
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         InsertLegacyDrawingHeaderFooterInOrder(worksheetXml.Root!, worksheetNs, new XElement(
             worksheetNs + "legacyDrawingHF",
             new XAttribute(relNs + "id", "rIdHeaderFooterDrawing1")));

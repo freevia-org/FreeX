@@ -68,7 +68,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         const string relationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
         const string worksheetPath = "xl/worksheets/sheet1.xml";
 
-        var relsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var relsXml = LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
         var relationship = relsXml.Root!
             .Elements(packageRelNs + "Relationship")
             .Single(element => element.Attribute("Type")?.Value == relationshipType);
