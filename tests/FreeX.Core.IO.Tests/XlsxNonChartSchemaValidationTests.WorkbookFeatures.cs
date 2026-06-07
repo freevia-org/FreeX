@@ -145,7 +145,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SchemaErrors(saved).Should().BeEmpty();
         var fileSharing = ReadWorkbookChildElement(saved, "fileSharing");
         fileSharing.Attribute("readOnlyRecommended").Should().BeNull();
-        fileSharing.Attribute("reservationPassword")!.Value.Should().Be("1234");
+        fileSharing.Attribute("reservationPassword").Should().BeNull();
         fileSharing.Attribute("revisionsPassword").Should().BeNull();
         fileSharing.Attribute("hashValue").Should().BeNull();
         fileSharing.Attribute("saltValue").Should().BeNull();
@@ -466,6 +466,8 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         protection.Attribute("lockStructure").Should().BeNull();
         protection.Attribute("lockWindows").Should().BeNull();
         protection.Attribute("lockRevision").Should().BeNull();
+        protection.Attribute("workbookPassword").Should().BeNull();
+        protection.Attribute("revisionsPassword").Should().BeNull();
         protection.Attribute("workbookHashValue").Should().BeNull();
         protection.Attribute("workbookSaltValue").Should().BeNull();
         protection.Attribute("workbookSpinCount").Should().BeNull();
@@ -795,6 +797,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         var fileSharing = workbookXml.Root!.Element(workbookNs + "fileSharing")!;
         fileSharing.SetAttributeValue("readOnlyRecommended", "maybe");
+        fileSharing.SetAttributeValue("reservationPassword", "not-hex");
         fileSharing.SetAttributeValue("revisionsPassword", "removed");
         fileSharing.SetAttributeValue("hashValue", "not-base64");
         fileSharing.SetAttributeValue("saltValue", "also-not-base64");
@@ -964,6 +967,8 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         protection.SetAttributeValue("lockStructure", "maybe");
         protection.SetAttributeValue("lockWindows", "maybe");
         protection.SetAttributeValue("lockRevision", "maybe");
+        protection.SetAttributeValue("workbookPassword", "not-hex");
+        protection.SetAttributeValue("revisionsPassword", "also-not-hex");
         protection.SetAttributeValue("workbookHashValue", "not-base64");
         protection.SetAttributeValue("workbookSaltValue", "also-not-base64");
         protection.SetAttributeValue("workbookSpinCount", "not-a-number");

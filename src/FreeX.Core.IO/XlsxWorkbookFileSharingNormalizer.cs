@@ -22,6 +22,7 @@ internal static class XlsxWorkbookFileSharingNormalizer
         changed |= RemoveUnknownAttributes(fileSharing);
         changed |= RemoveAllNodes(fileSharing);
         changed |= NormalizeAttribute(fileSharing, "readOnlyRecommended", NormalizeBoolean);
+        changed |= NormalizeAttribute(fileSharing, "reservationPassword", NormalizeLegacyPasswordHashOrNull);
         changed |= NormalizeAttribute(fileSharing, "hashValue", NormalizeBase64BinaryOrNull);
         changed |= NormalizeAttribute(fileSharing, "saltValue", NormalizeBase64BinaryOrNull);
         changed |= NormalizeAttribute(fileSharing, "spinCount", NormalizeUnsignedIntOrNull);
@@ -112,5 +113,17 @@ internal static class XlsxWorkbookFileSharingNormalizer
         {
             return null;
         }
+    }
+
+    private static string? NormalizeLegacyPasswordHashOrNull(string? value)
+    {
+        var trimmed = value?.Trim();
+        if (trimmed is not { Length: 4 } ||
+            !trimmed.All(static c => char.IsAsciiHexDigit(c)))
+        {
+            return null;
+        }
+
+        return trimmed.ToUpperInvariant();
     }
 }
