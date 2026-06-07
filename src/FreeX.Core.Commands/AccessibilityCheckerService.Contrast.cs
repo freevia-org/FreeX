@@ -1,5 +1,8 @@
 using System.Globalization;
+using System.IO;
 using System.Text.RegularExpressions;
+using System.Xml;
+using System.Xml.XPath;
 
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
@@ -948,6 +951,9 @@ public static partial class AccessibilityCheckerService
             case ErrorNode error:
                 operand = LiteralFormulaOperand(error.Error);
                 return true;
+            case OmittedArgumentNode:
+                operand = LiteralFormulaOperand(BlankValue.Instance);
+                return true;
             case ArrayConstantNode array when TryCreateFormulaArrayConstantLiteral(array, out var range):
                 operand = LiteralFormulaOperand(range);
                 return true;
@@ -1675,6 +1681,15 @@ public static partial class AccessibilityCheckerService
             case "CODE":
                 kind = ConditionalFormulaScalarFunctionKind.Code;
                 return true;
+            case "ASC":
+                kind = ConditionalFormulaScalarFunctionKind.Asc;
+                return true;
+            case "DBCS":
+                kind = ConditionalFormulaScalarFunctionKind.DbcsText;
+                return true;
+            case "JIS":
+                kind = ConditionalFormulaScalarFunctionKind.Jis;
+                return true;
             case "PROPER":
                 kind = ConditionalFormulaScalarFunctionKind.Proper;
                 return true;
@@ -1708,6 +1723,9 @@ public static partial class AccessibilityCheckerService
             case "DOLLARFR":
                 kind = ConditionalFormulaScalarFunctionKind.Dollarfr;
                 return true;
+            case "BAHTTEXT":
+                kind = ConditionalFormulaScalarFunctionKind.BahtText;
+                return true;
             case "LEN":
                 kind = ConditionalFormulaScalarFunctionKind.Len;
                 return true;
@@ -1731,6 +1749,39 @@ public static partial class AccessibilityCheckerService
                 return true;
             case "TEXTJOIN":
                 kind = ConditionalFormulaScalarFunctionKind.TextJoin;
+                return true;
+            case "TEXTBEFORE":
+                kind = ConditionalFormulaScalarFunctionKind.TextBefore;
+                return true;
+            case "TEXTAFTER":
+                kind = ConditionalFormulaScalarFunctionKind.TextAfter;
+                return true;
+            case "TEXTSPLIT":
+                kind = ConditionalFormulaScalarFunctionKind.TextSplit;
+                return true;
+            case "VALUETOTEXT":
+                kind = ConditionalFormulaScalarFunctionKind.ValueToText;
+                return true;
+            case "ARRAYTOTEXT":
+                kind = ConditionalFormulaScalarFunctionKind.ArrayToText;
+                return true;
+            case "REGEXEXTRACT":
+                kind = ConditionalFormulaScalarFunctionKind.RegexExtract;
+                return true;
+            case "REGEXREPLACE":
+                kind = ConditionalFormulaScalarFunctionKind.RegexReplace;
+                return true;
+            case "REGEXTEST":
+                kind = ConditionalFormulaScalarFunctionKind.RegexTest;
+                return true;
+            case "ENCODEURL":
+                kind = ConditionalFormulaScalarFunctionKind.EncodeUrl;
+                return true;
+            case "FILTERXML":
+                kind = ConditionalFormulaScalarFunctionKind.FilterXml;
+                return true;
+            case "PHONETIC":
+                kind = ConditionalFormulaScalarFunctionKind.Phonetic;
                 return true;
             case "SUBSTITUTE":
                 kind = ConditionalFormulaScalarFunctionKind.Substitute;
@@ -2120,10 +2171,16 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Unicode or
             ConditionalFormulaScalarFunctionKind.Char or
             ConditionalFormulaScalarFunctionKind.Code or
+            ConditionalFormulaScalarFunctionKind.Asc or
+            ConditionalFormulaScalarFunctionKind.DbcsText or
+            ConditionalFormulaScalarFunctionKind.Jis or
             ConditionalFormulaScalarFunctionKind.Proper or
             ConditionalFormulaScalarFunctionKind.Clean or
             ConditionalFormulaScalarFunctionKind.T or
             ConditionalFormulaScalarFunctionKind.Value or
+            ConditionalFormulaScalarFunctionKind.BahtText or
+            ConditionalFormulaScalarFunctionKind.EncodeUrl or
+            ConditionalFormulaScalarFunctionKind.Phonetic or
             ConditionalFormulaScalarFunctionKind.Len or
             ConditionalFormulaScalarFunctionKind.LenB or
             ConditionalFormulaScalarFunctionKind.Upper or
@@ -2168,6 +2225,14 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.TextJoin => argumentCount is >= 3 and <= 255,
             ConditionalFormulaScalarFunctionKind.NumberValue => argumentCount is >= 1 and <= 3,
             ConditionalFormulaScalarFunctionKind.Fixed => argumentCount is >= 1 and <= 3,
+            ConditionalFormulaScalarFunctionKind.TextBefore or
+            ConditionalFormulaScalarFunctionKind.TextAfter or
+            ConditionalFormulaScalarFunctionKind.TextSplit => argumentCount is >= 2 and <= 6,
+            ConditionalFormulaScalarFunctionKind.ValueToText or
+            ConditionalFormulaScalarFunctionKind.ArrayToText => argumentCount is 1 or 2,
+            ConditionalFormulaScalarFunctionKind.RegexTest => argumentCount is 2 or 3,
+            ConditionalFormulaScalarFunctionKind.RegexExtract => argumentCount is >= 2 and <= 4,
+            ConditionalFormulaScalarFunctionKind.RegexReplace => argumentCount is >= 3 and <= 5,
             ConditionalFormulaScalarFunctionKind.Log or
             ConditionalFormulaScalarFunctionKind.Roman or
             ConditionalFormulaScalarFunctionKind.IsoCeiling or
@@ -2208,6 +2273,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Right or
             ConditionalFormulaScalarFunctionKind.Exact or
             ConditionalFormulaScalarFunctionKind.Text or
+            ConditionalFormulaScalarFunctionKind.FilterXml or
             ConditionalFormulaScalarFunctionKind.BitAnd or
             ConditionalFormulaScalarFunctionKind.BitOr or
             ConditionalFormulaScalarFunctionKind.BitXor or
@@ -3371,6 +3437,9 @@ public static partial class AccessibilityCheckerService
         Unicode,
         Char,
         Code,
+        Asc,
+        DbcsText,
+        Jis,
         Proper,
         Rept,
         Clean,
@@ -3382,6 +3451,7 @@ public static partial class AccessibilityCheckerService
         Dollar,
         Dollarde,
         Dollarfr,
+        BahtText,
         Len,
         LenB,
         Upper,
@@ -3390,6 +3460,17 @@ public static partial class AccessibilityCheckerService
         Concat,
         Concatenate,
         TextJoin,
+        TextBefore,
+        TextAfter,
+        TextSplit,
+        ValueToText,
+        ArrayToText,
+        RegexExtract,
+        RegexReplace,
+        RegexTest,
+        EncodeUrl,
+        FilterXml,
+        Phonetic,
         Substitute,
         Replace,
         ReplaceB,
@@ -4478,6 +4559,10 @@ public static partial class AccessibilityCheckerService
                     return TryEvaluateFormulaTextScalarUnaryFunction(function, rowOffset, colOffset, FormulaCharScalar, out value);
                 case ConditionalFormulaScalarFunctionKind.Code:
                     return TryEvaluateFormulaTextScalarUnaryFunction(function, rowOffset, colOffset, FormulaCodeScalar, out value);
+                case ConditionalFormulaScalarFunctionKind.Asc:
+                case ConditionalFormulaScalarFunctionKind.DbcsText:
+                case ConditionalFormulaScalarFunctionKind.Jis:
+                    return TryEvaluateFormulaDbcsWidthFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Proper:
                     return TryEvaluateFormulaTextScalarUnaryFunction(function, rowOffset, colOffset, FormulaProperScalar, out value);
                 case ConditionalFormulaScalarFunctionKind.Rept:
@@ -4496,12 +4581,33 @@ public static partial class AccessibilityCheckerService
                     return TryEvaluateFormulaFixedFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Dollar:
                     return TryEvaluateFormulaDollarFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.BahtText:
+                    return TryEvaluateFormulaTextScalarUnaryFunction(function, rowOffset, colOffset, FormulaBahtTextScalar, out value);
                 case ConditionalFormulaScalarFunctionKind.Concat:
                     return TryEvaluateFormulaConcatFunction(function, rowOffset, colOffset, concatenate: false, out value);
                 case ConditionalFormulaScalarFunctionKind.Concatenate:
                     return TryEvaluateFormulaConcatFunction(function, rowOffset, colOffset, concatenate: true, out value);
                 case ConditionalFormulaScalarFunctionKind.TextJoin:
                     return TryEvaluateFormulaTextJoinFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.TextBefore:
+                case ConditionalFormulaScalarFunctionKind.TextAfter:
+                    return TryEvaluateFormulaTextBeforeAfterFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.TextSplit:
+                    return TryEvaluateFormulaTextSplitFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.ValueToText:
+                    return TryEvaluateFormulaValueToTextFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.ArrayToText:
+                    return TryEvaluateFormulaArrayToTextFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.RegexExtract:
+                case ConditionalFormulaScalarFunctionKind.RegexReplace:
+                case ConditionalFormulaScalarFunctionKind.RegexTest:
+                    return TryEvaluateFormulaRegexFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.EncodeUrl:
+                    return TryEvaluateFormulaTextScalarUnaryFunction(function, rowOffset, colOffset, FormulaEncodeUrlScalar, out value);
+                case ConditionalFormulaScalarFunctionKind.FilterXml:
+                    return TryEvaluateFormulaFilterXmlFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Phonetic:
+                    return TryEvaluateFormulaPhoneticFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Substitute:
                     return TryEvaluateFormulaSubstituteFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Replace:
@@ -6962,6 +7068,442 @@ public static partial class AccessibilityCheckerService
             return true;
         }
 
+        private bool TryEvaluateFormulaDbcsWidthFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaTextScalarArgument(function.Arguments[0], rowOffset, colOffset, out var source))
+                return false;
+
+            var toFullWidth = function.Kind is ConditionalFormulaScalarFunctionKind.DbcsText or ConditionalFormulaScalarFunctionKind.Jis;
+            if (source is RangeValue range)
+            {
+                var cells = new ScalarValue[range.RowCount, range.ColCount];
+                for (var row = 0; row < range.RowCount; row++)
+                {
+                    for (var col = 0; col < range.ColCount; col++)
+                    {
+                        if (!TryEvaluateFormulaDbcsWidthScalar(range.Cells[row, col], toFullWidth, out cells[row, col]))
+                            return false;
+                    }
+                }
+
+                value = new RangeValue(cells);
+                return true;
+            }
+
+            return TryEvaluateFormulaDbcsWidthScalar(source, toFullWidth, out value);
+        }
+
+        private static bool TryEvaluateFormulaDbcsWidthScalar(
+            ScalarValue source,
+            bool toFullWidth,
+            out ScalarValue value)
+        {
+            if (source is ErrorValue error)
+            {
+                value = error;
+                return true;
+            }
+
+            if (!TryGetFormulaCoercedText(source, out var text))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            if (FormulaTextHasLocaleSensitiveDbcsWidthMapping(text, toFullWidth))
+            {
+                value = ErrorValue.Value;
+                return false;
+            }
+
+            value = FormulaTextScalarResult(text);
+            return true;
+        }
+
+        private static bool FormulaTextHasLocaleSensitiveDbcsWidthMapping(string text, bool toFullWidth)
+        {
+            foreach (var ch in text)
+            {
+                if (toFullWidth)
+                {
+                    if (ch == ' ' || ch is >= '!' and <= '~' || ch is >= '\uff61' and <= '\uff9f')
+                        return true;
+                }
+                else if (ch == '\u3000' || ch is >= '\uff01' and <= '\uff5e' || ch is >= '\u30a0' and <= '\u30ff')
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool TryEvaluateFormulaTextBeforeAfterFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaTextScalarArgument(function.Arguments[0], rowOffset, colOffset, out var textSource))
+                return false;
+
+            if (textSource is ErrorValue textError)
+            {
+                value = textError;
+                return true;
+            }
+
+            ScalarValue error = ErrorValue.Value;
+            if (!TryResolveFormulaOptionalTextScalarArgument(function, 1, rowOffset, colOffset, out var delimiterSource) ||
+                !TryCollectFormulaTextDelimiters(delimiterSource, allowBlankArgument: false, out var delimiters, out error))
+            {
+                value = error;
+                return true;
+            }
+
+            if (delimiters.Count == 0)
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            if (!TryResolveFormulaOptionalTextScalarArgument(function, 2, rowOffset, colOffset, out var instanceSource) ||
+                !TryGetFormulaOptionalInteger(instanceSource, defaultValue: 1, out var instanceNum, out error) ||
+                !TryResolveFormulaOptionalTextScalarArgument(function, 3, rowOffset, colOffset, out var matchModeSource) ||
+                !TryGetFormulaOptionalInteger(matchModeSource, defaultValue: 0, out var matchMode, out error) ||
+                !TryResolveFormulaOptionalTextScalarArgument(function, 4, rowOffset, colOffset, out var matchEndModeSource) ||
+                !TryGetFormulaOptionalInteger(matchEndModeSource, defaultValue: 0, out var matchEndMode, out error) ||
+                !TryResolveFormulaOptionalTextScalarArgument(function, 5, rowOffset, colOffset, out var ifNotFoundSource))
+            {
+                value = error;
+                return true;
+            }
+
+            if (instanceNum == 0 || matchMode is not (0 or 1) || matchEndMode is not (0 or 1))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            ScalarValue ifNotFound = ErrorValue.NA;
+            if (function.Arguments.Count > 5)
+            {
+                if (!TryGetFormulaSingleValueOrErrorAsValue(ifNotFoundSource, out ifNotFound, out error))
+                {
+                    value = error;
+                    return true;
+                }
+            }
+
+            var options = new FormulaTextExtractOptions(
+                delimiters,
+                instanceNum,
+                matchMode == 1 ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal,
+                matchEndMode == 1,
+                ifNotFound);
+            var before = function.Kind == ConditionalFormulaScalarFunctionKind.TextBefore;
+            value = textSource is RangeValue textRange
+                ? MapFormulaTextScalarRange(textRange, source => FormulaTextBeforeAfterScalar(source, options, before))
+                : FormulaTextBeforeAfterScalar(textSource, options, before);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaTextSplitFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            ScalarValue error = ErrorValue.Value;
+            if (!TryResolveFormulaOptionalTextScalarArgument(function, 0, rowOffset, colOffset, out var textSource) ||
+                !TryGetFormulaSingleValueOrErrorAsValue(textSource, out var textValue, out error))
+            {
+                value = error;
+                return true;
+            }
+
+            if (textValue is ErrorValue textError)
+            {
+                value = textError;
+                return true;
+            }
+
+            if (!TryResolveFormulaOptionalTextScalarArgument(function, 1, rowOffset, colOffset, out var colDelimiterSource) ||
+                !TryCollectFormulaTextDelimiters(colDelimiterSource, allowBlankArgument: true, out var colDelimiters, out error) ||
+                !TryResolveFormulaOptionalTextScalarArgument(function, 2, rowOffset, colOffset, out var rowDelimiterSource) ||
+                !TryCollectFormulaTextDelimiters(rowDelimiterSource, allowBlankArgument: true, out var rowDelimiters, out error))
+            {
+                value = error;
+                return true;
+            }
+
+            if (colDelimiters.Count == 0 && rowDelimiters.Count == 0 ||
+                colDelimiters.Any(static delimiter => delimiter.Length == 0) ||
+                rowDelimiters.Any(static delimiter => delimiter.Length == 0))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            if (!TryResolveFormulaOptionalTextScalarArgument(function, 3, rowOffset, colOffset, out var ignoreEmptySource) ||
+                !TryGetFormulaOptionalBool(ignoreEmptySource, defaultValue: false, out var ignoreEmpty, out error) ||
+                !TryResolveFormulaOptionalTextScalarArgument(function, 4, rowOffset, colOffset, out var matchModeSource) ||
+                !TryGetFormulaOptionalInteger(matchModeSource, defaultValue: 0, out var matchMode, out error) ||
+                !TryResolveFormulaOptionalTextScalarArgument(function, 5, rowOffset, colOffset, out var padWithSource))
+            {
+                value = error;
+                return true;
+            }
+
+            if (matchMode is not (0 or 1))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            ScalarValue padWith = ErrorValue.NA;
+            if (function.Arguments.Count > 5 && padWithSource is not BlankValue)
+            {
+                if (!TryGetFormulaSingleValueOrErrorAsValue(padWithSource, out padWith, out error))
+                {
+                    value = error;
+                    return true;
+                }
+            }
+
+            if (!TryGetFormulaCoercedText(textValue, out var text))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            var comparison = matchMode == 1 ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            var rowTexts = rowDelimiters.Count == 0
+                ? [text]
+                : FormulaSplitByAnyDelimiter(text, rowDelimiters, comparison, ignoreEmpty);
+            var splitRows = new List<List<string>>(rowTexts.Count);
+            var maxCols = 0;
+            foreach (var rowText in rowTexts)
+            {
+                var cols = colDelimiters.Count == 0
+                    ? [rowText]
+                    : FormulaSplitByAnyDelimiter(rowText, colDelimiters, comparison, ignoreEmpty);
+                splitRows.Add(cols);
+                maxCols = Math.Max(maxCols, cols.Count);
+            }
+
+            if (splitRows.Count == 0 || maxCols == 0)
+            {
+                value = ErrorValue.Calc;
+                return true;
+            }
+
+            var cells = new ScalarValue[splitRows.Count, maxCols];
+            for (var row = 0; row < splitRows.Count; row++)
+                for (var col = 0; col < maxCols; col++)
+                    cells[row, col] = col < splitRows[row].Count ? FormulaTextScalarResult(splitRows[row][col]) : padWith;
+
+            value = new RangeValue(cells);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaValueToTextFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            ScalarValue error = ErrorValue.Value;
+            if (!TryResolveFormulaTextScalarArgument(function.Arguments[0], rowOffset, colOffset, out var source) ||
+                !TryGetFormulaValueTextFormat(function, rowOffset, colOffset, out var format, out error))
+            {
+                value = error;
+                return true;
+            }
+
+            if (source is RangeValue { RowCount: 1, ColCount: 1 } singleCellRange)
+            {
+                value = FormulaTextScalarResult(FormulaValueText(singleCellRange.Cells[0, 0], strict: format == 1));
+                return true;
+            }
+
+            value = source is RangeValue range
+                ? FormulaTextScalarResult(format == 1 ? FormulaStrictArrayText(range) : FormulaConciseArrayText(range))
+                : FormulaTextScalarResult(FormulaValueText(source, strict: format == 1));
+            return true;
+        }
+
+        private bool TryEvaluateFormulaArrayToTextFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            ScalarValue error = ErrorValue.Value;
+            if (!TryResolveFormulaTextScalarArgument(function.Arguments[0], rowOffset, colOffset, out var source) ||
+                !TryGetFormulaValueTextFormat(function, rowOffset, colOffset, out var format, out error))
+            {
+                value = error;
+                return true;
+            }
+
+            var range = source as RangeValue ?? new RangeValue(new ScalarValue[,] { { source } });
+            value = FormulaTextScalarResult(format == 1 ? FormulaStrictArrayText(range) : FormulaConciseArrayText(range));
+            return true;
+        }
+
+        private bool TryEvaluateFormulaRegexFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            return function.Kind switch
+            {
+                ConditionalFormulaScalarFunctionKind.RegexTest =>
+                    TryEvaluateFormulaRegexTestFunction(function, rowOffset, colOffset, out value),
+                ConditionalFormulaScalarFunctionKind.RegexExtract =>
+                    TryEvaluateFormulaRegexExtractFunction(function, rowOffset, colOffset, out value),
+                ConditionalFormulaScalarFunctionKind.RegexReplace =>
+                    TryEvaluateFormulaRegexReplaceFunction(function, rowOffset, colOffset, out value),
+                _ => false
+            };
+        }
+
+        private bool TryEvaluateFormulaRegexTestFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            ScalarValue error = ErrorValue.Value;
+            if (!TryResolveFormulaTextScalarArgument(function.Arguments[0], rowOffset, colOffset, out var textSource) ||
+                !TryCreateFormulaRegex(function, 1, 2, rowOffset, colOffset, out var regex, out error))
+            {
+                value = error;
+                return true;
+            }
+
+            value = textSource is RangeValue textRange
+                ? MapFormulaTextScalarRange(textRange, source => FormulaRegexTestScalar(source, regex))
+                : FormulaRegexTestScalar(textSource, regex);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaRegexExtractFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            ScalarValue error = ErrorValue.Value;
+            if (!TryResolveFormulaTextScalarArgument(function.Arguments[0], rowOffset, colOffset, out var textSource) ||
+                !TryCreateFormulaRegex(function, 1, 3, rowOffset, colOffset, out var regex, out error) ||
+                !TryResolveFormulaOptionalTextScalarArgument(function, 2, rowOffset, colOffset, out var returnModeSource) ||
+                !TryGetFormulaOptionalInteger(returnModeSource, defaultValue: 0, out var returnMode, out error))
+            {
+                value = error;
+                return true;
+            }
+
+            if (returnMode is not (0 or 1 or 2))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            value = textSource is RangeValue textRange
+                ? MapFormulaTextScalarRange(textRange, source => FormulaRegexExtractScalar(source, regex, returnMode))
+                : FormulaRegexExtractScalar(textSource, regex, returnMode);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaRegexReplaceFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            ScalarValue error = ErrorValue.Value;
+            if (!TryResolveFormulaTextScalarArgument(function.Arguments[0], rowOffset, colOffset, out var textSource) ||
+                !TryCreateFormulaRegex(function, 1, 4, rowOffset, colOffset, out var regex, out error) ||
+                !TryResolveFormulaTextScalarArgument(function.Arguments[2], rowOffset, colOffset, out var replacementSource) ||
+                !TryGetFormulaSingleValueOrErrorAsValue(replacementSource, out var replacement, out error) ||
+                !TryResolveFormulaOptionalTextScalarArgument(function, 3, rowOffset, colOffset, out var occurrenceSource) ||
+                !TryGetFormulaOptionalInteger(occurrenceSource, defaultValue: 0, out var occurrence, out error))
+            {
+                value = error;
+                return true;
+            }
+
+            if (replacement is ErrorValue replacementError)
+            {
+                value = replacementError;
+                return true;
+            }
+
+            if (!TryGetFormulaCoercedText(replacement, out var replacementText))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            value = textSource is RangeValue textRange
+                ? MapFormulaTextScalarRange(textRange, source => FormulaRegexReplaceScalar(source, regex, replacementText, occurrence))
+                : FormulaRegexReplaceScalar(textSource, regex, replacementText, occurrence);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaFilterXmlFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaTextScalarArguments(function.Arguments, rowOffset, colOffset, out var arguments))
+                return false;
+
+            value = MapFormulaTextScalarArguments(arguments, values => FormulaFilterXmlScalar(values[0], values[1]));
+            return true;
+        }
+
+        private bool TryEvaluateFormulaPhoneticFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaTextScalarArgument(function.Arguments[0], rowOffset, colOffset, out var source))
+                return false;
+
+            var scalar = source is RangeValue range ? range.Cells[0, 0] : source;
+            if (scalar is ErrorValue error)
+            {
+                value = error;
+                return true;
+            }
+
+            value = TryGetFormulaCoercedText(scalar, out var text)
+                ? FormulaTextScalarResult(text)
+                : ErrorValue.Value;
+            return true;
+        }
+
         private bool TryEvaluateFormulaSubstituteFunction(
             ConditionalFormulaScalarFunction function,
             int rowOffset,
@@ -7148,6 +7690,143 @@ public static partial class AccessibilityCheckerService
                     cells[row, col] = targetSheet.GetValue(startRow + (uint)row, startCol + (uint)col);
 
             value = new RangeValue(cells);
+            return true;
+        }
+
+        private bool TryResolveFormulaOptionalTextScalarArgument(
+            ConditionalFormulaScalarFunction function,
+            int index,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            if (index >= function.Arguments.Count)
+            {
+                value = BlankValue.Instance;
+                return true;
+            }
+
+            return TryResolveFormulaTextScalarArgument(function.Arguments[index], rowOffset, colOffset, out value);
+        }
+
+        private static bool TryCollectFormulaTextDelimiters(
+            ScalarValue value,
+            bool allowBlankArgument,
+            out List<string> delimiters,
+            out ScalarValue error)
+        {
+            delimiters = [];
+            error = ErrorValue.Value;
+            if (value is BlankValue && allowBlankArgument)
+                return true;
+
+            if (value is ErrorValue directError)
+            {
+                error = directError;
+                return false;
+            }
+
+            if (value is RangeValue range)
+            {
+                for (var row = 0; row < range.RowCount; row++)
+                {
+                    for (var col = 0; col < range.ColCount; col++)
+                    {
+                        var cell = range.Cells[row, col];
+                        if (cell is ErrorValue cellError)
+                        {
+                            error = cellError;
+                            return false;
+                        }
+
+                        if (!TryGetFormulaCoercedText(cell, out var cellText))
+                            return false;
+
+                        delimiters.Add(cellText);
+                    }
+                }
+
+                return true;
+            }
+
+            if (!TryGetFormulaCoercedText(value, out var text))
+                return false;
+
+            delimiters.Add(text);
+            return true;
+        }
+
+        private static bool TryGetFormulaOptionalInteger(
+            ScalarValue source,
+            int defaultValue,
+            out int value,
+            out ScalarValue error)
+        {
+            value = defaultValue;
+            error = ErrorValue.Value;
+            if (source is BlankValue)
+                return true;
+
+            if (!TryGetFormulaScalarControlArgument(source, out var scalar, out var controlError))
+            {
+                error = controlError;
+                return false;
+            }
+
+            if (!TryGetFormulaTextScalarNumber(scalar, out var number) ||
+                !double.IsFinite(number) ||
+                number < int.MinValue ||
+                number > int.MaxValue)
+            {
+                return false;
+            }
+
+            value = (int)number;
+            return true;
+        }
+
+        private static bool TryGetFormulaOptionalBool(
+            ScalarValue source,
+            bool defaultValue,
+            out bool value,
+            out ScalarValue error)
+        {
+            value = defaultValue;
+            error = ErrorValue.Value;
+            if (source is BlankValue)
+                return true;
+
+            if (!TryGetFormulaScalarControlArgument(source, out var scalar, out var controlError))
+            {
+                error = controlError;
+                return false;
+            }
+
+            if (TryGetFormulaControlBool(scalar, out value))
+                return true;
+
+            return false;
+        }
+
+        private static bool TryGetFormulaSingleValueOrErrorAsValue(
+            ScalarValue source,
+            out ScalarValue value,
+            out ScalarValue error)
+        {
+            error = ErrorValue.Value;
+            if (source is RangeValue range)
+            {
+                if (range.RowCount != 1 || range.ColCount != 1)
+                {
+                    value = ErrorValue.Value;
+                    return false;
+                }
+
+                value = range.Cells[0, 0];
+                return true;
+            }
+
+            value = source;
             return true;
         }
 
@@ -7466,6 +8145,613 @@ public static partial class AccessibilityCheckerService
 
             return builder.ToString();
         }
+
+        private static ScalarValue FormulaTextBeforeAfterScalar(
+            ScalarValue value,
+            FormulaTextExtractOptions options,
+            bool before)
+        {
+            if (value is ErrorValue error)
+                return error;
+
+            if (!TryGetFormulaCoercedText(value, out var text))
+                return ErrorValue.Value;
+
+            if (text.Length == 0)
+                return FormulaTextScalarResult(string.Empty);
+
+            var textLength = FormulaTextScalarContainsSurrogatePair(text)
+                ? FormulaTextScalarCountTextElements(text)
+                : text.Length;
+            if (Math.Abs((long)options.InstanceNum) > textLength)
+                return ErrorValue.Value;
+
+            if (options.Delimiters.Any(static delimiter => delimiter.Length == 0))
+            {
+                return before
+                    ? FormulaTextScalarResult(options.InstanceNum > 0 ? string.Empty : text)
+                    : FormulaTextScalarResult(options.InstanceNum > 0 ? text : string.Empty);
+            }
+
+            var match = FormulaFindTextDelimiterOccurrence(text, options);
+            if (match is null)
+                return options.IfNotFound;
+
+            return before
+                ? FormulaTextScalarResult(text[..match.Value.Index])
+                : FormulaTextScalarResult(text[(match.Value.Index + match.Value.Length)..]);
+        }
+
+        private static FormulaTextDelimiterMatch? FormulaFindTextDelimiterOccurrence(
+            string text,
+            FormulaTextExtractOptions options)
+        {
+            var matches = FormulaFindAllTextDelimiterMatches(text, options.Delimiters, options.Comparison);
+            if (options.MatchEnd)
+                matches.Add(new FormulaTextDelimiterMatch(text.Length, 0));
+
+            if (options.InstanceNum > 0)
+                return matches.Count >= options.InstanceNum ? matches[options.InstanceNum - 1] : null;
+
+            var fromEnd = -options.InstanceNum;
+            return matches.Count >= fromEnd ? matches[^fromEnd] : null;
+        }
+
+        private static List<FormulaTextDelimiterMatch> FormulaFindAllTextDelimiterMatches(
+            string text,
+            IReadOnlyList<string> delimiters,
+            StringComparison comparison)
+        {
+            var matches = new List<FormulaTextDelimiterMatch>();
+            var position = 0;
+            while (position <= text.Length)
+            {
+                var match = FormulaFindNextTextDelimiter(text, delimiters, comparison, position);
+                if (match is null)
+                    break;
+
+                matches.Add(match.Value);
+                position = match.Value.Index + Math.Max(1, match.Value.Length);
+            }
+
+            return matches;
+        }
+
+        private static List<string> FormulaSplitByAnyDelimiter(
+            string text,
+            IReadOnlyList<string> delimiters,
+            StringComparison comparison,
+            bool ignoreEmpty)
+        {
+            var result = new List<string>();
+            var position = 0;
+            while (position <= text.Length)
+            {
+                var match = FormulaFindNextTextDelimiter(text, delimiters, comparison, position);
+                var end = match?.Index ?? text.Length;
+                var token = text[position..end];
+                if (!ignoreEmpty || token.Length > 0)
+                    result.Add(token);
+
+                if (match is null)
+                    break;
+
+                position = match.Value.Index + match.Value.Length;
+            }
+
+            return result;
+        }
+
+        private static FormulaTextDelimiterMatch? FormulaFindNextTextDelimiter(
+            string text,
+            IReadOnlyList<string> delimiters,
+            StringComparison comparison,
+            int start)
+        {
+            FormulaTextDelimiterMatch? best = null;
+            for (var i = 0; i < delimiters.Count; i++)
+            {
+                var delimiter = delimiters[i];
+                var index = text.IndexOf(delimiter, start, comparison);
+                if (index < 0)
+                    continue;
+
+                if (best is null ||
+                    index < best.Value.Index ||
+                    index == best.Value.Index && delimiter.Length > best.Value.Length)
+                {
+                    best = new FormulaTextDelimiterMatch(index, delimiter.Length);
+                }
+            }
+
+            return best;
+        }
+
+        private bool TryGetFormulaValueTextFormat(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out int format,
+            out ScalarValue error)
+        {
+            format = 0;
+            error = ErrorValue.Value;
+            if (function.Arguments.Count < 2)
+                return true;
+
+            if (!TryResolveFormulaTextScalarArgument(function.Arguments[1], rowOffset, colOffset, out var source))
+                return false;
+
+            if (source is BlankValue)
+                return true;
+
+            if (!TryGetFormulaScalarControlArgument(source, out var scalar, out var controlError))
+            {
+                error = controlError;
+                return false;
+            }
+
+            if (!TryGetFormulaTextScalarNumber(scalar, out var raw) ||
+                !double.IsFinite(raw))
+            {
+                return false;
+            }
+
+            format = (int)raw;
+            return format is 0 or 1;
+        }
+
+        private static string FormulaConciseArrayText(RangeValue range)
+        {
+            var parts = new List<string>(range.RowCount * range.ColCount);
+            for (var row = 0; row < range.RowCount; row++)
+                for (var col = 0; col < range.ColCount; col++)
+                    parts.Add(FormulaValueText(range.Cells[row, col], strict: false));
+
+            return string.Join(", ", parts);
+        }
+
+        private static string FormulaStrictArrayText(RangeValue range)
+        {
+            var builder = new System.Text.StringBuilder();
+            builder.Append('{');
+            for (var row = 0; row < range.RowCount; row++)
+            {
+                if (row > 0)
+                    builder.Append(';');
+
+                for (var col = 0; col < range.ColCount; col++)
+                {
+                    if (col > 0)
+                        builder.Append(',');
+
+                    builder.Append(FormulaValueText(range.Cells[row, col], strict: true));
+                }
+            }
+
+            builder.Append('}');
+            return builder.ToString();
+        }
+
+        private static string FormulaValueText(ScalarValue value, bool strict)
+        {
+            if (!strict)
+                return FormulaValueConciseText(value);
+
+            return value switch
+            {
+                TextValue text => FormulaQuoteValueText(text.Value),
+                BlankValue => FormulaQuoteValueText(string.Empty),
+                NumberValue number => number.Value.ToString(CultureInfo.InvariantCulture),
+                DateTimeValue dateTime => dateTime.Value.ToString(CultureInfo.InvariantCulture),
+                BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+                ErrorValue error => error.Code,
+                _ => FormulaQuoteValueText(FormulaValueConciseText(value))
+            };
+        }
+
+        private static string FormulaValueConciseText(ScalarValue value) =>
+            value switch
+            {
+                ErrorValue error => error.Code,
+                _ when TryGetFormulaCoercedText(value, out var text) => text,
+                _ => value.ToString() ?? string.Empty
+            };
+
+        private static string FormulaQuoteValueText(string text) =>
+            "\"" + text.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"";
+
+        private bool TryCreateFormulaRegex(
+            ConditionalFormulaScalarFunction function,
+            int patternIndex,
+            int caseSensitivityIndex,
+            int rowOffset,
+            int colOffset,
+            out Regex regex,
+            out ScalarValue error)
+        {
+            regex = new Regex("$.", RegexOptions.CultureInvariant, FormulaTextSearchRegexTimeout);
+            error = ErrorValue.Value;
+            if (!TryResolveFormulaTextScalarArgument(function.Arguments[patternIndex], rowOffset, colOffset, out var patternSource) ||
+                !TryGetFormulaSingleValueOrErrorAsValue(patternSource, out var pattern, out error))
+            {
+                return false;
+            }
+
+            if (pattern is ErrorValue patternError)
+            {
+                error = patternError;
+                return false;
+            }
+
+            if (!TryResolveFormulaOptionalTextScalarArgument(function, caseSensitivityIndex, rowOffset, colOffset, out var caseSensitivitySource) ||
+                !TryGetFormulaRegexCaseSensitivity(caseSensitivitySource, out var options, out error))
+            {
+                return false;
+            }
+
+            if (!TryGetFormulaCoercedText(pattern, out var patternText))
+                return false;
+
+            try
+            {
+                regex = new Regex(patternText, options, FormulaTextSearchRegexTimeout);
+                return true;
+            }
+            catch (ArgumentException)
+            {
+                error = ErrorValue.Value;
+                return false;
+            }
+        }
+
+        private static bool TryGetFormulaRegexCaseSensitivity(
+            ScalarValue source,
+            out RegexOptions options,
+            out ScalarValue error)
+        {
+            options = RegexOptions.CultureInvariant;
+            error = ErrorValue.Value;
+            if (source is BlankValue)
+                return true;
+
+            if (!TryGetFormulaScalarControlArgument(source, out var scalar, out var controlError))
+            {
+                error = controlError;
+                return false;
+            }
+
+            if (!TryGetFormulaTextScalarNumber(scalar, out var raw) ||
+                !double.IsFinite(raw))
+            {
+                return false;
+            }
+
+            var mode = (int)raw;
+            if (mode == 0)
+                return true;
+
+            if (mode == 1)
+            {
+                options |= RegexOptions.IgnoreCase;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static ScalarValue FormulaRegexTestScalar(ScalarValue value, Regex regex)
+        {
+            if (value is ErrorValue error)
+                return error;
+
+            if (!TryGetFormulaCoercedText(value, out var text))
+                return ErrorValue.Value;
+
+            try
+            {
+                return new BoolValue(regex.IsMatch(text));
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                return ErrorValue.Value;
+            }
+        }
+
+        private static ScalarValue FormulaRegexExtractScalar(ScalarValue value, Regex regex, int returnMode)
+        {
+            if (value is ErrorValue error)
+                return error;
+
+            if (!TryGetFormulaCoercedText(value, out var text))
+                return ErrorValue.Value;
+
+            MatchCollection matches;
+            try
+            {
+                matches = regex.Matches(text);
+                _ = matches.Count;
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                return ErrorValue.Value;
+            }
+
+            if (matches.Count == 0)
+                return ErrorValue.NA;
+
+            if (returnMode == 1)
+            {
+                var cells = new ScalarValue[matches.Count, 1];
+                for (var i = 0; i < matches.Count; i++)
+                    cells[i, 0] = FormulaTextScalarResult(matches[i].Value);
+
+                return new RangeValue(cells);
+            }
+
+            if (returnMode == 2)
+            {
+                var first = matches[0];
+                if (first.Groups.Count <= 1)
+                    return ErrorValue.NA;
+
+                var cells = new ScalarValue[1, first.Groups.Count - 1];
+                for (var i = 1; i < first.Groups.Count; i++)
+                    cells[0, i - 1] = first.Groups[i].Success
+                        ? FormulaTextScalarResult(first.Groups[i].Value)
+                        : new TextValue(string.Empty);
+
+                return new RangeValue(cells);
+            }
+
+            return FormulaTextScalarResult(matches[0].Value);
+        }
+
+        private static ScalarValue FormulaRegexReplaceScalar(
+            ScalarValue value,
+            Regex regex,
+            string replacement,
+            int occurrence)
+        {
+            if (value is ErrorValue error)
+                return error;
+
+            if (!TryGetFormulaCoercedText(value, out var text))
+                return ErrorValue.Value;
+
+            try
+            {
+                if (occurrence == 0)
+                    return FormulaTextScalarResult(regex.Replace(text, replacement));
+
+                var matches = regex.Matches(text);
+                var matchIndex = occurrence > 0 ? occurrence - 1 : matches.Count + occurrence;
+                if (matchIndex < 0 || matchIndex >= matches.Count)
+                    return FormulaTextScalarResult(text);
+
+                var match = matches[matchIndex];
+                return FormulaTextScalarResult(
+                    text[..match.Index] +
+                    match.Result(replacement) +
+                    text[(match.Index + match.Length)..]);
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                return ErrorValue.Value;
+            }
+            catch (ArgumentException)
+            {
+                return ErrorValue.Value;
+            }
+        }
+
+        private static ScalarValue FormulaEncodeUrlScalar(ScalarValue value)
+        {
+            if (value is ErrorValue error)
+                return error;
+
+            if (!TryGetFormulaCoercedText(value, out var text))
+                return ErrorValue.Value;
+
+            try
+            {
+                return FormulaTextScalarResult(Uri.EscapeDataString(text));
+            }
+            catch (UriFormatException)
+            {
+                return ErrorValue.Value;
+            }
+        }
+
+        private static ScalarValue FormulaFilterXmlScalar(ScalarValue xmlValue, ScalarValue xpathValue)
+        {
+            if (xmlValue is ErrorValue xmlError)
+                return xmlError;
+
+            if (xpathValue is ErrorValue xpathError)
+                return xpathError;
+
+            if (!TryGetFormulaCoercedText(xmlValue, out var xmlText) ||
+                !TryGetFormulaCoercedText(xpathValue, out var xpath))
+            {
+                return ErrorValue.Value;
+            }
+
+            try
+            {
+                var settings = new XmlReaderSettings
+                {
+                    DtdProcessing = DtdProcessing.Prohibit,
+                    XmlResolver = null
+                };
+
+                using var stringReader = new StringReader(xmlText);
+                using var xmlReader = XmlReader.Create(stringReader, settings);
+                var document = new XPathDocument(xmlReader);
+                var navigator = document.CreateNavigator();
+                var result = navigator.Evaluate(xpath);
+
+                return result switch
+                {
+                    XPathNodeIterator nodes => FormulaFilterXmlNodeResult(nodes),
+                    string text when text.Length > 0 => FormulaTextScalarResult(text),
+                    double number when double.IsFinite(number) => FormulaTextScalarResult(number.ToString(CultureInfo.InvariantCulture)),
+                    bool boolean => FormulaTextScalarResult(boolean ? "TRUE" : "FALSE"),
+                    _ => ErrorValue.Value
+                };
+            }
+            catch (XmlException)
+            {
+                return ErrorValue.Value;
+            }
+            catch (XPathException)
+            {
+                return ErrorValue.Value;
+            }
+            catch (ArgumentException)
+            {
+                return ErrorValue.Value;
+            }
+        }
+
+        private static ScalarValue FormulaFilterXmlNodeResult(XPathNodeIterator nodes)
+        {
+            var values = new List<ScalarValue>();
+            while (nodes.MoveNext())
+                values.Add(FormulaTextScalarResult(nodes.Current?.Value ?? string.Empty));
+
+            if (values.Count == 0)
+                return ErrorValue.Value;
+
+            if (values.Count == 1)
+                return values[0];
+
+            var cells = new ScalarValue[values.Count, 1];
+            for (var i = 0; i < values.Count; i++)
+                cells[i, 0] = values[i];
+
+            return new RangeValue(cells);
+        }
+
+        private static ScalarValue FormulaBahtTextScalar(ScalarValue input)
+        {
+            if (input is ErrorValue error)
+                return error;
+
+            if (!TryGetFormulaTextScalarNumber(input, out var value) ||
+                !double.IsFinite(value))
+            {
+                return ErrorValue.Value;
+            }
+
+            var rounded = Math.Round(Math.Abs(value) + 1e-12, 2, MidpointRounding.AwayFromZero);
+            if (rounded > long.MaxValue)
+                return ErrorValue.Num;
+
+            var baht = (long)Math.Floor(rounded);
+            var satang = (int)Math.Round((rounded - baht) * 100, MidpointRounding.AwayFromZero);
+            if (satang == 100)
+            {
+                baht++;
+                satang = 0;
+            }
+
+            var builder = new System.Text.StringBuilder();
+            if (value < 0)
+                builder.Append("\u0e25\u0e1a");
+
+            if (baht > 0 || satang == 0)
+            {
+                builder.Append(FormulaThaiNumberToText(baht));
+                builder.Append("\u0e1a\u0e32\u0e17");
+            }
+
+            builder.Append(satang == 0
+                ? "\u0e16\u0e49\u0e27\u0e19"
+                : FormulaThaiNumberToText(satang) + "\u0e2a\u0e15\u0e32\u0e07\u0e04\u0e4c");
+            return FormulaTextScalarResult(builder.ToString());
+        }
+
+        private static string FormulaThaiNumberToText(long value)
+        {
+            if (value == 0)
+                return "\u0e28\u0e39\u0e19\u0e22\u0e4c";
+
+            if (value >= 1_000_000)
+            {
+                var high = value / 1_000_000;
+                var low = value % 1_000_000;
+                return FormulaThaiNumberToText(high) + "\u0e25\u0e49\u0e32\u0e19" +
+                    (low == 0 ? string.Empty : FormulaThaiNumberUnderMillionToText((int)low));
+            }
+
+            return FormulaThaiNumberUnderMillionToText((int)value);
+        }
+
+        private static string FormulaThaiNumberUnderMillionToText(int value)
+        {
+            string[] digits =
+            [
+                string.Empty,
+                "\u0e2b\u0e19\u0e36\u0e48\u0e07",
+                "\u0e2a\u0e2d\u0e07",
+                "\u0e2a\u0e32\u0e21",
+                "\u0e2a\u0e35\u0e48",
+                "\u0e2b\u0e49\u0e32",
+                "\u0e2b\u0e01",
+                "\u0e40\u0e08\u0e47\u0e14",
+                "\u0e41\u0e1b\u0e14",
+                "\u0e40\u0e01\u0e49\u0e32"
+            ];
+            string[] positions =
+            [
+                string.Empty,
+                "\u0e2a\u0e34\u0e1a",
+                "\u0e23\u0e49\u0e2d\u0e22",
+                "\u0e1e\u0e31\u0e19",
+                "\u0e2b\u0e21\u0e37\u0e48\u0e19",
+                "\u0e41\u0e2a\u0e19"
+            ];
+            var chars = value.ToString(CultureInfo.InvariantCulture).Reverse().ToArray();
+            var builder = new System.Text.StringBuilder();
+
+            for (var position = chars.Length - 1; position >= 0; position--)
+            {
+                var digit = chars[position] - '0';
+                if (digit == 0)
+                    continue;
+
+                if (position == 1)
+                {
+                    builder.Append(digit switch
+                    {
+                        1 => "\u0e2a\u0e34\u0e1a",
+                        2 => "\u0e22\u0e35\u0e48\u0e2a\u0e34\u0e1a",
+                        _ => digits[digit] + "\u0e2a\u0e34\u0e1a"
+                    });
+                }
+                else if (position == 0 && digit == 1 && value > 10)
+                {
+                    builder.Append("\u0e40\u0e2d\u0e47\u0e14");
+                }
+                else
+                {
+                    builder.Append(digits[digit]);
+                    builder.Append(positions[position]);
+                }
+            }
+
+            return builder.ToString();
+        }
+
+        private readonly record struct FormulaTextExtractOptions(
+            IReadOnlyList<string> Delimiters,
+            int InstanceNum,
+            StringComparison Comparison,
+            bool MatchEnd,
+            ScalarValue IfNotFound);
+
+        private readonly record struct FormulaTextDelimiterMatch(int Index, int Length);
 
         private static bool TryGetFormulaScalarControlArgument(
             ScalarValue value,
