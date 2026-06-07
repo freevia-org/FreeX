@@ -93,9 +93,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         {
             using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
             var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml")!;
-            XDocument worksheetXml;
-            using (var worksheetStream = worksheetEntry.Open())
-                worksheetXml = XDocument.Load(worksheetStream);
+            var worksheetXml = LoadZipEntryXml(worksheetEntry);
             XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
             worksheetXml.Root!.Element(ns + "ignoredErrors")?.Remove();
 
