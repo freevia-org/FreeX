@@ -15,17 +15,17 @@ public sealed class CellBorderPresetPlannerTests
     [InlineData(CellBorderPreset.Right)]
     [InlineData(CellBorderPreset.Bottom)]
     [InlineData(CellBorderPreset.Left)]
-    public void Plan_CreatesBordersWithCallerProvidedColor(CellBorderPreset preset)
+    public void Plan_CreatesBordersWithCallerProvidedStyleAndColor(CellBorderPreset preset)
     {
         var range = Range(2, 3, 4, 5);
         var address = new CellAddress(range.Start.Sheet, 2, 3);
 
-        var diff = CellBorderPresetPlanner.Plan(preset, range, address, color: Accent);
+        var diff = CellBorderPresetPlanner.Plan(preset, range, address, BorderStyle.Double, Accent);
 
         GetBorders(diff)
             .Where(border => border is not null)
             .Should()
-            .OnlyContain(border => border!.Value.Color == Accent);
+            .OnlyContain(border => border!.Value == new CellBorder(BorderStyle.Double, Accent));
     }
 
     [Fact]

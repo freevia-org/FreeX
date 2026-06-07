@@ -137,7 +137,9 @@ public sealed class MainWindow : Window
     }
     private sealed record FormatCellsDialogResult(
         FormatCellsCompactRequest Request,
-        CellBorderPreset? BorderPreset);
+        CellBorderPreset? BorderPreset,
+        BorderStyle BorderStyle,
+        CellColor? BorderColor);
     private sealed record FormatCellsNumberFormatChoice(string Category, string FormatCode, string Preview)
     {
         public override string ToString() => FormatCode;
@@ -4706,7 +4708,11 @@ public sealed class MainWindow : Window
 
         ClearSelectedDrawingObject();
         var rangeReference = FormatRangeReference(_session.SelectedRange);
-        var result = _session.ApplySelectedRangeCompactFormat(diff, selection.BorderPreset);
+        var result = _session.ApplySelectedRangeCompactFormat(
+            diff,
+            selection.BorderPreset,
+            selection.BorderStyle,
+            selection.BorderColor);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? "Format Cells failed.");
@@ -4886,6 +4892,18 @@ public sealed class MainWindow : Window
         };
         AutomationProperties.SetName(borderPresetBox, "Border preset");
         AutomationProperties.SetAutomationId(borderPresetBox, "FormatCellsBorderPresetBox");
+        var borderStyleBox = CreateFormatCellsComboBox(
+            "FormatCellsBorderStyleBox",
+            CreateFormatCellsBorderStyleChoices(),
+            BorderStyle.Thin);
+        var borderColorBox = new ComboBox
+        {
+            ItemsSource = CreateFormatCellsColorChoices(includeClear: false),
+            SelectedIndex = 0,
+            MinWidth = 180,
+        };
+        AutomationProperties.SetName(borderColorBox, "Border color");
+        AutomationProperties.SetAutomationId(borderColorBox, "FormatCellsBorderColorBox");
 
         var lockedBox = CreateFormatCellsCheckBox("Locked", "FormatCellsLockedBox", currentLocked);
         var hiddenBox = CreateFormatCellsCheckBox("Hidden", "FormatCellsHiddenBox", currentHidden);
@@ -4936,6 +4954,10 @@ public sealed class MainWindow : Window
                     : null;
             var fillChoice = fillColorBox.SelectedItem as FormatCellsColorChoice;
             var borderChoice = borderPresetBox.SelectedItem as FormatCellsNullableChoice<CellBorderPreset>;
+            var borderStyle = borderStyleBox.SelectedItem is FormatCellsNullableChoice<BorderStyle> { Value: { } selectedBorderStyle }
+                ? selectedBorderStyle
+                : BorderStyle.Thin;
+            var borderColor = (borderColorBox.SelectedItem as FormatCellsColorChoice)?.Color;
             var request = new FormatCellsCompactRequest(
                 NumberFormat: numberFormat,
                 HorizontalAlignment: ReadChangedFormatCellsValue(currentHorizontalAlignment, horizontalAlignmentBox),
@@ -4958,7 +4980,7 @@ public sealed class MainWindow : Window
                 TextRotation: textRotation,
                 Locked: ReadChangedFormatCellsBool(currentLocked, lockedBox),
                 Hidden: ReadChangedFormatCellsBool(currentHidden, hiddenBox));
-            result = new FormatCellsDialogResult(request, borderChoice?.Value);
+            result = new FormatCellsDialogResult(request, borderChoice?.Value, borderStyle, borderColor);
             dialog.Close();
         }
 
@@ -5071,6 +5093,8 @@ public sealed class MainWindow : Window
                 Children =
                 {
                     CreateFormatCellsField("Preset", borderPresetBox),
+                    CreateFormatCellsField("Line style", borderStyleBox),
+                    CreateFormatCellsField("Line color", borderColorBox),
                 },
             });
         var protectionTab = CreateFormatCellsTab(
@@ -5263,6 +5287,16 @@ public sealed class MainWindow : Window
         new("No border change", null),
         .. FormatCellsCompactPlanner.GetBorderPresetMetadata()
             .Select(metadata => new FormatCellsNullableChoice<CellBorderPreset>(metadata.DisplayName, metadata.Preset)),
+    ];
+
+    private static IReadOnlyList<FormatCellsNullableChoice<BorderStyle>> CreateFormatCellsBorderStyleChoices() =>
+    [
+        new("Thin", BorderStyle.Thin),
+        new("Medium", BorderStyle.Medium),
+        new("Thick", BorderStyle.Thick),
+        new("Dashed", BorderStyle.Dashed),
+        new("Dotted", BorderStyle.Dotted),
+        new("Double", BorderStyle.Double),
     ];
 
     private static bool? ReadChangedFormatCellsBool(bool currentValue, CheckBox checkBox)

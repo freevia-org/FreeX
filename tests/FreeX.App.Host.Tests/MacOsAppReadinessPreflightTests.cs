@@ -480,7 +480,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("public WorkbookCellEditResult FillSelectedRange(FillCellsDirection direction)");
         script.Should().Contain("new FillCellsCommand(sheetId, sheetRange, direction)");
         script.Should().Contain("CreateBorderPresetCommand(range, preset)");
-        script.Should().Contain("CellBorderPresetPlanner.Plan(preset, range, range.Start)");
+        script.Should().Contain("CellBorderPresetPlanner.Plan(preset, range, range.Start, borderStyle, borderColor)");
         script.Should().Contain("CellBorderPresetPlanner.RequiresPerCellPlanning(preset)");
         script.Should().Contain("BorderShortcutService.HasBorderChanges(diff)");
         script.Should().Contain("GroupedApplyStyleCommand(targetSheetIds, sourceRange, diff)");
@@ -1569,7 +1569,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     await ShowFormatCellsDialogAsync();
                     private async Task ShowFormatCellsDialogAsync()
                     FormatCellsCompactPlanner.TryPlan(selection.Request, out var diff, out var errorMessage);
-                    _session.ApplySelectedRangeCompactFormat(diff, selection.BorderPreset);
+                    _session.ApplySelectedRangeCompactFormat(
+                        diff,
+                        selection.BorderPreset,
+                        selection.BorderStyle,
+                        selection.BorderColor);
                     "FormatCellsCompactDialog"
                     "FormatCellsNumberFormatBox"
                     "FormatCellsHorizontalAlignmentBox"
@@ -1579,6 +1583,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     "FormatCellsFontColorBox"
                     "FormatCellsFillColorBox"
                     "FormatCellsBorderPresetBox"
+                    "FormatCellsBorderStyleBox"
+                    "FormatCellsBorderColorBox"
                     HasFillCellsButton: _fillCellsButton.Content?.ToString() == "Fill Cells";
                     HasFillDownMenuItem: HasToolbarMenuItem(_fillDownFlyoutItem, "Down");
                     HasFillRightMenuItem: HasToolbarMenuItem(_fillRightFlyoutItem, "Right");
@@ -2269,7 +2275,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 FillCellsDirection.Left => "Fill Left"
                 public WorkbookCellEditResult SetSelectedRangeBorderPreset(CellBorderPreset preset)
                 CreateBorderPresetCommand(range, preset)
-                CellBorderPresetPlanner.Plan(preset, range, range.Start)
+                CellBorderPresetPlanner.Plan(preset, range, range.Start, borderStyle, borderColor)
                 CellBorderPresetPlanner.RequiresPerCellPlanning(preset)
                 BorderShortcutService.HasBorderChanges(diff)
                 GroupedApplyStyleCommand(targetSheetIds, sourceRange, diff)

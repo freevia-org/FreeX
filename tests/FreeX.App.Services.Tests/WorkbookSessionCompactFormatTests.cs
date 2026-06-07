@@ -106,6 +106,62 @@ public sealed class WorkbookSessionCompactFormatTests
     }
 
     [Fact]
+    public void ApplySelectedRangeCompactFormat_UsesRequestedBorderStyleAndColorForRangeRelativePreset()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var borderColor = new CellColor(33, 115, 70);
+        var expectedBorder = new CellBorder(BorderStyle.Double, borderColor);
+        var session = CreateSession(workbook);
+        session.SelectRange(new GridRange(a1, b2));
+
+        var result = session.ApplySelectedRangeCompactFormat(
+            new StyleDiff(),
+            CellBorderPreset.Outside,
+            BorderStyle.Double,
+            borderColor);
+
+        result.Success.Should().BeTrue();
+        GetStyle(workbook, sheet, a1).BorderTop.Should().Be(expectedBorder);
+        GetStyle(workbook, sheet, a1).BorderLeft.Should().Be(expectedBorder);
+        GetStyle(workbook, sheet, b2).BorderRight.Should().Be(expectedBorder);
+        GetStyle(workbook, sheet, b2).BorderBottom.Should().Be(expectedBorder);
+    }
+
+    [Fact]
+    public void ApplySelectedRangeCompactFormat_UsesRequestedBorderStyleAndColorForInsidePreset()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var borderColor = new CellColor(112, 48, 160);
+        var expectedBorder = new CellBorder(BorderStyle.Dashed, borderColor);
+        var session = CreateSession(workbook);
+        session.SelectRange(new GridRange(a1, b2));
+
+        var result = session.ApplySelectedRangeCompactFormat(
+            new StyleDiff(),
+            CellBorderPreset.Inside,
+            BorderStyle.Dashed,
+            borderColor);
+
+        result.Success.Should().BeTrue();
+        var a1Style = GetStyle(workbook, sheet, a1);
+        a1Style.BorderTop.Should().Be(new CellBorder(BorderStyle.None));
+        a1Style.BorderLeft.Should().Be(new CellBorder(BorderStyle.None));
+        a1Style.BorderRight.Should().Be(expectedBorder);
+        a1Style.BorderBottom.Should().Be(expectedBorder);
+        var b2Style = GetStyle(workbook, sheet, b2);
+        b2Style.BorderTop.Should().Be(expectedBorder);
+        b2Style.BorderLeft.Should().Be(expectedBorder);
+        b2Style.BorderRight.Should().Be(new CellBorder(BorderStyle.None));
+        b2Style.BorderBottom.Should().Be(new CellBorder(BorderStyle.None));
+    }
+
+    [Fact]
     public void ApplySelectedRangeCompactFormat_EmptyRequestSucceedsWithoutDirtyingWorkbook()
     {
         var workbook = CreateWorkbook();

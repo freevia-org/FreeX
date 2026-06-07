@@ -1529,7 +1529,11 @@ public sealed class WorkbookSession
         return ApplySelectedRangeStyle(diff);
     }
 
-    public WorkbookCellEditResult ApplySelectedRangeCompactFormat(StyleDiff diff, CellBorderPreset? borderPreset)
+    public WorkbookCellEditResult ApplySelectedRangeCompactFormat(
+        StyleDiff diff,
+        CellBorderPreset? borderPreset,
+        BorderStyle borderStyle = BorderStyle.Thin,
+        CellColor? borderColor = null)
     {
         ArgumentNullException.ThrowIfNull(diff);
 
@@ -1540,8 +1544,8 @@ public sealed class WorkbookSession
         if (HasStyleDiffChanges(remainingDiff))
             commands.Add(CreateApplyStyleCommand(range, remainingDiff));
 
-        if (borderPreset is { } preset && HasBorderPresetChanges(range, preset))
-            commands.Add(CreateBorderPresetCommand(range, preset));
+        if (borderPreset is { } preset && HasBorderPresetChanges(range, preset, borderStyle, borderColor))
+            commands.Add(CreateBorderPresetCommand(range, preset, borderStyle, borderColor));
 
         if (diff.FontSize is { } fontSize)
             commands.Add(CreateSetFontSizeCommand(range, fontSize, GetFittingRowHeight(fontSize)));
@@ -1950,16 +1954,20 @@ public sealed class WorkbookSession
             : new ApplyStyleCommand(ActiveSheet.Id, range, diff);
     }
 
-    private IWorkbookCommand CreateBorderPresetCommand(GridRange range, CellBorderPreset preset)
+    private IWorkbookCommand CreateBorderPresetCommand(
+        GridRange range,
+        CellBorderPreset preset,
+        BorderStyle borderStyle = BorderStyle.Thin,
+        CellColor? borderColor = null)
     {
         if (!CellBorderPresetPlanner.RequiresPerCellPlanning(preset))
-            return CreateApplyStyleCommand(range, CellBorderPresetPlanner.Plan(preset, range, range.Start));
+            return CreateApplyStyleCommand(range, CellBorderPresetPlanner.Plan(preset, range, range.Start, borderStyle, borderColor));
 
         var targetSheetIds = CurrentGroupedEditSheetIds();
         var commands = new List<IWorkbookCommand>();
         foreach (var address in range.AllCells())
         {
-            var diff = CellBorderPresetPlanner.Plan(preset, range, address);
+            var diff = CellBorderPresetPlanner.Plan(preset, range, address, borderStyle, borderColor);
             if (!BorderShortcutService.HasBorderChanges(diff))
                 continue;
 
@@ -2192,14 +2200,18 @@ public sealed class WorkbookSession
     private static double GetFittingRowHeight(double fontSize) =>
         Math.Min(MaximumRowHeight, FontSizePlanner.EstimateFittingRowHeight(fontSize));
 
-    private static bool HasBorderPresetChanges(GridRange range, CellBorderPreset preset)
+    private static bool HasBorderPresetChanges(
+        GridRange range,
+        CellBorderPreset preset,
+        BorderStyle borderStyle = BorderStyle.Thin,
+        CellColor? borderColor = null)
     {
         if (!CellBorderPresetPlanner.RequiresPerCellPlanning(preset))
             return true;
 
         return range
             .AllCells()
-            .Any(address => BorderShortcutService.HasBorderChanges(CellBorderPresetPlanner.Plan(preset, range, address)));
+            .Any(address => BorderShortcutService.HasBorderChanges(CellBorderPresetPlanner.Plan(preset, range, address, borderStyle, borderColor)));
     }
 
     private static string GetFillCellsTitle(FillCellsDirection direction) =>

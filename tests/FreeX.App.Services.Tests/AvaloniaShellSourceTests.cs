@@ -2042,6 +2042,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"FormatCellsFontColorBox\"");
         source.Should().Contain("\"FormatCellsFillColorBox\"");
         source.Should().Contain("\"FormatCellsBorderPresetBox\"");
+        source.Should().Contain("\"FormatCellsBorderStyleBox\"");
+        source.Should().Contain("\"FormatCellsBorderColorBox\"");
         source.Should().Contain("\"FormatCellsDoubleUnderlineBox\"");
         source.Should().Contain("\"FormatCellsShrinkToFitBox\"");
         source.Should().Contain("\"FormatCellsIndentLevelBox\"");
@@ -2053,8 +2055,14 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"FormatCellsHiddenBox\"");
         source.Should().Contain("var currentUnderline = currentStyle.Underline ?? CellStyle.Default.Underline;");
         source.Should().Contain("Underline: ReadChangedFormatCellsBool(currentUnderline, underlineBox)");
+        source.Should().Contain("selection.BorderStyle");
+        source.Should().Contain("selection.BorderColor");
 
         sessionSource.Should().Contain("public WorkbookCellEditResult ApplySelectedRangeCompactFormat(");
+        sessionSource.Should().Contain("BorderStyle borderStyle = BorderStyle.Thin");
+        sessionSource.Should().Contain("CellColor? borderColor = null");
+        sessionSource.Should().Contain("CreateBorderPresetCommand(range, preset, borderStyle, borderColor)");
+        sessionSource.Should().Contain("CellBorderPresetPlanner.Plan(preset, range, address, borderStyle, borderColor)");
         plannerSource.Should().Contain("bool? DoubleUnderline = null");
         plannerSource.Should().Contain("bool? ShrinkToFit = null");
         plannerSource.Should().Contain("int? IndentLevel = null");
