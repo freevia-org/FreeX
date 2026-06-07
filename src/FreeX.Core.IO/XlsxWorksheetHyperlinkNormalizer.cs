@@ -47,7 +47,7 @@ internal static class XlsxWorksheetHyperlinkNormalizer
     public static bool NormalizeElement(XElement hyperlinks)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(hyperlinks, EmptyAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(hyperlinks, EmptyAttributes);
         changed |= RemoveUnexpectedChildren(hyperlinks, WorksheetNs + "hyperlink");
 
         var seenRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -62,7 +62,7 @@ internal static class XlsxWorksheetHyperlinkNormalizer
             }
 
             changed |= RemoveUnknownHyperlinkAttributes(hyperlink);
-            changed |= SetAttributeIfChanged(hyperlink, "ref", normalizedRef);
+            changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(hyperlink, "ref", normalizedRef);
             changed |= NormalizeRelationshipId(hyperlink);
             changed |= NormalizeLocation(hyperlink);
             if (!HasTarget(hyperlink) || !seenRefs.Add(normalizedRef))
@@ -179,24 +179,6 @@ internal static class XlsxWorksheetHyperlinkNormalizer
         return changed;
     }
 
-    private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedNames)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                (attribute.Name.NamespaceName.Length == 0 && allowedNames.Contains(attribute.Name.LocalName)))
-            {
-                continue;
-            }
-
-            attribute.Remove();
-            changed = true;
-        }
-
-        return changed;
-    }
-
     private static bool RemoveUnknownHyperlinkAttributes(XElement element)
     {
         var changed = false;
@@ -214,16 +196,6 @@ internal static class XlsxWorksheetHyperlinkNormalizer
         }
 
         return changed;
-    }
-
-    private static bool SetAttributeIfChanged(XElement element, string attributeName, string value)
-    {
-        var attribute = element.Attribute(attributeName);
-        if (attribute is not null && string.Equals(attribute.Value, value, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(attributeName, value);
-        return true;
     }
 
     private static bool RemoveAllNodes(XElement element)
