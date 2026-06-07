@@ -238,12 +238,30 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("private enum ReplaceDialogAction");
         script.Should().Contain("private sealed record ReplaceDialogResult(");
         script.Should().Contain("ReplaceDialogAction Action,");
+        script.Should().Contain("StyleDiff? ReplacementFormat);");
         script.Should().Contain("private sealed record FindOptionsControls(");
         script.Should().Contain("`\"ReplaceButton`\"");
         script.Should().Contain("CreateFindOptionsControls(`\"Replace`\", defaultLookInIndex: 1)");
+        script.Should().Contain("CreateFindReplaceFormatButton(`\"FindChooseFormatFromCellButton`\", `\"Choose From Cell`\")");
+        script.Should().Contain("CreateFindReplaceFormatButton(`\"FindClearFormatButton`\", `\"Clear Format`\")");
+        script.Should().Contain("CreateFindReplaceFormatButton(`\"ReplaceFindChooseFormatFromCellButton`\", `\"Choose From Cell`\")");
+        script.Should().Contain("CreateFindReplaceFormatButton(`\"ReplaceFindClearFormatButton`\", `\"Clear Format`\")");
+        script.Should().Contain("CreateFindReplaceFormatButton(`\"ReplaceWithChooseFormatFromCellButton`\", `\"Choose From Cell`\")");
+        script.Should().Contain("CreateFindReplaceFormatButton(`\"ReplaceWithClearFormatButton`\", `\"Clear Format`\")");
+        script.Should().Contain("CreateFindReplaceFormatRow(`\"Find format`\",");
+        script.Should().Contain("CreateFindReplaceFormatRow(`\"Replace format`\",");
+        script.Should().Contain("CreateFindOptions(optionsControls, findFormat)");
+        script.Should().Contain("RequiredFormat: requiredFormat);");
+        script.Should().Contain("replacement.ReplacementFormat");
         script.Should().Contain("_session.ReplaceNextValue(");
         script.Should().Contain("replacement.Options,");
         script.Should().Contain("public WorkbookReplaceResult ReplaceNextValue(");
+        script.Should().Contain("public StyleDiff? CreateFormatDiffFromActiveCell()");
+        script.Should().Contain("public StyleDiff? CreateFormatDiffFromCell(CellAddress address)");
+        script.Should().Contain("StyleDiff? replacementFormat = null");
+        script.Should().Contain("replacementFormat is not null");
+        script.Should().Contain("new GridRange(edit.Address, edit.Address)");
+        script.Should().Contain("new GridRange(match.Address, match.Address)");
         script.Should().Contain("GetReplaceTargetIndex(matches, effectiveOptions.SearchOrder, sameSearch)");
         script.Should().Contain("FindLookIn.Formulas => cell.FormulaText");
         script.Should().Contain("new SetCommentCommand(");
@@ -1087,7 +1105,8 @@ public sealed class MacOsAppReadinessPreflightTests
                         ReplaceDialogAction Action,
                         FindOptions Options,
                         bool MatchCase,
-                        bool MatchEntireCell);
+                        bool MatchEntireCell,
+                        StyleDiff? ReplacementFormat);
                     private sealed record FindOptionsControls(
                         ComboBox WithinBox,
                         ComboBox SearchBox,
@@ -1142,6 +1161,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     "FindNextButton"
                     "FindAllButton"
                     CreateFindOptionsControls("Find", defaultLookInIndex: 0)
+                    StyleDiff? findFormat = null;
+                    CreateFindReplaceFormatButton("FindChooseFormatFromCellButton", "Choose From Cell")
+                    CreateFindReplaceFormatButton("FindClearFormatButton", "Clear Format")
+                    _session.CreateFormatDiffFromActiveCell()
+                    CreateFindReplaceFormatRow("Find format", chooseFormatButton, clearFormatButton)
                     {automationPrefix}WithinBox
                     {automationPrefix}SearchBox
                     {automationPrefix}LookInBox
@@ -1155,6 +1179,12 @@ public sealed class MacOsAppReadinessPreflightTests
                     "ReplaceButton"
                     "ReplaceAllButton"
                     CreateFindOptionsControls("Replace", defaultLookInIndex: 1)
+                    StyleDiff? replacementFormat = null;
+                    CreateFindReplaceFormatButton("ReplaceFindChooseFormatFromCellButton", "Choose From Cell")
+                    CreateFindReplaceFormatButton("ReplaceFindClearFormatButton", "Clear Format")
+                    CreateFindReplaceFormatButton("ReplaceWithChooseFormatFromCellButton", "Choose From Cell")
+                    CreateFindReplaceFormatButton("ReplaceWithClearFormatButton", "Clear Format")
+                    CreateFindReplaceFormatRow("Replace format", chooseReplaceFormatButton, clearReplaceFormatButton)
                     "GoToReferenceBox"
                     "GoToSpecialKindBox"
                     "GoToSpecialNumbersBox"
@@ -1162,8 +1192,13 @@ public sealed class MacOsAppReadinessPreflightTests
                     "GoToSpecialLogicalsBox"
                     "GoToSpecialErrorsBox"
                     "GoToSpecialOkButton"
-                    private FindOptions CreateFindOptions(FindOptionsControls controls)
+                    private FindOptions CreateFindOptions(FindOptionsControls controls, StyleDiff? requiredFormat = null)
+                    CreateFindOptions(optionsControls, findFormat)
+                    RequiredFormat: requiredFormat);
                     private static FindOptionsControls CreateFindOptionsControls(string automationPrefix, int defaultLookInIndex)
+                    private static Button CreateFindReplaceFormatButton(string automationId, string content)
+                    private static StackPanel CreateFindReplaceFormatRow(string label, Button chooseButton, Button clearButton)
+                    private static void UpdateFindReplaceFormatState(StyleDiff? format, Button chooseButton, Button clearButton)
                     FindLookIn.Formulas
                     FindLookIn.Notes
                     FindLookIn.Comments
@@ -1175,6 +1210,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     replacement.Options,
                     replacement.MatchCase,
                     replacement.MatchEntireCell
+                    replacement.ReplacementFormat
                     _session.ReplaceNextValue(
                     _session.ReplaceAllValues(
                     var result = _session.GoToReference(reference);
@@ -2132,16 +2168,27 @@ public sealed class MacOsAppReadinessPreflightTests
                 bool keepSourceColumnWidths = false
                 if (keepSourceColumnWidths)
                 public string LastFindText => _lastFindText ??
+                public StyleDiff? CreateFormatDiffFromActiveCell()
+                public StyleDiff? CreateFormatDiffFromCell(CellAddress address)
                 public IReadOnlyList<GridRange> SelectedRanges { get; private set; } = [];
                 public WorkbookFindAllResult FindAll(
                 return WorkbookFindAllResult.Found(results.Select(CreateFindAllMatch).ToList());
                 private WorkbookFindAllMatch CreateFindAllMatch(FindResult result)
                 private string FindNameForAddress(CellAddress address)
+                public WorkbookReplaceResult ReplaceAllValues(
                 public WorkbookReplaceResult ReplaceNextValue(
                 FindOptions? options,
+                StyleDiff? replacementFormat = null
+                replacementFormat is not null
+                new GridRange(edit.Address, edit.Address)
+                private static bool TryCreateReplacementCommand(
+                new CompositeWorkbookCommand(
+                new ApplyStyleCommand(
+                new GridRange(match.Address, match.Address)
                 var effectiveOptions = ResolveFindOptions(options, FindLookIn.Values);
                 GetReplaceTargetIndex(matches, effectiveOptions.SearchOrder, sameSearch)
-                new EditCellsCommand(pair.Key, pair.Value)
+                commands.Add(new EditCellsCommand(sheetId, edits));
+                var editCommand = new EditCellsCommand(sheet.Id, [(match.Address, newCell)]);
                 effectiveOptions.LookIn,
                 FindLookIn.Formulas => cell.FormulaText
                 FindLookIn.Values => cell.HasFormula ? null : GetReplaceableDisplayText(cell.Value)

@@ -202,6 +202,19 @@ public sealed class WorkbookSession
 
     public string LastFindText => _lastFindText ?? "";
 
+    public StyleDiff? CreateFormatDiffFromActiveCell() =>
+        CreateFormatDiffFromCell(ActiveCell);
+
+    public StyleDiff? CreateFormatDiffFromCell(CellAddress address)
+    {
+        var sheet = Workbook.GetSheet(address.Sheet);
+        var styleId = sheet?.GetCell(address)?.StyleId ??
+            sheet?.GetStyleOnly(address.Row, address.Col);
+        return styleId is { } resolvedStyleId
+            ? StyleDiff.FromStyle(Workbook.GetStyle(resolvedStyleId))
+            : null;
+    }
+
     public void SelectCell(CellAddress address)
     {
         ActiveCell = address;
@@ -384,7 +397,8 @@ public sealed class WorkbookSession
         string replaceText,
         FindOptions? options,
         bool matchCase = false,
-        bool matchEntireCell = false)
+        bool matchEntireCell = false,
+        StyleDiff? replacementFormat = null)
     {
         ArgumentNullException.ThrowIfNull(searchText);
         ArgumentNullException.ThrowIfNull(replaceText);
@@ -444,8 +458,17 @@ public sealed class WorkbookSession
         }
 
         var replacedCount = editsBySheet.Values.Sum(static edits => edits.Count) + commands.Count;
-        commands.AddRange(editsBySheet
-            .Select(pair => (IWorkbookCommand)new EditCellsCommand(pair.Key, pair.Value)));
+        foreach (var (sheetId, edits) in editsBySheet)
+        {
+            commands.Add(new EditCellsCommand(sheetId, edits));
+            if (replacementFormat is not null)
+            {
+                commands.AddRange(edits.Select(edit => (IWorkbookCommand)new ApplyStyleCommand(
+                    sheetId,
+                    new GridRange(edit.Address, edit.Address),
+                    replacementFormat)));
+            }
+        }
 
         if (commands.Count == 0)
             return WorkbookReplaceResult.Replaced(0, matchCount: matches.Count);
@@ -475,7 +498,8 @@ public sealed class WorkbookSession
         string replaceText,
         FindOptions? options,
         bool matchCase = false,
-        bool matchEntireCell = false)
+        bool matchEntireCell = false,
+        StyleDiff? replacementFormat = null)
     {
         ArgumentNullException.ThrowIfNull(searchText);
         ArgumentNullException.ThrowIfNull(replaceText);
@@ -519,6 +543,7 @@ public sealed class WorkbookSession
                 comparison,
                 matchEntireCell,
                 effectiveOptions.LookIn,
+                replacementFormat,
                 out var command))
         {
             ClearLastFindTargets();
@@ -2446,6 +2471,7 @@ public sealed class WorkbookSession
         StringComparison comparison,
         bool matchEntireCell,
         FindLookIn lookIn,
+        StyleDiff? replacementFormat,
         out IWorkbookCommand command)
     {
         command = null!;
@@ -2459,7 +2485,18 @@ public sealed class WorkbookSession
                 lookIn,
                 out var newCell))
         {
-            command = new EditCellsCommand(sheet.Id, [(match.Address, newCell)]);
+            var editCommand = new EditCellsCommand(sheet.Id, [(match.Address, newCell)]);
+            command = replacementFormat is null
+                ? editCommand
+                : new CompositeWorkbookCommand(
+                    "Replace",
+                    [
+                        editCommand,
+                        new ApplyStyleCommand(
+                            sheet.Id,
+                            new GridRange(match.Address, match.Address),
+                            replacementFormat)
+                    ]);
             return true;
         }
 

@@ -435,6 +435,78 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void CreateFormatDiffFromActiveCell_CapturesStyleOnlyFormatting()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var fill = new CellColor(255, 242, 204);
+        var styleId = workbook.RegisterStyle(new CellStyle
+        {
+            Bold = true,
+            FillColor = fill,
+            NumberFormat = "$#,##0.00",
+            HorizontalAlignment = HorizontalAlignment.Center
+        });
+        sheet.SetStyleOnly(b2.Row, b2.Col, styleId);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(b2);
+
+        var diff = session.CreateFormatDiffFromActiveCell();
+
+        diff.Should().NotBeNull();
+        diff!.Bold.Should().BeTrue();
+        diff.FillColor.Should().Be(fill);
+        diff.NumberFormat.Should().Be("$#,##0.00");
+        diff.HAlign.Should().Be(HorizontalAlignment.Center);
+        sheet.GetCell(b2).Should().BeNull();
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public void FindAll_WithRequiredFormatFiltersThroughWorkbookSession()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        var a3 = new CellAddress(sheet.Id, 3, 1);
+        var yellow = new CellColor(255, 255, 0);
+        var requiredStyleId = workbook.RegisterStyle(new CellStyle { Bold = true, FillColor = yellow });
+        var partialStyleId = workbook.RegisterStyle(new CellStyle { FillColor = yellow });
+        sheet.SetCell(a1, new TextValue("needle"));
+        sheet.SetCell(a2, new TextValue("needle"));
+        sheet.SetCell(a3, new TextValue("needle"));
+        sheet.GetCell(a1)!.StyleId = requiredStyleId;
+        sheet.GetCell(a2)!.StyleId = partialStyleId;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a3);
+
+        var result = session.FindAll(
+            "needle",
+            new FindOptions(
+                Within: FindWithin.Sheet,
+                LookIn: FindLookIn.Values,
+                RequiredFormat: new StyleDiff(Bold: true, FillColor: yellow)));
+
+        result.Success.Should().BeTrue();
+        result.Matches.Select(match => match.Address).Should().Equal(a1);
+        result.MatchCount.Should().Be(1);
+        session.SelectedRange.Should().Be(new GridRange(a3, a3));
+        session.ActiveCell.Should().Be(a3);
+        session.LastFindText.Should().Be("needle");
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
     public void FindAll_WithCommentsLookInReportsThreadedRootAndReplyMatchesAtSameCell()
     {
         var workbook = CreateWorkbook();
@@ -593,6 +665,81 @@ public sealed class WorkbookSessionTests
         redo.Success.Should().BeTrue();
         sheet.GetCell(a1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("bar one");
         sheet.GetCell(c1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("bar two");
+    }
+
+    [Fact]
+    public void ReplaceAllValues_WithReplacementFormatAppliesCellStyleAndUndoRedoRestoresValuesAndStyles()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        var selection = new CellAddress(sheet.Id, 2, 2);
+        var replacementFill = new CellColor(255, 255, 0);
+        var unchangedFill = new CellColor(221, 235, 247);
+        var originalA1Style = workbook.RegisterStyle(new CellStyle
+        {
+            Italic = true,
+            NumberFormat = "0.0"
+        });
+        var unchangedStyle = workbook.RegisterStyle(new CellStyle { FillColor = unchangedFill });
+        sheet.SetCell(a1, new TextValue("foo one"));
+        sheet.SetCell(b1, new TextValue("foo two"));
+        sheet.SetCell(c1, new TextValue("other"));
+        sheet.GetCell(a1)!.StyleId = originalA1Style;
+        sheet.GetCell(c1)!.StyleId = unchangedStyle;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(selection);
+
+        var result = session.ReplaceAllValues(
+            "foo",
+            "bar",
+            new FindOptions(Within: FindWithin.Sheet, LookIn: FindLookIn.Values),
+            replacementFormat: new StyleDiff(
+                Bold: true,
+                FillColor: replacementFill,
+                NumberFormat: "$#,##0.00"));
+
+        result.Success.Should().BeTrue();
+        result.ReplacedCount.Should().Be(2);
+        result.MatchCount.Should().Be(2);
+        session.SelectedRange.Should().Be(new GridRange(selection, selection));
+        sheet.GetCell(a1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("bar one");
+        sheet.GetCell(b1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("bar two");
+        sheet.GetCell(c1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("other");
+        GetStyle(workbook, sheet, a1).Bold.Should().BeTrue();
+        GetStyle(workbook, sheet, a1).Italic.Should().BeTrue();
+        GetStyle(workbook, sheet, a1).FillColor.Should().Be(replacementFill);
+        GetStyle(workbook, sheet, a1).NumberFormat.Should().Be("$#,##0.00");
+        GetStyle(workbook, sheet, b1).Bold.Should().BeTrue();
+        GetStyle(workbook, sheet, b1).FillColor.Should().Be(replacementFill);
+        GetStyle(workbook, sheet, b1).NumberFormat.Should().Be("$#,##0.00");
+        GetStyle(workbook, sheet, c1).FillColor.Should().Be(unchangedFill);
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+
+        session.UndoLastEdit().Success.Should().BeTrue();
+
+        sheet.GetCell(a1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("foo one");
+        sheet.GetCell(b1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("foo two");
+        sheet.GetCell(c1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("other");
+        GetStyle(workbook, sheet, a1).Should().Be(workbook.GetStyle(originalA1Style));
+        GetStyle(workbook, sheet, b1).Should().Be(CellStyle.Default);
+        GetStyle(workbook, sheet, c1).Should().Be(workbook.GetStyle(unchangedStyle));
+        session.CanRedo.Should().BeTrue();
+
+        session.RedoLastEdit().Success.Should().BeTrue();
+
+        sheet.GetCell(a1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("bar one");
+        sheet.GetCell(b1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("bar two");
+        GetStyle(workbook, sheet, a1).FillColor.Should().Be(replacementFill);
+        GetStyle(workbook, sheet, b1).FillColor.Should().Be(replacementFill);
+        GetStyle(workbook, sheet, c1).FillColor.Should().Be(unchangedFill);
     }
 
     [Fact]
@@ -955,6 +1102,48 @@ public sealed class WorkbookSessionTests
 
         redo.Success.Should().BeTrue();
         sheet.GetCell(c1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("bar two");
+    }
+
+    [Fact]
+    public void ReplaceNextValue_WithReplacementFormatAppliesOnlyToReplacedCell()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        var a3 = new CellAddress(sheet.Id, 3, 1);
+        var replacementFill = new CellColor(198, 239, 206);
+        var originalA1Style = workbook.RegisterStyle(new CellStyle { FillColor = new CellColor(221, 235, 247) });
+        sheet.SetCell(a1, new TextValue("foo one"));
+        sheet.SetCell(c1, new TextValue("foo two"));
+        sheet.SetCell(a3, new TextValue("foo three"));
+        sheet.GetCell(a1)!.StyleId = originalA1Style;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.ReplaceNextValue(
+            "foo",
+            "bar",
+            new FindOptions(Within: FindWithin.Sheet, LookIn: FindLookIn.Values),
+            replacementFormat: new StyleDiff(Italic: true, FillColor: replacementFill));
+
+        result.Success.Should().BeTrue();
+        result.ReplacedCount.Should().Be(1);
+        result.ReplacedRange.Should().Be(new GridRange(c1, c1));
+        sheet.GetCell(a1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("foo one");
+        sheet.GetCell(c1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("bar two");
+        sheet.GetCell(a3)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("foo three");
+        GetStyle(workbook, sheet, a1).Should().Be(workbook.GetStyle(originalA1Style));
+        GetStyle(workbook, sheet, c1).Italic.Should().BeTrue();
+        GetStyle(workbook, sheet, c1).FillColor.Should().Be(replacementFill);
+        GetStyle(workbook, sheet, a3).FillColor.Should().BeNull();
+        session.SelectedRange.Should().Be(new GridRange(c1, c1));
+        session.ActiveCell.Should().Be(c1);
+        session.IsDirty.Should().BeTrue();
     }
 
     [Fact]

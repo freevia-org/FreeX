@@ -83,7 +83,8 @@ public sealed class MainWindow : Window
         ReplaceDialogAction Action,
         FindOptions Options,
         bool MatchCase,
-        bool MatchEntireCell);
+        bool MatchEntireCell,
+        StyleDiff? ReplacementFormat);
 
     private sealed record FindOptionsControls(
         ComboBox WithinBox,
@@ -3914,9 +3915,9 @@ public sealed class MainWindow : Window
         {
             Title = "Find",
             Width = 420,
-            Height = 370,
+            Height = 430,
             MinWidth = 360,
-            MinHeight = 330,
+            MinHeight = 390,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -3954,13 +3955,28 @@ public sealed class MainWindow : Window
         AutomationProperties.SetAutomationId(cancelButton, "FindCancelButton");
 
         var optionsControls = CreateFindOptionsControls("Find", defaultLookInIndex: 0);
+        StyleDiff? findFormat = null;
+        var chooseFormatButton = CreateFindReplaceFormatButton("FindChooseFormatFromCellButton", "Choose From Cell");
+        var clearFormatButton = CreateFindReplaceFormatButton("FindClearFormatButton", "Clear Format");
+        UpdateFindReplaceFormatState(findFormat, chooseFormatButton, clearFormatButton);
+        chooseFormatButton.Click += (_, _) =>
+        {
+            findFormat = _session.CreateFormatDiffFromActiveCell();
+            UpdateFindReplaceFormatState(findFormat, chooseFormatButton, clearFormatButton);
+        };
+        clearFormatButton.Click += (_, _) =>
+        {
+            findFormat = null;
+            UpdateFindReplaceFormatState(findFormat, chooseFormatButton, clearFormatButton);
+        };
+        var findFormatRow = CreateFindReplaceFormatRow("Find format", chooseFormatButton, clearFormatButton);
 
         void Accept(FindDialogAction action)
         {
             result = new FindDialogResult(
                 findBox.Text ?? "",
                 action,
-                CreateFindOptions(optionsControls),
+                CreateFindOptions(optionsControls, findFormat),
                 optionsControls.MatchCaseBox.IsChecked == true,
                 optionsControls.MatchEntireCellBox.IsChecked == true);
             dialog.Close();
@@ -4004,6 +4020,7 @@ public sealed class MainWindow : Window
             {
                 new TextBlock { Text = "Find what" },
                 findBox,
+                findFormatRow,
                 optionsControls.Panel,
                 buttonRow,
             },
@@ -4138,13 +4155,15 @@ public sealed class MainWindow : Window
                 replacement.ReplaceText,
                 replacement.Options,
                 replacement.MatchCase,
-                replacement.MatchEntireCell)
+                replacement.MatchEntireCell,
+                replacement.ReplacementFormat)
             : _session.ReplaceNextValue(
                 replacement.FindText,
                 replacement.ReplaceText,
                 replacement.Options,
                 replacement.MatchCase,
-                replacement.MatchEntireCell);
+                replacement.MatchEntireCell,
+                replacement.ReplacementFormat);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? "Replace failed.");
@@ -4171,9 +4190,9 @@ public sealed class MainWindow : Window
         {
             Title = "Replace",
             Width = 420,
-            Height = 430,
+            Height = 520,
             MinWidth = 360,
-            MinHeight = 390,
+            MinHeight = 480,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -4219,6 +4238,36 @@ public sealed class MainWindow : Window
         AutomationProperties.SetAutomationId(cancelButton, "ReplaceCancelButton");
 
         var optionsControls = CreateFindOptionsControls("Replace", defaultLookInIndex: 1);
+        StyleDiff? findFormat = null;
+        StyleDiff? replacementFormat = null;
+        var chooseFindFormatButton = CreateFindReplaceFormatButton("ReplaceFindChooseFormatFromCellButton", "Choose From Cell");
+        var clearFindFormatButton = CreateFindReplaceFormatButton("ReplaceFindClearFormatButton", "Clear Format");
+        var chooseReplaceFormatButton = CreateFindReplaceFormatButton("ReplaceWithChooseFormatFromCellButton", "Choose From Cell");
+        var clearReplaceFormatButton = CreateFindReplaceFormatButton("ReplaceWithClearFormatButton", "Clear Format");
+        UpdateFindReplaceFormatState(findFormat, chooseFindFormatButton, clearFindFormatButton);
+        UpdateFindReplaceFormatState(replacementFormat, chooseReplaceFormatButton, clearReplaceFormatButton);
+        chooseFindFormatButton.Click += (_, _) =>
+        {
+            findFormat = _session.CreateFormatDiffFromActiveCell();
+            UpdateFindReplaceFormatState(findFormat, chooseFindFormatButton, clearFindFormatButton);
+        };
+        clearFindFormatButton.Click += (_, _) =>
+        {
+            findFormat = null;
+            UpdateFindReplaceFormatState(findFormat, chooseFindFormatButton, clearFindFormatButton);
+        };
+        chooseReplaceFormatButton.Click += (_, _) =>
+        {
+            replacementFormat = _session.CreateFormatDiffFromActiveCell();
+            UpdateFindReplaceFormatState(replacementFormat, chooseReplaceFormatButton, clearReplaceFormatButton);
+        };
+        clearReplaceFormatButton.Click += (_, _) =>
+        {
+            replacementFormat = null;
+            UpdateFindReplaceFormatState(replacementFormat, chooseReplaceFormatButton, clearReplaceFormatButton);
+        };
+        var findFormatRow = CreateFindReplaceFormatRow("Find format", chooseFindFormatButton, clearFindFormatButton);
+        var replaceFormatRow = CreateFindReplaceFormatRow("Replace format", chooseReplaceFormatButton, clearReplaceFormatButton);
 
         void Accept(ReplaceDialogAction action)
         {
@@ -4226,9 +4275,10 @@ public sealed class MainWindow : Window
                 findBox.Text ?? "",
                 replaceBox.Text ?? "",
                 action,
-                CreateFindOptions(optionsControls),
+                CreateFindOptions(optionsControls, findFormat),
                 optionsControls.MatchCaseBox.IsChecked == true,
-                optionsControls.MatchEntireCellBox.IsChecked == true);
+                optionsControls.MatchEntireCellBox.IsChecked == true,
+                replacementFormat);
             dialog.Close();
         }
 
@@ -4259,8 +4309,10 @@ public sealed class MainWindow : Window
             {
                 new TextBlock { Text = "Find what" },
                 findBox,
+                findFormatRow,
                 new TextBlock { Text = "Replace with" },
                 replaceBox,
+                replaceFormatRow,
                 optionsControls.Panel,
                 buttonRow,
             },
@@ -4605,7 +4657,7 @@ public sealed class MainWindow : Window
         return result;
     }
 
-    private FindOptions CreateFindOptions(FindOptionsControls controls) =>
+    private FindOptions CreateFindOptions(FindOptionsControls controls, StyleDiff? requiredFormat = null) =>
         new(
             Within: controls.WithinBox.SelectedIndex == 1 ? FindWithin.Workbook : FindWithin.Sheet,
             CurrentSheetId: _session.ActiveSheet.Id,
@@ -4616,7 +4668,8 @@ public sealed class MainWindow : Window
                 2 => FindLookIn.Notes,
                 3 => FindLookIn.Comments,
                 _ => FindLookIn.Values
-            });
+            },
+            RequiredFormat: requiredFormat);
 
     private static FindOptionsControls CreateFindOptionsControls(string automationPrefix, int defaultLookInIndex)
     {
@@ -4693,6 +4746,44 @@ public sealed class MainWindow : Window
         AutomationProperties.SetName(comboBox, automationName);
         AutomationProperties.SetAutomationId(comboBox, automationId);
         return comboBox;
+    }
+
+    private static Button CreateFindReplaceFormatButton(string automationId, string content)
+    {
+        var button = new Button
+        {
+            Content = content,
+            MinWidth = 112,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(button, automationId);
+        return button;
+    }
+
+    private static StackPanel CreateFindReplaceFormatRow(string label, Button chooseButton, Button clearButton) =>
+        new()
+        {
+            Spacing = 4,
+            Children =
+            {
+                new TextBlock { Text = label },
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    Children =
+                    {
+                        chooseButton,
+                        clearButton,
+                    },
+                },
+            },
+        };
+
+    private static void UpdateFindReplaceFormatState(StyleDiff? format, Button chooseButton, Button clearButton)
+    {
+        chooseButton.Content = format is null ? "Choose From Cell" : "Format Set";
+        clearButton.IsVisible = format is not null;
     }
 
     private static CheckBox CreateFindOptionCheckBox(string label, string automationId)
