@@ -103,6 +103,15 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("StartWithClassicDesktopLifetime(startupArguments)");
         script.Should().Contain("IActivatableLifetime");
         script.Should().Contain("OpenActivatedFilesAsync");
+        script.Should().Contain("using FreeX.Core.Calc;");
+        script.Should().Contain("AddGridChild(grid, CreateCell(cell, row, col, zoomFactor, colWidth, rowHeight)");
+        script.Should().Contain("CellTextOrientationLayoutPlanner.HasTextOrientation(textRotation)");
+        script.Should().Contain("CellTextOrientationLayoutPlanner.CalculateLayout(");
+        script.Should().Contain("CreateTextRotationTransform(layout.TransformAngle)");
+        script.Should().Contain("Canvas.SetLeft(textBlock, layout.TextPoint.X);");
+        script.Should().Contain("Canvas.SetTop(textBlock, layout.TextPoint.Y);");
+        script.Should().Contain("public static class CellTextOrientationLayoutPlanner");
+        script.Should().Contain("public static bool ShouldClip(");
         script.Should().Contain("CreateNativePasteSpecialMenu()");
         script.Should().Contain("PasteSpecialClipboardAtActiveCell(text, mode, options)");
         script.Should().Contain("CreatePasteSpecialTextMenuItem(`\"Text`\")");
@@ -640,6 +649,8 @@ public sealed class MacOsAppReadinessPreflightTests
             root,
             "src/FreeX.App.Avalonia/MainWindow.cs",
             """
+            using FreeX.Core.Calc;
+
             namespace FreeX.App.Avalonia;
 
             public sealed class MainWindow
@@ -910,6 +921,19 @@ public sealed class MacOsAppReadinessPreflightTests
                     CalculateDisplayedGridHeight(viewport, showHeadings, zoomFactor);
                     fontSize * zoomFactor;
                     displayHeight / zoomFactor;
+                    AddGridChild(grid, CreateCell(cell, row, col, zoomFactor, colWidth, rowHeight));
+                    CellTextOrientationLayoutPlanner.HasTextOrientation(textRotation);
+                    CreateOrientedCellContent();
+                    var layout = CellTextOrientationLayoutPlanner.CalculateLayout();
+                    CreateTextRotationTransform(layout.TransformAngle);
+                    textBlock.RenderTransformOrigin = new RelativePoint(0, 0, RelativeUnit.Relative);
+                    textBlock.RenderTransform = transform;
+                    Canvas.SetLeft(textBlock, layout.TextPoint.X);
+                    Canvas.SetTop(textBlock, layout.TextPoint.Y);
+                    CellTextOrientationLayoutPlanner.PrepareDisplayText(text, textRotation);
+                    CellTextOrientationLayoutPlanner.NormalizeRotationForDisplay(textRotation);
+                    private static RotateTransform? CreateTextRotationTransform(double transformAngle)
+                    return Math.Abs(transformAngle) <= 0.001 ? null : new RotateTransform(transformAngle);
                     FreezePanesAtActiveCell();
                     FreezeTopRow();
                     FreezeFirstColumn();
@@ -1039,6 +1063,27 @@ public sealed class MacOsAppReadinessPreflightTests
                     ExternalImageClipboardPicturePngByteCount: externalImageClipboardPictures.Sum(static picture => picture.ImageBytes!.Length);
                     return new();
                 }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.Core.Calc/CellTextOrientationLayoutPlanner.cs",
+            """
+            namespace FreeX.Core.Calc;
+
+            public readonly record struct CellTextLayoutPoint(double X, double Y);
+            public readonly record struct CellTextLayoutRect(double Left, double Top, double Width, double Height);
+            public readonly record struct CellTextOrientationLayout(CellTextLayoutPoint TextPoint, CellTextLayoutRect Bounds, double TransformAngle);
+
+            public static class CellTextOrientationLayoutPlanner
+            {
+                public static bool HasTextOrientation(int textRotation) => true;
+                public static bool IsStackedTextRotation(int textRotation) => textRotation == 255;
+                public static int NormalizeRotationForDisplay(int textRotation) => textRotation;
+                public static string PrepareDisplayText(string text, int textRotation) => text;
+                public static CellTextOrientationLayout CalculateLayout() => new();
+                public static bool ShouldClip() => false;
             }
             """);
 

@@ -104,9 +104,10 @@ public sealed partial class GridViewRenderPerformanceTests
             source.IndexOf("private static bool ShouldClipText(", StringComparison.Ordinal)..
             source.IndexOf("private static Pen UnderlinePenForTextBrush", StringComparison.Ordinal)];
 
-        shouldClipText.Should().Contain("if (wrapText && text.Height > clipRect.Height + tolerance)");
-        shouldClipText.Should().Contain("textLayout.Bounds.Right > clipRect.Right + tolerance");
-        shouldClipText.Should().Contain("textLayout.Bounds.Bottom > clipRect.Bottom + tolerance");
+        shouldClipText.Should().Contain("CellTextOrientationLayoutPlanner.ShouldClip(");
+        shouldClipText.Should().Contain("new CellTextLayoutRect(clipRect.Left, clipRect.Top, clipRect.Width, clipRect.Height)");
+        shouldClipText.Should().Contain("text.Height");
+        shouldClipText.Should().Contain("new CellTextOrientationLayout(");
         shouldClipText.Should().NotContain("style is not null || wrapText");
     }
 

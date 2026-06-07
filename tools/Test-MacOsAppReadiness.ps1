@@ -556,6 +556,7 @@ function Test-SourceWiring {
             Path = "src\FreeX.App.Avalonia\MainWindow.cs"
             Markers = @(
                 "private const string NativeWorkbookExtension = `".fxl`";",
+                "using FreeX.Core.Calc;",
                 "public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files)",
                 "CreateColorPaletteFlyout(ColorPaletteTarget.Fill, includeClearFill: true)",
                 "CreateNativePasteSpecialMenu()",
@@ -914,11 +915,40 @@ function Test-SourceWiring {
                 "var showHeadings = _session.ActiveSheet.ShowHeadings;",
                 "var zoomFactor = GetActiveZoomFactor();",
                 "showGridlines ? GridLine : Brushes.Transparent",
+                "AddGridChild(grid, CreateCell(cell, row, col, zoomFactor, colWidth, rowHeight)",
                 "CalculateDisplayedGridWidth(viewport, showHeadings, zoomFactor)",
                 "CalculateDisplayedGridHeight(viewport, showHeadings, zoomFactor)",
                 "fontSize * zoomFactor",
                 "displayHeight / zoomFactor",
-                "private double GetActiveZoomFactor()"
+                "private double GetActiveZoomFactor()",
+                "CellTextOrientationLayoutPlanner.HasTextOrientation(textRotation)",
+                "CreateOrientedCellContent(",
+                "CellTextOrientationLayoutPlanner.CalculateLayout(",
+                "CreateTextRotationTransform(layout.TransformAngle)",
+                "textBlock.RenderTransformOrigin = new RelativePoint(0, 0, RelativeUnit.Relative);",
+                "textBlock.RenderTransform = transform;",
+                "Canvas.SetLeft(textBlock, layout.TextPoint.X);",
+                "Canvas.SetTop(textBlock, layout.TextPoint.Y);",
+                "CellTextOrientationLayoutPlanner.PrepareDisplayText(text, textRotation)",
+                "CellTextOrientationLayoutPlanner.NormalizeRotationForDisplay(textRotation)",
+                "private static RotateTransform? CreateTextRotationTransform(double transformAngle)",
+                "new RotateTransform(transformAngle)"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "src\FreeX.Core.Calc\CellTextOrientationLayoutPlanner.cs"
+            Markers = @(
+                "public readonly record struct CellTextLayoutPoint",
+                "public readonly record struct CellTextLayoutRect",
+                "public readonly record struct CellTextOrientationLayout",
+                "public static class CellTextOrientationLayoutPlanner",
+                "public static bool HasTextOrientation(int textRotation)",
+                "public static bool IsStackedTextRotation(int textRotation)",
+                "public static int NormalizeRotationForDisplay(int textRotation)",
+                "public static string PrepareDisplayText(string text, int textRotation)",
+                "public static CellTextOrientationLayout CalculateLayout(",
+                "public static bool ShouldClip("
             )
             OrderedPairs = @()
         },

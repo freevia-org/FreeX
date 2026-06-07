@@ -11,6 +11,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using FreeX.App.Services;
+using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -1491,7 +1492,9 @@ public sealed class MainWindow : Window
 
         for (var rowIndex = 0; rowIndex < viewport.RowMetrics.Count; rowIndex++)
         {
-            var row = viewport.RowMetrics[rowIndex].Row;
+            var rowMetric = viewport.RowMetrics[rowIndex];
+            var row = rowMetric.Row;
+            var rowHeight = GetDisplayedRowHeight(rowMetric, zoomFactor);
             if (showHeadings)
             {
                 var selectedRow = IsSelectedRow(row);
@@ -1500,9 +1503,11 @@ public sealed class MainWindow : Window
 
             for (var colIndex = 0; colIndex < viewport.ColMetrics.Count; colIndex++)
             {
-                var col = viewport.ColMetrics[colIndex].Col;
+                var colMetric = viewport.ColMetrics[colIndex];
+                var col = colMetric.Col;
+                var colWidth = GetDisplayedColumnWidth(colMetric, zoomFactor);
                 cellsByAddress.TryGetValue((row, col), out var cell);
-                AddGridChild(grid, CreateCell(cell, row, col, zoomFactor), rowIndex + headerOffset, colIndex + headerOffset);
+                AddGridChild(grid, CreateCell(cell, row, col, zoomFactor, colWidth, rowHeight), rowIndex + headerOffset, colIndex + headerOffset);
             }
         }
 
@@ -1919,7 +1924,7 @@ public sealed class MainWindow : Window
             selected: false,
             zoomFactor: zoomFactor);
 
-    private Border CreateCell(DisplayCell cell, uint row, uint col, double zoomFactor)
+    private Border CreateCell(DisplayCell cell, uint row, uint col, double zoomFactor, double cellWidth, double cellHeight)
     {
         var hasCell = cell.Row != 0 && cell.Col != 0;
         var address = new CellAddress(_session.ActiveSheet.Id, row, col);
@@ -1939,7 +1944,9 @@ public sealed class MainWindow : Window
                 textDecorations: null,
                 selected,
                 address,
-                zoomFactor: zoomFactor);
+                zoomFactor: zoomFactor,
+                cellWidth: cellWidth,
+                cellHeight: cellHeight);
 
         var style = cell.Style;
         var background = style?.ResolveFillColor(_session.Workbook.Theme) is { } fillColor
@@ -1948,10 +1955,11 @@ public sealed class MainWindow : Window
         var foreground = style is null
             ? Brushes.Black
             : Brush(style.ResolveFontColor(_session.Workbook.Theme));
-        var alignment = MapCellTextAlignment(
-            style?.HorizontalAlignment ?? CellHAlign.General,
-            cell.RawValue is NumberValue or DateTimeValue);
-        var verticalAlignment = MapCellVerticalAlignment(style?.VerticalAlignment ?? CellVAlign.Bottom);
+        var horizontalAlignment = style?.HorizontalAlignment ?? CellHAlign.General;
+        var verticalAlignmentModel = style?.VerticalAlignment ?? CellVAlign.Bottom;
+        var isNumeric = cell.RawValue is NumberValue or DateTimeValue;
+        var alignment = MapCellTextAlignment(horizontalAlignment, isNumeric);
+        var verticalAlignment = MapCellVerticalAlignment(verticalAlignmentModel);
         var textWrapping = style?.WrapText == true ? TextWrapping.Wrap : TextWrapping.NoWrap;
         var weight = style?.Bold == true ? FontWeight.SemiBold : FontWeight.Normal;
         var fontStyle = style?.Italic == true ? FontStyle.Italic : FontStyle.Normal;
@@ -1976,7 +1984,12 @@ public sealed class MainWindow : Window
             indentPadding,
             textRotation,
             style,
-            zoomFactor);
+            zoomFactor,
+            cellWidth,
+            cellHeight,
+            horizontalAlignment,
+            verticalAlignmentModel,
+            isNumeric);
     }
 
     private Border CreateInteractiveCellBorder(
@@ -1995,7 +2008,12 @@ public sealed class MainWindow : Window
         double indentPadding = 0,
         int textRotation = 0,
         CellStyle? style = null,
-        double zoomFactor = 1)
+        double zoomFactor = 1,
+        double cellWidth = 80,
+        double cellHeight = 20,
+        CellHAlign horizontalAlignment = CellHAlign.General,
+        CellVAlign? verticalAlignmentModel = null,
+        bool isNumeric = false)
     {
         var border = CreateCellBorder(
             text,
@@ -2013,7 +2031,12 @@ public sealed class MainWindow : Window
             textRotation,
             style,
             _session.ActiveSheet.ShowGridlines,
-            zoomFactor);
+            zoomFactor,
+            cellWidth,
+            cellHeight,
+            horizontalAlignment,
+            verticalAlignmentModel,
+            isNumeric);
         border.Cursor = new Cursor(StandardCursorType.Hand);
         border.PointerPressed += (_, args) =>
         {
@@ -2047,7 +2070,12 @@ public sealed class MainWindow : Window
         int textRotation = 0,
         CellStyle? style = null,
         bool showGridlines = true,
-        double zoomFactor = 1)
+        double zoomFactor = 1,
+        double cellWidth = 80,
+        double cellHeight = 20,
+        CellHAlign horizontalAlignment = CellHAlign.General,
+        CellVAlign? verticalAlignmentModel = null,
+        bool isNumeric = false)
     {
         var effectiveText = FormatTextForRotation(text, textRotation);
         var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;
@@ -2070,15 +2098,20 @@ public sealed class MainWindow : Window
             VerticalAlignment = verticalAlignment,
             Margin = new Thickness(scaledHorizontalPadding + scaledIndentPadding, 0, scaledHorizontalPadding, 0),
         };
-        if (CreateTextRotationTransform(textRotation) is { } transform)
-        {
-            textBlock.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
-            textBlock.RenderTransform = transform;
-        }
 
-        var content = new AvaloniaGrid { ClipToBounds = true };
-        content.Children.Add(textBlock);
-        AddStyledCellBorderOverlay(content, style);
+        var content = CellTextOrientationLayoutPlanner.HasTextOrientation(textRotation)
+            ? CreateOrientedCellContent(
+                textBlock,
+                cellWidth,
+                cellHeight,
+                horizontalAlignment,
+                verticalAlignmentModel,
+                isNumeric,
+                scaledIndentPadding,
+                textRotation,
+                effectiveTextWrapping,
+                style)
+            : CreateDefaultCellContent(textBlock, style);
 
         return new Border
         {
@@ -2088,6 +2121,63 @@ public sealed class MainWindow : Window
             ClipToBounds = true,
             Child = content,
         };
+    }
+
+    private static AvaloniaGrid CreateDefaultCellContent(TextBlock textBlock, CellStyle? style)
+    {
+        var content = new AvaloniaGrid { ClipToBounds = true };
+        content.Children.Add(textBlock);
+        AddStyledCellBorderOverlay(content, style);
+        return content;
+    }
+
+    private static AvaloniaGrid CreateOrientedCellContent(
+        TextBlock textBlock,
+        double cellWidth,
+        double cellHeight,
+        CellHAlign horizontalAlignment,
+        CellVAlign? verticalAlignment,
+        bool isNumeric,
+        double indentPixels,
+        int textRotation,
+        TextWrapping textWrapping,
+        CellStyle? style)
+    {
+        var content = new AvaloniaGrid { ClipToBounds = true };
+        var canvas = new Canvas { ClipToBounds = true };
+        var measureWidth = textWrapping == TextWrapping.Wrap
+            ? Math.Max(1, cellWidth - 4)
+            : double.PositiveInfinity;
+
+        textBlock.Margin = default;
+        textBlock.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
+        textBlock.VerticalAlignment = AvaloniaVerticalAlignment.Top;
+        textBlock.Measure(new Size(measureWidth, double.PositiveInfinity));
+        var desired = textBlock.DesiredSize;
+        textBlock.Width = Math.Max(0, desired.Width);
+        textBlock.Height = Math.Max(0, desired.Height);
+
+        var layout = CellTextOrientationLayoutPlanner.CalculateLayout(
+            new CellTextLayoutRect(0, 0, cellWidth, cellHeight),
+            desired.Width,
+            desired.Height,
+            horizontalAlignment,
+            verticalAlignment,
+            isNumeric,
+            indentPixels,
+            textRotation);
+        if (CreateTextRotationTransform(layout.TransformAngle) is { } transform)
+        {
+            textBlock.RenderTransformOrigin = new RelativePoint(0, 0, RelativeUnit.Relative);
+            textBlock.RenderTransform = transform;
+        }
+
+        Canvas.SetLeft(textBlock, layout.TextPoint.X);
+        Canvas.SetTop(textBlock, layout.TextPoint.Y);
+        canvas.Children.Add(textBlock);
+        content.Children.Add(canvas);
+        AddStyledCellBorderOverlay(content, style);
+        return content;
     }
 
     private static void AddStyledCellBorderOverlay(AvaloniaGrid content, CellStyle? style)
@@ -2156,18 +2246,13 @@ public sealed class MainWindow : Window
         };
 
     private static string FormatTextForRotation(string text, int textRotation) =>
-        textRotation == 255 && text.Length > 1
-            ? string.Join(Environment.NewLine, text.ToCharArray())
-            : text;
+        CellTextOrientationLayoutPlanner.PrepareDisplayText(text, textRotation);
 
     private static int NormalizeTextRotationForDisplay(int textRotation) =>
-        textRotation is >= -90 and <= 90 ? textRotation : 0;
+        CellTextOrientationLayoutPlanner.NormalizeRotationForDisplay(textRotation);
 
-    private static RotateTransform? CreateTextRotationTransform(int textRotation)
-    {
-        var displayRotation = NormalizeTextRotationForDisplay(textRotation);
-        return displayRotation == 0 ? null : new RotateTransform(-displayRotation);
-    }
+    private static RotateTransform? CreateTextRotationTransform(double transformAngle) =>
+        Math.Abs(transformAngle) <= 0.001 ? null : new RotateTransform(transformAngle);
 
     private MenuFlyout CreatePasteSpecialFlyout() =>
         new()
