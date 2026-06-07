@@ -4,10 +4,12 @@ namespace FreeX.Core.Commands;
 
 internal static class CommandGuards
 {
+    private const string SheetProtectedMessage = "The sheet is protected.";
+
     public static CommandOutcome? RejectIfProtected(Sheet sheet)
     {
         return sheet.IsProtected
-            ? new CommandOutcome(false, "The sheet is protected.")
+            ? new CommandOutcome(false, SheetProtectedMessage)
             : null;
     }
 
@@ -20,7 +22,7 @@ internal static class CommandGuards
 
         return sheet.ProtectionPermissions.Contains(permission)
             ? null
-            : new CommandOutcome(false, "The sheet is protected.");
+            : new CommandOutcome(false, SheetProtectedMessage);
     }
 
     public static CommandOutcome? RejectIfWorkbookStructureProtected(Workbook workbook)

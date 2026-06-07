@@ -182,6 +182,45 @@ public sealed partial class XlsxPackageMetadataMergerTests
     }
 
     [Fact]
+    public void MergeRelationshipParts_RebindsCopiedChartExternalDataPivotCacheReferenceWhenRelationshipIdCollides()
+    {
+        using var sourcePackage = CreatePackageWithChartExternalDataPivotCacheRelationshipIdCollisionSource();
+        using var targetPackage = CreatePackageWithChartExternalDataPivotCacheRelationshipIdCollisionTarget();
+        using var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var targetArchive = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, targetArchive);
+        XlsxPackageMetadataMerger.MergeContentTypes(sourceArchive, targetArchive);
+        XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, targetArchive, generatedEntriesBeforeMerge);
+
+        targetArchive.GetEntry("xl/charts/chart1.xml").Should().NotBeNull();
+        targetArchive.GetEntry("xl/pivotCache/pivotCacheDefinition1.xml").Should().NotBeNull();
+
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationshipsXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "xl/charts/_rels/chart1.xml.rels");
+        var pivotCacheRelationship = relationshipsXml.Root!
+            .Elements(relationshipNs + "Relationship")
+            .Single(element =>
+                (string?)element.Attribute("Type") == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition" &&
+                (string?)element.Attribute("Target") == "../pivotCache/pivotCacheDefinition1.xml");
+        var reboundId = pivotCacheRelationship.Attribute("Id")!.Value;
+
+        reboundId.Should().NotBe("rIdPivotCache");
+
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var chartXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "xl/charts/chart1.xml");
+        chartXml.Root!
+            .Elements(chartNs + "externalData")
+            .Should()
+            .ContainSingle(element => (string?)element.Attribute(relNs + "id") == reboundId);
+        chartXml.Root!
+            .Elements(chartNs + "externalData")
+            .Should()
+            .NotContain(element => (string?)element.Attribute(relNs + "id") == "rIdPivotCache");
+    }
+
+    [Fact]
     public void MergeRelationshipParts_PreservesWorkbookWebExtensionTaskpaneGraph()
     {
         using var sourcePackage = CreatePackageWithWorkbookWebExtensionTaskpaneGraph();
