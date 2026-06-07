@@ -94,7 +94,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             "/xl/externalLinks/externalLink1.xml",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml");
 
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         workbookXml.Root!.Elements(workbookNs + "externalReferences").Remove();
         InsertExternalReferencesInOrder(workbookXml.Root, workbookNs, new XElement(
             workbookNs + "externalReferences",
@@ -102,7 +102,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
 
         var workbookRelationshipsPath = "xl/_rels/workbook.xml.rels";
-        var workbookRelationshipsXml = LoadPackageXml(archive.GetEntry(workbookRelationshipsPath)!);
+        var workbookRelationshipsXml = LoadPackageXml(archive, workbookRelationshipsPath);
         workbookRelationshipsXml.Root!.Elements(packageRelNs + "Relationship")
             .Where(relationship =>
                 relationship.Attribute("Id")?.Value == "rIdFreeXExternalLink" ||

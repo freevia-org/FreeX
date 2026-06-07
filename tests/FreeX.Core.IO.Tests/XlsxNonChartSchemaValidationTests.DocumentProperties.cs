@@ -222,7 +222,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         string contentType)
     {
         XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
-        var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+        var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
         var overrideElement = contentTypesXml.Root!
             .Elements(contentTypeNs + "Override")
             .FirstOrDefault(element =>
@@ -249,7 +249,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         string target)
     {
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-        var relationshipsXml = LoadPackageXml(archive.GetEntry("_rels/.rels")!);
+        var relationshipsXml = LoadPackageXml(archive, "_rels/.rels");
         var matching = relationshipsXml.Root!
             .Elements(packageRelNs + "Relationship")
             .Where(relationship =>

@@ -282,7 +282,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         using var stream = Save(workbook);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var dxf = LoadPackageXml(archive.GetEntry("xl/styles.xml")!)
+        var dxf = LoadPackageXml(archive, "xl/styles.xml")
             .Root!
             .Element(workbookNs + "dxfs")!
             .Element(workbookNs + "dxf")!;
@@ -335,7 +335,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace freexNs = "urn:freex:test";
-        var dxf = LoadPackageXml(archive.GetEntry("xl/styles.xml")!)
+        var dxf = LoadPackageXml(archive, "xl/styles.xml")
             .Root!
             .Element(workbookNs + "dxfs")!
             .Elements(workbookNs + "dxf")
@@ -498,7 +498,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var conditionalFormatting = worksheetXml.Root!.Elements(worksheetNs + "conditionalFormatting").First();
         conditionalFormatting.SetAttributeValue("customBlockAttr", "removed");
         conditionalFormatting.Add(
@@ -535,7 +535,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         return worksheetXml.Root!
             .Elements(worksheetNs + localName)
             .Select(element => new XElement(element))

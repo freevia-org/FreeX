@@ -118,7 +118,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace freexNs = "urn:freex:test";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var row = worksheetXml
             .Root!
             .Element(worksheetNs + "sheetData")!
@@ -142,7 +142,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace freexNs = "urn:freex:test";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var cell = worksheetXml
             .Root!
             .Element(worksheetNs + "sheetData")!
@@ -165,7 +165,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        return new XElement(LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!)
+        return new XElement(LoadPackageXml(archive, "xl/worksheets/sheet1.xml")
             .Root!
             .Element(worksheetNs + "sheetData")!
             .Elements(worksheetNs + "row")
