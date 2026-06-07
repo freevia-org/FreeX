@@ -108,34 +108,8 @@ internal static class XlsxWorkbookThemeWriter
 
     private static IEnumerable<XElement> CreateThemeSupplementElements(WorkbookTheme theme, XNamespace drawingNs)
     {
-        var elements = new List<XElement>();
-        if (string.IsNullOrWhiteSpace(theme.NativeThemeSupplementXml))
+        if (TryCreateNativeThemeSupplementElements(theme.NativeThemeSupplementXml, drawingNs) is not { } elements)
             return CreateModeledThemeSupplementElements(theme, drawingNs);
-
-        try
-        {
-            using var stringReader = new StringReader($"<themeSupplement>{theme.NativeThemeSupplementXml}</themeSupplement>");
-            using var xmlReader = XmlReader.Create(
-                stringReader,
-                new XmlReaderSettings
-                {
-                    DtdProcessing = DtdProcessing.Prohibit,
-                    XmlResolver = null
-                });
-            var document = XDocument.Load(xmlReader);
-            foreach (var element in document.Root!
-                         .Elements()
-                         .Where(element => IsSupportedThemeSupplementElement(element, drawingNs)))
-            {
-                var clone = new XElement(element);
-                XlsxThemeTypefaceNormalizer.SanitizeNonEmptyTypefaceAttributes(clone);
-                elements.Add(clone);
-            }
-        }
-        catch
-        {
-            return CreateModeledThemeSupplementElements(theme, drawingNs);
-        }
 
         if (!elements.Any(element => element.Name == drawingNs + "extraClrSchemeLst"))
             elements.AddRange(CreateAlternateColorSchemeListElement(theme, drawingNs));
@@ -143,6 +117,40 @@ internal static class XlsxWorkbookThemeWriter
             elements.AddRange(CreateObjectDefaultsElement(theme.ObjectDefaults, drawingNs));
 
         return elements;
+
+        static List<XElement>? TryCreateNativeThemeSupplementElements(string? nativeThemeSupplementXml, XNamespace drawingNs)
+        {
+            if (string.IsNullOrWhiteSpace(nativeThemeSupplementXml))
+                return null;
+
+            var elements = new List<XElement>();
+            try
+            {
+                using var stringReader = new StringReader($"<themeSupplement>{nativeThemeSupplementXml}</themeSupplement>");
+                using var xmlReader = XmlReader.Create(
+                    stringReader,
+                    new XmlReaderSettings
+                    {
+                        DtdProcessing = DtdProcessing.Prohibit,
+                        XmlResolver = null
+                    });
+                var document = XDocument.Load(xmlReader);
+                foreach (var element in document.Root!
+                             .Elements()
+                             .Where(element => IsSupportedThemeSupplementElement(element, drawingNs)))
+                {
+                    var clone = new XElement(element);
+                    XlsxThemeTypefaceNormalizer.SanitizeNonEmptyTypefaceAttributes(clone);
+                    elements.Add(clone);
+                }
+            }
+            catch
+            {
+                return null;
+            }
+
+            return elements;
+        }
     }
 
     private static bool IsSupportedThemeSupplementElement(XElement element, XNamespace drawingNs) =>
