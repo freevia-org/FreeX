@@ -1802,6 +1802,36 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void LoadedWorkbookFullSave_WithComments_PreservesLegacyCommentPackageGraph()
+    {
+        using var source = CreateLegacyCommentSourcePackage();
+        var sourceComments = ReadPackageRootElement(source, "xl/comments1.xml");
+        var sourceVmlDrawing = ReadPackageRootElement(source, "xl/drawings/vmlDrawing1.vml");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadPackageRootElement(saved, "xl/comments1.xml")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceComments.ToString(SaveOptions.DisableFormatting));
+        ReadPackageRootElement(saved, "xl/drawings/vmlDrawing1.vml")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceVmlDrawing.ToString(SaveOptions.DisableFormatting));
+        AssertLegacyCommentPackageGraph(saved, "xl/comments1.xml", "xl/drawings/vmlDrawing1.vml");
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_SanitizesRichCommentFontFamiliesForSchemaValidity()
     {
         using var source = CreateLegacyCommentSourcePackage();
@@ -5446,6 +5476,51 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Element(workbookNs + "rFont")!
             .Attribute("val")!
             .Value;
+    }
+
+    private static void AssertLegacyCommentPackageGraph(Stream stream, string commentsPath, string vmlDrawingPath)
+    {
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        const string worksheetPath = "xl/worksheets/sheet1.xml";
+        const string commentsRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
+        const string vmlDrawingRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
+
+        ReadPackageRootElement(stream, "[Content_Types].xml")
+            .Elements(contentTypeNs + "Override")
+            .Where(element =>
+                string.Equals(element.Attribute("PartName")?.Value, $"/{commentsPath}", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(
+                    element.Attribute("ContentType")?.Value,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml",
+                    StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .ContainSingle();
+
+        var worksheetRelationships = ReadPackageRootElement(stream, "xl/worksheets/_rels/sheet1.xml.rels");
+        var commentsRelationship = worksheetRelationships
+            .Elements(packageRelNs + "Relationship")
+            .Where(element => string.Equals(element.Attribute("Type")?.Value, commentsRelationshipType, StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .ContainSingle()
+            .Subject;
+        XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, commentsRelationship.Attribute("Target")!.Value)
+            .Should()
+            .Be(commentsPath);
+
+        var legacyDrawing = ReadWorksheetChildElement(stream, "legacyDrawing");
+        var vmlRelationshipId = legacyDrawing.Attribute(relNs + "id")!.Value;
+        var vmlRelationship = worksheetRelationships
+            .Elements(packageRelNs + "Relationship")
+            .Where(element => string.Equals(element.Attribute("Type")?.Value, vmlDrawingRelationshipType, StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .ContainSingle()
+            .Subject;
+        vmlRelationship.Attribute("Id")!.Value.Should().Be(vmlRelationshipId);
+        XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, vmlRelationship.Attribute("Target")!.Value)
+            .Should()
+            .Be(vmlDrawingPath);
     }
 
     private static XElement ReadPackageRootElement(Stream stream, string entryName)
