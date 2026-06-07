@@ -74,7 +74,7 @@ public static class ShareWorkbookPlanner
         }
 
         var trimmedPath = currentFilePath.Trim();
-        if (!TryNormalizePath(trimmedPath, out var normalizedPath))
+        if (!PlannerPathHelpers.TryGetFullPath(trimmedPath, out var normalizedPath))
         {
             saveAsReason = ShareWorkbookSaveAsReason.InvalidPath;
             candidatePath = trimmedPath;
@@ -82,7 +82,7 @@ public static class ShareWorkbookPlanner
         }
 
         candidatePath = normalizedPath;
-        if (!FileExists(fileExists, normalizedPath))
+        if (!PlannerPathHelpers.FileExists(fileExists, normalizedPath))
         {
             saveAsReason = ShareWorkbookSaveAsReason.MissingFile;
             return false;
@@ -90,55 +90,5 @@ public static class ShareWorkbookPlanner
 
         shareablePath = normalizedPath;
         return true;
-    }
-
-    private static bool TryNormalizePath(string path, out string normalizedPath)
-    {
-        normalizedPath = "";
-        try
-        {
-            normalizedPath = System.IO.Path.GetFullPath(path);
-            return !string.IsNullOrWhiteSpace(normalizedPath);
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (NotSupportedException)
-        {
-            return false;
-        }
-        catch (PathTooLongException)
-        {
-            return false;
-        }
-    }
-
-    private static bool FileExists(Func<string, bool> fileExists, string path)
-    {
-        try
-        {
-            return fileExists(path);
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (NotSupportedException)
-        {
-            return false;
-        }
-        catch (PathTooLongException)
-        {
-            return false;
-        }
-        catch (IOException)
-        {
-            return false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return false;
-        }
     }
 }

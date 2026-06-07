@@ -88,6 +88,32 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void LoadedWorkbookFullSave_WithMisboundCustomXmlProperties_RebindsValidItemSidecars()
+    {
+        using var source = CreateCustomXmlSourcePackageWithSecondItem();
+        PointFirstCustomXmlItemAtSecondProperties(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var newSheet = workbook.AddSheet("New Sheet");
+        newSheet.SetCell(new CellAddress(newSheet.Id, 1, 1), new TextValue("forces full save"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("change_sheet_count");
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertCustomXmlPackage(saved);
+        AssertSecondCustomXmlPackageItem(saved);
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithInvalidCustomXmlProperties_DropsInvalidSidecarGraph()
     {
         using var source = CreateCustomXmlSourcePackage();
@@ -115,6 +141,31 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         PackageEntryNames(saved).Should().NotContain("customXml/itemProps1.xml");
         PackageEntryNames(saved).Should().NotContain("customXml/_rels/item1.xml.rels");
         ContentTypeOverridePartNames(saved).Should().NotContain("/customXml/itemProps1.xml");
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithMissingCustomXmlItemRelationship_RebindsSidecarGraph()
+    {
+        using var source = CreateCustomXmlSourcePackage();
+        RemoveFirstCustomXmlItemRelationshipsOnly(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertCustomXmlPackage(saved);
     }
 
     private static MemoryStream CreateCustomXmlSourcePackage()
@@ -241,6 +292,28 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         ReplacePackageXml(archive, "customXml/itemProps1.xml", new XDocument(new XElement("notDatastoreItem")));
     }
 
+    private static void PointFirstCustomXmlItemAtSecondProperties(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        ReplacePackageXml(archive, "customXml/_rels/item1.xml.rels", new XDocument(
+            new XElement(
+                packageRelNs + "Relationships",
+                new XElement(
+                    packageRelNs + "Relationship",
+                    new XAttribute("Id", "rIdWrongItemProps"),
+                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps"),
+                    new XAttribute("Target", "itemProps2.xml")))));
+    }
+
+    private static void RemoveFirstCustomXmlItemRelationshipsOnly(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        archive.GetEntry("customXml/_rels/item1.xml.rels")?.Delete();
+    }
+
     private static void AssertCustomXmlPackage(Stream stream)
     {
         XNamespace customXmlNs = "http://schemas.openxmlformats.org/officeDocument/2006/customXml";
@@ -271,7 +344,6 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         ReadPackageRootElement(stream, "customXml/_rels/item1.xml.rels")
             .Elements(packageRelNs + "Relationship")
             .Where(relationship =>
-                relationship.Attribute("Id")?.Value == "rIdFreeXItemProps" &&
                 relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps" &&
                 relationship.Attribute("Target")?.Value == "itemProps1.xml")
             .Should()
@@ -306,7 +378,6 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         ReadPackageRootElement(stream, "customXml/_rels/item2.xml.rels")
             .Elements(packageRelNs + "Relationship")
             .Where(relationship =>
-                relationship.Attribute("Id")?.Value == "rIdFreeXSecondItemProps" &&
                 relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps" &&
                 relationship.Attribute("Target")?.Value == "itemProps2.xml")
             .Should()

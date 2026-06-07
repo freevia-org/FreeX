@@ -46,7 +46,7 @@ internal static class XlsxWorksheetCellWatchesNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(cellWatches, EmptyAttributes);
-        changed |= RemoveUnexpectedChildren(cellWatches, WorksheetNs + "cellWatch");
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(cellWatches, WorksheetNs + "cellWatch");
 
         var seenReferences = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var cellWatch in cellWatches.Elements(WorksheetNs + "cellWatch").ToList())
@@ -79,21 +79,6 @@ internal static class XlsxWorksheetCellWatchesNormalizer
             if (NormalizeWorksheetRoot(root))
                 XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
         }
-    }
-
-    private static bool RemoveUnexpectedChildren(XElement element, XName allowedChildName)
-    {
-        var changed = false;
-        foreach (var child in element.Elements().ToList())
-        {
-            if (child.Name == allowedChildName)
-                continue;
-
-            child.Remove();
-            changed = true;
-        }
-
-        return changed;
     }
 
     private static string? NormalizeCellReference(string? value)

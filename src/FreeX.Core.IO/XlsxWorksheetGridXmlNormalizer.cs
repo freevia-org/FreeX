@@ -138,7 +138,7 @@ internal static class XlsxWorksheetGridXmlNormalizer
     {
         var changed = false;
         changed |= RemoveUnknownAttributes(columns, EmptyAttributes);
-        changed |= RemoveUnexpectedChildren(columns, WorksheetNs + "col");
+        changed |= RemoveChildElementsExcept(columns, WorksheetNs + "col");
 
         foreach (var column in columns.Elements(WorksheetNs + "col").ToList())
             changed |= NormalizeColumnElement(column);
@@ -156,7 +156,7 @@ internal static class XlsxWorksheetGridXmlNormalizer
     {
         var changed = false;
         changed |= RemoveUnknownAttributes(sheetData, EmptyAttributes);
-        changed |= RemoveUnexpectedChildren(sheetData, WorksheetNs + "row");
+        changed |= RemoveChildElementsExcept(sheetData, WorksheetNs + "row");
 
         foreach (var row in sheetData.Elements(WorksheetNs + "row").ToList())
             changed |= NormalizeRowElement(row, cellMetadataCount, valueMetadataCount);
@@ -326,21 +326,6 @@ internal static class XlsxWorksheetGridXmlNormalizer
         }
 
         keptExtensionList = true;
-        return changed;
-    }
-
-    private static bool RemoveUnexpectedChildren(XElement element, XName allowedChildName)
-    {
-        var changed = false;
-        foreach (var child in element.Elements().ToList())
-        {
-            if (child.Name == allowedChildName)
-                continue;
-
-            child.Remove();
-            changed = true;
-        }
-
         return changed;
     }
 
