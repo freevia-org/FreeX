@@ -5,6 +5,9 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxWorksheetPrinterSettingsReferencePreserver
 {
+    private const string PrinterSettingsRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings";
+
     public static void Preserve(ZipArchive sourceArchive, ZipArchive targetArchive)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -53,17 +56,32 @@ internal static class XlsxWorksheetPrinterSettingsReferencePreserver
             var sourcePageSetup = sourceWorksheetXml.Root?.Element(workbookNs + "pageSetup");
             var sourceRelId = sourcePageSetup?.Attribute(relNs + "id")?.Value;
             if (string.IsNullOrWhiteSpace(sourceRelId))
+            {
+                RemoveInvalidPageSetupRelationshipId(
+                    targetArchive,
+                    targetWorksheetPath,
+                    workbookNs,
+                    relNs,
+                    packageRelNs);
                 continue;
+            }
 
-            var sourceWorksheetRels = XlsxRelationshipReader.LoadTargets(
-                sourceArchive,
-                XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath),
-                sourceWorksheetPath,
-                packageRelNs);
-            if (!sourceWorksheetRels.TryGetValue(sourceRelId, out var printerSettingsPath) ||
+            if (!TryGetPrinterSettingsTarget(
+                    sourceArchive,
+                    XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath),
+                    sourceWorksheetPath,
+                    sourceRelId,
+                    packageRelNs,
+                    out var printerSettingsPath) ||
                 !printerSettingsPath.StartsWith("xl/printerSettings/", StringComparison.OrdinalIgnoreCase) ||
                 targetArchive.GetEntry(printerSettingsPath) is null)
             {
+                RemoveInvalidPageSetupRelationshipId(
+                    targetArchive,
+                    targetWorksheetPath,
+                    workbookNs,
+                    relNs,
+                    packageRelNs);
                 continue;
             }
 
@@ -76,7 +94,7 @@ internal static class XlsxWorksheetPrinterSettingsReferencePreserver
                 packageRelNs,
                 targetWorksheetPath,
                 printerSettingsPath,
-                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings");
+                PrinterSettingsRelationshipType);
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetRelsPath, targetWorksheetRelsXml);
 
             var targetWorksheetXml = XlsxPackageXmlEditor.LoadXml(targetWorksheetEntry);
@@ -95,5 +113,84 @@ internal static class XlsxWorksheetPrinterSettingsReferencePreserver
             targetPageSetup.SetAttributeValue(relNs + "id", targetRelId);
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
+    }
+
+    private static void RemoveInvalidPageSetupRelationshipId(
+        ZipArchive targetArchive,
+        string targetWorksheetPath,
+        XNamespace workbookNs,
+        XNamespace relNs,
+        XNamespace packageRelNs)
+    {
+        var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
+        if (targetWorksheetEntry is null)
+            return;
+
+        var targetWorksheetXml = XlsxPackageXmlEditor.LoadXml(targetWorksheetEntry);
+        var pageSetup = targetWorksheetXml.Root?.Element(workbookNs + "pageSetup");
+        var relationshipId = pageSetup?.Attribute(relNs + "id")?.Value;
+        if (string.IsNullOrWhiteSpace(relationshipId))
+            return;
+
+        if (TargetRelationshipIsPrinterSettings(
+                targetArchive,
+                targetWorksheetPath,
+                relationshipId,
+                packageRelNs))
+        {
+            return;
+        }
+
+        pageSetup!.Attribute(relNs + "id")?.Remove();
+        XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
+    }
+
+    private static bool TargetRelationshipIsPrinterSettings(
+        ZipArchive archive,
+        string worksheetPath,
+        string relationshipId,
+        XNamespace packageRelNs)
+    {
+        if (!TryGetPrinterSettingsTarget(
+                archive,
+                XlsxPackagePath.GetRelationshipPartPath(worksheetPath),
+                worksheetPath,
+                relationshipId,
+                packageRelNs,
+                out var printerSettingsPath))
+        {
+            return false;
+        }
+
+        return printerSettingsPath.StartsWith("xl/printerSettings/", StringComparison.OrdinalIgnoreCase) &&
+               archive.GetEntry(printerSettingsPath) is not null;
+    }
+
+    private static bool TryGetPrinterSettingsTarget(
+        ZipArchive archive,
+        string relationshipsPath,
+        string sourcePartPath,
+        string relationshipId,
+        XNamespace packageRelNs,
+        out string targetPath)
+    {
+        targetPath = "";
+        var relationshipsEntry = archive.GetEntry(relationshipsPath);
+        if (relationshipsEntry is null)
+            return false;
+
+        var relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
+        var relationship = relationshipsXml.Root?
+            .Elements(packageRelNs + "Relationship")
+            .FirstOrDefault(candidate =>
+                string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal) &&
+                string.Equals(candidate.Attribute("Type")?.Value, PrinterSettingsRelationshipType, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(candidate.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase));
+        var target = relationship?.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target))
+            return false;
+
+        targetPath = XlsxPackagePath.ResolveRelationshipTarget(sourcePartPath, target);
+        return !string.IsNullOrWhiteSpace(targetPath);
     }
 }
