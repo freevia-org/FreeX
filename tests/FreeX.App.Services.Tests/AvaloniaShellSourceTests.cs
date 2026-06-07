@@ -2708,4 +2708,40 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("go_to_dialog_result_closed_without_accept={FormatBool(snapshot.DialogEvidence.HasGoToDialogClosedWithoutAccept)}");
         smokeSource.Should().Contain("go_to_special_dialog_result_closed_without_accept={FormatBool(snapshot.DialogEvidence.HasGoToSpecialDialogClosedWithoutAccept)}");
     }
+
+    [Fact]
+    public void MainWindow_WiresWorkbookStatisticsToCompactNativeMenuDialog()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("private readonly NativeMenuItem _workbookStatisticsMenuItem = new();");
+        source.Should().Contain("_workbookStatisticsMenuItem.Header = \"Workbook Statistics...\";");
+        source.Should().Contain("_workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);");
+        source.Should().Contain("_workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();");
+        source.Should().Contain("fileMenu.Items.Add(_workbookStatisticsMenuItem);");
+        source.Should().Contain("_workbookStatisticsMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("else if (e.Key == Key.G && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))");
+        source.Should().Contain("await ShowWorkbookStatisticsDialogAsync();");
+        source.Should().Contain("private async Task ShowWorkbookStatisticsDialogAsync()");
+        source.Should().Contain("WorkbookStatisticsService.GetStatistics(_session.Workbook)");
+        source.Should().Contain("Title = \"Workbook Statistics\"");
+        source.Should().Contain("Width = 380");
+        source.Should().Contain("Height = 320");
+        source.Should().Contain("MinWidth = 340");
+        source.Should().Contain("MinHeight = 280");
+        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"WorkbookStatisticsDialog\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"WorkbookStatisticsOkButton\");");
+        source.Should().Contain("CreateWorkbookStatisticsDialogContent(statistics, okButton)");
+        source.Should().Contain("AutomationProperties.SetAutomationId(statisticsBlock, \"WorkbookStatisticsSummary\");");
+        source.Should().Contain("Summarizes sheet, cell, formula, comment, and object counts for the workbook.");
+        source.Should().Contain("private static string FormatWorkbookStatistics(WorkbookStatistics statistics)");
+        source.Should().Contain("$\"Sheets: {statistics.WorksheetCount}\"");
+        source.Should().Contain("$\"Cells with data: {statistics.CellCount}\"");
+        source.Should().Contain("$\"Formulas: {statistics.FormulaCount}\"");
+        source.Should().Contain("$\"Comments: {statistics.CommentCount}\"");
+        source.Should().Contain("$\"Charts: {statistics.ChartCount}\"");
+        source.Should().Contain("$\"Pictures: {statistics.PictureCount}\"");
+        source.Should().Contain("$\"Shapes and text boxes: {statistics.ShapeCount}\"");
+        source.Should().Contain("$\"Named ranges: {statistics.NamedRangeCount}\"");
+    }
 }

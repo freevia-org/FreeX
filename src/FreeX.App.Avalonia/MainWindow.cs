@@ -283,6 +283,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _openRecentMenuItem = new();
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
+    private readonly NativeMenuItem _workbookStatisticsMenuItem = new();
     private readonly NativeMenuItem _closeWorkbookMenuItem = new();
     private readonly NativeMenuItem _newSheetMenuItem = new();
     private readonly NativeMenuItem _renameSheetMenuItem = new();
@@ -541,6 +542,10 @@ public sealed class MainWindow : Window
         _saveAsMenuItem.Header = "Save As...";
         _saveAsMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Shift);
         _saveAsMenuItem.Click += async (_, _) => await SaveWorkbookAsAsync();
+
+        _workbookStatisticsMenuItem.Header = "Workbook Statistics...";
+        _workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);
+        _workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();
 
         _closeWorkbookMenuItem.Header = "Close Workbook";
         _closeWorkbookMenuItem.Gesture = new KeyGesture(Key.W, KeyModifiers.Meta);
@@ -870,6 +875,7 @@ public sealed class MainWindow : Window
         fileMenu.Items.Add(_openRecentMenuItem);
         fileMenu.Items.Add(_saveMenuItem);
         fileMenu.Items.Add(_saveAsMenuItem);
+        fileMenu.Items.Add(_workbookStatisticsMenuItem);
         fileMenu.Items.Add(new NativeMenuItemSeparator());
         fileMenu.Items.Add(_closeWorkbookMenuItem);
         fileMenu.Items.Add(new NativeMenuItemSeparator());
@@ -1581,6 +1587,7 @@ public sealed class MainWindow : Window
         RefreshNativeOpenRecentMenu(isIdle);
         _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
         _saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;
+        _workbookStatisticsMenuItem.IsEnabled = isIdle;
         _closeWorkbookMenuItem.IsEnabled = isIdle;
         var activeSheetTabIndex = FindActiveSheetTabIndex();
         _newSheetMenuItem.IsEnabled = _newSheetButton.IsEnabled;
@@ -4690,6 +4697,89 @@ public sealed class MainWindow : Window
         RefreshShell($"Selected {selectedText}");
         return true;
     }
+
+    private async Task ShowWorkbookStatisticsDialogAsync()
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var statistics = WorkbookStatisticsService.GetStatistics(_session.Workbook);
+        var dialog = new Window
+        {
+            Title = "Workbook Statistics",
+            Width = 380,
+            Height = 320,
+            MinWidth = 340,
+            MinHeight = 280,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "WorkbookStatisticsDialog");
+
+        var okButton = new Button
+        {
+            Content = "OK",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+        };
+        AutomationProperties.SetName(okButton, "OK");
+        AutomationProperties.SetAutomationId(okButton, "WorkbookStatisticsOkButton");
+        AutomationProperties.SetHelpText(okButton, "Close workbook statistics.");
+
+        okButton.Click += (_, _) => dialog.Close();
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key is Key.Enter or Key.Escape)
+            {
+                dialog.Close();
+                e.Handled = true;
+            }
+        };
+
+        dialog.Content = CreateWorkbookStatisticsDialogContent(statistics, okButton);
+        dialog.Opened += (_, _) => okButton.Focus();
+        await dialog.ShowDialog(this);
+    }
+
+    private static Control CreateWorkbookStatisticsDialogContent(WorkbookStatistics statistics, Button okButton)
+    {
+        var statisticsBlock = new TextBlock
+        {
+            Text = FormatWorkbookStatistics(statistics),
+            TextWrapping = TextWrapping.Wrap,
+            LineHeight = 22,
+        };
+        AutomationProperties.SetName(statisticsBlock, "Workbook Statistics");
+        AutomationProperties.SetAutomationId(statisticsBlock, "WorkbookStatisticsSummary");
+        AutomationProperties.SetHelpText(statisticsBlock, "Summarizes sheet, cell, formula, comment, and object counts for the workbook.");
+
+        var root = new DockPanel
+        {
+            Margin = new Thickness(16),
+        };
+        DockPanel.SetDock(okButton, Dock.Bottom);
+        root.Children.Add(okButton);
+        root.Children.Add(new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = statisticsBlock,
+        });
+
+        return root;
+    }
+
+    private static string FormatWorkbookStatistics(WorkbookStatistics statistics) =>
+        string.Join(Environment.NewLine,
+            $"Sheets: {statistics.WorksheetCount}",
+            $"Cells with data: {statistics.CellCount}",
+            $"Formulas: {statistics.FormulaCount}",
+            $"Comments: {statistics.CommentCount}",
+            $"Charts: {statistics.ChartCount}",
+            $"Pictures: {statistics.PictureCount}",
+            $"Shapes and text boxes: {statistics.ShapeCount}",
+            $"Named ranges: {statistics.NamedRangeCount}");
 
     private async Task ShowFormatCellsDialogAsync()
     {
@@ -7878,6 +7968,11 @@ public sealed class MainWindow : Window
         {
             e.Handled = true;
             await ShowReplaceDialogAsync();
+        }
+        else if (e.Key == Key.G && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))
+        {
+            e.Handled = true;
+            await ShowWorkbookStatisticsDialogAsync();
         }
         else if (e.Key == Key.G && HasOnlyControlModifier(e.KeyModifiers))
         {
