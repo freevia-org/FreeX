@@ -239,6 +239,8 @@ internal static class XlsxWorkbookSchemaNormalizer
             }
         }
 
+        changed |= XlsxWorkbookOleSizeNormalizer.NormalizeWorkbookRoot(root, workbookNs);
+
         if (root.Element(workbookNs + "fileVersion") is { } fileVersion)
             changed |= XlsxWorkbookFileVersionNormalizer.NormalizeElement(fileVersion);
         if (root.Element(workbookNs + "functionGroups") is { } functionGroups)
