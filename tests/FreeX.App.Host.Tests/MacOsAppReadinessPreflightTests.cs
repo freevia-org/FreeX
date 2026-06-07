@@ -29,6 +29,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_sheet_menu=true");
         script.Should().Contain("native_new_sheet_menu_item=true");
         script.Should().Contain("native_duplicate_sheet_menu_item=true");
+        script.Should().Contain("native_delete_sheet_menu_item=true");
+        script.Should().Contain("HasNativeDeleteSheetMenuItem &&");
         script.Should().Contain("native_help_menu=true");
         script.Should().Contain("native_help_online_menu_item=true");
         script.Should().Contain("native_legal_notices_menu_item=");
@@ -55,8 +57,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("private static bool HasVisibleCellBorder(CellStyle? style)");
         script.Should().Contain("var result = _session.AddSheet();");
         script.Should().Contain("var result = _session.DuplicateActiveSheet();");
+        script.Should().Contain("var result = _session.DeleteActiveSheet();");
         script.Should().Contain("public WorkbookCellEditResult AddSheet()");
         script.Should().Contain("new DuplicateSheetCommand(sourceSheetId)");
+        script.Should().Contain("public WorkbookCellEditResult DeleteActiveSheet()");
+        script.Should().Contain("new RemoveSheetCommand(sheetId)");
         script.Should().Contain("OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl");
         script.Should().Contain("AppHelpInfo.BuildAboutText(versionText, PlatformAboutSummary)");
         script.Should().Contain("LegalNoticeProvider.GetDocuments().Select(document =>");
@@ -334,6 +339,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_help_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_new_sheet_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_duplicate_sheet_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_delete_sheet_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_cut_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_copy_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_paste_menu_item=true" "$artifact_root/launch.txt"
@@ -437,9 +443,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     _newSheetButton.Click += (_, _) => AddNewSheet();
                     _newSheetMenuItem.Click += (_, _) => AddNewSheet();
                     _duplicateSheetMenuItem.Click += (_, _) => DuplicateActiveSheet();
+                    _deleteSheetMenuItem.Click += (_, _) => DeleteActiveSheet();
                     var sheetItem = new NativeMenuItem { Header = "Sheet" };
                     var result = _session.AddSheet();
                     var result = _session.DuplicateActiveSheet();
+                    var result = _session.DeleteActiveSheet();
                     if (e.Key == Key.F11 && e.KeyModifiers == KeyModifiers.Shift) { }
                     _helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, "Help Online");
                     _sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, "Send Feedback");
@@ -473,16 +481,17 @@ public sealed class MacOsAppReadinessPreflightTests
 
             internal sealed class MacOsLaunchSmokeSnapshot
             {
-                public bool IsPassed => HasNativeFileMenu && HasNativeEditMenu && HasNativeFormatMenu && HasNativeSheetMenu && HasNativeHelpMenu && HasNativeCellStylesMenuItem && HasNativeCopyMenuItem;
+                public bool IsPassed => HasNativeFileMenu && HasNativeEditMenu && HasNativeFormatMenu && HasNativeSheetMenu && HasNativeHelpMenu && HasNativeDeleteSheetMenuItem && HasNativeCellStylesMenuItem && HasNativeCopyMenuItem;
                 private bool HasNativeFileMenu { get; }
                 private bool HasNativeEditMenu { get; }
                 private bool HasNativeFormatMenu { get; }
                 private bool HasNativeSheetMenu { get; }
                 private bool HasNativeHelpMenu { get; }
+                private bool HasNativeDeleteSheetMenuItem { get; }
                 private bool HasNativeCellStylesMenuItem { get; }
                 private bool HasNativeCopyMenuItem { get; }
                 public int NativeCellStylesPresetCount { get; }
-                public string Report => "new_sheet_button= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_sheet_menu= native_new_sheet_menu_item= native_duplicate_sheet_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+                public string Report => "new_sheet_button= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_sheet_menu= native_new_sheet_menu_item= native_duplicate_sheet_menu_item= native_delete_sheet_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
             }
             """);
 
@@ -509,6 +518,15 @@ public sealed class MacOsAppReadinessPreflightTests
                     var result = _cellEditService.ExecuteEditCommand(
                         Workbook,
                         new DuplicateSheetCommand(sourceSheetId));
+                    return result;
+                }
+
+                public WorkbookCellEditResult DeleteActiveSheet()
+                {
+                    var sheetId = ActiveSheet.Id;
+                    var result = _cellEditService.ExecuteEditCommand(
+                        Workbook,
+                        new RemoveSheetCommand(sheetId));
                     return result;
                 }
 

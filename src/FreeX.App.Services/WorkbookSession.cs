@@ -276,6 +276,30 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public WorkbookCellEditResult DeleteActiveSheet()
+    {
+        var sheetId = ActiveSheet.Id;
+        var sheetIndex = Workbook.Sheets.ToList().FindIndex(sheet => sheet.Id == sheetId);
+        if (sheetIndex < 0)
+        {
+            return new WorkbookCellEditResult(
+                false,
+                "Active sheet was not found.",
+                [],
+                RecalcReport: null);
+        }
+
+        var preferredSheetId = FindPreferredSheetIdAfterRemoval(sheetIndex, sheetId);
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new RemoveSheetCommand(sheetId));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulWorkbookStructureResult(preferredSheetId ?? Workbook.Sheets[0].Id);
+        return result;
+    }
+
     public void BeginFormulaEdit(CellAddress address)
     {
         ActiveCell = address;
@@ -798,6 +822,25 @@ public sealed class WorkbookSession
         foreach (var sheet in Workbook.Sheets)
         {
             if (!sheetIdsBefore.Contains(sheet.Id))
+                return sheet.Id;
+        }
+
+        return null;
+    }
+
+    private SheetId? FindPreferredSheetIdAfterRemoval(int removedIndex, SheetId removedSheetId)
+    {
+        for (var index = removedIndex + 1; index < Workbook.Sheets.Count; index++)
+        {
+            var sheet = Workbook.Sheets[index];
+            if (sheet.Id != removedSheetId)
+                return sheet.Id;
+        }
+
+        for (var index = removedIndex - 1; index >= 0; index--)
+        {
+            var sheet = Workbook.Sheets[index];
+            if (sheet.Id != removedSheetId)
                 return sheet.Id;
         }
 

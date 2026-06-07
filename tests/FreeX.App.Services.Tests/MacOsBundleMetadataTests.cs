@@ -144,6 +144,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"native_help_menu=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_new_sheet_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_duplicate_sheet_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_delete_sheet_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_undo_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_redo_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_cut_menu_item=true\" \"$launch_smoke_report\"");

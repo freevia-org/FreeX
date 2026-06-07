@@ -2331,6 +2331,73 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void DeleteActiveSheet_RemovesSelectsNextSheetAndKeepsUndoRedoCoherent()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var charts = workbook.AddSheet("Charts");
+        details.SetCell(new CellAddress(details.Id, 2, 2), new TextValue("remove me"));
+        charts.SetCell(new CellAddress(charts.Id, 3, 3), new TextValue("keep me"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectSheet(details.Id);
+
+        var result = session.DeleteActiveSheet();
+
+        result.Success.Should().BeTrue();
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Sheet1", "Charts");
+        session.ActiveSheet.Should().BeSameAs(charts);
+        workbook.ActiveSheetIndex.Should().Be(1);
+        session.ActiveCell.Should().Be(new CellAddress(charts.Id, 1, 1));
+        session.SelectedRange.Should().Be(new GridRange(session.ActiveCell, session.ActiveCell));
+        session.SheetTabs.Should().Equal(
+            new WorkbookSheetTab(summary.Id, "Sheet1", IsActive: false),
+            new WorkbookSheetTab(charts.Id, "Charts", IsActive: true));
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Sheet1", "Details", "Charts");
+        session.ActiveSheet.Should().BeSameAs(details);
+        details.GetValue(new CellAddress(details.Id, 2, 2)).Should().Be(new TextValue("remove me"));
+        session.CanRedo.Should().BeTrue();
+
+        var redo = session.RedoLastEdit();
+
+        redo.Success.Should().BeTrue();
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Sheet1", "Charts");
+        session.ActiveSheet.Should().BeSameAs(charts);
+        charts.GetValue(new CellAddress(charts.Id, 3, 3)).Should().Be(new TextValue("keep me"));
+        workbook.ActiveSheetIndex.Should().Be(1);
+    }
+
+    [Fact]
+    public void DeleteActiveSheet_RejectsOnlySheetWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var result = session.DeleteActiveSheet();
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("only sheet");
+        workbook.Sheets.Should().ContainSingle().Which.Name.Should().Be("Sheet1");
+        session.ActiveSheet.Name.Should().Be("Sheet1");
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void SheetLifecycleCommands_RejectProtectedWorkbookWithoutMarkingDirty()
     {
         var workbook = CreateWorkbook();
@@ -2343,11 +2410,14 @@ public sealed class WorkbookSessionTests
 
         var add = session.AddSheet();
         var duplicate = session.DuplicateActiveSheet();
+        var delete = session.DeleteActiveSheet();
 
         add.Success.Should().BeFalse();
         duplicate.Success.Should().BeFalse();
+        delete.Success.Should().BeFalse();
         add.ErrorMessage.Should().Contain("protected");
         duplicate.ErrorMessage.Should().Contain("protected");
+        delete.ErrorMessage.Should().Contain("protected");
         workbook.Sheets.Should().ContainSingle().Which.Name.Should().Be("Sheet1");
         session.ActiveSheet.Name.Should().Be("Sheet1");
         session.IsDirty.Should().BeFalse();

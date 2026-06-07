@@ -121,6 +121,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _saveAsMenuItem = new();
     private readonly NativeMenuItem _newSheetMenuItem = new();
     private readonly NativeMenuItem _duplicateSheetMenuItem = new();
+    private readonly NativeMenuItem _deleteSheetMenuItem = new();
     private readonly NativeMenuItem _undoMenuItem = new();
     private readonly NativeMenuItem _redoMenuItem = new();
     private readonly NativeMenuItem _cutMenuItem = new();
@@ -319,6 +320,9 @@ public sealed class MainWindow : Window
 
         _duplicateSheetMenuItem.Header = "Duplicate Sheet";
         _duplicateSheetMenuItem.Click += (_, _) => DuplicateActiveSheet();
+
+        _deleteSheetMenuItem.Header = "Delete Sheet";
+        _deleteSheetMenuItem.Click += (_, _) => DeleteActiveSheet();
 
         _undoMenuItem.Header = "Undo";
         _undoMenuItem.Gesture = new KeyGesture(Key.Z, KeyModifiers.Meta);
@@ -528,6 +532,7 @@ public sealed class MainWindow : Window
         var sheetMenu = new NativeMenu();
         sheetMenu.Items.Add(_newSheetMenuItem);
         sheetMenu.Items.Add(_duplicateSheetMenuItem);
+        sheetMenu.Items.Add(_deleteSheetMenuItem);
 
         var helpMenu = new NativeMenu();
         helpMenu.Items.Add(_helpOnlineMenuItem);
@@ -998,6 +1003,7 @@ public sealed class MainWindow : Window
         _saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;
         _newSheetMenuItem.IsEnabled = _newSheetButton.IsEnabled;
         _duplicateSheetMenuItem.IsEnabled = isIdle;
+        _deleteSheetMenuItem.IsEnabled = isIdle;
         _undoMenuItem.IsEnabled = _undoButton.IsEnabled;
         _redoMenuItem.IsEnabled = _redoButton.IsEnabled;
         _cutMenuItem.IsEnabled = _cutButton.IsEnabled;
@@ -2072,6 +2078,26 @@ public sealed class MainWindow : Window
         RefreshShell($"Duplicated {sourceName}");
     }
 
+    private void DeleteActiveSheet()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var sheetName = _session.ActiveSheet.Name;
+        ClearSelectedDrawingObject();
+        var result = _session.DeleteActiveSheet();
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Delete Sheet failed.");
+            return;
+        }
+
+        RefreshShell($"Deleted {sheetName}");
+    }
+
     private void BeginFormulaEdit(CellAddress address, string? initialText = null)
     {
         ClearSelectedDrawingObject();
@@ -2990,6 +3016,7 @@ public sealed class MainWindow : Window
             HasNativeSaveAsMenuItem: HasNativeMenuItem(_saveAsMenuItem, "Save As..."),
             HasNativeNewSheetMenuItem: HasNativeMenuItem(_newSheetMenuItem, "New Sheet"),
             HasNativeDuplicateSheetMenuItem: HasNativeMenuItem(_duplicateSheetMenuItem, "Duplicate Sheet", requireGesture: false),
+            HasNativeDeleteSheetMenuItem: HasNativeMenuItem(_deleteSheetMenuItem, "Delete Sheet", requireGesture: false),
             HasNativeUndoMenuItem: HasNativeMenuItem(_undoMenuItem, "Undo"),
             HasNativeRedoMenuItem: HasNativeMenuItem(_redoMenuItem, "Redo"),
             HasNativeCutMenuItem: HasNativeMenuItem(_cutMenuItem, "Cut"),

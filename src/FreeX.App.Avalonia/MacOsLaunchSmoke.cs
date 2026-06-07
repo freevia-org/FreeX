@@ -78,6 +78,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeSaveAsMenuItem,
     bool HasNativeNewSheetMenuItem,
     bool HasNativeDuplicateSheetMenuItem,
+    bool HasNativeDeleteSheetMenuItem,
     bool HasNativeUndoMenuItem,
     bool HasNativeRedoMenuItem,
     bool HasNativeCutMenuItem,
@@ -144,6 +145,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeSaveAsMenuItem &&
         HasNativeNewSheetMenuItem &&
         HasNativeDuplicateSheetMenuItem &&
+        HasNativeDeleteSheetMenuItem &&
         HasNativeUndoMenuItem &&
         HasNativeRedoMenuItem &&
         HasNativeCutMenuItem &&
@@ -258,6 +260,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_save_as_menu_item={FormatBool(snapshot.HasNativeSaveAsMenuItem)}",
                 $"native_new_sheet_menu_item={FormatBool(snapshot.HasNativeNewSheetMenuItem)}",
                 $"native_duplicate_sheet_menu_item={FormatBool(snapshot.HasNativeDuplicateSheetMenuItem)}",
+                $"native_delete_sheet_menu_item={FormatBool(snapshot.HasNativeDeleteSheetMenuItem)}",
                 $"native_undo_menu_item={FormatBool(snapshot.HasNativeUndoMenuItem)}",
                 $"native_redo_menu_item={FormatBool(snapshot.HasNativeRedoMenuItem)}",
                 $"native_cut_menu_item={FormatBool(snapshot.HasNativeCutMenuItem)}",
