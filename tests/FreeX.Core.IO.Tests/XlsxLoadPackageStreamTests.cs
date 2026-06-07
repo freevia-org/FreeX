@@ -470,6 +470,29 @@ public sealed class XlsxLoadPackageStreamTests
     }
 
     [Fact]
+    public void ClosedXmlLoadSanitizer_NormalizesMisdirectedDocumentPropertyRootRelationships()
+    {
+        using var package = CreatePackageWithMisdirectedDocumentPropertyRootRelationship();
+
+        using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(package);
+
+        sanitized.Should().NotBeSameAs(package);
+        using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationships = XlsxPackageTestFixtures.LoadPackageXml(archive, "_rels/.rels")
+            .Root!
+            .Elements(relationshipNs + "Relationship")
+            .Where(relationship => string.Equals(
+                relationship.Attribute("Type")?.Value,
+                "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties",
+                StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        relationships.Should().ContainSingle();
+        relationships[0].Attribute("Target")!.Value.Should().Be("docProps/core.xml");
+        relationships[0].Attribute("TargetMode").Should().BeNull();
+    }
+
+    [Fact]
     public void ClosedXmlLoadSanitizer_NormalizesWorksheetRelationshipMarkers()
     {
         using var package = CreatePackageWithWorksheet(
@@ -1133,6 +1156,45 @@ public sealed class XlsxLoadPackageStreamTests
                 "docProps/core.xml",
                 """
                 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"/>
+                """);
+            WritePackageEntry(
+                archive,
+                "xl/workbook.xml",
+                """
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
+    private static MemoryStream CreatePackageWithMisdirectedDocumentPropertyRootRelationship()
+    {
+        var package = new MemoryStream();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WritePackageEntry(
+                archive,
+                "_rels/.rels",
+                """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdWorkbook" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="/xl/workbook.xml"/>
+                  <Relationship Id="rIdCoreSidecar" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="/package/services/metadata/core-properties/microsoft.azureiplabel.xml"/>
+                  <Relationship Id="rIdCore" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="/docProps/core.xml"/>
+                </Relationships>
+                """);
+            WritePackageEntry(
+                archive,
+                "docProps/core.xml",
+                """
+                <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"/>
+                """);
+            WritePackageEntry(
+                archive,
+                "package/services/metadata/core-properties/microsoft.azureiplabel.xml",
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"/>
                 """);
             WritePackageEntry(
                 archive,
