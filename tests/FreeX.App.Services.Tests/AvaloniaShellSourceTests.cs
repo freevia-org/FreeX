@@ -1265,6 +1265,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _newSheetMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _renameSheetMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _duplicateSheetMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _moveSheetLeftMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _moveSheetRightMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _deleteSheetMenuItem = new();");
         source.Should().Contain("_newSheetButton.Content = \"+\";");
         source.Should().Contain("_newSheetButton.Click += (_, _) => AddNewSheet();");
@@ -1276,18 +1278,28 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_renameSheetMenuItem.Click += async (_, _) => await RenameActiveSheetAsync();");
         source.Should().Contain("_duplicateSheetMenuItem.Header = \"Duplicate Sheet\";");
         source.Should().Contain("_duplicateSheetMenuItem.Click += (_, _) => DuplicateActiveSheet();");
+        source.Should().Contain("_moveSheetLeftMenuItem.Header = \"Move Sheet Left\";");
+        source.Should().Contain("_moveSheetLeftMenuItem.Click += (_, _) => MoveActiveSheetLeft();");
+        source.Should().Contain("_moveSheetRightMenuItem.Header = \"Move Sheet Right\";");
+        source.Should().Contain("_moveSheetRightMenuItem.Click += (_, _) => MoveActiveSheetRight();");
         source.Should().Contain("_deleteSheetMenuItem.Header = \"Delete Sheet\";");
         source.Should().Contain("_deleteSheetMenuItem.Click += (_, _) => DeleteActiveSheet();");
         source.Should().Contain("sheetMenu.Items.Add(_newSheetMenuItem);");
         source.Should().Contain("sheetMenu.Items.Add(_renameSheetMenuItem);");
         source.Should().Contain("sheetMenu.Items.Add(_duplicateSheetMenuItem);");
+        source.Should().Contain("sheetMenu.Items.Add(_moveSheetLeftMenuItem);");
+        source.Should().Contain("sheetMenu.Items.Add(_moveSheetRightMenuItem);");
         source.Should().Contain("sheetMenu.Items.Add(_deleteSheetMenuItem);");
         source.Should().Contain("Header = \"Sheet\"");
         source.Should().Contain("_newSheetButton.IsEnabled = isIdle;");
         source.Should().Contain("_newSheetMenuItem.IsEnabled = _newSheetButton.IsEnabled;");
         source.Should().Contain("_renameSheetMenuItem.IsEnabled = isIdle;");
         source.Should().Contain("_duplicateSheetMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("var activeSheetTabIndex = FindActiveSheetTabIndex();");
+        source.Should().Contain("_moveSheetLeftMenuItem.IsEnabled = isIdle && activeSheetTabIndex > 0;");
+        source.Should().Contain("activeSheetTabIndex < _session.SheetTabs.Count - 1;");
         source.Should().Contain("_deleteSheetMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("private int FindActiveSheetTabIndex()");
         source.Should().Contain("private void AddNewSheet()");
         source.Should().Contain("var result = _session.AddSheet();");
         source.Should().Contain("RefreshShell($\"Inserted {_session.ActiveSheet.Name}\");");
@@ -1302,6 +1314,12 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private void DuplicateActiveSheet()");
         source.Should().Contain("var result = _session.DuplicateActiveSheet();");
         source.Should().Contain("RefreshShell($\"Duplicated {sourceName}\");");
+        source.Should().Contain("private void MoveActiveSheetLeft()");
+        source.Should().Contain("var result = _session.MoveActiveSheetLeft();");
+        source.Should().Contain("RefreshShell($\"Moved {sheetName} left\");");
+        source.Should().Contain("private void MoveActiveSheetRight()");
+        source.Should().Contain("var result = _session.MoveActiveSheetRight();");
+        source.Should().Contain("RefreshShell($\"Moved {sheetName} right\");");
         source.Should().Contain("private void DeleteActiveSheet()");
         source.Should().Contain("var result = _session.DeleteActiveSheet();");
         source.Should().Contain("RefreshShell($\"Deleted {sheetName}\");");
@@ -1311,6 +1329,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("HasNativeNewSheetMenuItem: HasNativeMenuItem(_newSheetMenuItem, \"New Sheet\")");
         source.Should().Contain("HasNativeRenameSheetMenuItem: HasNativeMenuItem(_renameSheetMenuItem, \"Rename Sheet...\", requireGesture: false)");
         source.Should().Contain("HasNativeDuplicateSheetMenuItem: HasNativeMenuItem(_duplicateSheetMenuItem, \"Duplicate Sheet\", requireGesture: false)");
+        source.Should().Contain("HasNativeMoveSheetLeftMenuItem: HasNativeMenuItem(_moveSheetLeftMenuItem, \"Move Sheet Left\", requireGesture: false)");
+        source.Should().Contain("HasNativeMoveSheetRightMenuItem: HasNativeMenuItem(_moveSheetRightMenuItem, \"Move Sheet Right\", requireGesture: false)");
         source.Should().Contain("HasNativeDeleteSheetMenuItem: HasNativeMenuItem(_deleteSheetMenuItem, \"Delete Sheet\", requireGesture: false)");
         smokeSource.Should().Contain("SheetTabCount > 0");
         smokeSource.Should().Contain("HasNewSheetButton &&");
@@ -1318,12 +1338,16 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("HasNativeNewSheetMenuItem &&");
         smokeSource.Should().Contain("HasNativeRenameSheetMenuItem &&");
         smokeSource.Should().Contain("HasNativeDuplicateSheetMenuItem &&");
+        smokeSource.Should().Contain("HasNativeMoveSheetLeftMenuItem &&");
+        smokeSource.Should().Contain("HasNativeMoveSheetRightMenuItem &&");
         smokeSource.Should().Contain("HasNativeDeleteSheetMenuItem &&");
         smokeSource.Should().Contain("new_sheet_button={FormatBool(snapshot.HasNewSheetButton)}");
         smokeSource.Should().Contain("native_sheet_menu={FormatBool(snapshot.HasNativeSheetMenu)}");
         smokeSource.Should().Contain("native_new_sheet_menu_item={FormatBool(snapshot.HasNativeNewSheetMenuItem)}");
         smokeSource.Should().Contain("native_rename_sheet_menu_item={FormatBool(snapshot.HasNativeRenameSheetMenuItem)}");
         smokeSource.Should().Contain("native_duplicate_sheet_menu_item={FormatBool(snapshot.HasNativeDuplicateSheetMenuItem)}");
+        smokeSource.Should().Contain("native_move_sheet_left_menu_item={FormatBool(snapshot.HasNativeMoveSheetLeftMenuItem)}");
+        smokeSource.Should().Contain("native_move_sheet_right_menu_item={FormatBool(snapshot.HasNativeMoveSheetRightMenuItem)}");
         smokeSource.Should().Contain("native_delete_sheet_menu_item={FormatBool(snapshot.HasNativeDeleteSheetMenuItem)}");
     }
 

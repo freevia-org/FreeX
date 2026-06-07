@@ -292,6 +292,12 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public WorkbookCellEditResult MoveActiveSheetLeft() =>
+        MoveActiveSheetBy(offset: -1);
+
+    public WorkbookCellEditResult MoveActiveSheetRight() =>
+        MoveActiveSheetBy(offset: 1);
+
     public WorkbookCellEditResult DeleteActiveSheet()
     {
         var sheetId = ActiveSheet.Id;
@@ -335,6 +341,40 @@ public sealed class WorkbookSession
             return result;
 
         ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
+        return result;
+    }
+
+    private WorkbookCellEditResult MoveActiveSheetBy(int offset)
+    {
+        var sheetId = ActiveSheet.Id;
+        var fromIndex = Workbook.Sheets.ToList().FindIndex(sheet => sheet.Id == sheetId);
+        if (fromIndex < 0)
+        {
+            return new WorkbookCellEditResult(
+                false,
+                "Active sheet was not found.",
+                [],
+                RecalcReport: null);
+        }
+
+        var toIndex = fromIndex + offset;
+        if (toIndex < 0 || toIndex >= Workbook.Sheets.Count)
+        {
+            var edge = offset < 0 ? "first" : "last";
+            return new WorkbookCellEditResult(
+                false,
+                $"Active sheet is already the {edge} sheet.",
+                [],
+                RecalcReport: null);
+        }
+
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new MoveSheetCommand(fromIndex, toIndex));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulWorkbookMetadataResult(sheetId);
         return result;
     }
 

@@ -2519,6 +2519,155 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void MoveActiveSheetLeft_ReordersTabsPreservesActiveSheetAndUndoRedo()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var charts = workbook.AddSheet("Charts");
+        var selectedCell = new CellAddress(charts.Id, 3, 2);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectSheet(charts.Id);
+        session.SelectCell(selectedCell);
+
+        var result = session.MoveActiveSheetLeft();
+
+        result.Success.Should().BeTrue();
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Sheet1", "Charts", "Details");
+        session.ActiveSheet.Should().BeSameAs(charts);
+        workbook.ActiveSheetIndex.Should().Be(1);
+        session.ActiveCell.Should().Be(selectedCell);
+        session.SelectedRange.Should().Be(new GridRange(selectedCell, selectedCell));
+        session.SheetTabs.Should().Equal(
+            new WorkbookSheetTab(summary.Id, "Sheet1", IsActive: false),
+            new WorkbookSheetTab(charts.Id, "Charts", IsActive: true),
+            new WorkbookSheetTab(details.Id, "Details", IsActive: false));
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Sheet1", "Details", "Charts");
+        session.ActiveSheet.Should().BeSameAs(charts);
+        workbook.ActiveSheetIndex.Should().Be(2);
+        session.ActiveCell.Should().Be(selectedCell);
+        session.CanRedo.Should().BeTrue();
+
+        var redo = session.RedoLastEdit();
+
+        redo.Success.Should().BeTrue();
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Sheet1", "Charts", "Details");
+        session.ActiveSheet.Should().BeSameAs(charts);
+        workbook.ActiveSheetIndex.Should().Be(1);
+        session.ActiveCell.Should().Be(selectedCell);
+    }
+
+    [Fact]
+    public void MoveActiveSheetRight_ReordersTabsPreservesActiveSheetAndUndoRedo()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var charts = workbook.AddSheet("Charts");
+        var selectedCell = new CellAddress(summary.Id, 4, 4);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(selectedCell);
+
+        var result = session.MoveActiveSheetRight();
+
+        result.Success.Should().BeTrue();
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Details", "Sheet1", "Charts");
+        session.ActiveSheet.Should().BeSameAs(summary);
+        workbook.ActiveSheetIndex.Should().Be(1);
+        session.ActiveCell.Should().Be(selectedCell);
+        session.SelectedRange.Should().Be(new GridRange(selectedCell, selectedCell));
+        session.SheetTabs.Should().Equal(
+            new WorkbookSheetTab(details.Id, "Details", IsActive: false),
+            new WorkbookSheetTab(summary.Id, "Sheet1", IsActive: true),
+            new WorkbookSheetTab(charts.Id, "Charts", IsActive: false));
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Sheet1", "Details", "Charts");
+        session.ActiveSheet.Should().BeSameAs(summary);
+        workbook.ActiveSheetIndex.Should().Be(0);
+        session.ActiveCell.Should().Be(selectedCell);
+        session.CanRedo.Should().BeTrue();
+
+        var redo = session.RedoLastEdit();
+
+        redo.Success.Should().BeTrue();
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Details", "Sheet1", "Charts");
+        session.ActiveSheet.Should().BeSameAs(summary);
+        workbook.ActiveSheetIndex.Should().Be(1);
+        session.ActiveCell.Should().Be(selectedCell);
+    }
+
+    [Fact]
+    public void MoveActiveSheetLeftRight_RejectAtEdgesWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        workbook.AddSheet("Details");
+        var charts = workbook.AddSheet("Charts");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var left = session.MoveActiveSheetLeft();
+        session.SelectSheet(charts.Id);
+        var right = session.MoveActiveSheetRight();
+
+        left.Success.Should().BeFalse();
+        right.Success.Should().BeFalse();
+        left.ErrorMessage.Should().Contain("first");
+        right.ErrorMessage.Should().Contain("last");
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Sheet1", "Details", "Charts");
+        session.ActiveSheet.Should().BeSameAs(charts);
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void MoveActiveSheetLeftRight_RejectProtectedWorkbookWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var details = workbook.AddSheet("Details");
+        workbook.IsStructureProtected = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var right = session.MoveActiveSheetRight();
+        session.SelectSheet(details.Id);
+        var left = session.MoveActiveSheetLeft();
+
+        right.Success.Should().BeFalse();
+        left.Success.Should().BeFalse();
+        right.ErrorMessage.Should().Contain("protected");
+        left.ErrorMessage.Should().Contain("protected");
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Sheet1", "Details");
+        session.ActiveSheet.Should().BeSameAs(details);
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void DeleteActiveSheet_RemovesSelectsNextSheetAndKeepsUndoRedoCoherent()
     {
         var workbook = CreateWorkbook();

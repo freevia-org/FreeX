@@ -133,6 +133,8 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _newSheetMenuItem = new();
     private readonly NativeMenuItem _renameSheetMenuItem = new();
     private readonly NativeMenuItem _duplicateSheetMenuItem = new();
+    private readonly NativeMenuItem _moveSheetLeftMenuItem = new();
+    private readonly NativeMenuItem _moveSheetRightMenuItem = new();
     private readonly NativeMenuItem _deleteSheetMenuItem = new();
     private readonly NativeMenuItem _undoMenuItem = new();
     private readonly NativeMenuItem _redoMenuItem = new();
@@ -351,6 +353,12 @@ public sealed class MainWindow : Window
 
         _duplicateSheetMenuItem.Header = "Duplicate Sheet";
         _duplicateSheetMenuItem.Click += (_, _) => DuplicateActiveSheet();
+
+        _moveSheetLeftMenuItem.Header = "Move Sheet Left";
+        _moveSheetLeftMenuItem.Click += (_, _) => MoveActiveSheetLeft();
+
+        _moveSheetRightMenuItem.Header = "Move Sheet Right";
+        _moveSheetRightMenuItem.Click += (_, _) => MoveActiveSheetRight();
 
         _deleteSheetMenuItem.Header = "Delete Sheet";
         _deleteSheetMenuItem.Click += (_, _) => DeleteActiveSheet();
@@ -573,6 +581,8 @@ public sealed class MainWindow : Window
         sheetMenu.Items.Add(_newSheetMenuItem);
         sheetMenu.Items.Add(_renameSheetMenuItem);
         sheetMenu.Items.Add(_duplicateSheetMenuItem);
+        sheetMenu.Items.Add(_moveSheetLeftMenuItem);
+        sheetMenu.Items.Add(_moveSheetRightMenuItem);
         sheetMenu.Items.Add(_deleteSheetMenuItem);
 
         var helpMenu = new NativeMenu();
@@ -1046,9 +1056,15 @@ public sealed class MainWindow : Window
         _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
         _saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;
         _closeWorkbookMenuItem.IsEnabled = isIdle;
+        var activeSheetTabIndex = FindActiveSheetTabIndex();
         _newSheetMenuItem.IsEnabled = _newSheetButton.IsEnabled;
         _renameSheetMenuItem.IsEnabled = isIdle;
         _duplicateSheetMenuItem.IsEnabled = isIdle;
+        _moveSheetLeftMenuItem.IsEnabled = isIdle && activeSheetTabIndex > 0;
+        _moveSheetRightMenuItem.IsEnabled =
+            isIdle &&
+            activeSheetTabIndex >= 0 &&
+            activeSheetTabIndex < _session.SheetTabs.Count - 1;
         _deleteSheetMenuItem.IsEnabled = isIdle;
         _undoMenuItem.IsEnabled = _undoButton.IsEnabled;
         _redoMenuItem.IsEnabled = _redoButton.IsEnabled;
@@ -1089,6 +1105,17 @@ public sealed class MainWindow : Window
         _wrapTextMenuItem.IsEnabled = _wrapTextButton.IsEnabled;
         _decreaseIndentMenuItem.IsEnabled = _decreaseIndentButton.IsEnabled;
         _increaseIndentMenuItem.IsEnabled = _increaseIndentButton.IsEnabled;
+    }
+
+    private int FindActiveSheetTabIndex()
+    {
+        for (var index = 0; index < _session.SheetTabs.Count; index++)
+        {
+            if (_session.SheetTabs[index].IsActive)
+                return index;
+        }
+
+        return -1;
     }
 
     private Control BuildSheetTabs()
@@ -2193,6 +2220,46 @@ public sealed class MainWindow : Window
         RefreshShell($"Duplicated {sourceName}");
     }
 
+    private void MoveActiveSheetLeft()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var sheetName = _session.ActiveSheet.Name;
+        ClearSelectedDrawingObject();
+        var result = _session.MoveActiveSheetLeft();
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Move Sheet Left failed.");
+            return;
+        }
+
+        RefreshShell($"Moved {sheetName} left");
+    }
+
+    private void MoveActiveSheetRight()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var sheetName = _session.ActiveSheet.Name;
+        ClearSelectedDrawingObject();
+        var result = _session.MoveActiveSheetRight();
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Move Sheet Right failed.");
+            return;
+        }
+
+        RefreshShell($"Moved {sheetName} right");
+    }
+
     private void DeleteActiveSheet()
     {
         if (_isOpening || _isSaving)
@@ -3260,6 +3327,8 @@ public sealed class MainWindow : Window
             HasNativeNewSheetMenuItem: HasNativeMenuItem(_newSheetMenuItem, "New Sheet"),
             HasNativeRenameSheetMenuItem: HasNativeMenuItem(_renameSheetMenuItem, "Rename Sheet...", requireGesture: false),
             HasNativeDuplicateSheetMenuItem: HasNativeMenuItem(_duplicateSheetMenuItem, "Duplicate Sheet", requireGesture: false),
+            HasNativeMoveSheetLeftMenuItem: HasNativeMenuItem(_moveSheetLeftMenuItem, "Move Sheet Left", requireGesture: false),
+            HasNativeMoveSheetRightMenuItem: HasNativeMenuItem(_moveSheetRightMenuItem, "Move Sheet Right", requireGesture: false),
             HasNativeDeleteSheetMenuItem: HasNativeMenuItem(_deleteSheetMenuItem, "Delete Sheet", requireGesture: false),
             HasNativeUndoMenuItem: HasNativeMenuItem(_undoMenuItem, "Undo"),
             HasNativeRedoMenuItem: HasNativeMenuItem(_redoMenuItem, "Redo"),
