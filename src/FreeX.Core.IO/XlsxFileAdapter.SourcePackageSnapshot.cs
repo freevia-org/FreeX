@@ -2498,6 +2498,12 @@ public sealed partial class XlsxFileAdapter
             foreach (var entry in archive.Entries)
             {
                 var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+                if (XlsxDigitalSignaturePackagePolicy.IsDigitalSignaturePackagePath(path))
+                {
+                    blockReason = "package_guard_digital_signatures";
+                    return false;
+                }
+
                 if (TryGetPatchUnsafePackagePartReason(
                         path,
                         allowedVmlDrawingPaths,
@@ -2506,6 +2512,13 @@ public sealed partial class XlsxFileAdapter
                         allowedPivotPackagePaths,
                         out blockReason))
                 {
+                    return false;
+                }
+
+                if (path.EndsWith(".rels", StringComparison.OrdinalIgnoreCase) &&
+                    XlsxDigitalSignaturePackagePolicy.HasDigitalSignatureRelationship(entry))
+                {
+                    blockReason = "package_guard_digital_signatures";
                     return false;
                 }
 
