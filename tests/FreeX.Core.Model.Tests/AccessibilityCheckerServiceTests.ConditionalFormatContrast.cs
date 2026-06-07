@@ -4630,6 +4630,44 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialBillDiscountFunctions()
+    {
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("DISC($A1,$C1,$E1,$G1,$K1)>0.02", "B1", "B3");
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("INTRATE($A1,$C1,$F1,$G1,$K1)>0.05", "B1", "B3");
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("RECEIVED($A1,$C1,$F1,$H1,$K1)>98", "B2", "B3");
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("TBILLPRICE($A1,$L1,$H1)<99", "B1");
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("TBILLYIELD($A1,$L1,$E1)>0.05", "B1", "B3");
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("TBILLEQ($A1,$L1,$H1)>0.04", "B1", "B3");
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("PRICEDISC($A1,$C1,$H1,$G1,$K1)<96", "B1");
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("PRICEMAT($A1,$C1,$D1,$I1,$J1,$K1)>100.5", "B3");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialBillDiscountWrappersDefaultsAndErrors()
+    {
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("IF(DISC($A1,$C1,$E1,$G1)>0.02,TRUE,FALSE)", "B1", "B3");
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("AND($M1,TBILLPRICE($A1,$L1,$H1)<99)", "B1");
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("ISNUMBER(TBILLEQ($A1,$L1,$H1))", "B1", "B2", "B3");
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("ISNA(DISC($A1,$C1,$E1,$G1,$K1))", "B4");
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("ISERROR(RECEIVED($A1,$C1,$F1,$H1,$K1))", "B4", "B5", "B6");
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("ISERROR(PRICEMAT($A1,$C1,$D1,$I1,$J1,$K1))", "B4", "B5");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatFinancialBillDiscountUnsupportedShapesArityAndComparisons()
+    {
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("DISC($A$1:$A$2,$C1,$E1,$G1)>0");
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("ISERROR(DISC($A$1:$A$2,$C1,$E1,$G1))");
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("INTRATE($A1,$C1,$F1)>0");
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("RECEIVED($A1,$C1,$F1,$H1,$K1,$M1)>0");
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("TBILLPRICE($A1,$L$1:$L$2,$H1)>0");
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("TBILLYIELD($A1,$L1)>0");
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("TBILLEQ($A$5,$L$5,$H$5)>0");
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("PRICEDISC($A1,$C1,$H1)>0");
+        AssertFormulaFinancialBillDiscountFunctionContrastLocations("PRICEMAT($A1,$C1,$D1,$I1)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatArithmeticComparison()
     {
         AssertFormulaArithmeticContrastLocations("($A1+25-50)*2/5>=40", "B4");
@@ -6730,6 +6768,148 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 5), basis);
     }
 
+    private static Workbook CreateFormulaFinancialBillDiscountFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 6, 2);
+
+        SetFormulaFinancialBillDiscountFunctionContrastRow(
+            sheet,
+            1,
+            new NumberValue(43831),
+            new NumberValue(44197),
+            new NumberValue(43831),
+            new NumberValue(97),
+            new NumberValue(90),
+            new NumberValue(100),
+            new NumberValue(0.05),
+            new NumberValue(0.05),
+            new NumberValue(0.05),
+            new NumberValue(0),
+            new NumberValue(43921),
+            active: true,
+            "Strong discount");
+        SetFormulaFinancialBillDiscountFunctionContrastRow(
+            sheet,
+            2,
+            new NumberValue(43831),
+            new NumberValue(44197),
+            new NumberValue(43831),
+            new NumberValue(99),
+            new NumberValue(99),
+            new NumberValue(100),
+            new NumberValue(0.01),
+            new NumberValue(0.02),
+            new NumberValue(0.10),
+            new NumberValue(1),
+            new NumberValue(43921),
+            active: true,
+            "Small discount");
+        SetFormulaFinancialBillDiscountFunctionContrastRow(
+            sheet,
+            3,
+            new NumberValue(43845),
+            new NumberValue(44228),
+            new NumberValue(43831),
+            new NumberValue(95),
+            new NumberValue(95),
+            new NumberValue(110),
+            new NumberValue(0.04),
+            new NumberValue(0.08),
+            new NumberValue(0.06),
+            new NumberValue(4),
+            new NumberValue(43935),
+            active: true,
+            "Premium redemption");
+        SetFormulaFinancialBillDiscountFunctionContrastRow(
+            sheet,
+            4,
+            ErrorValue.NA,
+            new NumberValue(44197),
+            new NumberValue(43831),
+            new NumberValue(97),
+            new NumberValue(90),
+            new NumberValue(100),
+            new NumberValue(0.05),
+            new NumberValue(0.05),
+            new NumberValue(0.05),
+            new NumberValue(0),
+            new NumberValue(43921),
+            active: true,
+            "NA settlement");
+        SetFormulaFinancialBillDiscountFunctionContrastRow(
+            sheet,
+            5,
+            new NumberValue(44197),
+            new NumberValue(43831),
+            new NumberValue(43831),
+            new NumberValue(97),
+            new NumberValue(90),
+            new NumberValue(100),
+            new NumberValue(0.05),
+            new NumberValue(0.05),
+            new NumberValue(0.05),
+            new NumberValue(0),
+            new NumberValue(43921),
+            active: true,
+            "Invalid order");
+        SetFormulaFinancialBillDiscountFunctionContrastRow(
+            sheet,
+            6,
+            new NumberValue(43831),
+            new NumberValue(44197),
+            new NumberValue(43831),
+            new NumberValue(97),
+            new NumberValue(90),
+            new NumberValue(100),
+            new TextValue("Open"),
+            new NumberValue(0.05),
+            new NumberValue(0.05),
+            new NumberValue(0),
+            new NumberValue(43921),
+            active: true,
+            "Invalid discount");
+
+        return workbook;
+    }
+
+    private static void SetFormulaFinancialBillDiscountFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        ScalarValue settlement,
+        ScalarValue maturity,
+        ScalarValue issue,
+        ScalarValue price,
+        ScalarValue investment,
+        ScalarValue redemption,
+        ScalarValue discount,
+        ScalarValue rate,
+        ScalarValue yieldRate,
+        ScalarValue basis,
+        ScalarValue billMaturity,
+        bool active,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), settlement);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), maturity);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 4), issue);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 5), price);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 6), investment);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 7), redemption);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 8), discount);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 9), rate);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 10), yieldRate);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 11), basis);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 12), billMaturity);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 13), new BoolValue(active));
+    }
+
     private static void AssertFormulaBooleanContrastLocations(string formulaText, params string[] expectedLocations)
     {
         var workbook = CreateFormulaBooleanContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
@@ -6838,6 +7018,19 @@ public sealed partial class AccessibilityCheckerServiceTests
         params string[] expectedLocations)
     {
         var workbook = CreateFormulaFinancialCouponFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaFinancialBillDiscountFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaFinancialBillDiscountFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
 
         FindLowContrastCellTextIssues(workbook)

@@ -1320,6 +1320,30 @@ public static partial class AccessibilityCheckerService
             case "XIRR":
                 kind = ConditionalFormulaScalarFunctionKind.Xirr;
                 return true;
+            case "DISC":
+                kind = ConditionalFormulaScalarFunctionKind.Disc;
+                return true;
+            case "INTRATE":
+                kind = ConditionalFormulaScalarFunctionKind.Intrate;
+                return true;
+            case "RECEIVED":
+                kind = ConditionalFormulaScalarFunctionKind.Received;
+                return true;
+            case "PRICEDISC":
+                kind = ConditionalFormulaScalarFunctionKind.Pricedisc;
+                return true;
+            case "PRICEMAT":
+                kind = ConditionalFormulaScalarFunctionKind.Pricemat;
+                return true;
+            case "TBILLEQ":
+                kind = ConditionalFormulaScalarFunctionKind.Tbilleq;
+                return true;
+            case "TBILLPRICE":
+                kind = ConditionalFormulaScalarFunctionKind.Tbillprice;
+                return true;
+            case "TBILLYIELD":
+                kind = ConditionalFormulaScalarFunctionKind.Tbillyield;
+                return true;
             case "SLN":
                 kind = ConditionalFormulaScalarFunctionKind.Sln;
                 return true;
@@ -1979,6 +2003,14 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Mirr => argumentCount == 3,
             ConditionalFormulaScalarFunctionKind.Xnpv => argumentCount == 3,
             ConditionalFormulaScalarFunctionKind.Xirr => argumentCount is 2 or 3,
+            ConditionalFormulaScalarFunctionKind.Disc or
+            ConditionalFormulaScalarFunctionKind.Intrate or
+            ConditionalFormulaScalarFunctionKind.Received or
+            ConditionalFormulaScalarFunctionKind.Pricedisc => argumentCount is 4 or 5,
+            ConditionalFormulaScalarFunctionKind.Pricemat => argumentCount is 5 or 6,
+            ConditionalFormulaScalarFunctionKind.Tbilleq or
+            ConditionalFormulaScalarFunctionKind.Tbillprice or
+            ConditionalFormulaScalarFunctionKind.Tbillyield => argumentCount == 3,
             ConditionalFormulaScalarFunctionKind.Db or
             ConditionalFormulaScalarFunctionKind.Ddb => argumentCount is 4 or 5,
             ConditionalFormulaScalarFunctionKind.Vdb => argumentCount is >= 5 and <= 7,
@@ -2775,6 +2807,14 @@ public static partial class AccessibilityCheckerService
         Mirr,
         Xnpv,
         Xirr,
+        Disc,
+        Intrate,
+        Received,
+        Pricedisc,
+        Pricemat,
+        Tbilleq,
+        Tbillprice,
+        Tbillyield,
         Sln,
         Syd,
         Db,
@@ -3563,6 +3603,14 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Xnpv:
                 case ConditionalFormulaScalarFunctionKind.Xirr:
                     return TryEvaluateFormulaFinancialCashFlowFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Disc:
+                case ConditionalFormulaScalarFunctionKind.Intrate:
+                case ConditionalFormulaScalarFunctionKind.Received:
+                case ConditionalFormulaScalarFunctionKind.Pricedisc:
+                case ConditionalFormulaScalarFunctionKind.Pricemat:
+                case ConditionalFormulaScalarFunctionKind.Tbilleq:
+                case ConditionalFormulaScalarFunctionKind.Tbillprice:
+                case ConditionalFormulaScalarFunctionKind.Tbillyield:
                 case ConditionalFormulaScalarFunctionKind.Sln:
                 case ConditionalFormulaScalarFunctionKind.Syd:
                 case ConditionalFormulaScalarFunctionKind.Db:
@@ -10142,6 +10190,97 @@ public static partial class AccessibilityCheckerService
 
             switch (function.Kind)
             {
+                case ConditionalFormulaScalarFunctionKind.Disc:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var discSettlement, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var discMaturity, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var discPrice, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var discRedemption, out value) ||
+                        !TryGetFormulaFinancialOptionalBasis(arguments, 4, out var discBasis, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialDiscScalar(discSettlement, discMaturity, discPrice, discRedemption, discBasis);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Intrate:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var intrateSettlement, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var intrateMaturity, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var intrateInvestment, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var intrateRedemption, out value) ||
+                        !TryGetFormulaFinancialOptionalBasis(arguments, 4, out var intrateBasis, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialIntrateScalar(intrateSettlement, intrateMaturity, intrateInvestment, intrateRedemption, intrateBasis);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Received:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var receivedSettlement, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var receivedMaturity, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var receivedInvestment, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var receivedDiscount, out value) ||
+                        !TryGetFormulaFinancialOptionalBasis(arguments, 4, out var receivedBasis, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialReceivedScalar(receivedSettlement, receivedMaturity, receivedInvestment, receivedDiscount, receivedBasis);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Pricedisc:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var pricediscSettlement, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var pricediscMaturity, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var pricediscDiscount, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var pricediscRedemption, out value) ||
+                        !TryGetFormulaFinancialOptionalBasis(arguments, 4, out var pricediscBasis, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialPricediscScalar(pricediscSettlement, pricediscMaturity, pricediscDiscount, pricediscRedemption, pricediscBasis);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Pricemat:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var pricematSettlement, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var pricematMaturity, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var pricematIssue, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var pricematRate, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[4], out var pricematYield, out value) ||
+                        !TryGetFormulaFinancialOptionalBasis(arguments, 5, out var pricematBasis, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialPricematScalar(pricematSettlement, pricematMaturity, pricematIssue, pricematRate, pricematYield, pricematBasis);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Tbilleq:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var tbilleqSettlement, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var tbilleqMaturity, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var tbilleqDiscount, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialTbilleqScalar(tbilleqSettlement, tbilleqMaturity, tbilleqDiscount);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Tbillprice:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var tbillpriceSettlement, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var tbillpriceMaturity, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var tbillpriceDiscount, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialTbillpriceScalar(tbillpriceSettlement, tbillpriceMaturity, tbillpriceDiscount);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Tbillyield:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var tbillyieldSettlement, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var tbillyieldMaturity, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var tbillyieldPrice, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialTbillyieldScalar(tbillyieldSettlement, tbillyieldMaturity, tbillyieldPrice);
+                    return true;
                 case ConditionalFormulaScalarFunctionKind.Sln:
                     if (!TryGetFormulaFinancialNumber(arguments[0], out var slnCost, out value) ||
                         !TryGetFormulaFinancialNumber(arguments[1], out var slnSalvage, out value) ||
@@ -10554,6 +10693,284 @@ public static partial class AccessibilityCheckerService
             return FormulaFinancialNumberResult((Math.Log(fv) - Math.Log(pv)) / Math.Log(1d + rate));
         }
 
+        private static bool TryGetFormulaFinancialOptionalBasis(
+            IReadOnlyList<ScalarValue> arguments,
+            int index,
+            out int basis,
+            out ScalarValue error)
+        {
+            basis = 0;
+            if (!TryGetFormulaFinancialOptionalNumber(arguments, index, 0d, out var rawBasis, out error))
+                return false;
+
+            if (TryGetFormulaFinancialBasis(rawBasis, out basis))
+                return true;
+
+            error = ErrorValue.Num;
+            return false;
+        }
+
+        private static ScalarValue FormulaFinancialDiscScalar(
+            double settlement,
+            double maturity,
+            double price,
+            double redemption,
+            int basis)
+        {
+            if (!double.IsFinite(settlement) ||
+                !double.IsFinite(maturity) ||
+                !double.IsFinite(price) ||
+                !double.IsFinite(redemption))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (price <= 0d || redemption <= 0d)
+                return ErrorValue.Num;
+
+            if (!TryGetFormulaFinancialDate(settlement, out var settlementDate) ||
+                !TryGetFormulaFinancialDate(maturity, out var maturityDate) ||
+                settlementDate >= maturityDate)
+            {
+                return ErrorValue.Num;
+            }
+
+            var dayCountFraction = FormulaFinancialDayCountFraction(settlementDate, maturityDate, basis);
+            if (dayCountFraction <= 0d)
+                return ErrorValue.Num;
+
+            return FormulaFinancialNumberResult((redemption - price) / redemption / dayCountFraction);
+        }
+
+        private static ScalarValue FormulaFinancialIntrateScalar(
+            double settlement,
+            double maturity,
+            double investment,
+            double redemption,
+            int basis)
+        {
+            if (!double.IsFinite(settlement) ||
+                !double.IsFinite(maturity) ||
+                !double.IsFinite(investment) ||
+                !double.IsFinite(redemption))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (investment <= 0d || redemption <= 0d)
+                return ErrorValue.Num;
+
+            if (!TryGetFormulaFinancialDate(settlement, out var settlementDate) ||
+                !TryGetFormulaFinancialDate(maturity, out var maturityDate) ||
+                settlementDate >= maturityDate)
+            {
+                return ErrorValue.Num;
+            }
+
+            var dayCountFraction = FormulaFinancialDayCountFraction(settlementDate, maturityDate, basis);
+            if (dayCountFraction <= 0d)
+                return ErrorValue.Num;
+
+            return FormulaFinancialNumberResult((redemption - investment) / investment / dayCountFraction);
+        }
+
+        private static ScalarValue FormulaFinancialReceivedScalar(
+            double settlement,
+            double maturity,
+            double investment,
+            double discount,
+            int basis)
+        {
+            if (!double.IsFinite(settlement) ||
+                !double.IsFinite(maturity) ||
+                !double.IsFinite(investment) ||
+                !double.IsFinite(discount))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (investment <= 0d || discount <= 0d)
+                return ErrorValue.Num;
+
+            if (!TryGetFormulaFinancialDate(settlement, out var settlementDate) ||
+                !TryGetFormulaFinancialDate(maturity, out var maturityDate) ||
+                settlementDate >= maturityDate)
+            {
+                return ErrorValue.Num;
+            }
+
+            var dayCountFraction = FormulaFinancialDayCountFraction(settlementDate, maturityDate, basis);
+            var denominator = 1d - discount * dayCountFraction;
+            if (Math.Abs(denominator) < 1E-14d)
+                return ErrorValue.DivByZero;
+
+            return FormulaFinancialNumberResult(investment / denominator);
+        }
+
+        private static ScalarValue FormulaFinancialPricediscScalar(
+            double settlement,
+            double maturity,
+            double discount,
+            double redemption,
+            int basis)
+        {
+            if (!double.IsFinite(settlement) ||
+                !double.IsFinite(maturity) ||
+                !double.IsFinite(discount) ||
+                !double.IsFinite(redemption))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (discount <= 0d || redemption <= 0d)
+                return ErrorValue.Num;
+
+            if (!TryGetFormulaFinancialDate(settlement, out var settlementDate) ||
+                !TryGetFormulaFinancialDate(maturity, out var maturityDate) ||
+                settlementDate >= maturityDate)
+            {
+                return ErrorValue.Num;
+            }
+
+            var dayCountFraction = FormulaFinancialDayCountFraction(settlementDate, maturityDate, basis);
+            return FormulaFinancialNumberResult(redemption * (1d - discount * dayCountFraction));
+        }
+
+        private static ScalarValue FormulaFinancialPricematScalar(
+            double settlement,
+            double maturity,
+            double issue,
+            double rate,
+            double yieldRate,
+            int basis)
+        {
+            if (!double.IsFinite(settlement) ||
+                !double.IsFinite(maturity) ||
+                !double.IsFinite(issue) ||
+                !double.IsFinite(rate) ||
+                !double.IsFinite(yieldRate))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (rate < 0d || yieldRate < 0d)
+                return ErrorValue.Num;
+
+            if (!TryGetFormulaFinancialDate(settlement, out var settlementDate) ||
+                !TryGetFormulaFinancialDate(maturity, out var maturityDate) ||
+                !TryGetFormulaFinancialDate(issue, out var issueDate) ||
+                settlementDate >= maturityDate)
+            {
+                return ErrorValue.Num;
+            }
+
+            var issueToMaturity = FormulaFinancialDayCountFraction(issueDate, maturityDate, basis);
+            var settlementToMaturity = FormulaFinancialDayCountFraction(settlementDate, maturityDate, basis);
+            return FormulaFinancialNumberResult(100d * (1d + rate * issueToMaturity) / (1d + yieldRate * settlementToMaturity));
+        }
+
+        private static ScalarValue FormulaFinancialTbilleqScalar(double settlement, double maturity, double discount)
+        {
+            if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(discount))
+                return ErrorValue.Num;
+
+            if (discount <= 0d || discount >= 1d)
+                return ErrorValue.Num;
+
+            if (!TryGetFormulaFinancialDate(settlement, out var settlementDate) ||
+                !TryGetFormulaFinancialDate(maturity, out var maturityDate))
+            {
+                return ErrorValue.Num;
+            }
+
+            var daysSettlementToMaturity = (maturityDate - settlementDate).TotalDays;
+            if (daysSettlementToMaturity <= 0d || daysSettlementToMaturity > 182d)
+                return ErrorValue.Num;
+
+            return FormulaFinancialNumberResult((365d * discount) / (360d - discount * daysSettlementToMaturity));
+        }
+
+        private static ScalarValue FormulaFinancialTbillpriceScalar(double settlement, double maturity, double discount)
+        {
+            if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(discount))
+                return ErrorValue.Num;
+
+            if (discount <= 0d)
+                return ErrorValue.Num;
+
+            if (!TryGetFormulaFinancialDate(settlement, out var settlementDate) ||
+                !TryGetFormulaFinancialDate(maturity, out var maturityDate))
+            {
+                return ErrorValue.Num;
+            }
+
+            var daysSettlementToMaturity = (maturityDate - settlementDate).TotalDays;
+            if (daysSettlementToMaturity <= 0d)
+                return ErrorValue.Num;
+
+            return FormulaFinancialNumberResult(100d * (1d - discount * daysSettlementToMaturity / 360d));
+        }
+
+        private static ScalarValue FormulaFinancialTbillyieldScalar(double settlement, double maturity, double price)
+        {
+            if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(price))
+                return ErrorValue.Num;
+
+            if (price <= 0d)
+                return ErrorValue.Num;
+
+            if (!TryGetFormulaFinancialDate(settlement, out var settlementDate) ||
+                !TryGetFormulaFinancialDate(maturity, out var maturityDate))
+            {
+                return ErrorValue.Num;
+            }
+
+            var daysSettlementToMaturity = (maturityDate - settlementDate).TotalDays;
+            if (daysSettlementToMaturity <= 0d)
+                return ErrorValue.Num;
+
+            return FormulaFinancialNumberResult((100d - price) / price * 360d / daysSettlementToMaturity);
+        }
+
+        private static double FormulaFinancialDayCountFraction(DateTime start, DateTime end, int basis)
+        {
+            switch (basis)
+            {
+                case 0:
+                    var startDay = start.Day;
+                    var endDay = end.Day;
+                    if (endDay == 31 && startDay >= 30)
+                        endDay = 30;
+                    if (startDay == 31)
+                        startDay = 30;
+
+                    return ((end.Year - start.Year) * 360d + (end.Month - start.Month) * 30d + (endDay - startDay)) / 360d;
+                case 1:
+                    return (end - start).TotalDays / FormulaFinancialActualYearLength(start, end);
+                case 2:
+                    return (end - start).TotalDays / 360d;
+                case 3:
+                    return (end - start).TotalDays / 365d;
+                case 4:
+                    return FormulaDays30E360(start, end) / 360d;
+                default:
+                    return (end - start).TotalDays / 365d;
+            }
+        }
+
+        private static double FormulaFinancialActualYearLength(DateTime start, DateTime end)
+        {
+            if (start.Year == end.Year)
+                return DateTime.IsLeapYear(start.Year) ? 366d : 365d;
+
+            var years = end.Year - start.Year;
+            var days = (end - start).TotalDays;
+            return days / years;
+        }
+
+        private static bool TryGetFormulaFinancialDate(double serial, out DateTime date) =>
+            TryGetFormulaFinancialCouponDate(serial, out date);
+
         private static bool TryGetFormulaFinancialCouponArguments(
             IReadOnlyList<ScalarValue> arguments,
             out double settlement,
@@ -10582,7 +10999,7 @@ public static partial class AccessibilityCheckerService
             if (!TryGetFormulaFinancialOptionalNumber(arguments, 3, 0d, out var rawBasis, out error))
                 return false;
 
-            if (!TryGetFormulaFinancialCouponBasis(rawBasis, out basis))
+            if (!TryGetFormulaFinancialBasis(rawBasis, out basis))
             {
                 error = ErrorValue.Num;
                 return false;
@@ -10605,7 +11022,7 @@ public static partial class AccessibilityCheckerService
             return frequency is 1 or 2 or 4;
         }
 
-        private static bool TryGetFormulaFinancialCouponBasis(double rawBasis, out int basis)
+        private static bool TryGetFormulaFinancialBasis(double rawBasis, out int basis)
         {
             basis = 0;
             if (!double.IsFinite(rawBasis) ||
