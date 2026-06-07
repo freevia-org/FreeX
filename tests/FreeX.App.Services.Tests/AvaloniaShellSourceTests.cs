@@ -1349,36 +1349,56 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
-    public void MainWindow_WiresNativeDataValidationPreviewWithoutWorkbookMutation()
+    public void MainWindow_WiresNativeDataValidationMutationThroughSharedPresetPlanner()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "DataValidationPreviewPlanner.cs"));
+        var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
+        var presetSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "DataValidationPresetPlanner.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("private readonly NativeMenuItem _dataValidationMenuItem = new();");
         source.Should().Contain("_dataValidationMenuItem.Header = \"Data Validation...\";");
-        source.Should().Contain("_dataValidationMenuItem.Click += async (_, _) => await ShowDataValidationPreviewDialogAsync();");
+        source.Should().Contain("_dataValidationMenuItem.Click += async (_, _) => await ShowDataValidationDialogAsync();");
         source.Should().Contain("dataMenu.Items.Add(_dataValidationMenuItem);");
         source.Should().Contain("_dataValidationMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("private async Task ShowDataValidationPreviewDialogAsync()");
-        source.Should().Contain("DataValidationPreviewPlanner.Create(");
+        source.Should().Contain("private async Task ShowDataValidationDialogAsync()");
+        source.Should().Contain("if (!TryCommitPendingFormulaEdit())");
+        source.Should().Contain("var selection = await ShowDataValidationInputDialogAsync();");
+        source.Should().Contain("_session.ClearSelectedRangeDataValidation()");
+        source.Should().Contain("_session.ApplyDataValidationToSelectedRange(rule)");
+        source.Should().Contain("RefreshShell(clearResult.Mutated");
+        source.Should().Contain("Applied {DataValidationPresetPlanner.GetDisplayName(rule.Type)} data validation");
+        source.Should().Contain("private async Task<DataValidationDialogResult?> ShowDataValidationInputDialogAsync()");
+        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"DataValidationCompactDialog\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(applyButton, \"DataValidationApplyButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(clearButton, \"DataValidationClearButton\");");
+        source.Should().Contain("DataValidationPresetPlanner.CreateSelectionSummary(");
         source.Should().Contain("_session.Workbook");
         source.Should().Contain("_session.ActiveSheet");
         source.Should().Contain("_session.ActiveCell");
         source.Should().Contain("_session.SelectedRange");
-        source.Should().Contain("await ShowTextDialogAsync(\"Data Validation\", preview.Text, 520, 360);");
+        source.Should().Contain("CreateDataValidationTypeChoices()");
+        source.Should().Contain("DataValidationPresetPlanner.GetRuleTypeMetadata()");
+        source.Should().Contain(".Where(metadata => metadata.Type is DvType.WholeNumber or DvType.List or DvType.TextLength)");
+        source.Should().Contain("CreateDefaultDataValidationRule(initialType, _session.SelectedRange)");
+        source.Should().Contain("DataValidationPresetPlanner.CreateDefaultRule(type, _session.SelectedRange)");
+        source.Should().Contain("DataValidationPresetPlanner.RequiresSecondFormula(type, op)");
 
-        plannerSource.Should().Contain("DataValidationService.GetApplicable(sheet, activeCell)");
-        plannerSource.Should().Contain("DataValidationService.GetListItems(rule, sheet, workbook)");
-        plannerSource.Should().Contain("DataValidationService.FormatListSourceRange");
+        sessionSource.Should().Contain("public WorkbookDataValidationMutationResult ApplyDataValidationToSelectedRange(DataValidation rule)");
+        sessionSource.Should().Contain("public WorkbookDataValidationMutationResult ClearSelectedRangeDataValidation()");
+        sessionSource.Should().Contain("new SetDataValidationCommand(sheetId, sheetRule)");
+        sessionSource.Should().Contain("new ClearDataValidationCommand(sheetId, sheetRange)");
 
-        var handlerIndex = normalizedSource.IndexOf("private async Task ShowDataValidationPreviewDialogAsync()", StringComparison.Ordinal);
+        presetSource.Should().Contain("public static IReadOnlyList<DataValidationRuleTypeMetadata> GetRuleTypeMetadata()");
+        presetSource.Should().Contain("public static DataValidation CreateDefaultRule(DvType type, GridRange selectedRange)");
+        presetSource.Should().Contain("public static DataValidationSelectionSummary CreateSelectionSummary(");
+
+        var handlerIndex = normalizedSource.IndexOf("private async Task ShowDataValidationDialogAsync()", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);
-        var nextMethodIndex = normalizedSource.IndexOf("\n    private void BoldButton_Click", handlerIndex, StringComparison.Ordinal);
+        var nextMethodIndex = normalizedSource.IndexOf("\n    private async Task<DataValidationDialogResult?> ShowDataValidationInputDialogAsync()", handlerIndex, StringComparison.Ordinal);
         nextMethodIndex.Should().BeGreaterThan(handlerIndex);
         var handlerSource = normalizedSource[handlerIndex..nextMethodIndex];
 
-        handlerSource.Should().NotContain("TryCommitPendingFormulaEdit");
         handlerSource.Should().NotContain("SetDataValidationCommand");
         handlerSource.Should().NotContain("ClearDataValidationCommand");
         handlerSource.Should().NotContain("PasteDataValidationFromClipboardAtActiveCell");
