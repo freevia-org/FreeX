@@ -1375,6 +1375,29 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatStatisticalTestFunctions()
+    {
+        AssertFormulaStatisticalTestContrastLocations("Z.TEST($D$1:$D$4,$A1,2)<0.2", "B1", "B2");
+        AssertFormulaStatisticalTestContrastLocations("ZTEST($D$1:$D$4,$A1)<0.25", "B1", "B2");
+        AssertFormulaStatisticalTestContrastLocations("AND($C1,T.TEST($D$1:$D$4,$E$1:$E$4,2,2)<0.5)", "B1", "B2", "B4");
+        AssertFormulaStatisticalTestContrastLocations("AND($C1,TTEST($D$1:$D$4,$E$1:$E$4,2,3)<0.5)", "B1", "B2", "B4");
+        AssertFormulaStatisticalTestContrastLocations("F.TEST($D$1:$D$4,$E$1:$E$4)>0.8", FormulaStatisticalTestAllLocations);
+        AssertFormulaStatisticalTestContrastLocations("FTEST($D$1:$D$4,$E$1:$E$4)>0.8", FormulaStatisticalTestAllLocations);
+        AssertFormulaStatisticalTestContrastLocations("CHISQ.TEST($H$1:$I$2,$K$1:$L$2)<0.05", FormulaStatisticalTestAllLocations);
+        AssertFormulaStatisticalTestContrastLocations("CHITEST($H$1:$I$2,$K$1:$L$2)<0.05", FormulaStatisticalTestAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_PropagatesFormulaConditionalFormatStatisticalTestErrorsAndLeavesFrequencyUnsupported()
+    {
+        AssertFormulaStatisticalTestContrastLocations("ISERROR(Z.TEST($D$1:$D$4,$A1,0))", FormulaStatisticalTestAllLocations);
+        AssertFormulaStatisticalTestContrastLocations("ISNA(T.TEST($D$1:$D$3,$E$1:$E$4,2,1))", FormulaStatisticalTestAllLocations);
+        AssertFormulaStatisticalTestContrastLocations("ISERROR(F.TEST($D$1:$D$4,$D$1:$D$1))", FormulaStatisticalTestAllLocations);
+        AssertFormulaStatisticalTestContrastLocations("ISNA(CHISQ.TEST($H$1:$I$2,$K$1:$K$2))", FormulaStatisticalTestAllLocations);
+        AssertFormulaStatisticalTestContrastLocations("FREQUENCY($D$1:$D$4,$A$1:$A$4)>0");
+    }
+
+    [Fact]
     public void FindIssues_DoesNotMatchFormulaConditionalFormatAggregateUnsupportedOperandArguments()
     {
         AssertFormulaAggregateContrastLocations("SUM($D1&\"x\")>0");
@@ -2833,6 +2856,14 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         AssertFormulaNormalDistributionFunctionContrastLocations("AND($G1,NORM.DIST(ABS($A1),$C1,$D1,TRUE)>0.8)", "B2", "B3", "B4");
         AssertFormulaNormalDistributionFunctionContrastLocations("AND($G1,SUM(NORMSINV($E1),STANDARDIZE($A1,$C1,$D1))>1.9)", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatConfidenceFunctions()
+    {
+        AssertFormulaNormalDistributionFunctionContrastLocations("AND($G1,CONFIDENCE(0.05,$D1,25)>0.3)", "B1", "B2", "B3");
+        AssertFormulaNormalDistributionFunctionContrastLocations("AND($G1,CONFIDENCE.NORM(0.05,$D1,25)<0.4)", "B1", "B2", "B3", "B4");
+        AssertFormulaNormalDistributionFunctionContrastLocations("AND($G1,CONFIDENCE.T(0.05,$D1,25)>0.39)", "B1", "B2", "B3");
     }
 
     [Fact]
@@ -5761,6 +5792,50 @@ public sealed partial class AccessibilityCheckerServiceTests
         return workbook;
     }
 
+    private static Workbook CreateFormulaStatisticalTestContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 4, 2);
+
+        SetFormulaStatisticalTestContrastRow(sheet, 1, 11, active: true, "Low hypothesis", 10, 11);
+        SetFormulaStatisticalTestContrastRow(sheet, 2, 12, active: true, "Near low hypothesis", 12, 13);
+        SetFormulaStatisticalTestContrastRow(sheet, 3, 13, active: false, "Mean hypothesis", 14, 15);
+        SetFormulaStatisticalTestContrastRow(sheet, 4, 14, active: true, "High hypothesis", 16, 18);
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 8), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 9), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 8), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 9), new NumberValue(40));
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 11), new NumberValue(15));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 12), new NumberValue(15));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 11), new NumberValue(15));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 12), new NumberValue(45));
+
+        return workbook;
+    }
+
+    private static void SetFormulaStatisticalTestContrastRow(
+        Sheet sheet,
+        uint row,
+        double hypothesis,
+        bool active,
+        string label,
+        double firstSample,
+        double secondSample)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(hypothesis));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), new BoolValue(active));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 4), new NumberValue(firstSample));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 5), new NumberValue(secondSample));
+    }
+
     private static void SetFormulaAggregateContrastRow(
         Sheet sheet,
         uint row,
@@ -8371,6 +8446,17 @@ public sealed partial class AccessibilityCheckerServiceTests
             .Equal(expectedLocations);
     }
 
+    private static void AssertFormulaStatisticalTestContrastLocations(string formulaText, params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaStatisticalTestContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
     private static void AssertFormulaFinancialCashFlowFunctionContrastLocations(
         string formulaText,
         params string[] expectedLocations)
@@ -8823,6 +8909,9 @@ public sealed partial class AccessibilityCheckerServiceTests
         ["B1", "B2", "B3", "B4"];
 
     private static string[] FormulaStatisticalSelectionAllLocations =>
+        ["B1", "B2", "B3", "B4"];
+
+    private static string[] FormulaStatisticalTestAllLocations =>
         ["B1", "B2", "B3", "B4"];
 
     private static void AddFormulaContrastRule(

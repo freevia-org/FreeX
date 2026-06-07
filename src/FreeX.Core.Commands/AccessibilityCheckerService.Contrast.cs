@@ -1358,6 +1358,13 @@ public static partial class AccessibilityCheckerService
             case "STANDARDIZE":
                 kind = ConditionalFormulaScalarFunctionKind.Standardize;
                 return true;
+            case "CONFIDENCE":
+            case "CONFIDENCE.NORM":
+                kind = ConditionalFormulaScalarFunctionKind.ConfidenceNorm;
+                return true;
+            case "CONFIDENCE.T":
+                kind = ConditionalFormulaScalarFunctionKind.ConfidenceT;
+                return true;
             case "TDIST":
                 kind = ConditionalFormulaScalarFunctionKind.TDistCompat;
                 return true;
@@ -2254,6 +2261,8 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Time or
             ConditionalFormulaScalarFunctionKind.Datedif or
             ConditionalFormulaScalarFunctionKind.TDistCompat or
+            ConditionalFormulaScalarFunctionKind.ConfidenceNorm or
+            ConditionalFormulaScalarFunctionKind.ConfidenceT or
             ConditionalFormulaScalarFunctionKind.FDistRt or
             ConditionalFormulaScalarFunctionKind.FInv or
             ConditionalFormulaScalarFunctionKind.FInvRt or
@@ -2425,6 +2434,10 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaAggregateKind.PercentRankInc or
             ConditionalFormulaAggregateKind.PercentRankExc => argumentCount is 2 or 3,
             ConditionalFormulaAggregateKind.Prob => argumentCount is 3 or 4,
+            ConditionalFormulaAggregateKind.ZTest => argumentCount is 2 or 3,
+            ConditionalFormulaAggregateKind.TTest => argumentCount == 4,
+            ConditionalFormulaAggregateKind.FTest or
+            ConditionalFormulaAggregateKind.ChiSqTest => argumentCount == 2,
             ConditionalFormulaAggregateKind.TrimMean => argumentCount == 2,
             ConditionalFormulaAggregateKind.ModeSngl => argumentCount is >= 1 and <= MaxFormulaModeArgumentCount,
             _ => argumentCount > 0
@@ -2633,6 +2646,22 @@ public static partial class AccessibilityCheckerService
                 return true;
             case "PERCENTOF":
                 kind = ConditionalFormulaAggregateKind.PercentOf;
+                return true;
+            case "Z.TEST":
+            case "ZTEST":
+                kind = ConditionalFormulaAggregateKind.ZTest;
+                return true;
+            case "T.TEST":
+            case "TTEST":
+                kind = ConditionalFormulaAggregateKind.TTest;
+                return true;
+            case "F.TEST":
+            case "FTEST":
+                kind = ConditionalFormulaAggregateKind.FTest;
+                return true;
+            case "CHISQ.TEST":
+            case "CHITEST":
+                kind = ConditionalFormulaAggregateKind.ChiSqTest;
                 return true;
             case "DSUM":
                 kind = ConditionalFormulaAggregateKind.DSum;
@@ -3245,6 +3274,8 @@ public static partial class AccessibilityCheckerService
         Fisher,
         FisherInv,
         Standardize,
+        ConfidenceNorm,
+        ConfidenceT,
         TDistCompat,
         TDist,
         TDistRt,
@@ -3535,6 +3566,10 @@ public static partial class AccessibilityCheckerService
         ModeSngl,
         Prob,
         PercentOf,
+        ZTest,
+        TTest,
+        FTest,
+        ChiSqTest,
         DSum,
         DAverage,
         DCount,
@@ -3582,6 +3617,11 @@ public static partial class AccessibilityCheckerService
         double SumSquaresY,
         double SumSquaresX,
         double SumProducts);
+
+    private readonly record struct ConditionalFormulaStatisticalTestSummary(
+        int Count,
+        double Mean,
+        double SampleVariance);
 
     private enum ConditionalFormulaAggregateArgumentKind
     {
@@ -4321,7 +4361,9 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Phi:
                 case ConditionalFormulaScalarFunctionKind.Gauss:
                 case ConditionalFormulaScalarFunctionKind.Standardize:
+                case ConditionalFormulaScalarFunctionKind.ConfidenceNorm:
                     return TryEvaluateFormulaNormalDistributionFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.ConfidenceT:
                 case ConditionalFormulaScalarFunctionKind.TDistCompat:
                 case ConditionalFormulaScalarFunctionKind.TDist:
                 case ConditionalFormulaScalarFunctionKind.TDistRt:
@@ -9994,6 +10036,17 @@ public static partial class AccessibilityCheckerService
 
                     value = FormulaStandardizeScalar(standardizeX, standardizeMean, standardizeStdev);
                     return true;
+                case ConditionalFormulaScalarFunctionKind.ConfidenceNorm:
+                    if (!TryGetFormulaNormalNumber(arguments[0], out var confidenceNormAlpha) ||
+                        !TryGetFormulaNormalNumber(arguments[1], out var confidenceNormStdev) ||
+                        !TryGetFormulaNormalNumber(arguments[2], out var confidenceNormSize))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaConfidenceNormScalar(confidenceNormAlpha, confidenceNormStdev, confidenceNormSize);
+                    return true;
                 default:
                     return false;
             }
@@ -10076,6 +10129,15 @@ public static partial class AccessibilityCheckerService
                 return ErrorValue.Num;
 
             return FormulaNormalNumberResult((x - mean) / stdev);
+        }
+
+        private static ScalarValue FormulaConfidenceNormScalar(double alpha, double stdev, double sizeValue)
+        {
+            var size = Math.Truncate(sizeValue);
+            if (alpha <= 0d || alpha >= 1d || stdev <= 0d || size < 1d)
+                return ErrorValue.Num;
+
+            return FormulaNormalNumberResult(FormulaNormSInv(1.0d - alpha / 2.0d) * stdev / Math.Sqrt(size));
         }
 
         private static ScalarValue FormulaNormalNumberResult(double result) =>
@@ -11628,6 +11690,17 @@ public static partial class AccessibilityCheckerService
 
             switch (function.Kind)
             {
+                case ConditionalFormulaScalarFunctionKind.ConfidenceT:
+                    if (!TryGetFormulaNormalNumber(arguments[0], out var confidenceTAlpha) ||
+                        !TryGetFormulaNormalNumber(arguments[1], out var confidenceTStdev) ||
+                        !TryGetFormulaNormalNumber(arguments[2], out var confidenceTSize))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaConfidenceTScalar(confidenceTAlpha, confidenceTStdev, confidenceTSize);
+                    return true;
                 case ConditionalFormulaScalarFunctionKind.TDistCompat:
                     if (!TryGetFormulaNormalNumber(arguments[0], out var tDistCompatX) ||
                         !TryGetFormulaNormalNumber(arguments[1], out var tDistCompatDf) ||
@@ -11832,6 +11905,16 @@ public static partial class AccessibilityCheckerService
                 return ErrorValue.Num;
 
             return FormulaDistributionNumberResult(FormulaTInv(1.0d - probability / 2.0d, df));
+        }
+
+        private static ScalarValue FormulaConfidenceTScalar(double alpha, double stdev, double sizeValue)
+        {
+            var size = Math.Truncate(sizeValue);
+            var df = size - 1d;
+            if (alpha <= 0d || alpha >= 1d || stdev <= 0d || df < 1d)
+                return ErrorValue.Num;
+
+            return FormulaDistributionNumberResult(FormulaTInv(1.0d - alpha / 2.0d, df) * stdev / Math.Sqrt(size));
         }
 
         private static ScalarValue FormulaFDistScalar(double x, double d1Value, double d2Value, bool cumulative)
@@ -18574,7 +18657,11 @@ public static partial class AccessibilityCheckerService
                 ConditionalFormulaAggregateKind.PercentRankExc or
                 ConditionalFormulaAggregateKind.ModeSngl or
                 ConditionalFormulaAggregateKind.Prob or
-                ConditionalFormulaAggregateKind.PercentOf;
+                ConditionalFormulaAggregateKind.PercentOf or
+                ConditionalFormulaAggregateKind.ZTest or
+                ConditionalFormulaAggregateKind.TTest or
+                ConditionalFormulaAggregateKind.FTest or
+                ConditionalFormulaAggregateKind.ChiSqTest;
 
         private bool TryEvaluateFormulaStatisticalSelectionAggregate(
             ConditionalFormulaOperand operand,
@@ -18615,6 +18702,14 @@ public static partial class AccessibilityCheckerService
                     TryEvaluateFormulaProbAggregate(arguments, rowOffset, colOffset, out value),
                 ConditionalFormulaAggregateKind.PercentOf =>
                     TryEvaluateFormulaPercentOfAggregate(arguments, rowOffset, colOffset, out value),
+                ConditionalFormulaAggregateKind.ZTest =>
+                    TryEvaluateFormulaZTestAggregate(arguments, rowOffset, colOffset, out value),
+                ConditionalFormulaAggregateKind.TTest =>
+                    TryEvaluateFormulaTTestAggregate(arguments, rowOffset, colOffset, out value),
+                ConditionalFormulaAggregateKind.FTest =>
+                    TryEvaluateFormulaFTestAggregate(arguments, rowOffset, colOffset, out value),
+                ConditionalFormulaAggregateKind.ChiSqTest =>
+                    TryEvaluateFormulaChiSqTestAggregate(arguments, rowOffset, colOffset, out value),
                 _ => false
             };
         }
@@ -19186,6 +19281,550 @@ public static partial class AccessibilityCheckerService
 
             value = FormulaStatisticalNumberResult(subset / total);
             return true;
+        }
+
+        private bool TryEvaluateFormulaZTestAggregate(
+            IReadOnlyList<ConditionalFormulaAggregateArgument> arguments,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (arguments.Count is < 2 or > 3)
+                return false;
+
+            if (!TryResolveFormulaStatisticalTestNumbers(arguments[0], rowOffset, colOffset, out var numbers, out var arrayError))
+            {
+                value = arrayError ?? ErrorValue.Value;
+                return arrayError is not null;
+            }
+
+            if (!TryResolveFormulaStatisticalScalarArgument(arguments[1], rowOffset, colOffset, out var xValue))
+                return false;
+
+            if (xValue is ErrorValue xError)
+            {
+                value = xError;
+                return true;
+            }
+
+            if (!TryGetFormulaStatisticalNumber(xValue, out var x, out var xCoercionError))
+            {
+                value = xCoercionError ?? ErrorValue.Value;
+                return true;
+            }
+
+            if (!double.IsFinite(x))
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            if (!TryGetFormulaStatisticalTestSummary(numbers, requireSampleVariance: arguments.Count == 2, out var summary, out var summaryError))
+            {
+                value = summaryError;
+                return true;
+            }
+
+            double sigma;
+            if (arguments.Count == 3)
+            {
+                if (!TryResolveFormulaStatisticalScalarArgument(arguments[2], rowOffset, colOffset, out var sigmaValue))
+                    return false;
+
+                if (sigmaValue is ErrorValue sigmaError)
+                {
+                    value = sigmaError;
+                    return true;
+                }
+
+                if (!TryGetFormulaStatisticalNumber(sigmaValue, out sigma, out var sigmaCoercionError))
+                {
+                    value = sigmaCoercionError ?? ErrorValue.Value;
+                    return true;
+                }
+
+                if (!double.IsFinite(sigma) || sigma <= 0d)
+                {
+                    value = ErrorValue.Num;
+                    return true;
+                }
+            }
+            else
+            {
+                if (summary.SampleVariance == 0d)
+                {
+                    value = ErrorValue.DivByZero;
+                    return true;
+                }
+
+                sigma = Math.Sqrt(summary.SampleVariance);
+            }
+
+            var standardError = sigma / Math.Sqrt(summary.Count);
+            if (standardError == 0d || !double.IsFinite(standardError))
+            {
+                value = ErrorValue.DivByZero;
+                return true;
+            }
+
+            var z = (summary.Mean - x) / standardError;
+            value = FormulaStatisticalProbabilityResult(1.0d - FormulaNormSCdf(z));
+            return true;
+        }
+
+        private bool TryEvaluateFormulaTTestAggregate(
+            IReadOnlyList<ConditionalFormulaAggregateArgument> arguments,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (arguments.Count != 4)
+                return false;
+
+            if (!TryResolveFormulaStatisticalScalarArgument(arguments[2], rowOffset, colOffset, out var tailsValue) ||
+                !TryResolveFormulaStatisticalScalarArgument(arguments[3], rowOffset, colOffset, out var typeValue))
+            {
+                return false;
+            }
+
+            if (tailsValue is ErrorValue tailsError)
+            {
+                value = tailsError;
+                return true;
+            }
+
+            if (typeValue is ErrorValue typeError)
+            {
+                value = typeError;
+                return true;
+            }
+
+            if (!TryGetFormulaStatisticalNumber(tailsValue, out var tailsNumber, out var tailsCoercionError))
+            {
+                value = tailsCoercionError ?? ErrorValue.Value;
+                return true;
+            }
+
+            if (!TryGetFormulaStatisticalNumber(typeValue, out var typeNumber, out var typeCoercionError))
+            {
+                value = typeCoercionError ?? ErrorValue.Value;
+                return true;
+            }
+
+            if (!double.IsFinite(tailsNumber) || !double.IsFinite(typeNumber))
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            var tails = (int)Math.Truncate(tailsNumber);
+            var type = (int)Math.Truncate(typeNumber);
+            if (tails is not (1 or 2) || type is < 1 or > 3)
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            if (type == 1)
+            {
+                if (!TryCollectFormulaTTestPairedDifferences(arguments[0], arguments[1], rowOffset, colOffset, out var differences, out var pairedError))
+                {
+                    value = pairedError ?? ErrorValue.Value;
+                    return pairedError is not null;
+                }
+
+                if (!TryGetFormulaStatisticalTestSummary(differences, requireSampleVariance: true, out var pairedSummary, out var pairedSummaryError))
+                {
+                    value = pairedSummaryError;
+                    return true;
+                }
+
+                if (pairedSummary.SampleVariance == 0d)
+                {
+                    value = ErrorValue.DivByZero;
+                    return true;
+                }
+
+                var t = pairedSummary.Mean / Math.Sqrt(pairedSummary.SampleVariance / pairedSummary.Count);
+                value = FormulaTTestProbabilityResult(t, pairedSummary.Count - 1d, tails);
+                return true;
+            }
+
+            if (!TryResolveFormulaStatisticalTestNumbers(arguments[0], rowOffset, colOffset, out var leftNumbers, out var leftError))
+            {
+                value = leftError ?? ErrorValue.Value;
+                return leftError is not null;
+            }
+
+            if (!TryResolveFormulaStatisticalTestNumbers(arguments[1], rowOffset, colOffset, out var rightNumbers, out var rightError))
+            {
+                value = rightError ?? ErrorValue.Value;
+                return rightError is not null;
+            }
+
+            if (!TryGetFormulaStatisticalTestSummary(leftNumbers, requireSampleVariance: true, out var leftSummary, out var leftSummaryError))
+            {
+                value = leftSummaryError;
+                return true;
+            }
+
+            if (!TryGetFormulaStatisticalTestSummary(rightNumbers, requireSampleVariance: true, out var rightSummary, out var rightSummaryError))
+            {
+                value = rightSummaryError;
+                return true;
+            }
+
+            if (type == 2)
+            {
+                var df = leftSummary.Count + rightSummary.Count - 2d;
+                var pooledVariance = ((leftSummary.Count - 1d) * leftSummary.SampleVariance +
+                    (rightSummary.Count - 1d) * rightSummary.SampleVariance) / df;
+                if (pooledVariance == 0d || !double.IsFinite(pooledVariance))
+                {
+                    value = pooledVariance == 0d ? ErrorValue.DivByZero : ErrorValue.Num;
+                    return true;
+                }
+
+                var standardError = Math.Sqrt(pooledVariance * (1.0d / leftSummary.Count + 1.0d / rightSummary.Count));
+                if (standardError == 0d || !double.IsFinite(standardError))
+                {
+                    value = standardError == 0d ? ErrorValue.DivByZero : ErrorValue.Num;
+                    return true;
+                }
+
+                var t = (leftSummary.Mean - rightSummary.Mean) / standardError;
+                value = FormulaTTestProbabilityResult(t, df, tails);
+                return true;
+            }
+
+            var leftTerm = leftSummary.SampleVariance / leftSummary.Count;
+            var rightTerm = rightSummary.SampleVariance / rightSummary.Count;
+            var welchStandardError = Math.Sqrt(leftTerm + rightTerm);
+            var welchDfDenominator =
+                leftTerm * leftTerm / (leftSummary.Count - 1d) +
+                rightTerm * rightTerm / (rightSummary.Count - 1d);
+            if (welchStandardError == 0d || welchDfDenominator == 0d)
+            {
+                value = ErrorValue.DivByZero;
+                return true;
+            }
+
+            var welchDf = (leftTerm + rightTerm) * (leftTerm + rightTerm) / welchDfDenominator;
+            if (!double.IsFinite(welchStandardError) || !double.IsFinite(welchDf))
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            var welchT = (leftSummary.Mean - rightSummary.Mean) / welchStandardError;
+            value = FormulaTTestProbabilityResult(welchT, welchDf, tails);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaFTestAggregate(
+            IReadOnlyList<ConditionalFormulaAggregateArgument> arguments,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (arguments.Count != 2)
+                return false;
+
+            if (!TryResolveFormulaStatisticalTestNumbers(arguments[0], rowOffset, colOffset, out var leftNumbers, out var leftError))
+            {
+                value = leftError ?? ErrorValue.Value;
+                return leftError is not null;
+            }
+
+            if (!TryResolveFormulaStatisticalTestNumbers(arguments[1], rowOffset, colOffset, out var rightNumbers, out var rightError))
+            {
+                value = rightError ?? ErrorValue.Value;
+                return rightError is not null;
+            }
+
+            if (!TryGetFormulaStatisticalTestSummary(leftNumbers, requireSampleVariance: true, out var leftSummary, out var leftSummaryError))
+            {
+                value = leftSummaryError;
+                return true;
+            }
+
+            if (!TryGetFormulaStatisticalTestSummary(rightNumbers, requireSampleVariance: true, out var rightSummary, out var rightSummaryError))
+            {
+                value = rightSummaryError;
+                return true;
+            }
+
+            if (leftSummary.SampleVariance == 0d || rightSummary.SampleVariance == 0d)
+            {
+                value = ErrorValue.DivByZero;
+                return true;
+            }
+
+            var f = leftSummary.SampleVariance / rightSummary.SampleVariance;
+            var leftTail = FormulaFCdf(f, leftSummary.Count - 1d, rightSummary.Count - 1d);
+            var probability = f > 1d ? 2.0d * (1.0d - leftTail) : 2.0d * leftTail;
+            value = FormulaStatisticalProbabilityResult(probability);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaChiSqTestAggregate(
+            IReadOnlyList<ConditionalFormulaAggregateArgument> arguments,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (arguments.Count != 2)
+                return false;
+
+            if (!TryResolveFormulaStatisticalArrayArgument(arguments[0], rowOffset, colOffset, out var actualRange) ||
+                !TryResolveFormulaStatisticalArrayArgument(arguments[1], rowOffset, colOffset, out var expectedRange))
+            {
+                return false;
+            }
+
+            if (actualRange.RowCount != expectedRange.RowCount ||
+                actualRange.ColCount != expectedRange.ColCount)
+            {
+                value = ErrorValue.NA;
+                return true;
+            }
+
+            var statistic = 0d;
+            for (var row = 0; row < actualRange.RowCount; row++)
+            {
+                for (var col = 0; col < actualRange.ColCount; col++)
+                {
+                    if (!TryGetFormulaChiSqTestNumber(actualRange.Cells[row, col], out var actual, out var actualError))
+                    {
+                        value = actualError ?? ErrorValue.Value;
+                        return true;
+                    }
+
+                    if (!TryGetFormulaChiSqTestNumber(expectedRange.Cells[row, col], out var expected, out var expectedError))
+                    {
+                        value = expectedError ?? ErrorValue.Value;
+                        return true;
+                    }
+
+                    if (!double.IsFinite(actual) || !double.IsFinite(expected) || actual < 0d || expected < 0d)
+                    {
+                        value = ErrorValue.Num;
+                        return true;
+                    }
+
+                    if (expected == 0d)
+                    {
+                        value = ErrorValue.DivByZero;
+                        return true;
+                    }
+
+                    var difference = actual - expected;
+                    statistic += difference * difference / expected;
+                    if (!double.IsFinite(statistic))
+                    {
+                        value = ErrorValue.Num;
+                        return true;
+                    }
+                }
+            }
+
+            var degreesOfFreedom = actualRange.RowCount == 1 || actualRange.ColCount == 1
+                ? actualRange.RowCount * actualRange.ColCount - 1d
+                : (actualRange.RowCount - 1d) * (actualRange.ColCount - 1d);
+            if (degreesOfFreedom < 1d)
+            {
+                value = ErrorValue.NA;
+                return true;
+            }
+
+            value = FormulaStatisticalProbabilityResult(1.0d - FormulaChiSqCdf(statistic, degreesOfFreedom));
+            return true;
+        }
+
+        private bool TryResolveFormulaStatisticalTestNumbers(
+            ConditionalFormulaAggregateArgument argument,
+            int rowOffset,
+            int colOffset,
+            out List<double> numbers,
+            out ErrorValue? error)
+        {
+            numbers = [];
+            error = null;
+            if (!TryResolveFormulaStatisticalArrayArgument(argument, rowOffset, colOffset, out var range))
+                return false;
+
+            if (!TryCollectFormulaStatisticalArrayNumbers(range, out numbers, out var rangeError))
+            {
+                error = rangeError ?? ErrorValue.Value;
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool TryCollectFormulaTTestPairedDifferences(
+            ConditionalFormulaAggregateArgument leftArgument,
+            ConditionalFormulaAggregateArgument rightArgument,
+            int rowOffset,
+            int colOffset,
+            out List<double> differences,
+            out ErrorValue? error)
+        {
+            differences = [];
+            error = null;
+            if (!TryResolveFormulaStatisticalArrayArgument(leftArgument, rowOffset, colOffset, out var left) ||
+                !TryResolveFormulaStatisticalArrayArgument(rightArgument, rowOffset, colOffset, out var right))
+            {
+                return false;
+            }
+
+            if (left.RowCount != right.RowCount ||
+                left.ColCount != right.ColCount)
+            {
+                error = ErrorValue.NA;
+                return false;
+            }
+
+            for (var row = 0; row < left.RowCount; row++)
+            {
+                for (var col = 0; col < left.ColCount; col++)
+                {
+                    if (left.Cells[row, col] is ErrorValue leftError)
+                    {
+                        error = leftError;
+                        return false;
+                    }
+
+                    if (right.Cells[row, col] is ErrorValue rightError)
+                    {
+                        error = rightError;
+                        return false;
+                    }
+
+                    if (!TryGetFormulaStatisticalCellNumber(left.Cells[row, col], out var leftNumber) ||
+                        !TryGetFormulaStatisticalCellNumber(right.Cells[row, col], out var rightNumber))
+                    {
+                        continue;
+                    }
+
+                    differences.Add(leftNumber - rightNumber);
+                }
+            }
+
+            return true;
+        }
+
+        private static bool TryGetFormulaStatisticalTestSummary(
+            IReadOnlyList<double> numbers,
+            bool requireSampleVariance,
+            out ConditionalFormulaStatisticalTestSummary summary,
+            out ErrorValue error)
+        {
+            summary = default;
+            error = ErrorValue.Value;
+            if (numbers.Count == 0)
+            {
+                error = ErrorValue.NA;
+                return false;
+            }
+
+            if (requireSampleVariance && numbers.Count < 2)
+            {
+                error = ErrorValue.DivByZero;
+                return false;
+            }
+
+            var sum = 0d;
+            for (var i = 0; i < numbers.Count; i++)
+            {
+                if (!double.IsFinite(numbers[i]))
+                {
+                    error = ErrorValue.Num;
+                    return false;
+                }
+
+                sum += numbers[i];
+                if (!double.IsFinite(sum))
+                {
+                    error = ErrorValue.Num;
+                    return false;
+                }
+            }
+
+            var mean = sum / numbers.Count;
+            if (!double.IsFinite(mean))
+            {
+                error = ErrorValue.Num;
+                return false;
+            }
+
+            var sampleVariance = 0d;
+            if (numbers.Count > 1)
+            {
+                var sumSquares = 0d;
+                for (var i = 0; i < numbers.Count; i++)
+                {
+                    var deviation = numbers[i] - mean;
+                    sumSquares += deviation * deviation;
+                    if (!double.IsFinite(sumSquares))
+                    {
+                        error = ErrorValue.Num;
+                        return false;
+                    }
+                }
+
+                sampleVariance = sumSquares / (numbers.Count - 1d);
+                if (!double.IsFinite(sampleVariance))
+                {
+                    error = ErrorValue.Num;
+                    return false;
+                }
+            }
+
+            summary = new ConditionalFormulaStatisticalTestSummary(numbers.Count, mean, sampleVariance);
+            return true;
+        }
+
+        private static bool TryGetFormulaChiSqTestNumber(
+            ScalarValue value,
+            out double number,
+            out ErrorValue? error)
+        {
+            error = null;
+            if (value is ErrorValue valueError)
+            {
+                number = 0d;
+                error = valueError;
+                return false;
+            }
+
+            if (TryGetFormulaStatisticalCellNumber(value, out number))
+                return true;
+
+            error = ErrorValue.Value;
+            return false;
+        }
+
+        private static ScalarValue FormulaTTestProbabilityResult(double t, double df, int tails)
+        {
+            if (!double.IsFinite(t) || !double.IsFinite(df) || df <= 0d)
+                return ErrorValue.Num;
+
+            var tail = 1.0d - FormulaTCdf(Math.Abs(t), df);
+            var probability = tails == 1 ? tail : 2.0d * tail;
+            return FormulaStatisticalProbabilityResult(probability);
+        }
+
+        private static ScalarValue FormulaStatisticalProbabilityResult(double probability)
+        {
+            if (!double.IsFinite(probability))
+                return ErrorValue.Num;
+
+            return new NumberValue(Math.Min(1.0d, Math.Max(0d, probability)));
         }
 
         private static bool IsFormulaStatisticalRangeArgument(ConditionalFormulaAggregateArgument argument) =>
