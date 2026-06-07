@@ -12016,6 +12016,60 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesVbaProjectPackageGraphAlongsideModelEdits()
+    {
+        var workbook = new Workbook("MacroPackageGraphRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("kept"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalVbaProjectPackage(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 1, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        archive.GetEntry("xl/vbaProject.bin").Should().NotBeNull();
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        var workbookRelsXml = LoadPackageXml(archive.GetEntry("xl/_rels/workbook.xml.rels")!);
+        workbookRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Should()
+            .ContainSingle(element =>
+                (string?)element.Attribute("Type") == "http://schemas.microsoft.com/office/2006/relationships/vbaProject" &&
+                (string?)element.Attribute("Target") == "vbaProject.bin");
+
+        var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+        contentTypesXml.Root!
+            .Elements(contentTypeNs + "Override")
+            .Should()
+            .ContainSingle(element =>
+                (string?)element.Attribute("PartName") == "/xl/workbook.xml" &&
+                (string?)element.Attribute("ContentType") == "application/vnd.ms-excel.sheet.macroEnabled.main+xml");
+        contentTypesXml.Root!
+            .Elements(contentTypeNs + "Override")
+            .Should()
+            .ContainSingle(element =>
+                (string?)element.Attribute("PartName") == "/xl/vbaProject.bin" &&
+                (string?)element.Attribute("ContentType") == "application/vnd.ms-office.vbaProject");
+
+        saved.Position = 0;
+        var roundTripped = adapter.Load(saved);
+        roundTripped.GetSheetAt(0).GetValue(1, 1).Should().Be(new TextValue("edited"));
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedChartsheetReferenceAlongsideModelEdits()
     {
         var workbook = new Workbook("UnsupportedSheetTypeRetentionTest");
@@ -24875,6 +24929,52 @@ public partial class FileAdapterSmokeTests
                 new XElement(drawingNs + "graphicData",
                     new XAttribute("uri", "http://schemas.openxmlformats.org/drawingml/2006/chart"),
                     new XElement(chartNs + "chart", new XAttribute(relNs + "id", "rIdFreeXChart")))));
+
+    private static void AddMinimalVbaProjectPackage(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+            archive.GetEntry("xl/vbaProject.bin")?.Delete();
+            var vbaEntry = archive.CreateEntry("xl/vbaProject.bin");
+            using (var stream = vbaEntry.Open())
+            {
+                stream.Write([0xD0, 0xCF, 0x11, 0xE0]);
+            }
+
+            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            var workbookOverride = contentTypesXml.Root!
+                .Elements(contentTypeNs + "Override")
+                .FirstOrDefault(element => (string?)element.Attribute("PartName") == "/xl/workbook.xml");
+            if (workbookOverride is null)
+            {
+                AddContentTypeOverride(
+                    contentTypesXml,
+                    contentTypeNs,
+                    "/xl/workbook.xml",
+                    "application/vnd.ms-excel.sheet.macroEnabled.main+xml");
+            }
+            else
+            {
+                workbookOverride.SetAttributeValue("ContentType", "application/vnd.ms-excel.sheet.macroEnabled.main+xml");
+            }
+
+            AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/vbaProject.bin", "application/vnd.ms-office.vbaProject");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var workbookRelsXml = LoadPackageXml(archive.GetEntry("xl/_rels/workbook.xml.rels")!);
+            workbookRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdVbaProject"),
+                new XAttribute("Type", "http://schemas.microsoft.com/office/2006/relationships/vbaProject"),
+                new XAttribute("Target", "vbaProject.bin")));
+            ReplacePackageXml(archive, "xl/_rels/workbook.xml.rels", workbookRelsXml);
+        }
+
+        packageStream.Position = 0;
+    }
 
     private static XDocument LoadPackageXml(ZipArchiveEntry entry) =>
         XlsxPackageTestFixtures.LoadPackageXml(entry);
