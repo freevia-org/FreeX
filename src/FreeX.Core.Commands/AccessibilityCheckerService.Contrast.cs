@@ -1654,6 +1654,9 @@ public static partial class AccessibilityCheckerService
             case "MDETERM":
                 kind = ConditionalFormulaScalarFunctionKind.MDeterm;
                 return true;
+            case "MUNIT":
+                kind = ConditionalFormulaScalarFunctionKind.MUnit;
+                return true;
             case "MINVERSE":
                 kind = ConditionalFormulaScalarFunctionKind.MInverse;
                 return true;
@@ -1977,6 +1980,9 @@ public static partial class AccessibilityCheckerService
                 return true;
             case "OFFSET":
                 kind = ConditionalFormulaScalarFunctionKind.Offset;
+                return true;
+            case "INDIRECT":
+                kind = ConditionalFormulaScalarFunctionKind.Indirect;
                 return true;
             case "N":
                 kind = ConditionalFormulaScalarFunctionKind.N;
@@ -2365,6 +2371,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.VLookup or
             ConditionalFormulaScalarFunctionKind.HLookup => argumentCount is 3 or 4,
             ConditionalFormulaScalarFunctionKind.Offset => argumentCount is >= 3 and <= 5,
+            ConditionalFormulaScalarFunctionKind.Indirect => argumentCount is 1 or 2,
             ConditionalFormulaScalarFunctionKind.N or
             ConditionalFormulaScalarFunctionKind.Type or
             ConditionalFormulaScalarFunctionKind.ErrorType => argumentCount == 1,
@@ -2449,6 +2456,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Coupnum or
             ConditionalFormulaScalarFunctionKind.Couppcd => argumentCount is 3 or 4,
             ConditionalFormulaScalarFunctionKind.MDeterm or
+            ConditionalFormulaScalarFunctionKind.MUnit or
             ConditionalFormulaScalarFunctionKind.MInverse or
             ConditionalFormulaScalarFunctionKind.Transpose => argumentCount == 1,
             ConditionalFormulaScalarFunctionKind.MMult => argumentCount == 2,
@@ -3499,6 +3507,7 @@ public static partial class AccessibilityCheckerService
         Couppcd,
         MMult,
         MDeterm,
+        MUnit,
         MInverse,
         Transpose,
         Sequence,
@@ -3607,6 +3616,7 @@ public static partial class AccessibilityCheckerService
         VLookup,
         HLookup,
         Offset,
+        Indirect,
         N,
         Type,
         ErrorType,
@@ -4629,6 +4639,7 @@ public static partial class AccessibilityCheckerService
                     return TryEvaluateFormulaFinancialScalarFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.MMult:
                 case ConditionalFormulaScalarFunctionKind.MDeterm:
+                case ConditionalFormulaScalarFunctionKind.MUnit:
                 case ConditionalFormulaScalarFunctionKind.MInverse:
                 case ConditionalFormulaScalarFunctionKind.Transpose:
                     return TryEvaluateFormulaMatrixArrayFunction(function, rowOffset, colOffset, out value);
@@ -4830,6 +4841,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.VLookup:
                 case ConditionalFormulaScalarFunctionKind.HLookup:
                 case ConditionalFormulaScalarFunctionKind.Offset:
+                case ConditionalFormulaScalarFunctionKind.Indirect:
                     return TryEvaluateFormulaLookupReferenceFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Bin2Dec:
                 case ConditionalFormulaScalarFunctionKind.Hex2Dec:
@@ -4897,6 +4909,8 @@ public static partial class AccessibilityCheckerService
                     return TryEvaluateFormulaMMultFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.MDeterm:
                     return TryEvaluateFormulaMDetermFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.MUnit:
+                    return TryEvaluateFormulaMUnitFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.MInverse:
                     return TryEvaluateFormulaMInverseFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Transpose:
@@ -4996,6 +5010,42 @@ public static partial class AccessibilityCheckerService
             }
 
             value = FormulaMatrixDeterminant(matrix);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaMUnitFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaDynamicArrayControlArgument(
+                    function.Arguments[0],
+                    rowOffset,
+                    colOffset,
+                    out var dimensionValue,
+                    out var dimensionError))
+            {
+                value = dimensionError ?? ErrorValue.Value;
+                return dimensionError is not null;
+            }
+
+            if (!TryGetFormulaDynamicArrayInteger(dimensionValue, out var dimension) || dimension < 1)
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            if (!FormulaDynamicArrayCellCountWithinLimit(dimension, dimension))
+                return false;
+
+            var cells = new ScalarValue[dimension, dimension];
+            for (var row = 0; row < dimension; row++)
+                for (var col = 0; col < dimension; col++)
+                    cells[row, col] = new NumberValue(row == col ? 1d : 0d);
+
+            value = new RangeValue(cells);
             return true;
         }
 
@@ -11339,6 +11389,8 @@ public static partial class AccessibilityCheckerService
                     TryEvaluateFormulaLookupFunction(function, rowOffset, colOffset, vertical: false, out value),
                 ConditionalFormulaScalarFunctionKind.Offset =>
                     TryEvaluateFormulaOffsetFunction(function, rowOffset, colOffset, out value),
+                ConditionalFormulaScalarFunctionKind.Indirect =>
+                    TryEvaluateFormulaIndirectFunction(function, rowOffset, colOffset, out value),
                 _ => false
             };
         }
@@ -12193,6 +12245,446 @@ public static partial class AccessibilityCheckerService
             }
 
             integer = intValue;
+            return true;
+        }
+
+        private bool TryEvaluateFormulaIndirectFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaLookupScalarArgument(function.Arguments[0], rowOffset, colOffset, out var referenceValue))
+                return false;
+
+            if (referenceValue is ErrorValue referenceError)
+            {
+                value = referenceError;
+                return true;
+            }
+
+            if (!TryGetFormulaCoercedText(referenceValue, out var referenceText))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            var useA1 = true;
+            if (function.Arguments.Count > 1)
+            {
+                if (!TryResolveFormulaLookupScalarArgument(function.Arguments[1], rowOffset, colOffset, out var useA1Value))
+                    return false;
+
+                if (useA1Value is ErrorValue useA1Error)
+                {
+                    value = useA1Error;
+                    return true;
+                }
+
+                if (useA1Value is not BlankValue)
+                {
+                    var boolean = FormulaBooleanValue(useA1Value);
+                    if (!boolean.HasValue)
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    useA1 = boolean.Value;
+                }
+            }
+
+            if (!TryResolveFormulaIndirectReference(
+                    referenceText,
+                    useA1,
+                    out var targetSheet,
+                    out var startRow,
+                    out var startCol,
+                    out var endRow,
+                    out var endCol,
+                    out var referenceResolutionError))
+            {
+                value = referenceResolutionError ?? ErrorValue.Ref;
+                return true;
+            }
+
+            if (!TryMaterializeFormulaRange(targetSheet, startRow, startCol, endRow, endCol, out var range))
+                return false;
+
+            value = FormulaLookupRangeResult(range);
+            return true;
+        }
+
+        private bool TryResolveFormulaIndirectReference(
+            string text,
+            bool useA1,
+            out Sheet targetSheet,
+            out uint startRow,
+            out uint startCol,
+            out uint endRow,
+            out uint endCol,
+            out ErrorValue? error)
+        {
+            targetSheet = default!;
+            startRow = 0;
+            startCol = 0;
+            endRow = 0;
+            endCol = 0;
+            error = null;
+
+            if (!TrySplitFormulaIndirectReferenceText(text, out var sheetName, out var referenceText, out error))
+                return false;
+
+            if (referenceText.Length == 0)
+            {
+                error = ErrorValue.Ref;
+                return false;
+            }
+
+            var resolvedSheet = sheetName is null ? sheet : workbook.GetSheet(sheetName);
+            if (resolvedSheet is null)
+            {
+                error = ErrorValue.Ref;
+                return false;
+            }
+
+            var parsed = useA1
+                ? TryParseFormulaIndirectA1Reference(referenceText, out startRow, out startCol, out endRow, out endCol)
+                : TryParseFormulaIndirectR1C1Reference(referenceText, _formulaCurrentRow, _formulaCurrentCol, out startRow, out startCol, out endRow, out endCol);
+
+            if (!parsed)
+            {
+                error = ErrorValue.Ref;
+                return false;
+            }
+
+            targetSheet = resolvedSheet;
+            (startRow, endRow) = (Math.Min(startRow, endRow), Math.Max(startRow, endRow));
+            (startCol, endCol) = (Math.Min(startCol, endCol), Math.Max(startCol, endCol));
+            return true;
+        }
+
+        private static bool TrySplitFormulaIndirectReferenceText(
+            string text,
+            out string? sheetName,
+            out string referenceText,
+            out ErrorValue? error)
+        {
+            sheetName = null;
+            referenceText = text.Trim();
+            error = null;
+
+            if (referenceText.Length == 0)
+            {
+                error = ErrorValue.Ref;
+                return false;
+            }
+
+            if (referenceText[0] == '\'')
+                return TrySplitQuotedFormulaIndirectReferenceText(referenceText, out sheetName, out referenceText, out error);
+
+            var bangIndex = referenceText.IndexOf('!');
+            if (bangIndex < 0)
+                return true;
+
+            if (referenceText.IndexOf('!', bangIndex + 1) >= 0)
+            {
+                error = ErrorValue.Ref;
+                return false;
+            }
+
+            var sheetPart = referenceText[..bangIndex].Trim();
+            if (!IsFormulaIndirectSimpleSheetQualifier(sheetPart) ||
+                !IsFormulaIndirectSafeSheetName(sheetPart))
+            {
+                error = ErrorValue.Ref;
+                return false;
+            }
+
+            sheetName = sheetPart;
+            referenceText = referenceText[(bangIndex + 1)..].Trim();
+            return true;
+        }
+
+        private static bool TrySplitQuotedFormulaIndirectReferenceText(
+            string text,
+            out string? sheetName,
+            out string referenceText,
+            out ErrorValue? error)
+        {
+            sheetName = null;
+            referenceText = string.Empty;
+            error = null;
+
+            var builder = new System.Text.StringBuilder();
+            for (var index = 1; index < text.Length; index++)
+            {
+                var ch = text[index];
+                if (ch != '\'')
+                {
+                    builder.Append(ch);
+                    continue;
+                }
+
+                if (index + 1 < text.Length && text[index + 1] == '\'')
+                {
+                    builder.Append('\'');
+                    index++;
+                    continue;
+                }
+
+                if (index + 1 >= text.Length || text[index + 1] != '!')
+                    break;
+
+                var candidateSheetName = builder.ToString();
+                if (!IsFormulaIndirectSafeSheetName(candidateSheetName))
+                {
+                    error = ErrorValue.Ref;
+                    return false;
+                }
+
+                sheetName = candidateSheetName;
+                referenceText = text[(index + 2)..].Trim();
+                return true;
+            }
+
+            error = ErrorValue.Ref;
+            return false;
+        }
+
+        private static bool IsFormulaIndirectSimpleSheetQualifier(string sheetName) =>
+            sheetName.Length > 0 && sheetName.All(static ch => char.IsLetterOrDigit(ch) || ch is '_' or '.');
+
+        private static bool IsFormulaIndirectSafeSheetName(string sheetName) =>
+            sheetName.Length > 0 &&
+            sheetName.IndexOf('[') < 0 &&
+            sheetName.IndexOf(']') < 0 &&
+            sheetName.IndexOf(':') < 0;
+
+        private static bool TryParseFormulaIndirectA1Reference(
+            string referenceText,
+            out uint startRow,
+            out uint startCol,
+            out uint endRow,
+            out uint endCol)
+        {
+            startRow = 0;
+            startCol = 0;
+            endRow = 0;
+            endCol = 0;
+            var text = referenceText.Trim();
+            var colonIndex = text.IndexOf(':');
+            if (colonIndex >= 0)
+            {
+                if (colonIndex != text.LastIndexOf(':'))
+                    return false;
+
+                var left = text[..colonIndex];
+                var right = text[(colonIndex + 1)..];
+                if (TryParseFormulaIndirectA1CellReference(left, out startRow, out startCol) &&
+                    TryParseFormulaIndirectA1CellReference(right, out endRow, out endCol))
+                {
+                    return true;
+                }
+
+                if (TryParseFormulaIndirectA1RowNumber(left, out startRow) &&
+                    TryParseFormulaIndirectA1RowNumber(right, out endRow))
+                {
+                    startCol = 1;
+                    endCol = CellAddress.MaxCol;
+                    return true;
+                }
+
+                if (TryParseFormulaIndirectA1ColumnName(left, out startCol) &&
+                    TryParseFormulaIndirectA1ColumnName(right, out endCol))
+                {
+                    startRow = 1;
+                    endRow = CellAddress.MaxRow;
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (!TryParseFormulaIndirectA1CellReference(text, out startRow, out startCol))
+                return false;
+
+            endRow = startRow;
+            endCol = startCol;
+            return true;
+        }
+
+        private static bool TryParseFormulaIndirectA1CellReference(string text, out uint row, out uint col)
+        {
+            row = 0;
+            col = 0;
+            var cellReference = text.Trim();
+            var index = 0;
+            if (index < cellReference.Length && cellReference[index] == '$')
+                index++;
+
+            var colStart = index;
+            while (index < cellReference.Length && char.IsLetter(cellReference[index]))
+                index++;
+
+            var colLength = index - colStart;
+            if (colLength is 0 or > 3)
+                return false;
+
+            var columnName = cellReference[colStart..index];
+            if (index < cellReference.Length && cellReference[index] == '$')
+                index++;
+
+            var rowStart = index;
+            while (index < cellReference.Length && char.IsDigit(cellReference[index]))
+                index++;
+
+            if (rowStart == index || index != cellReference.Length)
+                return false;
+
+            if (!uint.TryParse(cellReference[rowStart..], out row) || row is < 1 or > CellAddress.MaxRow)
+                return false;
+
+            col = CellAddress.ColumnNameToNumber(columnName.ToUpperInvariant());
+            return col is >= 1 and <= CellAddress.MaxCol;
+        }
+
+        private static bool TryParseFormulaIndirectA1RowNumber(string text, out uint row)
+        {
+            row = 0;
+            var candidate = text.Trim();
+            if (candidate.StartsWith('$'))
+                candidate = candidate[1..];
+
+            return candidate.Length > 0 &&
+                candidate.All(char.IsDigit) &&
+                uint.TryParse(candidate, out row) &&
+                row is >= 1 and <= CellAddress.MaxRow;
+        }
+
+        private static bool TryParseFormulaIndirectA1ColumnName(string text, out uint col)
+        {
+            col = 0;
+            var candidate = text.Trim();
+            if (candidate.StartsWith('$'))
+                candidate = candidate[1..];
+
+            if (candidate.Length is 0 or > 3 || !candidate.All(char.IsLetter))
+                return false;
+
+            col = CellAddress.ColumnNameToNumber(candidate.ToUpperInvariant());
+            return col is >= 1 and <= CellAddress.MaxCol;
+        }
+
+        private static bool TryParseFormulaIndirectR1C1Reference(
+            string referenceText,
+            uint currentRow,
+            uint currentCol,
+            out uint startRow,
+            out uint startCol,
+            out uint endRow,
+            out uint endCol)
+        {
+            startRow = 0;
+            startCol = 0;
+            endRow = 0;
+            endCol = 0;
+            var text = referenceText.Trim();
+            var colonIndex = text.IndexOf(':');
+            if (colonIndex >= 0)
+            {
+                if (colonIndex != text.LastIndexOf(':'))
+                    return false;
+
+                return TryParseFormulaIndirectR1C1CellReference(text[..colonIndex], currentRow, currentCol, out startRow, out startCol) &&
+                    TryParseFormulaIndirectR1C1CellReference(text[(colonIndex + 1)..], currentRow, currentCol, out endRow, out endCol);
+            }
+
+            if (!TryParseFormulaIndirectR1C1CellReference(text, currentRow, currentCol, out startRow, out startCol))
+                return false;
+
+            endRow = startRow;
+            endCol = startCol;
+            return true;
+        }
+
+        private static bool TryParseFormulaIndirectR1C1CellReference(
+            string text,
+            uint currentRow,
+            uint currentCol,
+            out uint row,
+            out uint col)
+        {
+            row = 0;
+            col = 0;
+            var cellReference = text.Trim();
+            var index = 0;
+            return TryReadFormulaIndirectR1C1Part(cellReference, ref index, 'R', currentRow, CellAddress.MaxRow, out row) &&
+                TryReadFormulaIndirectR1C1Part(cellReference, ref index, 'C', currentCol, CellAddress.MaxCol, out col) &&
+                index == cellReference.Length;
+        }
+
+        private static bool TryReadFormulaIndirectR1C1Part(
+            string text,
+            ref int index,
+            char expectedPrefix,
+            uint current,
+            uint max,
+            out uint value)
+        {
+            value = 0;
+            if (index >= text.Length || char.ToUpperInvariant(text[index]) != expectedPrefix)
+                return false;
+
+            index++;
+            if (index < text.Length && text[index] == '[')
+            {
+                var offsetStart = ++index;
+                if (index < text.Length && text[index] is '+' or '-')
+                    index++;
+
+                var digitStart = index;
+                while (index < text.Length && char.IsDigit(text[index]))
+                    index++;
+
+                if (digitStart == index || index >= text.Length || text[index] != ']')
+                    return false;
+
+                var offsetText = text[offsetStart..index];
+                index++;
+                if (!long.TryParse(offsetText, out var offset))
+                    return false;
+
+                var resolved = (long)current + offset;
+                if (resolved < 1 || resolved > max)
+                    return false;
+
+                value = (uint)resolved;
+                return true;
+            }
+
+            var numberStart = index;
+            ulong absolute = 0;
+            while (index < text.Length && char.IsDigit(text[index]))
+            {
+                absolute = absolute * 10UL + (ulong)(text[index] - '0');
+                if (absolute > max)
+                    return false;
+
+                index++;
+            }
+
+            if (index > numberStart)
+            {
+                if (absolute == 0)
+                    return false;
+
+                value = (uint)absolute;
+                return true;
+            }
+
+            value = current;
             return true;
         }
 
