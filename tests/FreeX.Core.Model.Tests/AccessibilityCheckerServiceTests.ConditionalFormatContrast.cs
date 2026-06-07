@@ -475,6 +475,39 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatIfErrorAndIfNaWrappers()
+    {
+        AssertFormulaPredicateContrastLocations("IFERROR($A1,TRUE)", "B2", "B3", "B5", "B6", "B7");
+        AssertFormulaPredicateContrastLocations("IFNA($A1,TRUE)", "B2", "B3", "B5", "B7");
+        AssertFormulaIfContrastLocations("IFERROR(#VALUE!,$A1>=100)", "B2", "B4");
+        AssertFormulaIfContrastLocations("IFNA(#N/A,$C1=\"Open\")", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatIfErrorAndIfNaNestedWrappers()
+    {
+        AssertFormulaIfContrastLocations("AND(IFERROR($A1>=100,FALSE),$C1=\"Open\")", "B4");
+        AssertFormulaIfContrastLocations("OR(IFNA(#N/A,$A1>=100),$C1=\"Open\")", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatIfsWrappers()
+    {
+        AssertFormulaIfContrastLocations("IFS($A1>=125,TRUE,$A1>=100,$C1=\"Closed\",TRUE,FALSE)", "B2", "B4");
+        AssertFormulaIfContrastLocations("AND(IFS($A1>=125,TRUE,$A1>=100,TRUE,TRUE,FALSE),$C1=\"Open\")", "B4");
+        AssertFormulaIfContrastLocations("IFNA(IFS($A1>200,TRUE),$C1=\"Open\")", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatSwitchWrappers()
+    {
+        AssertFormulaIfContrastLocations("SWITCH(TRUE,$A1>=125,TRUE,$C1=\"Open\",TRUE,FALSE)", "B3", "B4");
+        AssertFormulaIfContrastLocations("SWITCH($C1,\"Open\",$A1>=100,\"Closed\",$A1>=100,FALSE)", "B2", "B4");
+        AssertFormulaIfContrastLocations("SWITCH($C1,\"Open\",FALSE,$A1>=100)", "B2");
+        AssertFormulaIfContrastLocations("AND(SWITCH(TRUE,$A1>=125,TRUE,$C1=\"Open\",TRUE,FALSE),$A1>=100)", "B4");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAggregateComparison()
     {
         AssertFormulaAggregateContrastLocations("SUM($A1)>100", "B4");
@@ -4909,6 +4942,20 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         AssertFormulaIfContrastLocations("IF(KURT($A1)>0,TRUE,FALSE)");
         AssertFormulaIfContrastLocations("IF($A1>=100,KURT($A1),FALSE)");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchUnsupportedFormulaConditionalFormatInsideSelectorWrappers()
+    {
+        AssertFormulaIfContrastLocations("IFERROR(KURT($A1),TRUE)");
+        AssertFormulaIfContrastLocations("IFNA($A1>=100,TRUE,FALSE)");
+        AssertFormulaIfContrastLocations("IFS($A1>=100,TRUE,KURT($A1)>0,TRUE)");
+        AssertFormulaIfContrastLocations("IFS($A1>=100)");
+        AssertFormulaIfContrastLocations("SWITCH($C1,\"Open\",TRUE,KURT($A1),FALSE)");
+        AssertFormulaIfContrastLocations("SWITCH($C1,\"Open\")");
+        AssertFormulaIfContrastLocations("IFERROR($A1,0)>0");
+        AssertFormulaIfContrastLocations("IFS($A1>=100,1,TRUE,0)>0");
+        AssertFormulaIfContrastLocations("SWITCH($C1,\"Open\",1,0)>0");
     }
 
     [Fact]
