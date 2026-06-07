@@ -14,7 +14,7 @@ public sealed class XlsxScatterChartWriterTests
     [Fact]
     public void Save_DefaultScatterSuppressesConnectorLines()
     {
-        using var saved = Save(CreateScatterWorkbook());
+        using var saved = XlsxPackageTestHelper.SaveWorkbook(CreateScatterWorkbook());
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
 
         var scatterChart = LoadScatterChart(archive);
@@ -35,7 +35,7 @@ public sealed class XlsxScatterChartWriterTests
     [Fact]
     public void Save_ScatterKeepsConnectorLinesWhenSeriesRequestsLineOrSmoothing()
     {
-        using var saved = Save(CreateScatterWorkbook(
+        using var saved = XlsxPackageTestHelper.SaveWorkbook(CreateScatterWorkbook(
         [
             new ChartSeriesFormat(0, StrokeColor: new CellColor(20, 110, 180)),
             new ChartSeriesFormat(1, Smooth: true)
@@ -85,14 +85,6 @@ public sealed class XlsxScatterChartWriterTests
             SeriesFormats = seriesFormats?.ToList() ?? []
         });
         return workbook;
-    }
-
-    private static MemoryStream Save(Workbook workbook)
-    {
-        var saved = new MemoryStream();
-        new XlsxFileAdapter().Save(workbook, saved);
-        saved.Position = 0;
-        return saved;
     }
 
     private static XElement LoadScatterChart(ZipArchive archive)

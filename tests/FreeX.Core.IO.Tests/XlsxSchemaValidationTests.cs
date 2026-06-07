@@ -120,7 +120,7 @@ public sealed class XlsxSchemaValidationTests
     [InlineData(ChartType.Waterfall)]
     public void XlsxAdapter_Save_WritesExcelOpenableChartExPackageStructure(ChartType chartType)
     {
-        using var saved = Save(CreateWorkbookWithChart(chartType));
+        using var saved = XlsxPackageTestHelper.SaveWorkbook(CreateWorkbookWithChart(chartType));
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
 
         var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
@@ -157,7 +157,7 @@ public sealed class XlsxSchemaValidationTests
     [Fact]
     public void LoadedWorkbookPatchSave_WithClassicChart_ProducesSchemaValidWorkbook()
     {
-        using var source = Save(CreateWorkbookWithChart(ChartType.Column));
+        using var source = XlsxPackageTestHelper.SaveWorkbook(CreateWorkbookWithChart(ChartType.Column));
         var sourceChartPart = ReadPackageEntryBytes(source, "xl/charts/chart1.xml");
         var sourceDrawingPart = ReadPackageEntryBytes(source, "xl/drawings/drawing1.xml");
         source.Position = 0;
@@ -184,7 +184,7 @@ public sealed class XlsxSchemaValidationTests
     [Fact]
     public void LoadedWorkbookPatchSave_WithChartEx_ProducesSchemaValidWorkbook()
     {
-        using var source = Save(CreateWorkbookWithChart(ChartType.Histogram));
+        using var source = XlsxPackageTestHelper.SaveWorkbook(CreateWorkbookWithChart(ChartType.Histogram));
         var chartPart = FindSingleEntryByContentType(source, ChartExContentType);
         var colorStylePart = FindSingleEntryByContentType(source, ChartExColorStyleContentType);
         var stylePart = FindSingleEntryByContentType(source, ChartExStyleContentType);
@@ -225,7 +225,7 @@ public sealed class XlsxSchemaValidationTests
     [Fact]
     public void LoadedWorkbookPatchSave_WithPivotChart_ProducesSchemaValidWorkbook()
     {
-        using var source = Save(CreatePivotChartWorkbook());
+        using var source = XlsxPackageTestHelper.SaveWorkbook(CreatePivotChartWorkbook());
         var sourceParts = new[]
         {
             "xl/workbook.xml",
@@ -439,17 +439,9 @@ public sealed class XlsxSchemaValidationTests
         return workbook;
     }
 
-    private static MemoryStream Save(Workbook workbook)
-    {
-        var stream = new MemoryStream();
-        new XlsxFileAdapter().Save(workbook, stream);
-        stream.Position = 0;
-        return stream;
-    }
-
     private static System.Collections.Generic.List<string> SchemaErrors(Workbook workbook)
     {
-        using var stream = Save(workbook);
+        using var stream = XlsxPackageTestHelper.SaveWorkbook(workbook);
         return SchemaErrors(stream);
     }
 

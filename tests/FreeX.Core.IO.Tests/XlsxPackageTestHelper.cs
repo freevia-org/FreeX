@@ -15,6 +15,11 @@ internal static class XlsxPackageTestHelper
         var sheet = workbook.AddSheet("Sheet1");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
 
+        return SaveWorkbook(workbook);
+    }
+
+    public static MemoryStream SaveWorkbook(Workbook workbook)
+    {
         var package = new MemoryStream();
         new XlsxFileAdapter().Save(workbook, package);
         package.Position = 0;
