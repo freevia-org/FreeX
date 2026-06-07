@@ -50,6 +50,27 @@ internal static class XlsxWorksheetNativeMetadataHelpers
         }
     }
 
+    public static bool TrySetNativeAttributeIfDifferent(XElement element, string name, string value)
+    {
+        try
+        {
+            var attributeName = XName.Get(name);
+            if (string.Equals(element.Attribute(attributeName)?.Value, value, StringComparison.Ordinal))
+                return false;
+
+            element.SetAttributeValue(attributeName, value);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
+    }
+
     public static bool TryAddNativeChildElement(
         XElement target,
         string? childXml,
