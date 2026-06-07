@@ -16,6 +16,37 @@ public static class FileDialogFilterBuilder
         return BuildFilter(formats, includeAllSupported: false, includeAllFiles: false);
     }
 
+    public static IReadOnlyList<FilePickerTypeDescriptor> BuildOpenPickerTypes(
+        IEnumerable<IFileAdapter> adapters,
+        string allSupportedName = "All supported files") =>
+        BuildOpenPickerTypes(
+            GetFormats(adapters, static format => format.CanOpen),
+            allSupportedName);
+
+    public static IReadOnlyList<FilePickerTypeDescriptor> BuildOpenPickerTypes(
+        IEnumerable<FileFormatDescriptor> formats,
+        string allSupportedName = "All supported files")
+    {
+        var openFormats = formats.Where(format => format.CanOpen).ToList();
+        return BuildPickerTypes(openFormats, includeAllSupported: true, allSupportedName);
+    }
+
+    public static IReadOnlyList<FilePickerTypeDescriptor> BuildSavePickerTypes(
+        IEnumerable<IFileAdapter> adapters,
+        string? preferredFirstExtension = null) =>
+        BuildSavePickerTypes(
+            GetFormats(adapters, static format => format.CanSave),
+            preferredFirstExtension);
+
+    public static IReadOnlyList<FilePickerTypeDescriptor> BuildSavePickerTypes(
+        IEnumerable<FileFormatDescriptor> formats,
+        string? preferredFirstExtension = null)
+    {
+        var saveFormats = formats.Where(format => format.CanSave).ToList();
+        PromotePreferredExtension(saveFormats, preferredFirstExtension);
+        return BuildPickerTypes(saveFormats, includeAllSupported: false, allSupportedName: "");
+    }
+
     public static int FindSaveFilterIndex(IEnumerable<IFileAdapter> adapters, string extension)
     {
         var normalizedExtension = FileFormatResolver.NormalizeExtension(extension);
@@ -79,6 +110,20 @@ public static class FileDialogFilterBuilder
         return string.Join('|', parts);
     }
 
+    private static IReadOnlyList<FilePickerTypeDescriptor> BuildPickerTypes(
+        IReadOnlyCollection<FileFormatDescriptor> formats,
+        bool includeAllSupported,
+        string allSupportedName)
+    {
+        var descriptors = new List<FilePickerTypeDescriptor>(formats.Count + 1);
+
+        if (includeAllSupported && formats.Count > 0)
+            descriptors.Add(BuildAllSupportedPickerType(formats, allSupportedName));
+
+        descriptors.AddRange(formats.Select(BuildFormatPickerType));
+        return descriptors;
+    }
+
     private static string BuildAllSupportedFilterEntry(IEnumerable<FileFormatDescriptor> formats)
     {
         var allSupported = string.Join(';', formats
@@ -89,9 +134,48 @@ public static class FileDialogFilterBuilder
         return $"All supported files ({allSupported})|{allSupported}";
     }
 
+    private static FilePickerTypeDescriptor BuildAllSupportedPickerType(
+        IEnumerable<FileFormatDescriptor> formats,
+        string allSupportedName) =>
+        new(allSupportedName, BuildDistinctPatterns(formats));
+
     private static string BuildFormatFilterEntry(FileFormatDescriptor format)
     {
         var extension = FileFormatResolver.NormalizeExtension(format.Extension);
         return $"{format.FormatName} (*{extension})|*{extension}";
+    }
+
+    private static FilePickerTypeDescriptor BuildFormatPickerType(FileFormatDescriptor format)
+    {
+        var extension = FileFormatResolver.NormalizeExtension(format.Extension);
+        return new FilePickerTypeDescriptor(format.FormatName, [$"*{extension}"]);
+    }
+
+    private static IReadOnlyList<string> BuildDistinctPatterns(IEnumerable<FileFormatDescriptor> formats) =>
+        formats
+            .Select(format => FileFormatResolver.NormalizeExtension(format.Extension))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(extension => $"*{extension}")
+            .ToList();
+
+    private static void PromotePreferredExtension(
+        List<FileFormatDescriptor> formats,
+        string? preferredFirstExtension)
+    {
+        var normalizedExtension = FileFormatResolver.NormalizeExtension(preferredFirstExtension ?? "");
+        if (normalizedExtension.Length == 0)
+            return;
+
+        var index = formats.FindIndex(format =>
+            string.Equals(
+                FileFormatResolver.NormalizeExtension(format.Extension),
+                normalizedExtension,
+                StringComparison.OrdinalIgnoreCase));
+        if (index <= 0)
+            return;
+
+        var preferred = formats[index];
+        formats.RemoveAt(index);
+        formats.Insert(0, preferred);
     }
 }

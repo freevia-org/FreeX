@@ -8706,62 +8706,25 @@ public sealed class MainWindow : Window
 
     private IReadOnlyList<FilePickerFileType> BuildSaveFileTypes()
     {
-        var formats = _session.SaveFormats.ToList();
-
-        var nativeIndex = formats.FindIndex(format =>
-            string.Equals(
-                FileFormatResolver.NormalizeExtension(format.Extension),
-                NativeWorkbookExtension,
-                StringComparison.OrdinalIgnoreCase));
-        if (nativeIndex > 0)
-        {
-            var native = formats[nativeIndex];
-            formats.RemoveAt(nativeIndex);
-            formats.Insert(0, native);
-        }
-
-        return formats
-            .Select(format =>
-            {
-                var extension = FileFormatResolver.NormalizeExtension(format.Extension);
-                return new FilePickerFileType(format.FormatName)
-                {
-                    Patterns = [$"*{extension}"],
-                };
-            })
+        return FileDialogFilterBuilder
+            .BuildSavePickerTypes(_session.SaveFormats, preferredFirstExtension: NativeWorkbookExtension)
+            .Select(CreateFilePickerFileType)
             .ToList();
     }
 
     private IReadOnlyList<FilePickerFileType> BuildOpenFileTypes()
     {
-        var formats = _session.OpenFormats.ToList();
-        var patterns = formats
-            .Select(format => FileFormatResolver.NormalizeExtension(format.Extension))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(extension => $"*{extension}")
+        return FileDialogFilterBuilder
+            .BuildOpenPickerTypes(_session.OpenFormats, allSupportedName: "All supported workbooks")
+            .Select(CreateFilePickerFileType)
             .ToList();
-        if (patterns.Count == 0)
-            return [];
-
-        var fileTypes = new List<FilePickerFileType>
-        {
-            new("All supported workbooks")
-            {
-                Patterns = patterns,
-            },
-        };
-
-        fileTypes.AddRange(formats.Select(format =>
-        {
-            var extension = FileFormatResolver.NormalizeExtension(format.Extension);
-            return new FilePickerFileType(format.FormatName)
-            {
-                Patterns = [$"*{extension}"],
-            };
-        }));
-
-        return fileTypes;
     }
+
+    private static FilePickerFileType CreateFilePickerFileType(FilePickerTypeDescriptor descriptor) =>
+        new(descriptor.DisplayName)
+        {
+            Patterns = descriptor.Patterns.ToList(),
+        };
 
     private void ShowSaveIssue(string message)
     {
