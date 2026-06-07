@@ -663,6 +663,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var workbookXml = XlsxPackageXmlEditor.LoadXml(sourceEntry);
         workbookXml.Root?.Elements(workbookNs + "pivotCaches").Remove();
+        if (workbookXml.Root?.Element(workbookNs + "workbookPr") is { } workbookPr)
+            XlsxWorkbookPropertiesNormalizer.NormalizeElement(workbookPr);
         if (workbookXml.Root?.Element(workbookNs + "fileVersion") is { } fileVersion)
             XlsxWorkbookFileVersionNormalizer.NormalizeElement(fileVersion);
         if (workbookXml.Root?.Element(workbookNs + "functionGroups") is { } functionGroups)
