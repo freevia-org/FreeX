@@ -38,15 +38,19 @@ public partial class FileAdapterSmokeTests
             var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
             workbookXml.Root!.Add(new XElement(
                 workbookNs + "webPublishObjects",
-                new XAttribute("count", "1"),
+                new XAttribute("count", " 1 "),
+                new XAttribute("customWebPublishObjectsFlag", "removed"),
+                new XElement(workbookNs + "nativeWebPublishObjectsChild"),
                 new XElement(
                     workbookNs + "webPublishObject",
-                    new XAttribute("id", "1"),
-                    new XAttribute("divId", "FreeXWebPublish"),
+                    new XAttribute("id", " 1 "),
+                    new XAttribute("divId", " FreeXWebPublish "),
                     new XAttribute("sourceObject", "Data"),
                     new XAttribute("destinationFile", "https://example.invalid/report.htm"),
                     new XAttribute("title", "Report"),
-                    new XAttribute("autoRepublish", "0"))));
+                    new XAttribute("autoRepublish", "0"),
+                    new XAttribute("customWebPublishObjectFlag", "removed"),
+                    new XElement(workbookNs + "nativeWebPublishObjectChild"))));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 

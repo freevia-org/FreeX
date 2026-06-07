@@ -12779,9 +12779,17 @@ public partial class FileAdapterSmokeTests
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
-        workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("webPublishObjects");
-        workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("FreeXWebPublish");
-        workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("destinationFile=\"https://example.invalid/report.htm\"");
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var webPublishObjects = workbookXml.Root!.Element(workbookNs + "webPublishObjects")!;
+        webPublishObjects.Attribute("count")!.Value.Should().Be("1");
+        webPublishObjects.Attribute("customWebPublishObjectsFlag").Should().BeNull();
+        webPublishObjects.Element(workbookNs + "nativeWebPublishObjectsChild").Should().BeNull();
+        var webPublishObject = webPublishObjects.Element(workbookNs + "webPublishObject")!;
+        webPublishObject.Attribute("id")!.Value.Should().Be("1");
+        webPublishObject.Attribute("divId")!.Value.Should().Be("FreeXWebPublish");
+        webPublishObject.Attribute("destinationFile")!.Value.Should().Be("https://example.invalid/report.htm");
+        webPublishObject.Attribute("customWebPublishObjectFlag").Should().BeNull();
+        webPublishObject.Element(workbookNs + "nativeWebPublishObjectChild").Should().BeNull();
     }
 
     [Fact]
