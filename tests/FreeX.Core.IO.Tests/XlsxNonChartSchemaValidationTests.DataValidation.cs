@@ -14,6 +14,9 @@ namespace FreeX.Core.IO.Tests;
 
 public sealed partial class XlsxNonChartSchemaValidationTests
 {
+    private const string DataValidationsExtensionUri = "{FREEX-DATA-VALIDATIONS-EXT}";
+    private const string DataValidationExtensionUri = "{FREEX-DATA-VALIDATION-EXT}";
+
     [Fact]
     public void DataValidation_ProducesSchemaValidWorkbook()
     {
@@ -45,6 +48,38 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         });
 
         SchemaErrors(workbook).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void DataValidationExtensionLists_RemovesInvalidNativeMetadataForSchemaValidity()
+    {
+        var workbook = new Workbook("DataValidationExtensionListInvalidSchema");
+        var sheet = workbook.AddSheet("Data");
+        SeedNumericGrid(sheet);
+
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = Range(sheet, 2, 1, 5, 1),
+            Type = DvType.List,
+            Formula1 = "\"Red,Green,Blue\"",
+            NativeContainerChildXmls =
+            [
+                CreateInvalidExtensionListXml(DataValidationsExtensionUri, "FreeXDataValidationsExtension", "customDataValidationsExtLstFlag", "customDataValidationsExtFlag", "nativeDataValidationsExtLstChild"),
+                CreateDuplicateExtensionListXml("{FREEX-DUPLICATE-DATA-VALIDATIONS-EXTLST}"),
+                "<nativeDataValidationsChild xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" />"
+            ],
+            NativeChildXmls =
+            [
+                CreateInvalidExtensionListXml(DataValidationExtensionUri, "FreeXDataValidationExtension", "customDataValidationExtLstFlag", "customDataValidationExtFlag", "nativeDataValidationExtLstChild"),
+                CreateDuplicateExtensionListXml("{FREEX-DUPLICATE-DATA-VALIDATION-EXTLST}"),
+                "<nativeDataValidationChild xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" />"
+            ]
+        });
+
+        using var stream = Save(workbook);
+
+        SchemaErrors(stream).Should().BeEmpty();
+        AssertDataValidationInvalidExtensionListsRemoved(stream);
     }
 
 
@@ -138,6 +173,30 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceDataValidations.ToString(SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidDataValidationExtensionListsForSchemaValidity()
+    {
+        using var source = Save(CreateDataValidationSourceWorkbook());
+        SetDataValidationExtensionListsInvalidNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 8, 8), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertDataValidationInvalidExtensionListsRemoved(saved);
     }
 
     private static Workbook CreateDataValidationSourceWorkbook()
@@ -252,6 +311,39 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         return new XElement(worksheetXml.Root!.Element(worksheetNs + "dataValidations")!);
+    }
+
+    private static void SetDataValidationExtensionListsInvalidNativeMetadata(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        var dataValidations = worksheetXml.Root!.Element(worksheetNs + "dataValidations")!;
+        dataValidations.Add(
+            CreateInvalidExtensionList(worksheetNs, DataValidationsExtensionUri, "FreeXDataValidationsExtension", "customDataValidationsExtLstFlag", "customDataValidationsExtFlag", "nativeDataValidationsExtLstChild"),
+            new XElement(worksheetNs + "extLst", new XElement(worksheetNs + "ext", new XAttribute("uri", "{FREEX-DUPLICATE-DATA-VALIDATIONS-EXTLST}"))),
+            new XElement(worksheetNs + "nativeDataValidationsChild"));
+
+        var validation = dataValidations.Element(worksheetNs + "dataValidation")!;
+        validation.Add(
+            CreateInvalidExtensionList(worksheetNs, DataValidationExtensionUri, "FreeXDataValidationExtension", "customDataValidationExtLstFlag", "customDataValidationExtFlag", "nativeDataValidationExtLstChild"),
+            new XElement(worksheetNs + "extLst", new XElement(worksheetNs + "ext", new XAttribute("uri", "{FREEX-DUPLICATE-DATA-VALIDATION-EXTLST}"))),
+            new XElement(worksheetNs + "nativeDataValidationChild"));
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void AssertDataValidationInvalidExtensionListsRemoved(Stream stream)
+    {
+        var dataValidations = ReadDataValidationsElement(stream);
+        var worksheetNs = dataValidations.Name.Namespace;
+        dataValidations.Elements(worksheetNs + "extLst").Should().BeEmpty();
+        dataValidations.Element(worksheetNs + "nativeDataValidationsChild").Should().BeNull();
+
+        var validation = dataValidations.Element(worksheetNs + "dataValidation")!;
+        validation.Elements(worksheetNs + "extLst").Should().BeEmpty();
+        validation.Element(worksheetNs + "nativeDataValidationChild").Should().BeNull();
+        validation.Element(worksheetNs + "formula1").Should().NotBeNull();
     }
 
 }
