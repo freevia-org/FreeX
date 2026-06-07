@@ -722,6 +722,7 @@ public static partial class AccessibilityCheckerService
     private const int MaxFormulaPermutInput = 1_000_000;
     private const int MaxFormulaPermutIterations = 10_000;
     private const int MaxFormulaPermutationAInput = int.MaxValue;
+    private const int MaxFormulaFinancialDepreciationIterations = 10_000;
     private const int MaxFormulaGcdArgumentCount = 255;
     private const int MaxFormulaMultinomialArgumentCount = 255;
     private const int MaxFormulaModeArgumentCount = 255;
@@ -1304,6 +1305,48 @@ public static partial class AccessibilityCheckerService
             case "ISPMT":
                 kind = ConditionalFormulaScalarFunctionKind.Ispmt;
                 return true;
+            case "NPV":
+                kind = ConditionalFormulaScalarFunctionKind.Npv;
+                return true;
+            case "IRR":
+                kind = ConditionalFormulaScalarFunctionKind.Irr;
+                return true;
+            case "MIRR":
+                kind = ConditionalFormulaScalarFunctionKind.Mirr;
+                return true;
+            case "XNPV":
+                kind = ConditionalFormulaScalarFunctionKind.Xnpv;
+                return true;
+            case "XIRR":
+                kind = ConditionalFormulaScalarFunctionKind.Xirr;
+                return true;
+            case "SLN":
+                kind = ConditionalFormulaScalarFunctionKind.Sln;
+                return true;
+            case "SYD":
+                kind = ConditionalFormulaScalarFunctionKind.Syd;
+                return true;
+            case "DB":
+                kind = ConditionalFormulaScalarFunctionKind.Db;
+                return true;
+            case "DDB":
+                kind = ConditionalFormulaScalarFunctionKind.Ddb;
+                return true;
+            case "VDB":
+                kind = ConditionalFormulaScalarFunctionKind.Vdb;
+                return true;
+            case "EFFECT":
+                kind = ConditionalFormulaScalarFunctionKind.Effect;
+                return true;
+            case "NOMINAL":
+                kind = ConditionalFormulaScalarFunctionKind.Nominal;
+                return true;
+            case "RRI":
+                kind = ConditionalFormulaScalarFunctionKind.Rri;
+                return true;
+            case "PDURATION":
+                kind = ConditionalFormulaScalarFunctionKind.Pduration;
+                return true;
             case "PI":
                 kind = ConditionalFormulaScalarFunctionKind.Pi;
                 return true;
@@ -1823,6 +1866,8 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.EDate or
             ConditionalFormulaScalarFunctionKind.EOMonth or
             ConditionalFormulaScalarFunctionKind.Days or
+            ConditionalFormulaScalarFunctionKind.Effect or
+            ConditionalFormulaScalarFunctionKind.Nominal or
             ConditionalFormulaScalarFunctionKind.Decimal => argumentCount == 2,
             ConditionalFormulaScalarFunctionKind.LeftB or
             ConditionalFormulaScalarFunctionKind.RightB => argumentCount is 1 or 2,
@@ -1860,17 +1905,29 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.LogNormDistCompat or
             ConditionalFormulaScalarFunctionKind.LogNormInv or
             ConditionalFormulaScalarFunctionKind.Standardize or
+            ConditionalFormulaScalarFunctionKind.Sln or
+            ConditionalFormulaScalarFunctionKind.Rri or
+            ConditionalFormulaScalarFunctionKind.Pduration or
             ConditionalFormulaScalarFunctionKind.Convert => argumentCount == 3,
             ConditionalFormulaScalarFunctionKind.TDist or
             ConditionalFormulaScalarFunctionKind.FDist or
             ConditionalFormulaScalarFunctionKind.NormDist or
             ConditionalFormulaScalarFunctionKind.GammaDist or
             ConditionalFormulaScalarFunctionKind.LogNormDist or
-            ConditionalFormulaScalarFunctionKind.WeibullDist => argumentCount == 4,
+            ConditionalFormulaScalarFunctionKind.WeibullDist or
+            ConditionalFormulaScalarFunctionKind.Syd => argumentCount == 4,
             ConditionalFormulaScalarFunctionKind.BetaDist => argumentCount is >= 4 and <= 6,
             ConditionalFormulaScalarFunctionKind.BetaDistCompat or
             ConditionalFormulaScalarFunctionKind.BetaInv => argumentCount is >= 3 and <= 5,
             ConditionalFormulaScalarFunctionKind.NormSDist => argumentCount == 2,
+            ConditionalFormulaScalarFunctionKind.Npv => argumentCount is >= 2 and <= 255,
+            ConditionalFormulaScalarFunctionKind.Irr => argumentCount is 1 or 2,
+            ConditionalFormulaScalarFunctionKind.Mirr => argumentCount == 3,
+            ConditionalFormulaScalarFunctionKind.Xnpv => argumentCount == 3,
+            ConditionalFormulaScalarFunctionKind.Xirr => argumentCount is 2 or 3,
+            ConditionalFormulaScalarFunctionKind.Db or
+            ConditionalFormulaScalarFunctionKind.Ddb => argumentCount is 4 or 5,
+            ConditionalFormulaScalarFunctionKind.Vdb => argumentCount is >= 5 and <= 7,
             ConditionalFormulaScalarFunctionKind.TDistRt or
             ConditionalFormulaScalarFunctionKind.TDist2T or
             ConditionalFormulaScalarFunctionKind.TInv or
@@ -2653,6 +2710,20 @@ public static partial class AccessibilityCheckerService
         Ipmt,
         Ppmt,
         Ispmt,
+        Npv,
+        Irr,
+        Mirr,
+        Xnpv,
+        Xirr,
+        Sln,
+        Syd,
+        Db,
+        Ddb,
+        Vdb,
+        Effect,
+        Nominal,
+        Rri,
+        Pduration,
         Pi,
         Arabic,
         Roman,
@@ -3411,6 +3482,22 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Ppmt:
                 case ConditionalFormulaScalarFunctionKind.Ispmt:
                     return TryEvaluateFormulaFinancialAnnuityFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Npv:
+                case ConditionalFormulaScalarFunctionKind.Irr:
+                case ConditionalFormulaScalarFunctionKind.Mirr:
+                case ConditionalFormulaScalarFunctionKind.Xnpv:
+                case ConditionalFormulaScalarFunctionKind.Xirr:
+                    return TryEvaluateFormulaFinancialCashFlowFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Sln:
+                case ConditionalFormulaScalarFunctionKind.Syd:
+                case ConditionalFormulaScalarFunctionKind.Db:
+                case ConditionalFormulaScalarFunctionKind.Ddb:
+                case ConditionalFormulaScalarFunctionKind.Vdb:
+                case ConditionalFormulaScalarFunctionKind.Effect:
+                case ConditionalFormulaScalarFunctionKind.Nominal:
+                case ConditionalFormulaScalarFunctionKind.Rri:
+                case ConditionalFormulaScalarFunctionKind.Pduration:
+                    return TryEvaluateFormulaFinancialScalarFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Pi:
                     value = new NumberValue(Math.PI);
                     return true;
@@ -7759,6 +7846,655 @@ public static partial class AccessibilityCheckerService
             return TryGetFormulaDistributionNumber(value, out number);
         }
 
+        private bool TryEvaluateFormulaFinancialCashFlowFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            return function.Kind switch
+            {
+                ConditionalFormulaScalarFunctionKind.Npv => TryEvaluateFormulaNpvFunction(function, rowOffset, colOffset, out value),
+                ConditionalFormulaScalarFunctionKind.Irr => TryEvaluateFormulaIrrFunction(function, rowOffset, colOffset, out value),
+                ConditionalFormulaScalarFunctionKind.Mirr => TryEvaluateFormulaMirrFunction(function, rowOffset, colOffset, out value),
+                ConditionalFormulaScalarFunctionKind.Xnpv => TryEvaluateFormulaXnpvFunction(function, rowOffset, colOffset, out value),
+                ConditionalFormulaScalarFunctionKind.Xirr => TryEvaluateFormulaXirrFunction(function, rowOffset, colOffset, out value),
+                _ => false
+            };
+        }
+
+        private bool TryEvaluateFormulaNpvFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaFinancialScalarArgument(function.Arguments[0], rowOffset, colOffset, out var rateValue))
+                return false;
+
+            if (!TryGetFormulaFinancialScalarNumber(rateValue, out var rate, out var rateError))
+            {
+                value = rateError ?? ErrorValue.Value;
+                return true;
+            }
+
+            if (!double.IsFinite(rate))
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            var cashFlows = new List<double>();
+            for (var i = 1; i < function.Arguments.Count; i++)
+            {
+                if (!AppendFormulaFinancialArgumentNumbers(function.Arguments[i], rowOffset, colOffset, cashFlows, out var argumentError))
+                {
+                    value = argumentError ?? ErrorValue.Value;
+                    return argumentError is not null;
+                }
+            }
+
+            var result = 0d;
+            for (var i = 0; i < cashFlows.Count; i++)
+                result += cashFlows[i] / Math.Pow(1d + rate, i + 1);
+
+            value = FormulaFinancialNumberResult(result);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaIrrFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaFinancialArrayArgument(function.Arguments[0], rowOffset, colOffset, out var valueRange))
+                return false;
+
+            var guess = 0.1d;
+            if (function.Arguments.Count > 1)
+            {
+                if (!TryResolveFormulaFinancialScalarArgument(function.Arguments[1], rowOffset, colOffset, out var guessValue))
+                    return false;
+
+                if (guessValue is not BlankValue &&
+                    !TryGetFormulaFinancialScalarNumber(guessValue, out guess, out var guessError))
+                {
+                    value = guessError ?? ErrorValue.Value;
+                    return true;
+                }
+            }
+
+            if (!double.IsFinite(guess) || guess <= -1d)
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            if (!TryCollectFormulaFinancialRangeNumbers(valueRange, out var cashFlows, out var valueError))
+            {
+                value = valueError ?? ErrorValue.Value;
+                return true;
+            }
+
+            value = FormulaIrrCashFlows(cashFlows, guess);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaMirrFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaFinancialArrayArgument(function.Arguments[0], rowOffset, colOffset, out var valueRange) ||
+                !TryResolveFormulaFinancialScalarArgument(function.Arguments[1], rowOffset, colOffset, out var financeRateValue) ||
+                !TryResolveFormulaFinancialScalarArgument(function.Arguments[2], rowOffset, colOffset, out var reinvestRateValue))
+            {
+                return false;
+            }
+
+            if (!TryGetFormulaFinancialScalarNumber(financeRateValue, out var financeRate, out var financeRateError))
+            {
+                value = financeRateError ?? ErrorValue.Value;
+                return true;
+            }
+
+            if (!TryGetFormulaFinancialScalarNumber(reinvestRateValue, out var reinvestRate, out var reinvestRateError))
+            {
+                value = reinvestRateError ?? ErrorValue.Value;
+                return true;
+            }
+
+            if (!double.IsFinite(financeRate) || !double.IsFinite(reinvestRate))
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            if (!TryCollectFormulaFinancialRangeNumbers(valueRange, out var cashFlows, out var valueError))
+            {
+                value = valueError ?? ErrorValue.Value;
+                return true;
+            }
+
+            var count = cashFlows.Count;
+            if (count < 2)
+            {
+                value = ErrorValue.DivByZero;
+                return true;
+            }
+
+            var npvNeg = 0d;
+            var npvPos = 0d;
+            for (var i = 0; i < count; i++)
+            {
+                if (cashFlows[i] < 0d)
+                    npvNeg += cashFlows[i] / Math.Pow(1d + financeRate, i);
+                else if (cashFlows[i] > 0d)
+                    npvPos += cashFlows[i] / Math.Pow(1d + reinvestRate, i);
+            }
+
+            if (npvNeg == 0d || npvPos == 0d)
+            {
+                value = ErrorValue.DivByZero;
+                return true;
+            }
+
+            value = FormulaFinancialNumberResult(
+                Math.Pow((-npvPos * Math.Pow(1d + reinvestRate, count - 1)) / npvNeg, 1.0d / (count - 1)) - 1d);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaXnpvFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaFinancialScalarArgument(function.Arguments[0], rowOffset, colOffset, out var rateValue) ||
+                !TryResolveFormulaFinancialArrayArgument(function.Arguments[1], rowOffset, colOffset, out var valueRange) ||
+                !TryResolveFormulaFinancialArrayArgument(function.Arguments[2], rowOffset, colOffset, out var dateRange))
+            {
+                return false;
+            }
+
+            if (!TryGetFormulaFinancialScalarNumber(rateValue, out var rate, out var rateError))
+            {
+                value = rateError ?? ErrorValue.Value;
+                return true;
+            }
+
+            if (!double.IsFinite(rate) || rate <= -1d)
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            var (valueCount, valueError) = CountFormulaFinancialRangeNumbers(valueRange);
+            if (valueError is not null)
+            {
+                value = valueError;
+                return true;
+            }
+
+            var (dateCount, dateError) = CountFormulaFinancialRangeNumbers(dateRange);
+            if (dateError is not null)
+            {
+                value = dateError;
+                return true;
+            }
+
+            if (valueCount != dateCount || valueCount == 0)
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            var valueRow = 0;
+            var valueCol = 0;
+            var dateRow = 0;
+            var dateCol = 0;
+            if (!TryReadNextFormulaFinancialRangeNumber(dateRange, ref dateRow, ref dateCol, out var firstDateSerial) ||
+                !TryFormulaFinancialSerialToDate(firstDateSerial, out var firstDate))
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            dateRow = 0;
+            dateCol = 0;
+            var result = 0d;
+            for (var i = 0; i < valueCount; i++)
+            {
+                if (!TryReadNextFormulaFinancialRangeNumber(valueRange, ref valueRow, ref valueCol, out var cashFlow) ||
+                    !TryReadNextFormulaFinancialRangeNumber(dateRange, ref dateRow, ref dateCol, out var dateSerial) ||
+                    !TryFormulaFinancialSerialToDate(dateSerial, out var date))
+                {
+                    value = ErrorValue.Num;
+                    return true;
+                }
+
+                var yearFraction = (date - firstDate).TotalDays / 365.0d;
+                result += cashFlow / Math.Pow(1d + rate, yearFraction);
+            }
+
+            value = FormulaFinancialNumberResult(result);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaXirrFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaFinancialArrayArgument(function.Arguments[0], rowOffset, colOffset, out var valueRange) ||
+                !TryResolveFormulaFinancialArrayArgument(function.Arguments[1], rowOffset, colOffset, out var dateRange))
+            {
+                return false;
+            }
+
+            var guess = 0.1d;
+            if (function.Arguments.Count > 2)
+            {
+                if (!TryResolveFormulaFinancialScalarArgument(function.Arguments[2], rowOffset, colOffset, out var guessValue))
+                    return false;
+
+                if (guessValue is not BlankValue &&
+                    !TryGetFormulaFinancialScalarNumber(guessValue, out guess, out var guessError))
+                {
+                    value = guessError ?? ErrorValue.Value;
+                    return true;
+                }
+            }
+
+            if (!TryCollectFormulaFinancialRangeNumbers(valueRange, out var cashFlows, out var valueError))
+            {
+                value = valueError ?? ErrorValue.Value;
+                return true;
+            }
+
+            if (!TryCollectFormulaFinancialRangeNumbers(dateRange, out var dates, out var dateError))
+            {
+                value = dateError ?? ErrorValue.Value;
+                return true;
+            }
+
+            if (cashFlows.Count < 2)
+            {
+                value = ErrorValue.NA;
+                return true;
+            }
+
+            if (cashFlows.Count != dates.Count)
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            if (!NormalizeFormulaFinancialDateSerialsToYearFractions(dates))
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            var rate = guess;
+            for (var iteration = 0; iteration < 200; iteration++)
+            {
+                var functionValue = 0d;
+                var derivative = 0d;
+                for (var i = 0; i < cashFlows.Count; i++)
+                {
+                    var time = dates[i];
+                    var denominator = Math.Pow(1d + rate, time);
+                    functionValue += cashFlows[i] / denominator;
+                    derivative -= time * cashFlows[i] / (denominator * (1d + rate));
+                }
+
+                if (Math.Abs(derivative) < 1E-14d)
+                    break;
+
+                var delta = functionValue / derivative;
+                rate -= delta;
+                if (Math.Abs(delta) < 1E-10d)
+                    break;
+            }
+
+            value = FormulaFinancialNumberResult(rate);
+            return true;
+        }
+
+        private bool TryResolveFormulaFinancialScalarArgument(
+            ConditionalFormulaOperand argument,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (argument.Kind == ConditionalFormulaOperandKind.ReferenceRange)
+            {
+                if (!TryMaterializeFormulaReferenceRange(argument, rowOffset, colOffset, out var range))
+                    return false;
+
+                if (!TryGetSingleFormulaStatisticalRangeValue(range, out value))
+                    value = ErrorValue.Value;
+
+                return true;
+            }
+
+            if (!TryResolveFormulaOperand(argument, rowOffset, colOffset, out value))
+                return false;
+
+            if (value is RangeValue resolvedRange &&
+                !TryGetSingleFormulaStatisticalRangeValue(resolvedRange, out value))
+            {
+                value = ErrorValue.Value;
+            }
+
+            return true;
+        }
+
+        private bool TryResolveFormulaFinancialArrayArgument(
+            ConditionalFormulaOperand argument,
+            int rowOffset,
+            int colOffset,
+            out RangeValue range)
+        {
+            range = default!;
+            if (argument.Kind == ConditionalFormulaOperandKind.ReferenceRange)
+                return TryMaterializeFormulaReferenceRange(argument, rowOffset, colOffset, out range);
+
+            if (!TryResolveFormulaOperand(argument, rowOffset, colOffset, out var value))
+                return false;
+
+            range = value is RangeValue resolvedRange
+                ? resolvedRange
+                : SingleFormulaFinancialArray(value);
+            return true;
+        }
+
+        private bool AppendFormulaFinancialArgumentNumbers(
+            ConditionalFormulaOperand argument,
+            int rowOffset,
+            int colOffset,
+            List<double> numbers,
+            out ErrorValue? error)
+        {
+            error = null;
+            if (argument.Kind == ConditionalFormulaOperandKind.ReferenceRange)
+            {
+                if (!TryMaterializeFormulaReferenceRange(argument, rowOffset, colOffset, out var materializedRange))
+                    return false;
+
+                return AppendFormulaFinancialRangeNumbers(materializedRange, numbers, out error);
+            }
+
+            if (argument.Kind == ConditionalFormulaOperandKind.Reference)
+            {
+                if (!TryResolveFormulaReference(argument, rowOffset, colOffset, out var targetSheet, out var row, out var col))
+                    return false;
+
+                return AppendFormulaFinancialValueNumber(targetSheet.GetValue(row, col), isDirectArgument: false, numbers, out error);
+            }
+
+            if (!TryResolveFormulaOperand(argument, rowOffset, colOffset, out var value))
+                return false;
+
+            return value is RangeValue resolvedRange
+                ? AppendFormulaFinancialRangeNumbers(resolvedRange, numbers, out error)
+                : AppendFormulaFinancialValueNumber(value, isDirectArgument: true, numbers, out error);
+        }
+
+        private static RangeValue SingleFormulaFinancialArray(ScalarValue value) =>
+            new(new[,] { { value } });
+
+        private static bool TryCollectFormulaFinancialRangeNumbers(
+            RangeValue range,
+            out List<double> numbers,
+            out ErrorValue? error)
+        {
+            var (count, countError) = CountFormulaFinancialRangeNumbers(range);
+            if (countError is not null)
+            {
+                numbers = new List<double>();
+                error = countError;
+                return false;
+            }
+
+            numbers = new List<double>(count);
+            return AppendFormulaFinancialRangeNumbers(range, numbers, out error);
+        }
+
+        private static (int Count, ErrorValue? Error) CountFormulaFinancialRangeNumbers(RangeValue range)
+        {
+            var count = 0;
+            for (var row = 0; row < range.RowCount; row++)
+            {
+                for (var col = 0; col < range.ColCount; col++)
+                {
+                    var value = range.Cells[row, col];
+                    if (value is ErrorValue error)
+                        return (0, error);
+
+                    if (value is NumberValue or DateTimeValue)
+                        count++;
+                }
+            }
+
+            return (count, null);
+        }
+
+        private static bool AppendFormulaFinancialRangeNumbers(
+            RangeValue range,
+            List<double> numbers,
+            out ErrorValue? error)
+        {
+            error = null;
+            for (var row = 0; row < range.RowCount; row++)
+            {
+                for (var col = 0; col < range.ColCount; col++)
+                {
+                    if (!AppendFormulaFinancialValueNumber(range.Cells[row, col], isDirectArgument: false, numbers, out error))
+                        return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool AppendFormulaFinancialValueNumber(
+            ScalarValue value,
+            bool isDirectArgument,
+            List<double> numbers,
+            out ErrorValue? error)
+        {
+            error = null;
+            switch (value)
+            {
+                case RangeValue range:
+                    return AppendFormulaFinancialRangeNumbers(range, numbers, out error);
+                case ErrorValue valueError:
+                    error = valueError;
+                    return false;
+                case NumberValue numeric:
+                    numbers.Add(numeric.Value);
+                    return true;
+                case DateTimeValue dateTime:
+                    numbers.Add(dateTime.Value);
+                    return true;
+                case BoolValue boolean when isDirectArgument:
+                    numbers.Add(boolean.Value ? 1d : 0d);
+                    return true;
+                case TextValue text when isDirectArgument:
+                    if (!TryParseFormulaTextScalarNumber(text.Value, out var parsed))
+                    {
+                        error = ErrorValue.Value;
+                        return false;
+                    }
+
+                    numbers.Add(parsed);
+                    return true;
+                default:
+                    return true;
+            }
+        }
+
+        private static bool TryReadNextFormulaFinancialRangeNumber(
+            RangeValue range,
+            ref int row,
+            ref int col,
+            out double number)
+        {
+            for (; row < range.RowCount; row++)
+            {
+                for (; col < range.ColCount; col++)
+                {
+                    var value = range.Cells[row, col];
+                    if (value is NumberValue numeric)
+                    {
+                        number = numeric.Value;
+                        col++;
+                        return true;
+                    }
+
+                    if (value is DateTimeValue dateTime)
+                    {
+                        number = dateTime.Value;
+                        col++;
+                        return true;
+                    }
+                }
+
+                col = 0;
+            }
+
+            number = 0d;
+            return false;
+        }
+
+        private static bool TryGetFormulaFinancialScalarNumber(
+            ScalarValue value,
+            out double number,
+            out ErrorValue? error)
+        {
+            error = null;
+            switch (value)
+            {
+                case ErrorValue valueError:
+                    number = 0d;
+                    error = valueError;
+                    return false;
+                case NumberValue numeric:
+                    number = numeric.Value;
+                    return true;
+                case DateTimeValue dateTime:
+                    number = dateTime.Value;
+                    return true;
+                case BoolValue boolean:
+                    number = boolean.Value ? 1d : 0d;
+                    return true;
+                case BlankValue:
+                    number = 0d;
+                    return true;
+                case TextValue text when TryParseFormulaTextScalarNumber(text.Value, out var parsed):
+                    number = parsed;
+                    return true;
+                default:
+                    number = 0d;
+                    error = ErrorValue.Value;
+                    return false;
+            }
+        }
+
+        private static ScalarValue FormulaIrrCashFlows(IReadOnlyList<double> cashFlows, double guess)
+        {
+            if (cashFlows.Count < 2)
+                return ErrorValue.Num;
+
+            var hasPositive = false;
+            var hasNegative = false;
+            for (var i = 0; i < cashFlows.Count; i++)
+            {
+                if (cashFlows[i] > 0d)
+                    hasPositive = true;
+                else if (cashFlows[i] < 0d)
+                    hasNegative = true;
+            }
+
+            if (!hasPositive || !hasNegative)
+                return ErrorValue.Num;
+
+            var rate = guess;
+            for (var iteration = 0; iteration < 100; iteration++)
+            {
+                var functionValue = 0d;
+                var derivative = 0d;
+                for (var i = 0; i < cashFlows.Count; i++)
+                {
+                    var denominator = Math.Pow(1d + rate, i);
+                    functionValue += cashFlows[i] / denominator;
+                    if (i > 0)
+                        derivative -= i * cashFlows[i] / (denominator * (1d + rate));
+                }
+
+                if (Math.Abs(functionValue) < 1E-10d)
+                    break;
+
+                if (Math.Abs(derivative) < 1E-15d)
+                    return ErrorValue.Num;
+
+                var delta = functionValue / derivative;
+                rate -= delta;
+                if (Math.Abs(delta) < 1E-10d)
+                    break;
+            }
+
+            return FormulaFinancialNumberResult(rate);
+        }
+
+        private static bool NormalizeFormulaFinancialDateSerialsToYearFractions(List<double> serials)
+        {
+            if (serials.Count == 0 ||
+                !TryFormulaFinancialSerialToDate(serials[0], out var firstDate))
+            {
+                return false;
+            }
+
+            for (var i = 0; i < serials.Count; i++)
+            {
+                if (!TryFormulaFinancialSerialToDate(serials[i], out var date))
+                    return false;
+
+                serials[i] = (date - firstDate).TotalDays / 365.0d;
+            }
+
+            return true;
+        }
+
+        private static bool TryFormulaFinancialSerialToDate(double serial, out DateTime date)
+        {
+            date = default;
+            if (!double.IsFinite(serial))
+                return false;
+
+            try
+            {
+                date = FormulaExcelSerialToDate(serial);
+                return true;
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return false;
+            }
+        }
+
         private static ScalarValue FormulaExponDistScalar(double x, double lambda, bool cumulative)
         {
             if (x < 0d || lambda <= 0d)
@@ -8489,6 +9225,436 @@ public static partial class AccessibilityCheckerService
             }
 
             return x;
+        }
+
+        private bool TryEvaluateFormulaFinancialScalarFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            var arguments = new ScalarValue[function.Arguments.Count];
+            for (var i = 0; i < function.Arguments.Count; i++)
+            {
+                if (!TryResolveFormulaOperand(function.Arguments[i], rowOffset, colOffset, out var argument) ||
+                    argument is RangeValue)
+                {
+                    return false;
+                }
+
+                if (argument is ErrorValue error)
+                {
+                    value = error;
+                    return true;
+                }
+
+                arguments[i] = argument;
+            }
+
+            switch (function.Kind)
+            {
+                case ConditionalFormulaScalarFunctionKind.Sln:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var slnCost, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var slnSalvage, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var slnLife, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialSlnScalar(slnCost, slnSalvage, slnLife);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Syd:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var sydCost, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var sydSalvage, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var sydLife, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var sydPeriod, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialSydScalar(sydCost, sydSalvage, sydLife, sydPeriod);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Db:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var dbCost, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var dbSalvage, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var dbLife, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var dbPeriod, out value) ||
+                        !TryGetFormulaFinancialOptionalNumber(arguments, 4, 12d, out var dbMonth, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialDbScalar(dbCost, dbSalvage, dbLife, dbPeriod, dbMonth);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Ddb:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var ddbCost, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var ddbSalvage, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var ddbLife, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var ddbPeriod, out value) ||
+                        !TryGetFormulaFinancialOptionalNumber(arguments, 4, 2d, out var ddbFactor, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialDdbScalar(ddbCost, ddbSalvage, ddbLife, ddbPeriod, ddbFactor);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Vdb:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var vdbCost, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var vdbSalvage, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var vdbLife, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var vdbStartPeriod, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[4], out var vdbEndPeriod, out value) ||
+                        !TryGetFormulaFinancialOptionalNumber(arguments, 5, 2d, out var vdbFactor, out value) ||
+                        !TryGetFormulaFinancialOptionalBool(arguments, 6, defaultValue: false, out var vdbNoSwitch, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialVdbScalar(vdbCost, vdbSalvage, vdbLife, vdbStartPeriod, vdbEndPeriod, vdbFactor, vdbNoSwitch);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Effect:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var effectRate, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var effectNpery, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialEffectScalar(effectRate, effectNpery);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Nominal:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var nominalRate, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var nominalNpery, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialNominalScalar(nominalRate, nominalNpery);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Rri:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var rriNper, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var rriPv, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var rriFv, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialRriScalar(rriNper, rriPv, rriFv);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Pduration:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var pdurationRate, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var pdurationPv, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var pdurationFv, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialPdurationScalar(pdurationRate, pdurationPv, pdurationFv);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static bool TryGetFormulaFinancialNumber(
+            ScalarValue source,
+            out double number,
+            out ScalarValue error)
+        {
+            error = ErrorValue.Value;
+            switch (source)
+            {
+                case NumberValue numeric:
+                    number = numeric.Value;
+                    break;
+                case DateTimeValue dateTime:
+                    number = dateTime.Value;
+                    break;
+                case BoolValue boolean:
+                    number = boolean.Value ? 1d : 0d;
+                    break;
+                case BlankValue:
+                    number = 0d;
+                    break;
+                case TextValue text when TryParseFormulaValueText(text.Value, out var parsed):
+                    number = parsed;
+                    break;
+                case ErrorValue sourceError:
+                    number = 0d;
+                    error = sourceError;
+                    return false;
+                default:
+                    number = 0d;
+                    return false;
+            }
+
+            if (double.IsFinite(number))
+                return true;
+
+            error = ErrorValue.Num;
+            return false;
+        }
+
+        private static bool TryGetFormulaFinancialOptionalNumber(
+            IReadOnlyList<ScalarValue> arguments,
+            int index,
+            double defaultValue,
+            out double number,
+            out ScalarValue error)
+        {
+            if (index >= arguments.Count || arguments[index] is BlankValue)
+            {
+                number = defaultValue;
+                error = ErrorValue.Value;
+                return true;
+            }
+
+            return TryGetFormulaFinancialNumber(arguments[index], out number, out error);
+        }
+
+        private static bool TryGetFormulaFinancialOptionalBool(
+            IReadOnlyList<ScalarValue> arguments,
+            int index,
+            bool defaultValue,
+            out bool boolean,
+            out ScalarValue error)
+        {
+            if (index >= arguments.Count || arguments[index] is BlankValue)
+            {
+                boolean = defaultValue;
+                error = ErrorValue.Value;
+                return true;
+            }
+
+            error = ErrorValue.Value;
+            switch (arguments[index])
+            {
+                case BoolValue logical:
+                    boolean = logical.Value;
+                    return true;
+                case NumberValue numeric when double.IsFinite(numeric.Value):
+                    boolean = numeric.Value != 0d;
+                    return true;
+                case DateTimeValue dateTime when double.IsFinite(dateTime.Value):
+                    boolean = dateTime.Value != 0d;
+                    return true;
+                case ErrorValue sourceError:
+                    boolean = false;
+                    error = sourceError;
+                    return false;
+                default:
+                    boolean = false;
+                    return false;
+            }
+        }
+
+        private static ScalarValue FormulaFinancialSlnScalar(double cost, double salvage, double life)
+        {
+            if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(life))
+                return ErrorValue.Num;
+
+            return life == 0d
+                ? ErrorValue.DivByZero
+                : FormulaFinancialNumberResult((cost - salvage) / life);
+        }
+
+        private static ScalarValue FormulaFinancialSydScalar(double cost, double salvage, double life, double period)
+        {
+            if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(life) || !double.IsFinite(period))
+                return ErrorValue.Num;
+
+            if (life <= 0d || period <= 0d || period > life)
+                return ErrorValue.Num;
+
+            return FormulaFinancialNumberResult((cost - salvage) * (life - period + 1d) / (life * (life + 1d) / 2d));
+        }
+
+        private static ScalarValue FormulaFinancialDbScalar(double cost, double salvage, double life, double period, double month)
+        {
+            if (!TryGetFormulaFinancialInteger(life, out var integerLife) ||
+                !TryGetFormulaFinancialInteger(period, out var integerPeriod) ||
+                !TryGetFormulaFinancialInteger(month, out var integerMonth))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (cost <= 0d ||
+                salvage < 0d ||
+                integerLife <= 0 ||
+                integerPeriod <= 0 ||
+                integerPeriod > integerLife + 1 ||
+                integerMonth is < 1 or > 12 ||
+                integerPeriod > MaxFormulaFinancialDepreciationIterations)
+            {
+                return ErrorValue.Num;
+            }
+
+            if (salvage >= cost)
+                return new NumberValue(0d);
+
+            var rate = Math.Round(1d - Math.Pow(salvage / cost, 1d / integerLife), 3);
+            var accumulated = 0d;
+            var depreciation = 0d;
+            for (var currentPeriod = 1; currentPeriod <= integerPeriod; currentPeriod++)
+            {
+                if (currentPeriod == 1)
+                    depreciation = cost * rate * integerMonth / 12d;
+                else if (currentPeriod <= integerLife)
+                    depreciation = (cost - accumulated) * rate;
+                else
+                    depreciation = (cost - accumulated) * rate * (12d - integerMonth + 1d) / 12d;
+
+                if (currentPeriod < integerPeriod)
+                    accumulated += depreciation;
+            }
+
+            return FormulaFinancialNumberResult(depreciation);
+        }
+
+        private static ScalarValue FormulaFinancialDdbScalar(double cost, double salvage, double life, double period, double factor)
+        {
+            if (!double.IsFinite(cost) ||
+                !double.IsFinite(salvage) ||
+                !double.IsFinite(life) ||
+                !double.IsFinite(factor) ||
+                !TryGetFormulaFinancialInteger(period, out var integerPeriod))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (cost < 0d ||
+                salvage < 0d ||
+                life <= 0d ||
+                period <= 0d ||
+                factor <= 0d ||
+                integerPeriod > MaxFormulaFinancialDepreciationIterations)
+            {
+                return ErrorValue.Num;
+            }
+
+            var bookValue = cost;
+            for (var currentPeriod = 1; currentPeriod <= integerPeriod; currentPeriod++)
+            {
+                var depreciation = Math.Min(bookValue - salvage, bookValue * factor / life);
+                depreciation = Math.Max(depreciation, 0d);
+                if (currentPeriod < integerPeriod)
+                    bookValue -= depreciation;
+                else
+                    return FormulaFinancialNumberResult(depreciation);
+            }
+
+            return new NumberValue(0d);
+        }
+
+        private static ScalarValue FormulaFinancialVdbScalar(
+            double cost,
+            double salvage,
+            double life,
+            double startPeriod,
+            double endPeriod,
+            double factor,
+            bool noSwitch)
+        {
+            if (!double.IsFinite(cost) ||
+                !double.IsFinite(salvage) ||
+                !double.IsFinite(life) ||
+                !double.IsFinite(startPeriod) ||
+                !double.IsFinite(endPeriod) ||
+                !double.IsFinite(factor))
+            {
+                return ErrorValue.Num;
+            }
+
+            if (cost < 0d ||
+                salvage < 0d ||
+                life <= 0d ||
+                startPeriod < 0d ||
+                endPeriod < startPeriod ||
+                endPeriod > life ||
+                factor <= 0d)
+            {
+                return ErrorValue.Num;
+            }
+
+            var totalDepreciation = 0d;
+            var bookValue = cost;
+            var currentPeriod = startPeriod;
+            var iterations = 0;
+            while (currentPeriod < endPeriod)
+            {
+                if (++iterations > MaxFormulaFinancialDepreciationIterations)
+                    return ErrorValue.Num;
+
+                var periodEnd = Math.Min(Math.Ceiling(currentPeriod + 1e-10d), endPeriod);
+                if (periodEnd <= currentPeriod)
+                    return ErrorValue.Num;
+
+                var fraction = periodEnd - currentPeriod;
+                var period = Math.Floor(currentPeriod + 1e-10d);
+                var ddbDepreciation = bookValue * factor / life;
+                var straightLineDepreciation = (bookValue - salvage) / (life - period);
+                var depreciation = !noSwitch && straightLineDepreciation > ddbDepreciation
+                    ? straightLineDepreciation
+                    : ddbDepreciation;
+                depreciation = Math.Max(0d, Math.Min(depreciation, bookValue - salvage));
+
+                var partialDepreciation = depreciation * fraction;
+                totalDepreciation += partialDepreciation;
+                bookValue -= partialDepreciation;
+                currentPeriod = periodEnd;
+            }
+
+            return FormulaFinancialNumberResult(totalDepreciation);
+        }
+
+        private static ScalarValue FormulaFinancialEffectScalar(double nominalRate, double npery)
+        {
+            npery = Math.Truncate(npery);
+            if (!double.IsFinite(nominalRate) || !double.IsFinite(npery) || nominalRate <= 0d || npery < 1d)
+                return ErrorValue.Num;
+
+            return FormulaFinancialNumberResult(Math.Pow(1d + nominalRate / npery, npery) - 1d);
+        }
+
+        private static ScalarValue FormulaFinancialNominalScalar(double effectiveRate, double npery)
+        {
+            npery = Math.Truncate(npery);
+            if (!double.IsFinite(effectiveRate) || !double.IsFinite(npery) || effectiveRate <= 0d || npery < 1d)
+                return ErrorValue.Num;
+
+            return FormulaFinancialNumberResult((Math.Pow(1d + effectiveRate, 1d / npery) - 1d) * npery);
+        }
+
+        private static ScalarValue FormulaFinancialRriScalar(double nper, double pv, double fv)
+        {
+            if (!double.IsFinite(nper) || !double.IsFinite(pv) || !double.IsFinite(fv))
+                return ErrorValue.Num;
+
+            if (nper <= 0d || pv == 0d || pv > 0d && fv < 0d || pv < 0d && fv > 0d)
+                return ErrorValue.Num;
+
+            return FormulaFinancialNumberResult(Math.Pow(fv / pv, 1d / nper) - 1d);
+        }
+
+        private static ScalarValue FormulaFinancialPdurationScalar(double rate, double pv, double fv)
+        {
+            if (!double.IsFinite(rate) || !double.IsFinite(pv) || !double.IsFinite(fv))
+                return ErrorValue.Num;
+
+            if (rate <= 0d || pv <= 0d || fv <= 0d)
+                return ErrorValue.Num;
+
+            return FormulaFinancialNumberResult((Math.Log(fv) - Math.Log(pv)) / Math.Log(1d + rate));
+        }
+
+        private static bool TryGetFormulaFinancialInteger(double value, out int integer)
+        {
+            integer = 0;
+            if (!double.IsFinite(value) || value < int.MinValue || value > int.MaxValue)
+                return false;
+
+            integer = (int)Math.Truncate(value);
+            return true;
         }
 
         private bool TryEvaluateFormulaNumericScalarFunction(

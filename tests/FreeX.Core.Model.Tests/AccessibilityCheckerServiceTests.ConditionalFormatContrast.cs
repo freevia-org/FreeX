@@ -554,6 +554,34 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialCashFlowFunctions()
+    {
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("AND($A1<0,NPV(0,\"25\",TRUE,$A1,$C1:$D1)>225)", "B1");
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("AND($A1<0,IRR($A1:$D1)>0.1)", "B1");
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("AND($A1<0,MIRR($A1:$D1,$H1,$I1)>0.12)", "B1");
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("AND($A1<0,XNPV(0.1,$A1:$D1,$E1:$G1)>100)", "B1");
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("AND($A1<0,XIRR($A1:$D1,$E1:$G1)>0.1)", "B1");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialCashFlowWrappersAndErrors()
+    {
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("AND($A1<0,NPV(0,N($A1:$D1))>0)", "B1");
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("ISNA(IRR($A1:$D1))", "B4");
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("ISERROR(MIRR($A1:$D1,$H1,$I1))", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatFinancialCashFlowUnsupportedShapesOrComparisons()
+    {
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("NPV(0)>0");
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("IRR()>0");
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("MIRR($A1:$D1,$H1)>0");
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("XNPV($H1:$I1,$A1:$D1,$E1:$G1)>0");
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("XIRR($A1:$D1,$E1:$F1)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAValueAggregates()
     {
         AssertFormulaAggregateContrastLocations("AVERAGEA($D1:$D3)=6", "B1", "B2");
@@ -4447,6 +4475,66 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialDepreciationFunctions()
+    {
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("SLN($A1,$C1,$D1)>170", "B1", "B2", "B8");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("SYD($A1,$C1,$D1,$E1)>200", "B1", "B2", "B8");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("DB($A1,$C1,$D1,$E1,$I1)>300", "B1", "B2");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("DDB($A1,$C1,$D1,$E1)>300", "B1", "B8");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("VDB($A1,$C1,$D1,$F1,$G1)>300", "B1", "B2", "B8");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialRateFunctions()
+    {
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("EFFECT($K1,$L1)>0.1", "B1", "B2", "B8");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("NOMINAL(EFFECT($K1,$L1),$L1)>0.19", "B2");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("RRI($E1,$M1,$N1)>0.06", "B1", "B2", "B8");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("PDURATION($K1,$M1,$N1)>7", "B1");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialOptionalArgumentsWrappersAndAggregates()
+    {
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("DDB($A1,$C1,$D1,$E1,$H1)>=300", "B1", "B8");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("DB($A1,$C1,$D1,$E1,$I1)>180", "B1", "B2", "B8");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("AND($O1,VDB($A1,$C1,$D1,$F1,$G1,$H1,$J1)>250)", "B1", "B2", "B8");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("SUM(SLN($A1,$C1,$D1),SYD($A1,$C1,$D1,$E1))>400", "B1", "B2", "B8");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("IF(EFFECT($K1,$L1)>0.1,TRUE,FALSE)", "B1", "B2", "B8");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialErrorPredicates()
+    {
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("ISERROR(SLN($A1,$C1,$D1))", "B5", "B6", "B7");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("ISNA(SLN($A1,$C1,$D1))", "B5");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("ISERROR(DB($A1,$C1,$D1,$E1,$I1))", "B5", "B6", "B7");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("ISERROR(VDB($A1,$C1,$D1,$F1,$G1,$H1,$J1))", "B5", "B6", "B7");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("ISERROR(EFFECT($K1,$L1))", "B5", "B6", "B7");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("ISNA(EFFECT($K1,$L1))", "B5");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("ISERROR(RRI($E1,$M1,$N1))", "B5", "B6", "B7");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("ISERROR(PDURATION($K1,$M1,$N1))", "B5", "B6", "B7");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatFinancialUnsupportedShapesArityAndErrorComparisons()
+    {
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("SLN($A$1:$A$2,$C1,$D1)>0");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("SYD($A1,$C1,$D1)>0");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("DB($A1,$C1,$D1,$E1,$I1,1)>0");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("DDB($A1,$C1,$D1)>0");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("VDB($A1,$C1,$D1,$F1)>0");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("VDB($A1,$C1,$D1,$F1,$G1,$H1,$J1,1)>0");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("VDB($A1,$C1,$D1,$F1,$G1,$H1,$J$1:$J$2)>0");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("EFFECT($K$1:$K$2,$L1)>0");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("NOMINAL($K1)>0");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("RRI($E1,$M1)>0");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("PDURATION($K1,$M1,$N1,1)>0");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("SLN($A$6,$C$6,$D$6)>0");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("EFFECT($K$6,$L$6)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatArithmeticComparison()
     {
         AssertFormulaArithmeticContrastLocations("($A1+25-50)*2/5>=40", "B4");
@@ -4924,6 +5012,67 @@ public sealed partial class AccessibilityCheckerServiceTests
 
         if (optionalValue is not BlankValue)
             sheet.SetCell(new CellAddress(sheet.Id, row, 4), optionalValue);
+    }
+
+    private static Workbook CreateFormulaFinancialCashFlowFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 4, 2);
+
+        SetFormulaFinancialCashFlowFunctionContrastRow(
+            sheet,
+            1,
+            new NumberValue(-1000),
+            new NumberValue(600),
+            new NumberValue(600),
+            "Strong return");
+        SetFormulaFinancialCashFlowFunctionContrastRow(
+            sheet,
+            2,
+            new NumberValue(-1000),
+            new NumberValue(400),
+            new NumberValue(400),
+            "Weak return");
+        SetFormulaFinancialCashFlowFunctionContrastRow(
+            sheet,
+            3,
+            new NumberValue(100),
+            new NumberValue(200),
+            new NumberValue(300),
+            "Positive only");
+        SetFormulaFinancialCashFlowFunctionContrastRow(
+            sheet,
+            4,
+            new NumberValue(-1000),
+            ErrorValue.NA,
+            new NumberValue(1100),
+            "NA cash flow");
+
+        return workbook;
+    }
+
+    private static void SetFormulaFinancialCashFlowFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        ScalarValue firstCashFlow,
+        ScalarValue secondCashFlow,
+        ScalarValue thirdCashFlow,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), firstCashFlow);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), secondCashFlow);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 4), thirdCashFlow);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 5), new NumberValue(43831));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 6), new NumberValue(44016));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 7), new NumberValue(44197));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 8), new NumberValue(0.1));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 9), new NumberValue(0.12));
     }
 
     private static Workbook CreateFormulaPaddedTextFunctionContrastWorkbook(
@@ -6112,6 +6261,200 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 3), new NumberValue(weight));
     }
 
+    private static Workbook CreateFormulaFinancialDepreciationFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 8, 2);
+
+        SetFormulaFinancialDepreciationFunctionContrastRow(
+            sheet,
+            1,
+            new NumberValue(1000),
+            new NumberValue(100),
+            new NumberValue(5),
+            new NumberValue(1),
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(2),
+            new NumberValue(12),
+            new BoolValue(false),
+            new NumberValue(0.1),
+            new NumberValue(12),
+            new NumberValue(100),
+            new NumberValue(200),
+            active: true,
+            "Base annual");
+        SetFormulaFinancialDepreciationFunctionContrastRow(
+            sheet,
+            2,
+            new NumberValue(1000),
+            new NumberValue(100),
+            new NumberValue(5),
+            new NumberValue(2),
+            new NumberValue(1),
+            new NumberValue(2),
+            new NumberValue(2),
+            new NumberValue(6),
+            new BoolValue(false),
+            new NumberValue(0.2),
+            new NumberValue(4),
+            new NumberValue(100),
+            new NumberValue(121),
+            active: true,
+            "Later period");
+        SetFormulaFinancialDepreciationFunctionContrastRow(
+            sheet,
+            3,
+            new NumberValue(500),
+            new NumberValue(50),
+            new NumberValue(4),
+            new NumberValue(3),
+            new NumberValue(2),
+            new NumberValue(3),
+            new NumberValue(1.5),
+            new NumberValue(12),
+            new BoolValue(true),
+            new NumberValue(0.05),
+            new NumberValue(2),
+            new NumberValue(100),
+            new NumberValue(110),
+            active: true,
+            "Short life");
+        SetFormulaFinancialDepreciationFunctionContrastRow(
+            sheet,
+            4,
+            new NumberValue(300),
+            new NumberValue(0),
+            new NumberValue(3),
+            new NumberValue(3),
+            new NumberValue(0),
+            new NumberValue(2),
+            new NumberValue(2),
+            new NumberValue(12),
+            new BoolValue(false),
+            new NumberValue(0.01),
+            new NumberValue(1),
+            new NumberValue(100),
+            new NumberValue(105),
+            active: false,
+            "Inactive small");
+        SetFormulaFinancialDepreciationFunctionContrastRow(
+            sheet,
+            5,
+            ErrorValue.NA,
+            new NumberValue(100),
+            new NumberValue(5),
+            new NumberValue(1),
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(2),
+            new NumberValue(12),
+            new BoolValue(false),
+            ErrorValue.NA,
+            new NumberValue(12),
+            ErrorValue.NA,
+            new NumberValue(200),
+            active: false,
+            "NA source");
+        SetFormulaFinancialDepreciationFunctionContrastRow(
+            sheet,
+            6,
+            new NumberValue(1000),
+            new NumberValue(100),
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(0),
+            new NumberValue(0),
+            new BoolValue(false),
+            new NumberValue(0),
+            new NumberValue(0),
+            new NumberValue(0),
+            new NumberValue(200),
+            active: false,
+            "Invalid domain");
+        SetFormulaFinancialDepreciationFunctionContrastRow(
+            sheet,
+            7,
+            new TextValue("Open"),
+            new NumberValue(100),
+            new NumberValue(5),
+            new NumberValue(1),
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(2),
+            new NumberValue(12),
+            new TextValue("Open"),
+            new TextValue("Open"),
+            new NumberValue(12),
+            new TextValue("Open"),
+            new NumberValue(200),
+            active: false,
+            "Value source");
+        SetFormulaFinancialDepreciationFunctionContrastRow(
+            sheet,
+            8,
+            new NumberValue(1000),
+            new NumberValue(100),
+            new NumberValue(5),
+            new NumberValue(1.9),
+            new NumberValue(0.5),
+            new NumberValue(1.5),
+            new NumberValue(1.5),
+            new NumberValue(6.9),
+            new BoolValue(true),
+            new NumberValue(0.12),
+            new NumberValue(12.9),
+            new NumberValue(100),
+            new NumberValue(150),
+            active: true,
+            "Fractional optional");
+
+        return workbook;
+    }
+
+    private static void SetFormulaFinancialDepreciationFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        ScalarValue cost,
+        ScalarValue salvage,
+        ScalarValue life,
+        ScalarValue period,
+        ScalarValue startPeriod,
+        ScalarValue endPeriod,
+        ScalarValue factor,
+        ScalarValue month,
+        ScalarValue noSwitch,
+        ScalarValue rate,
+        ScalarValue npery,
+        ScalarValue presentValue,
+        ScalarValue futureValue,
+        bool active,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), cost);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), salvage);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 4), life);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 5), period);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 6), startPeriod);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 7), endPeriod);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 8), factor);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 9), month);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 10), noSwitch);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 11), rate);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 12), npery);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 13), presentValue);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 14), futureValue);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 15), new BoolValue(active));
+    }
+
     private static void AssertFormulaBooleanContrastLocations(string formulaText, params string[] expectedLocations)
     {
         var workbook = CreateFormulaBooleanContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
@@ -6178,9 +6521,35 @@ public sealed partial class AccessibilityCheckerServiceTests
             .Equal(expectedLocations);
     }
 
+    private static void AssertFormulaFinancialCashFlowFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaFinancialCashFlowFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
     private static void AssertFormulaArithmeticContrastLocations(string formulaText, params string[] expectedLocations)
     {
         var workbook = CreateFormulaAggregateContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaFinancialDepreciationFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaFinancialDepreciationFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
 
         FindLowContrastCellTextIssues(workbook)

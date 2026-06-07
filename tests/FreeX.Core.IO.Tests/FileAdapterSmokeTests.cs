@@ -12932,11 +12932,14 @@ public partial class FileAdapterSmokeTests
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var views = workbookXml.Root!.Element(workbookNs + "bookViews")!.Elements(workbookNs + "workbookView").ToList();
         views.Should().HaveCount(2);
-        views.Any(view =>
-            string.Equals(view.Attribute("visibility")?.Value, "hidden", StringComparison.Ordinal) &&
-            string.Equals(view.Attribute("tabRatio")?.Value, "700", StringComparison.Ordinal) &&
-            string.Equals(view.Attribute("customWorkbookViewFlag")?.Value, "kept", StringComparison.Ordinal))
-            .Should().BeTrue();
+        var retainedViews = views
+            .Where(view =>
+                string.Equals(view.Attribute("visibility")?.Value, "hidden", StringComparison.Ordinal) &&
+                string.Equals(view.Attribute("tabRatio")?.Value, "700", StringComparison.Ordinal))
+            .ToList();
+        retainedViews.Should().ContainSingle();
+        var retainedView = retainedViews.Single();
+        retainedView.Attribute("customWorkbookViewFlag").Should().BeNull();
     }
 
     [Fact]
@@ -12980,7 +12983,7 @@ public partial class FileAdapterSmokeTests
         views.Should().HaveCount(2);
         views.Last().Attribute("visibility")!.Value.Should().Be("hidden");
         views.Last().Attribute("tabRatio")!.Value.Should().Be("700");
-        views.Last().Attribute("customWorkbookViewFlag")!.Value.Should().Be("kept");
+        views.Last().Attribute("customWorkbookViewFlag").Should().BeNull();
     }
 
     [Fact]
@@ -13021,7 +13024,7 @@ public partial class FileAdapterSmokeTests
             .Elements(workbookNs + "workbookView")
             .Last();
         view.Attribute("visibility")!.Value.Should().Be("hidden");
-        view.Attribute("customWorkbookViewFlag")!.Value.Should().Be("kept");
+        view.Attribute("customWorkbookViewFlag").Should().BeNull();
         view.Attributes().Select(attribute => attribute.Name.LocalName)
             .Should().NotContain("bad attribute name");
     }
