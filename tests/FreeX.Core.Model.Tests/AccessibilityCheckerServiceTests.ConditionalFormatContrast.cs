@@ -554,6 +554,43 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDatabaseAggregateSubset()
+    {
+        AssertFormulaDatabaseAggregateContrastLocations("DSUM($F$1:$I$5,\"Amount\",$K$1:$K$2)=200", "B1", "B2", "B3", "B4");
+        AssertFormulaDatabaseAggregateContrastLocations("DSUM($F$1:$I$5,2,$M$1:$M$2)>200", "B1", "B2", "B3", "B4");
+        AssertFormulaDatabaseAggregateContrastLocations("DCOUNT($F$1:$I$5,\"Amount\",$K$1:$K$2)=2", "B1", "B2", "B3", "B4");
+        AssertFormulaDatabaseAggregateContrastLocations("DCOUNTA($F$1:$I$5,\"Region\",$K$1:$K$2)=2", "B1", "B2", "B3", "B4");
+        AssertFormulaDatabaseAggregateContrastLocations("DMAX($F$1:$I$5,\"Amount\",$K$1:$K$2)=125", "B1", "B2", "B3", "B4");
+        AssertFormulaDatabaseAggregateContrastLocations("DMIN($F$1:$I$5,\"Amount\",$K$1:$K$2)=75", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDatabaseAggregateShiftedReferences()
+    {
+        AssertFormulaDatabaseAggregateContrastLocations("DCOUNT($F$1:$I$5,$L1,$K$1:$K$2)>0", "B1", "B3");
+        AssertFormulaDatabaseAggregateContrastLocations("DSUM($F$1:$I$5,\"Amount\",$J$1:$J2)>300", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_PropagatesFormulaConditionalFormatDatabaseAggregateErrorsAndRejectsUnsupportedShapes()
+    {
+        AssertFormulaDatabaseAggregateContrastLocations("ISNA(DSUM(NA(),\"Amount\",$K$1:$K$2))", "B1", "B2", "B3", "B4");
+        AssertFormulaDatabaseAggregateContrastLocations("ISERROR(DMAX($F$1:$I$5,\"Missing\",$K$1:$K$2))", "B1", "B2", "B3", "B4");
+        AssertFormulaDatabaseAggregateContrastLocations("DSUM($F$1:$I$5,\"Amount\",$K$1)>0");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDatabaseAggregateExtendedFunctions()
+    {
+        AssertFormulaDatabaseAggregateContrastLocations("DAVERAGE($F$1:$I$5,\"Amount\",$K$1:$K$2)=100", "B1", "B2", "B3", "B4");
+        AssertFormulaDatabaseAggregateContrastLocations("DPRODUCT($F$1:$I$5,\"Units\",$K$1:$K$2)=12", "B1", "B2", "B3", "B4");
+        AssertFormulaDatabaseAggregateContrastLocations("DSTDEV($F$1:$I$5,\"Amount\",$K$1:$K$2)>35", "B1", "B2", "B3", "B4");
+        AssertFormulaDatabaseAggregateContrastLocations("DSTDEVP($F$1:$I$5,\"Amount\",$K$1:$K$2)=25", "B1", "B2", "B3", "B4");
+        AssertFormulaDatabaseAggregateContrastLocations("DVAR($F$1:$I$5,\"Amount\",$K$1:$K$2)>1200", "B1", "B2", "B3", "B4");
+        AssertFormulaDatabaseAggregateContrastLocations("DVARP($F$1:$I$5,\"Amount\",$K$1:$K$2)=625", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialCashFlowFunctions()
     {
         AssertFormulaFinancialCashFlowFunctionContrastLocations("AND($A1<0,NPV(0,\"25\",TRUE,$A1,$C1:$D1)>225)", "B1");
@@ -5109,6 +5146,64 @@ public sealed partial class AccessibilityCheckerServiceTests
             sheet.SetCell(new CellAddress(sheet.Id, row, 4), optionalValue);
     }
 
+    private static Workbook CreateFormulaDatabaseAggregateContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 4, 2);
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Closed summary"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("Open summary"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new TextValue("Indexed field"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new TextValue("Invalid field"));
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 6), new TextValue("Status"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 7), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 8), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 9), new TextValue("Units"));
+        SetFormulaDatabaseAggregateDataRow(sheet, 2, "Closed", 75, "East", 1);
+        SetFormulaDatabaseAggregateDataRow(sheet, 3, "Closed", 100, "West", 2);
+        SetFormulaDatabaseAggregateDataRow(sheet, 4, "Open", 75, "East", 3);
+        SetFormulaDatabaseAggregateDataRow(sheet, 5, "Open", 125, "West", 4);
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 10), new TextValue("Status"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 10), new TextValue("Closed"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 10), new TextValue("Open"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 10), new TextValue("Missing"));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 10), new TextValue("Open"));
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 11), new TextValue("Status"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 11), new TextValue("Open"));
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 12), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 12), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 12), new NumberValue(4));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 12), new NumberValue(9));
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 13), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 13), new TextValue(">75"));
+
+        return workbook;
+    }
+
+    private static void SetFormulaDatabaseAggregateDataRow(
+        Sheet sheet,
+        uint row,
+        string status,
+        double amount,
+        string region,
+        double units)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 6), new TextValue(status));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 7), new NumberValue(amount));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 8), new TextValue(region));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 9), new NumberValue(units));
+    }
+
     private static Workbook CreateFormulaFinancialCashFlowFunctionContrastWorkbook(
         out Sheet sheet,
         out CellAddress firstLabel,
@@ -6777,6 +6872,17 @@ public sealed partial class AccessibilityCheckerServiceTests
     private static void AssertFormulaAggregateContrastLocations(string formulaText, params string[] expectedLocations)
     {
         var workbook = CreateFormulaAggregateContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaDatabaseAggregateContrastLocations(string formulaText, params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaDatabaseAggregateContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
 
         FindLowContrastCellTextIssues(workbook)
