@@ -496,7 +496,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
             .Equal(ReadPackageEntry(sourceBytes, "xl/styles.xml"));
         ReadMergeCellsAttribute(savedBytes, "xl/worksheets/sheet1.xml", "nativeMergeContainerAttr")
             .Should()
-            .Be("kept");
+            .BeNull();
         ReadMergeCellsAttribute(savedBytes, "xl/worksheets/sheet1.xml", "count")
             .Should()
             .Be("2");
@@ -505,7 +505,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
             .Equal("C1:D1", "A3:B4");
         ReadMergeCellAttribute(savedBytes, "xl/worksheets/sheet1.xml", "C1:D1", "nativeMergeCellAttr")
             .Should()
-            .Be("kept-C1-D1");
+            .BeNull();
         ReadMergeCellAttribute(savedBytes, "xl/worksheets/sheet1.xml", "A3:B4", "nativeMergeCellAttr")
             .Should()
             .BeNull();
