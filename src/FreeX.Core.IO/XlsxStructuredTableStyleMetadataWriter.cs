@@ -61,22 +61,9 @@ internal static class XlsxStructuredTableStyleMetadataWriter
 
     private static XElement? ToTableStyleXml(StructuredTableStyleModel style, XNamespace workbookNs)
     {
-        if (!string.IsNullOrWhiteSpace(style.NativeXml))
-        {
-            try
-            {
-                var nativeStyle = XElement.Parse(style.NativeXml);
-                if (nativeStyle.Name == workbookNs + "tableStyle" &&
-                    string.Equals(nativeStyle.Attribute("name")?.Value, style.Name, StringComparison.Ordinal))
-                {
-                    return new XElement(nativeStyle);
-                }
-            }
-            catch
-            {
-                // Ignore malformed authored table-style payloads and fall back to a minimal style shell.
-            }
-        }
+        var nativeStyle = TryParseNativeTableStyleXml(style, workbookNs);
+        if (nativeStyle is not null)
+            return nativeStyle;
 
         return new XElement(
             workbookNs + "tableStyle",
@@ -84,5 +71,27 @@ internal static class XlsxStructuredTableStyleMetadataWriter
             new XAttribute("pivot", style.AppliesToPivotTables ? "1" : "0"),
             new XAttribute("table", style.AppliesToTables ? "1" : "0"),
             new XAttribute("count", "0"));
+    }
+
+    private static XElement? TryParseNativeTableStyleXml(StructuredTableStyleModel style, XNamespace workbookNs)
+    {
+        if (string.IsNullOrWhiteSpace(style.NativeXml))
+            return null;
+
+        try
+        {
+            var nativeStyle = XElement.Parse(style.NativeXml);
+            if (nativeStyle.Name == workbookNs + "tableStyle" &&
+                string.Equals(nativeStyle.Attribute("name")?.Value, style.Name, StringComparison.Ordinal))
+            {
+                return new XElement(nativeStyle);
+            }
+        }
+        catch
+        {
+            // Ignore malformed authored table-style payloads and fall back to a minimal style shell.
+        }
+
+        return null;
     }
 }
