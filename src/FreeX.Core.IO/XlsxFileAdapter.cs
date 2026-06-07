@@ -720,6 +720,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             packageParts.HasInspected ? packageParts.HasWorkbookSmartTagSchemaIssues : null,
             packageParts.HasInspected ? packageParts.HasWorkbookNativeMetadataSchemaIssues : null,
             hasWorksheetRelationshipMarkerSchemaIssues,
+            null,
             mergeCellWorksheetPathsToStrip);
     }
 
