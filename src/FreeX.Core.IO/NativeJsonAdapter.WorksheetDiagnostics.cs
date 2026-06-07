@@ -10,16 +10,7 @@ public sealed partial class NativeJsonAdapter
             return null;
 
         var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
-        var watchNativeAttributes = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var pair in dto.WatchNativeAttributes ?? [])
-        {
-            if (string.IsNullOrWhiteSpace(pair.Key))
-                continue;
-
-            var attributes = CleanNativeAttributes(pair.Value);
-            if (attributes.Count > 0)
-                watchNativeAttributes[pair.Key.Trim()] = attributes;
-        }
+        var watchNativeAttributes = CleanKeyedNativeAttributes(dto.WatchNativeAttributes, CleanNativeAttributes);
 
         if (nativeAttributes.Count == 0 && watchNativeAttributes.Count == 0)
             return null;
@@ -37,16 +28,7 @@ public sealed partial class NativeJsonAdapter
             return null;
 
         var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
-        var watchNativeAttributes = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var pair in model.WatchNativeAttributes ?? [])
-        {
-            if (string.IsNullOrWhiteSpace(pair.Key))
-                continue;
-
-            var attributes = CleanNativeAttributesForSave(pair.Value);
-            if (attributes.Count > 0)
-                watchNativeAttributes[pair.Key.Trim()] = attributes;
-        }
+        var watchNativeAttributes = CleanKeyedNativeAttributes(model.WatchNativeAttributes, CleanNativeAttributesForSave);
 
         if (nativeAttributes.Count == 0 && watchNativeAttributes.Count == 0)
             return null;
@@ -64,16 +46,7 @@ public sealed partial class NativeJsonAdapter
             return null;
 
         var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
-        var errorNativeAttributes = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var pair in dto.ErrorNativeAttributes ?? [])
-        {
-            if (string.IsNullOrWhiteSpace(pair.Key))
-                continue;
-
-            var attributes = CleanNativeAttributes(pair.Value);
-            if (attributes.Count > 0)
-                errorNativeAttributes[pair.Key.Trim()] = attributes;
-        }
+        var errorNativeAttributes = CleanKeyedNativeAttributes(dto.ErrorNativeAttributes, CleanNativeAttributes);
 
         if (nativeAttributes.Count == 0 && errorNativeAttributes.Count == 0)
             return null;
@@ -91,16 +64,7 @@ public sealed partial class NativeJsonAdapter
             return null;
 
         var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
-        var errorNativeAttributes = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var pair in model.ErrorNativeAttributes ?? [])
-        {
-            if (string.IsNullOrWhiteSpace(pair.Key))
-                continue;
-
-            var attributes = CleanNativeAttributesForSave(pair.Value);
-            if (attributes.Count > 0)
-                errorNativeAttributes[pair.Key.Trim()] = attributes;
-        }
+        var errorNativeAttributes = CleanKeyedNativeAttributes(model.ErrorNativeAttributes, CleanNativeAttributesForSave);
 
         if (nativeAttributes.Count == 0 && errorNativeAttributes.Count == 0)
             return null;
@@ -110,5 +74,26 @@ public sealed partial class NativeJsonAdapter
             NativeAttributes = nativeAttributes,
             ErrorNativeAttributes = errorNativeAttributes
         };
+    }
+
+    private static Dictionary<string, Dictionary<string, string>> CleanKeyedNativeAttributes(
+        IReadOnlyDictionary<string, Dictionary<string, string>>? source,
+        Func<Dictionary<string, string>?, Dictionary<string, string>> cleanAttributes)
+    {
+        var result = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+        if (source is null)
+            return result;
+
+        foreach (var pair in source)
+        {
+            if (string.IsNullOrWhiteSpace(pair.Key))
+                continue;
+
+            var attributes = cleanAttributes(pair.Value);
+            if (attributes.Count > 0)
+                result[pair.Key.Trim()] = attributes;
+        }
+
+        return result;
     }
 }
