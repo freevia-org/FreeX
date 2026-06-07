@@ -447,6 +447,7 @@ public sealed class XlsxFileAdapterFormatTests
         preserveSourcePackageParts.Should().Contain("sourceParts.HasStructuredTables");
         preserveSourcePackageParts.Should().Contain("sourceParts.HasExternalLinks");
         preserveSourcePackageParts.Should().Contain("sourceParts.HasDrawings");
+        preserveSourcePackageParts.Should().Contain("XlsxWorksheetDataConsolidationNormalizer.NormalizeWorksheets(generatedArchive);");
         preserveSourcePackageParts.Should().Contain("XlsxWorksheetDataValidationNormalizer.NormalizeWorksheets(generatedArchive);");
         preserveSourcePackageParts.Should().Contain("XlsxWorksheetExtensionListNormalizer.NormalizeWorksheets(generatedArchive);");
         preserveSourcePackageParts.Should().NotContain(
