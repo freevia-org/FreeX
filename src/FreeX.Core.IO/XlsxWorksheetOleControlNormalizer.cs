@@ -152,12 +152,12 @@ internal static class XlsxWorksheetOleControlNormalizer
         var changed = false;
         changed |= RemoveUnknownAttributes(oleObject, OleObjectAttributes);
         changed |= RemoveUnexpectedChildElements(oleObject, WorksheetNs + "objectPr");
-        changed |= NormalizeAttribute(oleObject, "shapeId", NormalizeUnsignedIntOrNull);
-        changed |= NormalizeAttribute(oleObject, "autoLoad", NormalizeBoolean);
-        changed |= NormalizeAttribute(oleObject, "oleUpdate", NormalizeOleUpdate);
-        changed |= NormalizeAttribute(oleObject, "progId", NormalizeOptionalText);
-        changed |= NormalizeAttribute(oleObject, "dvAspect", NormalizeOptionalText);
-        changed |= NormalizeAttribute(oleObject, "link", NormalizeOptionalText);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "shapeId", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "autoLoad", NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "oleUpdate", NormalizeOleUpdate);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "progId", NormalizeOptionalText);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "dvAspect", NormalizeOptionalText);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(oleObject, "link", NormalizeOptionalText);
         return changed;
     }
 
@@ -166,8 +166,8 @@ internal static class XlsxWorksheetOleControlNormalizer
         var changed = false;
         changed |= RemoveUnknownAttributes(control, ControlAttributes);
         changed |= RemoveUnexpectedChildElements(control, WorksheetNs + "controlPr");
-        changed |= NormalizeAttribute(control, "shapeId", NormalizeUnsignedIntOrNull);
-        changed |= NormalizeAttribute(control, "name", NormalizeOptionalText);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(control, "shapeId", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(control, "name", NormalizeOptionalText);
         return changed;
     }
 
@@ -204,29 +204,6 @@ internal static class XlsxWorksheetOleControlNormalizer
         }
 
         return changed;
-    }
-
-    private static bool NormalizeAttribute(
-        XElement element,
-        string attributeName,
-        Func<string?, string?> normalize)
-    {
-        var attribute = element.Attribute(attributeName);
-        var normalized = normalize(attribute?.Value);
-        if (normalized is null)
-        {
-            if (attribute is null)
-                return false;
-
-            attribute.Remove();
-            return true;
-        }
-
-        if (attribute is not null && string.Equals(attribute.Value, normalized, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(attributeName, normalized);
-        return true;
     }
 
     private static string? NormalizeBoolean(string? value)
