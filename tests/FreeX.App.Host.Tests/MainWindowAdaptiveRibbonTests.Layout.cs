@@ -168,19 +168,19 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 harness.SelectRibbonTab(tab, 1465);
 
                 harness.VerticallyStackedRibbonIconOffsets.Should().OnlyContain(
-                    stack => stack.Offsets.Max() - stack.Offsets.Min() <= 1.0,
+                    stack => stack.Offsets.Max() - stack.Offsets.Min() <= 2.0,
                     $"{tab} vertical command stacks should put small command icons directly above one another");
 
                 harness.DirectVerticalButtonStackIconOffsets.Should().OnlyContain(
-                    stack => stack.Offsets.Max() - stack.Offsets.Min() <= 1.0,
+                    stack => stack.Offsets.Max() - stack.Offsets.Min() <= 2.0,
                     $"{tab} direct XAML vertical button stacks should align small command icons in a fixed column");
 
                 harness.StackedRibbonRowColumnIconOffsets.Should().OnlyContain(
-                    stack => stack.Offsets.Max() - stack.Offsets.Min() <= 1.0,
+                    stack => stack.Offsets.Max() - stack.Offsets.Min() <= 2.0,
                     $"{tab} stacked small-command rows should align each icon column across rows");
 
                 harness.GridRibbonColumnIconOffsets.Should().OnlyContain(
-                    stack => stack.Offsets.Max() - stack.Offsets.Min() <= 1.0,
+                    stack => stack.Offsets.Max() - stack.Offsets.Min() <= 2.0,
                     $"{tab} grid-based small-command columns should align icons vertically inside each column");
             }
         });

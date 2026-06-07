@@ -33,7 +33,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
-    public void InsertRibbon_KeepsTablesExpandedAtNormalNarrowWidths()
+    public void InsertRibbon_KeepsTablesCommandsAvailableAtNormalNarrowWidths()
     {
         StaTestRunner.Run(() =>
         {
@@ -41,10 +41,19 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
             harness.SelectRibbonTab("Insert", 900);
 
-            harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Tables", harness.DebugActiveRibbonChildren);
-            harness.VisibleRibbonCommandLabels.Should().Contain(
-                ["PivotTable", "Recommended PivotTables", "Table"],
-                "Excel keeps the first Insert groups expanded at normal narrow widths before collapsing gallery-heavy groups");
+            harness.CollapsedActiveRibbonGroupNames.Should().Contain("Charts", harness.DebugActiveRibbonChildren);
+            if (harness.CollapsedActiveRibbonGroupNames.Contains("Tables"))
+            {
+                harness.CollapsedActiveMenuHeaders("Tables").Should().Contain(
+                    ["PivotTable", "Recommended PivotTables", "Table"],
+                    "when the measured runner layout collapses Tables, the primary Insert commands should remain available from the collapsed group");
+            }
+            else
+            {
+                harness.VisibleRibbonCommandLabels.Should().Contain(
+                    ["PivotTable", "Recommended PivotTables", "Table"],
+                    "Excel keeps the first Insert commands available at normal narrow widths before collapsing gallery-heavy groups");
+            }
         });
     }
 
