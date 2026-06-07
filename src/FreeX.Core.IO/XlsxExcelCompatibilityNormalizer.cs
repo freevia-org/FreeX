@@ -30,6 +30,7 @@ internal static partial class XlsxExcelCompatibilityNormalizer
 
         var changedWorkbook = RemoveWorkbookCustomViews(archive);
         changedWorkbook |= NormalizeCorruptPivotCaches(archive);
+        changedWorkbook |= NormalizeLegacyPivotTableDefinitionAttributes(archive);
         if (changedWorkbook || plan.RemoveCalcChain)
             RemoveCalcChain(archive);
 
@@ -271,6 +272,73 @@ internal static partial class XlsxExcelCompatibilityNormalizer
         }
 
         return changed;
+    }
+
+    internal static bool NormalizeLegacyPivotTableDefinitionAttributes(ZipArchive archive)
+    {
+        var changed = false;
+        foreach (var entry in archive.Entries.Where(entry =>
+                     entry.FullName.StartsWith("xl/pivotTables/pivotTable", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)).ToList())
+        {
+            var pivotTableXml = XlsxPackageXmlEditor.LoadXml(entry);
+            var root = pivotTableXml.Root;
+            if (root is null || root.Name != WorkbookNs + "pivotTableDefinition")
+                continue;
+
+            var pivotTableChanged = false;
+            pivotTableChanged |= NormalizeLegacyGrandTotalAttribute(root, "showRowGrandTotals", "rowGrandTotals");
+            pivotTableChanged |= NormalizeLegacyGrandTotalAttribute(root, "showColumnGrandTotals", "colGrandTotals");
+            pivotTableChanged |= NormalizeLegacyGrandTotalAttribute(root, "showGrandTotals", "rowGrandTotals");
+            pivotTableChanged |= NormalizeLegacyGrandTotalAttribute(root, "showGrandTotals", "colGrandTotals");
+            pivotTableChanged |= RemoveAttribute(root, "showGrandTotals");
+            pivotTableChanged |= RemoveAttribute(root, "showRowGrandTotals");
+            pivotTableChanged |= RemoveAttribute(root, "showColumnGrandTotals");
+            pivotTableChanged |= RemoveAttribute(root, "repeatItemLabels");
+            pivotTableChanged |= RemoveAttribute(root, "blankLineAfterItems");
+
+            if (!pivotTableChanged)
+                continue;
+
+            XlsxPackageXmlEditor.ReplaceXml(archive, entry.FullName, pivotTableXml);
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool NormalizeLegacyGrandTotalAttribute(XElement root, string legacyName, string schemaName)
+    {
+        if (root.Attribute(schemaName) is not null ||
+            root.Attribute(legacyName) is not { } legacyAttribute ||
+            NormalizeBooleanText(legacyAttribute.Value) is not { } normalized)
+        {
+            return false;
+        }
+
+        root.SetAttributeValue(schemaName, normalized);
+        return true;
+    }
+
+    private static bool RemoveAttribute(XElement root, string attributeName)
+    {
+        var attribute = root.Attribute(attributeName);
+        if (attribute is null)
+            return false;
+
+        attribute.Remove();
+        return true;
+    }
+
+    private static string? NormalizeBooleanText(string? value)
+    {
+        var trimmed = value?.Trim();
+        return trimmed?.ToLowerInvariant() switch
+        {
+            "1" or "true" => "1",
+            "0" or "false" => "0",
+            _ => null
+        };
     }
 
     private static void RewritePivotCacheDefinition(
