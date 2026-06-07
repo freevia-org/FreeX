@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Xml.Linq;
 
 namespace FreeX.Core.IO.Tests;
 
@@ -308,9 +307,4 @@ public sealed partial class XlsxPackageMetadataMergerTests
         writer.Write(content);
     }
 
-    private static XDocument LoadXml(ZipArchiveEntry entry)
-    {
-        using var stream = entry.Open();
-        return XDocument.Load(stream);
-    }
 }

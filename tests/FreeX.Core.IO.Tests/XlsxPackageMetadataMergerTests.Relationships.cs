@@ -20,7 +20,7 @@ public sealed partial class XlsxPackageMetadataMergerTests
 
         targetArchive.GetEntry("xl/media/image 1.png").Should().NotBeNull();
 
-        var relsXml = LoadXml(targetArchive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var relsXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
         XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         relsXml.Root!
             .Elements(relationshipNs + "Relationship")
@@ -44,7 +44,7 @@ public sealed partial class XlsxPackageMetadataMergerTests
 
         targetArchive.GetEntry("xl/media/image 1.png").Should().NotBeNull();
 
-        var relsXml = LoadXml(targetArchive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var relsXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
         XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         relsXml.Root!
             .Elements(relationshipNs + "Relationship")
@@ -68,7 +68,7 @@ public sealed partial class XlsxPackageMetadataMergerTests
 
         targetArchive.GetEntry("xl/media/image 1.png").Should().NotBeNull();
 
-        var relsXml = LoadXml(targetArchive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var relsXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
         XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         relsXml.Root!
             .Elements(relationshipNs + "Relationship")
@@ -112,7 +112,7 @@ public sealed partial class XlsxPackageMetadataMergerTests
 
         target.GetEntry("xl/media/Image1.png").Should().NotBeNull();
 
-        var relsXml = LoadXml(target.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var relsXml = XlsxPackageTestFixtures.LoadPackageXml(target.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
         XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         relsXml.Root!
             .Elements(relationshipNs + "Relationship")
@@ -134,7 +134,7 @@ public sealed partial class XlsxPackageMetadataMergerTests
         var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, targetArchive);
         XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, targetArchive, generatedEntriesBeforeMerge);
 
-        var relsXml = LoadXml(targetArchive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var relsXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
         XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         var externalRelationships = relsXml.Root!
             .Elements(relationshipNs + "Relationship")
@@ -161,7 +161,7 @@ public sealed partial class XlsxPackageMetadataMergerTests
         var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, targetArchive);
         XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, targetArchive, generatedEntriesBeforeMerge);
 
-        var relsXml = LoadXml(targetArchive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var relsXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
         XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         relsXml.Root!
             .Elements(relationshipNs + "Relationship")
@@ -183,7 +183,7 @@ public sealed partial class XlsxPackageMetadataMergerTests
         var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, targetArchive);
         XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, targetArchive, generatedEntriesBeforeMerge);
 
-        var relsXml = LoadXml(targetArchive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var relsXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
         XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         relsXml.Root!
             .Elements(relationshipNs + "Relationship")
@@ -207,7 +207,7 @@ public sealed partial class XlsxPackageMetadataMergerTests
 
         targetArchive.GetEntry("docProps/core.xml").Should().NotBeNull();
 
-        var relsXml = LoadXml(targetArchive.GetEntry("_rels/.rels")!);
+        var relsXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive.GetEntry("_rels/.rels")!);
         XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         var relationshipTypes = relsXml.Root!
             .Elements(relationshipNs + "Relationship")
