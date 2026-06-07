@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.IO.Compression;
-using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -304,31 +303,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             if (excludedAttributeNames?.Contains(name) == true)
                 continue;
 
-            TrySetNativeAttributeIfMissing(element, name, value);
-        }
-    }
-
-    private static bool TrySetNativeAttributeIfMissing(XElement element, string name, string value)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-            return false;
-
-        try
-        {
-            var attributeName = XName.Get(name);
-            if (element.Attribute(attributeName) is not null)
-                return false;
-
-            element.SetAttributeValue(attributeName, value);
-            return true;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (XmlException)
-        {
-            return false;
+            XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttributeIfMissing(element, name, value);
         }
     }
 
