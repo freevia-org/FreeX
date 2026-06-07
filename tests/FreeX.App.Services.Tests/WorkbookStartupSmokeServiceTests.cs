@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreeX.Core.Calc;
+using FreeX.Core.IO;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services.Tests;
@@ -26,6 +27,8 @@ public sealed class WorkbookStartupSmokeServiceTests
         result.Message.Should().Contain("roundtrip_drawing_object_render_plans=4");
         result.Message.Should().Contain("roundtrip_cropped_image_render_plans=1");
         result.Message.Should().Contain("roundtrip_cell_range_snapshot_render_plans=1");
+        result.Message.Should().Contain("applying compact Format Cells style to B2");
+        result.Message.Should().Contain("format_cells_style_roundtrip=true");
         result.Message.Should().Contain("edited, saved, and reopened");
     }
 
@@ -118,7 +121,36 @@ public sealed class WorkbookStartupSmokeServiceTests
         result.Message.Should().Contain("roundtrip_drawing_object_render_plans=0");
         result.Message.Should().Contain("roundtrip_cropped_image_render_plans=0");
         result.Message.Should().Contain("roundtrip_cell_range_snapshot_render_plans=0");
+        result.Message.Should().Contain("format_cells_style_roundtrip=true");
         result.Message.Should().Contain("edited, saved, and reopened");
+    }
+
+    [Fact]
+    public void Run_WithoutArguments_FailsWhenReopenedFormatCellsStyleIsMissing()
+    {
+        var nativeAdapter = new NativeJsonAdapter();
+        var styleStrippingAdapter = new TestFileAdapter(
+            load: stream =>
+            {
+                var workbook = nativeAdapter.Load(stream);
+                var sheet = workbook.Sheets.FirstOrDefault();
+                if (sheet is not null)
+                {
+                    sheet.GetCell(2, 2)!.StyleId = StyleId.Default;
+                    sheet.ClearStyleOnly(2, 2);
+                }
+
+                return workbook;
+            },
+            save: nativeAdapter.Save,
+            extension: ".fxl",
+            formatName: "Native workbook");
+
+        var result = new WorkbookStartupSmokeService(adapters: [styleStrippingAdapter]).Run([]);
+
+        result.Success.Should().BeFalse();
+        result.ExitCode.Should().Be(1);
+        result.Message.Should().Contain("Format Cells style was not reopened on B2");
     }
 
     [Fact]
@@ -165,6 +197,7 @@ public sealed class WorkbookStartupSmokeServiceTests
         handled.Should().BeTrue();
         exitCode.Should().Be(0);
         output.ToString().Should().Contain("Packaging smoke opened");
+        output.ToString().Should().Contain("format_cells_style_roundtrip=true");
         output.ToString().Should().Contain("edited, saved, and reopened");
         error.ToString().Should().BeEmpty();
     }
