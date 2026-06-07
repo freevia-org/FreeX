@@ -300,6 +300,28 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public WorkbookCellEditResult RenameActiveSheet(string? name)
+    {
+        var newName = (name ?? "").Trim();
+        if (string.Equals(newName, ActiveSheet.Name, StringComparison.Ordinal))
+        {
+            return new WorkbookCellEditResult(
+                true,
+                null,
+                [],
+                RecalcReport: null);
+        }
+
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new RenameSheetCommand(ActiveSheet.Id, newName));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
+        return result;
+    }
+
     public void BeginFormulaEdit(CellAddress address)
     {
         ActiveCell = address;
@@ -813,8 +835,19 @@ public sealed class WorkbookSession
             return;
         }
 
-        ApplySuccessfulWorkbookStructureResult(
-            FindNewSheetId(sheetIdsBefore) ?? ActiveSheet.Id);
+        if (FindNewSheetId(sheetIdsBefore) is { } newSheetId)
+        {
+            ApplySuccessfulWorkbookStructureResult(newSheetId);
+            return;
+        }
+
+        if (Workbook.GetSheet(ActiveSheet.Id) is not null)
+        {
+            ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
+            return;
+        }
+
+        ApplySuccessfulWorkbookStructureResult(ActiveSheet.Id);
     }
 
     private SheetId? FindNewSheetId(IReadOnlySet<SheetId> sheetIdsBefore)
@@ -856,6 +889,20 @@ public sealed class WorkbookSession
         ActiveSheet.ActiveRow = ActiveCell.Row;
         ActiveSheet.ActiveCol = ActiveCell.Col;
         SelectedRange = new GridRange(ActiveCell, ActiveCell);
+        FormulaEditAddress = null;
+        IsDirty = true;
+        _selectionStatsRevision++;
+        RefreshViewport();
+        EnsureActiveCellVisible();
+    }
+
+    private void ApplySuccessfulWorkbookMetadataResult(SheetId preferredSheetId)
+    {
+        var selection = _sheetSelectionService.SelectSheet(Workbook, preferredSheetId);
+        ActiveSheet = selection.Sheet;
+        SheetTabs = selection.Tabs;
+        ActiveSheet.ActiveRow = ActiveCell.Row;
+        ActiveSheet.ActiveCol = ActiveCell.Col;
         FormulaEditAddress = null;
         IsDirty = true;
         _selectionStatsRevision++;

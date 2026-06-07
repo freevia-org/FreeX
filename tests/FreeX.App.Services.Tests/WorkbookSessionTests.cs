@@ -2223,6 +2223,116 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void RenameActiveSheet_TrimsNameRefreshesTabsAndPreservesSelection()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        sheet.SetCell(b2, new TextValue("selected"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(b2);
+
+        var result = session.RenameActiveSheet("  Data  ");
+
+        result.Success.Should().BeTrue();
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        sheet.Name.Should().Be("Data");
+        session.ActiveSheet.Should().BeSameAs(sheet);
+        session.ActiveCell.Should().Be(b2);
+        session.SelectedRange.Should().Be(new GridRange(b2, b2));
+        session.SheetTabs.Should().ContainSingle()
+            .Which.Should().Be(new WorkbookSheetTab(sheet.Id, "Data", IsActive: true));
+        session.Viewport.Cells.Should().Contain(cell => cell.Row == 2 && cell.Col == 2);
+    }
+
+    [Fact]
+    public void RenameActiveSheet_RewritesFormulaReferencesAndKeepsUndoRedoCoherent()
+    {
+        var workbook = CreateWorkbook();
+        var source = workbook.Sheets.Single();
+        var formulas = workbook.AddSheet("Formulas");
+        var formulaAddress = new CellAddress(formulas.Id, 1, 1);
+        formulas.SetFormula(formulaAddress, "Sheet1!A1");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var result = session.RenameActiveSheet("Data");
+
+        result.Success.Should().BeTrue();
+        source.Name.Should().Be("Data");
+        formulas.GetCell(formulaAddress)!.FormulaText.Should().Be("Data!A1");
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        source.Name.Should().Be("Sheet1");
+        formulas.GetCell(formulaAddress)!.FormulaText.Should().Be("Sheet1!A1");
+        session.ActiveSheet.Should().BeSameAs(source);
+        session.CanRedo.Should().BeTrue();
+
+        var redo = session.RedoLastEdit();
+
+        redo.Success.Should().BeTrue();
+        source.Name.Should().Be("Data");
+        formulas.GetCell(formulaAddress)!.FormulaText.Should().Be("Data!A1");
+        session.ActiveSheet.Should().BeSameAs(source);
+    }
+
+    [Fact]
+    public void RenameActiveSheet_NoOpsSameNameWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var result = session.RenameActiveSheet("Sheet1");
+
+        result.Success.Should().BeTrue();
+        sheet.Name.Should().Be("Sheet1");
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void RenameActiveSheet_RejectsInvalidOrDuplicateNameWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        workbook.AddSheet("Data");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var duplicate = session.RenameActiveSheet("data");
+        var invalid = session.RenameActiveSheet("Bad/Name");
+        var blank = session.RenameActiveSheet("   ");
+
+        duplicate.Success.Should().BeFalse();
+        invalid.Success.Should().BeFalse();
+        blank.Success.Should().BeFalse();
+        duplicate.ErrorMessage.Should().Contain("already exists");
+        invalid.ErrorMessage.Should().Contain("cannot contain");
+        blank.ErrorMessage.Should().Contain("cannot be blank");
+        workbook.Sheets[0].Name.Should().Be("Sheet1");
+        session.ActiveSheet.Name.Should().Be("Sheet1");
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void AddSheet_AppendsSelectsNewSheetAndKeepsUndoRedoCoherent()
     {
         var workbook = CreateWorkbook();
@@ -2411,13 +2521,16 @@ public sealed class WorkbookSessionTests
         var add = session.AddSheet();
         var duplicate = session.DuplicateActiveSheet();
         var delete = session.DeleteActiveSheet();
+        var rename = session.RenameActiveSheet("Data");
 
         add.Success.Should().BeFalse();
         duplicate.Success.Should().BeFalse();
         delete.Success.Should().BeFalse();
+        rename.Success.Should().BeFalse();
         add.ErrorMessage.Should().Contain("protected");
         duplicate.ErrorMessage.Should().Contain("protected");
         delete.ErrorMessage.Should().Contain("protected");
+        rename.ErrorMessage.Should().Contain("protected");
         workbook.Sheets.Should().ContainSingle().Which.Name.Should().Be("Sheet1");
         session.ActiveSheet.Name.Should().Be("Sheet1");
         session.IsDirty.Should().BeFalse();

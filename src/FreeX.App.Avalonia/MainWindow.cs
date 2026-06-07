@@ -120,6 +120,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
     private readonly NativeMenuItem _newSheetMenuItem = new();
+    private readonly NativeMenuItem _renameSheetMenuItem = new();
     private readonly NativeMenuItem _duplicateSheetMenuItem = new();
     private readonly NativeMenuItem _deleteSheetMenuItem = new();
     private readonly NativeMenuItem _undoMenuItem = new();
@@ -317,6 +318,9 @@ public sealed class MainWindow : Window
         _newSheetMenuItem.Header = "New Sheet";
         _newSheetMenuItem.Gesture = new KeyGesture(Key.F11, KeyModifiers.Shift);
         _newSheetMenuItem.Click += (_, _) => AddNewSheet();
+
+        _renameSheetMenuItem.Header = "Rename Sheet...";
+        _renameSheetMenuItem.Click += async (_, _) => await RenameActiveSheetAsync();
 
         _duplicateSheetMenuItem.Header = "Duplicate Sheet";
         _duplicateSheetMenuItem.Click += (_, _) => DuplicateActiveSheet();
@@ -531,6 +535,7 @@ public sealed class MainWindow : Window
 
         var sheetMenu = new NativeMenu();
         sheetMenu.Items.Add(_newSheetMenuItem);
+        sheetMenu.Items.Add(_renameSheetMenuItem);
         sheetMenu.Items.Add(_duplicateSheetMenuItem);
         sheetMenu.Items.Add(_deleteSheetMenuItem);
 
@@ -1002,6 +1007,7 @@ public sealed class MainWindow : Window
         _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
         _saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;
         _newSheetMenuItem.IsEnabled = _newSheetButton.IsEnabled;
+        _renameSheetMenuItem.IsEnabled = isIdle;
         _duplicateSheetMenuItem.IsEnabled = isIdle;
         _deleteSheetMenuItem.IsEnabled = isIdle;
         _undoMenuItem.IsEnabled = _undoButton.IsEnabled;
@@ -2058,6 +2064,32 @@ public sealed class MainWindow : Window
         RefreshShell($"Inserted {_session.ActiveSheet.Name}");
     }
 
+    private async Task RenameActiveSheetAsync()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var currentName = _session.ActiveSheet.Name;
+        var newName = await ShowRenameSheetDialogAsync(currentName);
+        if (newName is null)
+            return;
+
+        ClearSelectedDrawingObject();
+        var result = _session.RenameActiveSheet(newName);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Rename Sheet failed.");
+            return;
+        }
+
+        RefreshShell(string.Equals(currentName, _session.ActiveSheet.Name, StringComparison.Ordinal)
+            ? $"Selected {currentName}"
+            : $"Renamed {currentName} to {_session.ActiveSheet.Name}");
+    }
+
     private void DuplicateActiveSheet()
     {
         if (_isOpening || _isSaving)
@@ -2096,6 +2128,116 @@ public sealed class MainWindow : Window
         }
 
         RefreshShell($"Deleted {sheetName}");
+    }
+
+    private async Task<string?> ShowRenameSheetDialogAsync(string currentName)
+    {
+        string? result = null;
+        var dialog = new Window
+        {
+            Title = "Rename Sheet",
+            Width = 380,
+            Height = 190,
+            MinWidth = 340,
+            MinHeight = 180,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+
+        var nameBox = new TextBox
+        {
+            Text = currentName,
+            MinWidth = 280,
+        };
+        AutomationProperties.SetName(nameBox, "Sheet name");
+        AutomationProperties.SetAutomationId(nameBox, "RenameSheetNameBox");
+        AutomationProperties.SetHelpText(nameBox, "Enter a worksheet name up to 31 characters.");
+
+        var validationText = new TextBlock
+        {
+            Foreground = Brush(143, 74, 18),
+            TextWrapping = TextWrapping.Wrap,
+            IsVisible = false,
+        };
+
+        var okButton = new Button
+        {
+            Content = "OK",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+
+        void Accept()
+        {
+            var proposedName = (nameBox.Text ?? "").Trim();
+            var validationError = _session.Workbook.ValidateSheetName(proposedName, _session.ActiveSheet.Id);
+            if (validationError is not null)
+            {
+                validationText.Text = validationError;
+                validationText.IsVisible = true;
+                nameBox.Focus();
+                nameBox.SelectAll();
+                return;
+            }
+
+            result = proposedName;
+            dialog.Close();
+        }
+
+        okButton.Click += (_, _) => Accept();
+        cancelButton.Click += (_, _) => dialog.Close();
+        nameBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                Accept();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                dialog.Close();
+                e.Handled = true;
+            }
+        };
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Children =
+            {
+                cancelButton,
+                okButton,
+            },
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = "Sheet name" },
+                nameBox,
+                validationText,
+                buttonRow,
+            },
+        };
+        dialog.Opened += (_, _) =>
+        {
+            nameBox.Focus();
+            nameBox.SelectAll();
+        };
+
+        await dialog.ShowDialog(this);
+        return result;
     }
 
     private void BeginFormulaEdit(CellAddress address, string? initialText = null)
@@ -3015,6 +3157,7 @@ public sealed class MainWindow : Window
             HasNativeSaveMenuItem: HasNativeMenuItem(_saveMenuItem, "Save"),
             HasNativeSaveAsMenuItem: HasNativeMenuItem(_saveAsMenuItem, "Save As..."),
             HasNativeNewSheetMenuItem: HasNativeMenuItem(_newSheetMenuItem, "New Sheet"),
+            HasNativeRenameSheetMenuItem: HasNativeMenuItem(_renameSheetMenuItem, "Rename Sheet...", requireGesture: false),
             HasNativeDuplicateSheetMenuItem: HasNativeMenuItem(_duplicateSheetMenuItem, "Duplicate Sheet", requireGesture: false),
             HasNativeDeleteSheetMenuItem: HasNativeMenuItem(_deleteSheetMenuItem, "Delete Sheet", requireGesture: false),
             HasNativeUndoMenuItem: HasNativeMenuItem(_undoMenuItem, "Undo"),

@@ -28,8 +28,10 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("new_sheet_button=true");
         script.Should().Contain("native_sheet_menu=true");
         script.Should().Contain("native_new_sheet_menu_item=true");
+        script.Should().Contain("native_rename_sheet_menu_item=true");
         script.Should().Contain("native_duplicate_sheet_menu_item=true");
         script.Should().Contain("native_delete_sheet_menu_item=true");
+        script.Should().Contain("HasNativeRenameSheetMenuItem &&");
         script.Should().Contain("HasNativeDeleteSheetMenuItem &&");
         script.Should().Contain("native_help_menu=true");
         script.Should().Contain("native_help_online_menu_item=true");
@@ -56,9 +58,16 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("TryCreateDrawingBitmap(imageBytes, out var bitmap)");
         script.Should().Contain("private static bool HasVisibleCellBorder(CellStyle? style)");
         script.Should().Contain("var result = _session.AddSheet();");
+        script.Should().Contain("var result = _session.RenameActiveSheet(newName);");
+        script.Should().Contain("private async Task<string?> ShowRenameSheetDialogAsync(string currentName)");
+        script.Should().Contain("AutomationProperties.SetAutomationId(nameBox, `\"RenameSheetNameBox`\");");
+        script.Should().Contain("var validationError = _session.Workbook.ValidateSheetName(proposedName, _session.ActiveSheet.Id);");
         script.Should().Contain("var result = _session.DuplicateActiveSheet();");
         script.Should().Contain("var result = _session.DeleteActiveSheet();");
         script.Should().Contain("public WorkbookCellEditResult AddSheet()");
+        script.Should().Contain("public WorkbookCellEditResult RenameActiveSheet(string? name)");
+        script.Should().Contain("new RenameSheetCommand(ActiveSheet.Id, newName)");
+        script.Should().Contain("ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id)");
         script.Should().Contain("new DuplicateSheetCommand(sourceSheetId)");
         script.Should().Contain("public WorkbookCellEditResult DeleteActiveSheet()");
         script.Should().Contain("new RemoveSheetCommand(sheetId)");
@@ -338,6 +347,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_sheet_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_help_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_new_sheet_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_rename_sheet_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_duplicate_sheet_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_delete_sheet_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_cut_menu_item=true" "$artifact_root/launch.txt"
@@ -442,10 +452,15 @@ public sealed class MacOsAppReadinessPreflightTests
                     AddStyledCellBorderOverlay(content, style);
                     _newSheetButton.Click += (_, _) => AddNewSheet();
                     _newSheetMenuItem.Click += (_, _) => AddNewSheet();
+                    _renameSheetMenuItem.Click += async (_, _) => await RenameActiveSheetAsync();
                     _duplicateSheetMenuItem.Click += (_, _) => DuplicateActiveSheet();
                     _deleteSheetMenuItem.Click += (_, _) => DeleteActiveSheet();
                     var sheetItem = new NativeMenuItem { Header = "Sheet" };
                     var result = _session.AddSheet();
+                    var result = _session.RenameActiveSheet(newName);
+                    ShowRenameSheetDialogAsync(currentName).ToString();
+                    AutomationProperties.SetAutomationId(nameBox, "RenameSheetNameBox");
+                    var validationError = _session.Workbook.ValidateSheetName(proposedName, _session.ActiveSheet.Id);
                     var result = _session.DuplicateActiveSheet();
                     var result = _session.DeleteActiveSheet();
                     if (e.Key == Key.F11 && e.KeyModifiers == KeyModifiers.Shift) { }
@@ -460,6 +475,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     LegalNoticeProvider.GetDocuments().Select(document => document.Title);
                 }
                 private static bool HasVisibleCellBorder(CellStyle? style) => true;
+                private async Task RenameActiveSheetAsync() => await Task.CompletedTask;
+                private async Task<string?> ShowRenameSheetDialogAsync(string currentName) => await Task.FromResult<string?>(currentName);
                 internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot() => new();
             }
             """);
@@ -481,17 +498,18 @@ public sealed class MacOsAppReadinessPreflightTests
 
             internal sealed class MacOsLaunchSmokeSnapshot
             {
-                public bool IsPassed => HasNativeFileMenu && HasNativeEditMenu && HasNativeFormatMenu && HasNativeSheetMenu && HasNativeHelpMenu && HasNativeDeleteSheetMenuItem && HasNativeCellStylesMenuItem && HasNativeCopyMenuItem;
+                public bool IsPassed => HasNativeFileMenu && HasNativeEditMenu && HasNativeFormatMenu && HasNativeSheetMenu && HasNativeHelpMenu && HasNativeRenameSheetMenuItem && HasNativeDeleteSheetMenuItem && HasNativeCellStylesMenuItem && HasNativeCopyMenuItem;
                 private bool HasNativeFileMenu { get; }
                 private bool HasNativeEditMenu { get; }
                 private bool HasNativeFormatMenu { get; }
                 private bool HasNativeSheetMenu { get; }
                 private bool HasNativeHelpMenu { get; }
+                private bool HasNativeRenameSheetMenuItem { get; }
                 private bool HasNativeDeleteSheetMenuItem { get; }
                 private bool HasNativeCellStylesMenuItem { get; }
                 private bool HasNativeCopyMenuItem { get; }
                 public int NativeCellStylesPresetCount { get; }
-                public string Report => "new_sheet_button= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_sheet_menu= native_new_sheet_menu_item= native_duplicate_sheet_menu_item= native_delete_sheet_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+                public string Report => "new_sheet_button= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_delete_sheet_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
             }
             """);
 
@@ -509,6 +527,16 @@ public sealed class MacOsAppReadinessPreflightTests
                         Workbook,
                         new AddSheetCommand(WorkbookSheetNameGenerator.GenerateUniqueSheetName(Workbook)));
                     ApplySuccessfulWorkbookStructureResult(Workbook.Sheets[^1].Id);
+                    return result;
+                }
+
+                public WorkbookCellEditResult RenameActiveSheet(string? name)
+                {
+                    var newName = (name ?? "").Trim();
+                    var result = _cellEditService.ExecuteEditCommand(
+                        Workbook,
+                        new RenameSheetCommand(ActiveSheet.Id, newName));
+                    ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
                     return result;
                 }
 
@@ -537,6 +565,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 }
 
                 private void ApplySuccessfulWorkbookStructureResult(SheetId preferredSheetId) { }
+                private void ApplySuccessfulWorkbookMetadataResult(SheetId preferredSheetId) { }
             }
             """);
 
