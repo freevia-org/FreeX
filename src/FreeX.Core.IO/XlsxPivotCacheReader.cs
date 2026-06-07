@@ -14,14 +14,18 @@ internal static class XlsxPivotCacheReader
         XNamespace relNs)
     {
         var result = new List<PivotCacheModel>();
+        var seenCacheIds = new HashSet<int>();
+        var seenRelationshipIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var pivotCacheElement in workbookXml.Root?
                      .Element(workbookNs + "pivotCaches")?
                      .Elements(workbookNs + "pivotCache") ?? [])
         {
             var cacheIdAttribute = XlsxXmlAttributeReader.ReadIntAttribute(pivotCacheElement, "cacheId");
-            var relId = pivotCacheElement.Attribute(relNs + "id")?.Value;
+            var relId = pivotCacheElement.Attribute(relNs + "id")?.Value.Trim();
             if (cacheIdAttribute is null or < 0 ||
                 string.IsNullOrWhiteSpace(relId) ||
+                !seenCacheIds.Add(cacheIdAttribute.Value) ||
+                !seenRelationshipIds.Add(relId) ||
                 !workbookRels.TryGetValue(relId, out var cachePath))
             {
                 continue;

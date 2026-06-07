@@ -117,7 +117,7 @@ internal static class XlsxPivotXmlReferencePreserver
 
         foreach (var pivotCache in pivotCaches.Elements(sourcePivotCaches.Name.Namespace + "pivotCache"))
         {
-            var sourceRelId = pivotCache.Attribute(relNs + "id")?.Value;
+            var sourceRelId = pivotCache.Attribute(relNs + "id")?.Value.Trim();
             if (string.IsNullOrWhiteSpace(sourceRelId))
                 continue;
 
