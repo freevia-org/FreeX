@@ -17867,7 +17867,7 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetSmartTags()
+    public void XlsxAdapter_LoadedWorkbookSave_DropsWorksheetSmartTagsForSchemaValidity()
     {
         var workbook = new Workbook("WorksheetSmartTagsRetentionTest");
         var sheet = workbook.AddSheet("Data");
@@ -17913,17 +17913,11 @@ public partial class FileAdapterSmokeTests
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var smartTags = worksheetXml.Root!.Element(worksheetNs + "smartTags");
-        smartTags.Should().NotBeNull();
-        smartTags!.ToString().Should().Contain("r=\"A1\"");
-        smartTags.ToString().Should().Contain("type=\"0\"");
-        smartTags.ToString().Should().Contain("key=\"place\"");
-        smartTags.ToString().Should().Contain("val=\"Seattle\"");
-        smartTags.ToString().Should().Contain("customSmartTagPropertyFlag=\"keep\"");
+        worksheetXml.Root!.Element(worksheetNs + "smartTags").Should().BeNull();
     }
 
     [Fact]
-    public void XlsxAdapter_FreshSave_WritesModeledWorksheetSmartTagsBeforeDrawing()
+    public void XlsxAdapter_FreshSave_DropsModeledWorksheetSmartTagsForSchemaValidity()
     {
         var workbook = new Workbook("WorksheetSmartTagsOrderTest");
         var sheet = workbook.AddSheet("Data");
@@ -17972,14 +17966,13 @@ public partial class FileAdapterSmokeTests
             .Select(element => element.Name.LocalName)
             .ToList();
 
-        orderedElements.Should().Contain("smartTags");
+        orderedElements.Should().NotContain("smartTags");
         orderedElements.Should().Contain("drawing");
-        orderedElements.IndexOf("smartTags").Should().BeLessThan(orderedElements.IndexOf("drawing"));
-        worksheetXml.Root!.Element(worksheetNs + "smartTags")!.ToString().Should().Contain("val=\"Seattle\"");
+        worksheetXml.Root!.Element(worksheetNs + "smartTags").Should().BeNull();
     }
 
     [Fact]
-    public void XlsxAdapter_FreshSave_FallsBackWhenWorksheetSmartTagsNativeXmlHasWrongNamespace()
+    public void XlsxAdapter_FreshSave_DropsWorksheetSmartTagsWhenNativeXmlHasWrongNamespace()
     {
         var workbook = new Workbook("WorksheetSmartTagsWrongNamespaceFallbackTest");
         var sheet = workbook.AddSheet("Data");
@@ -18037,17 +18030,7 @@ public partial class FileAdapterSmokeTests
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var smartTags = worksheetXml.Root!.Element(worksheetNs + "smartTags");
-        smartTags.Should().NotBeNull();
-        smartTags!.Descendants(worksheetNs + "cellSmartTags").Should().ContainSingle()
-            .Which.Attribute("r")!.Value.Should().Be("A1");
-        smartTags.Descendants(worksheetNs + "cellSmartTag").Should().ContainSingle()
-            .Which.Attribute("deleted")!.Value.Should().Be("0");
-        smartTags.ToString().Should().Contain("validCellSmartTagsAttr=\"cell-kept\"");
-        smartTags.ToString().Should().Contain("validCellSmartTagAttr=\"tag-kept\"");
-        smartTags.ToString().Should().Contain("customSmartTagPropertyFlag=\"keep\"");
-        smartTags.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
-        smartTags.ToString().Should().NotContain("wrongNamespace");
+        worksheetXml.Root!.Element(worksheetNs + "smartTags").Should().BeNull();
     }
 
     [Fact]

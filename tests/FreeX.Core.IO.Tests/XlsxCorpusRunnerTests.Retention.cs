@@ -1385,7 +1385,7 @@ public partial class XlsxCorpusRunnerTests
     }
 
     [Fact]
-    public void GeneratedWorksheetSmartTagsRow_RetainsSmartTagsAfterModelEdit()
+    public void GeneratedWorksheetSmartTagsRow_DropsSmartTagsAfterModelEditForSchemaValidity()
     {
         using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-smart-tags-001");
         AssertWorksheetSmartTags(source, "generated-worksheet-smart-tags-001 source");
@@ -1399,7 +1399,7 @@ public partial class XlsxCorpusRunnerTests
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-smart-tags-001");
-        AssertWorksheetSmartTags(saved, "generated-worksheet-smart-tags-001 saved");
+        AssertWorksheetSmartTagsRemoved(saved, "generated-worksheet-smart-tags-001 saved");
     }
 
     [Fact]
@@ -1569,6 +1569,15 @@ public partial class XlsxCorpusRunnerTests
         property.Attribute("key")!.Value.Should().Be("place", because);
         property.Attribute("val")!.Value.Should().Be("Seattle", because);
         property.Attribute("customSmartTagPropertyFlag")!.Value.Should().Be("keep", because);
+    }
+
+    private static void AssertWorksheetSmartTagsRemoved(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        worksheetXml.Root!.Element(worksheetNs + "smartTags").Should().BeNull(because);
     }
 
     private static void AssertWorksheetCustomProperties(Stream package, string because)

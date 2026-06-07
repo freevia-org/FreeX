@@ -953,6 +953,85 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         AssertWorksheetScenariosSanitized(saved);
     }
 
+    [Fact]
+    public void WorksheetSmartTags_AuthoringDropsSchemaInvalidWorksheetSmartTags()
+    {
+        using var saved = Save(CreateWorksheetSmartTagsSourceWorkbook());
+
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetSmartTagsRemoved(saved);
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_DropsWorksheetSmartTagsForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetSmartTagsCarrierWorkbook());
+        AddWorksheetSmartTagsNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetSmartTagsRemoved(saved);
+    }
+
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidWorksheetSmartTagsForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetSmartTagsCarrierWorkbook());
+        SetWorksheetSmartTagsInvalidNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetSmartTagsRemoved(saved);
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorksheetSmartTagsForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetSmartTagsCarrierWorkbook());
+        SetWorksheetSmartTagsInvalidNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetSmartTagsRemoved(saved);
+    }
+
 
     [Fact]
     public void ProtectedRanges_ProducesSchemaValidWorkbook()
@@ -3545,6 +3624,143 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         var a1 = inputCells.Single(inputCell => inputCell.Attribute("r")?.Value == "A1");
         a1.Attribute("deleted")!.Value.Should().Be("1");
+    }
+
+    private static Workbook CreateWorksheetSmartTagsCarrierWorkbook()
+    {
+        var workbook = new Workbook("WorksheetSmartTagsPatchSave");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Seattle"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
+        return workbook;
+    }
+
+    private static Workbook CreateWorksheetSmartTagsSourceWorkbook()
+    {
+        var workbook = CreateWorksheetSmartTagsCarrierWorkbook();
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SmartTags = new WorksheetSmartTagsModel
+        {
+            Cells =
+            [
+                new WorksheetCellSmartTagsModel
+                {
+                    Reference = "A1",
+                    Tags =
+                    [
+                        new WorksheetCellSmartTagModel
+                        {
+                            Type = "0",
+                            Deleted = false,
+                            Properties =
+                            [
+                                new WorksheetCellSmartTagPropertyModel
+                                {
+                                    Key = "place",
+                                    Value = "Seattle"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        };
+        return workbook;
+    }
+
+    private static void AddWorksheetSmartTagsNativeMetadata(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        worksheetXml.Root!.Element(worksheetNs + "smartTags")?.Remove();
+        worksheetXml.Root.Add(new XElement(
+            worksheetNs + "smartTags",
+            new XElement(
+                worksheetNs + "cellSmartTags",
+                new XAttribute("r", "A1"),
+                new XElement(
+                    worksheetNs + "cellSmartTag",
+                    new XAttribute("type", "0"),
+                    new XAttribute("deleted", "0"),
+                    new XElement(
+                        worksheetNs + "cellSmartTagPr",
+                        new XAttribute("key", "place"),
+                        new XAttribute("val", "Seattle"))))));
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void SetWorksheetSmartTagsInvalidNativeMetadata(MemoryStream stream)
+    {
+        AddWorksheetSmartTagsNativeMetadata(stream);
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        var smartTags = worksheetXml.Root!.Element(worksheetNs + "smartTags")!;
+        smartTags.SetAttributeValue("nativeSmartTagsFlag", "removed");
+        smartTags.Add(new XElement(worksheetNs + "nativeSmartTagsChild"));
+
+        var cellSmartTags = smartTags.Element(worksheetNs + "cellSmartTags")!;
+        cellSmartTags.SetAttributeValue("r", " a1 ");
+        cellSmartTags.SetAttributeValue("nativeCellSmartTagsFlag", "removed");
+        cellSmartTags.Add(new XElement(worksheetNs + "nativeCellSmartTagsChild"));
+
+        var cellSmartTag = cellSmartTags.Element(worksheetNs + "cellSmartTag")!;
+        cellSmartTag.SetAttributeValue("type", " 0 ");
+        cellSmartTag.SetAttributeValue("deleted", "false");
+        cellSmartTag.SetAttributeValue("nativeCellSmartTagFlag", "removed");
+        cellSmartTag.Add(new XElement(worksheetNs + "nativeCellSmartTagChild"));
+
+        var property = cellSmartTag.Element(worksheetNs + "cellSmartTagPr")!;
+        property.SetAttributeValue("key", " place ");
+        property.SetAttributeValue("nativeCellSmartTagPropertyFlag", "removed");
+        property.Add(new XElement(worksheetNs + "nativeCellSmartTagPropertyChild"));
+
+        cellSmartTag.Add(
+            new XElement(
+                worksheetNs + "cellSmartTagPr",
+                new XAttribute("key", "removedMissingValue")),
+            new XElement(
+                worksheetNs + "cellSmartTagPr",
+                new XAttribute("val", "removedMissingKey")));
+        cellSmartTags.Add(new XElement(
+            worksheetNs + "cellSmartTag",
+            new XAttribute("type", "not-a-number"),
+            new XElement(
+                worksheetNs + "cellSmartTagPr",
+                new XAttribute("key", "removed"),
+                new XAttribute("val", "removed"))));
+        smartTags.Add(new XElement(
+            worksheetNs + "cellSmartTags",
+            new XAttribute("r", "NotARef"),
+            new XElement(
+                worksheetNs + "cellSmartTag",
+                new XAttribute("type", "1"),
+                new XElement(
+                    worksheetNs + "cellSmartTagPr",
+                    new XAttribute("key", "removed"),
+                    new XAttribute("val", "removed")))));
+        worksheetXml.Root!.Add(new XElement(
+            worksheetNs + "smartTags",
+            new XAttribute("nativeDuplicateContainer", "removed"),
+            new XElement(
+                worksheetNs + "cellSmartTags",
+                new XAttribute("r", "NotARef"),
+                new XElement(
+                    worksheetNs + "cellSmartTag",
+                    new XAttribute("type", "1"),
+                    new XElement(
+                        worksheetNs + "cellSmartTagPr",
+                        new XAttribute("key", "removed"),
+                        new XAttribute("val", "removed"))))));
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void AssertWorksheetSmartTagsRemoved(MemoryStream stream)
+    {
+        ReadWorksheetChildElements(stream, "smartTags").Should().BeEmpty();
     }
 
     private static Workbook CreateProtectedRangesSourceWorkbook()
