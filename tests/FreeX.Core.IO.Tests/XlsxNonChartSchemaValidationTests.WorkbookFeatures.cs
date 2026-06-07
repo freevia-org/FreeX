@@ -9,6 +9,10 @@ namespace FreeX.Core.IO.Tests;
 
 public sealed partial class XlsxNonChartSchemaValidationTests
 {
+    private const string WorkbookViewExtensionUri = "{FREEX-WORKBOOK-VIEW-EXT}";
+    private const string AdditionalWorkbookViewExtensionUri = "{FREEX-ADDITIONAL-WORKBOOK-VIEW-EXT}";
+    private const string CustomWorkbookViewExtensionUri = "{FREEX-CUSTOM-WORKBOOK-VIEW-EXT}";
+
     [Fact]
     public void WorkbookFileVersion_ProducesSchemaValidWorkbook()
     {
@@ -613,11 +617,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     {
         var workbook = CreateWorkbookAdditionalViewsSourceWorkbook();
         workbook.AdditionalViews!.NativeAttributes["customBookViewsFlag"] = "removed";
-        workbook.AdditionalViews!.Views[0].NativeXml = """
-            <workbookView xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" visibility="invalid" minimized="maybe" showHorizontalScroll="maybe" showVerticalScroll="maybe" showSheetTabs="maybe" tabRatio="not-a-number" firstSheet="not-a-number" activeTab="not-a-number" xWindow="not-a-number" windowWidth="not-a-number" customWorkbookViewFlag="removed">
-              <nativeWorkbookViewChild />
-            </workbookView>
-            """;
+        workbook.AdditionalViews!.Views[0].NativeXml = CreateInvalidWorkbookViewNativeXml();
 
         using var saved = Save(workbook);
 
@@ -626,6 +626,14 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         bookViews.Attribute("customBookViewsFlag").Should().BeNull();
         var additionalView = bookViews.Elements(bookViews.Name.Namespace + "workbookView").Skip(1).Single();
         AssertWorkbookViewInvalidAttributesRemoved(additionalView);
+        AssertExtensionListSanitized(
+            additionalView,
+            bookViews.Name.Namespace,
+            AdditionalWorkbookViewExtensionUri,
+            "FreeXAdditionalWorkbookViewExtension",
+            "customAdditionalWorkbookViewExtLstFlag",
+            "customAdditionalWorkbookViewExtFlag",
+            "nativeAdditionalWorkbookViewExtLstChild");
     }
 
     [Fact]
@@ -682,6 +690,48 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         bookViews.Element(bookViews.Name.Namespace + "nativeBookViewsChild").Should().BeNull();
         var primaryView = bookViews.Elements(bookViews.Name.Namespace + "workbookView").First();
         AssertWorkbookViewInvalidAttributesRemoved(primaryView);
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorkbookViewExtensionListsForSchemaValidity()
+    {
+        using var source = Save(CreateWorkbookAdditionalViewsSourceWorkbook());
+        SetWorkbookViewInvalidExtensionLists(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var bookViews = ReadWorkbookChildElement(saved, "bookViews");
+        var views = bookViews.Elements(bookViews.Name.Namespace + "workbookView").ToList();
+        views.Should().HaveCount(2);
+        AssertExtensionListSanitized(
+            views[0],
+            bookViews.Name.Namespace,
+            WorkbookViewExtensionUri,
+            "FreeXWorkbookViewExtension",
+            "customWorkbookViewExtLstFlag",
+            "customWorkbookViewExtFlag",
+            "nativeWorkbookViewExtLstChild");
+        AssertExtensionListSanitized(
+            views[1],
+            bookViews.Name.Namespace,
+            AdditionalWorkbookViewExtensionUri,
+            "FreeXAdditionalWorkbookViewExtension",
+            "customAdditionalWorkbookViewExtLstFlag",
+            "customAdditionalWorkbookViewExtFlag",
+            "nativeAdditionalWorkbookViewExtLstChild");
     }
 
     private static Workbook CreateWorkbookFileVersionSourceWorkbook()
@@ -1034,6 +1084,36 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         return workbook;
     }
 
+    private static string CreateInvalidWorkbookViewNativeXml()
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        return new XElement(
+                workbookNs + "workbookView",
+                new XAttribute("visibility", "invalid"),
+                new XAttribute("minimized", "maybe"),
+                new XAttribute("showHorizontalScroll", "maybe"),
+                new XAttribute("showVerticalScroll", "maybe"),
+                new XAttribute("showSheetTabs", "maybe"),
+                new XAttribute("tabRatio", "not-a-number"),
+                new XAttribute("firstSheet", "not-a-number"),
+                new XAttribute("activeTab", "not-a-number"),
+                new XAttribute("xWindow", "not-a-number"),
+                new XAttribute("windowWidth", "not-a-number"),
+                new XAttribute("customWorkbookViewFlag", "removed"),
+                new XElement(workbookNs + "nativeWorkbookViewChild"),
+                CreateInvalidExtensionList(
+                    workbookNs,
+                    AdditionalWorkbookViewExtensionUri,
+                    "FreeXAdditionalWorkbookViewExtension",
+                    "customAdditionalWorkbookViewExtLstFlag",
+                    "customAdditionalWorkbookViewExtFlag",
+                    "nativeAdditionalWorkbookViewExtLstChild"),
+                new XElement(
+                    workbookNs + "extLst",
+                    new XElement(workbookNs + "ext", new XAttribute("uri", "{FREEX-DUPLICATE-ADDITIONAL-WORKBOOK-VIEW-EXTLST}"))))
+            .ToString(SaveOptions.DisableFormatting);
+    }
+
     private static void SetWorkbookViewInvalidAttributes(MemoryStream stream)
     {
         stream.Position = 0;
@@ -1050,6 +1130,49 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .First();
         SetInvalidWorkbookViewAttributes(workbookView);
         ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+    }
+
+    private static void SetWorkbookViewInvalidExtensionLists(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
+        var workbookViews = workbookXml.Root!
+            .Element(workbookNs + "bookViews")!
+            .Elements(workbookNs + "workbookView")
+            .ToList();
+        AddInvalidWorkbookViewExtensionLists(
+            workbookViews[0],
+            WorkbookViewExtensionUri,
+            "FreeXWorkbookViewExtension",
+            "customWorkbookViewExtLstFlag",
+            "customWorkbookViewExtFlag",
+            "nativeWorkbookViewExtLstChild");
+        AddInvalidWorkbookViewExtensionLists(
+            workbookViews[1],
+            AdditionalWorkbookViewExtensionUri,
+            "FreeXAdditionalWorkbookViewExtension",
+            "customAdditionalWorkbookViewExtLstFlag",
+            "customAdditionalWorkbookViewExtFlag",
+            "nativeAdditionalWorkbookViewExtLstChild");
+        ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+    }
+
+    private static void AddInvalidWorkbookViewExtensionLists(
+        XElement workbookView,
+        string uri,
+        string payloadName,
+        string listAttributeName,
+        string extensionAttributeName,
+        string unexpectedChildName)
+    {
+        var workbookNs = workbookView.Name.Namespace;
+        workbookView.Add(
+            CreateInvalidExtensionList(workbookNs, uri, payloadName, listAttributeName, extensionAttributeName, unexpectedChildName),
+            new XElement(
+                workbookNs + "extLst",
+                new XElement(workbookNs + "ext", new XAttribute("uri", $"{{FREEX-DUPLICATE-{payloadName.ToUpperInvariant()}-EXTLST}}"))));
     }
 
     private static void SetInvalidWorkbookViewAttributes(XElement workbookView)

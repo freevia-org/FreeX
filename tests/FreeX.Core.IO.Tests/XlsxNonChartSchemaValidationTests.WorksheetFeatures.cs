@@ -1089,6 +1089,14 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         customWorkbookViews.Element(customWorkbookViews.Name.Namespace + "nativeCustomWorkbookViewsChild").Should().BeNull();
         var customWorkbookView = customWorkbookViews.Elements(customWorkbookViews.Name.Namespace + "customWorkbookView").Single();
         AssertInvalidCustomWorkbookViewAttributesRemoved(customWorkbookView);
+        AssertExtensionListSanitized(
+            customWorkbookView,
+            customWorkbookViews.Name.Namespace,
+            CustomWorkbookViewExtensionUri,
+            "FreeXCustomWorkbookViewExtension",
+            "customWorkbookViewExtLstFlag",
+            "customWorkbookViewExtFlag",
+            "nativeWorkbookViewExtLstChild");
     }
 
 
@@ -3411,6 +3419,17 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         customWorkbookView.SetAttributeValue("showComments", "invalid");
         customWorkbookView.SetAttributeValue("customCustomWorkbookViewFlag", "removed");
         customWorkbookView.Add(new XElement(workbookNs + "nativeCustomWorkbookViewChild"));
+        customWorkbookView.Add(
+            CreateInvalidExtensionList(
+                workbookNs,
+                CustomWorkbookViewExtensionUri,
+                "FreeXCustomWorkbookViewExtension",
+                "customWorkbookViewExtLstFlag",
+                "customWorkbookViewExtFlag",
+                "nativeWorkbookViewExtLstChild"),
+            new XElement(
+                workbookNs + "extLst",
+                new XElement(workbookNs + "ext", new XAttribute("uri", "{FREEX-DUPLICATE-CUSTOM-WORKBOOK-VIEW-EXTLST}"))));
         ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
     }
 
