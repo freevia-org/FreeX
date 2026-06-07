@@ -177,6 +177,10 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _wrapTextMenuItem = new();
     private readonly NativeMenuItem _decreaseIndentMenuItem = new();
     private readonly NativeMenuItem _increaseIndentMenuItem = new();
+    private readonly NativeMenuItem _freezePanesMenuItem = new();
+    private readonly NativeMenuItem _freezeTopRowMenuItem = new();
+    private readonly NativeMenuItem _freezeFirstColumnMenuItem = new();
+    private readonly NativeMenuItem _unfreezePanesMenuItem = new();
     private readonly NativeMenuItem _showFormulasMenuItem = new();
     private readonly NativeMenuItem _helpOnlineMenuItem = new();
     private readonly NativeMenuItem _sendFeedbackMenuItem = new();
@@ -507,6 +511,18 @@ public sealed class MainWindow : Window
         _alignRightMenuItem.Header = "Align Right";
         _alignRightMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Right);
 
+        _freezePanesMenuItem.Header = "Freeze Panes";
+        _freezePanesMenuItem.Click += (_, _) => FreezePanesAtActiveCell();
+
+        _freezeTopRowMenuItem.Header = "Freeze Top Row";
+        _freezeTopRowMenuItem.Click += (_, _) => FreezeTopRow();
+
+        _freezeFirstColumnMenuItem.Header = "Freeze First Column";
+        _freezeFirstColumnMenuItem.Click += (_, _) => FreezeFirstColumn();
+
+        _unfreezePanesMenuItem.Header = "Unfreeze Panes";
+        _unfreezePanesMenuItem.Click += (_, _) => UnfreezePanes();
+
         _showFormulasMenuItem.Header = "Show Formulas";
         _showFormulasMenuItem.Gesture = new KeyGesture(Key.Oem3, KeyModifiers.Control);
         _showFormulasMenuItem.ToggleType = MenuItemToggleType.CheckBox;
@@ -592,6 +608,11 @@ public sealed class MainWindow : Window
         formatMenu.Items.Add(_alignRightMenuItem);
 
         var viewMenu = new NativeMenu();
+        viewMenu.Items.Add(_freezePanesMenuItem);
+        viewMenu.Items.Add(_freezeTopRowMenuItem);
+        viewMenu.Items.Add(_freezeFirstColumnMenuItem);
+        viewMenu.Items.Add(_unfreezePanesMenuItem);
+        viewMenu.Items.Add(new NativeMenuItemSeparator());
         viewMenu.Items.Add(_showFormulasMenuItem);
 
         var sheetMenu = new NativeMenu();
@@ -1133,6 +1154,10 @@ public sealed class MainWindow : Window
         _wrapTextMenuItem.IsEnabled = _wrapTextButton.IsEnabled;
         _decreaseIndentMenuItem.IsEnabled = _decreaseIndentButton.IsEnabled;
         _increaseIndentMenuItem.IsEnabled = _increaseIndentButton.IsEnabled;
+        _freezePanesMenuItem.IsEnabled = isIdle;
+        _freezeTopRowMenuItem.IsEnabled = isIdle;
+        _freezeFirstColumnMenuItem.IsEnabled = isIdle;
+        _unfreezePanesMenuItem.IsEnabled = isIdle;
         _showFormulasMenuItem.IsEnabled = isIdle;
         _showFormulasMenuItem.IsChecked = _session.IsShowingFormulas;
     }
@@ -3718,6 +3743,46 @@ public sealed class MainWindow : Window
         RefreshShell($"{(enabled ? "Wrapped" : "Unwrapped")} {rangeReference}");
     }
 
+    private void FreezePanesAtActiveCell()
+    {
+        ApplyFreezePaneCommand(_session.FreezePanesAtActiveCell, "Froze panes at", "Freeze Panes failed.");
+    }
+
+    private void FreezeTopRow()
+    {
+        ApplyFreezePaneCommand(_session.FreezeTopRow, "Froze top row for", "Freeze Top Row failed.");
+    }
+
+    private void FreezeFirstColumn()
+    {
+        ApplyFreezePaneCommand(_session.FreezeFirstColumn, "Froze first column for", "Freeze First Column failed.");
+    }
+
+    private void UnfreezePanes()
+    {
+        ApplyFreezePaneCommand(_session.UnfreezePanes, "Unfroze panes for", "Unfreeze Panes failed.");
+    }
+
+    private void ApplyFreezePaneCommand(Func<WorkbookCellEditResult> execute, string successAction, string failureMessage)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var sheetName = _session.ActiveSheet.Name;
+        var result = execute();
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? failureMessage);
+            return;
+        }
+
+        RefreshShell($"{successAction} {sheetName}");
+    }
+
     private void ApplySelectedRangeHorizontalAlignment(CellHAlign alignment)
     {
         if (_isOpening || _isSaving)
@@ -3901,6 +3966,10 @@ public sealed class MainWindow : Window
             HasNativeAlignMiddleMenuItem: HasNativeMenuItem(_alignMiddleMenuItem, "Align Middle", requireGesture: false),
             HasNativeAlignBottomMenuItem: HasNativeMenuItem(_alignBottomMenuItem, "Align Bottom", requireGesture: false),
             HasNativeWrapTextMenuItem: HasNativeMenuItem(_wrapTextMenuItem, "Wrap Text", requireGesture: false),
+            HasNativeFreezePanesMenuItem: HasNativeMenuItem(_freezePanesMenuItem, "Freeze Panes", requireGesture: false),
+            HasNativeFreezeTopRowMenuItem: HasNativeMenuItem(_freezeTopRowMenuItem, "Freeze Top Row", requireGesture: false),
+            HasNativeFreezeFirstColumnMenuItem: HasNativeMenuItem(_freezeFirstColumnMenuItem, "Freeze First Column", requireGesture: false),
+            HasNativeUnfreezePanesMenuItem: HasNativeMenuItem(_unfreezePanesMenuItem, "Unfreeze Panes", requireGesture: false),
             HasNativeDecreaseIndentMenuItem: HasNativeMenuItem(_decreaseIndentMenuItem, "Decrease Indent", requireGesture: false),
             HasNativeIncreaseIndentMenuItem: HasNativeMenuItem(_increaseIndentMenuItem, "Increase Indent", requireGesture: false),
             HasNativeAlignLeftMenuItem: HasNativeMenuItem(_alignLeftMenuItem, "Align Left", requireGesture: false),

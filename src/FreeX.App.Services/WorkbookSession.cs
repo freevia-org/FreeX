@@ -331,6 +331,22 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public WorkbookCellEditResult FreezePanesAtActiveCell()
+    {
+        var frozenRows = ActiveCell.Row > 1 ? ActiveCell.Row - 1 : 0;
+        var frozenCols = ActiveCell.Col > 1 ? ActiveCell.Col - 1 : 0;
+        return SetFreezePanes(frozenRows, frozenCols);
+    }
+
+    public WorkbookCellEditResult FreezeTopRow() =>
+        SetFreezePanes(frozenRows: 1, frozenCols: 0);
+
+    public WorkbookCellEditResult FreezeFirstColumn() =>
+        SetFreezePanes(frozenRows: 0, frozenCols: 1);
+
+    public WorkbookCellEditResult UnfreezePanes() =>
+        SetFreezePanes(frozenRows: 0, frozenCols: 0);
+
     public WorkbookCellEditResult HideActiveSheet()
     {
         var sheetId = ActiveSheet.Id;
@@ -1353,6 +1369,18 @@ public sealed class WorkbookSession
         _selectionStatsRevision++;
         RefreshViewport();
         EnsureActiveCellVisible();
+    }
+
+    private WorkbookCellEditResult SetFreezePanes(uint frozenRows, uint frozenCols)
+    {
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new SetFreezePanesCommand(ActiveSheet.Id, frozenRows, frozenCols));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
+        return result;
     }
 
     private CellStyle GetCellStyle(CellAddress address)

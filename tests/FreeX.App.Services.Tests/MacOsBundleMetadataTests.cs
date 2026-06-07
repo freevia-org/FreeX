@@ -209,6 +209,10 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"native_align_left_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_align_center_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_align_right_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_freeze_panes_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_freeze_top_row_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_freeze_first_column_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_unfreeze_panes_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_show_formulas_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_help_online_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_send_feedback_menu_item=true\" \"$launch_smoke_report\"");

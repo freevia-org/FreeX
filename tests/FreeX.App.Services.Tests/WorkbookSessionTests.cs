@@ -3136,6 +3136,70 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void FreezePanesAtActiveCell_SetsFrozenRowsAndColumnsClearsSplitRefreshesViewportAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        sheet.SplitRow = 8;
+        sheet.SplitColumn = 4;
+        var session = new WorkbookSessionFactory().Create(
+            new StartupWorkbookLoadResult(workbook, "Book.fxl", "Opened .fxl.", IsFallback: false),
+            viewportHeight: 100,
+            viewportWidth: 220);
+        var c4 = new CellAddress(sheet.Id, 4, 3);
+        session.SelectCell(c4);
+
+        var result = session.FreezePanesAtActiveCell();
+
+        result.Success.Should().BeTrue();
+        sheet.FrozenRows.Should().Be(3);
+        sheet.FrozenCols.Should().Be(2);
+        sheet.SplitRow.Should().BeNull();
+        sheet.SplitColumn.Should().BeNull();
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveCell.Should().Be(c4);
+        session.SelectedRange.Should().Be(new GridRange(c4, c4));
+        session.Viewport.FrozenPanes.Should().Be(new FrozenPaneState(3, 2));
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.FrozenRows.Should().Be(0);
+        sheet.FrozenCols.Should().Be(0);
+        sheet.SplitRow.Should().Be(8);
+        sheet.SplitColumn.Should().Be(4);
+        session.Viewport.FrozenPanes.Should().BeNull();
+    }
+
+    [Fact]
+    public void FreezeTopRowFreezeFirstColumnAndUnfreezePanes_RouteThroughSharedCommand()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        session.FreezeTopRow().Success.Should().BeTrue();
+        sheet.FrozenRows.Should().Be(1);
+        sheet.FrozenCols.Should().Be(0);
+        session.Viewport.FrozenPanes.Should().Be(new FrozenPaneState(1, 0));
+
+        session.FreezeFirstColumn().Success.Should().BeTrue();
+        sheet.FrozenRows.Should().Be(0);
+        sheet.FrozenCols.Should().Be(1);
+        session.Viewport.FrozenPanes.Should().Be(new FrozenPaneState(0, 1));
+
+        session.UnfreezePanes().Success.Should().BeTrue();
+        sheet.FrozenRows.Should().Be(0);
+        sheet.FrozenCols.Should().Be(0);
+        session.Viewport.FrozenPanes.Should().BeNull();
+    }
+
+    [Fact]
     public void AddSheet_AppendsSelectsNewSheetAndKeepsUndoRedoCoherent()
     {
         var workbook = CreateWorkbook();

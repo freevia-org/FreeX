@@ -140,6 +140,10 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeAlignMiddleMenuItem,
     bool HasNativeAlignBottomMenuItem,
     bool HasNativeWrapTextMenuItem,
+    bool HasNativeFreezePanesMenuItem,
+    bool HasNativeFreezeTopRowMenuItem,
+    bool HasNativeFreezeFirstColumnMenuItem,
+    bool HasNativeUnfreezePanesMenuItem,
     bool HasNativeDecreaseIndentMenuItem,
     bool HasNativeIncreaseIndentMenuItem,
     bool HasNativeAlignLeftMenuItem,
@@ -233,6 +237,10 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeAlignMiddleMenuItem &&
         HasNativeAlignBottomMenuItem &&
         HasNativeWrapTextMenuItem &&
+        HasNativeFreezePanesMenuItem &&
+        HasNativeFreezeTopRowMenuItem &&
+        HasNativeFreezeFirstColumnMenuItem &&
+        HasNativeUnfreezePanesMenuItem &&
         HasNativeDecreaseIndentMenuItem &&
         HasNativeIncreaseIndentMenuItem &&
         HasNativeAlignLeftMenuItem &&
@@ -374,6 +382,10 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_align_middle_menu_item={FormatBool(snapshot.HasNativeAlignMiddleMenuItem)}",
                 $"native_align_bottom_menu_item={FormatBool(snapshot.HasNativeAlignBottomMenuItem)}",
                 $"native_wrap_text_menu_item={FormatBool(snapshot.HasNativeWrapTextMenuItem)}",
+                $"native_freeze_panes_menu_item={FormatBool(snapshot.HasNativeFreezePanesMenuItem)}",
+                $"native_freeze_top_row_menu_item={FormatBool(snapshot.HasNativeFreezeTopRowMenuItem)}",
+                $"native_freeze_first_column_menu_item={FormatBool(snapshot.HasNativeFreezeFirstColumnMenuItem)}",
+                $"native_unfreeze_panes_menu_item={FormatBool(snapshot.HasNativeUnfreezePanesMenuItem)}",
                 $"native_decrease_indent_menu_item={FormatBool(snapshot.HasNativeDecreaseIndentMenuItem)}",
                 $"native_increase_indent_menu_item={FormatBool(snapshot.HasNativeIncreaseIndentMenuItem)}",
                 $"native_align_left_menu_item={FormatBool(snapshot.HasNativeAlignLeftMenuItem)}",

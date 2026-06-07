@@ -53,6 +53,10 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("freex-$runtime-macos-tester-instructions.md");
         script.Should().Contain("native_horizontal_text_menu_item=true");
         script.Should().Contain("native_rotate_text_down_menu_item=");
+        script.Should().Contain("native_freeze_panes_menu_item=true");
+        script.Should().Contain("native_freeze_top_row_menu_item=true");
+        script.Should().Contain("native_freeze_first_column_menu_item=true");
+        script.Should().Contain("native_unfreeze_panes_menu_item=true");
         script.Should().Contain("PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode)");
         script.Should().Contain("PortPreviewWorkbookFactory.PreviewShapeName");
         script.Should().Contain("_sessionFactory.Create(source, SmokeViewportHeight, SmokeViewportWidth, includeObjects: true)");
@@ -106,6 +110,16 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("var validationError = _session.Workbook.ValidateSheetName(proposedName, _session.ActiveSheet.Id);");
         script.Should().Contain("var result = _session.DuplicateActiveSheet();");
         script.Should().Contain("var result = _session.DeleteActiveSheet();");
+        script.Should().Contain("_freezePanesMenuItem.Header = `\"Freeze Panes`\";");
+        script.Should().Contain("_freezePanesMenuItem.Click += (_, _) => FreezePanesAtActiveCell();");
+        script.Should().Contain("viewMenu.Items.Add(_freezePanesMenuItem);");
+        script.Should().Contain("private void ApplyFreezePaneCommand(Func<WorkbookCellEditResult> execute, string successAction, string failureMessage)");
+        script.Should().Contain("_session.FreezePanesAtActiveCell");
+        script.Should().Contain("public WorkbookCellEditResult FreezePanesAtActiveCell()");
+        script.Should().Contain("public WorkbookCellEditResult FreezeTopRow()");
+        script.Should().Contain("public WorkbookCellEditResult FreezeFirstColumn()");
+        script.Should().Contain("public WorkbookCellEditResult UnfreezePanes()");
+        script.Should().Contain("new SetFreezePanesCommand(ActiveSheet.Id, frozenRows, frozenCols)");
         script.Should().Contain("public WorkbookCellEditResult AddSheet()");
         script.Should().Contain("public WorkbookCellEditResult RenameActiveSheet(string? name)");
         script.Should().Contain("new RenameSheetCommand(ActiveSheet.Id, newName)");
@@ -437,6 +451,10 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_vertical_text_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_rotate_text_up_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_rotate_text_down_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_freeze_panes_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_freeze_top_row_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_freeze_first_column_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_unfreeze_panes_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_show_formulas_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_help_online_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_send_feedback_menu_item=true" "$artifact_root/launch.txt"
@@ -622,6 +640,15 @@ public sealed class MacOsAppReadinessPreflightTests
                     _hideSheetMenuItem.Click += (_, _) => HideActiveSheet();
                     _unhideSheetMenuItem.Click += async (_, _) => await UnhideSheetAsync();
                     _deleteSheetMenuItem.Click += (_, _) => DeleteActiveSheet();
+                    _freezePanesMenuItem.Header = "Freeze Panes";
+                    _freezePanesMenuItem.Click += (_, _) => FreezePanesAtActiveCell();
+                    _freezeTopRowMenuItem.Header = "Freeze Top Row";
+                    _freezeFirstColumnMenuItem.Header = "Freeze First Column";
+                    _unfreezePanesMenuItem.Header = "Unfreeze Panes";
+                    viewMenu.Items.Add(_freezePanesMenuItem);
+                    viewMenu.Items.Add(_freezeTopRowMenuItem);
+                    viewMenu.Items.Add(_freezeFirstColumnMenuItem);
+                    viewMenu.Items.Add(_unfreezePanesMenuItem);
                     _showFormulasMenuItem.ToggleType = MenuItemToggleType.CheckBox;
                     _showFormulasMenuItem.Click += (_, _) => ToggleShowFormulas();
                     Header = "View";
@@ -640,6 +667,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     AutomationProperties.SetAutomationId(sheetBox, "UnhideSheetList");
                     var result = _session.UnhideSheet(sheet.Id);
                     var result = _session.DeleteActiveSheet();
+                    FreezePanesAtActiveCell();
+                    FreezeTopRow();
+                    FreezeFirstColumn();
+                    UnfreezePanes();
+                    ApplyFreezePaneCommand(_session.FreezePanesAtActiveCell, "Froze panes at", "Freeze Panes failed.");
                     ToggleShowFormulas();
                     var result = _session.SetShowFormulas(showFormulas);
                     if (e.Key == Key.F11 && e.KeyModifiers == KeyModifiers.Shift) { }
@@ -677,6 +709,11 @@ public sealed class MacOsAppReadinessPreflightTests
                 private async Task PasteSpecialExternalTextFromClipboardAsync(string label) => await Task.CompletedTask;
                 private async Task UnhideSheetAsync() => await Task.CompletedTask;
                 private async Task<WorkbookHiddenSheet?> ShowUnhideSheetDialogAsync(IReadOnlyList<WorkbookHiddenSheet> hiddenSheets) => await Task.FromResult<WorkbookHiddenSheet?>(null);
+                private void FreezePanesAtActiveCell() { }
+                private void FreezeTopRow() { }
+                private void FreezeFirstColumn() { }
+                private void UnfreezePanes() { }
+                private void ApplyFreezePaneCommand(Func<WorkbookCellEditResult> execute, string successAction, string failureMessage) { }
                 private void ToggleShowFormulas() { }
                 internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot() => new();
             }
@@ -717,6 +754,10 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativeHideSheetMenuItem &&
                     HasNativeUnhideSheetMenuItem &&
                     HasNativeDeleteSheetMenuItem &&
+                    HasNativeFreezePanesMenuItem &&
+                    HasNativeFreezeTopRowMenuItem &&
+                    HasNativeFreezeFirstColumnMenuItem &&
+                    HasNativeUnfreezePanesMenuItem &&
                     HasNativeShowFormulasMenuItem &&
                     HasNativePasteSpecialCommentsMenuItem &&
                     HasNativePasteSpecialValidationMenuItem &&
@@ -751,6 +792,10 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativeHideSheetMenuItem { get; }
                 private bool HasNativeUnhideSheetMenuItem { get; }
                 private bool HasNativeDeleteSheetMenuItem { get; }
+                private bool HasNativeFreezePanesMenuItem { get; }
+                private bool HasNativeFreezeTopRowMenuItem { get; }
+                private bool HasNativeFreezeFirstColumnMenuItem { get; }
+                private bool HasNativeUnfreezePanesMenuItem { get; }
                 private bool HasNativeShowFormulasMenuItem { get; }
                 private bool HasNativePasteSpecialCommentsMenuItem { get; }
                 private bool HasNativePasteSpecialValidationMenuItem { get; }
@@ -769,7 +814,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativePasteSpecialPictureMenuItem { get; }
                 private bool HasNativePasteSpecialLinkedPictureMenuItem { get; }
                 public int NativeCellStylesPresetCount { get; }
-                public string Report => "native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+                public string Report => "native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
             }
             """);
 
@@ -849,6 +894,11 @@ public sealed class MacOsAppReadinessPreflightTests
                 public bool IsShowingFormulas => ActiveSheet.ShowFormulas;
                 public WorkbookCellEditResult SetShowFormulas(bool showFormulas)
                 new SetWorksheetShowFormulasCommand(ActiveSheet.Id, showFormulas)
+                public WorkbookCellEditResult FreezePanesAtActiveCell()
+                public WorkbookCellEditResult FreezeTopRow()
+                public WorkbookCellEditResult FreezeFirstColumn()
+                public WorkbookCellEditResult UnfreezePanes()
+                new SetFreezePanesCommand(ActiveSheet.Id, frozenRows, frozenCols)
                 public WorkbookCellEditResult PasteColumnWidthsFromClipboardAtActiveCell(string? text)
                 public WorkbookCellEditResult PasteCommentsFromClipboardAtActiveCell(string? text, bool transpose = false)
                 new PasteCommentsCommand(
