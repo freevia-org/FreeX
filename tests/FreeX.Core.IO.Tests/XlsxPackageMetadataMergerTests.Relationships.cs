@@ -56,6 +56,106 @@ public sealed partial class XlsxPackageMetadataMergerTests
     }
 
     [Fact]
+    public void MergeRelationshipParts_PreservesModernCommentSidecarRelationshipsToGeneratedThreadedCommentParts()
+    {
+        using var sourcePackage = XlsxPackageTestFixtures.CreatePackage(
+            ("[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/threadedComments/threadedComment1.xml" ContentType="application/vnd.ms-excel.threadedcomments+xml"/>
+                  <Override PartName="/xl/persons/person.xml" ContentType="application/vnd.ms-excel.person+xml"/>
+                  <Override PartName="/xl/threadedComments/threadedCommentMetadata1.xml" ContentType="application/vnd.ms-excel.threadedcommentmetadata+xml"/>
+                </Types>
+                """),
+            ("xl/worksheets/_rels/sheet1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdThreadedCommentMetadata"
+                                Type="http://schemas.microsoft.com/office/2021/relationships/threadedCommentMetadata"
+                                Target="../threadedComments/threadedCommentMetadata1.xml"/>
+                </Relationships>
+                """),
+            ("xl/threadedComments/threadedCommentMetadata1.xml", """
+                <xltc2:threadedCommentMetadata xmlns:xltc2="http://schemas.microsoft.com/office/spreadsheetml/2021/threadedcomments2"/>
+                """),
+            ("xl/threadedComments/_rels/threadedCommentMetadata1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdThread"
+                                Type="http://schemas.microsoft.com/office/2017/10/relationships/threadedComment"
+                                Target="threadedComment1.xml"/>
+                  <Relationship Id="rIdPerson"
+                                Type="http://schemas.microsoft.com/office/2017/10/relationships/person"
+                                Target="../persons/person.xml"/>
+                </Relationships>
+                """));
+        using var targetPackage = XlsxPackageTestFixtures.CreatePackage(
+            ("[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/threadedComments/threadedComment1.xml" ContentType="application/vnd.ms-excel.threadedcomments+xml"/>
+                  <Override PartName="/xl/persons/person.xml" ContentType="application/vnd.ms-excel.person+xml"/>
+                </Types>
+                """),
+            ("xl/worksheets/sheet1.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """),
+            ("xl/worksheets/_rels/sheet1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>
+                """),
+            ("xl/threadedComments/threadedComment1.xml", """
+                <xltc:ThreadedComments xmlns:xltc="http://schemas.microsoft.com/office/spreadsheetml/2018/threadedcomments"/>
+                """),
+            ("xl/persons/person.xml", """
+                <xltc:personList xmlns:xltc="http://schemas.microsoft.com/office/spreadsheetml/2018/threadedcomments"/>
+                """));
+        using var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var targetArchive = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, targetArchive);
+        generatedEntriesBeforeMerge.Should().Contain("xl/threadedComments/threadedComment1.xml");
+        generatedEntriesBeforeMerge.Should().Contain("xl/persons/person.xml");
+
+        XlsxPackageMetadataMerger.MergeContentTypes(sourceArchive, targetArchive);
+        XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, targetArchive, generatedEntriesBeforeMerge);
+
+        targetArchive.GetEntry("xl/threadedComments/threadedCommentMetadata1.xml").Should().NotBeNull();
+        targetArchive.GetEntry("xl/threadedComments/_rels/threadedCommentMetadata1.xml.rels").Should().NotBeNull();
+
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "[Content_Types].xml");
+        contentTypesXml.Root!
+            .Elements(contentTypeNs + "Override")
+            .Should()
+            .ContainSingle(element =>
+                (string?)element.Attribute("PartName") == "/xl/threadedComments/threadedCommentMetadata1.xml" &&
+                (string?)element.Attribute("ContentType") == "application/vnd.ms-excel.threadedcommentmetadata+xml");
+
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var worksheetRelationshipsXml = LoadWorksheetRelationshipsXml(targetArchive);
+        worksheetRelationshipsXml.Root!
+            .Elements(relationshipNs + "Relationship")
+            .Should()
+            .ContainSingle(element =>
+                (string?)element.Attribute("Type") == "http://schemas.microsoft.com/office/2021/relationships/threadedCommentMetadata" &&
+                (string?)element.Attribute("Target") == "../threadedComments/threadedCommentMetadata1.xml");
+
+        var sidecarRelationshipsXml = XlsxPackageTestFixtures.LoadPackageXml(
+            targetArchive,
+            "xl/threadedComments/_rels/threadedCommentMetadata1.xml.rels");
+        sidecarRelationshipsXml.Root!
+            .Elements(relationshipNs + "Relationship")
+            .Should()
+            .Contain(element =>
+                (string?)element.Attribute("Type") == "http://schemas.microsoft.com/office/2017/10/relationships/threadedComment" &&
+                (string?)element.Attribute("Target") == "threadedComment1.xml")
+            .And
+            .Contain(element =>
+                (string?)element.Attribute("Type") == "http://schemas.microsoft.com/office/2017/10/relationships/person" &&
+                (string?)element.Attribute("Target") == "../persons/person.xml");
+    }
+
+    [Fact]
     public void MergeRelationshipParts_PreservesPercentEncodedInternalTargetsForCopiedParts()
     {
         using var sourcePackage = CreatePackageWithPercentEncodedMediaRelationship();

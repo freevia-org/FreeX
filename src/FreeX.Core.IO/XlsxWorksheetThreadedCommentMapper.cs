@@ -28,12 +28,8 @@ internal static class XlsxWorksheetThreadedCommentMapper
             return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var entry in archive.Entries)
+        foreach (var path in GetReferencedThreadedCommentAndPersonPartPaths(archive))
         {
-            var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
-            if (!IsThreadedCommentOrPersonPart(path))
-                continue;
-
             excluded.Add(path);
             excluded.Add(XlsxPackagePath.GetRelationshipPartPath(path));
         }
@@ -411,6 +407,61 @@ internal static class XlsxWorksheetThreadedCommentMapper
     private static bool IsThreadedCommentOrPersonPart(string path) =>
         path.StartsWith("xl/threadedComments/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/persons/", StringComparison.OrdinalIgnoreCase);
+
+    private static IEnumerable<string> GetReferencedThreadedCommentAndPersonPartPaths(ZipArchive archive)
+    {
+        foreach (var relationshipsEntry in archive.Entries.Where(entry =>
+                     entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)))
+        {
+            XDocument relationshipsXml;
+            try
+            {
+                relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
+            }
+            catch
+            {
+                continue;
+            }
+
+            var sourcePartPath = RelationshipPartToSourcePart(relationshipsEntry.FullName);
+            foreach (var relationship in relationshipsXml.Root?.Elements(PackageRelNs + "Relationship") ?? [])
+            {
+                var relationshipType = relationship.Attribute("Type")?.Value;
+                if (!string.Equals(relationshipType, ThreadedCommentsRelationshipType, StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(relationshipType, PersonRelationshipType, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var target = relationship.Attribute("Target")?.Value;
+                if (string.IsNullOrWhiteSpace(target))
+                    continue;
+
+                var targetPath = XlsxPackagePath.ResolveRelationshipTarget(sourcePartPath, target);
+                if (IsThreadedCommentOrPersonPart(targetPath))
+                    yield return targetPath;
+            }
+        }
+    }
+
+    private static string RelationshipPartToSourcePart(string relationshipPartPath)
+    {
+        var normalized = XlsxPackagePath.NormalizeZipPath(relationshipPartPath.Replace('\\', '/'));
+        if (string.Equals(normalized, "_rels/.rels", StringComparison.OrdinalIgnoreCase))
+            return "";
+
+        const string relsSegment = "/_rels/";
+        var relsIndex = normalized.IndexOf(relsSegment, StringComparison.OrdinalIgnoreCase);
+        if (relsIndex < 0 || !normalized.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
+            return normalized;
+
+        var directory = normalized[..relsIndex];
+        var fileName = normalized[(relsIndex + relsSegment.Length)..^".rels".Length];
+        return string.IsNullOrEmpty(directory) ? fileName : $"{directory}/{fileName}";
+    }
 
     private static string? NormalizeId(string? id) =>
         string.IsNullOrWhiteSpace(id) ? null : id.Trim();
