@@ -85,7 +85,7 @@ internal static class XlsxWorkbookCustomViewNormalizer
     public static bool NormalizeCustomWorkbookViewsElement(XElement customWorkbookViews)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(customWorkbookViews, NoAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(customWorkbookViews, NoAttributes);
         changed |= RemoveUnexpectedChildElements(customWorkbookViews, WorkbookNs + "customWorkbookView");
 
         foreach (var customWorkbookView in customWorkbookViews.Elements(WorkbookNs + "customWorkbookView").ToList())
@@ -107,21 +107,21 @@ internal static class XlsxWorkbookCustomViewNormalizer
     public static bool NormalizeCustomWorkbookViewElement(XElement customWorkbookView)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(customWorkbookView, CustomWorkbookViewAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(customWorkbookView, CustomWorkbookViewAttributes);
         changed |= RemoveUnexpectedChildElements(customWorkbookView, WorkbookNs + "extLst");
         changed |= NormalizeExtensionLists(customWorkbookView);
-        changed |= NormalizeAttribute(customWorkbookView, "name", NormalizeOptionalText);
-        changed |= NormalizeAttribute(customWorkbookView, "guid", NormalizeGuid);
-        changed |= NormalizeAttribute(customWorkbookView, "showComments", value => NormalizeToken(value, ShowCommentsValues));
-        changed |= NormalizeAttribute(customWorkbookView, "showObjects", value => NormalizeToken(value, ShowObjectsValues));
-        changed |= NormalizeAttribute(customWorkbookView, "activeSheetId", value => NormalizeUnsignedIntOrDefault(value, "1"));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, "name", NormalizeOptionalText);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, "guid", NormalizeGuid);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, "showComments", value => NormalizeToken(value, ShowCommentsValues));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, "showObjects", value => NormalizeToken(value, ShowObjectsValues));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, "activeSheetId", value => NormalizeUnsignedIntOrDefault(value, "1"));
 
         foreach (var attributeName in BooleanAttributes)
-            changed |= NormalizeAttribute(customWorkbookView, attributeName, NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, attributeName, NormalizeBoolean);
         foreach (var attributeName in IntAttributes)
-            changed |= NormalizeAttribute(customWorkbookView, attributeName, NormalizeIntOrNull);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, attributeName, NormalizeIntOrNull);
         foreach (var attributeName in UnsignedIntAttributes)
-            changed |= NormalizeAttribute(customWorkbookView, attributeName, NormalizeUnsignedIntOrNull);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(customWorkbookView, attributeName, NormalizeUnsignedIntOrNull);
 
         return changed;
     }
@@ -157,24 +157,6 @@ internal static class XlsxWorkbookCustomViewNormalizer
         return changed;
     }
 
-    private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedAttributes)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                (attribute.Name.NamespaceName.Length == 0 && allowedAttributes.Contains(attribute.Name.LocalName)))
-            {
-                continue;
-            }
-
-            attribute.Remove();
-            changed = true;
-        }
-
-        return changed;
-    }
-
     private static bool RemoveUnexpectedChildElements(XElement element, XName allowedChildName)
     {
         var changed = false;
@@ -185,29 +167,6 @@ internal static class XlsxWorkbookCustomViewNormalizer
         }
 
         return changed;
-    }
-
-    private static bool NormalizeAttribute(
-        XElement element,
-        string attributeName,
-        Func<string?, string?> normalize)
-    {
-        var attribute = element.Attribute(attributeName);
-        var normalized = normalize(attribute?.Value);
-        if (normalized is null)
-        {
-            if (attribute is null)
-                return false;
-
-            attribute.Remove();
-            return true;
-        }
-
-        if (attribute is not null && string.Equals(attribute.Value, normalized, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(attributeName, normalized);
-        return true;
     }
 
     private static string? NormalizeBoolean(string? value)
