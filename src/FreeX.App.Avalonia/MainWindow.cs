@@ -10,6 +10,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -4070,16 +4071,17 @@ public sealed class MainWindow : Window
         {
             dialog.Opened += (_, _) =>
             {
-                launchSmokeProbe(new FindDialogSmokeProbe(
+                RunLaunchSmokeDialogProbe(
                     dialog,
-                    findBox,
-                    findNextButton,
-                    findAllButton,
-                    cancelButton,
-                    optionsControls,
-                    chooseFormatButton,
-                    clearFormatButton));
-                dialog.Close();
+                    () => launchSmokeProbe(new FindDialogSmokeProbe(
+                        dialog,
+                        findBox,
+                        findNextButton,
+                        findAllButton,
+                        cancelButton,
+                        optionsControls,
+                        chooseFormatButton,
+                        clearFormatButton)));
             };
         }
 
@@ -4378,19 +4380,20 @@ public sealed class MainWindow : Window
         {
             dialog.Opened += (_, _) =>
             {
-                launchSmokeProbe(new ReplaceDialogSmokeProbe(
+                RunLaunchSmokeDialogProbe(
                     dialog,
-                    findBox,
-                    replaceBox,
-                    replaceButton,
-                    replaceAllButton,
-                    cancelButton,
-                    optionsControls,
-                    chooseFindFormatButton,
-                    clearFindFormatButton,
-                    chooseReplaceFormatButton,
-                    clearReplaceFormatButton));
-                dialog.Close();
+                    () => launchSmokeProbe(new ReplaceDialogSmokeProbe(
+                        dialog,
+                        findBox,
+                        replaceBox,
+                        replaceButton,
+                        replaceAllButton,
+                        cancelButton,
+                        optionsControls,
+                        chooseFindFormatButton,
+                        clearFindFormatButton,
+                        chooseReplaceFormatButton,
+                        clearReplaceFormatButton)));
             };
         }
 
@@ -4577,16 +4580,17 @@ public sealed class MainWindow : Window
         {
             dialog.Opened += (_, _) =>
             {
-                launchSmokeProbe(new GoToSpecialDialogSmokeProbe(
+                RunLaunchSmokeDialogProbe(
                     dialog,
-                    kindBox,
-                    numbersBox,
-                    textBox,
-                    logicalsBox,
-                    errorsBox,
-                    okButton,
-                    cancelButton));
-                dialog.Close();
+                    () => launchSmokeProbe(new GoToSpecialDialogSmokeProbe(
+                        dialog,
+                        kindBox,
+                        numbersBox,
+                        textBox,
+                        logicalsBox,
+                        errorsBox,
+                        okButton,
+                        cancelButton)));
             };
         }
 
@@ -4744,12 +4748,13 @@ public sealed class MainWindow : Window
         {
             dialog.Opened += (_, _) =>
             {
-                launchSmokeProbe(new SingleInputDialogSmokeProbe(
+                RunLaunchSmokeDialogProbe(
                     dialog,
-                    inputBox,
-                    acceptButton,
-                    cancelButton));
-                dialog.Close();
+                    () => launchSmokeProbe(new SingleInputDialogSmokeProbe(
+                        dialog,
+                        inputBox,
+                        acceptButton,
+                        cancelButton)));
             };
         }
 
@@ -6303,7 +6308,8 @@ public sealed class MainWindow : Window
         var hasFindDialogActionButtons = false;
         var hasFindDialogOptions = false;
         var hasFindDialogFormatControls = false;
-        await ShowFindInputDialogAsync(probe =>
+        var hasFindDialogCompactLayout = false;
+        var findDialogResult = await ShowFindInputDialogAsync(probe =>
         {
             hasFindDialog = HasLaunchSmokeDialog(probe.Dialog, "Find");
             hasFindDialogTextBox = HasLaunchSmokeAutomationId(probe.FindBox, "FindTextBox") &&
@@ -6317,6 +6323,7 @@ public sealed class MainWindow : Window
                 HasLaunchSmokeButton(probe.ChooseFormatButton, "FindChooseFormatFromCellButton", "Choose From Cell") &&
                 HasLaunchSmokeButton(probe.ClearFormatButton, "FindClearFormatButton", "Clear Format") &&
                 !probe.ClearFormatButton.IsVisible;
+            hasFindDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 430, minWidth: 360, minHeight: 390);
         });
 
         var hasReplaceDialog = false;
@@ -6324,7 +6331,8 @@ public sealed class MainWindow : Window
         var hasReplaceDialogActionButtons = false;
         var hasReplaceDialogOptions = false;
         var hasReplaceDialogFormatControls = false;
-        await ShowReplaceInputDialogAsync(probe =>
+        var hasReplaceDialogCompactLayout = false;
+        var replaceDialogResult = await ShowReplaceInputDialogAsync(probe =>
         {
             hasReplaceDialog = HasLaunchSmokeDialog(probe.Dialog, "Replace");
             hasReplaceDialogTextBoxes =
@@ -6344,11 +6352,13 @@ public sealed class MainWindow : Window
                 HasLaunchSmokeButton(probe.ChooseReplaceFormatButton, "ReplaceWithChooseFormatFromCellButton", "Choose From Cell") &&
                 HasLaunchSmokeButton(probe.ClearReplaceFormatButton, "ReplaceWithClearFormatButton", "Clear Format") &&
                 !probe.ClearReplaceFormatButton.IsVisible;
+            hasReplaceDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 520, minWidth: 360, minHeight: 480);
         });
 
         var hasGoToDialog = false;
         var hasGoToDialogReferenceControls = false;
-        await ShowSingleInputDialogAsync(
+        var hasGoToDialogCompactLayout = false;
+        var goToDialogResult = await ShowSingleInputDialogAsync(
             "Go To",
             "Reference",
             FormatRangeReference(_session.SelectedRange),
@@ -6361,12 +6371,14 @@ public sealed class MainWindow : Window
                     HasLaunchSmokeAutomationId(probe.InputBox, "GoToReferenceBox") &&
                     HasLaunchSmokeButton(probe.AcceptButton, "GoToReferenceBoxAcceptButton", "Go") &&
                     HasLaunchSmokeButton(probe.CancelButton, "GoToReferenceBoxCancelButton", "Cancel");
+                hasGoToDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 380, height: 165, minWidth: 340, minHeight: 155);
             });
 
         var hasGoToSpecialDialog = false;
         var hasGoToSpecialKindControls = false;
         var hasGoToSpecialValueTypeControls = false;
-        await ShowGoToSpecialInputDialogAsync(probe =>
+        var hasGoToSpecialDialogCompactLayout = false;
+        var goToSpecialDialogResult = await ShowGoToSpecialInputDialogAsync(probe =>
         {
             hasGoToSpecialDialog = HasLaunchSmokeDialog(probe.Dialog, "Go To Special");
             hasGoToSpecialKindControls =
@@ -6379,6 +6391,7 @@ public sealed class MainWindow : Window
                 HasLaunchSmokeCheckBox(probe.TextBox, "GoToSpecialTextBox", "Text") &&
                 HasLaunchSmokeCheckBox(probe.LogicalsBox, "GoToSpecialLogicalsBox", "Logicals") &&
                 HasLaunchSmokeCheckBox(probe.ErrorsBox, "GoToSpecialErrorsBox", "Errors");
+            hasGoToSpecialDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 310, minWidth: 360, minHeight: 280);
         });
 
         _launchSmokeDialogEvidence = new MacOsLaunchSmokeDialogSnapshot(
@@ -6387,22 +6400,53 @@ public sealed class MainWindow : Window
             hasFindDialogActionButtons,
             hasFindDialogOptions,
             hasFindDialogFormatControls,
+            hasFindDialogCompactLayout,
             hasReplaceDialog,
             hasReplaceDialogTextBoxes,
             hasReplaceDialogActionButtons,
             hasReplaceDialogOptions,
             hasReplaceDialogFormatControls,
+            hasReplaceDialogCompactLayout,
             hasGoToDialog,
             hasGoToDialogReferenceControls,
+            hasGoToDialogCompactLayout,
             hasGoToSpecialDialog,
             hasGoToSpecialKindControls,
-            hasGoToSpecialValueTypeControls);
+            hasGoToSpecialValueTypeControls,
+            hasGoToSpecialDialogCompactLayout,
+            findDialogResult is null,
+            replaceDialogResult is null,
+            goToDialogResult is null,
+            goToSpecialDialogResult is null);
         return _launchSmokeDialogEvidence;
+    }
+
+    private static void RunLaunchSmokeDialogProbe(Window dialog, Action probe)
+    {
+        try
+        {
+            probe();
+        }
+        finally
+        {
+            Dispatcher.UIThread.Post(() => dialog.Close());
+        }
     }
 
     private static bool HasLaunchSmokeDialog(Window dialog, string title) =>
         dialog.IsVisible &&
         string.Equals(dialog.Title, title, StringComparison.Ordinal);
+
+    private static bool HasLaunchSmokeCompactDialog(
+        Window dialog,
+        double width,
+        double height,
+        double minWidth,
+        double minHeight) =>
+        dialog.Width <= width &&
+        dialog.Height <= height &&
+        dialog.MinWidth <= minWidth &&
+        dialog.MinHeight <= minHeight;
 
     private static bool HasLaunchSmokeButton(Button button, string automationId, string content) =>
         HasLaunchSmokeAutomationId(button, automationId) &&

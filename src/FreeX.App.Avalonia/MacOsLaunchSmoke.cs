@@ -73,16 +73,24 @@ internal sealed record MacOsLaunchSmokeDialogSnapshot(
     bool HasFindDialogActionButtons,
     bool HasFindDialogOptions,
     bool HasFindDialogFormatControls,
+    bool HasFindDialogCompactLayout,
     bool HasReplaceDialog,
     bool HasReplaceDialogTextBoxes,
     bool HasReplaceDialogActionButtons,
     bool HasReplaceDialogOptions,
     bool HasReplaceDialogFormatControls,
+    bool HasReplaceDialogCompactLayout,
     bool HasGoToDialog,
     bool HasGoToDialogReferenceControls,
+    bool HasGoToDialogCompactLayout,
     bool HasGoToSpecialDialog,
     bool HasGoToSpecialKindControls,
-    bool HasGoToSpecialValueTypeControls)
+    bool HasGoToSpecialValueTypeControls,
+    bool HasGoToSpecialDialogCompactLayout,
+    bool HasFindDialogClosedWithoutAccept,
+    bool HasReplaceDialogClosedWithoutAccept,
+    bool HasGoToDialogClosedWithoutAccept,
+    bool HasGoToSpecialDialogClosedWithoutAccept)
 {
     public static MacOsLaunchSmokeDialogSnapshot Empty { get; } = new(
         HasFindDialog: false,
@@ -90,16 +98,24 @@ internal sealed record MacOsLaunchSmokeDialogSnapshot(
         HasFindDialogActionButtons: false,
         HasFindDialogOptions: false,
         HasFindDialogFormatControls: false,
+        HasFindDialogCompactLayout: false,
         HasReplaceDialog: false,
         HasReplaceDialogTextBoxes: false,
         HasReplaceDialogActionButtons: false,
         HasReplaceDialogOptions: false,
         HasReplaceDialogFormatControls: false,
+        HasReplaceDialogCompactLayout: false,
         HasGoToDialog: false,
         HasGoToDialogReferenceControls: false,
+        HasGoToDialogCompactLayout: false,
         HasGoToSpecialDialog: false,
         HasGoToSpecialKindControls: false,
-        HasGoToSpecialValueTypeControls: false);
+        HasGoToSpecialValueTypeControls: false,
+        HasGoToSpecialDialogCompactLayout: false,
+        HasFindDialogClosedWithoutAccept: false,
+        HasReplaceDialogClosedWithoutAccept: false,
+        HasGoToDialogClosedWithoutAccept: false,
+        HasGoToSpecialDialogClosedWithoutAccept: false);
 
     public bool IsPassed =>
         HasFindDialog &&
@@ -107,16 +123,24 @@ internal sealed record MacOsLaunchSmokeDialogSnapshot(
         HasFindDialogActionButtons &&
         HasFindDialogOptions &&
         HasFindDialogFormatControls &&
+        HasFindDialogCompactLayout &&
         HasReplaceDialog &&
         HasReplaceDialogTextBoxes &&
         HasReplaceDialogActionButtons &&
         HasReplaceDialogOptions &&
         HasReplaceDialogFormatControls &&
+        HasReplaceDialogCompactLayout &&
         HasGoToDialog &&
         HasGoToDialogReferenceControls &&
+        HasGoToDialogCompactLayout &&
         HasGoToSpecialDialog &&
         HasGoToSpecialKindControls &&
-        HasGoToSpecialValueTypeControls;
+        HasGoToSpecialValueTypeControls &&
+        HasGoToSpecialDialogCompactLayout &&
+        HasFindDialogClosedWithoutAccept &&
+        HasReplaceDialogClosedWithoutAccept &&
+        HasGoToDialogClosedWithoutAccept &&
+        HasGoToSpecialDialogClosedWithoutAccept;
 }
 
 internal sealed record MacOsLaunchSmokeSnapshot(
@@ -586,20 +610,24 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"find_dialog_action_buttons={FormatBool(snapshot.DialogEvidence.HasFindDialogActionButtons)}",
                 $"find_dialog_options={FormatBool(snapshot.DialogEvidence.HasFindDialogOptions)}",
                 $"find_dialog_format_controls={FormatBool(snapshot.DialogEvidence.HasFindDialogFormatControls)}",
-                $"find_dialog_result_closed_without_accept={FormatBool(attemptedDialogEvidence && snapshot.DialogEvidence.HasFindDialog)}",
+                $"find_dialog_compact_layout={FormatBool(snapshot.DialogEvidence.HasFindDialogCompactLayout)}",
+                $"find_dialog_result_closed_without_accept={FormatBool(snapshot.DialogEvidence.HasFindDialogClosedWithoutAccept)}",
                 $"replace_dialog={FormatBool(snapshot.DialogEvidence.HasReplaceDialog)}",
                 $"replace_dialog_text_boxes={FormatBool(snapshot.DialogEvidence.HasReplaceDialogTextBoxes)}",
                 $"replace_dialog_action_buttons={FormatBool(snapshot.DialogEvidence.HasReplaceDialogActionButtons)}",
                 $"replace_dialog_options={FormatBool(snapshot.DialogEvidence.HasReplaceDialogOptions)}",
                 $"replace_dialog_format_controls={FormatBool(snapshot.DialogEvidence.HasReplaceDialogFormatControls)}",
-                $"replace_dialog_result_closed_without_accept={FormatBool(attemptedDialogEvidence && snapshot.DialogEvidence.HasReplaceDialog)}",
+                $"replace_dialog_compact_layout={FormatBool(snapshot.DialogEvidence.HasReplaceDialogCompactLayout)}",
+                $"replace_dialog_result_closed_without_accept={FormatBool(snapshot.DialogEvidence.HasReplaceDialogClosedWithoutAccept)}",
                 $"go_to_dialog={FormatBool(snapshot.DialogEvidence.HasGoToDialog)}",
                 $"go_to_dialog_reference_controls={FormatBool(snapshot.DialogEvidence.HasGoToDialogReferenceControls)}",
-                $"go_to_dialog_result_closed_without_accept={FormatBool(attemptedDialogEvidence && snapshot.DialogEvidence.HasGoToDialog)}",
+                $"go_to_dialog_compact_layout={FormatBool(snapshot.DialogEvidence.HasGoToDialogCompactLayout)}",
+                $"go_to_dialog_result_closed_without_accept={FormatBool(snapshot.DialogEvidence.HasGoToDialogClosedWithoutAccept)}",
                 $"go_to_special_dialog={FormatBool(snapshot.DialogEvidence.HasGoToSpecialDialog)}",
                 $"go_to_special_dialog_kind_controls={FormatBool(snapshot.DialogEvidence.HasGoToSpecialKindControls)}",
                 $"go_to_special_dialog_value_type_controls={FormatBool(snapshot.DialogEvidence.HasGoToSpecialValueTypeControls)}",
-                $"go_to_special_dialog_result_closed_without_accept={FormatBool(attemptedDialogEvidence && snapshot.DialogEvidence.HasGoToSpecialDialog)}",
+                $"go_to_special_dialog_compact_layout={FormatBool(snapshot.DialogEvidence.HasGoToSpecialDialogCompactLayout)}",
+                $"go_to_special_dialog_result_closed_without_accept={FormatBool(snapshot.DialogEvidence.HasGoToSpecialDialogClosedWithoutAccept)}",
                 $"opened_source_path={snapshot.OpenedSourcePath ?? ""}",
                 $"is_opening={FormatBool(snapshot.IsOpening)}",
                 $"new_sheet_button={FormatBool(snapshot.HasNewSheetButton)}",

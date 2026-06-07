@@ -51,7 +51,9 @@ public sealed class MacOsBundleMetadataTests
         var project = XDocument.Load(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "FreeX.App.Avalonia.csproj"));
         var runtimes = ProjectProperty(project, "RuntimeIdentifiers")!.Split(';', StringSplitOptions.RemoveEmptyEntries);
 
-        workflow.Should().Contain("runs-on: macos-latest");
+        workflow.Should().Contain("runs-on: ${{ matrix.runner }}");
+        workflow.Should().Contain("runner: macos-latest");
+        workflow.Should().Contain("runner: macos-15-intel");
         workflow.Should().Contain("runtime:");
         foreach (var runtime in runtimes)
             workflow.Should().Contain(runtime);
@@ -186,19 +188,23 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"find_dialog_action_buttons=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"find_dialog_options=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"find_dialog_format_controls=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"find_dialog_compact_layout=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"find_dialog_result_closed_without_accept=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"replace_dialog=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"replace_dialog_text_boxes=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"replace_dialog_action_buttons=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"replace_dialog_options=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"replace_dialog_format_controls=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"replace_dialog_compact_layout=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"replace_dialog_result_closed_without_accept=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"go_to_dialog=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"go_to_dialog_reference_controls=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"go_to_dialog_compact_layout=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"go_to_dialog_result_closed_without_accept=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"go_to_special_dialog=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"go_to_special_dialog_kind_controls=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"go_to_special_dialog_value_type_controls=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"go_to_special_dialog_compact_layout=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"go_to_special_dialog_result_closed_without_accept=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_edit_menu=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_format_menu=true\" \"$launch_smoke_report\"");
