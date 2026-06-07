@@ -1977,8 +1977,9 @@ public sealed class MainWindow : Window
         if (viewport.DrawingObjects is not { Count: > 0 })
             return overlay;
 
-        foreach (var drawingObject in viewport.DrawingObjects)
+        foreach (var renderPlan in DrawingObjectRenderPlanner.Plan(viewport))
         {
+            var drawingObject = renderPlan.Bounds;
             if (!TryGetDisplayedDrawingObjectBounds(
                     viewport,
                     drawingObject,
@@ -1992,7 +1993,7 @@ public sealed class MainWindow : Window
                 continue;
             }
 
-            var visual = CreateSelectableDrawingObjectVisual(drawingObject, width, height);
+            var visual = CreateSelectableDrawingObjectVisual(renderPlan, width, height);
             Canvas.SetLeft(visual, left);
             Canvas.SetTop(visual, top);
             overlay.Children.Add(visual);
@@ -2002,11 +2003,12 @@ public sealed class MainWindow : Window
     }
 
     private Control CreateSelectableDrawingObjectVisual(
-        DrawingObjectBounds drawingObject,
+        DrawingObjectRenderPlan renderPlan,
         double width,
         double height)
     {
-        var visual = CreateDrawingObjectVisual(drawingObject, width, height);
+        var drawingObject = renderPlan.Bounds;
+        var visual = CreateDrawingObjectVisual(renderPlan, width, height);
         var selected = IsSelectedDrawingObject(drawingObject);
         var container = new AvaloniaGrid
         {
@@ -2085,15 +2087,18 @@ public sealed class MainWindow : Window
         };
 
     private static Control CreateDrawingObjectVisual(
-        DrawingObjectBounds drawingObject,
+        DrawingObjectRenderPlan renderPlan,
         double width,
         double height)
     {
-        var visual = drawingObject.Kind switch
+        var drawingObject = renderPlan.Bounds;
+        var visual = renderPlan.PrimitiveKind switch
         {
-            SelectionPaneObjectKind.Shape => CreateDrawingShapeVisual(drawingObject, width, height),
-            SelectionPaneObjectKind.Picture => CreateDrawingPictureVisual(drawingObject, width, height),
-            SelectionPaneObjectKind.TextBox => CreateDrawingTextBoxVisual(drawingObject, width, height),
+            DrawingObjectRenderPrimitiveKind.Shape => CreateDrawingShapeVisual(drawingObject, width, height),
+            DrawingObjectRenderPrimitiveKind.Image or DrawingObjectRenderPrimitiveKind.CroppedImage =>
+                CreateDrawingImageVisual(renderPlan, width, height),
+            DrawingObjectRenderPrimitiveKind.CellRangeSnapshot => CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height),
+            DrawingObjectRenderPrimitiveKind.TextBox => CreateDrawingTextBoxVisual(drawingObject, width, height),
             _ => CreateDrawingObjectBoundsMarker(drawingObject, width, height)
         };
         ApplyDrawingObjectRotation(visual, drawingObject.RotationDegrees);
@@ -2140,15 +2145,16 @@ public sealed class MainWindow : Window
             IsHitTestVisible = false,
         };
 
-    private static Control CreateDrawingPictureVisual(
-        DrawingObjectBounds drawingObject,
+    private static Control CreateDrawingImageVisual(
+        DrawingObjectRenderPlan renderPlan,
         double width,
         double height)
     {
+        var drawingObject = renderPlan.Bounds;
         if (drawingObject.ImageBytes is { Length: > 0 } imageBytes &&
             TryCreateDrawingBitmap(imageBytes, out var bitmap))
         {
-            return new Border
+            var frame = new Border
             {
                 Width = Math.Max(1, width),
                 Height = Math.Max(1, height),
@@ -2156,15 +2162,140 @@ public sealed class MainWindow : Window
                 BorderThickness = new Thickness(1),
                 ClipToBounds = true,
                 IsHitTestVisible = false,
-                Child = new Image
-                {
-                    Source = bitmap,
-                    Stretch = Stretch.UniformToFill,
-                },
             };
+
+            if (renderPlan.Crop is { } crop)
+            {
+                frame.Background = new ImageBrush(bitmap)
+                {
+                    Stretch = Stretch.Fill,
+                    SourceRect = CreateDrawingImageSourceRect(crop),
+                    DestinationRect = RelativeRect.Fill,
+                    TileMode = TileMode.None,
+                };
+                return frame;
+            }
+
+            frame.Child = new Image
+            {
+                Source = bitmap,
+                Stretch = Stretch.UniformToFill,
+            };
+            return frame;
         }
 
         return CreateDrawingObjectBoundsMarker(drawingObject, width, height);
+    }
+
+    private static RelativeRect CreateDrawingImageSourceRect(DrawingPictureCrop crop)
+    {
+        var left = ClampDrawingCrop(crop.Left);
+        var top = ClampDrawingCrop(crop.Top);
+        var right = ClampDrawingCrop(crop.Right);
+        var bottom = ClampDrawingCrop(crop.Bottom);
+        return new RelativeRect(
+            left,
+            top,
+            Math.Max(0.01, 1 - left - right),
+            Math.Max(0.01, 1 - top - bottom),
+            RelativeUnit.Relative);
+    }
+
+    private static double ClampDrawingCrop(double crop) => Math.Clamp(crop, 0, 0.99);
+
+    private static Control CreateDrawingCellRangeSnapshotVisual(
+        DrawingObjectRenderPlan renderPlan,
+        double width,
+        double height)
+    {
+        var drawingObject = renderPlan.Bounds;
+        if (renderPlan.PictureGrid is not { } pictureGrid)
+            return CreateDrawingObjectBoundsMarker(drawingObject, width, height);
+
+        var frameWidth = Math.Max(1, width);
+        var frameHeight = Math.Max(1, height);
+        var canvas = new Canvas
+        {
+            Width = frameWidth,
+            Height = frameHeight,
+            ClipToBounds = true,
+            IsHitTestVisible = false,
+        };
+
+        var rowCount = Math.Max(1u, pictureGrid.RowCount);
+        var columnCount = Math.Max(1u, pictureGrid.ColumnCount);
+        var cellWidth = frameWidth / columnCount;
+        var cellHeight = frameHeight / rowCount;
+
+        for (uint row = 1; row < rowCount; row++)
+        {
+            var line = new AvaloniaRectangle
+            {
+                Width = frameWidth,
+                Height = 1,
+                Fill = Brush(0xD7, 0xDE, 0xE6),
+                IsHitTestVisible = false,
+            };
+            Canvas.SetLeft(line, 0);
+            Canvas.SetTop(line, Math.Max(0, row * cellHeight));
+            canvas.Children.Add(line);
+        }
+
+        for (uint column = 1; column < columnCount; column++)
+        {
+            var line = new AvaloniaRectangle
+            {
+                Width = 1,
+                Height = frameHeight,
+                Fill = Brush(0xD7, 0xDE, 0xE6),
+                IsHitTestVisible = false,
+            };
+            Canvas.SetLeft(line, Math.Max(0, column * cellWidth));
+            Canvas.SetTop(line, 0);
+            canvas.Children.Add(line);
+        }
+
+        foreach (var cell in pictureGrid.Cells)
+        {
+            if (cell.RowOffset >= rowCount ||
+                cell.ColumnOffset >= columnCount ||
+                string.IsNullOrEmpty(cell.Text))
+            {
+                continue;
+            }
+
+            var text = new Border
+            {
+                Width = Math.Max(1, cellWidth - 6),
+                Height = Math.Max(1, cellHeight - 2),
+                ClipToBounds = true,
+                Background = Brushes.Transparent,
+                IsHitTestVisible = false,
+                Child = new TextBlock
+                {
+                    Text = cell.Text,
+                    FontSize = 11,
+                    Foreground = Brushes.Black,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                },
+            };
+            Canvas.SetLeft(text, cell.ColumnOffset * cellWidth + 3);
+            Canvas.SetTop(text, cell.RowOffset * cellHeight + 1);
+            canvas.Children.Add(text);
+        }
+
+        return new Border
+        {
+            Width = frameWidth,
+            Height = frameHeight,
+            Background = Brushes.White,
+            BorderBrush = DrawingObjectBoundsBorder,
+            BorderThickness = new Thickness(1),
+            ClipToBounds = true,
+            IsHitTestVisible = false,
+            Child = canvas,
+        };
     }
 
     private static Control CreateDrawingTextBoxVisual(
