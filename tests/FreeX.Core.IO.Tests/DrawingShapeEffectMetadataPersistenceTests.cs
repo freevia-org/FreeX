@@ -45,7 +45,7 @@ public sealed class DrawingShapeEffectMetadataPersistenceTests
 
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
         {
-            var drawingXml = XDocument.Load(archive.GetEntry("xl/drawings/drawing1.xml")!.Open());
+            var drawingXml = LoadDrawingXml(archive);
             XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
             drawingXml.Descendants(a + effectElementName).Should().ContainSingle();
         }
@@ -69,7 +69,7 @@ public sealed class DrawingShapeEffectMetadataPersistenceTests
 
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
         {
-            var drawingXml = XDocument.Load(archive.GetEntry("xl/drawings/drawing1.xml")!.Open());
+            var drawingXml = LoadDrawingXml(archive);
             XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
             drawingXml.Descendants(a + "effectLst").Should().BeEmpty("bevel is stored as DrawingML 3D formatting");
             drawingXml.Descendants(a + "sp3d").Should().ContainSingle();
@@ -97,7 +97,7 @@ public sealed class DrawingShapeEffectMetadataPersistenceTests
 
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
         {
-            var drawingXml = XDocument.Load(archive.GetEntry("xl/drawings/drawing1.xml")!.Open());
+            var drawingXml = LoadDrawingXml(archive);
             XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
             drawingXml.Descendants(a + "effectLst").Should().BeEmpty("3-D rotation is stored as DrawingML scene 3D");
             var scene = drawingXml.Descendants(a + "scene3d").Should().ContainSingle().Subject;
@@ -146,7 +146,7 @@ public sealed class DrawingShapeEffectMetadataPersistenceTests
 
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
         {
-            var drawingXml = XDocument.Load(archive.GetEntry("xl/drawings/drawing1.xml")!.Open());
+            var drawingXml = LoadDrawingXml(archive);
             XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
             var gradientLine = drawingXml.Descendants(a + "lin").Should().ContainSingle().Subject;
             gradientLine.Attribute("ang")!.Value.Should().Be("16200000");
@@ -178,6 +178,12 @@ public sealed class DrawingShapeEffectMetadataPersistenceTests
 
         return workbook;
     }
+
+    private static XDocument LoadDrawingXml(ZipArchive archive) =>
+        XlsxPackageTestFixtures.LoadPackageXml(
+            archive,
+            "xl/drawings/drawing1.xml",
+            "the XLSX package should contain xl/drawings/drawing1.xml");
 
     private static Workbook CreateWorkbookWithGradientShape(DrawingShapeGradientDirection direction)
     {
