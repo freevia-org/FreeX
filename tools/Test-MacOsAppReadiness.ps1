@@ -706,6 +706,8 @@ function Test-SourceWiring {
                 "`"FormatCellsSubscriptBox`"",
                 "`"FormatCellsLockedBox`"",
                 "`"FormatCellsHiddenBox`"",
+                "`"FormatCellsProtectionExplanationText`"",
+                "Locking cells or hiding formulas has no effect until you protect the worksheet.",
                 "var currentMergeCells = _session.IsSelectedRangeMerged;",
                 "MergeCells: ReadChangedFormatCellsBool(currentMergeCells, mergeCellsBox)",
                 "var normalStyle = CellStyle.Default;",

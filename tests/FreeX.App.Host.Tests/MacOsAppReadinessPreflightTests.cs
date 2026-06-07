@@ -321,6 +321,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("`\"FormatCellsFillPatternStyleBox`\"");
         script.Should().Contain("`\"FormatCellsFillPatternColorBox`\"");
         script.Should().Contain("`\"FormatCellsNormalFontBox`\"");
+        script.Should().Contain("`\"FormatCellsProtectionExplanationText`\"");
+        script.Should().Contain("Locking cells or hiding formulas has no effect until you protect the worksheet.");
         script.Should().Contain("var normalStyle = CellStyle.Default;");
         script.Should().Contain("Bold: normalFont ? normalStyle.Bold : ReadChangedFormatCellsBool(_session.IsSelectedRangeStartBold, boldBox)");
         script.Should().Contain("FontName: normalFont ? normalStyle.FontName : ReadChangedFormatCellsText(currentFontName, fontNameBox)");
@@ -1628,6 +1630,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     "FormatCellsSubscriptBox"
                     "FormatCellsLockedBox"
                     "FormatCellsHiddenBox"
+                    "FormatCellsProtectionExplanationText"
+                    Locking cells or hiding formulas has no effect until you protect the worksheet.
                     var currentMergeCells = _session.IsSelectedRangeMerged;
                     MergeCells: ReadChangedFormatCellsBool(currentMergeCells, mergeCellsBox)
                     var normalStyle = CellStyle.Default;

@@ -4941,6 +4941,13 @@ public sealed class MainWindow : Window
 
         var lockedBox = CreateFormatCellsCheckBox("Locked", "FormatCellsLockedBox", currentLocked);
         var hiddenBox = CreateFormatCellsCheckBox("Hidden", "FormatCellsHiddenBox", currentHidden);
+        var protectionExplanationText = new TextBlock
+        {
+            Text = "Locking cells or hiding formulas has no effect until you protect the worksheet.",
+            Foreground = HeaderForeground,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        AutomationProperties.SetAutomationId(protectionExplanationText, "FormatCellsProtectionExplanationText");
 
         var okButton = new Button
         {
@@ -5157,6 +5164,7 @@ public sealed class MainWindow : Window
                 {
                     lockedBox,
                     hiddenBox,
+                    protectionExplanationText,
                 },
             });
         var tabStrip = new TabControl

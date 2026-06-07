@@ -2061,6 +2061,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"FormatCellsSubscriptBox\"");
         source.Should().Contain("\"FormatCellsLockedBox\"");
         source.Should().Contain("\"FormatCellsHiddenBox\"");
+        source.Should().Contain("\"FormatCellsProtectionExplanationText\"");
+        source.Should().Contain("Locking cells or hiding formulas has no effect until you protect the worksheet.");
         source.Should().Contain("var currentMergeCells = _session.IsSelectedRangeMerged;");
         source.Should().Contain("var currentUnderline = currentStyle.Underline ?? CellStyle.Default.Underline;");
         source.Should().Contain("Underline: normalFont ? normalStyle.Underline : ReadChangedFormatCellsBool(currentUnderline, underlineBox)");
