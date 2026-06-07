@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Text;
 using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.Model;
@@ -83,23 +82,15 @@ public sealed class XlsxWorksheetChartWriterTests
 
     private static string ResolveWorksheetDrawingTarget(ZipArchive archive)
     {
-        var ws = LoadXml(archive, "xl/worksheets/sheet1.xml");
+        var ws = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var drawingRelId = ws.Root!.Element(Ns + "drawing")!.Attribute(Rel + "id")!.Value;
-        var wsRels = LoadXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
+        var wsRels = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
         return wsRels.Root!.Elements(PkgRel + "Relationship")
             .First(r => r.Attribute("Id")!.Value == drawingRelId).Attribute("Target")!.Value;
     }
 
-    private static XDocument LoadXml(ZipArchive archive, string path)
-    {
-        using var stream = archive.GetEntry(path)!.Open();
-        return XDocument.Load(stream);
-    }
-
-    private static MemoryStream CreatePackage()
-    {
-        var entries = new (string Path, string Xml)[]
-        {
+    private static MemoryStream CreatePackage() =>
+        XlsxPackageTestFixtures.CreatePackage(
             ("[Content_Types].xml",
                 """
                 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -122,21 +113,5 @@ public sealed class XlsxWorksheetChartWriterTests
             ("xl/worksheets/sheet1.xml",
                 """
                 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/></worksheet>
-                """),
-        };
-
-        var package = new MemoryStream();
-        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
-        {
-            foreach (var (path, xml) in entries)
-            {
-                var entry = archive.CreateEntry(path);
-                using var writer = new StreamWriter(entry.Open(), Encoding.UTF8);
-                writer.Write(xml);
-            }
-        }
-
-        package.Position = 0;
-        return package;
-    }
+                """));
 }
