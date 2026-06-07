@@ -3,29 +3,10 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
-
-public enum SelectionPaneDialogAction
-{
-    ApplyVisibility,
-    MoveUp,
-    MoveDown
-}
-
-public sealed record SelectionPaneVisibilityChange(SelectionPaneObjectKind Kind, Guid Id, bool IsVisible);
-
-public sealed record SelectionPaneRenameChange(SelectionPaneObjectKind Kind, Guid Id, string Name);
-
-public sealed record SelectionPaneMoveChange(SelectionPaneObjectKind Kind, Guid Id, bool Forward);
-
-public sealed record SelectionPaneDialogResult(
-    SelectionPaneDialogAction Action,
-    SelectionPaneItem? Target,
-    IReadOnlyList<SelectionPaneVisibilityChange> VisibilityChanges,
-    IReadOnlyList<SelectionPaneRenameChange> RenameChanges,
-    IReadOnlyList<SelectionPaneMoveChange> MoveChanges);
 
 internal sealed class SelectionPaneDialogItem(SelectionPaneItem item)
 {
