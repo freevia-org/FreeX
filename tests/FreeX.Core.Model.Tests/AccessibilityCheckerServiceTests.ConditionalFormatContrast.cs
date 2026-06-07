@@ -3176,6 +3176,8 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaFinancialAnnuityFunctionContrastLocations("IPMT($A1,$I1,$C1,$D1,$G1,$H1)<0", "B1", "B3");
         AssertFormulaFinancialAnnuityFunctionContrastLocations("PPMT($A1,$I1,$C1,$D1,$G1,$H1)<0", "B1", "B2", "B3");
         AssertFormulaFinancialAnnuityFunctionContrastLocations("ISPMT($A1,$I1,$C1,$D1)<0", "B1", "B3", "B4");
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("CUMIPMT($A1,$C1,$D1,1,$I1,$H1)<0", "B1", "B3");
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("CUMPRINC($A1,$C1,$D1,1,$I1,$H1)<0", "B1", "B3");
     }
 
     [Fact]
@@ -3191,8 +3193,12 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         AssertFormulaFinancialAnnuityFunctionContrastLocations("ISNA(PMT($A1,$C1,$D1))", "B5");
         AssertFormulaFinancialAnnuityFunctionContrastLocations("ISERROR(IPMT($A1,$I1,$C1,$D1,$G1,$H1))", "B4", "B5", "B6");
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("ISERROR(CUMIPMT($A1,$C1,$D1,1,$I1,$H1))", "B2", "B4", "B5", "B6");
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("ISNA(CUMPRINC($A1,$C1,$D1,1,$I1,$H1))", "B5");
         AssertFormulaFinancialAnnuityFunctionContrastLocations("PMT($A$1:$A$2,$C1,$D1)<0");
         AssertFormulaFinancialAnnuityFunctionContrastLocations("ISERROR(PMT($A$1:$A$1,$C1,$D1))");
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("CUMIPMT($A$1:$A$2,$C1,$D1,1,$I1,$H1)<0");
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("CUMPRINC($A1,$C1,$D1,1,$I1)<0");
     }
 
     [Fact]
@@ -5164,6 +5170,8 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaFinancialDepreciationFunctionContrastLocations("DB($A1,$C1,$D1,$E1,$I1)>300", "B1", "B2");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("DDB($A1,$C1,$D1,$E1)>300", "B1", "B8");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("VDB($A1,$C1,$D1,$F1,$G1)>300", "B1", "B2", "B8");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("AMORDEGRC($A1,DATE(2020,1,1),DATE(2020,12,31),$C1,$E1,$K1,0)>140", "B1", "B2", "B8");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("AMORLINC($A1,DATE(2020,1,1),DATE(2020,12,31),$C1,$E1,$K1)>=100", "B1", "B2", "B8");
     }
 
     [Fact]
@@ -5183,6 +5191,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaFinancialDepreciationFunctionContrastLocations("AND($O1,VDB($A1,$C1,$D1,$F1,$G1,$H1,$J1)>250)", "B1", "B2", "B8");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("SUM(SLN($A1,$C1,$D1),SYD($A1,$C1,$D1,$E1))>400", "B1", "B2", "B8");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("IF(EFFECT($K1,$L1)>0.1,TRUE,FALSE)", "B1", "B2", "B8");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("AMORLINC($A1,DATE(2020,1,1),DATE(2020,12,31),$C1,$E1,$K1)>100", "B2", "B8");
     }
 
     [Fact]
@@ -5192,6 +5201,8 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaFinancialDepreciationFunctionContrastLocations("ISNA(SLN($A1,$C1,$D1))", "B5");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("ISERROR(DB($A1,$C1,$D1,$E1,$I1))", "B5", "B6", "B7");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("ISERROR(VDB($A1,$C1,$D1,$F1,$G1,$H1,$J1))", "B5", "B6", "B7");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("ISERROR(AMORDEGRC($A1,DATE(2020,1,1),DATE(2020,12,31),$C1,$E1,$K1,0))", "B5", "B6", "B7");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("ISNA(AMORLINC($A1,DATE(2020,1,1),DATE(2020,12,31),$C1,$E1,$K1))", "B5");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("ISERROR(EFFECT($K1,$L1))", "B5", "B6", "B7");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("ISNA(EFFECT($K1,$L1))", "B5");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("ISERROR(RRI($E1,$M1,$N1))", "B5", "B6", "B7");
@@ -5208,6 +5219,9 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaFinancialDepreciationFunctionContrastLocations("VDB($A1,$C1,$D1,$F1)>0");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("VDB($A1,$C1,$D1,$F1,$G1,$H1,$J1,1)>0");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("VDB($A1,$C1,$D1,$F1,$G1,$H1,$J$1:$J$2)>0");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("AMORDEGRC($A$1:$A$2,DATE(2020,1,1),DATE(2020,12,31),$C1,$E1,$K1)>0");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("AMORLINC($A1,DATE(2020,1,1),DATE(2020,12,31),$C1,$E1)>0");
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("AMORLINC($A1,DATE(2020,1,1),DATE(2020,12,31),$C1,$E1,$K1,$J$1:$J$2)>0");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("EFFECT($K$1:$K$2,$L1)>0");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("NOMINAL($K1)>0");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("RRI($E1,$M1)>0");
