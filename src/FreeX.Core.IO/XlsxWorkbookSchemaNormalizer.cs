@@ -215,10 +215,23 @@ internal static class XlsxWorkbookSchemaNormalizer
             return false;
 
         var changed = false;
+        if (root.Element(workbookNs + "workbookPr") is { } workbookPr)
+            changed |= XlsxWorkbookPropertiesNormalizer.NormalizeElement(workbookPr);
         if (root.Element(workbookNs + "fileVersion") is { } fileVersion)
             changed |= XlsxWorkbookFileVersionNormalizer.NormalizeElement(fileVersion);
         if (root.Element(workbookNs + "functionGroups") is { } functionGroups)
             changed |= XlsxWorkbookFunctionGroupsNormalizer.NormalizeElement(functionGroups);
+        if (root.Element(workbookNs + "smartTagPr") is { } smartTagPr)
+            changed |= XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagPropertiesElement(smartTagPr);
+        if (root.Element(workbookNs + "smartTagTypes") is { } smartTagTypes)
+        {
+            changed |= XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagTypesElement(smartTagTypes);
+            if (XlsxWorkbookSmartTagNormalizer.ShouldRemoveSmartTagTypesElement(smartTagTypes))
+            {
+                smartTagTypes.Remove();
+                changed = true;
+            }
+        }
 
         var orderedChildren = root.Elements()
             .Select((element, index) => new { Element = element, Index = index })

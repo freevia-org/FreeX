@@ -663,10 +663,20 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var workbookXml = XlsxPackageXmlEditor.LoadXml(sourceEntry);
         workbookXml.Root?.Elements(workbookNs + "pivotCaches").Remove();
+        if (workbookXml.Root?.Element(workbookNs + "workbookPr") is { } workbookPr)
+            XlsxWorkbookPropertiesNormalizer.NormalizeElement(workbookPr);
         if (workbookXml.Root?.Element(workbookNs + "fileVersion") is { } fileVersion)
             XlsxWorkbookFileVersionNormalizer.NormalizeElement(fileVersion);
         if (workbookXml.Root?.Element(workbookNs + "functionGroups") is { } functionGroups)
             XlsxWorkbookFunctionGroupsNormalizer.NormalizeElement(functionGroups);
+        if (workbookXml.Root?.Element(workbookNs + "smartTagPr") is { } smartTagPr)
+            XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagPropertiesElement(smartTagPr);
+        if (workbookXml.Root?.Element(workbookNs + "smartTagTypes") is { } smartTagTypes)
+        {
+            XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagTypesElement(smartTagTypes);
+            if (XlsxWorkbookSmartTagNormalizer.ShouldRemoveSmartTagTypesElement(smartTagTypes))
+                smartTagTypes.Remove();
+        }
         if (workbookXml.Root?.Element(workbookNs + "bookViews") is { } bookViews)
             XlsxWorkbookViewNormalizer.NormalizeBookViewsElement(bookViews);
         if (workbookXml.Root?.Element(workbookNs + "calcPr") is { } calcPr)

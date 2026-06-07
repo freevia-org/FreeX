@@ -303,6 +303,22 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void WorkbookProperties_SanitizesInvalidAttributesForSchemaValidity()
+    {
+        var workbook = CreateWorkbookPropertiesSourceWorkbook();
+        workbook.Properties = CreateWorkbookPropertiesMetadataWithInvalidXml();
+
+        using var saved = Save(workbook);
+
+        SchemaErrors(saved).Should().BeEmpty();
+        var workbookPr = ReadWorkbookChildElement(saved, "workbookPr");
+        workbookPr.Attribute("date1904")!.Value.Should().Be("1");
+        workbookPr.Attribute("defaultThemeVersion")!.Value.Should().Be("166925");
+        workbookPr.Attribute("customWorkbookPrFlag").Should().BeNull();
+        workbookPr.Element(workbookPr.Name.Namespace + "nativeWorkbookPrChild").Should().BeNull();
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithWorkbookProperties_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreateWorkbookPropertiesSourceWorkbook());
@@ -328,6 +344,36 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceWorkbookProperties.ToString(SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorkbookPropertiesForSchemaValidity()
+    {
+        using var source = Save(CreateWorkbookPropertiesSourceWorkbook());
+        SetWorkbookPropertiesInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var workbookPr = ReadWorkbookChildElement(saved, "workbookPr");
+        workbookPr.Attribute("date1904").Should().BeNull();
+        workbookPr.Attribute("showObjects").Should().BeNull();
+        workbookPr.Attribute("updateLinks").Should().BeNull();
+        workbookPr.Attribute("defaultThemeVersion").Should().BeNull();
+        workbookPr.Attribute("customWorkbookPrFlag").Should().BeNull();
+        workbookPr.Element(workbookPr.Name.Namespace + "nativeWorkbookPrChild").Should().BeNull();
     }
 
     [Fact]
@@ -717,6 +763,33 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var bag = new NativeXmlPreserveBag();
         bag.Set("workbookPr", """<e defaultThemeVersion="166925" />""");
         return bag;
+    }
+
+    private static NativeXmlPreserveBag CreateWorkbookPropertiesMetadataWithInvalidXml()
+    {
+        var bag = new NativeXmlPreserveBag();
+        bag.Set("workbookPr", """
+            <e defaultThemeVersion="166925" customWorkbookPrFlag="removed">
+              <nativeWorkbookPrChild xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" />
+            </e>
+            """);
+        return bag;
+    }
+
+    private static void SetWorkbookPropertiesInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookPr = workbookXml.Root!.Element(workbookNs + "workbookPr")!;
+        workbookPr.SetAttributeValue("date1904", "maybe");
+        workbookPr.SetAttributeValue("showObjects", "invalid");
+        workbookPr.SetAttributeValue("updateLinks", "invalid");
+        workbookPr.SetAttributeValue("defaultThemeVersion", "not-a-number");
+        workbookPr.SetAttributeValue("customWorkbookPrFlag", "removed");
+        workbookPr.Add(new XElement(workbookNs + "nativeWorkbookPrChild"));
+        ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
     }
 
     private static Workbook CreateWorkbookProtectionSourceWorkbook()
