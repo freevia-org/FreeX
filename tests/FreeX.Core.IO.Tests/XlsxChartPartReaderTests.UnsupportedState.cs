@@ -1,4 +1,3 @@
-using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -11,7 +10,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_ClearsUnsupportedPercentageDataLabels()
     {
         var sheetId = new SheetId(Guid.NewGuid());
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
               <c:chart>
                 <c:plotArea>
@@ -43,7 +42,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_ClearsUnsupportedSecondaryAxisState()
     {
         var sheetId = new SheetId(Guid.NewGuid());
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
               <c:chart>
                 <c:plotArea>
@@ -82,7 +81,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_ClearsUnsupportedComboLineOverlayState()
     {
         var sheetId = new SheetId(Guid.NewGuid());
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
               <c:chart>
                 <c:plotArea>
@@ -118,7 +117,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_ClearsUnsupportedTrendlineState()
     {
         var sheetId = new SheetId(Guid.NewGuid());
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
                           xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
               <c:chart>
@@ -164,7 +163,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_ClearsUnsupportedAxisStateForNoAxisCharts()
     {
         var sheetId = new SheetId(Guid.NewGuid());
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
                           xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
               <c:chart>
@@ -245,7 +244,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_ClearsOutOfRangeExplodedSliceState()
     {
         var sheetId = new SheetId(Guid.NewGuid());
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
               <c:chart>
                 <c:plotArea>
@@ -276,7 +275,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_DropsOutOfRangePointDataLabelFormatting()
     {
         var sheetId = new SheetId(Guid.NewGuid());
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
                           xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
               <c:chart>
@@ -312,7 +311,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_DropsNegativeSeriesFormattingIndexes()
     {
         var sheetId = new SheetId(Guid.NewGuid());
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
                           xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
               <c:chart>
@@ -342,7 +341,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_DropsPointDataLabelFormattingForNegativeSeriesIndexes()
     {
         var sheetId = new SheetId(Guid.NewGuid());
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
                           xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
               <c:chart>
