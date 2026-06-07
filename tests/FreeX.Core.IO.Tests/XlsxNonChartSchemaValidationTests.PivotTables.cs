@@ -131,6 +131,39 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Be(workbookNs + "pivotTableDefinition");
     }
 
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesLegacyPivotTableDefinitionRootAttributesForSchemaValidity()
+    {
+        using var source = Save(CreatePivotTableSourceWorkbook());
+        SetPivotTableDefinitionLegacyRootAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 10, 4), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+
+        var pivotTable = ReadPackageRootElement(saved, "xl/pivotTables/pivotTable1.xml");
+        pivotTable.Attribute("showGrandTotals").Should().BeNull();
+        pivotTable.Attribute("showRowGrandTotals").Should().BeNull();
+        pivotTable.Attribute("showColumnGrandTotals").Should().BeNull();
+        pivotTable.Attribute("repeatItemLabels").Should().BeNull();
+        pivotTable.Attribute("blankLineAfterItems").Should().BeNull();
+        pivotTable.Attribute("rowGrandTotals")!.Value.Should().Be("0");
+        pivotTable.Attribute("colGrandTotals")!.Value.Should().Be("1");
+    }
+
     private static Workbook CreatePivotTableSourceWorkbook()
     {
         var workbook = new Workbook("PivotTablePatchSave");
@@ -205,5 +238,23 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         return relationshipId;
+    }
+
+    private static void SetPivotTableDefinitionLegacyRootAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+
+        var pivotTableXml = LoadPackageXml(archive, "xl/pivotTables/pivotTable1.xml");
+        var root = pivotTableXml.Root!;
+        root.Attribute("rowGrandTotals")?.Remove();
+        root.Attribute("colGrandTotals")?.Remove();
+        root.SetAttributeValue("showGrandTotals", "1");
+        root.SetAttributeValue("showRowGrandTotals", "0");
+        root.SetAttributeValue("showColumnGrandTotals", "1");
+        root.SetAttributeValue("repeatItemLabels", "0");
+        root.SetAttributeValue("blankLineAfterItems", "1");
+
+        ReplacePackageXml(archive, "xl/pivotTables/pivotTable1.xml", pivotTableXml);
     }
 }
