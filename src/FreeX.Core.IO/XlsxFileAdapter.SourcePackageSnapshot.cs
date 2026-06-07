@@ -839,6 +839,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchCustomViews(archive, workbook, SourceHasCustomViews);
                 NormalizePatchWorkbookViews(archive);
                 NormalizePatchWorkbookCalculationProperties(archive);
+                NormalizePatchWorkbookDefinedNames(archive);
                 NormalizePatchWorkbookProperties(archive);
                 NormalizePatchWorkbookFileVersion(archive);
                 NormalizePatchWorkbookFileSharing(archive);
@@ -1168,6 +1169,33 @@ public sealed partial class XlsxFileAdapter
             {
                 XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
             }
+        }
+
+        private static void NormalizePatchWorkbookDefinedNames(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var root = workbookXml.Root;
+            if (root is null)
+                return;
+
+            var changed = false;
+            foreach (var definedNames in root.Elements(workbookNs + "definedNames").ToList())
+            {
+                changed |= XlsxWorkbookDefinedNameNormalizer.NormalizeDefinedNamesElement(definedNames);
+                if (!XlsxWorkbookDefinedNameNormalizer.ShouldRemoveDefinedNamesElement(definedNames))
+                    continue;
+
+                definedNames.Remove();
+                changed = true;
+            }
+
+            if (changed)
+                XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
         }
 
         private static void NormalizePatchWorkbookProperties(ZipArchive archive)
