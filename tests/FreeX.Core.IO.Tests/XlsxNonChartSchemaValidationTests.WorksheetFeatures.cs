@@ -3921,6 +3921,8 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         protectedRange.SetAttributeValue("name", " NativeEditableRange ");
         protectedRange.SetAttributeValue("password", "ABCD");
         protectedRange.SetAttributeValue("securityDescriptor", "D:PAI");
+        protectedRange.SetAttributeValue("hashValue", "not-base64");
+        protectedRange.SetAttributeValue("saltValue", "also-not-base64");
         protectedRange.SetAttributeValue("spinCount", "not-a-number");
         protectedRange.SetAttributeValue("customProtectedRangeFlag", "removed");
         protectedRange.Add(
@@ -3954,6 +3956,8 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         protectedRange.Attribute("name")!.Value.Should().Be("NativeEditableRange");
         protectedRange.Attribute("password")!.Value.Should().Be("ABCD");
         protectedRange.Attribute("securityDescriptor")!.Value.Should().Be("D:PAI");
+        protectedRange.Attribute("hashValue").Should().BeNull();
+        protectedRange.Attribute("saltValue").Should().BeNull();
         protectedRange.Attribute("spinCount").Should().BeNull();
         protectedRange.Attribute("customProtectedRangeFlag").Should().BeNull();
         protectedRange.Elements().Should().BeEmpty();

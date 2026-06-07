@@ -91,6 +91,8 @@ internal static class XlsxWorksheetProtectedRangeNormalizer
         changed |= RemoveUnknownAttributes(protectedRange, ProtectedRangeAttributes);
         changed |= NormalizeAttribute(protectedRange, "sqref", NormalizeSqref);
         changed |= NormalizeAttribute(protectedRange, "name", NormalizeOptionalText);
+        changed |= NormalizeAttribute(protectedRange, "hashValue", NormalizeBase64BinaryOrNull);
+        changed |= NormalizeAttribute(protectedRange, "saltValue", NormalizeBase64BinaryOrNull);
         changed |= NormalizeAttribute(protectedRange, "spinCount", NormalizeUnsignedIntOrNull);
         changed |= RemoveAllChildren(protectedRange);
         return changed;
@@ -183,6 +185,23 @@ internal static class XlsxWorksheetProtectedRangeNormalizer
         return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
             ? parsed.ToString(CultureInfo.InvariantCulture)
             : null;
+    }
+
+    private static string? NormalizeBase64BinaryOrNull(string? value)
+    {
+        var trimmed = value?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+            return null;
+
+        try
+        {
+            _ = Convert.FromBase64String(trimmed);
+            return trimmed;
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
     }
 
     private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry) =>
