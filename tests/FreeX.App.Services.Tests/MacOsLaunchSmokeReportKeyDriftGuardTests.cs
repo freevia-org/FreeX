@@ -17,6 +17,31 @@ public sealed class MacOsLaunchSmokeReportKeyDriftGuardTests
         "\"(?<key>(?:native|toolbar)_[a-z0-9_]+)=",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
+    private static readonly Regex CommandKeySourceReportKeyPattern = new(
+        "\\$\"(?<key>(?:command_key|cmd)_[a-z0-9_]+)=",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly Regex CommandKeyWorkflowGrepReportKeyPattern = new(
+        "grep -q \"(?<key>(?:command_key|cmd)_[a-z0-9_]+)=",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly string[] ExpectedCommandKeyReportKeys =
+    [
+        "cmd_bold_menu_gesture",
+        "cmd_close_workbook_menu_gesture",
+        "cmd_find_menu_gesture",
+        "cmd_italic_menu_gesture",
+        "cmd_new_workbook_menu_gesture",
+        "cmd_open_menu_gesture",
+        "cmd_quit_menu_gesture",
+        "cmd_save_as_menu_gesture",
+        "cmd_save_menu_gesture",
+        "cmd_select_all_menu_gesture",
+        "cmd_underline_menu_gesture",
+        "command_key_smoke",
+        "command_key_smoke_attempted"
+    ];
+
     [Fact]
     public void MacOsLaunchSmoke_NativeAndToolbarReportKeysMatchWorkflowGrepsAndReadinessMarkers()
     {
@@ -41,6 +66,38 @@ public sealed class MacOsLaunchSmokeReportKeyDriftGuardTests
         FindMissingKeys(readinessMarkerKeys, sourceReportKeys, "readiness report marker", "MacOsLaunchSmoke report")
             .Should()
             .BeEmpty("readiness report markers should stay backed by MacOsLaunchSmoke native_ and toolbar_ report keys");
+    }
+
+    [Fact]
+    public void MacOsLaunchSmoke_CommandKeyReportKeysMatchWorkflowAndPlanningMarkers()
+    {
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var workflow = File.ReadAllText(RepositoryFileLocator.Find(".github", "workflows", "macos-app.yml"));
+        var planning = File.ReadAllText(RepositoryFileLocator.Find("docs", "planning", "multiplatform-macos-port.md"));
+
+        var sourceReportKeys = ExtractDistinctKeys(smokeSource, CommandKeySourceReportKeyPattern);
+        var workflowGrepKeys = ExtractDistinctKeys(workflow, CommandKeyWorkflowGrepReportKeyPattern);
+
+        sourceReportKeys.Should().Equal(ExpectedCommandKeyReportKeys);
+        workflowGrepKeys.Should().Equal(ExpectedCommandKeyReportKeys);
+
+        foreach (var key in ExpectedCommandKeyReportKeys)
+            planning.Should().Contain($"{key}=");
+
+        smokeSource.Should().Contain("internal sealed record MacOsLaunchSmokeCommandKeySnapshot(");
+        smokeSource.Should().Contain("commandKeyEvidence = CaptureCommandKeyEvidence(mainWindow);");
+        smokeSource.Should().Contain("commandKeyEvidence.IsPassed");
+        smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_newWorkbookMenuItem\", Key.N, KeyModifiers.Meta)");
+        smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_openMenuItem\", Key.O, KeyModifiers.Meta)");
+        smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_saveMenuItem\", Key.S, KeyModifiers.Meta)");
+        smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_saveAsMenuItem\", Key.S, KeyModifiers.Meta | KeyModifiers.Shift)");
+        smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_closeWorkbookMenuItem\", Key.W, KeyModifiers.Meta)");
+        smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_quitMenuItem\", Key.Q, KeyModifiers.Meta)");
+        smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_selectAllMenuItem\", Key.A, KeyModifiers.Meta)");
+        smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_findMenuItem\", Key.F, KeyModifiers.Meta)");
+        smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_boldMenuItem\", Key.B, KeyModifiers.Meta)");
+        smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_italicMenuItem\", Key.I, KeyModifiers.Meta)");
+        smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_underlineMenuItem\", Key.U, KeyModifiers.Meta)");
     }
 
     private static string[] ExtractDistinctKeys(string text, Regex pattern) =>

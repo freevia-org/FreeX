@@ -1,4 +1,7 @@
+using System.Reflection;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Input;
 using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia;
@@ -162,6 +165,46 @@ internal sealed record MacOsLaunchSmokeDialogSnapshot(
         HasGoToDialogClosedWithoutAccept &&
         HasGoToSpecialDialogClosedWithoutAccept &&
         HasFormatCellsDialogClosedWithoutAccept;
+}
+
+internal sealed record MacOsLaunchSmokeCommandKeySnapshot(
+    bool HasNewWorkbookMenuGesture,
+    bool HasOpenMenuGesture,
+    bool HasSaveMenuGesture,
+    bool HasSaveAsMenuGesture,
+    bool HasCloseWorkbookMenuGesture,
+    bool HasQuitMenuGesture,
+    bool HasSelectAllMenuGesture,
+    bool HasFindMenuGesture,
+    bool HasBoldMenuGesture,
+    bool HasItalicMenuGesture,
+    bool HasUnderlineMenuGesture)
+{
+    public static MacOsLaunchSmokeCommandKeySnapshot Empty { get; } = new(
+        HasNewWorkbookMenuGesture: false,
+        HasOpenMenuGesture: false,
+        HasSaveMenuGesture: false,
+        HasSaveAsMenuGesture: false,
+        HasCloseWorkbookMenuGesture: false,
+        HasQuitMenuGesture: false,
+        HasSelectAllMenuGesture: false,
+        HasFindMenuGesture: false,
+        HasBoldMenuGesture: false,
+        HasItalicMenuGesture: false,
+        HasUnderlineMenuGesture: false);
+
+    public bool IsPassed =>
+        HasNewWorkbookMenuGesture &&
+        HasOpenMenuGesture &&
+        HasSaveMenuGesture &&
+        HasSaveAsMenuGesture &&
+        HasCloseWorkbookMenuGesture &&
+        HasQuitMenuGesture &&
+        HasSelectAllMenuGesture &&
+        HasFindMenuGesture &&
+        HasBoldMenuGesture &&
+        HasItalicMenuGesture &&
+        HasUnderlineMenuGesture;
 }
 
 internal sealed record MacOsLaunchSmokeSnapshot(
@@ -532,14 +575,25 @@ internal static class MacOsLaunchSmokeCoordinator
     {
         var deadline = DateTimeOffset.UtcNow.AddMilliseconds(MaxWaitMilliseconds);
         var snapshot = mainWindow.CreateLaunchSmokeSnapshot();
+        var commandKeyEvidence = MacOsLaunchSmokeCommandKeySnapshot.Empty;
         var initialExternalImageClipboardPictureCount = snapshot.ExternalImageClipboardPictureCount;
+        var attemptedCommandKeyEvidence = false;
         var attemptedImageClipboardPaste = false;
         var attemptedDialogEvidence = false;
         try
         {
-            while (!IsPassed(snapshot, options, initialExternalImageClipboardPictureCount) &&
+            while (!IsPassedWithCommandKeyEvidence(snapshot, options, initialExternalImageClipboardPictureCount, commandKeyEvidence) &&
                 DateTimeOffset.UtcNow < deadline)
             {
+                if (snapshot.HasShellEvidence &&
+                    !commandKeyEvidence.IsPassed &&
+                    !attemptedCommandKeyEvidence)
+                {
+                    attemptedCommandKeyEvidence = true;
+                    commandKeyEvidence = CaptureCommandKeyEvidence(mainWindow);
+                    continue;
+                }
+
                 if (snapshot.HasShellEvidence &&
                     !snapshot.DialogEvidence.IsPassed &&
                     !attemptedDialogEvidence)
@@ -568,18 +622,22 @@ internal static class MacOsLaunchSmokeCoordinator
             WriteReport(
                 options.ReportPath,
                 snapshot,
+                commandKeyEvidence,
                 options,
                 initialExternalImageClipboardPictureCount,
+                attemptedCommandKeyEvidence,
                 attemptedDialogEvidence);
-            Shutdown(IsPassed(snapshot, options, initialExternalImageClipboardPictureCount) ? 0 : 1);
+            Shutdown(IsPassedWithCommandKeyEvidence(snapshot, options, initialExternalImageClipboardPictureCount, commandKeyEvidence) ? 0 : 1);
         }
         catch (Exception ex)
         {
             WriteFailureReport(
                 options.ReportPath,
                 snapshot,
+                commandKeyEvidence,
                 options,
                 initialExternalImageClipboardPictureCount,
+                attemptedCommandKeyEvidence,
                 attemptedDialogEvidence,
                 ex);
             Shutdown(1);
@@ -595,6 +653,37 @@ internal static class MacOsLaunchSmokeCoordinator
             snapshot,
             initialExternalImageClipboardPictureCount));
 
+    private static bool IsPassedWithCommandKeyEvidence(
+        MacOsLaunchSmokeSnapshot snapshot,
+        MacOsLaunchSmokeOptions options,
+        int initialExternalImageClipboardPictureCount,
+        MacOsLaunchSmokeCommandKeySnapshot commandKeyEvidence) =>
+        IsPassed(snapshot, options, initialExternalImageClipboardPictureCount) &&
+        commandKeyEvidence.IsPassed;
+
+    private static MacOsLaunchSmokeCommandKeySnapshot CaptureCommandKeyEvidence(MainWindow mainWindow) =>
+        new(
+            HasNewWorkbookMenuGesture: HasNativeMenuItemGesture(mainWindow, "_newWorkbookMenuItem", Key.N, KeyModifiers.Meta),
+            HasOpenMenuGesture: HasNativeMenuItemGesture(mainWindow, "_openMenuItem", Key.O, KeyModifiers.Meta),
+            HasSaveMenuGesture: HasNativeMenuItemGesture(mainWindow, "_saveMenuItem", Key.S, KeyModifiers.Meta),
+            HasSaveAsMenuGesture: HasNativeMenuItemGesture(mainWindow, "_saveAsMenuItem", Key.S, KeyModifiers.Meta | KeyModifiers.Shift),
+            HasCloseWorkbookMenuGesture: HasNativeMenuItemGesture(mainWindow, "_closeWorkbookMenuItem", Key.W, KeyModifiers.Meta),
+            HasQuitMenuGesture: HasNativeMenuItemGesture(mainWindow, "_quitMenuItem", Key.Q, KeyModifiers.Meta),
+            HasSelectAllMenuGesture: HasNativeMenuItemGesture(mainWindow, "_selectAllMenuItem", Key.A, KeyModifiers.Meta),
+            HasFindMenuGesture: HasNativeMenuItemGesture(mainWindow, "_findMenuItem", Key.F, KeyModifiers.Meta),
+            HasBoldMenuGesture: HasNativeMenuItemGesture(mainWindow, "_boldMenuItem", Key.B, KeyModifiers.Meta),
+            HasItalicMenuGesture: HasNativeMenuItemGesture(mainWindow, "_italicMenuItem", Key.I, KeyModifiers.Meta),
+            HasUnderlineMenuGesture: HasNativeMenuItemGesture(mainWindow, "_underlineMenuItem", Key.U, KeyModifiers.Meta));
+
+    private static bool HasNativeMenuItemGesture(
+        MainWindow mainWindow,
+        string fieldName,
+        Key expectedKey,
+        KeyModifiers expectedModifiers) =>
+        typeof(MainWindow).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(mainWindow) is NativeMenuItem { Gesture: { } gesture } &&
+        gesture.Key == expectedKey &&
+        gesture.KeyModifiers == expectedModifiers;
+
     private static bool HasExternalImageClipboardPasteEvidence(
         MacOsLaunchSmokeSnapshot snapshot,
         int initialExternalImageClipboardPictureCount) =>
@@ -604,8 +693,10 @@ internal static class MacOsLaunchSmokeCoordinator
     private static void WriteReport(
         string reportPath,
         MacOsLaunchSmokeSnapshot snapshot,
+        MacOsLaunchSmokeCommandKeySnapshot commandKeyEvidence,
         MacOsLaunchSmokeOptions options,
         int initialExternalImageClipboardPictureCount,
+        bool attemptedCommandKeyEvidence,
         bool attemptedDialogEvidence)
     {
         var directory = Path.GetDirectoryName(reportPath);
@@ -620,7 +711,7 @@ internal static class MacOsLaunchSmokeCoordinator
         File.WriteAllLines(
             reportPath,
             [
-                $"macos_launch_smoke={(IsPassed(snapshot, options, initialExternalImageClipboardPictureCount) ? "passed" : "failed")}",
+                $"macos_launch_smoke={(IsPassedWithCommandKeyEvidence(snapshot, options, initialExternalImageClipboardPictureCount, commandKeyEvidence) ? "passed" : "failed")}",
                 $"window_shown={FormatBool(snapshot.WindowShown)}",
                 $"window_title={snapshot.WindowTitle}",
                 $"display_name={snapshot.DisplayName}",
@@ -628,6 +719,19 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"sheet_tab_count={snapshot.SheetTabCount}",
                 $"viewport_rows={snapshot.ViewportRowCount}",
                 $"viewport_columns={snapshot.ViewportColumnCount}",
+                $"command_key_smoke={(commandKeyEvidence.IsPassed ? "passed" : "failed")}",
+                $"command_key_smoke_attempted={FormatBool(attemptedCommandKeyEvidence)}",
+                $"cmd_new_workbook_menu_gesture={FormatBool(commandKeyEvidence.HasNewWorkbookMenuGesture)}",
+                $"cmd_open_menu_gesture={FormatBool(commandKeyEvidence.HasOpenMenuGesture)}",
+                $"cmd_save_menu_gesture={FormatBool(commandKeyEvidence.HasSaveMenuGesture)}",
+                $"cmd_save_as_menu_gesture={FormatBool(commandKeyEvidence.HasSaveAsMenuGesture)}",
+                $"cmd_close_workbook_menu_gesture={FormatBool(commandKeyEvidence.HasCloseWorkbookMenuGesture)}",
+                $"cmd_quit_menu_gesture={FormatBool(commandKeyEvidence.HasQuitMenuGesture)}",
+                $"cmd_select_all_menu_gesture={FormatBool(commandKeyEvidence.HasSelectAllMenuGesture)}",
+                $"cmd_find_menu_gesture={FormatBool(commandKeyEvidence.HasFindMenuGesture)}",
+                $"cmd_bold_menu_gesture={FormatBool(commandKeyEvidence.HasBoldMenuGesture)}",
+                $"cmd_italic_menu_gesture={FormatBool(commandKeyEvidence.HasItalicMenuGesture)}",
+                $"cmd_underline_menu_gesture={FormatBool(commandKeyEvidence.HasUnderlineMenuGesture)}",
                 $"external_image_clipboard_paste_required={FormatBool(options.VerifyImageClipboardPaste)}",
                 $"external_image_clipboard_paste={FormatBool(imageClipboardPasteVerified)}",
                 $"external_image_clipboard_picture_count={snapshot.ExternalImageClipboardPictureCount}",
@@ -837,16 +941,20 @@ internal static class MacOsLaunchSmokeCoordinator
     private static void WriteFailureReport(
         string reportPath,
         MacOsLaunchSmokeSnapshot snapshot,
+        MacOsLaunchSmokeCommandKeySnapshot commandKeyEvidence,
         MacOsLaunchSmokeOptions options,
         int initialExternalImageClipboardPictureCount,
+        bool attemptedCommandKeyEvidence,
         bool attemptedDialogEvidence,
         Exception exception)
     {
         WriteReport(
             reportPath,
             snapshot,
+            commandKeyEvidence,
             options,
             initialExternalImageClipboardPictureCount,
+            attemptedCommandKeyEvidence,
             attemptedDialogEvidence);
         File.AppendAllLines(reportPath, [$"error={exception.GetType().Name}: {exception.Message}"]);
     }

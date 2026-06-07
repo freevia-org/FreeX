@@ -555,10 +555,14 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("new MacOsLaunchSmokeOptions(reportPath, verifyImageClipboardPaste)");
         smokeSource.Should().Contain("mainWindow.Opened += async (_, _) => await RunAsync(mainWindow, options);");
         smokeSource.Should().Contain("mainWindow.CreateLaunchSmokeSnapshot()");
+        smokeSource.Should().Contain("commandKeyEvidence = CaptureCommandKeyEvidence(mainWindow);");
         smokeSource.Should().Contain("await mainWindow.TryPasteLaunchSmokeClipboardImageAsync();");
         smokeSource.Should().Contain("IsPassed(snapshot, options, initialExternalImageClipboardPictureCount)");
+        smokeSource.Should().Contain("IsPassedWithCommandKeyEvidence(snapshot, options, initialExternalImageClipboardPictureCount, commandKeyEvidence)");
         smokeSource.Should().Contain("HasExternalImageClipboardPasteEvidence(");
-        smokeSource.Should().Contain("macos_launch_smoke={(IsPassed(snapshot, options, initialExternalImageClipboardPictureCount) ? \"passed\" : \"failed\")}");
+        smokeSource.Should().Contain("macos_launch_smoke={(IsPassedWithCommandKeyEvidence(snapshot, options, initialExternalImageClipboardPictureCount, commandKeyEvidence) ? \"passed\" : \"failed\")}");
+        smokeSource.Should().Contain("command_key_smoke={(commandKeyEvidence.IsPassed ? \"passed\" : \"failed\")}");
+        smokeSource.Should().Contain("command_key_smoke_attempted={FormatBool(attemptedCommandKeyEvidence)}");
         smokeSource.Should().Contain("external_image_clipboard_paste_required={FormatBool(options.VerifyImageClipboardPaste)}");
         smokeSource.Should().Contain("external_image_clipboard_paste={FormatBool(imageClipboardPasteVerified)}");
         smokeSource.Should().Contain("external_image_clipboard_picture_count={snapshot.ExternalImageClipboardPictureCount}");
