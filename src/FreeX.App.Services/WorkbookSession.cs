@@ -601,6 +601,59 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public WorkbookCellEditResult PasteLinkFromClipboardAtActiveCell(
+        string? text,
+        bool transpose = false,
+        bool keepSourceColumnWidths = false)
+    {
+        if (_internalClipboard is not { } internalClipboard ||
+            (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
+        {
+            _internalClipboard = null;
+            return new WorkbookCellEditResult(
+                false,
+                "Paste Link requires copied FreeX cells.",
+                [],
+                RecalcReport: null);
+        }
+
+        var sourceSheet = Workbook.GetSheet(internalClipboard.SourceRange.Start.Sheet);
+        if (sourceSheet is null)
+        {
+            return new WorkbookCellEditResult(
+                false,
+                "Paste Link source sheet was not found.",
+                [],
+                RecalcReport: null);
+        }
+
+        var destination = ActiveCell;
+        var linkedCells = PasteLinkService.CreateLinkedCells(
+            internalClipboard.SourceRange,
+            destination,
+            sourceSheet.Name,
+            transpose);
+        IWorkbookCommand command = new EditCellsCommand(ActiveSheet.Id, linkedCells);
+        if (keepSourceColumnWidths)
+        {
+            command = new CompositeWorkbookCommand(
+                "Paste Link",
+                [
+                    command,
+                    new PasteColumnWidthsCommand(ActiveSheet.Id, internalClipboard.SourceRange, destination.Col)
+                ]);
+        }
+
+        var result = _cellEditService.ExecuteEditCommand(Workbook, command);
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulEditResult(result, destination);
+        var pasteSize = GetPasteDimensions(internalClipboard.SourceRange, transpose);
+        SelectPastedRange(destination, pasteSize.RowCount, pasteSize.ColCount);
+        return result;
+    }
+
     public WorkbookCellEditResult PasteExternalTextAtActiveCell(string text, bool preserveText = false)
     {
         ArgumentNullException.ThrowIfNull(text);
@@ -1199,7 +1252,8 @@ public sealed class WorkbookSession
             return result;
 
         ApplySuccessfulEditResult(result, destination);
-        SelectPastedRange(destination, clipboard.SourceRange.RowCount, clipboard.SourceRange.ColCount);
+        var pasteSize = GetPasteDimensions(clipboard.SourceRange, options.Transpose);
+        SelectPastedRange(destination, pasteSize.RowCount, pasteSize.ColCount);
         if (clipboard.IsCut)
             _internalClipboard = null;
         return result;
@@ -1242,6 +1296,11 @@ public sealed class WorkbookSession
 
         return !clipboard.SourceRange.Overlaps(new GridRange(destination, pastedEnd));
     }
+
+    private static (ulong RowCount, ulong ColCount) GetPasteDimensions(GridRange sourceRange, bool transpose) =>
+        transpose
+            ? (sourceRange.ColCount, sourceRange.RowCount)
+            : (sourceRange.RowCount, sourceRange.ColCount);
 
     private void SelectPastedRange(CellAddress start, ulong rowCount, ulong colCount)
     {

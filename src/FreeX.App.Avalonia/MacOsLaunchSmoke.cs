@@ -97,6 +97,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativePasteSpecialMenuItem,
     bool HasNativePasteSpecialColumnWidthsMenuItem,
     bool HasNativePasteSpecialKeepSourceColumnWidthsMenuItem,
+    bool HasNativePasteSpecialPasteLinkMenuItem,
     bool HasNativeSelectAllMenuItem,
     bool HasNativeClearContentsMenuItem,
     bool HasNativeBoldMenuItem,
@@ -178,6 +179,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativePasteSpecialMenuItem &&
         HasNativePasteSpecialColumnWidthsMenuItem &&
         HasNativePasteSpecialKeepSourceColumnWidthsMenuItem &&
+        HasNativePasteSpecialPasteLinkMenuItem &&
         HasNativeSelectAllMenuItem &&
         HasNativeClearContentsMenuItem &&
         HasNativeBoldMenuItem &&
@@ -307,6 +309,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_paste_special_menu_item={FormatBool(snapshot.HasNativePasteSpecialMenuItem)}",
                 $"native_paste_special_column_widths_menu_item={FormatBool(snapshot.HasNativePasteSpecialColumnWidthsMenuItem)}",
                 $"native_paste_special_keep_source_column_widths_menu_item={FormatBool(snapshot.HasNativePasteSpecialKeepSourceColumnWidthsMenuItem)}",
+                $"native_paste_special_paste_link_menu_item={FormatBool(snapshot.HasNativePasteSpecialPasteLinkMenuItem)}",
                 $"native_select_all_menu_item={FormatBool(snapshot.HasNativeSelectAllMenuItem)}",
                 $"native_clear_contents_menu_item={FormatBool(snapshot.HasNativeClearContentsMenuItem)}",
                 $"native_bold_menu_item={FormatBool(snapshot.HasNativeBoldMenuItem)}",

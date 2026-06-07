@@ -731,6 +731,120 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void PasteLinkFromClipboardAtActiveCell_CreatesFormulasPreservesDestinationStyleAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var d3 = new CellAddress(sheet.Id, 3, 4);
+        var e3 = new CellAddress(sheet.Id, 3, 5);
+        var destinationStyle = workbook.RegisterStyle(new CellStyle { FontColor = new CellColor(0x21, 0x43, 0x65) });
+        sheet.SetCell(a1, new NumberValue(10));
+        sheet.SetCell(b1, new NumberValue(12));
+        sheet.SetCell(d3, new Cell { Value = new TextValue("old"), StyleId = destinationStyle });
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b1));
+        var clipboardText = session.CopySelectedRangeText();
+        session.SelectCell(d3);
+
+        var result = session.PasteLinkFromClipboardAtActiveCell(clipboardText);
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().Equal(d3, e3);
+        session.SelectedRange.Should().Be(new GridRange(d3, e3));
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        sheet.GetCell(d3)!.FormulaText.Should().Be("'Sheet1'!A1");
+        sheet.GetCell(e3)!.FormulaText.Should().Be("'Sheet1'!B1");
+        workbook.GetStyle(sheet.GetCell(d3)!.StyleId).FontColor.Should().Be(new CellColor(0x21, 0x43, 0x65));
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.GetValue(d3).Should().Be(new TextValue("old"));
+        workbook.GetStyle(sheet.GetCell(d3)!.StyleId).FontColor.Should().Be(new CellColor(0x21, 0x43, 0x65));
+        sheet.GetCell(e3).Should().BeNull();
+    }
+
+    [Fact]
+    public void PasteLinkFromClipboardAtActiveCell_RejectsChangedPlatformClipboardText()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var d1 = new CellAddress(sheet.Id, 1, 4);
+        sheet.SetCell(a1, new TextValue("source"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+        session.CopySelectedRangeText();
+        session.SelectCell(d1);
+
+        var result = session.PasteLinkFromClipboardAtActiveCell("external");
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be("Paste Link requires copied FreeX cells.");
+        sheet.GetCell(d1).Should().BeNull();
+    }
+
+    [Fact]
+    public void PasteLinkFromClipboardAtActiveCell_TransposesAndCanKeepSourceColumnWidthsWithoutClearingCutSource()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var d3 = new CellAddress(sheet.Id, 3, 4);
+        var d4 = new CellAddress(sheet.Id, 4, 4);
+        sheet.SetCell(a1, new TextValue("first"));
+        sheet.SetCell(b1, new TextValue("second"));
+        sheet.ColumnWidths[1] = 22;
+        sheet.ColumnWidths[4] = 9;
+        sheet.ColumnWidths[5] = 18;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b1));
+        var clipboardText = session.CutSelectedRangeText();
+        session.SelectCell(d3);
+
+        var result = session.PasteLinkFromClipboardAtActiveCell(
+            clipboardText,
+            transpose: true,
+            keepSourceColumnWidths: true);
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().Equal(d3, d4);
+        session.SelectedRange.Should().Be(new GridRange(d3, d4));
+        sheet.GetValue(a1).Should().Be(new TextValue("first"));
+        sheet.GetValue(b1).Should().Be(new TextValue("second"));
+        sheet.GetCell(d3)!.FormulaText.Should().Be("'Sheet1'!A1");
+        sheet.GetCell(d4)!.FormulaText.Should().Be("'Sheet1'!B1");
+        sheet.ColumnWidths[4].Should().Be(22);
+        sheet.ColumnWidths.Should().NotContainKey(5);
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.GetValue(a1).Should().Be(new TextValue("first"));
+        sheet.GetValue(b1).Should().Be(new TextValue("second"));
+        sheet.GetCell(d3).Should().BeNull();
+        sheet.GetCell(d4).Should().BeNull();
+        sheet.ColumnWidths[4].Should().Be(9);
+        sheet.ColumnWidths[5].Should().Be(18);
+    }
+
+    [Fact]
     public void ClearSelectedRangeContents_ClearsValuesAndFormulasPreservesSelectionAndUndo()
     {
         var workbook = CreateWorkbook();

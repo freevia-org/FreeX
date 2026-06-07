@@ -1880,6 +1880,7 @@ public sealed class MainWindow : Window
         yield return CreatePasteSpecialMenuItem("Formats", PasteCellsMode.Formats, default);
         yield return CreatePasteColumnWidthsMenuItem("Column Widths");
         yield return CreatePasteSpecialMenuItem("Keep Source Column Widths", PasteCellsMode.All, default, keepSourceColumnWidths: true);
+        yield return CreatePasteLinkMenuItem("Paste Link");
         yield return CreatePasteSpecialMenuItem("Transpose", PasteCellsMode.All, new PasteSpecialOptions(Transpose: true));
         yield return CreatePasteSpecialMenuItem("Skip Blanks", PasteCellsMode.All, new PasteSpecialOptions(SkipBlanks: true));
         yield return CreatePasteSpecialMenuItem("Add", PasteCellsMode.All, new PasteSpecialOptions(Operation: PasteSpecialOperation.Add));
@@ -1907,6 +1908,13 @@ public sealed class MainWindow : Window
         return menuItem;
     }
 
+    private MenuItem CreatePasteLinkMenuItem(string header)
+    {
+        var menuItem = new MenuItem { Header = header };
+        menuItem.Click += async (_, _) => await PasteLinkFromClipboardAsync(header);
+        return menuItem;
+    }
+
     private NativeMenu CreateNativePasteSpecialMenu()
     {
         var menu = new NativeMenu();
@@ -1915,6 +1923,7 @@ public sealed class MainWindow : Window
         menu.Items.Add(CreateNativePasteSpecialMenuItem("Formats", PasteCellsMode.Formats, default));
         menu.Items.Add(CreateNativePasteColumnWidthsMenuItem("Column Widths"));
         menu.Items.Add(CreateNativePasteSpecialMenuItem("Keep Source Column Widths", PasteCellsMode.All, default, keepSourceColumnWidths: true));
+        menu.Items.Add(CreateNativePasteLinkMenuItem("Paste Link"));
         menu.Items.Add(CreateNativePasteSpecialMenuItem("Transpose", PasteCellsMode.All, new PasteSpecialOptions(Transpose: true)));
         menu.Items.Add(CreateNativePasteSpecialMenuItem("Skip Blanks", PasteCellsMode.All, new PasteSpecialOptions(SkipBlanks: true)));
         menu.Items.Add(new NativeMenuItemSeparator());
@@ -1941,6 +1950,13 @@ public sealed class MainWindow : Window
     {
         var menuItem = new NativeMenuItem { Header = header };
         menuItem.Click += async (_, _) => await PasteColumnWidthsFromClipboardAsync(header);
+        return menuItem;
+    }
+
+    private NativeMenuItem CreateNativePasteLinkMenuItem(string header)
+    {
+        var menuItem = new NativeMenuItem { Header = header };
+        menuItem.Click += async (_, _) => await PasteLinkFromClipboardAsync(header);
         return menuItem;
     }
 
@@ -3023,6 +3039,33 @@ public sealed class MainWindow : Window
         RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
     }
 
+    private async Task PasteLinkFromClipboardAsync(string label)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard is null)
+        {
+            ShowEditIssue("Clipboard unavailable on this platform.");
+            return;
+        }
+
+        var text = await clipboard.TryGetTextAsync();
+        var destination = _session.ActiveCell;
+        var result = _session.PasteLinkFromClipboardAtActiveCell(text);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Paste Link failed.");
+            return;
+        }
+
+        RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
+    }
+
     private void ClearSelectedRangeContents()
     {
         if (_isOpening || _isSaving)
@@ -3589,6 +3632,7 @@ public sealed class MainWindow : Window
             HasNativePasteSpecialMenuItem: HasNativeMenuItem(_pasteSpecialMenuItem, "Paste Special"),
             HasNativePasteSpecialColumnWidthsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Column Widths"),
             HasNativePasteSpecialKeepSourceColumnWidthsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Keep Source Column Widths"),
+            HasNativePasteSpecialPasteLinkMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Paste Link"),
             HasNativeSelectAllMenuItem: HasNativeMenuItem(_selectAllMenuItem, "Select All"),
             HasNativeClearContentsMenuItem: HasNativeMenuItem(_clearContentsMenuItem, "Clear Contents"),
             HasNativeBoldMenuItem: HasNativeMenuItem(_boldMenuItem, "Bold"),
