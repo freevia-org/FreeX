@@ -27,7 +27,7 @@ public sealed partial class XlsxChartExWriterTests
 
         using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
         {
-            var chartXml = XlsxPackageTestFixtures.LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+            var chartXml = LoadChartXml(archive);
             chartXml.Root!.Name.Should().Be(ChartExNs + "chartSpace");
             chartXml.Root.Elements().Select(element => element.Name).Take(2)
                 .Should().Equal(ChartExNs + "chartData", ChartExNs + "chart");
