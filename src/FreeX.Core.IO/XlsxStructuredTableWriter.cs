@@ -142,22 +142,8 @@ internal static class XlsxStructuredTableWriter
 
         if (table.HasAutoFilter)
             root.Add(ToAutoFilterXml(table, workbookNs));
-        if (!string.IsNullOrWhiteSpace(table.NativeSortStateXml))
-        {
-            try
-            {
-                var sortState = XElement.Parse(table.NativeSortStateXml);
-                if (sortState.Name == workbookNs + "sortState")
-                {
-                    XlsxWorksheetSortStateNormalizer.NormalizeElement(sortState);
-                    root.Add(sortState);
-                }
-            }
-            catch
-            {
-                // Ignore malformed native table sort payloads from older saves.
-            }
-        }
+        if (TryCreateNativeSortState(table.NativeSortStateXml, workbookNs) is { } sortState)
+            root.Add(sortState);
         root.Add(new XElement(
             workbookNs + "tableColumns",
             new XAttribute("count", columns.Count.ToString(CultureInfo.InvariantCulture)),
@@ -171,6 +157,27 @@ internal static class XlsxStructuredTableWriter
 
         XlsxStructuredTableSchemaNormalizer.NormalizeElement(root, tablePath);
         return new XDocument(root);
+    }
+
+    private static XElement? TryCreateNativeSortState(string? nativeXml, XNamespace workbookNs)
+    {
+        if (string.IsNullOrWhiteSpace(nativeXml))
+            return null;
+
+        try
+        {
+            var sortState = XElement.Parse(nativeXml);
+            if (sortState.Name != workbookNs + "sortState")
+                return null;
+
+            XlsxWorksheetSortStateNormalizer.NormalizeElement(sortState);
+            return sortState;
+        }
+        catch
+        {
+            // Ignore malformed native table sort payloads from older saves.
+            return null;
+        }
     }
 
     private static XElement ToColumnXml(StructuredTableColumnModel column, XNamespace workbookNs)

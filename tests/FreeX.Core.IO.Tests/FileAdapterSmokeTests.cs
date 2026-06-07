@@ -3847,11 +3847,10 @@ public partial class FileAdapterSmokeTests
         protectedRange.Attribute("name")!.Value.Should().Be("NativeEditableRange");
         protectedRange.Attribute("password")!.Value.Should().Be("ABCD");
         protectedRange.Attribute("securityDescriptor")!.Value.Should().Be("D:PAI");
-        protectedRange.Element(worksheetNs + "extLst").Should().NotBeNull();
+        protectedRange.Element(worksheetNs + "extLst").Should().BeNull();
         protectedRange.Elements(XName.Get("protectedRangeNativeChild", "urn:freex:test"))
-            .Select(element => element.Attribute("id")?.Value)
             .Should()
-            .BeEquivalentTo("first", "second");
+            .BeEmpty();
     }
 
     [Fact]
