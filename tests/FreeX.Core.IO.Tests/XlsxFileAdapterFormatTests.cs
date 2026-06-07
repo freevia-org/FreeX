@@ -447,6 +447,8 @@ public sealed class XlsxFileAdapterFormatTests
         preserveSourcePackageParts.Should().Contain("sourceParts.HasStructuredTables");
         preserveSourcePackageParts.Should().Contain("sourceParts.HasExternalLinks");
         preserveSourcePackageParts.Should().Contain("sourceParts.HasDrawings");
+        preserveSourcePackageParts.Should().Contain("XlsxWorksheetDataValidationNormalizer.NormalizeWorksheets(generatedArchive);");
+        preserveSourcePackageParts.Should().Contain("XlsxWorksheetExtensionListNormalizer.NormalizeWorksheets(generatedArchive);");
         preserveSourcePackageParts.Should().NotContain(
             "HasSourcePackagePart(sourceArchive",
             "loaded-workbook save replay should avoid rescanning all ZIP entries for each optional source package part");
