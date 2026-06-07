@@ -73,12 +73,12 @@ internal static class XlsxWorksheetSheetPropertiesNormalizer
     public static bool NormalizeElement(XElement sheetProperties)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(sheetProperties, SheetPropertiesAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(sheetProperties, SheetPropertiesAttributes);
 
         foreach (var attributeName in SheetPropertiesBooleanAttributes)
-            changed |= NormalizeAttribute(sheetProperties, attributeName, NormalizeBoolean);
-        changed |= NormalizeAttribute(sheetProperties, "syncRef", NormalizeReference);
-        changed |= NormalizeAttribute(sheetProperties, "codeName", NormalizeOptionalText);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetProperties, attributeName, NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetProperties, "syncRef", NormalizeReference);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetProperties, "codeName", NormalizeOptionalText);
 
         changed |= RemoveUnexpectedChildren(sheetProperties);
         changed |= RemoveDuplicateAllowedChildren(sheetProperties);
@@ -133,13 +133,13 @@ internal static class XlsxWorksheetSheetPropertiesNormalizer
     private static bool NormalizeTabColor(XElement tabColor)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(tabColor, ColorAttributes);
-        changed |= NormalizeAttribute(tabColor, "auto", NormalizeBoolean);
-        changed |= NormalizeAttribute(tabColor, "indexed", NormalizeUnsignedIntOrNull);
-        changed |= NormalizeAttribute(tabColor, "theme", NormalizeUnsignedIntOrNull);
-        changed |= NormalizeAttribute(tabColor, "rgb", NormalizeRgbHex);
-        changed |= NormalizeAttribute(tabColor, "tint", NormalizeTint);
-        changed |= RemoveAllNodes(tabColor);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(tabColor, ColorAttributes);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tabColor, "auto", NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tabColor, "indexed", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tabColor, "theme", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tabColor, "rgb", NormalizeRgbHex);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tabColor, "tint", NormalizeTint);
+        changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(tabColor);
         return changed;
     }
 
@@ -195,47 +195,6 @@ internal static class XlsxWorksheetSheetPropertiesNormalizer
         element.Name == WorksheetNs + "pageSetUpPr" ? 2 :
         90;
 
-    private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedNames)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                (attribute.Name.NamespaceName.Length == 0 && allowedNames.Contains(attribute.Name.LocalName)))
-            {
-                continue;
-            }
-
-            attribute.Remove();
-            changed = true;
-        }
-
-        return changed;
-    }
-
-    private static bool NormalizeAttribute(
-        XElement element,
-        string attributeName,
-        Func<string?, string?> normalize)
-    {
-        var attribute = element.Attribute(attributeName);
-        var normalized = normalize(attribute?.Value);
-        if (normalized is null)
-        {
-            if (attribute is null)
-                return false;
-
-            attribute.Remove();
-            return true;
-        }
-
-        if (attribute is not null && string.Equals(attribute.Value, normalized, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(attributeName, normalized);
-        return true;
-    }
-
     private static bool RemoveNonElementNodes(XElement element)
     {
         var nodes = element.Nodes().Where(node => node is not XElement).ToList();
@@ -244,15 +203,6 @@ internal static class XlsxWorksheetSheetPropertiesNormalizer
 
         foreach (var node in nodes)
             node.Remove();
-        return true;
-    }
-
-    private static bool RemoveAllNodes(XElement element)
-    {
-        if (!element.Nodes().Any())
-            return false;
-
-        element.RemoveNodes();
         return true;
     }
 
