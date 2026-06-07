@@ -31,6 +31,12 @@ public sealed class PlatformApplicationDataPathProvider : IApplicationDataPathPr
 
     public static PlatformApplicationDataPathProvider Instance { get; } = new();
 
+    public static PlatformApplicationDataPathProvider LocalInstance { get; } =
+        new(
+            OperatingSystem.IsMacOS,
+            () => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            () => Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
+
     public string GetApplicationDataDirectory()
     {
         if (_isMacOsProvider())

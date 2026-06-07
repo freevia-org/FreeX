@@ -9,7 +9,8 @@ public sealed class AppDiagnosticsStartupTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("App.xaml.cs");
 
-        source.Should().Contain("AddSingleton(AppDiagnosticsOptions.CreateDefault())");
+        source.Should().Contain("AddSingleton<IApplicationDataPathProvider>(PlatformApplicationDataPathProvider.LocalInstance)");
+        source.Should().Contain("AppDiagnosticsOptions.CreateDefault(sp.GetRequiredService<IApplicationDataPathProvider>())");
         source.Should().Contain("AddSingleton<AppDiagnosticsFileStore>()");
         source.Should().Contain("AddSingleton<IAppDiagnostics, AppDiagnostics>()");
         source.Should().Contain("DispatcherUnhandledException");

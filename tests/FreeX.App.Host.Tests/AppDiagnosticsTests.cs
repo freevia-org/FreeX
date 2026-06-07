@@ -2,17 +2,18 @@ using System.IO;
 using System.Text.Json;
 using FluentAssertions;
 using FreeX.App.Host;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host.Tests;
 
 public sealed class AppDiagnosticsTests
 {
     [Fact]
-    public void Options_CreateDefault_UsesLocalAppDataDiagnosticsFolder()
+    public void Options_CreateDefault_UsesApplicationDataPathProviderDiagnosticsFolder()
     {
         using var temp = new TestTemporaryDirectory();
 
-        var options = AppDiagnosticsOptions.CreateDefault(() => temp.Path);
+        var options = AppDiagnosticsOptions.CreateDefault(new TestApplicationDataPathProvider(temp.Path));
 
         options.IsEnabled.Should().BeTrue();
         options.DiagnosticsDirectory.Should().Be(Path.Combine(temp.Path, "FreeX", "Diagnostics"));
@@ -142,4 +143,8 @@ public sealed class AppDiagnosticsTests
         recordCrash.Should().NotThrow().Which.Should().BeEmpty();
     }
 
+    private sealed class TestApplicationDataPathProvider(string path) : IApplicationDataPathProvider
+    {
+        public string GetApplicationDataDirectory() => path;
+    }
 }

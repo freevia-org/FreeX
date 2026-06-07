@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using FreeX.App.Services;
 using FreeX.Core.IO;
 
 namespace FreeX.App.Host;
@@ -82,20 +83,16 @@ public sealed class FreeXOptions
     [JsonIgnore]
     public string? LastPersistenceError { get; private set; }
 
-    private static string StorePath => ResolveStorePath();
+    private static string StorePath => ResolveStorePath(PlatformApplicationDataPathProvider.Instance);
 
     internal static string StorePathForDisplay => StorePath;
 
     public static FreeXOptions Load() => LoadFromPath(StorePath);
 
-    private static string ResolveStorePath()
+    internal static string ResolveStorePath(IApplicationDataPathProvider pathProvider)
     {
         var overridePath = Environment.GetEnvironmentVariable(OptionsPathEnvironmentVariable);
-        return string.IsNullOrWhiteSpace(overridePath)
-            ? System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "FreeX", "options.json")
-            : overridePath;
+        return AppStoragePathPlanner.ResolveOptionsFilePath(pathProvider, overridePath);
     }
 
     internal static FreeXOptions LoadFromPath(string storePath)
