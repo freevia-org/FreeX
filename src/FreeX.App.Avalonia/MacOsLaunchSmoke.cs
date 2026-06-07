@@ -85,6 +85,8 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeDuplicateSheetMenuItem,
     bool HasNativeMoveSheetLeftMenuItem,
     bool HasNativeMoveSheetRightMenuItem,
+    bool HasNativeHideSheetMenuItem,
+    bool HasNativeUnhideSheetMenuItem,
     bool HasNativeDeleteSheetMenuItem,
     bool HasNativeUndoMenuItem,
     bool HasNativeRedoMenuItem,
@@ -160,6 +162,8 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeDuplicateSheetMenuItem &&
         HasNativeMoveSheetLeftMenuItem &&
         HasNativeMoveSheetRightMenuItem &&
+        HasNativeHideSheetMenuItem &&
+        HasNativeUnhideSheetMenuItem &&
         HasNativeDeleteSheetMenuItem &&
         HasNativeUndoMenuItem &&
         HasNativeRedoMenuItem &&
@@ -283,6 +287,8 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_duplicate_sheet_menu_item={FormatBool(snapshot.HasNativeDuplicateSheetMenuItem)}",
                 $"native_move_sheet_left_menu_item={FormatBool(snapshot.HasNativeMoveSheetLeftMenuItem)}",
                 $"native_move_sheet_right_menu_item={FormatBool(snapshot.HasNativeMoveSheetRightMenuItem)}",
+                $"native_hide_sheet_menu_item={FormatBool(snapshot.HasNativeHideSheetMenuItem)}",
+                $"native_unhide_sheet_menu_item={FormatBool(snapshot.HasNativeUnhideSheetMenuItem)}",
                 $"native_delete_sheet_menu_item={FormatBool(snapshot.HasNativeDeleteSheetMenuItem)}",
                 $"native_undo_menu_item={FormatBool(snapshot.HasNativeUndoMenuItem)}",
                 $"native_redo_menu_item={FormatBool(snapshot.HasNativeRedoMenuItem)}",

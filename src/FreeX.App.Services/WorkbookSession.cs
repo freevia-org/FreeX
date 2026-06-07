@@ -83,6 +83,15 @@ public sealed class WorkbookSession
 
     public IReadOnlyList<WorkbookSheetTab> SheetTabs { get; private set; }
 
+    public IReadOnlyList<WorkbookHiddenSheet> HiddenSheets =>
+        Workbook.Sheets
+            .Where(sheet => sheet.IsHidden && !sheet.IsVeryHidden)
+            .Select(sheet => new WorkbookHiddenSheet(sheet.Id, sheet.Name))
+            .ToList();
+
+    public bool CanHideActiveSheet =>
+        Workbook.Sheets.Any(sheet => sheet.Id != ActiveSheet.Id && !sheet.IsHidden && !sheet.IsVeryHidden);
+
     public string? CurrentFilePath { get; private set; }
 
     public XlsxFeatureReport? CurrentXlsxFeatureReport { get; private set; }
@@ -297,6 +306,70 @@ public sealed class WorkbookSession
 
     public WorkbookCellEditResult MoveActiveSheetRight() =>
         MoveActiveSheetBy(offset: 1);
+
+    public WorkbookCellEditResult HideActiveSheet()
+    {
+        var sheetId = ActiveSheet.Id;
+        var sheetIndex = Workbook.Sheets.ToList().FindIndex(sheet => sheet.Id == sheetId);
+        if (sheetIndex < 0)
+        {
+            return new WorkbookCellEditResult(
+                false,
+                "Active sheet was not found.",
+                [],
+                RecalcReport: null);
+        }
+
+        var preferredSheetId = FindPreferredVisibleSheetIdAfterHidden(sheetIndex, sheetId);
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new SetSheetHiddenCommand(sheetId, hidden: true));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulWorkbookStructureResult(preferredSheetId ?? ActiveSheet.Id);
+        return result;
+    }
+
+    public WorkbookCellEditResult UnhideSheet(SheetId sheetId)
+    {
+        var sheet = Workbook.GetSheet(sheetId);
+        if (sheet is null)
+        {
+            return new WorkbookCellEditResult(
+                false,
+                "Hidden sheet was not found.",
+                [],
+                RecalcReport: null);
+        }
+
+        if (sheet.IsVeryHidden)
+        {
+            return new WorkbookCellEditResult(
+                false,
+                "Very hidden sheets cannot be unhidden from this menu.",
+                [],
+                RecalcReport: null);
+        }
+
+        if (!sheet.IsHidden)
+        {
+            return new WorkbookCellEditResult(
+                true,
+                null,
+                [],
+                RecalcReport: null);
+        }
+
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new SetSheetHiddenCommand(sheetId, hidden: false));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulWorkbookStructureResult(sheetId);
+        return result;
+    }
 
     public WorkbookCellEditResult DeleteActiveSheet()
     {
@@ -930,6 +1003,25 @@ public sealed class WorkbookSession
         {
             var sheet = Workbook.Sheets[index];
             if (sheet.Id != removedSheetId)
+                return sheet.Id;
+        }
+
+        return null;
+    }
+
+    private SheetId? FindPreferredVisibleSheetIdAfterHidden(int hiddenIndex, SheetId hiddenSheetId)
+    {
+        for (var index = hiddenIndex + 1; index < Workbook.Sheets.Count; index++)
+        {
+            var sheet = Workbook.Sheets[index];
+            if (sheet.Id != hiddenSheetId && !sheet.IsHidden && !sheet.IsVeryHidden)
+                return sheet.Id;
+        }
+
+        for (var index = hiddenIndex - 1; index >= 0; index--)
+        {
+            var sheet = Workbook.Sheets[index];
+            if (sheet.Id != hiddenSheetId && !sheet.IsHidden && !sheet.IsVeryHidden)
                 return sheet.Id;
         }
 

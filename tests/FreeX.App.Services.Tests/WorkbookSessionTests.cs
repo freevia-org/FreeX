@@ -2668,6 +2668,183 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void HideActiveSheet_HidesSheetSelectsVisibleSurvivorAndKeepsUndoRedoCoherent()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var charts = workbook.AddSheet("Charts");
+        charts.SetCell(new CellAddress(charts.Id, 3, 3), new TextValue("visible survivor"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectSheet(details.Id);
+
+        var result = session.HideActiveSheet();
+
+        result.Success.Should().BeTrue();
+        details.IsHidden.Should().BeTrue();
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveSheet.Should().BeSameAs(charts);
+        workbook.ActiveSheetIndex.Should().Be(2);
+        session.HiddenSheets.Should().ContainSingle()
+            .Which.Should().Be(new WorkbookHiddenSheet(details.Id, "Details"));
+        session.SheetTabs.Should().Equal(
+            new WorkbookSheetTab(summary.Id, "Sheet1", IsActive: false),
+            new WorkbookSheetTab(charts.Id, "Charts", IsActive: true));
+        session.Viewport.Cells.Should().Contain(cell => cell.Row == 3 && cell.Col == 3);
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        details.IsHidden.Should().BeFalse();
+        session.HiddenSheets.Should().BeEmpty();
+        session.ActiveSheet.Should().BeSameAs(charts);
+        session.SheetTabs.Should().Equal(
+            new WorkbookSheetTab(summary.Id, "Sheet1", IsActive: false),
+            new WorkbookSheetTab(details.Id, "Details", IsActive: false),
+            new WorkbookSheetTab(charts.Id, "Charts", IsActive: true));
+        session.CanRedo.Should().BeTrue();
+
+        var redo = session.RedoLastEdit();
+
+        redo.Success.Should().BeTrue();
+        details.IsHidden.Should().BeTrue();
+        session.HiddenSheets.Should().ContainSingle()
+            .Which.Should().Be(new WorkbookHiddenSheet(details.Id, "Details"));
+        session.ActiveSheet.Should().BeSameAs(charts);
+    }
+
+    [Fact]
+    public void UnhideSheet_ListsNormalHiddenSheetsSelectsUnhiddenSheetAndKeepsUndoRedoCoherent()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var audit = workbook.AddSheet("Audit");
+        details.IsHidden = true;
+        audit.IsHidden = true;
+        audit.IsVeryHidden = true;
+        details.SetCell(new CellAddress(details.Id, 4, 2), new TextValue("restored"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        session.HiddenSheets.Should().ContainSingle()
+            .Which.Should().Be(new WorkbookHiddenSheet(details.Id, "Details"));
+
+        var result = session.UnhideSheet(details.Id);
+
+        result.Success.Should().BeTrue();
+        details.IsHidden.Should().BeFalse();
+        audit.IsHidden.Should().BeTrue();
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveSheet.Should().BeSameAs(details);
+        workbook.ActiveSheetIndex.Should().Be(1);
+        session.HiddenSheets.Should().BeEmpty();
+        session.SheetTabs.Should().Equal(
+            new WorkbookSheetTab(summary.Id, "Sheet1", IsActive: false),
+            new WorkbookSheetTab(details.Id, "Details", IsActive: true));
+        session.Viewport.Cells.Should().Contain(cell => cell.Row == 4 && cell.Col == 2);
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        details.IsHidden.Should().BeTrue();
+        session.HiddenSheets.Should().ContainSingle()
+            .Which.Should().Be(new WorkbookHiddenSheet(details.Id, "Details"));
+        session.ActiveSheet.Should().BeSameAs(summary);
+        session.CanRedo.Should().BeTrue();
+
+        var redo = session.RedoLastEdit();
+
+        redo.Success.Should().BeTrue();
+        details.IsHidden.Should().BeFalse();
+        session.HiddenSheets.Should().BeEmpty();
+        session.ActiveSheet.Should().BeSameAs(summary);
+    }
+
+    [Fact]
+    public void HideActiveSheet_RejectsOnlyUserVisibleSheetWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var audit = workbook.AddSheet("Audit");
+        audit.IsVeryHidden = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        session.CanHideActiveSheet.Should().BeFalse();
+
+        var result = session.HideActiveSheet();
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("visible");
+        workbook.Sheets[0].IsHidden.Should().BeFalse();
+        session.ActiveSheet.Should().BeSameAs(workbook.Sheets[0]);
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void HideUnhideSheet_RejectProtectedWorkbookWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var details = workbook.AddSheet("Details");
+        details.IsHidden = true;
+        workbook.IsStructureProtected = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var hide = session.HideActiveSheet();
+        var unhide = session.UnhideSheet(details.Id);
+
+        hide.Success.Should().BeFalse();
+        unhide.Success.Should().BeFalse();
+        hide.ErrorMessage.Should().Contain("protected");
+        unhide.ErrorMessage.Should().Contain("protected");
+        workbook.Sheets[0].IsHidden.Should().BeFalse();
+        details.IsHidden.Should().BeTrue();
+        session.ActiveSheet.Should().BeSameAs(workbook.Sheets[0]);
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void UnhideSheet_RejectsVeryHiddenSheetWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var audit = workbook.AddSheet("Audit");
+        audit.IsHidden = true;
+        audit.IsVeryHidden = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var result = session.UnhideSheet(audit.Id);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("Very hidden");
+        audit.IsHidden.Should().BeTrue();
+        session.HiddenSheets.Should().BeEmpty();
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void DeleteActiveSheet_RemovesSelectsNextSheetAndKeepsUndoRedoCoherent()
     {
         var workbook = CreateWorkbook();

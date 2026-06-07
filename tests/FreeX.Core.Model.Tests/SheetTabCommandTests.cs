@@ -321,6 +321,22 @@ public class SheetTabCommandTests
     }
 
     [Fact]
+    public void SetSheetHiddenCommand_TreatsVeryHiddenSheetsAsNotVisible()
+    {
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+        sheet2.IsVeryHidden = true;
+        var ctx = new TestCommandContext(wb);
+
+        var outcome = new SetSheetHiddenCommand(sheet1.Id, hidden: true).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("visible");
+        sheet1.IsHidden.Should().BeFalse();
+    }
+
+    [Fact]
     public void SetSheetTabColorCommand_SetsColorAndUndoRestores()
     {
         var wb = new Workbook("test");

@@ -7,6 +7,13 @@ public sealed record WorkbookSheetTab(
     string Name,
     bool IsActive);
 
+public sealed record WorkbookHiddenSheet(
+    SheetId Id,
+    string Name)
+{
+    public override string ToString() => Name;
+}
+
 public sealed record WorkbookSheetSelection(
     Sheet Sheet,
     int Index,

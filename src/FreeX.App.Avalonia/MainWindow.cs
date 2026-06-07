@@ -135,6 +135,8 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _duplicateSheetMenuItem = new();
     private readonly NativeMenuItem _moveSheetLeftMenuItem = new();
     private readonly NativeMenuItem _moveSheetRightMenuItem = new();
+    private readonly NativeMenuItem _hideSheetMenuItem = new();
+    private readonly NativeMenuItem _unhideSheetMenuItem = new();
     private readonly NativeMenuItem _deleteSheetMenuItem = new();
     private readonly NativeMenuItem _undoMenuItem = new();
     private readonly NativeMenuItem _redoMenuItem = new();
@@ -360,6 +362,12 @@ public sealed class MainWindow : Window
         _moveSheetRightMenuItem.Header = "Move Sheet Right";
         _moveSheetRightMenuItem.Click += (_, _) => MoveActiveSheetRight();
 
+        _hideSheetMenuItem.Header = "Hide Sheet";
+        _hideSheetMenuItem.Click += (_, _) => HideActiveSheet();
+
+        _unhideSheetMenuItem.Header = "Unhide Sheet...";
+        _unhideSheetMenuItem.Click += async (_, _) => await UnhideSheetAsync();
+
         _deleteSheetMenuItem.Header = "Delete Sheet";
         _deleteSheetMenuItem.Click += (_, _) => DeleteActiveSheet();
 
@@ -583,6 +591,10 @@ public sealed class MainWindow : Window
         sheetMenu.Items.Add(_duplicateSheetMenuItem);
         sheetMenu.Items.Add(_moveSheetLeftMenuItem);
         sheetMenu.Items.Add(_moveSheetRightMenuItem);
+        sheetMenu.Items.Add(new NativeMenuItemSeparator());
+        sheetMenu.Items.Add(_hideSheetMenuItem);
+        sheetMenu.Items.Add(_unhideSheetMenuItem);
+        sheetMenu.Items.Add(new NativeMenuItemSeparator());
         sheetMenu.Items.Add(_deleteSheetMenuItem);
 
         var helpMenu = new NativeMenu();
@@ -1065,6 +1077,8 @@ public sealed class MainWindow : Window
             isIdle &&
             activeSheetTabIndex >= 0 &&
             activeSheetTabIndex < _session.SheetTabs.Count - 1;
+        _hideSheetMenuItem.IsEnabled = isIdle && _session.CanHideActiveSheet;
+        _unhideSheetMenuItem.IsEnabled = isIdle && _session.HiddenSheets.Count > 0;
         _deleteSheetMenuItem.IsEnabled = isIdle;
         _undoMenuItem.IsEnabled = _undoButton.IsEnabled;
         _redoMenuItem.IsEnabled = _redoButton.IsEnabled;
@@ -2260,6 +2274,56 @@ public sealed class MainWindow : Window
         RefreshShell($"Moved {sheetName} right");
     }
 
+    private void HideActiveSheet()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var sheetName = _session.ActiveSheet.Name;
+        ClearSelectedDrawingObject();
+        var result = _session.HideActiveSheet();
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Hide Sheet failed.");
+            return;
+        }
+
+        RefreshShell($"Hid {sheetName}");
+    }
+
+    private async Task UnhideSheetAsync()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var hiddenSheets = _session.HiddenSheets;
+        if (hiddenSheets.Count == 0)
+        {
+            ShowEditIssue("No hidden sheets.");
+            return;
+        }
+
+        var sheet = await ShowUnhideSheetDialogAsync(hiddenSheets);
+        if (sheet is null)
+            return;
+
+        ClearSelectedDrawingObject();
+        var result = _session.UnhideSheet(sheet.Id);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Unhide Sheet failed.");
+            return;
+        }
+
+        RefreshShell($"Unhid {sheet.Name}");
+    }
+
     private void DeleteActiveSheet()
     {
         if (_isOpening || _isSaving)
@@ -2278,6 +2342,99 @@ public sealed class MainWindow : Window
         }
 
         RefreshShell($"Deleted {sheetName}");
+    }
+
+    private async Task<WorkbookHiddenSheet?> ShowUnhideSheetDialogAsync(IReadOnlyList<WorkbookHiddenSheet> hiddenSheets)
+    {
+        WorkbookHiddenSheet? result = null;
+        var dialog = new Window
+        {
+            Title = "Unhide Sheet",
+            Width = 380,
+            Height = 190,
+            MinWidth = 340,
+            MinHeight = 180,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+
+        var sheetBox = new ComboBox
+        {
+            ItemsSource = hiddenSheets,
+            MinWidth = 280,
+            SelectedIndex = hiddenSheets.Count > 0 ? 0 : -1,
+        };
+        AutomationProperties.SetName(sheetBox, "Hidden sheet");
+        AutomationProperties.SetAutomationId(sheetBox, "UnhideSheetList");
+        AutomationProperties.SetHelpText(sheetBox, "Select the hidden worksheet to make visible.");
+
+        var okButton = new Button
+        {
+            Content = "OK",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(okButton, "UnhideSheetOkButton");
+        AutomationProperties.SetAutomationId(cancelButton, "UnhideSheetCancelButton");
+
+        void Accept()
+        {
+            if (sheetBox.SelectedItem is not WorkbookHiddenSheet selected)
+                return;
+
+            result = selected;
+            dialog.Close();
+        }
+
+        okButton.Click += (_, _) => Accept();
+        cancelButton.Click += (_, _) => dialog.Close();
+        sheetBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                Accept();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                dialog.Close();
+                e.Handled = true;
+            }
+        };
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Children =
+            {
+                cancelButton,
+                okButton,
+            },
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = "Hidden sheet" },
+                sheetBox,
+                buttonRow,
+            },
+        };
+        dialog.Opened += (_, _) => sheetBox.Focus();
+
+        await dialog.ShowDialog(this);
+        return result;
     }
 
     private async Task<string?> ShowRenameSheetDialogAsync(string currentName)
@@ -3329,6 +3486,8 @@ public sealed class MainWindow : Window
             HasNativeDuplicateSheetMenuItem: HasNativeMenuItem(_duplicateSheetMenuItem, "Duplicate Sheet", requireGesture: false),
             HasNativeMoveSheetLeftMenuItem: HasNativeMenuItem(_moveSheetLeftMenuItem, "Move Sheet Left", requireGesture: false),
             HasNativeMoveSheetRightMenuItem: HasNativeMenuItem(_moveSheetRightMenuItem, "Move Sheet Right", requireGesture: false),
+            HasNativeHideSheetMenuItem: HasNativeMenuItem(_hideSheetMenuItem, "Hide Sheet", requireGesture: false),
+            HasNativeUnhideSheetMenuItem: HasNativeMenuItem(_unhideSheetMenuItem, "Unhide Sheet...", requireGesture: false),
             HasNativeDeleteSheetMenuItem: HasNativeMenuItem(_deleteSheetMenuItem, "Delete Sheet", requireGesture: false),
             HasNativeUndoMenuItem: HasNativeMenuItem(_undoMenuItem, "Undo"),
             HasNativeRedoMenuItem: HasNativeMenuItem(_redoMenuItem, "Redo"),
