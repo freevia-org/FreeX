@@ -37,6 +37,13 @@ internal static class XlsxWorksheetXmlValueParser
     public static bool IsFalse(string? value) =>
         value is "0" || string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
 
+    public static double? ParsePositiveFiniteDouble(string? value) =>
+        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) &&
+        double.IsFinite(parsed) &&
+        parsed > 0
+            ? parsed
+            : null;
+
     public static uint ValidFrozenRowsOrZero(uint row) =>
         row <= CellAddress.MaxRow ? row : 0;
 

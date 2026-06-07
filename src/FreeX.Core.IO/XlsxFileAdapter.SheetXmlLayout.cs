@@ -342,7 +342,8 @@ public sealed partial class XlsxFileAdapter
             !IsFalse(sheetView?.Attribute("showRuler")?.Value),
             ParseZoomPercent(sheetView?.Attribute("zoomScale")?.Value),
             IsTruthy(sheetView?.Attribute("showFormulas")?.Value),
-            ParseOptionalDouble(sheetFormatPr?.Attribute("defaultColWidth")?.Value),
+            XlsxWorksheetXmlValueParser.ParsePositiveFiniteDouble(
+                sheetFormatPr?.Attribute("defaultColWidth")?.Value),
             ReadDefaultRowHeight(sheetFormatPr, stylesXml),
             XlsxWorksheetLayoutMetadataReader.ReadWorksheetSheetFormatMetadata(sheetFormatPr),
             XlsxWorksheetLayoutMetadataReader.ReadWorksheetDimensionMetadata(dimension),
@@ -696,17 +697,13 @@ public sealed partial class XlsxFileAdapter
     private static int ParseZoomPercent(string? value) =>
         int.TryParse(value, out var zoom) && zoom is >= 10 and <= 400 ? zoom : 100;
 
-    private static double? ParseOptionalDouble(string? value) =>
-        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) &&
-        double.IsFinite(parsed) &&
-        parsed > 0
-            ? parsed
-            : null;
-
     private static double? ReadDefaultRowHeight(XElement? sheetFormatPr, XDocument? stylesXml)
     {
-        if (ParseOptionalDouble(sheetFormatPr?.Attribute("defaultRowHeight")?.Value) is not { } rowHeightPoints)
+        if (XlsxWorksheetXmlValueParser.ParsePositiveFiniteDouble(
+            sheetFormatPr?.Attribute("defaultRowHeight")?.Value) is not { } rowHeightPoints)
+        {
             return null;
+        }
 
         if (!IsTruthy(sheetFormatPr?.Attribute("customHeight")?.Value) &&
             IsAptosNarrowNormalStyle(stylesXml) &&
@@ -740,7 +737,8 @@ public sealed partial class XlsxFileAdapter
             return (null, null);
 
         var fontName = font.Element(ns + "name")?.Attribute("val")?.Value;
-        var fontSize = ParseOptionalDouble(font.Element(ns + "sz")?.Attribute("val")?.Value);
+        var fontSize = XlsxWorksheetXmlValueParser.ParsePositiveFiniteDouble(
+            font.Element(ns + "sz")?.Attribute("val")?.Value);
         return (fontName, fontSize);
     }
 
