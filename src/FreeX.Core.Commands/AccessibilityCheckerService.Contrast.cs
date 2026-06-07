@@ -841,6 +841,7 @@ public static partial class AccessibilityCheckerService
     private const int MaxFormulaPermutIterations = 10_000;
     private const int MaxFormulaPermutationAInput = int.MaxValue;
     private const int MaxFormulaFinancialDepreciationIterations = 10_000;
+    private const int MaxFormulaFinancialPaymentIterations = 50_000;
     private const int MaxFormulaFinancialBondCouponIterations = 50_000;
     private const int MaxFormulaFinancialBondYieldIterations = 200;
     private const int MaxFormulaGcdArgumentCount = 255;
@@ -1528,6 +1529,12 @@ public static partial class AccessibilityCheckerService
             case "ISPMT":
                 kind = ConditionalFormulaScalarFunctionKind.Ispmt;
                 return true;
+            case "CUMIPMT":
+                kind = ConditionalFormulaScalarFunctionKind.Cumipmt;
+                return true;
+            case "CUMPRINC":
+                kind = ConditionalFormulaScalarFunctionKind.Cumprinc;
+                return true;
             case "NPV":
                 kind = ConditionalFormulaScalarFunctionKind.Npv;
                 return true;
@@ -1617,6 +1624,12 @@ public static partial class AccessibilityCheckerService
                 return true;
             case "VDB":
                 kind = ConditionalFormulaScalarFunctionKind.Vdb;
+                return true;
+            case "AMORDEGRC":
+                kind = ConditionalFormulaScalarFunctionKind.Amordegrc;
+                return true;
+            case "AMORLINC":
+                kind = ConditionalFormulaScalarFunctionKind.Amorlinc;
                 return true;
             case "EFFECT":
                 kind = ConditionalFormulaScalarFunctionKind.Effect;
@@ -2484,6 +2497,10 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Ipmt or
             ConditionalFormulaScalarFunctionKind.Ppmt => argumentCount is >= 4 and <= 6,
             ConditionalFormulaScalarFunctionKind.Ispmt => argumentCount == 4,
+            ConditionalFormulaScalarFunctionKind.Cumipmt or
+            ConditionalFormulaScalarFunctionKind.Cumprinc => argumentCount == 6,
+            ConditionalFormulaScalarFunctionKind.Amordegrc or
+            ConditionalFormulaScalarFunctionKind.Amorlinc => argumentCount is 6 or 7,
             ConditionalFormulaScalarFunctionKind.Multinomial => argumentCount is >= 1 and <= MaxFormulaMultinomialArgumentCount,
             ConditionalFormulaScalarFunctionKind.Gcd or
             ConditionalFormulaScalarFunctionKind.Lcm => argumentCount is >= 1 and <= MaxFormulaGcdArgumentCount,
@@ -3457,6 +3474,8 @@ public static partial class AccessibilityCheckerService
         Ipmt,
         Ppmt,
         Ispmt,
+        Cumipmt,
+        Cumprinc,
         Npv,
         Irr,
         Mirr,
@@ -3487,6 +3506,8 @@ public static partial class AccessibilityCheckerService
         Db,
         Ddb,
         Vdb,
+        Amordegrc,
+        Amorlinc,
         Effect,
         Nominal,
         Rri,
@@ -4581,6 +4602,8 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Ipmt:
                 case ConditionalFormulaScalarFunctionKind.Ppmt:
                 case ConditionalFormulaScalarFunctionKind.Ispmt:
+                case ConditionalFormulaScalarFunctionKind.Cumipmt:
+                case ConditionalFormulaScalarFunctionKind.Cumprinc:
                     return TryEvaluateFormulaFinancialAnnuityFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Npv:
                 case ConditionalFormulaScalarFunctionKind.Irr:
@@ -4616,6 +4639,8 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Db:
                 case ConditionalFormulaScalarFunctionKind.Ddb:
                 case ConditionalFormulaScalarFunctionKind.Vdb:
+                case ConditionalFormulaScalarFunctionKind.Amordegrc:
+                case ConditionalFormulaScalarFunctionKind.Amorlinc:
                 case ConditionalFormulaScalarFunctionKind.Effect:
                 case ConditionalFormulaScalarFunctionKind.Nominal:
                 case ConditionalFormulaScalarFunctionKind.Rri:
@@ -12679,6 +12704,34 @@ public static partial class AccessibilityCheckerService
 
                     value = FormulaIspmtScalar(ispmtRate, ispmtPer, ispmtNper, ispmtPv);
                     return true;
+                case ConditionalFormulaScalarFunctionKind.Cumipmt:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var cumipmtRate) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var cumipmtNper) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var cumipmtPv) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var cumipmtStart) ||
+                        !TryGetFormulaFinancialNumber(arguments[4], out var cumipmtEnd) ||
+                        !TryGetFormulaFinancialNumber(arguments[5], out var cumipmtType))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaCumipmtScalar(cumipmtRate, cumipmtNper, cumipmtPv, cumipmtStart, cumipmtEnd, cumipmtType);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Cumprinc:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var cumprincRate) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var cumprincNper) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var cumprincPv) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var cumprincStart) ||
+                        !TryGetFormulaFinancialNumber(arguments[4], out var cumprincEnd) ||
+                        !TryGetFormulaFinancialNumber(arguments[5], out var cumprincType))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaCumprincScalar(cumprincRate, cumprincNper, cumprincPv, cumprincStart, cumprincEnd, cumprincType);
+                    return true;
                 default:
                     return false;
             }
@@ -12851,6 +12904,102 @@ public static partial class AccessibilityCheckerService
                 return ErrorValue.Num;
 
             return FormulaFinancialNumberResult(-pv * rate * (nper - per) / nper);
+        }
+
+        private static ScalarValue FormulaCumipmtScalar(double rate, double nper, double pv, double start, double end, double type)
+        {
+            if (!TryGetFormulaFinancialCumulativePaymentArguments(
+                    rate,
+                    nper,
+                    pv,
+                    start,
+                    end,
+                    type,
+                    out var startPeriod,
+                    out var endPeriod,
+                    out var paymentType))
+            {
+                return ErrorValue.Num;
+            }
+
+            var sum = 0d;
+            var periodCount = endPeriod - startPeriod + 1;
+            for (var offset = 0; offset < periodCount; offset++)
+            {
+                var period = startPeriod + offset;
+                sum += FormulaFinancialCalcIpmt(rate, period, nper, pv, 0d, paymentType);
+            }
+
+            return FormulaFinancialNumberResult(sum);
+        }
+
+        private static ScalarValue FormulaCumprincScalar(double rate, double nper, double pv, double start, double end, double type)
+        {
+            if (!TryGetFormulaFinancialCumulativePaymentArguments(
+                    rate,
+                    nper,
+                    pv,
+                    start,
+                    end,
+                    type,
+                    out var startPeriod,
+                    out var endPeriod,
+                    out var paymentType))
+            {
+                return ErrorValue.Num;
+            }
+
+            var payment = FormulaFinancialCalcPmt(rate, nper, pv, 0d, paymentType);
+            var sum = 0d;
+            var periodCount = endPeriod - startPeriod + 1;
+            for (var offset = 0; offset < periodCount; offset++)
+            {
+                var period = startPeriod + offset;
+                sum += payment - FormulaFinancialCalcIpmt(rate, period, nper, pv, 0d, paymentType);
+            }
+
+            return FormulaFinancialNumberResult(sum);
+        }
+
+        private static bool TryGetFormulaFinancialCumulativePaymentArguments(
+            double rate,
+            double nper,
+            double pv,
+            double start,
+            double end,
+            double type,
+            out int startPeriod,
+            out int endPeriod,
+            out int paymentType)
+        {
+            startPeriod = 0;
+            endPeriod = 0;
+            paymentType = 0;
+            if (!double.IsFinite(rate) ||
+                !double.IsFinite(nper) ||
+                !double.IsFinite(pv) ||
+                !TryGetFormulaFinancialInteger(start, out startPeriod) ||
+                !TryGetFormulaFinancialInteger(end, out endPeriod) ||
+                !TryGetFormulaFinancialInteger(type, out paymentType) ||
+                !TryGetFormulaFinancialInteger(nper, out var periodCount))
+            {
+                return false;
+            }
+
+            if (paymentType != 0 && paymentType != 1)
+                return false;
+
+            if (rate <= 0d ||
+                nper <= 0d ||
+                pv <= 0d ||
+                startPeriod < 1 ||
+                endPeriod < startPeriod ||
+                endPeriod > periodCount)
+            {
+                return false;
+            }
+
+            return endPeriod - startPeriod + 1 <= MaxFormulaFinancialPaymentIterations;
         }
 
         private static bool TryGetFormulaFinancialPaymentPeriod(
@@ -15545,6 +15694,48 @@ public static partial class AccessibilityCheckerService
 
                     value = FormulaFinancialVdbScalar(vdbCost, vdbSalvage, vdbLife, vdbStartPeriod, vdbEndPeriod, vdbFactor, vdbNoSwitch);
                     return true;
+                case ConditionalFormulaScalarFunctionKind.Amordegrc:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var amordegrcCost, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var amordegrcDatePurchased, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var amordegrcFirstPeriod, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var amordegrcSalvage, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[4], out var amordegrcPeriod, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[5], out var amordegrcRate, out value) ||
+                        !TryGetFormulaFinancialOptionalBasis(arguments, 6, out var amordegrcBasis, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialAmordegrcScalar(
+                        amordegrcCost,
+                        amordegrcDatePurchased,
+                        amordegrcFirstPeriod,
+                        amordegrcSalvage,
+                        amordegrcPeriod,
+                        amordegrcRate,
+                        amordegrcBasis);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Amorlinc:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var amorlincCost, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var amorlincDatePurchased, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var amorlincFirstPeriod, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var amorlincSalvage, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[4], out var amorlincPeriod, out value) ||
+                        !TryGetFormulaFinancialNumber(arguments[5], out var amorlincRate, out value) ||
+                        !TryGetFormulaFinancialOptionalBasis(arguments, 6, out var amorlincBasis, out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialAmorlincScalar(
+                        amorlincCost,
+                        amorlincDatePurchased,
+                        amorlincFirstPeriod,
+                        amorlincSalvage,
+                        amorlincPeriod,
+                        amorlincRate,
+                        amorlincBasis);
+                    return true;
                 case ConditionalFormulaScalarFunctionKind.Effect:
                     if (!TryGetFormulaFinancialNumber(arguments[0], out var effectRate, out value) ||
                         !TryGetFormulaFinancialNumber(arguments[1], out var effectNpery, out value))
@@ -16161,6 +16352,136 @@ public static partial class AccessibilityCheckerService
             }
 
             return FormulaFinancialNumberResult(totalDepreciation);
+        }
+
+        private static ScalarValue FormulaFinancialAmordegrcScalar(
+            double cost,
+            double datePurchased,
+            double firstPeriod,
+            double salvage,
+            double period,
+            double rate,
+            int basis)
+        {
+            if (!TryGetFormulaFinancialAmortizationArguments(
+                    cost,
+                    datePurchased,
+                    firstPeriod,
+                    salvage,
+                    period,
+                    rate,
+                    basis,
+                    out var datePurchasedDate,
+                    out var firstPeriodDate,
+                    out var integerPeriod))
+            {
+                return ErrorValue.Num;
+            }
+
+            var life = 1d / rate;
+            double coefficient;
+            if (life < 3d)
+                coefficient = 1d;
+            else if (life < 5d)
+                coefficient = 1.5d;
+            else if (life <= 6d)
+                coefficient = 2d;
+            else
+                coefficient = 2.5d;
+
+            var depreciationRate = rate * coefficient;
+            var firstFraction = FormulaFinancialDayCountFraction(datePurchasedDate, firstPeriodDate, basis);
+            var bookValue = cost;
+            for (var currentPeriod = 0; currentPeriod <= integerPeriod; currentPeriod++)
+            {
+                var depreciation = currentPeriod == 0
+                    ? bookValue * depreciationRate * firstFraction
+                    : bookValue * depreciationRate;
+                depreciation = Math.Max(0d, Math.Min(depreciation, bookValue - salvage));
+                if (currentPeriod < integerPeriod)
+                    bookValue -= depreciation;
+                else
+                    return FormulaFinancialNumberResult(depreciation);
+            }
+
+            return new NumberValue(0d);
+        }
+
+        private static ScalarValue FormulaFinancialAmorlincScalar(
+            double cost,
+            double datePurchased,
+            double firstPeriod,
+            double salvage,
+            double period,
+            double rate,
+            int basis)
+        {
+            if (!TryGetFormulaFinancialAmortizationArguments(
+                    cost,
+                    datePurchased,
+                    firstPeriod,
+                    salvage,
+                    period,
+                    rate,
+                    basis,
+                    out var datePurchasedDate,
+                    out var firstPeriodDate,
+                    out var integerPeriod))
+            {
+                return ErrorValue.Num;
+            }
+
+            var firstFraction = FormulaFinancialDayCountFraction(datePurchasedDate, firstPeriodDate, basis);
+            var annualDepreciation = cost * rate;
+            var bookValue = cost;
+            for (var currentPeriod = 0; currentPeriod <= integerPeriod; currentPeriod++)
+            {
+                var depreciation = currentPeriod == 0
+                    ? annualDepreciation * firstFraction
+                    : annualDepreciation;
+                depreciation = Math.Max(0d, Math.Min(depreciation, bookValue - salvage));
+                if (currentPeriod < integerPeriod)
+                    bookValue -= depreciation;
+                else
+                    return FormulaFinancialNumberResult(depreciation);
+            }
+
+            return new NumberValue(0d);
+        }
+
+        private static bool TryGetFormulaFinancialAmortizationArguments(
+            double cost,
+            double datePurchased,
+            double firstPeriod,
+            double salvage,
+            double period,
+            double rate,
+            int basis,
+            out DateTime datePurchasedDate,
+            out DateTime firstPeriodDate,
+            out int integerPeriod)
+        {
+            datePurchasedDate = default;
+            firstPeriodDate = default;
+            integerPeriod = 0;
+            if (!double.IsFinite(cost) ||
+                !double.IsFinite(salvage) ||
+                !double.IsFinite(rate) ||
+                !TryGetFormulaFinancialInteger(period, out integerPeriod))
+            {
+                return false;
+            }
+
+            if (cost <= 0d ||
+                salvage < 0d ||
+                rate <= 0d ||
+                integerPeriod > MaxFormulaFinancialDepreciationIterations)
+            {
+                return false;
+            }
+
+            return TryGetFormulaFinancialDate(datePurchased, out datePurchasedDate) &&
+                TryGetFormulaFinancialDate(firstPeriod, out firstPeriodDate);
         }
 
         private static ScalarValue FormulaFinancialEffectScalar(double nominalRate, double npery)
