@@ -4535,6 +4535,37 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialCouponFunctions()
+    {
+        AssertFormulaFinancialCouponFunctionContrastLocations("COUPDAYBS($A1,$C1,$D1,$E1)>10", "B2", "B3", "B8");
+        AssertFormulaFinancialCouponFunctionContrastLocations("COUPDAYS($A1,$C1,$D1)>180", "B1", "B2", "B4");
+        AssertFormulaFinancialCouponFunctionContrastLocations("COUPDAYSNC($A1,$C1,$D1,$E1)>100", "B1", "B2", "B4");
+        AssertFormulaFinancialCouponFunctionContrastLocations("COUPNCD($A1,$C1,$D1,$E1)=DATE(2020,7,1)", "B2");
+        AssertFormulaFinancialCouponFunctionContrastLocations("COUPNUM($A1,$C1,$D1,$E1)>=2", "B2", "B3", "B8");
+        AssertFormulaFinancialCouponFunctionContrastLocations("COUPPCD($A1,$C1,$D1,$E1)=DATE(2020,7,1)", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialCouponWrappersAndErrors()
+    {
+        AssertFormulaFinancialCouponFunctionContrastLocations("SUM(COUPDAYBS($A1,$C1,$D1,$E1),COUPDAYSNC($A1,$C1,$D1,$E1))>=182", "B1", "B2", "B4");
+        AssertFormulaFinancialCouponFunctionContrastLocations("IF(COUPNUM($A1,$C1,$D1,$E1)>1,TRUE,FALSE)", "B2", "B3", "B8");
+        AssertFormulaFinancialCouponFunctionContrastLocations("AND(ISNUMBER(COUPNCD($A1,$C1,$D1,$E1)),COUPPCD($A1,$C1,$D1,$E1)<=DATE(2020,7,1))", "B1", "B2", "B3", "B4", "B8");
+        AssertFormulaFinancialCouponFunctionContrastLocations("ISNA(COUPDAYBS($A1,$C1,$D1,$E1))", "B5");
+        AssertFormulaFinancialCouponFunctionContrastLocations("ISERROR(COUPNUM($A1,$C1,$D1,$E1))", "B5", "B6", "B7");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatFinancialCouponUnsupportedShapesArityAndComparisons()
+    {
+        AssertFormulaFinancialCouponFunctionContrastLocations("COUPDAYS($A$1:$A$2,$C1,$D1)>0");
+        AssertFormulaFinancialCouponFunctionContrastLocations("COUPNCD($A1,$C1,$D$1:$D$2)>0");
+        AssertFormulaFinancialCouponFunctionContrastLocations("COUPPCD($A1,$C1)>0");
+        AssertFormulaFinancialCouponFunctionContrastLocations("COUPNUM($A1,$C1,$D1,$E1,$F1)>0");
+        AssertFormulaFinancialCouponFunctionContrastLocations("COUPDAYS($A$7,$C$7,$D$7,$E$7)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatArithmeticComparison()
     {
         AssertFormulaArithmeticContrastLocations("($A1+25-50)*2/5>=40", "B4");
@@ -6455,6 +6486,100 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 15), new BoolValue(active));
     }
 
+    private static Workbook CreateFormulaFinancialCouponFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 8, 2);
+
+        SetFormulaFinancialCouponFunctionContrastRow(
+            sheet,
+            1,
+            new NumberValue(43831),
+            new NumberValue(44197),
+            new NumberValue(1),
+            new NumberValue(0),
+            "Annual start");
+        SetFormulaFinancialCouponFunctionContrastRow(
+            sheet,
+            2,
+            new NumberValue(43845),
+            new NumberValue(44197),
+            new NumberValue(2),
+            new NumberValue(0),
+            "Semiannual partial");
+        SetFormulaFinancialCouponFunctionContrastRow(
+            sheet,
+            3,
+            new NumberValue(43921),
+            new NumberValue(44197),
+            new NumberValue(4),
+            new NumberValue(1),
+            "Quarter actual");
+        SetFormulaFinancialCouponFunctionContrastRow(
+            sheet,
+            4,
+            new NumberValue(44016),
+            new NumberValue(44197),
+            new NumberValue(2),
+            new NumberValue(4),
+            "European basis");
+        SetFormulaFinancialCouponFunctionContrastRow(
+            sheet,
+            5,
+            ErrorValue.NA,
+            new NumberValue(44197),
+            new NumberValue(2),
+            new NumberValue(0),
+            "NA settlement");
+        SetFormulaFinancialCouponFunctionContrastRow(
+            sheet,
+            6,
+            new TextValue("Open"),
+            new NumberValue(44197),
+            new NumberValue(2),
+            new NumberValue(0),
+            "Value settlement");
+        SetFormulaFinancialCouponFunctionContrastRow(
+            sheet,
+            7,
+            new NumberValue(44197),
+            new NumberValue(43831),
+            new NumberValue(2),
+            new NumberValue(0),
+            "Invalid order");
+        SetFormulaFinancialCouponFunctionContrastRow(
+            sheet,
+            8,
+            new NumberValue(43845),
+            new NumberValue(44562),
+            new NumberValue(4),
+            new NumberValue(1),
+            "Long quarterly");
+
+        return workbook;
+    }
+
+    private static void SetFormulaFinancialCouponFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        ScalarValue settlement,
+        ScalarValue maturity,
+        ScalarValue frequency,
+        ScalarValue basis,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), settlement);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), maturity);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 4), frequency);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 5), basis);
+    }
+
     private static void AssertFormulaBooleanContrastLocations(string formulaText, params string[] expectedLocations)
     {
         var workbook = CreateFormulaBooleanContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
@@ -6550,6 +6675,19 @@ public sealed partial class AccessibilityCheckerServiceTests
         params string[] expectedLocations)
     {
         var workbook = CreateFormulaFinancialDepreciationFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaFinancialCouponFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaFinancialCouponFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
 
         FindLowContrastCellTextIssues(workbook)
