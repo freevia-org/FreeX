@@ -5,6 +5,7 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxPackageMetadataMerger
 {
+    private const string SpreadsheetRelationshipPrefix = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/";
     public static IReadOnlySet<string> CopyUnknownPackageParts(
         ZipArchive sourceArchive,
         ZipArchive targetArchive,
@@ -430,8 +431,41 @@ internal static class XlsxPackageMetadataMerger
             return false;
 
         return !string.IsNullOrWhiteSpace(targetPart) &&
-               !generatedEntriesBeforeMerge.Contains(targetPart) &&
-               targetIndex.Contains(targetPart);
+               targetIndex.Contains(targetPart) &&
+               (!generatedEntriesBeforeMerge.Contains(targetPart) ||
+                IsDataModelPackageGraphRelationship(relationshipPartPath, relationship, targetPart));
+    }
+
+    private static bool IsDataModelPackageGraphRelationship(
+        string relationshipPartPath,
+        XElement relationship,
+        string targetPart)
+    {
+        if (IsDataModelPackagePart(targetPart))
+            return true;
+
+        if (!string.Equals(
+                RelationshipPartToSourcePart(relationshipPartPath),
+                "xl/workbook.xml",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var relationshipType = NormalizeRelationshipType(relationship);
+        return string.Equals(targetPart, "xl/connections.xml", StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(
+                   relationshipType,
+                   SpreadsheetRelationshipPrefix + "connections",
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsDataModelPackagePart(string targetPart)
+    {
+        if (!targetPart.StartsWith("xl/model/", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return true;
     }
 
     private static bool IsStructurallyValidPackageRelationship(XElement relationship)
