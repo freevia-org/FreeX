@@ -1,0 +1,200 @@
+using System.Globalization;
+using System.Xml.Linq;
+
+namespace FreeX.Core.IO;
+
+internal static class XlsxWorkbookWebPublishObjectsNormalizer
+{
+    private static readonly XNamespace WorkbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+    private static readonly HashSet<string> WebPublishObjectsAttributes =
+    [
+        "count"
+    ];
+
+    private static readonly HashSet<string> WebPublishObjectAttributes =
+    [
+        "id",
+        "divId",
+        "sourceObject",
+        "destinationFile",
+        "title",
+        "autoRepublish"
+    ];
+
+    private static readonly string[] TextAttributes =
+    [
+        "divId",
+        "sourceObject",
+        "destinationFile",
+        "title"
+    ];
+
+    public static bool NormalizeWorkbookRoot(XElement workbookRoot, XNamespace workbookNs)
+    {
+        var changed = false;
+        var keptWebPublishObjects = false;
+        foreach (var webPublishObjects in workbookRoot.Elements(workbookNs + "webPublishObjects").ToList())
+        {
+            if (keptWebPublishObjects)
+            {
+                webPublishObjects.Remove();
+                changed = true;
+                continue;
+            }
+
+            changed |= NormalizeWebPublishObjectsElement(webPublishObjects);
+            if (ShouldRemoveWebPublishObjectsElement(webPublishObjects))
+            {
+                webPublishObjects.Remove();
+                changed = true;
+                continue;
+            }
+
+            keptWebPublishObjects = true;
+        }
+
+        return changed;
+    }
+
+    public static bool NormalizeWebPublishObjectsElement(XElement webPublishObjects)
+    {
+        var changed = false;
+        changed |= RemoveUnknownAttributes(webPublishObjects, WebPublishObjectsAttributes);
+        changed |= RemoveUnexpectedChildElements(webPublishObjects, WorkbookNs + "webPublishObject");
+
+        foreach (var webPublishObject in webPublishObjects.Elements(WorkbookNs + "webPublishObject").ToList())
+        {
+            changed |= NormalizeWebPublishObjectElement(webPublishObject);
+            if (!ShouldRemoveWebPublishObjectElement(webPublishObject))
+                continue;
+
+            webPublishObject.Remove();
+            changed = true;
+        }
+
+        changed |= NormalizeCount(webPublishObjects);
+        return changed;
+    }
+
+    public static bool ShouldRemoveWebPublishObjectsElement(XElement webPublishObjects) =>
+        !webPublishObjects.Elements(WorkbookNs + "webPublishObject").Any();
+
+    private static bool NormalizeWebPublishObjectElement(XElement webPublishObject)
+    {
+        var changed = false;
+        changed |= RemoveUnknownAttributes(webPublishObject, WebPublishObjectAttributes);
+        changed |= RemoveAllNodes(webPublishObject);
+        changed |= NormalizeAttribute(webPublishObject, "id", NormalizeUnsignedIntOrNull);
+        changed |= NormalizeAttribute(webPublishObject, "autoRepublish", NormalizeBoolean);
+
+        foreach (var attributeName in TextAttributes)
+            changed |= NormalizeAttribute(webPublishObject, attributeName, NormalizeOptionalText);
+
+        return changed;
+    }
+
+    private static bool ShouldRemoveWebPublishObjectElement(XElement webPublishObject) =>
+        webPublishObject.Attribute("id") is null ||
+        string.IsNullOrWhiteSpace(webPublishObject.Attribute("divId")?.Value) ||
+        string.IsNullOrWhiteSpace(webPublishObject.Attribute("sourceObject")?.Value) ||
+        string.IsNullOrWhiteSpace(webPublishObject.Attribute("destinationFile")?.Value);
+
+    private static bool NormalizeCount(XElement webPublishObjects)
+    {
+        var count = webPublishObjects.Elements(WorkbookNs + "webPublishObject").Count().ToString(CultureInfo.InvariantCulture);
+        var attribute = webPublishObjects.Attribute("count");
+        if (attribute is not null && string.Equals(attribute.Value, count, StringComparison.Ordinal))
+            return false;
+
+        webPublishObjects.SetAttributeValue("count", count);
+        return true;
+    }
+
+    private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedNames)
+    {
+        var changed = false;
+        foreach (var attribute in element.Attributes().ToList())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                (attribute.Name.NamespaceName.Length == 0 && allowedNames.Contains(attribute.Name.LocalName)))
+            {
+                continue;
+            }
+
+            attribute.Remove();
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool RemoveUnexpectedChildElements(XElement element, XName allowedChildName)
+    {
+        var changed = false;
+        foreach (var child in element.Elements().Where(child => child.Name != allowedChildName).ToList())
+        {
+            child.Remove();
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool RemoveAllNodes(XElement element)
+    {
+        if (!element.Nodes().Any())
+            return false;
+
+        element.RemoveNodes();
+        return true;
+    }
+
+    private static bool NormalizeAttribute(
+        XElement element,
+        string attributeName,
+        Func<string?, string?> normalize)
+    {
+        var attribute = element.Attribute(attributeName);
+        var normalized = normalize(attribute?.Value);
+        if (normalized is null)
+        {
+            if (attribute is null)
+                return false;
+
+            attribute.Remove();
+            return true;
+        }
+
+        if (attribute is not null && string.Equals(attribute.Value, normalized, StringComparison.Ordinal))
+            return false;
+
+        element.SetAttributeValue(attributeName, normalized);
+        return true;
+    }
+
+    private static string? NormalizeBoolean(string? value)
+    {
+        var trimmed = value?.Trim();
+        return trimmed switch
+        {
+            "0" or "1" => trimmed,
+            "true" or "false" => trimmed,
+            _ => null
+        };
+    }
+
+    private static string? NormalizeOptionalText(string? value)
+    {
+        var trimmed = value?.Trim();
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+    }
+
+    private static string? NormalizeUnsignedIntOrNull(string? value)
+    {
+        var trimmed = value?.Trim();
+        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed.ToString(CultureInfo.InvariantCulture)
+            : null;
+    }
+}

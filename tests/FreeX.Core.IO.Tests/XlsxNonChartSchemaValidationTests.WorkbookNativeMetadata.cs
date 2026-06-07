@@ -131,6 +131,39 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         webPublishing.Element(webPublishing.Name.Namespace + "nativeWebPublishingChild").Should().BeNull();
     }
 
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorkbookWebPublishObjectsForSchemaValidity()
+    {
+        using var source = CreateWorkbookNativeMetadataSourcePackage();
+        SetWorkbookWebPublishObjectsInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var webPublishObjects = ReadWorkbookChildElement(saved, "webPublishObjects");
+        webPublishObjects.Attribute("count")!.Value.Should().Be("1");
+        webPublishObjects.Attribute("customWebPublishObjectsFlag").Should().BeNull();
+        webPublishObjects.Element(webPublishObjects.Name.Namespace + "nativeWebPublishObjectsChild").Should().BeNull();
+        var webPublishObject = webPublishObjects.Elements(webPublishObjects.Name.Namespace + "webPublishObject").Single();
+        webPublishObject.Attribute("id")!.Value.Should().Be("1");
+        webPublishObject.Attribute("divId")!.Value.Should().Be("FreeXWebPublish");
+        webPublishObject.Attribute("destinationFile")!.Value.Should().Be("https://example.invalid/report.htm");
+        webPublishObject.Attribute("customWebPublishObjectFlag").Should().BeNull();
+        webPublishObject.Element(webPublishObject.Name.Namespace + "nativeWebPublishObjectChild").Should().BeNull();
+    }
+
     private static MemoryStream CreateWorkbookNativeMetadataSourcePackage()
     {
         var workbook = new Workbook("WorkbookNativeMetadataPatchSave");
@@ -220,6 +253,25 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         webPublishing.SetAttributeValue("codePage", " 65001 ");
         webPublishing.SetAttributeValue("customWebPublishingFlag", "removed");
         webPublishing.Add(new XElement(workbookNs + "nativeWebPublishingChild"));
+        ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+    }
+
+    private static void SetWorkbookWebPublishObjectsInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var webPublishObjects = workbookXml.Root!.Element(workbookNs + "webPublishObjects")!;
+        webPublishObjects.SetAttributeValue("count", " 1 ");
+        webPublishObjects.SetAttributeValue("customWebPublishObjectsFlag", "removed");
+        webPublishObjects.Add(new XElement(workbookNs + "nativeWebPublishObjectsChild"));
+        var webPublishObject = webPublishObjects.Element(workbookNs + "webPublishObject")!;
+        webPublishObject.SetAttributeValue("id", " 1 ");
+        webPublishObject.SetAttributeValue("divId", " FreeXWebPublish ");
+        webPublishObject.SetAttributeValue("customWebPublishObjectFlag", "removed");
+        webPublishObject.Add(new XElement(workbookNs + "nativeWebPublishObjectChild"));
         ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
     }
 
