@@ -203,6 +203,23 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         AssertWorksheetOleControlsSanitized(saved);
     }
 
+    [Fact]
+    public void WorksheetOleControlNormalizer_RebindsControlPropertiesRelationshipIdCollision()
+    {
+        using var saved = CreateWorksheetNativeMetadataSourcePackage();
+        CreateWorksheetControlPropertiesRelationshipIdCollision(saved);
+
+        saved.Position = 0;
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XlsxWorksheetOleControlNormalizer.NormalizePackage(archive);
+        }
+
+        saved.Position = 0;
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetControlPropertiesRelationshipRebound(saved);
+    }
+
     private static MemoryStream CreateWorksheetNativeMetadataSourcePackage()
     {
         var workbook = new Workbook("WorksheetNativeMetadataPatchSave");
@@ -433,6 +450,49 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
     }
 
+    private static void CreateWorksheetControlPropertiesRelationshipIdCollision(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        var control = worksheetXml.Root!
+            .Element(worksheetNs + "controls")!
+            .Element(worksheetNs + "control")!;
+        control.SetAttributeValue(relNs + "id", "rId1");
+        control.Element(worksheetNs + "controlPr")!.SetAttributeValue(relNs + "id", "rId1");
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+        var relationshipsXml = LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
+        relationshipsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Single(relationship => relationship.Attribute("Target")?.Value == "../ctrlProps/ctrlProp1.xml")
+            .SetAttributeValue("Id", "rId2");
+        relationshipsXml.Root!.Add(new XElement(
+            packageRelNs + "Relationship",
+            new XAttribute("Id", "rId1"),
+            new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing"),
+            new XAttribute("Target", "../drawings/vmlDrawing1.vml")));
+        ReplacePackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels", relationshipsXml);
+
+        WritePackageEntry(archive, "xl/drawings/vmlDrawing1.vml", "<xml/>");
+        AddPackageContentTypeOverride(
+            archive,
+            "/xl/drawings/vmlDrawing1.vml",
+            "application/vnd.openxmlformats-officedocument.vmlDrawing");
+
+        var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+        contentTypesXml.Root!
+            .Elements(contentTypeNs + "Override")
+            .Where(overrideElement => overrideElement.Attribute("PartName")?.Value == "/xl/ctrlProps/ctrlProp1.xml")
+            .Remove();
+        ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+    }
+
     private static void SetInvalidWebPublishItemsPayload(XElement webPublishItems, XNamespace worksheetNs)
     {
         webPublishItems.RemoveNodes();
@@ -617,6 +677,48 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         controlPr.Attribute("disabled").Should().BeNull();
         controlPr.Attribute("customControlPrFlag").Should().BeNull();
         controlPr.Elements(worksheetNs + "anchor").Should().ContainSingle();
+    }
+
+    private static void AssertWorksheetControlPropertiesRelationshipRebound(Stream stream)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+        var control = ReadWorksheetChildElement(stream, "controls")
+            .Element(worksheetNs + "control")!;
+        var controlRelationshipId = control.Attribute(relNs + "id")!.Value;
+        controlRelationshipId.Should().Be("rId2", "rId1 is claimed by the generated VML sidecar relationship");
+        control.Element(worksheetNs + "controlPr")!
+            .Attribute(relNs + "id")!
+            .Value
+            .Should()
+            .Be(controlRelationshipId);
+
+        var relationships = ReadPackageRootElement(stream, "xl/worksheets/_rels/sheet1.xml.rels")
+            .Elements(packageRelNs + "Relationship")
+            .ToList();
+        relationships.Where(relationship =>
+                relationship.Attribute("Id")?.Value == "rId1" &&
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing" &&
+                relationship.Attribute("Target")?.Value == "../drawings/vmlDrawing1.vml")
+            .Should()
+            .ContainSingle();
+        relationships.Where(relationship =>
+                relationship.Attribute("Id")?.Value == controlRelationshipId &&
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/ctrlProp" &&
+                relationship.Attribute("Target")?.Value == "../ctrlProps/ctrlProp1.xml")
+            .Should()
+            .ContainSingle();
+
+        ReadPackageRootElement(stream, "[Content_Types].xml")
+            .Elements(contentTypeNs + "Override")
+            .Where(overrideElement =>
+                overrideElement.Attribute("PartName")?.Value == "/xl/ctrlProps/ctrlProp1.xml" &&
+                overrideElement.Attribute("ContentType")?.Value == "application/vnd.ms-excel.controlproperties+xml")
+            .Should()
+            .ContainSingle();
     }
 
     private static XElement CreateControlAnchor(XNamespace worksheetNs)
