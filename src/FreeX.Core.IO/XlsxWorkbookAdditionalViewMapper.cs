@@ -32,7 +32,7 @@ internal static class XlsxWorkbookAdditionalViewMapper
                 .Select(ReadView)
                 .ToList()
         };
-        ReadNativeAttributes(bookViews, model.NativeAttributes);
+        XlsxWorksheetNativeMetadataHelpers.ReadNativeAttributes(bookViews, model.NativeAttributes, []);
 
         return model.NativeAttributes.Count == 0 && model.Views.Count == 0
             ? null
@@ -73,7 +73,7 @@ internal static class XlsxWorkbookAdditionalViewMapper
                 sheets.AddBeforeSelf(bookViews);
         }
 
-        ApplyNativeAttributes(bookViews, workbook.AdditionalViews.NativeAttributes);
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(bookViews, workbook.AdditionalViews.NativeAttributes, []);
         foreach (var view in bookViews.Elements(WorkbookNs + "workbookView").Skip(1).ToList())
             view.Remove();
 
@@ -89,7 +89,7 @@ internal static class XlsxWorkbookAdditionalViewMapper
         {
             NativeXml = element.ToString(SaveOptions.DisableFormatting)
         };
-        ReadNativeAttributes(element, model.NativeAttributes);
+        XlsxWorksheetNativeMetadataHelpers.ReadNativeAttributes(element, model.NativeAttributes, []);
         return model;
     }
 
@@ -102,7 +102,7 @@ internal static class XlsxWorkbookAdditionalViewMapper
             return null;
 
         var element = new XElement(WorkbookNs + "workbookView");
-        ApplyNativeAttributes(element, model.NativeAttributes);
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(element, model.NativeAttributes, []);
         RemoveOfficeRevisionAttributes(element);
         XlsxWorkbookViewNormalizer.NormalizeWorkbookViewElement(element);
         return element;
@@ -154,38 +154,4 @@ internal static class XlsxWorkbookAdditionalViewMapper
         namespaceName.StartsWith("http://schemas.microsoft.com/office/spreadsheetml/", StringComparison.Ordinal) &&
         namespaceName.Contains("/revision", StringComparison.Ordinal);
 
-    private static void ReadNativeAttributes(XElement element, Dictionary<string, string> target)
-    {
-        foreach (var attribute in element.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration)
-                continue;
-
-            target[attribute.Name.ToString()] = attribute.Value;
-        }
-    }
-
-    private static void ApplyNativeAttributes(XElement element, Dictionary<string, string> attributes)
-    {
-        foreach (var attribute in attributes)
-        {
-            if (string.IsNullOrWhiteSpace(attribute.Key))
-                continue;
-
-            if (TryGetAttributeName(attribute.Key) is { } attributeName)
-                element.SetAttributeValue(attributeName, attribute.Value);
-        }
-    }
-
-    private static XName? TryGetAttributeName(string key)
-    {
-        try
-        {
-            return XName.Get(key);
-        }
-        catch
-        {
-            return null;
-        }
-    }
 }
