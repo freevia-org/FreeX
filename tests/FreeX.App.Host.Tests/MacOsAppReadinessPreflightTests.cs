@@ -19,6 +19,12 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("Test-MacOsIcon");
         script.Should().Contain("NSHighResolutionCapable");
         script.Should().Contain("dotnet-version: 10.0.x");
+        script.Should().Contain("distribution_candidate:");
+        script.Should().Contain("artifact_channel=\"distribution-candidate\"");
+        script.Should().Contain("Distribution-candidate macOS app runs require Developer ID signing secrets");
+        script.Should().Contain("Distribution-candidate macOS app runs require notarization secrets");
+        script.Should().Contain("distribution_readiness=internal_preview_not_for_distribution");
+        script.Should().Contain("distribution_readiness=distribution_candidate_ready");
         script.Should().Contain("--framework net10.0");
         script.Should().Contain("--output \"$app/Contents/MacOS\"");
         script.Should().Contain("native_fill_color_swatch_count=69");
@@ -773,6 +779,13 @@ public sealed class MacOsAppReadinessPreflightTests
             ".github/workflows/macos-app.yml",
             $"""
             name: macOS App Preview
+            on:
+              workflow_dispatch:
+                inputs:
+                  distribution_candidate:
+                    description: Require Developer ID signing, accepted notarization, and stapled ticket evidence.
+                    type: boolean
+                    default: false
             jobs:
               macos-app:
                 runs-on: ${"{{"} matrix.runner {"}}"}
@@ -797,6 +810,19 @@ public sealed class MacOsAppReadinessPreflightTests
                       zip_name="freex-$runtime-macos-app.zip"
                       zip_path="$artifact_root/$zip_name"
                       unzip_root="$RUNNER_TEMP/freex-$runtime-unzip"
+                      distribution_candidate="${"{{"} github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true {"}}"}"
+                      artifact_channel="internal-preview"
+                      distribution_contract="internal_preview_not_for_distribution_notarization_optional"
+                      artifact_channel="distribution-candidate"
+                      distribution_contract="distribution_candidate_requires_developer_id_notarization_stapling"
+                      echo "artifact_channel=$artifact_channel"
+                      echo "distribution_candidate=$distribution_candidate"
+                      echo "distribution_readiness=$distribution_readiness"
+                      echo "Distribution-candidate macOS app runs require Developer ID signing secrets: MACOS_CODESIGN_CERTIFICATE_P12, MACOS_CODESIGN_CERTIFICATE_PASSWORD, and MACOS_DEVELOPER_ID_APPLICATION."
+                      echo "Distribution-candidate macOS app runs require notarization secrets: MACOS_NOTARY_APPLE_ID, MACOS_NOTARY_TEAM_ID, and MACOS_NOTARY_PASSWORD."
+                      echo "Distribution-candidate run requires codesign_mode=developer-id, notarization_status=accepted, and stapler_validated=true."
+                      echo "distribution_readiness=internal_preview_not_for_distribution"
+                      echo "distribution_readiness=distribution_candidate_ready"
                       echo "Developer ID signing is disabled for pull_request events; using ad-hoc signing."
                       dotnet publish src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj \
                         --configuration Release \
@@ -825,16 +851,16 @@ public sealed class MacOsAppReadinessPreflightTests
                       test -x "$unzip_root/FreeX.app/Contents/MacOS/FreeX"
                       test -f "$unzip_root/FreeX.app/Contents/MacOS/FreeX.dll"
                       xcrun notarytool submit "$zip_path"
-                      xcrun stapler validate "$app"
+                      xcrun stapler validate "$app" | tee -a "$notary_log"
                       tester_instructions_path="$artifact_root/freex-$runtime-macos-tester-instructions.md"
                       shasum -a 256 -c "$zip_name.sha256"
                       zip_sha256="$(cut -d ' ' -f 1 "$artifact_root/$zip_name.sha256")"
                       echo "zip_sha256=$zip_sha256"
                       cat > "$tester_instructions_path" <<EOF
-                      This artifact is a preview build for macOS port validation. It is not a public release channel.
+                      This artifact is a macOS port validation build. Internal-preview artifacts are not a public release channel; distribution-candidate artifacts must show Developer ID signing, accepted notarization, and stapler validation in evidence.
                       Use osx-arm64 for Apple Silicon Macs and osx-x64 for Intel Macs.
                       Unzip the GitHub Actions artifact wrapper first; these files are inside it.
-                      Ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing.
+                      If artifact_channel=internal-preview, ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing.
                       EOF
                       "$unzip_root/FreeX.app/Contents/MacOS/FreeX" --packaging-smoke | tee "$artifact_root/smoke.log"
                       grep -q "macOS Preview Workbook" "$artifact_root/smoke.log"

@@ -1,10 +1,10 @@
 # macOS Signing And Notarization Runbook
 
-This runbook turns the `macOS App Preview` GitHub Actions workflow from an internal ad-hoc signed preview into a Developer ID signed and notarized macOS validation artifact. It also records how to retrieve the hosted app artifacts from GitHub Actions. The workflow is still not a public release channel until the hosted evidence below is captured and a release-asset publication path exists.
+This runbook explains how the `macOS App Preview` GitHub Actions workflow produces internal preview artifacts by default and how to run it as a guarded distribution-candidate validation when Developer ID signing and notarization evidence are required. It also records how to retrieve the hosted app artifacts from GitHub Actions. The workflow is still not a public release channel until the hosted evidence below is captured and a release-asset publication path exists.
 
 ## Current Workflow Contract
 
-The workflow is `.github/workflows/macos-app.yml`. It runs on `workflow_dispatch`, `push` to `main`, and `pull_request` to `main`; pull request events intentionally fall back to ad-hoc signing even when secrets are present.
+The workflow is `.github/workflows/macos-app.yml`. It runs on `workflow_dispatch`, `push` to `main`, and `pull_request` to `main`; pull request events intentionally fall back to ad-hoc signing even when secrets are present. `workflow_dispatch` includes a `distribution_candidate` input that defaults to `false`. Default hosted runs are `artifact_channel=internal-preview`, where notarization may be skipped with explicit evidence. A dispatch run with `distribution_candidate=true` is `artifact_channel=distribution-candidate` and fails unless Developer ID signing, accepted notarization, and stapler validation all complete.
 
 The workflow builds two app artifacts:
 
@@ -22,6 +22,8 @@ Each runtime uploads an Actions artifact named `freex-<run-id>-<run-attempt>-<ru
 - `freex-<runtime>-macos-tester-instructions.md`
 
 The matching diagnostics artifact is always uploaded when available, even if the workflow fails before the primary artifact is complete.
+
+Each evidence file records `artifact_channel`, `distribution_candidate`, `distribution_contract`, and `distribution_readiness` so internal previews and distribution candidates can be separated without relying on artifact names alone.
 
 ## Artifact Retrieval
 
@@ -44,7 +46,7 @@ gh run download <run-id> -n freex-<run-id>-<run-attempt>-osx-arm64-macos-app -D 
 gh run download <run-id> -n freex-<run-id>-<run-attempt>-osx-x64-macos-app -D artifacts/osx-x64
 ```
 
-Signed and internal ad-hoc outputs use the same artifact names. Unzip the GitHub artifact wrapper first, then verify the inner `freex-<runtime>-macos-app.zip` with the matching `.zip.sha256`. For an internal preview, expect `codesign_mode=ad-hoc` and notarization evidence such as `notarization_status=skipped_missing_credentials` or `skipped_not_developer_id_signed`. For external distribution, require `codesign_mode=developer-id`, `notarization_status=accepted`, and `stapler_validated=true`.
+Signed, notarized, and internal ad-hoc outputs use the same artifact names. Unzip the GitHub artifact wrapper first, then verify the inner `freex-<runtime>-macos-app.zip` with the matching `.zip.sha256`. For an internal preview, expect `artifact_channel=internal-preview`, `distribution_readiness=internal_preview_not_for_distribution`, and `codesign_mode=ad-hoc` or notarization evidence such as `notarization_status=skipped_missing_credentials` or `skipped_not_developer_id_signed`. For a distribution candidate, require `artifact_channel=distribution-candidate`, `distribution_readiness=distribution_candidate_ready`, `codesign_mode=developer-id`, `notarization_status=accepted`, and `stapler_validated=true`.
 
 No local Mac is needed to produce the downloadable artifacts: hosted macOS runners build the bundle, run native-architecture package/launch smoke, exercise LaunchServices, verify checksums, and collect evidence. A human tester on macOS is still required for Finder open, Gatekeeper behavior, basic workbook workflows, and any candidate accessibility checks.
 
@@ -86,10 +88,13 @@ Paste the base64 output into `MACOS_CODESIGN_CERTIFICATE_P12` exactly as generat
 ## Hosted Validation Steps
 
 1. Configure all six secrets above in the GitHub repository.
-2. Run `macOS App Preview` from `main` with `workflow_dispatch`, or let a trusted non-PR `push` to `main` run it.
+2. Run `macOS App Preview` from `main` with `workflow_dispatch` and set `distribution_candidate=true`; default dispatch, push, and pull request runs remain internal previews.
 3. Confirm both matrix jobs complete, or inspect the diagnostics artifact for the failed runtime.
 4. Download each `freex-<run-id>-<run-attempt>-<runtime>-macos-app` artifact from the run summary or with `gh run download`.
 5. Verify `freex-<runtime>-macos-evidence.txt` contains:
+   - `artifact_channel=distribution-candidate`
+   - `distribution_candidate=true`
+   - `distribution_readiness=distribution_candidate_ready`
    - `codesign_verified=true`
    - `codesign_mode=developer-id`
    - `notarization_status=accepted`
@@ -112,6 +117,7 @@ Before public-preview promotion, complete the macOS/Avalonia accessibility evide
 Do not present the macOS artifact as a public release until all of these are true:
 
 - Hosted evidence exists for both `osx-arm64` and `osx-x64`.
+- The evidence marks the artifact as `artifact_channel=distribution-candidate` with `distribution_readiness=distribution_candidate_ready`.
 - Developer ID signing, accepted notarization, and stapling evidence are present.
 - LaunchServices and packaging smoke evidence is attached to the release record.
 - A release-channel path exists; the current workflow uploads Actions artifacts only and has `contents: read`.

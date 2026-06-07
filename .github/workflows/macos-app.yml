@@ -2,6 +2,12 @@ name: macOS App Preview
 
 on:
   workflow_dispatch:
+    inputs:
+      distribution_candidate:
+        description: Require Developer ID signing, accepted notarization, and stapled ticket evidence.
+        required: false
+        type: boolean
+        default: false
   push:
     branches:
       - main
@@ -97,6 +103,13 @@ jobs:
           launch_smoke_report="$artifact_root/freex-$runtime-macos-launch-smoke.txt"
           notary_log="$artifact_root/freex-$runtime-macos-notarization.log"
           tester_instructions_path="$artifact_root/freex-$runtime-macos-tester-instructions.md"
+          distribution_candidate="${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}"
+          artifact_channel="internal-preview"
+          distribution_contract="internal_preview_not_for_distribution_notarization_optional"
+          if [[ "$distribution_candidate" == "true" ]]; then
+            artifact_channel="distribution-candidate"
+            distribution_contract="distribution_candidate_requires_developer_id_notarization_stapling"
+          fi
           signing_mode="ad-hoc"
           notarization_status="skipped_not_developer_id_signed"
           stapler_validated="false"
@@ -115,6 +128,18 @@ jobs:
           rm -rf "$output_root"
           mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$artifact_root"
           : > "$notary_log"
+          {
+            echo ""
+            echo "[artifact-channel]"
+            echo "artifact_channel=$artifact_channel"
+            echo "distribution_candidate=$distribution_candidate"
+            echo "distribution_contract=$distribution_contract"
+          } >> "$evidence_path"
+          {
+            echo "artifact_channel=$artifact_channel"
+            echo "distribution_candidate=$distribution_candidate"
+            echo "distribution_contract=$distribution_contract"
+          } >> "$notary_log"
 
           has_any_signing_secret=false
           for signing_secret in \
@@ -125,6 +150,14 @@ jobs:
               has_any_signing_secret=true
             fi
           done
+          if [[ "$distribution_candidate" == "true" ]]; then
+            if [[ -z "$MACOS_CODESIGN_CERTIFICATE_P12" ||
+                  -z "$MACOS_CODESIGN_CERTIFICATE_PASSWORD" ||
+                  -z "$MACOS_DEVELOPER_ID_APPLICATION" ]]; then
+              echo "Distribution-candidate macOS app runs require Developer ID signing secrets: MACOS_CODESIGN_CERTIFICATE_P12, MACOS_CODESIGN_CERTIFICATE_PASSWORD, and MACOS_DEVELOPER_ID_APPLICATION." | tee -a "$notary_log" >&2
+              exit 1
+            fi
+          fi
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" && "$has_any_signing_secret" == "true" ]]; then
             echo "Developer ID signing is disabled for pull_request events; using ad-hoc signing."
           elif [[ "$has_any_signing_secret" == "true" ]]; then
@@ -197,10 +230,18 @@ jobs:
               has_any_notary_secret=true
             fi
           done
+          if [[ "$distribution_candidate" == "true" ]]; then
+            if [[ -z "$MACOS_NOTARY_APPLE_ID" ||
+                  -z "$MACOS_NOTARY_TEAM_ID" ||
+                  -z "$MACOS_NOTARY_PASSWORD" ]]; then
+              echo "Distribution-candidate macOS app runs require notarization secrets: MACOS_NOTARY_APPLE_ID, MACOS_NOTARY_TEAM_ID, and MACOS_NOTARY_PASSWORD." | tee -a "$notary_log" >&2
+              exit 1
+            fi
+          fi
           if [[ "$has_any_notary_secret" == "true" ]]; then
             if [[ "$signing_mode" != "developer-id" ]]; then
               notarization_status="skipped_missing_developer_id_signature"
-              echo "notarization_status=skipped_missing_developer_id_signature" | tee "$notary_log"
+              echo "notarization_status=skipped_missing_developer_id_signature" | tee -a "$notary_log"
             elif [[ -z "$MACOS_NOTARY_APPLE_ID" ||
                     -z "$MACOS_NOTARY_TEAM_ID" ||
                     -z "$MACOS_NOTARY_PASSWORD" ]]; then
@@ -214,15 +255,38 @@ jobs:
                 --wait \
                 --output-format json | tee "$notary_log"
               grep -q '"status": *"Accepted"' "$notary_log"
-              xcrun stapler staple "$app"
-              xcrun stapler validate "$app"
+              {
+                echo "artifact_channel=$artifact_channel"
+                echo "distribution_candidate=$distribution_candidate"
+                echo "distribution_contract=$distribution_contract"
+              } >> "$notary_log"
+              xcrun stapler staple "$app" | tee -a "$notary_log"
+              xcrun stapler validate "$app" | tee -a "$notary_log"
               stapler_validated="true"
               ditto -c -k --sequesterRsrc --keepParent "$app" "$zip_path"
               notarization_status="accepted"
             fi
           else
             notarization_status="skipped_missing_credentials"
-            echo "notarization_status=skipped_missing_credentials" | tee "$notary_log"
+            echo "notarization_status=skipped_missing_credentials" | tee -a "$notary_log"
+          fi
+          if [[ "$distribution_candidate" == "true" ]]; then
+            if [[ "$signing_mode" != "developer-id" ||
+                  "$notarization_status" != "accepted" ||
+                  "$stapler_validated" != "true" ]]; then
+              distribution_readiness=distribution_candidate_blocked_missing_required_evidence
+              {
+                echo "distribution_readiness=$distribution_readiness"
+                echo "codesign_mode=$signing_mode"
+                echo "notarization_status=$notarization_status"
+                echo "stapler_validated=$stapler_validated"
+              } >> "$evidence_path"
+              echo "Distribution-candidate run requires codesign_mode=developer-id, notarization_status=accepted, and stapler_validated=true." | tee -a "$notary_log" >&2
+              exit 1
+            fi
+            distribution_readiness=distribution_candidate_ready
+          else
+            distribution_readiness=internal_preview_not_for_distribution
           fi
           (cd "$artifact_root" && shasum -a 256 "$zip_name" > "$zip_name.sha256")
           (cd "$artifact_root" && shasum -a 256 -c "$zip_name.sha256")
@@ -239,6 +303,10 @@ jobs:
             echo ""
             echo "[bundle]"
             echo "runtime=$runtime"
+            echo "artifact_channel=$artifact_channel"
+            echo "distribution_candidate=$distribution_candidate"
+            echo "distribution_contract=$distribution_contract"
+            echo "distribution_readiness=$distribution_readiness"
             echo "host_arch=$host_arch"
             echo "binary_archs=$binary_archs"
             echo "zip_name=$zip_name"
@@ -539,9 +607,10 @@ jobs:
           fi
 
           cat > "$tester_instructions_path" <<EOF
-          # FreeX macOS App Preview ($runtime)
+          # FreeX macOS App ($artifact_channel, $runtime)
 
-          This artifact is a preview build for macOS port validation. It is not a public release channel.
+          This artifact is a macOS port validation build. Internal-preview artifacts are not a public release channel; distribution-candidate artifacts must show Developer ID signing, accepted notarization, and stapler validation in evidence.
+          For artifact_channel=internal-preview: This artifact is a preview build for macOS port validation. It is not a public release channel.
 
           Use osx-arm64 for Apple Silicon Macs and osx-x64 for Intel Macs. Unzip the GitHub Actions artifact wrapper first; these files are inside it.
 
@@ -574,12 +643,16 @@ jobs:
 
           Unzip $zip_name, then open FreeX.app. If macOS Gatekeeper blocks the preview, check freex-$runtime-macos-evidence.txt first:
 
+          - artifact_channel=$artifact_channel
+          - distribution_candidate=$distribution_candidate
+          - distribution_readiness=$distribution_readiness
           - codesign_mode=$signing_mode
           - notarization_status=$notarization_status
           - stapler_validated=$stapler_validated
           - zip_sha256=$zip_sha256
 
-          Ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing. Public distribution still requires Developer ID signing, accepted notarization, and stapling evidence.
+          If artifact_channel=internal-preview, ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing. If artifact_channel=distribution-candidate, reject the artifact unless it has Developer ID signing, accepted notarization, and stapling evidence.
+          For artifact_channel=internal-preview: Ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing.
 
           ## Report
 
