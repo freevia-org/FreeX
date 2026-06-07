@@ -3096,6 +3096,14 @@
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_FieldList}"
                                             local:RibbonTooltip.KeyTip="FL"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ShowOrHideThePivotTableFieldsTaskPane}" local:RibbonMetadata.CommandName="Field List"/>
+                                    <Button Content="{local:Loc Key=MainWindow_Content_PlusMinusButtons}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotExpandCollapseButtonsBtn_Click"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_PlusMinusButtons}"
+                                            local:RibbonTooltip.KeyTip="PB"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ShowOrHideExpandCollapseButtonsForTheSelectedPivotTable}" local:RibbonMetadata.CommandName="+/- Buttons"/>
+                                    <Button Content="{local:Loc Key=MainWindow_Content_FieldHeaders}" Width="112" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotFieldHeadersBtn_Click"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_FieldHeaders}"
+                                            local:RibbonTooltip.KeyTip="FH"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ShowOrHideFieldCaptionsAndFilterDropDownsForTheSelectedPivotTable}" local:RibbonMetadata.CommandName="Field Headers"/>
                                 </StackPanel>
                                 <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Show}" Style="{StaticResource GroupLbl}"/></Border>
                             </Grid>

@@ -11,6 +11,7 @@ public sealed class XlsxCustomRibbonPackageGraphTests
 {
     private const string CustomUiPath = "customUI/customUI.xml";
     private const string CustomUi14Path = "customUI/customUI14.xml";
+    private const string DanglingCustomUiPath = "customUI/missingCustomUI.xml";
     private const string CustomUiContentType = "application/xml";
     private const string CustomUiRelationshipType = "http://schemas.microsoft.com/office/2006/relationships/ui/extensibility";
     private const string CustomUi14RelationshipType = "http://schemas.microsoft.com/office/2007/relationships/ui/extensibility";
@@ -63,7 +64,66 @@ public sealed class XlsxCustomRibbonPackageGraphTests
         adapter.Load(saved).GetSheetAt(0).GetValue(2, 1).Should().Be(new NumberValue(42));
     }
 
-    private static MemoryStream CreateWorkbookWithCustomRibbonPackageGraph()
+    [Fact]
+    public void LoadedWorkbookFullSave_RebindsCustomRibbonRootRelationshipIdCollision()
+    {
+        using var source = CreateWorkbookWithCustomRibbonPackageGraph(
+            customUiRelationshipId: "rId1",
+            moveGeneratedRootRelationshipIdsAwayFromRId1: true);
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("collision edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        AssertCustomRibbonPackageGraph(saved);
+
+        saved.Position = 0;
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        var rootRelsXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "_rels/.rels");
+        AssertRootRelationshipIdsAreUnique(rootRelsXml);
+        AssertRelationship(rootRelsXml, CustomUiRelationshipType, CustomUiPath)
+            .Attribute("Id")?.Value.Should().NotBe("rId1", "the generated officeDocument relationship already owns rId1");
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_PrunesDanglingCustomRibbonRootRelationshipsAndContentTypes()
+    {
+        using var source = CreateWorkbookWithCustomRibbonPackageGraph(includeDanglingCustomUiRelationship: true);
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("patch edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        AssertCustomRibbonPackageGraph(saved);
+
+        saved.Position = 0;
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        var rootRelsXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "_rels/.rels");
+        AssertRelationshipMissing(rootRelsXml, CustomUiRelationshipType, DanglingCustomUiPath);
+
+        var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "[Content_Types].xml");
+        AssertContentTypeOverrideMissing(contentTypesXml, DanglingCustomUiPath);
+    }
+
+    private static MemoryStream CreateWorkbookWithCustomRibbonPackageGraph(
+        string customUiRelationshipId = "rIdCustomUi",
+        bool moveGeneratedRootRelationshipIdsAwayFromRId1 = false,
+        bool includeDanglingCustomUiRelationship = false)
     {
         var workbook = new Workbook("CustomRibbonPackageGraph");
         var sheet = workbook.AddSheet("Data");
@@ -81,11 +141,17 @@ public sealed class XlsxCustomRibbonPackageGraphTests
             var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "[Content_Types].xml");
             EnsureContentTypeOverride(contentTypesXml, CustomUiPath, CustomUiContentType);
             EnsureContentTypeOverride(contentTypesXml, CustomUi14Path, CustomUiContentType);
+            if (includeDanglingCustomUiRelationship)
+                EnsureContentTypeOverride(contentTypesXml, DanglingCustomUiPath, CustomUiContentType);
             ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
 
             var rootRelsXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "_rels/.rels");
-            EnsureRelationship(rootRelsXml, "rIdCustomUi", CustomUiRelationshipType, CustomUiPath);
+            if (moveGeneratedRootRelationshipIdsAwayFromRId1)
+                MoveGeneratedRootRelationshipIdsAwayFromRId1(rootRelsXml);
+            EnsureRelationship(rootRelsXml, customUiRelationshipId, CustomUiRelationshipType, CustomUiPath);
             EnsureRelationship(rootRelsXml, "rIdCustomUi14", CustomUi14RelationshipType, CustomUi14Path);
+            if (includeDanglingCustomUiRelationship)
+                EnsureRelationship(rootRelsXml, "rIdDanglingCustomUi", CustomUiRelationshipType, DanglingCustomUiPath);
             ReplacePackageXml(archive, "_rels/.rels", rootRelsXml);
         }
 
@@ -108,6 +174,7 @@ public sealed class XlsxCustomRibbonPackageGraphTests
         var rootRelsXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "_rels/.rels");
         AssertRelationship(rootRelsXml, CustomUiRelationshipType, CustomUiPath);
         AssertRelationship(rootRelsXml, CustomUi14RelationshipType, CustomUi14Path);
+        AssertRootRelationshipIdsAreUnique(rootRelsXml);
     }
 
     private static void WriteTextEntry(ZipArchive archive, string path, string content)
@@ -154,6 +221,13 @@ public sealed class XlsxCustomRibbonPackageGraphTests
             new XAttribute("Target", target)));
     }
 
+    private static void MoveGeneratedRootRelationshipIdsAwayFromRId1(XDocument relationshipsXml)
+    {
+        var index = 1;
+        foreach (var relationship in relationshipsXml.Root!.Elements(PackageRelationshipNs + "Relationship"))
+            relationship.SetAttributeValue("Id", $"rIdGenerated{index++}");
+    }
+
     private static void AssertContentTypeOverride(XDocument contentTypesXml, string partName, string contentType)
     {
         var normalizedPartName = "/" + partName.TrimStart('/');
@@ -165,14 +239,47 @@ public sealed class XlsxCustomRibbonPackageGraphTests
                 string.Equals((string?)element.Attribute("ContentType"), contentType, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static void AssertRelationship(XDocument relationshipsXml, string relationshipType, string target)
+    private static void AssertContentTypeOverrideMissing(XDocument contentTypesXml, string partName)
     {
-        relationshipsXml.Root!
+        var normalizedPartName = "/" + partName.TrimStart('/');
+        contentTypesXml.Root!
+            .Elements(ContentTypeNs + "Override")
+            .Should()
+            .NotContain(element =>
+                string.Equals((string?)element.Attribute("PartName"), normalizedPartName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static XElement AssertRelationship(XDocument relationshipsXml, string relationshipType, string target)
+    {
+        var relationship = relationshipsXml.Root!
             .Elements(PackageRelationshipNs + "Relationship")
             .Should()
             .ContainSingle(element =>
                 string.Equals((string?)element.Attribute("Type"), relationshipType, StringComparison.OrdinalIgnoreCase) &&
                 string.Equals((string?)element.Attribute("Target"), target, StringComparison.OrdinalIgnoreCase) &&
-                element.Attribute("TargetMode") == null);
+                element.Attribute("TargetMode") == null)
+            .Subject;
+        return relationship;
+    }
+
+    private static void AssertRelationshipMissing(XDocument relationshipsXml, string relationshipType, string target)
+    {
+        relationshipsXml.Root!
+            .Elements(PackageRelationshipNs + "Relationship")
+            .Should()
+            .NotContain(element =>
+                string.Equals((string?)element.Attribute("Type"), relationshipType, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals((string?)element.Attribute("Target"), target, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static void AssertRootRelationshipIdsAreUnique(XDocument relationshipsXml)
+    {
+        var ids = relationshipsXml.Root!
+            .Elements(PackageRelationshipNs + "Relationship")
+            .Select(element => element.Attribute("Id")?.Value)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .ToList();
+
+        ids.Distinct(StringComparer.OrdinalIgnoreCase).Count().Should().Be(ids.Count);
     }
 }

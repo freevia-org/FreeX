@@ -24,8 +24,8 @@ public sealed class ResizeDrawingShapeCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
-        if (!double.IsFinite(_width) || !double.IsFinite(_height) || _width <= 0 || _height <= 0)
-            return new CommandOutcome(false, "Shape size must be positive.");
+        if (DrawingShapeCommandGuards.RejectInvalidSize(_width, _height) is { } invalidSize)
+            return invalidSize;
 
         var sheet = ctx.GetSheet(_sheetId);
         if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
