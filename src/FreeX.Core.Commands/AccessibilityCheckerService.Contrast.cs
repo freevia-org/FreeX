@@ -723,6 +723,7 @@ public static partial class AccessibilityCheckerService
     private const int MaxFormulaPermutationAInput = int.MaxValue;
     private const int MaxFormulaGcdArgumentCount = 255;
     private const int MaxFormulaMultinomialArgumentCount = 255;
+    private const int MaxFormulaModeArgumentCount = 255;
     private const int MaxFormulaSumProductArgumentCount = 255;
     private const double MaxFormulaGcdInputExclusive = 9_223_372_036_854_775_808d;
     private const ulong MaxFormulaBitwiseInput = 281_474_976_710_655UL;
@@ -1698,6 +1699,20 @@ public static partial class AccessibilityCheckerService
         {
             ConditionalFormulaAggregateKind.SumProduct => argumentCount is >= 1 and <= MaxFormulaSumProductArgumentCount,
             _ when IsFormulaPairwiseAggregate(aggregateKind) => argumentCount == 2,
+            ConditionalFormulaAggregateKind.Large or
+            ConditionalFormulaAggregateKind.Small or
+            ConditionalFormulaAggregateKind.PercentileInc or
+            ConditionalFormulaAggregateKind.PercentileExc or
+            ConditionalFormulaAggregateKind.QuartileInc or
+            ConditionalFormulaAggregateKind.QuartileExc or
+            ConditionalFormulaAggregateKind.PercentOf => argumentCount == 2,
+            ConditionalFormulaAggregateKind.Rank or
+            ConditionalFormulaAggregateKind.RankEq or
+            ConditionalFormulaAggregateKind.RankAvg or
+            ConditionalFormulaAggregateKind.PercentRankInc or
+            ConditionalFormulaAggregateKind.PercentRankExc => argumentCount is 2 or 3,
+            ConditionalFormulaAggregateKind.Prob => argumentCount is 3 or 4,
+            ConditionalFormulaAggregateKind.ModeSngl => argumentCount is >= 1 and <= MaxFormulaModeArgumentCount,
             _ => argumentCount > 0
         };
 
@@ -1785,6 +1800,52 @@ public static partial class AccessibilityCheckerService
                 return true;
             case "COUNTBLANK":
                 kind = ConditionalFormulaAggregateKind.CountBlank;
+                return true;
+            case "LARGE":
+                kind = ConditionalFormulaAggregateKind.Large;
+                return true;
+            case "SMALL":
+                kind = ConditionalFormulaAggregateKind.Small;
+                return true;
+            case "RANK":
+                kind = ConditionalFormulaAggregateKind.Rank;
+                return true;
+            case "RANK.EQ":
+                kind = ConditionalFormulaAggregateKind.RankEq;
+                return true;
+            case "RANK.AVG":
+                kind = ConditionalFormulaAggregateKind.RankAvg;
+                return true;
+            case "PERCENTILE":
+            case "PERCENTILE.INC":
+                kind = ConditionalFormulaAggregateKind.PercentileInc;
+                return true;
+            case "PERCENTILE.EXC":
+                kind = ConditionalFormulaAggregateKind.PercentileExc;
+                return true;
+            case "QUARTILE":
+            case "QUARTILE.INC":
+                kind = ConditionalFormulaAggregateKind.QuartileInc;
+                return true;
+            case "QUARTILE.EXC":
+                kind = ConditionalFormulaAggregateKind.QuartileExc;
+                return true;
+            case "PERCENTRANK":
+            case "PERCENTRANK.INC":
+                kind = ConditionalFormulaAggregateKind.PercentRankInc;
+                return true;
+            case "PERCENTRANK.EXC":
+                kind = ConditionalFormulaAggregateKind.PercentRankExc;
+                return true;
+            case "MODE":
+            case "MODE.SNGL":
+                kind = ConditionalFormulaAggregateKind.ModeSngl;
+                return true;
+            case "PROB":
+                kind = ConditionalFormulaAggregateKind.Prob;
+                return true;
+            case "PERCENTOF":
+                kind = ConditionalFormulaAggregateKind.PercentOf;
                 return true;
             default:
                 kind = default;
@@ -2409,7 +2470,21 @@ public static partial class AccessibilityCheckerService
         MaxA,
         Count,
         CountA,
-        CountBlank
+        CountBlank,
+        Large,
+        Small,
+        Rank,
+        RankEq,
+        RankAvg,
+        PercentileInc,
+        PercentileExc,
+        QuartileInc,
+        QuartileExc,
+        PercentRankInc,
+        PercentRankExc,
+        ModeSngl,
+        Prob,
+        PercentOf
     }
 
     private readonly record struct ConditionalFormulaAggregateArgument(
@@ -8967,6 +9042,1069 @@ public static partial class AccessibilityCheckerService
             return double.IsFinite(term);
         }
 
+        private static bool IsFormulaStatisticalSelectionAggregate(ConditionalFormulaAggregateKind aggregateKind) =>
+            aggregateKind is
+                ConditionalFormulaAggregateKind.Large or
+                ConditionalFormulaAggregateKind.Small or
+                ConditionalFormulaAggregateKind.Rank or
+                ConditionalFormulaAggregateKind.RankEq or
+                ConditionalFormulaAggregateKind.RankAvg or
+                ConditionalFormulaAggregateKind.PercentileInc or
+                ConditionalFormulaAggregateKind.PercentileExc or
+                ConditionalFormulaAggregateKind.QuartileInc or
+                ConditionalFormulaAggregateKind.QuartileExc or
+                ConditionalFormulaAggregateKind.PercentRankInc or
+                ConditionalFormulaAggregateKind.PercentRankExc or
+                ConditionalFormulaAggregateKind.ModeSngl or
+                ConditionalFormulaAggregateKind.Prob or
+                ConditionalFormulaAggregateKind.PercentOf;
+
+        private bool TryEvaluateFormulaStatisticalSelectionAggregate(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (operand.AggregateArguments is not { Count: > 0 } arguments)
+                return false;
+
+            return operand.AggregateKind switch
+            {
+                ConditionalFormulaAggregateKind.Large =>
+                    TryEvaluateFormulaLargeSmallAggregate(arguments, rowOffset, colOffset, largest: true, out value),
+                ConditionalFormulaAggregateKind.Small =>
+                    TryEvaluateFormulaLargeSmallAggregate(arguments, rowOffset, colOffset, largest: false, out value),
+                ConditionalFormulaAggregateKind.Rank or
+                ConditionalFormulaAggregateKind.RankEq =>
+                    TryEvaluateFormulaRankAggregate(arguments, rowOffset, colOffset, averageTies: false, requireRangeArray: false, out value),
+                ConditionalFormulaAggregateKind.RankAvg =>
+                    TryEvaluateFormulaRankAggregate(arguments, rowOffset, colOffset, averageTies: true, requireRangeArray: true, out value),
+                ConditionalFormulaAggregateKind.PercentileInc =>
+                    TryEvaluateFormulaPercentileAggregate(arguments, rowOffset, colOffset, inclusive: true, out value),
+                ConditionalFormulaAggregateKind.PercentileExc =>
+                    TryEvaluateFormulaPercentileAggregate(arguments, rowOffset, colOffset, inclusive: false, out value),
+                ConditionalFormulaAggregateKind.QuartileInc =>
+                    TryEvaluateFormulaQuartileAggregate(arguments, rowOffset, colOffset, inclusive: true, out value),
+                ConditionalFormulaAggregateKind.QuartileExc =>
+                    TryEvaluateFormulaQuartileAggregate(arguments, rowOffset, colOffset, inclusive: false, out value),
+                ConditionalFormulaAggregateKind.PercentRankInc =>
+                    TryEvaluateFormulaPercentRankAggregate(arguments, rowOffset, colOffset, inclusive: true, out value),
+                ConditionalFormulaAggregateKind.PercentRankExc =>
+                    TryEvaluateFormulaPercentRankAggregate(arguments, rowOffset, colOffset, inclusive: false, out value),
+                ConditionalFormulaAggregateKind.ModeSngl =>
+                    TryEvaluateFormulaModeSnglAggregate(arguments, rowOffset, colOffset, out value),
+                ConditionalFormulaAggregateKind.Prob =>
+                    TryEvaluateFormulaProbAggregate(arguments, rowOffset, colOffset, out value),
+                ConditionalFormulaAggregateKind.PercentOf =>
+                    TryEvaluateFormulaPercentOfAggregate(arguments, rowOffset, colOffset, out value),
+                _ => false
+            };
+        }
+
+        private bool TryEvaluateFormulaLargeSmallAggregate(
+            IReadOnlyList<ConditionalFormulaAggregateArgument> arguments,
+            int rowOffset,
+            int colOffset,
+            bool largest,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (arguments.Count != 2 ||
+                !TryResolveFormulaStatisticalArrayArgument(arguments[0], rowOffset, colOffset, out var range) ||
+                !TryResolveFormulaStatisticalScalarArgument(arguments[1], rowOffset, colOffset, out var kValue))
+            {
+                return false;
+            }
+
+            if (kValue is ErrorValue kError)
+            {
+                value = kError;
+                return true;
+            }
+
+            if (!TryGetFormulaStatisticalNumber(kValue, out var rawK, out var kCoercionError))
+            {
+                value = kCoercionError ?? ErrorValue.Value;
+                return true;
+            }
+
+            if (!double.IsFinite(rawK) || rawK < int.MinValue || rawK > int.MaxValue)
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            if (!TryCollectFormulaStatisticalArrayNumbers(range, out var numbers, out var rangeError))
+            {
+                value = rangeError ?? ErrorValue.Value;
+                return true;
+            }
+
+            var k = (int)rawK;
+            if (k < 1 || k > numbers.Count)
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            numbers.Sort();
+            value = FormulaStatisticalNumberResult(largest ? numbers[^k] : numbers[k - 1]);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaRankAggregate(
+            IReadOnlyList<ConditionalFormulaAggregateArgument> arguments,
+            int rowOffset,
+            int colOffset,
+            bool averageTies,
+            bool requireRangeArray,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (arguments.Count is < 2 or > 3 ||
+                !TryResolveFormulaStatisticalScalarArgument(arguments[0], rowOffset, colOffset, out var numberValue))
+            {
+                return false;
+            }
+
+            if (numberValue is ErrorValue numberError)
+            {
+                value = numberError;
+                return true;
+            }
+
+            if (requireRangeArray &&
+                !IsFormulaStatisticalRangeArgument(arguments[1]))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            if (!TryResolveFormulaStatisticalArrayArgument(arguments[1], rowOffset, colOffset, out var range))
+                return false;
+
+            var orderValue = (ScalarValue)BlankValue.Instance;
+            if (arguments.Count == 3 &&
+                !TryResolveFormulaStatisticalScalarArgument(arguments[2], rowOffset, colOffset, out orderValue))
+            {
+                return false;
+            }
+
+            if (orderValue is ErrorValue orderError)
+            {
+                value = orderError;
+                return true;
+            }
+
+            var numberIsValid = TryGetFormulaStatisticalNumber(numberValue, out var number, out var numberCoercionError);
+            var orderIsValid = TryGetFormulaStatisticalNumber(orderValue, out var rawOrder, out var orderCoercionError);
+            if (!numberIsValid || !orderIsValid)
+            {
+                value = numberCoercionError ?? orderCoercionError ?? ErrorValue.Value;
+                return true;
+            }
+
+            if (!double.IsFinite(number) || !double.IsFinite(rawOrder))
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            if (!TryCollectFormulaStatisticalArrayNumbers(range, out var numbers, out var rangeError))
+            {
+                value = rangeError ?? ErrorValue.Value;
+                return true;
+            }
+
+            if (!numbers.Contains(number))
+            {
+                value = ErrorValue.NA;
+                return true;
+            }
+
+            var descending = rawOrder == 0d;
+            var betterCount = descending
+                ? numbers.Count(candidate => candidate > number)
+                : numbers.Count(candidate => candidate < number);
+            if (!averageTies)
+            {
+                value = new NumberValue(betterCount + 1);
+                return true;
+            }
+
+            var tieCount = numbers.Count(candidate => candidate == number);
+            value = new NumberValue(betterCount + 1 + (tieCount - 1) / 2.0);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaPercentileAggregate(
+            IReadOnlyList<ConditionalFormulaAggregateArgument> arguments,
+            int rowOffset,
+            int colOffset,
+            bool inclusive,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (arguments.Count != 2 ||
+                !TryResolveFormulaStatisticalArrayArgument(arguments[0], rowOffset, colOffset, out var range) ||
+                !TryResolveFormulaStatisticalScalarArgument(arguments[1], rowOffset, colOffset, out var percentileValue))
+            {
+                return false;
+            }
+
+            if (percentileValue is ErrorValue percentileError)
+            {
+                value = percentileError;
+                return true;
+            }
+
+            if (!TryGetFormulaStatisticalNumber(percentileValue, out var percentile, out var coercionError))
+            {
+                value = coercionError ?? ErrorValue.Value;
+                return true;
+            }
+
+            value = EvaluateFormulaPercentile(range, percentile, inclusive);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaQuartileAggregate(
+            IReadOnlyList<ConditionalFormulaAggregateArgument> arguments,
+            int rowOffset,
+            int colOffset,
+            bool inclusive,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (arguments.Count != 2 ||
+                !TryResolveFormulaStatisticalArrayArgument(arguments[0], rowOffset, colOffset, out var range) ||
+                !TryResolveFormulaStatisticalScalarArgument(arguments[1], rowOffset, colOffset, out var quartileValue))
+            {
+                return false;
+            }
+
+            if (quartileValue is ErrorValue quartileError)
+            {
+                value = quartileError;
+                return true;
+            }
+
+            if (!TryGetFormulaStatisticalNumber(quartileValue, out var rawQuartile, out var coercionError))
+            {
+                value = coercionError ?? ErrorValue.Value;
+                return true;
+            }
+
+            if (!double.IsFinite(rawQuartile) || rawQuartile < int.MinValue || rawQuartile > int.MaxValue)
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            var quartile = (int)rawQuartile;
+            if (inclusive)
+            {
+                if (quartile is < 0 or > 4)
+                {
+                    value = ErrorValue.Num;
+                    return true;
+                }
+
+                value = quartile switch
+                {
+                    0 => EvaluateFormulaPercentile(range, 0d, inclusive: true),
+                    4 => EvaluateFormulaPercentile(range, 1d, inclusive: true),
+                    _ => EvaluateFormulaPercentile(range, quartile / 4.0, inclusive: true)
+                };
+                return true;
+            }
+
+            if (quartile is < 1 or > 3)
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            value = EvaluateFormulaPercentile(range, quartile / 4.0, inclusive: false);
+            return true;
+        }
+
+        private ScalarValue EvaluateFormulaPercentile(RangeValue range, double percentile, bool inclusive)
+        {
+            if (!double.IsFinite(percentile))
+                return ErrorValue.Num;
+
+            if (inclusive)
+            {
+                if (percentile is < 0d or > 1d)
+                    return ErrorValue.Num;
+            }
+            else if (percentile <= 0d || percentile >= 1d)
+            {
+                return ErrorValue.Num;
+            }
+
+            if (!TryCollectFormulaStatisticalArrayNumbers(range, out var numbers, out var rangeError))
+                return rangeError ?? ErrorValue.Value;
+
+            numbers.Sort();
+            var count = numbers.Count;
+            if (count == 0)
+                return ErrorValue.Num;
+
+            var rank = inclusive
+                ? percentile * (count - 1)
+                : percentile * (count + 1) - 1;
+            if (!inclusive && (rank < 0d || rank >= count))
+                return ErrorValue.Num;
+
+            var lowerIndex = (int)rank;
+            if (lowerIndex >= count - 1)
+                return FormulaStatisticalNumberResult(numbers[^1]);
+
+            var lower = numbers[lowerIndex];
+            var upper = numbers[lowerIndex + 1];
+            return FormulaStatisticalNumberResult(lower + (rank - lowerIndex) * (upper - lower));
+        }
+
+        private bool TryEvaluateFormulaPercentRankAggregate(
+            IReadOnlyList<ConditionalFormulaAggregateArgument> arguments,
+            int rowOffset,
+            int colOffset,
+            bool inclusive,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (arguments.Count is < 2 or > 3 ||
+                !TryResolveFormulaStatisticalArrayArgument(arguments[0], rowOffset, colOffset, out var range) ||
+                !TryResolveFormulaStatisticalScalarArgument(arguments[1], rowOffset, colOffset, out var xValue))
+            {
+                return false;
+            }
+
+            var significanceValue = (ScalarValue)BlankValue.Instance;
+            if (arguments.Count == 3 &&
+                !TryResolveFormulaStatisticalScalarArgument(arguments[2], rowOffset, colOffset, out significanceValue))
+            {
+                return false;
+            }
+
+            if (xValue is ErrorValue xError)
+            {
+                value = xError;
+                return true;
+            }
+
+            if (significanceValue is ErrorValue significanceError)
+            {
+                value = significanceError;
+                return true;
+            }
+
+            var xIsValid = TryGetFormulaStatisticalNumber(xValue, out var x, out var xCoercionError);
+            var significanceIsValid = TryGetFormulaStatisticalNumber(significanceValue, out var rawSignificance, out var significanceCoercionError);
+            if (!xIsValid || !significanceIsValid)
+            {
+                value = xCoercionError ?? significanceCoercionError ?? ErrorValue.Value;
+                return true;
+            }
+
+            if (!double.IsFinite(x) || !double.IsFinite(rawSignificance) || rawSignificance > int.MaxValue)
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            var significance = significanceValue is BlankValue ? 3 : (int)rawSignificance;
+            if (significance < 1)
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            if (!TryCollectFormulaStatisticalArrayNumbers(range, out var numbers, out var rangeError))
+            {
+                value = rangeError ?? ErrorValue.Value;
+                return true;
+            }
+
+            numbers.Sort();
+            var count = numbers.Count;
+            if (count == 0 || x < numbers[0] || x > numbers[^1])
+            {
+                value = ErrorValue.NA;
+                return true;
+            }
+
+            var factor = Math.Pow(10d, significance);
+            if (!double.IsFinite(factor))
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            var below = numbers.Count(candidate => candidate < x);
+            var equal = numbers.Count(candidate => candidate == x);
+            double percentRank;
+            if (equal > 0)
+            {
+                percentRank = inclusive
+                    ? count == 1 ? 1d : (double)below / (count - 1)
+                    : (below + 1.0) / (count + 1.0);
+            }
+            else
+            {
+                var lowerIndex = below - 1;
+                if (lowerIndex < 0 || lowerIndex >= count - 1)
+                {
+                    value = ErrorValue.NA;
+                    return true;
+                }
+
+                var lower = numbers[lowerIndex];
+                var upper = numbers[lowerIndex + 1];
+                var fraction = upper > lower ? (x - lower) / (upper - lower) : 0d;
+                percentRank = inclusive
+                    ? (lowerIndex + fraction) / (count - 1)
+                    : (lowerIndex + 1.0 + fraction) / (count + 1.0);
+            }
+
+            value = FormulaStatisticalNumberResult(Math.Floor(percentRank * factor) / factor);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaModeSnglAggregate(
+            IReadOnlyList<ConditionalFormulaAggregateArgument> arguments,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (arguments.Count is < 1 or > MaxFormulaModeArgumentCount)
+                return false;
+
+            var numbers = new List<double>();
+            foreach (var argument in arguments)
+            {
+                if (!AppendFormulaModeSnglNumbers(argument, rowOffset, colOffset, numbers, out var error))
+                {
+                    value = error ?? ErrorValue.Value;
+                    return error is not null;
+                }
+            }
+
+            if (numbers.Count == 0)
+            {
+                value = ErrorValue.NA;
+                return true;
+            }
+
+            var frequencies = new Dictionary<double, int>();
+            var order = new List<double>();
+            foreach (var number in numbers)
+            {
+                if (!double.IsFinite(number))
+                {
+                    value = ErrorValue.Num;
+                    return true;
+                }
+
+                if (!frequencies.ContainsKey(number))
+                    order.Add(number);
+
+                frequencies[number] = frequencies.GetValueOrDefault(number) + 1;
+            }
+
+            var maxFrequency = frequencies.Values.Max();
+            if (maxFrequency < 2)
+            {
+                value = ErrorValue.NA;
+                return true;
+            }
+
+            foreach (var candidate in order)
+            {
+                if (frequencies[candidate] == maxFrequency)
+                {
+                    value = FormulaStatisticalNumberResult(candidate);
+                    return true;
+                }
+            }
+
+            value = ErrorValue.NA;
+            return true;
+        }
+
+        private bool TryEvaluateFormulaProbAggregate(
+            IReadOnlyList<ConditionalFormulaAggregateArgument> arguments,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (arguments.Count is < 3 or > 4 ||
+                !TryResolveFormulaStatisticalArrayArgument(arguments[0], rowOffset, colOffset, out var xRange) ||
+                !TryResolveFormulaStatisticalArrayArgument(arguments[1], rowOffset, colOffset, out var probabilityRange) ||
+                !TryResolveFormulaStatisticalScalarArgument(arguments[2], rowOffset, colOffset, out var lowerValue))
+            {
+                return false;
+            }
+
+            var upperValue = lowerValue;
+            if (arguments.Count == 4 &&
+                !TryResolveFormulaStatisticalScalarArgument(arguments[3], rowOffset, colOffset, out upperValue))
+            {
+                return false;
+            }
+
+            if (lowerValue is ErrorValue lowerError)
+            {
+                value = lowerError;
+                return true;
+            }
+
+            if (upperValue is ErrorValue upperError)
+            {
+                value = upperError;
+                return true;
+            }
+
+            if (xRange.RowCount != probabilityRange.RowCount ||
+                xRange.ColCount != probabilityRange.ColCount)
+            {
+                value = ErrorValue.NA;
+                return true;
+            }
+
+            var lowerIsValid = TryGetFormulaStatisticalNumber(lowerValue, out var lower, out var lowerCoercionError);
+            var upperIsValid = TryGetFormulaStatisticalNumber(upperValue, out var upper, out var upperCoercionError);
+            if (!lowerIsValid || !upperIsValid)
+            {
+                value = lowerCoercionError ?? upperCoercionError ?? ErrorValue.Value;
+                return true;
+            }
+
+            if (!double.IsFinite(lower) || !double.IsFinite(upper))
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            var probabilitySum = 0d;
+            var result = 0d;
+            for (var row = 0; row < xRange.RowCount; row++)
+            {
+                for (var col = 0; col < xRange.ColCount; col++)
+                {
+                    var xCell = xRange.Cells[row, col];
+                    var probabilityCell = probabilityRange.Cells[row, col];
+                    if (xCell is ErrorValue xError)
+                    {
+                        value = xError;
+                        return true;
+                    }
+
+                    if (probabilityCell is ErrorValue probabilityError)
+                    {
+                        value = probabilityError;
+                        return true;
+                    }
+
+                    if (!TryGetFormulaStatisticalCellNumber(xCell, out var x) ||
+                        !TryGetFormulaStatisticalCellNumber(probabilityCell, out var probability))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    if (!double.IsFinite(x) ||
+                        !double.IsFinite(probability) ||
+                        probability <= 0d ||
+                        probability > 1d)
+                    {
+                        value = ErrorValue.Num;
+                        return true;
+                    }
+
+                    probabilitySum += probability;
+                    if (x >= lower && x <= upper)
+                        result += probability;
+                }
+            }
+
+            value = Math.Abs(probabilitySum - 1.0) <= 1e-12
+                ? FormulaStatisticalNumberResult(result)
+                : ErrorValue.Num;
+            return true;
+        }
+
+        private bool TryEvaluateFormulaPercentOfAggregate(
+            IReadOnlyList<ConditionalFormulaAggregateArgument> arguments,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (arguments.Count != 2)
+                return false;
+
+            if (!TryGetFormulaPercentOfSum(arguments[0], rowOffset, colOffset, out var subset, out var subsetError))
+            {
+                value = subsetError ?? ErrorValue.Value;
+                return subsetError is not null;
+            }
+
+            if (!TryGetFormulaPercentOfSum(arguments[1], rowOffset, colOffset, out var total, out var totalError))
+            {
+                value = totalError ?? ErrorValue.Value;
+                return totalError is not null;
+            }
+
+            if (total == 0d)
+            {
+                value = ErrorValue.DivByZero;
+                return true;
+            }
+
+            value = FormulaStatisticalNumberResult(subset / total);
+            return true;
+        }
+
+        private static bool IsFormulaStatisticalRangeArgument(ConditionalFormulaAggregateArgument argument) =>
+            argument.Kind == ConditionalFormulaAggregateArgumentKind.Range ||
+            argument.Kind == ConditionalFormulaAggregateArgumentKind.Operand &&
+            argument.Operand is { } operand &&
+            operand.Kind == ConditionalFormulaOperandKind.ReferenceRange;
+
+        private bool TryResolveFormulaStatisticalArrayArgument(
+            ConditionalFormulaAggregateArgument argument,
+            int rowOffset,
+            int colOffset,
+            out RangeValue range)
+        {
+            range = default!;
+            switch (argument.Kind)
+            {
+                case ConditionalFormulaAggregateArgumentKind.Literal:
+                    range = SingleFormulaStatisticalArray(argument.Literal ?? BlankValue.Instance);
+                    return true;
+                case ConditionalFormulaAggregateArgumentKind.Reference:
+                    if (!TryResolveFormulaAggregateReference(argument, rowOffset, colOffset, out var targetSheet, out var row, out var col))
+                        return false;
+
+                    range = SingleFormulaStatisticalArray(targetSheet.GetValue(row, col), row, col, targetSheet.Name);
+                    return true;
+                case ConditionalFormulaAggregateArgumentKind.Range:
+                    return TryMaterializeFormulaAggregateArgumentRange(argument, rowOffset, colOffset, out range);
+                case ConditionalFormulaAggregateArgumentKind.Operand:
+                    if (!argument.Operand.HasValue)
+                        return false;
+
+                    if (argument.Operand.Value.Kind == ConditionalFormulaOperandKind.ReferenceRange)
+                        return TryMaterializeFormulaReferenceRange(argument.Operand.Value, rowOffset, colOffset, out range);
+
+                    if (!TryResolveFormulaOperand(argument.Operand.Value, rowOffset, colOffset, out var value))
+                        return false;
+
+                    range = value is RangeValue resolvedRange
+                        ? resolvedRange
+                        : SingleFormulaStatisticalArray(value);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private bool TryResolveFormulaStatisticalScalarArgument(
+            ConditionalFormulaAggregateArgument argument,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            switch (argument.Kind)
+            {
+                case ConditionalFormulaAggregateArgumentKind.Literal:
+                    value = argument.Literal ?? BlankValue.Instance;
+                    return true;
+                case ConditionalFormulaAggregateArgumentKind.Reference:
+                    if (!TryResolveFormulaAggregateReference(argument, rowOffset, colOffset, out var targetSheet, out var row, out var col))
+                        return false;
+
+                    value = targetSheet.GetValue(row, col);
+                    return true;
+                case ConditionalFormulaAggregateArgumentKind.Range:
+                    if (!TryMaterializeFormulaAggregateArgumentRange(argument, rowOffset, colOffset, out var range))
+                        return false;
+
+                    return TryGetSingleFormulaStatisticalRangeValue(range, out value);
+                case ConditionalFormulaAggregateArgumentKind.Operand:
+                    if (!argument.Operand.HasValue)
+                        return false;
+
+                    if (argument.Operand.Value.Kind == ConditionalFormulaOperandKind.ReferenceRange)
+                    {
+                        if (!TryMaterializeFormulaReferenceRange(argument.Operand.Value, rowOffset, colOffset, out var referenceRange))
+                            return false;
+
+                        return TryGetSingleFormulaStatisticalRangeValue(referenceRange, out value);
+                    }
+
+                    if (!TryResolveFormulaOperand(argument.Operand.Value, rowOffset, colOffset, out value))
+                        return false;
+
+                    return value is not RangeValue resolvedRange ||
+                        TryGetSingleFormulaStatisticalRangeValue(resolvedRange, out value);
+                default:
+                    return false;
+            }
+        }
+
+        private bool TryMaterializeFormulaAggregateArgumentRange(
+            ConditionalFormulaAggregateArgument argument,
+            int rowOffset,
+            int colOffset,
+            out RangeValue range)
+        {
+            range = default!;
+            if (!TryResolveFormulaAggregateRange(
+                    argument,
+                    rowOffset,
+                    colOffset,
+                    out var targetSheet,
+                    out var startRow,
+                    out var startCol,
+                    out var endRow,
+                    out var endCol))
+            {
+                return false;
+            }
+
+            var rowCount = (ulong)endRow - startRow + 1UL;
+            var colCount = (ulong)endCol - startCol + 1UL;
+            if (rowCount * colCount > MaxFormulaAggregateRangeCells)
+                return false;
+
+            var cells = new ScalarValue[(int)rowCount, (int)colCount];
+            for (var currentRow = startRow; currentRow <= endRow; currentRow++)
+            {
+                for (var currentCol = startCol; currentCol <= endCol; currentCol++)
+                {
+                    cells[(int)(currentRow - startRow), (int)(currentCol - startCol)] =
+                        targetSheet.GetValue(currentRow, currentCol);
+                }
+            }
+
+            range = new RangeValue(cells, startRow, startCol) { SheetName = targetSheet.Name };
+            return true;
+        }
+
+        private static RangeValue SingleFormulaStatisticalArray(
+            ScalarValue value,
+            uint row = 1,
+            uint col = 1,
+            string? sheetName = null) =>
+            new(new[,] { { value } }, row, col) { SheetName = sheetName };
+
+        private static bool TryGetSingleFormulaStatisticalRangeValue(RangeValue range, out ScalarValue value)
+        {
+            if (range.RowCount == 1 && range.ColCount == 1)
+            {
+                value = range.Cells[0, 0];
+                return true;
+            }
+
+            value = ErrorValue.Value;
+            return false;
+        }
+
+        private static bool TryCollectFormulaStatisticalArrayNumbers(
+            RangeValue range,
+            out List<double> numbers,
+            out ErrorValue? error)
+        {
+            numbers = new List<double>(range.RowCount * range.ColCount);
+            error = null;
+            for (var row = 0; row < range.RowCount; row++)
+            {
+                for (var col = 0; col < range.ColCount; col++)
+                {
+                    var value = range.Cells[row, col];
+                    if (value is ErrorValue valueError)
+                    {
+                        error = valueError;
+                        return false;
+                    }
+
+                    if (TryGetFormulaStatisticalCellNumber(value, out var number))
+                        numbers.Add(number);
+                }
+            }
+
+            return true;
+        }
+
+        private bool AppendFormulaModeSnglNumbers(
+            ConditionalFormulaAggregateArgument argument,
+            int rowOffset,
+            int colOffset,
+            List<double> numbers,
+            out ErrorValue? error)
+        {
+            error = null;
+            switch (argument.Kind)
+            {
+                case ConditionalFormulaAggregateArgumentKind.Literal:
+                    return AppendFormulaModeSnglValue(argument.Literal ?? BlankValue.Instance, isDirectArgument: true, numbers, out error);
+                case ConditionalFormulaAggregateArgumentKind.Reference:
+                    if (!TryResolveFormulaAggregateReference(argument, rowOffset, colOffset, out var targetSheet, out var row, out var col))
+                        return false;
+
+                    return AppendFormulaModeSnglValue(targetSheet.GetValue(row, col), isDirectArgument: false, numbers, out error);
+                case ConditionalFormulaAggregateArgumentKind.Range:
+                    if (!TryMaterializeFormulaAggregateArgumentRange(argument, rowOffset, colOffset, out var range))
+                        return false;
+
+                    return AppendFormulaModeSnglRange(range, numbers, out error);
+                case ConditionalFormulaAggregateArgumentKind.Operand:
+                    if (!argument.Operand.HasValue)
+                        return false;
+
+                    if (argument.Operand.Value.Kind == ConditionalFormulaOperandKind.ReferenceRange)
+                    {
+                        if (!TryMaterializeFormulaReferenceRange(argument.Operand.Value, rowOffset, colOffset, out var referenceRange))
+                            return false;
+
+                        return AppendFormulaModeSnglRange(referenceRange, numbers, out error);
+                    }
+
+                    if (!TryResolveFormulaOperand(argument.Operand.Value, rowOffset, colOffset, out var operandValue))
+                        return false;
+
+                    return operandValue is RangeValue operandRange
+                        ? AppendFormulaModeSnglRange(operandRange, numbers, out error)
+                        : AppendFormulaModeSnglValue(operandValue, isDirectArgument: true, numbers, out error);
+                default:
+                    return false;
+            }
+        }
+
+        private static bool AppendFormulaModeSnglRange(
+            RangeValue range,
+            List<double> numbers,
+            out ErrorValue? error)
+        {
+            error = null;
+            for (var row = 0; row < range.RowCount; row++)
+            {
+                for (var col = 0; col < range.ColCount; col++)
+                {
+                    if (!AppendFormulaModeSnglValue(range.Cells[row, col], isDirectArgument: false, numbers, out error))
+                        return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool AppendFormulaModeSnglValue(
+            ScalarValue value,
+            bool isDirectArgument,
+            List<double> numbers,
+            out ErrorValue? error)
+        {
+            error = null;
+            switch (value)
+            {
+                case ErrorValue valueError:
+                    error = valueError;
+                    return false;
+                case NumberValue numeric:
+                    numbers.Add(numeric.Value);
+                    return true;
+                case DateTimeValue dateTime:
+                    numbers.Add(dateTime.Value);
+                    return true;
+                case BoolValue boolean when isDirectArgument:
+                    numbers.Add(boolean.Value ? 1d : 0d);
+                    return true;
+                case TextValue text when isDirectArgument:
+                    if (!TryParseFormulaStatisticalNumberText(text.Value, out var parsed))
+                    {
+                        error = ErrorValue.Value;
+                        return false;
+                    }
+
+                    if (!double.IsFinite(parsed))
+                    {
+                        error = ErrorValue.Num;
+                        return false;
+                    }
+
+                    numbers.Add(parsed);
+                    return true;
+                default:
+                    return true;
+            }
+        }
+
+        private bool TryGetFormulaPercentOfSum(
+            ConditionalFormulaAggregateArgument argument,
+            int rowOffset,
+            int colOffset,
+            out double sum,
+            out ErrorValue? error)
+        {
+            sum = 0d;
+            error = null;
+
+            if (argument.Kind is ConditionalFormulaAggregateArgumentKind.Range ||
+                argument.Kind == ConditionalFormulaAggregateArgumentKind.Operand &&
+                argument.Operand is { } operand &&
+                operand.Kind == ConditionalFormulaOperandKind.ReferenceRange)
+            {
+                if (!TryResolveFormulaStatisticalArrayArgument(argument, rowOffset, colOffset, out var range))
+                    return false;
+
+                return TryGetFormulaPercentOfRangeSum(range, out sum, out error);
+            }
+
+            if (!TryResolveFormulaStatisticalScalarArgument(argument, rowOffset, colOffset, out var value))
+                return false;
+
+            if (value is ErrorValue valueError)
+            {
+                error = valueError;
+                return false;
+            }
+
+            if (value is RangeValue rangeValue)
+                return TryGetFormulaPercentOfRangeSum(rangeValue, out sum, out error);
+
+            if (!TryGetFormulaStatisticalNumber(value, out sum, out error))
+                return false;
+
+            if (!double.IsFinite(sum))
+            {
+                error = ErrorValue.Num;
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryGetFormulaPercentOfRangeSum(
+            RangeValue range,
+            out double sum,
+            out ErrorValue? error)
+        {
+            sum = 0d;
+            error = null;
+            for (var row = 0; row < range.RowCount; row++)
+            {
+                for (var col = 0; col < range.ColCount; col++)
+                {
+                    var cell = range.Cells[row, col];
+                    if (cell is ErrorValue cellError)
+                    {
+                        error = cellError;
+                        return false;
+                    }
+
+                    if (TryGetFormulaStatisticalCellNumber(cell, out var number))
+                    {
+                        sum += number;
+                        if (!double.IsFinite(sum))
+                        {
+                            error = ErrorValue.Num;
+                            return false;
+                        }
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        private static bool TryGetFormulaStatisticalNumber(
+            ScalarValue value,
+            out double number,
+            out ErrorValue? error)
+        {
+            error = null;
+            switch (value)
+            {
+                case ErrorValue valueError:
+                    number = 0d;
+                    error = valueError;
+                    return false;
+                case NumberValue numeric:
+                    number = numeric.Value;
+                    return true;
+                case DateTimeValue dateTime:
+                    number = dateTime.Value;
+                    return true;
+                case BoolValue boolean:
+                    number = boolean.Value ? 1d : 0d;
+                    return true;
+                case BlankValue:
+                    number = 0d;
+                    return true;
+                case TextValue text when TryParseFormulaStatisticalNumberText(text.Value, out var parsed):
+                    number = parsed;
+                    return true;
+                default:
+                    number = 0d;
+                    error = ErrorValue.Value;
+                    return false;
+            }
+        }
+
+        private static bool TryParseFormulaStatisticalNumberText(string text, out double number)
+        {
+            number = 0d;
+            var candidate = text.Trim();
+            if (candidate.Length == 0)
+                return false;
+
+            var isPercent = candidate.EndsWith('%');
+            if (isPercent)
+            {
+                candidate = candidate[..^1].TrimEnd();
+                if (candidate.Length == 0)
+                    return false;
+            }
+
+            var styles = NumberStyles.Float | NumberStyles.AllowThousands;
+            if (!double.TryParse(candidate, styles, CultureInfo.InvariantCulture, out number))
+                return false;
+
+            if (isPercent)
+                number /= 100d;
+
+            return true;
+        }
+
+        private static bool TryGetFormulaStatisticalCellNumber(ScalarValue value, out double number)
+        {
+            switch (value)
+            {
+                case NumberValue numeric:
+                    number = numeric.Value;
+                    return true;
+                case DateTimeValue dateTime:
+                    number = dateTime.Value;
+                    return true;
+                default:
+                    number = 0d;
+                    return false;
+            }
+        }
+
+        private static ScalarValue FormulaStatisticalNumberResult(double value) =>
+            double.IsFinite(value) ? new NumberValue(value) : ErrorValue.Num;
+
         private bool TryEvaluateFormulaAggregate(
             ConditionalFormulaOperand operand,
             int rowOffset,
@@ -8974,6 +10112,9 @@ public static partial class AccessibilityCheckerService
             out ScalarValue value)
         {
             value = ErrorValue.Value;
+            if (IsFormulaStatisticalSelectionAggregate(operand.AggregateKind))
+                return TryEvaluateFormulaStatisticalSelectionAggregate(operand, rowOffset, colOffset, out value);
+
             if (operand.AggregateKind == ConditionalFormulaAggregateKind.SumProduct)
                 return TryEvaluateFormulaSumProductAggregate(operand, rowOffset, colOffset, out value);
 

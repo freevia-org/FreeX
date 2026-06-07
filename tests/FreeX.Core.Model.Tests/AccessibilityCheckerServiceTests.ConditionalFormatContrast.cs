@@ -959,6 +959,55 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatStatisticalSelectionAndRankFunctions()
+    {
+        AssertFormulaStatisticalSelectionContrastLocations("$A1=LARGE($A$1:$A$4,1)", "B4");
+        AssertFormulaStatisticalSelectionContrastLocations("$A1=SMALL($A$1:$A$4,1)", "B1", "B3");
+        AssertFormulaStatisticalSelectionContrastLocations("RANK($A1,$A$1:$A$4)=2", "B2");
+        AssertFormulaStatisticalSelectionContrastLocations("RANK.EQ($A1,$A$1:$A$4,1)=1", "B1", "B3");
+        AssertFormulaStatisticalSelectionContrastLocations("RANK.AVG($A1,$A$1:$A$4)=3.5", "B1", "B3");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatPercentileQuartileAndPercentRankFunctions()
+    {
+        AssertFormulaStatisticalSelectionContrastLocations("$A1>PERCENTILE($A$1:$A$4,0.5)", "B2", "B4");
+        AssertFormulaStatisticalSelectionContrastLocations("$A1=PERCENTILE.INC($A$1:$A$4,0)", "B1", "B3");
+        AssertFormulaStatisticalSelectionContrastLocations("$A1>PERCENTILE.EXC($A$1:$A$4,0.5)", "B2", "B4");
+        AssertFormulaStatisticalSelectionContrastLocations("$A1>=QUARTILE($A$1:$A$4,3)", "B4");
+        AssertFormulaStatisticalSelectionContrastLocations("$A1=QUARTILE.INC($A$1:$A$4,1)", "B1", "B3");
+        AssertFormulaStatisticalSelectionContrastLocations("$A1>QUARTILE.EXC($A$1:$A$4,2)", "B2", "B4");
+        AssertFormulaStatisticalSelectionContrastLocations("PERCENTRANK($A$1:$A$4,$A1)=0", "B1", "B3");
+        AssertFormulaStatisticalSelectionContrastLocations("PERCENTRANK.INC($A$1:$A$4,$A1)>0.5", "B2", "B4");
+        AssertFormulaStatisticalSelectionContrastLocations("PERCENTRANK.EXC($A$1:$A$4,$A1)=0.2", "B1", "B3");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatModeProbAndPercentOfFunctions()
+    {
+        AssertFormulaStatisticalSelectionContrastLocations("$A1=MODE($A$1:$A$4)", "B1", "B3");
+        AssertFormulaStatisticalSelectionContrastLocations("$A1=MODE.SNGL($A$1:$A$4)", "B1", "B3");
+        AssertFormulaStatisticalSelectionContrastLocations("PROB($A$1:$A$4,$F$1:$F$4,$A1)=0.5", "B1", "B3");
+        AssertFormulaStatisticalSelectionContrastLocations("PERCENTOF($A1,$A$1:$A$4)>0.25", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_PropagatesFormulaConditionalFormatStatisticalSelectionErrorsAndFailsClosedForErrorComparisons()
+    {
+        AssertFormulaStatisticalSelectionContrastLocations("ISNA(LARGE(NA(),1))", FormulaStatisticalSelectionAllLocations);
+        AssertFormulaStatisticalSelectionContrastLocations("ISNA(RANK(5,$A$1:$A$4,NA()))", FormulaStatisticalSelectionAllLocations);
+        AssertFormulaStatisticalSelectionContrastLocations("ISERROR(PERCENTILE($A$1:$A$4,2))", FormulaStatisticalSelectionAllLocations);
+        AssertFormulaStatisticalSelectionContrastLocations("ISNA(PERCENTRANK($A$1:$A$4,1000))", FormulaStatisticalSelectionAllLocations);
+        AssertFormulaStatisticalSelectionContrastLocations("ISNA(PROB($A$1:$A$4,$F$1:$F$3,$A1))", FormulaStatisticalSelectionAllLocations);
+        AssertFormulaStatisticalSelectionContrastLocations("ISERROR(PERCENTOF($A1,$D$3:$D$3))", FormulaStatisticalSelectionAllLocations);
+        AssertFormulaStatisticalSelectionContrastLocations("LARGE(NA(),1)>0");
+        AssertFormulaStatisticalSelectionContrastLocations("PERCENTILE($A$1:$A$4,2)>0");
+        AssertFormulaStatisticalSelectionContrastLocations("PROB($A$1:$A$4,$F$1:$F$3,$A1)>0");
+        AssertFormulaStatisticalSelectionContrastLocations("PERCENTOF($A1,$D$3:$D$3)>0");
+        AssertFormulaStatisticalSelectionContrastLocations("LARGE($A$1:$A$4,$G$1:$G$2)>0");
+    }
+
+    [Fact]
     public void FindIssues_DoesNotMatchFormulaConditionalFormatAggregateUnsupportedOperandArguments()
     {
         AssertFormulaAggregateContrastLocations("SUM($D1&\"x\")>0");
@@ -4550,6 +4599,21 @@ public sealed partial class AccessibilityCheckerServiceTests
         return workbook;
     }
 
+    private static Workbook CreateFormulaStatisticalSelectionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = CreateFormulaAggregateContrastWorkbook(out sheet, out firstLabel, out lastLabel);
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 6), new NumberValue(0.25));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 6), new NumberValue(0.25));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 6), new NumberValue(0.25));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 6), new NumberValue(0.25));
+
+        return workbook;
+    }
+
     private static void SetFormulaAggregateContrastRow(
         Sheet sheet,
         uint row,
@@ -5290,6 +5354,17 @@ public sealed partial class AccessibilityCheckerServiceTests
             .Equal(expectedLocations);
     }
 
+    private static void AssertFormulaStatisticalSelectionContrastLocations(string formulaText, params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaStatisticalSelectionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
     private static void AssertFormulaArithmeticContrastLocations(string formulaText, params string[] expectedLocations)
     {
         var workbook = CreateFormulaAggregateContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
@@ -5549,6 +5624,9 @@ public sealed partial class AccessibilityCheckerServiceTests
 
     private static string[] FormulaInfoScalarAllLocations =>
         ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9", "B10", "B11", "B12", "B13", "B14", "B15", "B16"];
+
+    private static string[] FormulaStatisticalSelectionAllLocations =>
+        ["B1", "B2", "B3", "B4"];
 
     private static void AddFormulaContrastRule(
         Sheet sheet,
