@@ -101,6 +101,36 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         oleSize.Element(oleSize.Name.Namespace + "nativeOleSizeChild").Should().BeNull();
     }
 
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorkbookWebPublishingForSchemaValidity()
+    {
+        using var source = CreateWorkbookNativeMetadataSourcePackage();
+        SetWorkbookWebPublishingInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var webPublishing = ReadWorkbookChildElement(saved, "webPublishing");
+        webPublishing.Attribute("css")!.Value.Should().Be("1");
+        webPublishing.Attribute("targetScreenSize")!.Value.Should().Be("800x600");
+        webPublishing.Attribute("dpi")!.Value.Should().Be("96");
+        webPublishing.Attribute("codePage")!.Value.Should().Be("65001");
+        webPublishing.Attribute("customWebPublishingFlag").Should().BeNull();
+        webPublishing.Element(webPublishing.Name.Namespace + "nativeWebPublishingChild").Should().BeNull();
+    }
+
     private static MemoryStream CreateWorkbookNativeMetadataSourcePackage()
     {
         var workbook = new Workbook("WorkbookNativeMetadataPatchSave");
@@ -175,6 +205,21 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         oleSize.SetAttributeValue("ref", " a1:d12 ");
         oleSize.SetAttributeValue("customOleSizeFlag", "removed");
         oleSize.Add(new XElement(workbookNs + "nativeOleSizeChild"));
+        ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+    }
+
+    private static void SetWorkbookWebPublishingInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var webPublishing = workbookXml.Root!.Element(workbookNs + "webPublishing")!;
+        webPublishing.SetAttributeValue("dpi", " 96 ");
+        webPublishing.SetAttributeValue("codePage", " 65001 ");
+        webPublishing.SetAttributeValue("customWebPublishingFlag", "removed");
+        webPublishing.Add(new XElement(workbookNs + "nativeWebPublishingChild"));
         ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
     }
 

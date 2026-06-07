@@ -12807,9 +12807,13 @@ public partial class FileAdapterSmokeTests
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
-        workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("webPublishing");
-        workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("css=\"1\"");
-        workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("targetScreenSize=\"800x600\"");
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var webPublishing = workbookXml.Root!.Element(workbookNs + "webPublishing")!;
+        webPublishing.Attribute("css")!.Value.Should().Be("1");
+        webPublishing.Attribute("targetScreenSize")!.Value.Should().Be("800x600");
+        webPublishing.Attribute("dpi")!.Value.Should().Be("96");
+        webPublishing.Attribute("customWebPublishingFlag").Should().BeNull();
+        webPublishing.Element(workbookNs + "nativeWebPublishingChild").Should().BeNull();
     }
 
     [Fact]

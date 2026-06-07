@@ -240,6 +240,7 @@ internal static class XlsxWorkbookSchemaNormalizer
         }
 
         changed |= XlsxWorkbookOleSizeNormalizer.NormalizeWorkbookRoot(root, workbookNs);
+        changed |= XlsxWorkbookWebPublishingNormalizer.NormalizeWorkbookRoot(root, workbookNs);
 
         if (root.Element(workbookNs + "fileVersion") is { } fileVersion)
             changed |= XlsxWorkbookFileVersionNormalizer.NormalizeElement(fileVersion);

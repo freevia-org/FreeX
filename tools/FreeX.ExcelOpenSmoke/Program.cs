@@ -467,6 +467,7 @@ internal static class ExcelOpenSmoke
                 AssertWorkbookDefinedNamesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookCalculationPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookOleSizeMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorkbookWebPublishingMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookFileRecoveryMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookExtensionListMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertSharedStringTableComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -708,6 +709,7 @@ internal static class ExcelOpenSmoke
             AssertWorkbookDefinedNamesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookCalculationPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookOleSizeMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorkbookWebPublishingMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookFileRecoveryMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookExtensionListMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertSharedStringTableComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -5722,6 +5724,130 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid workbook oleSize metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorkbookWebPublishingMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        var workbookEntry = FindPackageEntry(archive, WorkbookPart);
+        if (workbookEntry is not null)
+            AddWorkbookWebPublishingMetadataIssues(LoadPackageXml(workbookEntry), issues);
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorkbookWebPublishingMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorkbookWebPublishingMetadataIssues(XDocument workbookXml, List<string> issues)
+    {
+        var root = workbookXml.Root;
+        if (root is null)
+            return;
+
+        var webPublishingElements = root.Elements(SpreadsheetNs + "webPublishing").ToArray();
+        if (webPublishingElements.Length > 1)
+            issues.Add($"{WorkbookPart} has {webPublishingElements.Length} webPublishing elements; expected at most one");
+
+        foreach (var webPublishing in webPublishingElements.Select((element, index) => new WorkbookWebPublishingReference(index + 1, element)))
+        {
+            AddWorkbookWebPublishingIssues(root, webPublishing, issues);
+        }
+    }
+
+    private static void AddWorkbookWebPublishingIssues(
+        XElement workbookRoot,
+        WorkbookWebPublishingReference webPublishingReference,
+        List<string> issues)
+    {
+        var webPublishing = webPublishingReference.Element;
+        var description = $"webPublishing #{webPublishingReference.Ordinal}";
+        AddWorkbookMetadataOrderingIssues(
+            workbookRoot,
+            webPublishing,
+            description,
+            [
+                "fileRecoveryPr",
+                "webPublishObjects",
+                "extLst"
+            ],
+            issues);
+
+        foreach (var attribute in webPublishing.Attributes().Where(attribute => IsKnownWorkbookWebPublishingBooleanAttribute(attribute.Name.LocalName)))
+        {
+            AddOptionalWorkbookMetadataBooleanIssue(description, attribute.Name.LocalName, attribute.Value, issues);
+        }
+
+        foreach (var attribute in webPublishing.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                (attribute.Name.NamespaceName.Length == 0 && IsKnownWorkbookWebPublishingAttribute(attribute.Name.LocalName)))
+            {
+                continue;
+            }
+
+            issues.Add($"{WorkbookPart} {description} has unsupported attribute {attribute.Name}");
+        }
+
+        var targetScreenSize = webPublishing.Attribute("targetScreenSize")?.Value;
+        if (!string.IsNullOrWhiteSpace(targetScreenSize) && !IsKnownWorkbookTargetScreenSizeValue(targetScreenSize))
+            issues.Add($"{WorkbookPart} {description} has invalid targetScreenSize value '{targetScreenSize}'");
+
+        AddOptionalWorkbookMetadataUnsignedIntIssue(description, "dpi", webPublishing.Attribute("dpi")?.Value, issues);
+        AddOptionalWorkbookMetadataUnsignedIntIssue(description, "codePage", webPublishing.Attribute("codePage")?.Value, issues);
+
+        if (webPublishing.Attribute("characterSet") is { } characterSet &&
+            string.IsNullOrWhiteSpace(characterSet.Value))
+        {
+            issues.Add($"{WorkbookPart} {description} has empty characterSet value");
+        }
+
+        if (webPublishing.Nodes().Any())
+            issues.Add($"{WorkbookPart} {description} has child content; expected attributes only");
+    }
+
+    private static bool IsKnownWorkbookWebPublishingAttribute(string name) =>
+        name is "css" or
+            "thicket" or
+            "longFileNames" or
+            "vml" or
+            "allowPng" or
+            "targetScreenSize" or
+            "dpi" or
+            "codePage" or
+            "characterSet";
+
+    private static bool IsKnownWorkbookWebPublishingBooleanAttribute(string name) =>
+        name is "css" or
+            "thicket" or
+            "longFileNames" or
+            "vml" or
+            "allowPng";
+
+    private static bool IsKnownWorkbookTargetScreenSizeValue(string value) =>
+        value is "544x376" or
+            "640x480" or
+            "720x512" or
+            "800x600" or
+            "1024x768" or
+            "1152x882" or
+            "1152x900" or
+            "1280x1024" or
+            "1600x1200" or
+            "1800x1440" or
+            "1920x1200";
+
+    private static void ThrowInvalidWorkbookWebPublishingMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid workbook webPublishing metadata: {sample}{suffix}");
     }
 
     private static void AssertWorkbookFileRecoveryMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -18877,6 +19003,10 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorkbookOleSizeReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorkbookWebPublishingReference(
         int Ordinal,
         XElement Element);
 
