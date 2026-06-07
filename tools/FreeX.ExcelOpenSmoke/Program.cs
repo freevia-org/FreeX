@@ -466,6 +466,7 @@ internal static class ExcelOpenSmoke
                 AssertWorkbookFunctionGroupsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookDefinedNamesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookCalculationPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorkbookOleSizeMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookFileRecoveryMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookExtensionListMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertSharedStringTableComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -706,6 +707,7 @@ internal static class ExcelOpenSmoke
             AssertWorkbookFunctionGroupsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookDefinedNamesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookCalculationPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorkbookOleSizeMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookFileRecoveryMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookExtensionListMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertSharedStringTableComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -5420,6 +5422,11 @@ internal static class ExcelOpenSmoke
             ],
             issues);
 
+        foreach (var attribute in definedNames.Attributes().Where(attribute => !attribute.IsNamespaceDeclaration))
+        {
+            issues.Add($"{WorkbookPart} {description} has unsupported attribute {attribute.Name}");
+        }
+
         foreach (var unexpectedChild in definedNames.Elements().Where(element => element.Name != SpreadsheetNs + "definedName"))
         {
             issues.Add($"{WorkbookPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}; expected definedName entries only");
@@ -5443,6 +5450,17 @@ internal static class ExcelOpenSmoke
         if (string.IsNullOrWhiteSpace(definedName.Attribute("name")?.Value))
             issues.Add($"{WorkbookPart} {description} has no name");
 
+        foreach (var attribute in definedName.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                (attribute.Name.NamespaceName.Length == 0 && IsKnownWorkbookDefinedNameAttribute(attribute.Name.LocalName)))
+            {
+                continue;
+            }
+
+            issues.Add($"{WorkbookPart} {description} has unsupported attribute {attribute.Name}");
+        }
+
         foreach (var attribute in definedName.Attributes().Where(attribute => IsKnownWorkbookDefinedNameBooleanAttribute(attribute.Name.LocalName)))
         {
             AddOptionalWorkbookMetadataBooleanIssue(description, attribute.Name.LocalName, attribute.Value, issues);
@@ -5454,6 +5472,23 @@ internal static class ExcelOpenSmoke
         if (definedName.Elements().Any())
             issues.Add($"{WorkbookPart} {description} has child elements; expected formula text only");
     }
+
+    private static bool IsKnownWorkbookDefinedNameAttribute(string name) =>
+        name is "name" or
+            "comment" or
+            "customMenu" or
+            "description" or
+            "help" or
+            "statusBar" or
+            "localSheetId" or
+            "hidden" or
+            "function" or
+            "vbProcedure" or
+            "xlm" or
+            "functionGroupId" or
+            "shortcutKey" or
+            "publishToServer" or
+            "workbookParameter";
 
     private static bool IsKnownWorkbookDefinedNameBooleanAttribute(string name) =>
         name is "hidden" or
@@ -5602,6 +5637,92 @@ internal static class ExcelOpenSmoke
 
     private static bool IsKnownWorkbookCalculationReferenceModeValue(string value) =>
         value is "A1" or "R1C1";
+
+    private static void AssertWorkbookOleSizeMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        var workbookEntry = FindPackageEntry(archive, WorkbookPart);
+        if (workbookEntry is not null)
+            AddWorkbookOleSizeMetadataIssues(LoadPackageXml(workbookEntry), issues);
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorkbookOleSizeMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorkbookOleSizeMetadataIssues(XDocument workbookXml, List<string> issues)
+    {
+        var root = workbookXml.Root;
+        if (root is null)
+            return;
+
+        var oleSizeElements = root.Elements(SpreadsheetNs + "oleSize").ToArray();
+        if (oleSizeElements.Length > 1)
+            issues.Add($"{WorkbookPart} has {oleSizeElements.Length} oleSize elements; expected at most one");
+
+        foreach (var oleSize in oleSizeElements.Select((element, index) => new WorkbookOleSizeReference(index + 1, element)))
+        {
+            AddWorkbookOleSizeIssues(root, oleSize, issues);
+        }
+    }
+
+    private static void AddWorkbookOleSizeIssues(
+        XElement workbookRoot,
+        WorkbookOleSizeReference oleSizeReference,
+        List<string> issues)
+    {
+        var oleSize = oleSizeReference.Element;
+        var description = $"oleSize #{oleSizeReference.Ordinal}";
+        AddWorkbookMetadataOrderingIssues(
+            workbookRoot,
+            oleSize,
+            description,
+            [
+                "customWorkbookViews",
+                "pivotCaches",
+                "smartTagPr",
+                "smartTagTypes",
+                "webPublishing",
+                "fileRecoveryPr",
+                "webPublishObjects",
+                "extLst"
+            ],
+            issues);
+
+        foreach (var attribute in oleSize.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                (attribute.Name.NamespaceName.Length == 0 && attribute.Name.LocalName == "ref"))
+            {
+                continue;
+            }
+
+            issues.Add($"{WorkbookPart} {description} has unsupported attribute {attribute.Name}");
+        }
+
+        var reference = oleSize.Attribute("ref")?.Value;
+        if (string.IsNullOrWhiteSpace(reference))
+            issues.Add($"{WorkbookPart} {description} has no ref");
+        else if (!IsValidLocalWorksheetReference(reference))
+            issues.Add($"{WorkbookPart} {description} has invalid local ref reference '{reference}'");
+
+        if (oleSize.Nodes().Any())
+            issues.Add($"{WorkbookPart} {description} has child content; expected attributes only");
+    }
+
+    private static void ThrowInvalidWorkbookOleSizeMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid workbook oleSize metadata: {sample}{suffix}");
+    }
 
     private static void AssertWorkbookFileRecoveryMetadataComplete(string xlsxPath, string label, string sourcePath)
     {
@@ -18752,6 +18873,10 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorkbookCalculationPropertiesReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorkbookOleSizeReference(
         int Ordinal,
         XElement Element);
 

@@ -209,7 +209,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             new XElement(workbookNs + "workbookPr"),
             new XElement(workbookNs + "bookViews"),
             new XElement(workbookNs + "sheets"),
-            new XElement(workbookNs + "definedNames"),
+            new XElement(
+                workbookNs + "definedNames",
+                new XElement(workbookNs + "definedName", new XAttribute("name", "OrderProbe"), "Sheet1!$A$1")),
             new XElement(workbookNs + "calcPr"),
             new XElement(workbookNs + "revisionPtr"),
             new XElement(workbookNs + "extLst")));

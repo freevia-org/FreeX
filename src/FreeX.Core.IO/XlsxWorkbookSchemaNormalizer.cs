@@ -229,6 +229,18 @@ internal static class XlsxWorkbookSchemaNormalizer
             }
         }
 
+        foreach (var definedNames in root.Elements(workbookNs + "definedNames").ToList())
+        {
+            changed |= XlsxWorkbookDefinedNameNormalizer.NormalizeDefinedNamesElement(definedNames);
+            if (XlsxWorkbookDefinedNameNormalizer.ShouldRemoveDefinedNamesElement(definedNames))
+            {
+                definedNames.Remove();
+                changed = true;
+            }
+        }
+
+        changed |= XlsxWorkbookOleSizeNormalizer.NormalizeWorkbookRoot(root, workbookNs);
+
         if (root.Element(workbookNs + "fileVersion") is { } fileVersion)
             changed |= XlsxWorkbookFileVersionNormalizer.NormalizeElement(fileVersion);
         if (root.Element(workbookNs + "functionGroups") is { } functionGroups)

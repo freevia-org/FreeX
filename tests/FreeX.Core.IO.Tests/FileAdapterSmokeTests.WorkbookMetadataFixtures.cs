@@ -138,7 +138,9 @@ public partial class FileAdapterSmokeTests
             var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
             workbookXml.Root!.Add(new XElement(
                 workbookNs + "oleSize",
-                new XAttribute("ref", "A1:D12")));
+                new XAttribute("ref", " a1:d12 "),
+                new XAttribute("customOleSizeFlag", "removed"),
+                new XElement(workbookNs + "nativeOleSizeChild")));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
@@ -156,14 +158,20 @@ public partial class FileAdapterSmokeTests
             if (definedNames is null)
             {
                 definedNames = new XElement(workbookNs + "definedNames");
-                workbookXml.Root!.Add(definedNames);
+                var sheets = workbookXml.Root!.Element(workbookNs + "sheets");
+                if (sheets is not null)
+                    sheets.AddAfterSelf(definedNames);
+                else
+                    workbookXml.Root!.Add(definedNames);
             }
 
             definedNames.Add(new XElement(
                 workbookNs + "definedName",
                 new XAttribute("name", "DynamicSalesRange"),
                 new XAttribute("hidden", "1"),
-                "1+1"));
+                new XAttribute("customDefinedNameFlag", "removed"),
+                "1+1",
+                new XElement(workbookNs + "nativeDefinedNameChild")));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 

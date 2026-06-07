@@ -140,9 +140,9 @@ FreeX implements **488 in-scope Excel functions**, including:
 | Date & Time | TODAY, NOW, DATE, YEAR, MONTH, DAY, WORKDAY, NETWORKDAYS, EOMONTH, DATEDIF |
 | Logical | IF, IFS, AND, OR, NOT, IFERROR, IFNA, SWITCH, CHOOSE |
 | Higher-Order | LET, LAMBDA, MAP, REDUCE, SCAN, BYROW, BYCOL, MAKEARRAY |
-| Financial | NPV, IRR, PMT, FV, PV, RATE, NPER, XNPV, XIRR |
+| Financial | NPV, IRR, PMT, FV, PV, RATE, NPER, XNPV, XIRR, PRICE, YIELD, DURATION |
 | Information | ISNUMBER, ISTEXT, ISBLANK, ISERROR, CELL, TYPE, NA, ISREF |
-| Database | DSUM, DAVERAGE, DCOUNT, DMAX, DMIN |
+| Database | DSUM, DAVERAGE, DCOUNT, DCOUNTA, DMAX, DMIN, DPRODUCT, DSTDEV, DSTDEVP, DVAR, DVARP |
 | Engineering | CONVERT, BIN2DEC, DEC2HEX, BITAND, BITOR, BITXOR, GESTEP |
 
 Press **Shift+F3** to open the Insert Function dialog with category search.

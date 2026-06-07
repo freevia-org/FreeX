@@ -12868,8 +12868,11 @@ public partial class FileAdapterSmokeTests
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
-        workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("oleSize");
-        workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("ref=\"A1:D12\"");
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var oleSize = workbookXml.Root!.Element(workbookNs + "oleSize")!;
+        oleSize.Attribute("ref")!.Value.Should().Be("A1:D12");
+        oleSize.Attribute("customOleSizeFlag").Should().BeNull();
+        oleSize.Element(workbookNs + "nativeOleSizeChild").Should().BeNull();
     }
 
     [Fact]
@@ -12895,9 +12898,15 @@ public partial class FileAdapterSmokeTests
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
-        workbookXml.ToString().Should().Contain("DynamicSalesRange");
-        workbookXml.ToString().Should().Contain("hidden=\"1\"");
-        workbookXml.ToString().Should().Contain("1+1");
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var definedName = workbookXml.Root!
+            .Element(workbookNs + "definedNames")!
+            .Elements(workbookNs + "definedName")
+            .Single(name => name.Attribute("name")?.Value == "DynamicSalesRange");
+        definedName.Attribute("hidden")!.Value.Should().Be("1");
+        definedName.Value.Should().Contain("1+1");
+        definedName.Attribute("customDefinedNameFlag").Should().BeNull();
+        definedName.Element(workbookNs + "nativeDefinedNameChild").Should().BeNull();
     }
 
     [Fact]
