@@ -2419,6 +2419,19 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatComplexArithmeticComparisons()
+    {
+        AssertFormulaComplexFunctionContrastLocations("IMSUM($A1,\"1+i\")=\"4+5i\"", "B1");
+        AssertFormulaComplexFunctionContrastLocations("IMSUM($A1,\"1+i\")=\"6-11i\"", "B2");
+        AssertFormulaComplexFunctionContrastLocations("IMSUB($A1,\"1+i\")=\"2+3i\"", "B1");
+        AssertFormulaComplexFunctionContrastLocations("IMSUB($A1,\"1+i\")=\"4-13j\"", "B2");
+        AssertFormulaComplexFunctionContrastLocations("IMPRODUCT($A1,\"1+i\")=\"-1+7i\"", "B1");
+        AssertFormulaComplexFunctionContrastLocations("IMDIV($A1,\"1+i\")=\"3.5+0.5i\"", "B1");
+        AssertFormulaComplexFunctionContrastLocations("IMREAL(IMPOWER($A1,2))=-7", "B1");
+        AssertFormulaComplexFunctionContrastLocations("IMAGINARY(IMPOWER($A1,2))=24", "B1");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatComplexWrappersPredicatesAndAggregates()
     {
         AssertFormulaComplexFunctionContrastLocations("AND(IMABS($A1)>6,$F1)", "B2");
@@ -2429,6 +2442,32 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaComplexFunctionContrastLocations("IMREAL($A1)+IMAGINARY($A1)=7", "B1", "B5");
         AssertFormulaComplexFunctionContrastLocations("SUM(IMABS($A1),1)>13", "B2");
         AssertFormulaComplexFunctionContrastLocations("ABS(IMABS($A1)-5)<0.000000000001", "B1");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatComplexArithmeticWrappersPredicatesAndAggregates()
+    {
+        AssertFormulaComplexFunctionContrastLocations("AND(IMABS(IMSUM($A1,\"1+i\"))>10,$F1)", "B2");
+        AssertFormulaComplexFunctionContrastLocations("IF(IMREAL(IMDIV($A1,\"1+i\"))>0,TRUE,FALSE)", "B1", "B3", "B4", "B5");
+        AssertFormulaComplexFunctionContrastLocations("ISTEXT(IMPOWER($A1,2))", "B1", "B2", "B3", "B4", "B5", "B6");
+        AssertFormulaComplexFunctionContrastLocations("SUM(IMABS(IMPRODUCT($A1,\"1+i\")),1)>14", "B2");
+        AssertFormulaComplexFunctionContrastLocations("ABS(IMAGINARY(IMPOWER($A1,2))-24)<0.000000000001", "B1");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatComplexArithmeticRangeFlattening()
+    {
+        AssertFormulaComplexFunctionContrastLocations("IMSUM($A$1:$A$3)=\"8-7i\"", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations(
+            "AND(IMPRODUCT($A$1:$A$3)=\"16+63i\",$F1)",
+            "B1",
+            "B2",
+            "B4",
+            "B6",
+            "B7",
+            "B8",
+            "B9");
+        AssertFormulaComplexFunctionContrastLocations("IMSUM($A$1:$A$2,\"1+i\")=\"9-7i\"", FormulaComplexAllLocations);
     }
 
     [Fact]
@@ -2452,6 +2491,18 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatComplexArithmeticErrors()
+    {
+        AssertFormulaComplexFunctionContrastLocations("ISERROR(IMDIV($A1,\"0\"))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISNA(IMDIV($A1,\"0\"))", "B8");
+        AssertFormulaComplexFunctionContrastLocations("ISERR(IMDIV($A1,\"0\"))", "B1", "B2", "B3", "B4", "B5", "B6", "B7", "B9");
+        AssertFormulaComplexFunctionContrastLocations("ISERROR(IMPOWER(0,-1))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISERROR(IMPOWER(\"1+i\",\"Open\"))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISNA(IMSUM($A$8:$A$9))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISERR(IMPRODUCT($A$7:$A$8))", FormulaComplexAllLocations);
+    }
+
+    [Fact]
     public void FindIssues_DoesNotMatchFormulaConditionalFormatComplexUnsupportedShapesOrErrorComparisons()
     {
         AssertFormulaComplexFunctionContrastLocations("COMPLEX($C1)>0");
@@ -2464,6 +2515,14 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaComplexFunctionContrastLocations("COMPLEX(1,2,\"x\")=\"1+2i\"");
         AssertFormulaComplexFunctionContrastLocations("IMREAL(\"not complex\")>0");
         AssertFormulaComplexFunctionContrastLocations("IMREAL(NA())>0");
+        AssertFormulaComplexFunctionContrastLocations("IMSUM()>\"\"");
+        AssertFormulaComplexFunctionContrastLocations("IMPRODUCT()>\"\"");
+        AssertFormulaComplexFunctionContrastLocations("IMSUB($A1)>\"\"");
+        AssertFormulaComplexFunctionContrastLocations("IMSUB($A1,1,2)>\"\"");
+        AssertFormulaComplexFunctionContrastLocations("IMDIV($A1)>\"\"");
+        AssertFormulaComplexFunctionContrastLocations("IMPOWER($A1)>\"\"");
+        AssertFormulaComplexFunctionContrastLocations("IMPOWER($A1,$A$1:$A$2)>\"\"");
+        AssertFormulaComplexFunctionContrastLocations("IMDIV($A1,\"0\")>0");
     }
 
     [Fact]

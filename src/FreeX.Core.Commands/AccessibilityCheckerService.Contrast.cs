@@ -1336,6 +1336,21 @@ public static partial class AccessibilityCheckerService
             case "IMCONJUGATE":
                 kind = ConditionalFormulaScalarFunctionKind.ImConjugate;
                 return true;
+            case "IMSUM":
+                kind = ConditionalFormulaScalarFunctionKind.ImSum;
+                return true;
+            case "IMSUB":
+                kind = ConditionalFormulaScalarFunctionKind.ImSub;
+                return true;
+            case "IMPRODUCT":
+                kind = ConditionalFormulaScalarFunctionKind.ImProduct;
+                return true;
+            case "IMDIV":
+                kind = ConditionalFormulaScalarFunctionKind.ImDiv;
+                return true;
+            case "IMPOWER":
+                kind = ConditionalFormulaScalarFunctionKind.ImPower;
+                return true;
             case "DELTA":
                 kind = ConditionalFormulaScalarFunctionKind.Delta;
                 return true;
@@ -1441,6 +1456,8 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Imaginary or
             ConditionalFormulaScalarFunctionKind.ImAbs or
             ConditionalFormulaScalarFunctionKind.ImConjugate => argumentCount == 1,
+            ConditionalFormulaScalarFunctionKind.ImSum or
+            ConditionalFormulaScalarFunctionKind.ImProduct => argumentCount is >= 1 and <= 255,
             ConditionalFormulaScalarFunctionKind.NumberValue => argumentCount is >= 1 and <= 3,
             ConditionalFormulaScalarFunctionKind.Log or
             ConditionalFormulaScalarFunctionKind.Roman or
@@ -1479,6 +1496,9 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.BitXor or
             ConditionalFormulaScalarFunctionKind.BitLShift or
             ConditionalFormulaScalarFunctionKind.BitRShift or
+            ConditionalFormulaScalarFunctionKind.ImSub or
+            ConditionalFormulaScalarFunctionKind.ImDiv or
+            ConditionalFormulaScalarFunctionKind.ImPower or
             ConditionalFormulaScalarFunctionKind.EDate or
             ConditionalFormulaScalarFunctionKind.EOMonth or
             ConditionalFormulaScalarFunctionKind.Days or
@@ -2190,6 +2210,11 @@ public static partial class AccessibilityCheckerService
         Imaginary,
         ImAbs,
         ImConjugate,
+        ImSum,
+        ImSub,
+        ImProduct,
+        ImDiv,
+        ImPower,
         Delta,
         Erf,
         ErfPrecise,
@@ -2886,6 +2911,11 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Imaginary:
                 case ConditionalFormulaScalarFunctionKind.ImAbs:
                 case ConditionalFormulaScalarFunctionKind.ImConjugate:
+                case ConditionalFormulaScalarFunctionKind.ImSum:
+                case ConditionalFormulaScalarFunctionKind.ImSub:
+                case ConditionalFormulaScalarFunctionKind.ImProduct:
+                case ConditionalFormulaScalarFunctionKind.ImDiv:
+                case ConditionalFormulaScalarFunctionKind.ImPower:
                     return TryEvaluateFormulaComplexFunction(function, rowOffset, colOffset, out value);
                 default:
                     return false;
@@ -3391,6 +3421,19 @@ public static partial class AccessibilityCheckerService
             if (function.Kind == ConditionalFormulaScalarFunctionKind.Complex)
                 return TryEvaluateFormulaComplexConstructor(function, rowOffset, colOffset, out value);
 
+            if (function.Kind is ConditionalFormulaScalarFunctionKind.ImSum or
+                ConditionalFormulaScalarFunctionKind.ImProduct)
+            {
+                return TryEvaluateFormulaComplexAggregateFunction(function, rowOffset, colOffset, out value);
+            }
+
+            if (function.Kind is ConditionalFormulaScalarFunctionKind.ImSub or
+                ConditionalFormulaScalarFunctionKind.ImDiv or
+                ConditionalFormulaScalarFunctionKind.ImPower)
+            {
+                return TryEvaluateFormulaComplexBinaryFunction(function, rowOffset, colOffset, out value);
+            }
+
             if (!TryResolveFormulaOperand(function.Arguments[0], rowOffset, colOffset, out var source))
                 return false;
 
@@ -3412,6 +3455,224 @@ public static partial class AccessibilityCheckerService
                 _ => ErrorValue.Value
             };
             return true;
+        }
+
+        private bool TryEvaluateFormulaComplexAggregateFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            double real = function.Kind == ConditionalFormulaScalarFunctionKind.ImProduct ? 1d : 0d;
+            double imaginary = 0d;
+            var suffix = "i";
+
+            foreach (var argument in function.Arguments)
+            {
+                if (!TryEvaluateFormulaComplexAggregateArgument(
+                        argument,
+                        rowOffset,
+                        colOffset,
+                        ref real,
+                        ref imaginary,
+                        ref suffix,
+                        function.Kind,
+                        out value))
+                {
+                    return false;
+                }
+
+                if (value is ErrorValue)
+                    return true;
+            }
+
+            value = FormulaComplexTextResult(real, imaginary, suffix);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaComplexAggregateArgument(
+            ConditionalFormulaOperand argument,
+            int rowOffset,
+            int colOffset,
+            ref double real,
+            ref double imaginary,
+            ref string suffix,
+            ConditionalFormulaScalarFunctionKind kind,
+            out ScalarValue value)
+        {
+            value = BlankValue.Instance;
+            if (argument.Kind == ConditionalFormulaOperandKind.ReferenceRange)
+            {
+                if (!TryResolveFormulaReferenceRange(
+                        argument,
+                        rowOffset,
+                        colOffset,
+                        out var targetSheet,
+                        out var startRow,
+                        out var startCol,
+                        out var endRow,
+                        out var endCol))
+                {
+                    return false;
+                }
+
+                var rowCount = (ulong)endRow - startRow + 1UL;
+                var colCount = (ulong)endCol - startCol + 1UL;
+                if (rowCount * colCount > MaxFormulaAggregateRangeCells)
+                    return false;
+
+                for (var currentRow = startRow; currentRow <= endRow; currentRow++)
+                {
+                    for (var currentCol = startCol; currentCol <= endCol; currentCol++)
+                    {
+                        if (!AppendFormulaComplexAggregateValue(
+                                targetSheet.GetValue(currentRow, currentCol),
+                                ref real,
+                                ref imaginary,
+                                ref suffix,
+                                kind,
+                                out value))
+                        {
+                            return true;
+                        }
+                    }
+                }
+
+                return true;
+            }
+
+            if (!TryResolveFormulaOperand(argument, rowOffset, colOffset, out var source))
+                return false;
+
+            if (source is RangeValue range)
+            {
+                foreach (var cell in range.Flatten())
+                {
+                    if (!AppendFormulaComplexAggregateValue(cell, ref real, ref imaginary, ref suffix, kind, out value))
+                        return true;
+                }
+
+                return true;
+            }
+
+            AppendFormulaComplexAggregateValue(source, ref real, ref imaginary, ref suffix, kind, out value);
+            return true;
+        }
+
+        private static bool AppendFormulaComplexAggregateValue(
+            ScalarValue source,
+            ref double real,
+            ref double imaginary,
+            ref string suffix,
+            ConditionalFormulaScalarFunctionKind kind,
+            out ScalarValue value)
+        {
+            value = BlankValue.Instance;
+            var parsed = ParseFormulaComplexArgument(source);
+            if (parsed.Error is not null)
+            {
+                value = parsed.Error;
+                return false;
+            }
+
+            if (kind == ConditionalFormulaScalarFunctionKind.ImProduct)
+            {
+                var nextReal = real * parsed.Real - imaginary * parsed.Imaginary;
+                var nextImaginary = real * parsed.Imaginary + imaginary * parsed.Real;
+                real = nextReal;
+                imaginary = nextImaginary;
+            }
+            else
+            {
+                real += parsed.Real;
+                imaginary += parsed.Imaginary;
+            }
+
+            suffix = parsed.Suffix;
+            return true;
+        }
+
+        private bool TryEvaluateFormulaComplexBinaryFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaOperand(function.Arguments[0], rowOffset, colOffset, out var leftValue))
+                return false;
+
+            if (!TryResolveFormulaOperand(function.Arguments[1], rowOffset, colOffset, out var rightValue))
+                return false;
+
+            var left = ParseFormulaComplexArgument(leftValue);
+            if (left.Error is not null)
+            {
+                value = left.Error;
+                return true;
+            }
+
+            if (function.Kind == ConditionalFormulaScalarFunctionKind.ImPower)
+            {
+                value = EvaluateFormulaComplexPower(left, rightValue);
+                return true;
+            }
+
+            var right = ParseFormulaComplexArgument(rightValue);
+            if (right.Error is not null)
+            {
+                value = right.Error;
+                return true;
+            }
+
+            value = function.Kind switch
+            {
+                ConditionalFormulaScalarFunctionKind.ImSub =>
+                    FormulaComplexTextResult(left.Real - right.Real, left.Imaginary - right.Imaginary, left.Suffix),
+                ConditionalFormulaScalarFunctionKind.ImDiv =>
+                    EvaluateFormulaComplexDivision(left, right),
+                _ => ErrorValue.Value
+            };
+            return true;
+        }
+
+        private static ScalarValue EvaluateFormulaComplexDivision(
+            (double Real, double Imaginary, string Suffix, ErrorValue? Error) left,
+            (double Real, double Imaginary, string Suffix, ErrorValue? Error) right)
+        {
+            var denominator = right.Real * right.Real + right.Imaginary * right.Imaginary;
+            if (denominator == 0)
+                return ErrorValue.Num;
+
+            var real = (left.Real * right.Real + left.Imaginary * right.Imaginary) / denominator;
+            var imaginary = (left.Imaginary * right.Real - left.Real * right.Imaginary) / denominator;
+            return FormulaComplexTextResult(real, imaginary, left.Suffix);
+        }
+
+        private static ScalarValue EvaluateFormulaComplexPower(
+            (double Real, double Imaginary, string Suffix, ErrorValue? Error) source,
+            ScalarValue exponentValue)
+        {
+            if (exponentValue is ErrorValue exponentError)
+                return exponentError;
+
+            if (!TryGetFormulaComplexNumber(exponentValue, out var exponent))
+                return ErrorValue.Value;
+
+            var modulus = Math.Sqrt(source.Real * source.Real + source.Imaginary * source.Imaginary);
+            if (modulus == 0 && exponent <= 0)
+                return ErrorValue.Num;
+
+            var magnitude = Math.Pow(modulus, exponent);
+            var angle = Math.Atan2(source.Imaginary, source.Real) * exponent;
+            if (!double.IsFinite(magnitude) || !double.IsFinite(angle))
+                return ErrorValue.Num;
+
+            return FormulaComplexTextResult(
+                magnitude * Math.Cos(angle),
+                magnitude * Math.Sin(angle),
+                source.Suffix);
         }
 
         private bool TryEvaluateFormulaComplexConstructor(
