@@ -279,7 +279,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
                 worksheetNs + "control",
                 new XAttribute("shapeId", "1026"),
                 new XAttribute("name", "Button 1"),
-                new XAttribute(relNs + "id", "rIdFreeXControl"))));
+                new XAttribute(relNs + "id", "rIdFreeXControl"),
+                new XElement(
+                    worksheetNs + "controlPr",
+                    new XAttribute(relNs + "id", "rIdFreeXControl"),
+                    new XAttribute("print", "1"),
+                    new XAttribute("altText", "Launch report"),
+                    CreateControlAnchor(worksheetNs)))));
         ReplaceWorksheetChildInOrder(root, new XElement(
             worksheetNs + "webPublishItems",
             new XAttribute("count", "1"),
@@ -408,6 +414,15 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         control.SetAttributeValue("shapeId", " 1026 ");
         control.SetAttributeValue("name", " Button 1 ");
         control.SetAttributeValue("customControlFlag", "removed");
+        var controlPr = control.Element(worksheetNs + "controlPr")!;
+        controlPr.SetAttributeValue("print", " true ");
+        controlPr.SetAttributeValue("altText", " Launch report ");
+        controlPr.SetAttributeValue("disabled", "not-a-boolean");
+        controlPr.SetAttributeValue("customControlPrFlag", "removed");
+        controlPr.Add(new XElement(worksheetNs + "nativeControlPrChild"));
+        control.Add(new XElement(
+            worksheetNs + "controlPr",
+            new XAttribute(relNs + "id", "rIdRemovedControlProperties")));
         control.Add(new XElement(worksheetNs + "nativeControlChild"));
         controls.Add(new XElement(
             worksheetNs + "control",
@@ -459,6 +474,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Be("rIdFreeXOleObject");
         ReadWorksheetChildElement(stream, "controls")
             .Element(worksheetNs + "control")!
+            .Attribute(relNs + "id")!
+            .Value
+            .Should()
+            .Be("rIdFreeXControl");
+        ReadWorksheetChildElement(stream, "controls")
+            .Element(worksheetNs + "control")!
+            .Element(worksheetNs + "controlPr")!
             .Attribute(relNs + "id")!
             .Value
             .Should()
@@ -585,7 +607,41 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         control.Attribute("name")!.Value.Should().Be("Button 1");
         control.Attribute(relNs + "id")!.Value.Should().Be("rIdFreeXControl");
         control.Attribute("customControlFlag").Should().BeNull();
-        control.Elements().Should().BeEmpty();
+        var controlPr = control.Elements(worksheetNs + "controlPr")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        controlPr.Attribute(relNs + "id")!.Value.Should().Be("rIdFreeXControl");
+        controlPr.Attribute("print")!.Value.Should().Be("true");
+        controlPr.Attribute("altText")!.Value.Should().Be("Launch report");
+        controlPr.Attribute("disabled").Should().BeNull();
+        controlPr.Attribute("customControlPrFlag").Should().BeNull();
+        controlPr.Elements(worksheetNs + "anchor").Should().ContainSingle();
+    }
+
+    private static XElement CreateControlAnchor(XNamespace worksheetNs)
+    {
+        XNamespace drawingSpreadsheetNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+
+        static XElement Marker(
+            XNamespace worksheetNs,
+            XNamespace drawingSpreadsheetNs,
+            string name,
+            int column,
+            int row) =>
+            new(
+                worksheetNs + name,
+                new XElement(drawingSpreadsheetNs + "col", column.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new XElement(drawingSpreadsheetNs + "colOff", "0"),
+                new XElement(drawingSpreadsheetNs + "row", row.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new XElement(drawingSpreadsheetNs + "rowOff", "0"));
+
+        return new XElement(
+            worksheetNs + "anchor",
+            new XAttribute("moveWithCells", "1"),
+            new XAttribute("sizeWithCells", "1"),
+            Marker(worksheetNs, drawingSpreadsheetNs, "from", 0, 1),
+            Marker(worksheetNs, drawingSpreadsheetNs, "to", 1, 2));
     }
 
     private static void AssertWorksheetNativeMetadataOrder(XElement worksheetRoot)
