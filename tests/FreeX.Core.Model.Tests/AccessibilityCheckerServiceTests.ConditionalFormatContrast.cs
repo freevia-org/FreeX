@@ -554,6 +554,34 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialCashFlowFunctions()
+    {
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("AND($A1<0,NPV(0,\"25\",TRUE,$A1,$C1:$D1)>225)", "B1");
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("AND($A1<0,IRR($A1:$D1)>0.1)", "B1");
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("AND($A1<0,MIRR($A1:$D1,$H1,$I1)>0.12)", "B1");
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("AND($A1<0,XNPV(0.1,$A1:$D1,$E1:$G1)>100)", "B1");
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("AND($A1<0,XIRR($A1:$D1,$E1:$G1)>0.1)", "B1");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialCashFlowWrappersAndErrors()
+    {
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("AND($A1<0,NPV(0,N($A1:$D1))>0)", "B1");
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("ISNA(IRR($A1:$D1))", "B4");
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("ISERROR(MIRR($A1:$D1,$H1,$I1))", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatFinancialCashFlowUnsupportedShapesOrComparisons()
+    {
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("NPV(0)>0");
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("IRR()>0");
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("MIRR($A1:$D1,$H1)>0");
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("XNPV($H1:$I1,$A1:$D1,$E1:$G1)>0");
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("XIRR($A1:$D1,$E1:$F1)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAValueAggregates()
     {
         AssertFormulaAggregateContrastLocations("AVERAGEA($D1:$D3)=6", "B1", "B2");
@@ -4891,6 +4919,67 @@ public sealed partial class AccessibilityCheckerServiceTests
             sheet.SetCell(new CellAddress(sheet.Id, row, 4), optionalValue);
     }
 
+    private static Workbook CreateFormulaFinancialCashFlowFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 4, 2);
+
+        SetFormulaFinancialCashFlowFunctionContrastRow(
+            sheet,
+            1,
+            new NumberValue(-1000),
+            new NumberValue(600),
+            new NumberValue(600),
+            "Strong return");
+        SetFormulaFinancialCashFlowFunctionContrastRow(
+            sheet,
+            2,
+            new NumberValue(-1000),
+            new NumberValue(400),
+            new NumberValue(400),
+            "Weak return");
+        SetFormulaFinancialCashFlowFunctionContrastRow(
+            sheet,
+            3,
+            new NumberValue(100),
+            new NumberValue(200),
+            new NumberValue(300),
+            "Positive only");
+        SetFormulaFinancialCashFlowFunctionContrastRow(
+            sheet,
+            4,
+            new NumberValue(-1000),
+            ErrorValue.NA,
+            new NumberValue(1100),
+            "NA cash flow");
+
+        return workbook;
+    }
+
+    private static void SetFormulaFinancialCashFlowFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        ScalarValue firstCashFlow,
+        ScalarValue secondCashFlow,
+        ScalarValue thirdCashFlow,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), firstCashFlow);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), secondCashFlow);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 4), thirdCashFlow);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 5), new NumberValue(43831));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 6), new NumberValue(44016));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 7), new NumberValue(44197));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 8), new NumberValue(0.1));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 9), new NumberValue(0.12));
+    }
+
     private static Workbook CreateFormulaPaddedTextFunctionContrastWorkbook(
         out Sheet sheet,
         out CellAddress firstLabel,
@@ -6025,6 +6114,19 @@ public sealed partial class AccessibilityCheckerServiceTests
     private static void AssertFormulaStatisticalSelectionContrastLocations(string formulaText, params string[] expectedLocations)
     {
         var workbook = CreateFormulaStatisticalSelectionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaFinancialCashFlowFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaFinancialCashFlowFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
 
         FindLowContrastCellTextIssues(workbook)
