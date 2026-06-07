@@ -35,12 +35,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         workbookXml.Descendants().SelectMany(element => element.Attributes()).Where(IsOfficeRevisionAttribute).Should().BeEmpty();
         worksheetXml.Descendants().SelectMany(element => element.Attributes()).Where(IsOfficeRevisionAttribute).Should().BeEmpty();
 
-        var dxf = LoadPackageXml(archive.GetEntry("xl/styles.xml")!)
+        var dxf = LoadPackageXml(archive, "xl/styles.xml")
             .Root!
             .Element(workbookNs + "dxfs")!
             .Elements(workbookNs + "dxf")
@@ -97,12 +97,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        LoadPackageXml(archive.GetEntry("xl/workbook.xml")!)
+        LoadPackageXml(archive, "xl/workbook.xml")
             .Root!
             .Element(workbookNs + "customWorkbookViews")
             .Should()
             .BeNull();
-        LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!)
+        LoadPackageXml(archive, "xl/worksheets/sheet1.xml")
             .Root!
             .Element(workbookNs + "customSheetViews")
             .Should()
@@ -134,7 +134,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         using var stream = Save(workbook);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var styledFont = LoadPackageXml(archive.GetEntry("xl/styles.xml")!)
+        var styledFont = LoadPackageXml(archive, "xl/styles.xml")
             .Root!
             .Element(workbookNs + "fonts")!
             .Elements(workbookNs + "font")
@@ -252,7 +252,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var rFont = LoadPackageXml(archive.GetEntry("xl/sharedStrings.xml")!)
+        var rFont = LoadPackageXml(archive, "xl/sharedStrings.xml")
             .Root!
             .Elements(workbookNs + "si")
             .Single(element => element.Value == "Rich font")
@@ -286,7 +286,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var rFont = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!)
+        var rFont = LoadPackageXml(archive, "xl/worksheets/sheet1.xml")
             .Root!
             .Element(workbookNs + "sheetData")!
             .Descendants(workbookNs + "c")
@@ -329,7 +329,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var rFont = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!)
+        var rFont = LoadPackageXml(archive, "xl/worksheets/sheet1.xml")
             .Root!
             .Element(workbookNs + "sheetData")!
             .Descendants(workbookNs + "c")
@@ -349,7 +349,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var cell = worksheetXml.Root!
             .Element(workbookNs + "sheetData")!
             .Descendants(workbookNs + "c")
