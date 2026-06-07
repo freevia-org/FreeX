@@ -2809,4 +2809,47 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("$\"Shapes and text boxes: {statistics.ShapeCount}\"");
         source.Should().Contain("$\"Named ranges: {statistics.NamedRangeCount}\"");
     }
+
+    [Fact]
+    public void MainWindow_KeepsMacOsCommandKeyMenuGesturesAndDirectInputRoutesAligned()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("const KeyModifiers commandModifiers = KeyModifiers.Control | KeyModifiers.Meta;");
+        source.Should().Contain("return (modifiers & commandModifiers) != 0 &&");
+        source.Should().Contain("(modifiers & ~commandModifiers) == 0;");
+        source.Should().Contain("return modifiers.HasFlag(KeyModifiers.Shift) &&");
+        source.Should().Contain("(modifiers & ~(commandModifiers | KeyModifiers.Shift)) == 0;");
+
+        source.Should().Contain("_newWorkbookMenuItem.Gesture = new KeyGesture(Key.N, KeyModifiers.Meta);");
+        source.Should().Contain("_openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);");
+        source.Should().Contain("_saveMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta);");
+        source.Should().Contain("_saveAsMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Shift);");
+        source.Should().Contain("_closeWorkbookMenuItem.Gesture = new KeyGesture(Key.W, KeyModifiers.Meta);");
+        source.Should().Contain("_undoMenuItem.Gesture = new KeyGesture(Key.Z, KeyModifiers.Meta);");
+        source.Should().Contain("_redoMenuItem.Gesture = new KeyGesture(Key.Z, KeyModifiers.Meta | KeyModifiers.Shift);");
+        source.Should().Contain("_cutMenuItem.Gesture = new KeyGesture(Key.X, KeyModifiers.Meta);");
+        source.Should().Contain("_copyMenuItem.Gesture = new KeyGesture(Key.C, KeyModifiers.Meta);");
+        source.Should().Contain("_pasteMenuItem.Gesture = new KeyGesture(Key.V, KeyModifiers.Meta);");
+        source.Should().Contain("_pasteSpecialMenuItem.Gesture = new KeyGesture(Key.V, KeyModifiers.Meta | KeyModifiers.Alt);");
+        source.Should().Contain("_selectAllMenuItem.Gesture = new KeyGesture(Key.A, KeyModifiers.Meta);");
+        source.Should().Contain("_findMenuItem.Gesture = new KeyGesture(Key.F, KeyModifiers.Meta);");
+        source.Should().Contain("_findNextMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Meta);");
+        source.Should().Contain("_boldMenuItem.Gesture = new KeyGesture(Key.B, KeyModifiers.Meta);");
+        source.Should().Contain("_italicMenuItem.Gesture = new KeyGesture(Key.I, KeyModifiers.Meta);");
+        source.Should().Contain("_underlineMenuItem.Gesture = new KeyGesture(Key.U, KeyModifiers.Meta);");
+        source.Should().Contain("_formatCellsMenuItem.Gesture = new KeyGesture(Key.D1, KeyModifiers.Meta);");
+        source.Should().Contain("_quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);");
+
+        source.Should().Contain("e.Key == Key.PageUp && HasCommandAndShiftModifiers(e.KeyModifiers)");
+        source.Should().Contain("e.Key == Key.PageDown && HasCommandAndShiftModifiers(e.KeyModifiers)");
+        source.Should().Contain("e.Key == Key.PageUp && HasOnlyCommandModifier(e.KeyModifiers)");
+        source.Should().Contain("e.Key == Key.PageDown && HasOnlyCommandModifier(e.KeyModifiers)");
+        source.Should().Contain("e.Key == Key.F && HasOnlyCommandModifier(e.KeyModifiers)");
+        source.Should().Contain("e.Key == Key.A && HasOnlyCommandModifier(e.KeyModifiers)");
+        source.Should().Contain("e.Key == Key.B && HasOnlyCommandModifier(e.KeyModifiers)");
+        source.Should().Contain("e.Key == Key.I && HasOnlyCommandModifier(e.KeyModifiers)");
+        source.Should().Contain("e.Key == Key.U && HasOnlyCommandModifier(e.KeyModifiers)");
+        source.Should().Contain("e.Key == Key.W && HasOnlyCommandModifier(e.KeyModifiers)");
+    }
 }
