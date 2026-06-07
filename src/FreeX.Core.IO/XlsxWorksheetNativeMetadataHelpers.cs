@@ -157,6 +157,23 @@ internal static class XlsxWorksheetNativeMetadataHelpers
         }
     }
 
+    public static bool ReplaceChildrenFromNativeXml(
+        XElement target,
+        IReadOnlyList<string> childXmls,
+        IReadOnlyCollection<string>? excludedLocalNames = null)
+    {
+        if (childXmls.Count == 0)
+            return false;
+
+        target.Elements().Remove();
+        foreach (var childXml in childXmls)
+        {
+            TryAddNativeChildElement(target, childXml, excludedLocalNames);
+        }
+
+        return true;
+    }
+
     public static XElement? TryParseNativeElement(
         string? xml,
         XName expectedName,

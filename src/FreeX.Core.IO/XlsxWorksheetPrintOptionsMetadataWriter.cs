@@ -41,14 +41,7 @@ internal static class XlsxWorksheetPrintOptionsMetadataWriter
                 poAttrs,
                 ["gridLines", "headings", "horizontalCentered", "verticalCentered"]);
 
-            if (poChildren.Count > 0)
-            {
-                printOptions.Elements().Remove();
-                foreach (var childXml in poChildren)
-                {
-                    XlsxWorksheetNativeMetadataHelpers.TryAddNativeChildElement(printOptions, childXml);
-                }
-            }
+            XlsxWorksheetNativeMetadataHelpers.ReplaceChildrenFromNativeXml(printOptions, poChildren);
 
             XlsxWorksheetPageLayoutNormalizer.NormalizePrintOptions(printOptions);
             session.MarkDirty(worksheetEdit);
