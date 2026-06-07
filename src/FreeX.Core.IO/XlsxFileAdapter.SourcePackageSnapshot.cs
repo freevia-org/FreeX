@@ -3534,6 +3534,9 @@ public sealed partial class XlsxFileAdapter
                 return false;
             }
 
+            if (!XlsxHeaderFooterPicturePackageGraphNormalizer.IsPatchSafe(archive, vmlPath))
+                return false;
+
             if (worksheetXml is null)
             {
                 var worksheetEntry = archive.GetEntry(worksheetPath);
