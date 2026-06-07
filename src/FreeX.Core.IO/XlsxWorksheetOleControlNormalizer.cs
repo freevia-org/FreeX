@@ -8,6 +8,10 @@ internal static class XlsxWorksheetOleControlNormalizer
 {
     private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
     private static readonly XNamespace RelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    private static readonly XNamespace PackageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+    private const string ControlPropertiesRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/ctrlProp";
+    private const string ControlPropertiesContentType = "application/vnd.ms-excel.controlproperties+xml";
 
     private static readonly HashSet<string> NoAttributes = [];
 
@@ -52,6 +56,9 @@ internal static class XlsxWorksheetOleControlNormalizer
     ];
 
     public static void NormalizeWorksheets(ZipArchive archive)
+        => NormalizePackage(archive);
+
+    public static void NormalizePackage(ZipArchive archive)
     {
         foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
         {
@@ -60,7 +67,9 @@ internal static class XlsxWorksheetOleControlNormalizer
             if (root is null)
                 continue;
 
-            if (NormalizeWorksheetRoot(root))
+            var changed = NormalizeWorksheetRoot(root);
+            changed |= RebindControlPropertiesRelationships(archive, worksheetEntry.FullName, worksheetXml);
+            if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
         }
     }
@@ -236,6 +245,185 @@ internal static class XlsxWorksheetOleControlNormalizer
     private static bool ShouldRemoveRelationshipBackedElement(XElement element) =>
         element.Attribute(RelNs + "id") is null ||
         element.Attribute("shapeId") is null;
+
+    private static bool RebindControlPropertiesRelationships(
+        ZipArchive archive,
+        string worksheetPath,
+        XDocument worksheetXml)
+    {
+        var controls = worksheetXml.Root?
+            .Element(WorksheetNs + "controls")?
+            .Elements(WorksheetNs + "control")
+            .ToList();
+        if (controls is null || controls.Count == 0)
+            return false;
+
+        var controlPropertiesParts = archive.Entries
+            .Select(entry => XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/')))
+            .Where(path => path.StartsWith("xl/ctrlProps/", StringComparison.OrdinalIgnoreCase) &&
+                           path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (controlPropertiesParts.Count == 0)
+            return false;
+
+        var relationshipsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
+        var relationshipsXml = archive.GetEntry(relationshipsPath) is { } relationshipsEntry
+            ? XlsxPackageXmlEditor.LoadXml(relationshipsEntry)
+            : new XDocument(new XElement(PackageRelNs + "Relationships"));
+
+        var relationshipsChanged = false;
+        var controlPropertiesRelationships = relationshipsXml.Root?
+            .Elements(PackageRelNs + "Relationship")
+            .Where(relationship => IsControlPropertiesRelationship(worksheetPath, relationship, archive))
+            .ToList()
+            ?? [];
+
+        var usedRelationshipIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var nextControlPropertiesPartIndex = 0;
+        var worksheetChanged = false;
+        foreach (var control in controls)
+        {
+            var relationshipId = control.Attribute(RelNs + "id")?.Value;
+            var relationship = FindUnusedValidControlRelationship(
+                controlPropertiesRelationships,
+                relationshipId,
+                usedRelationshipIds);
+            if (relationship is null)
+            {
+                relationship = FindNextUnusedControlRelationship(controlPropertiesRelationships, usedRelationshipIds);
+            }
+
+            if (relationship is null)
+            {
+                while (nextControlPropertiesPartIndex < controlPropertiesParts.Count &&
+                       controlPropertiesRelationships.Any(candidate =>
+                           string.Equals(
+                               ResolveRelationshipTarget(worksheetPath, candidate),
+                               controlPropertiesParts[nextControlPropertiesPartIndex],
+                               StringComparison.OrdinalIgnoreCase)))
+                {
+                    nextControlPropertiesPartIndex++;
+                }
+
+                if (nextControlPropertiesPartIndex >= controlPropertiesParts.Count)
+                    continue;
+
+                var targetPart = controlPropertiesParts[nextControlPropertiesPartIndex++];
+                relationship = AddControlPropertiesRelationship(relationshipsXml, worksheetPath, targetPart);
+                controlPropertiesRelationships.Add(relationship);
+                relationshipsChanged = true;
+            }
+
+            var reboundId = relationship.Attribute("Id")?.Value;
+            if (string.IsNullOrWhiteSpace(reboundId))
+                continue;
+
+            usedRelationshipIds.Add(reboundId);
+            worksheetChanged |= SetRelationshipId(control, reboundId);
+            foreach (var controlProperties in control.Elements(WorksheetNs + "controlPr"))
+                worksheetChanged |= SetRelationshipId(controlProperties, reboundId);
+            EnsureControlPropertiesContentType(archive, relationship, worksheetPath);
+        }
+
+        if (relationshipsChanged)
+            XlsxPackageXmlEditor.ReplaceXml(archive, relationshipsPath, relationshipsXml);
+
+        return worksheetChanged;
+    }
+
+    private static XElement? FindUnusedValidControlRelationship(
+        IReadOnlyList<XElement> relationships,
+        string? relationshipId,
+        ISet<string> usedRelationshipIds)
+    {
+        if (string.IsNullOrWhiteSpace(relationshipId) || usedRelationshipIds.Contains(relationshipId))
+            return null;
+
+        return relationships.FirstOrDefault(relationship =>
+            string.Equals(relationship.Attribute("Id")?.Value, relationshipId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static XElement? FindNextUnusedControlRelationship(
+        IReadOnlyList<XElement> relationships,
+        ISet<string> usedRelationshipIds)
+        => relationships.FirstOrDefault(relationship =>
+        {
+            var relationshipId = relationship.Attribute("Id")?.Value;
+            return !string.IsNullOrWhiteSpace(relationshipId) && !usedRelationshipIds.Contains(relationshipId);
+        });
+
+    private static XElement AddControlPropertiesRelationship(
+        XDocument relationshipsXml,
+        string worksheetPath,
+        string controlPropertiesPart)
+    {
+        var root = relationshipsXml.Root;
+        if (root is null)
+        {
+            root = new XElement(PackageRelNs + "Relationships");
+            relationshipsXml.Add(root);
+        }
+
+        var relationship = new XElement(
+            PackageRelNs + "Relationship",
+            new XAttribute("Id", XlsxPackageXmlEditor.NextRelationshipId(relationshipsXml, PackageRelNs)),
+            new XAttribute("Type", ControlPropertiesRelationshipType),
+            new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(worksheetPath, controlPropertiesPart)));
+        root.Add(relationship);
+        return relationship;
+    }
+
+    private static bool SetRelationshipId(XElement element, string relationshipId)
+    {
+        if (string.Equals(element.Attribute(RelNs + "id")?.Value, relationshipId, StringComparison.Ordinal))
+            return false;
+
+        element.SetAttributeValue(RelNs + "id", relationshipId);
+        return true;
+    }
+
+    private static bool IsControlPropertiesRelationship(
+        string worksheetPath,
+        XElement relationship,
+        ZipArchive archive)
+    {
+        if (string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var relationshipType = relationship.Attribute("Type")?.Value;
+        if (!string.Equals(relationshipType, ControlPropertiesRelationshipType, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(
+                relationshipType,
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/control",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var targetPart = ResolveRelationshipTarget(worksheetPath, relationship);
+        return targetPart.StartsWith("xl/ctrlProps/", StringComparison.OrdinalIgnoreCase) &&
+               targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+               archive.GetEntry(targetPart) is not null;
+    }
+
+    private static string ResolveRelationshipTarget(string worksheetPath, XElement relationship)
+    {
+        var target = relationship.Attribute("Target")?.Value;
+        return string.IsNullOrWhiteSpace(target)
+            ? ""
+            : XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, target);
+    }
+
+    private static void EnsureControlPropertiesContentType(
+        ZipArchive archive,
+        XElement relationship,
+        string worksheetPath)
+    {
+        var targetPart = ResolveRelationshipTarget(worksheetPath, relationship);
+        if (!string.IsNullOrWhiteSpace(targetPart))
+            XlsxPackageXmlEditor.EnsureSpecificContentType(archive, targetPart, ControlPropertiesContentType);
+    }
 
     private static bool RemoveUnexpectedChildElements(XElement element, XName allowedChildName)
     {
