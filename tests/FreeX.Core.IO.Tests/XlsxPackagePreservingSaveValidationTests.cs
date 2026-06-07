@@ -130,7 +130,7 @@ public sealed class XlsxPackagePreservingSaveValidationTests
         using var package = CreateExpandablePackage(packageBytes);
         using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
         {
-            var contentTypesXml = LoadXml(archive, "[Content_Types].xml");
+            var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "[Content_Types].xml", "[Content_Types].xml");
             AddContentTypeDefault(contentTypesXml, "freexbin", "application/vnd.freex.package-preservation-binary");
             AddContentTypeOverride(
                 contentTypesXml,
@@ -195,7 +195,7 @@ public sealed class XlsxPackagePreservingSaveValidationTests
         using var package = CreateExpandablePackage(packageBytes);
         using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
         {
-            var contentTypesXml = LoadXml(archive, "[Content_Types].xml");
+            var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "[Content_Types].xml", "[Content_Types].xml");
             AddContentTypeDefault(contentTypesXml, "freexbin", "application/vnd.freex.package-preservation-binary");
             AddContentTypeOverride(
                 contentTypesXml,
@@ -320,7 +320,7 @@ public sealed class XlsxPackagePreservingSaveValidationTests
 
     private static void AssertContentTypeDefault(ZipArchive archive, string extension, string contentType)
     {
-        var contentTypesXml = LoadXml(archive, "[Content_Types].xml");
+        var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "[Content_Types].xml", "[Content_Types].xml");
         contentTypesXml.Root!
             .Elements(ContentTypeNs + "Default")
             .Should()
@@ -331,7 +331,7 @@ public sealed class XlsxPackagePreservingSaveValidationTests
 
     private static void AssertContentTypeOverride(ZipArchive archive, string partName, string contentType)
     {
-        var contentTypesXml = LoadXml(archive, "[Content_Types].xml");
+        var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "[Content_Types].xml", "[Content_Types].xml");
         contentTypesXml.Root!
             .Elements(ContentTypeNs + "Override")
             .Should()
@@ -347,7 +347,7 @@ public sealed class XlsxPackagePreservingSaveValidationTests
         string target,
         string? targetMode = null)
     {
-        var relationshipsXml = LoadXml(archive, relationshipPartPath);
+        var relationshipsXml = XlsxPackageTestFixtures.LoadPackageXml(archive, relationshipPartPath, relationshipPartPath);
         relationshipsXml.Root!
             .Elements(PackageRelNs + "Relationship")
             .Where(element => RelationshipMatches(element, type, target, targetMode))
@@ -364,7 +364,7 @@ public sealed class XlsxPackagePreservingSaveValidationTests
 
     private static IReadOnlyList<string> ReadContentTypeOverridePartNames(ZipArchive archive)
     {
-        var contentTypesXml = LoadXml(archive, "[Content_Types].xml");
+        var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "[Content_Types].xml", "[Content_Types].xml");
         return contentTypesXml.Root!
             .Elements(ContentTypeNs + "Override")
             .Select(element => element.Attribute("PartName")?.Value)
@@ -378,7 +378,7 @@ public sealed class XlsxPackagePreservingSaveValidationTests
         foreach (var relationshipEntry in archive.Entries.Where(entry =>
                      entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)))
         {
-            var relationshipsXml = LoadXml(relationshipEntry);
+            var relationshipsXml = XlsxPackageTestFixtures.LoadPackageXml(relationshipEntry);
             var sourcePartPath = RelationshipPartToSourcePart(relationshipEntry.FullName);
             foreach (var relationship in relationshipsXml.Root?.Elements(PackageRelNs + "Relationship") ?? [])
             {
@@ -451,7 +451,7 @@ public sealed class XlsxPackagePreservingSaveValidationTests
         string? targetMode = null)
     {
         var relationshipsXml = archive.GetEntry(relationshipPartPath) is { } entry
-            ? LoadXml(entry)
+            ? XlsxPackageTestFixtures.LoadPackageXml(entry)
             : new XDocument(new XElement(PackageRelNs + "Relationships"));
 
         var relationship = new XElement(
@@ -464,19 +464,6 @@ public sealed class XlsxPackagePreservingSaveValidationTests
 
         relationshipsXml.Root!.Add(relationship);
         ReplaceXml(archive, relationshipPartPath, relationshipsXml);
-    }
-
-    private static XDocument LoadXml(ZipArchive archive, string path)
-    {
-        var entry = archive.GetEntry(path);
-        entry.Should().NotBeNull(path);
-        return LoadXml(entry!);
-    }
-
-    private static XDocument LoadXml(ZipArchiveEntry entry)
-    {
-        using var stream = entry.Open();
-        return XDocument.Load(stream);
     }
 
     private static void ReplaceXml(ZipArchive archive, string path, XDocument xml)
