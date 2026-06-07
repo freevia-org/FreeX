@@ -164,6 +164,36 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         webPublishObject.Element(webPublishObject.Name.Namespace + "nativeWebPublishObjectChild").Should().BeNull();
     }
 
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorkbookExtensionListForSchemaValidity()
+    {
+        using var source = CreateWorkbookNativeMetadataSourcePackage();
+        SetWorkbookExtensionListInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var extensionList = ReadWorkbookChildElement(saved, "extLst");
+        extensionList.Attribute("customWorkbookExtLstFlag").Should().BeNull();
+        extensionList.Element(extensionList.Name.Namespace + "nativeWorkbookExtLstChild").Should().BeNull();
+        var extension = extensionList.Elements(extensionList.Name.Namespace + "ext").Single();
+        extension.Attribute("uri")!.Value.Should().Be("{00112233-4455-6677-8899-AABBCCDDEEFF}");
+        extension.Attribute("customWorkbookExtFlag").Should().BeNull();
+        extension.ToString(SaveOptions.DisableFormatting).Should().Contain("FreeXWorkbookNativeMetadata");
+    }
+
     private static MemoryStream CreateWorkbookNativeMetadataSourcePackage()
     {
         var workbook = new Workbook("WorkbookNativeMetadataPatchSave");
@@ -272,6 +302,23 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         webPublishObject.SetAttributeValue("divId", " FreeXWebPublish ");
         webPublishObject.SetAttributeValue("customWebPublishObjectFlag", "removed");
         webPublishObject.Add(new XElement(workbookNs + "nativeWebPublishObjectChild"));
+        ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+    }
+
+    private static void SetWorkbookExtensionListInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var extensionList = workbookXml.Root!.Element(workbookNs + "extLst")!;
+        extensionList.SetAttributeValue("customWorkbookExtLstFlag", "removed");
+        extensionList.Add(new XElement(workbookNs + "nativeWorkbookExtLstChild"));
+        var extension = extensionList.Element(workbookNs + "ext")!;
+        extension.SetAttributeValue("uri", " {00112233-4455-6677-8899-AABBCCDDEEFF} ");
+        extension.SetAttributeValue("customWorkbookExtFlag", "removed");
+        extensionList.Add(new XElement(workbookNs + "ext", new XAttribute("uri", " ")));
         ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
     }
 

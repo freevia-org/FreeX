@@ -16,9 +16,12 @@ public partial class FileAdapterSmokeTests
             var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
             workbookXml.Root!.Add(new XElement(
                 workbookNs + "extLst",
+                new XAttribute("customWorkbookExtLstFlag", "removed"),
+                new XElement(workbookNs + "nativeWorkbookExtLstChild"),
                 new XElement(
                     workbookNs + "ext",
-                    new XAttribute("uri", "{00112233-4455-6677-8899-AABBCCDDEEFF}"),
+                    new XAttribute("uri", " {00112233-4455-6677-8899-AABBCCDDEEFF} "),
+                    new XAttribute("customWorkbookExtFlag", "removed"),
                     new XElement(
                         x15Ns + "futureMetadata",
                         new XAttribute(XNamespace.Xmlns + "x15", x15Ns),

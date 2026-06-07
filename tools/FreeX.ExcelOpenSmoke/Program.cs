@@ -6181,6 +6181,17 @@ internal static class ExcelOpenSmoke
     {
         var extension = extensionReference.Element;
         var description = $"{extensionListDescription} ext #{extensionReference.Ordinal}";
+        foreach (var attribute in extension.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                (attribute.Name.NamespaceName.Length == 0 && attribute.Name.LocalName == "uri"))
+            {
+                continue;
+            }
+
+            issues.Add($"{WorkbookPart} {description} has unsupported attribute {attribute.Name}");
+        }
+
         var uri = extension.Attribute("uri")?.Value;
         if (string.IsNullOrWhiteSpace(uri))
         {
