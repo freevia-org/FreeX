@@ -64,7 +64,7 @@ public sealed partial class XlsxChartExWriterTests
 
         using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
         {
-            var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+            var chartXml = XlsxPackageTestFixtures.LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
             chartXml.Root!
                 .Element(ChartExNs + "chartData")!
                 .Elements(ChartExNs + "data")

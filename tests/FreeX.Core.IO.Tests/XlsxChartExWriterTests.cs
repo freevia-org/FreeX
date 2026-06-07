@@ -214,9 +214,6 @@ public sealed partial class XlsxChartExWriterTests
                 "50000:50000");
     }
 
-    private static XDocument LoadPackageXml(ZipArchiveEntry entry)
-        => XlsxPackageTestFixtures.LoadPackageXml(entry);
-
     private static void ReplacePackageXml(ZipArchive archive, string entryName, XDocument xml)
     {
         archive.GetEntry(entryName)?.Delete();
