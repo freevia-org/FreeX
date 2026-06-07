@@ -72,6 +72,7 @@ public sealed partial class XlsxFileAdapter
         XlsxWorksheetSheetFormatNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxWorksheetSheetPropertiesNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxWorksheetSheetViewNormalizer.NormalizeWorksheets(generatedArchive);
+        XlsxWorksheetProtectionNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxWorksheetProtectedRangeNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxWorksheetScenarioNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxWorksheetSmartTagNormalizer.NormalizeWorksheets(generatedArchive);

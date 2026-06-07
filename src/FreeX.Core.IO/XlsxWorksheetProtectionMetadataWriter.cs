@@ -50,11 +50,9 @@ internal static class XlsxWorksheetProtectionMetadataWriter
                 InsertSheetProtection(root, worksheetNs, protection);
             }
 
-            var hasAdvancedHash = false;
             if (metadata is not null)
             {
-                var (protAttrs, protChildren) = XmlNativeBagSerializer.Deserialize(metadata.Get("sheetProtection"));
-                hasAdvancedHash = protAttrs.ContainsKey("hashValue");
+                var (protAttrs, _) = XmlNativeBagSerializer.Deserialize(metadata.Get("sheetProtection"));
                 foreach (var attribute in protAttrs)
                 {
                     if (string.IsNullOrWhiteSpace(attribute.Key) ||
@@ -66,14 +64,14 @@ internal static class XlsxWorksheetProtectionMetadataWriter
 
                     XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(protection, attribute.Key, attribute.Value);
                 }
-
-                protection.Elements().Remove();
-                foreach (var childXml in protChildren)
-                {
-                    XlsxWorksheetNativeMetadataHelpers.TryAddNativeChildElement(protection, childXml);
-                }
             }
 
+            if (sheet.IsProtected)
+                protection.SetAttributeValue("sheet", "1");
+
+            XlsxWorksheetProtectionNormalizer.NormalizeElement(protection);
+
+            var hasAdvancedHash = protection.Attribute("hashValue") is not null;
             if (hasAdvancedHash)
                 protection.Attribute("password")?.Remove();
             else if (hasProtectionPassword)
@@ -81,9 +79,7 @@ internal static class XlsxWorksheetProtectionMetadataWriter
                     "password",
                     XlsxWorkbookMetadataXmlHelper.ToLegacyPasswordHash(sheet.ProtectionPassword!));
 
-            if (sheet.IsProtected)
-                protection.SetAttributeValue("sheet", "1");
-
+            XlsxWorksheetProtectionNormalizer.NormalizeElement(protection);
             session.MarkDirty(worksheetEdit);
         }
     }
