@@ -843,6 +843,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchWorkbookDefinedNames(archive);
                 NormalizePatchWorkbookOleSize(archive);
                 NormalizePatchWorkbookPivotCaches(archive);
+                NormalizePatchPivotTableDefinitions(archive);
                 NormalizePatchWorkbookWebPublishing(archive);
                 NormalizePatchWorkbookWebPublishObjects(archive);
                 NormalizePatchWorkbookExtensionList(archive);
@@ -890,6 +891,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchStructuredTableAutoFilters(archive);
                 NormalizePatchStructuredTableSortStates(archive);
                 NormalizePatchStructuredTableMetadata(archive);
+                NormalizePatchExternalLinks(archive);
                 NormalizePatchWorksheetSortStates(archive);
                 NormalizePatchWorksheetDataConsolidation(archive);
                 if (SourceOfficeRevisionAttributes is { HasAny: true } officeRevisionAttributes)
@@ -1290,6 +1292,9 @@ public sealed partial class XlsxFileAdapter
             if (XlsxWorkbookPivotCachesNormalizer.NormalizeWorkbookRoot(root, workbookNs))
                 XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
         }
+
+        private static void NormalizePatchPivotTableDefinitions(ZipArchive archive) =>
+            XlsxExcelCompatibilityNormalizer.NormalizeLegacyPivotTableDefinitionAttributes(archive);
 
         private static void NormalizePatchWorkbookWebPublishing(ZipArchive archive)
         {
@@ -1753,6 +1758,9 @@ public sealed partial class XlsxFileAdapter
 
         private static void NormalizePatchStructuredTableMetadata(ZipArchive archive)
             => XlsxStructuredTableSchemaNormalizer.NormalizePackage(archive);
+
+        private static void NormalizePatchExternalLinks(ZipArchive archive)
+            => XlsxExternalLinkSchemaNormalizer.NormalizePackage(archive);
 
         private static void NormalizePatchWorksheetDataConsolidation(ZipArchive archive)
         {

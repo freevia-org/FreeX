@@ -401,7 +401,12 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
 
         var relationships = relationshipsRoot
             .Elements(relationshipNs + "Relationship")
-            .Where(relationship => RelationshipTargetsPart(relationship, partName))
+            .Where(relationship =>
+                string.Equals(
+                    relationship.Attribute("Type")?.Value?.Trim(),
+                    relationshipType,
+                    StringComparison.OrdinalIgnoreCase) ||
+                RelationshipTargetsPart(relationship, partName))
             .ToArray();
         if (relationships.Length == 0)
             return false;

@@ -18,7 +18,7 @@ internal static class XlsxWorkbookFunctionGroupsNormalizer
     public static bool NormalizeElement(XElement functionGroups)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(functionGroups, FunctionGroupsAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(functionGroups, FunctionGroupsAttributes);
         changed |= NormalizeUnsignedIntAttribute(functionGroups, "builtInGroupCount");
 
         foreach (var child in functionGroups.Elements().ToList())
@@ -45,8 +45,8 @@ internal static class XlsxWorkbookFunctionGroupsNormalizer
     private static bool NormalizeFunctionGroup(XElement functionGroup)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(functionGroup, FunctionGroupAttributes);
-        changed |= RemoveAllNodes(functionGroup);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(functionGroup, FunctionGroupAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(functionGroup);
         if (string.IsNullOrWhiteSpace(functionGroup.Attribute("name")?.Value))
         {
             functionGroup.Attribute("name")?.Remove();
@@ -54,33 +54,6 @@ internal static class XlsxWorkbookFunctionGroupsNormalizer
         }
 
         return changed;
-    }
-
-    private static bool RemoveUnknownAttributes(XElement element, HashSet<string> allowedAttributes)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                (attribute.Name.NamespaceName.Length == 0 && allowedAttributes.Contains(attribute.Name.LocalName)))
-            {
-                continue;
-            }
-
-            attribute.Remove();
-            changed = true;
-        }
-
-        return changed;
-    }
-
-    private static bool RemoveAllNodes(XElement element)
-    {
-        if (!element.Nodes().Any())
-            return false;
-
-        element.RemoveNodes();
-        return true;
     }
 
     private static bool NormalizeUnsignedIntAttribute(XElement element, string attributeName)
