@@ -1,4 +1,3 @@
-using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -11,7 +10,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_ReadsColumnChartRangeTitleAndThemeSeriesFill()
     {
         var sheetId = new SheetId(Guid.NewGuid());
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
                           xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
                           xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
@@ -52,7 +51,7 @@ public sealed partial class XlsxChartPartReaderTests
     public void TryReadSupportedChart_ReadsPivotSourceBinding()
     {
         var sheetId = new SheetId(Guid.NewGuid());
-        var chartXml = XDocument.Parse("""
+        var chartXml = ParseChartXml("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
                           xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
                           xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
