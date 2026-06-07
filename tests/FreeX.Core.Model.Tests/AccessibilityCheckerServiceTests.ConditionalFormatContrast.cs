@@ -736,6 +736,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDatabaseAggregateContrastLocations("DSUM($F$1:$I$5,2,$M$1:$M$2)>200", "B1", "B2", "B3", "B4");
         AssertFormulaDatabaseAggregateContrastLocations("DCOUNT($F$1:$I$5,\"Amount\",$K$1:$K$2)=2", "B1", "B2", "B3", "B4");
         AssertFormulaDatabaseAggregateContrastLocations("DCOUNTA($F$1:$I$5,\"Region\",$K$1:$K$2)=2", "B1", "B2", "B3", "B4");
+        AssertFormulaDatabaseAggregateContrastLocations("DGET($F$1:$I$5,\"Region\",$N$1:$N$2)=\"East\"", "B1", "B2", "B3", "B4");
         AssertFormulaDatabaseAggregateContrastLocations("DMAX($F$1:$I$5,\"Amount\",$K$1:$K$2)=125", "B1", "B2", "B3", "B4");
         AssertFormulaDatabaseAggregateContrastLocations("DMIN($F$1:$I$5,\"Amount\",$K$1:$K$2)=75", "B1", "B2", "B3", "B4");
     }
@@ -744,6 +745,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDatabaseAggregateShiftedReferences()
     {
         AssertFormulaDatabaseAggregateContrastLocations("DCOUNT($F$1:$I$5,$L1,$K$1:$K$2)>0", "B1", "B3");
+        AssertFormulaDatabaseAggregateContrastLocations("ISNUMBER(DGET($F$1:$I$5,$L1,$N$1:$N$2))", "B1", "B3");
         AssertFormulaDatabaseAggregateContrastLocations("DSUM($F$1:$I$5,\"Amount\",$J$1:$J2)>300", "B2", "B3", "B4");
     }
 
@@ -752,6 +754,8 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         AssertFormulaDatabaseAggregateContrastLocations("ISNA(DSUM(NA(),\"Amount\",$K$1:$K$2))", "B1", "B2", "B3", "B4");
         AssertFormulaDatabaseAggregateContrastLocations("ISERROR(DMAX($F$1:$I$5,\"Missing\",$K$1:$K$2))", "B1", "B2", "B3", "B4");
+        AssertFormulaDatabaseAggregateContrastLocations("ISERROR(DGET($F$1:$I$5,\"Amount\",$K$1:$K$2))", "B1", "B2", "B3", "B4");
+        AssertFormulaDatabaseAggregateContrastLocations("ISERROR(DGET($F$1:$I$5,\"Amount\",$O$1:$O$2))", "B1", "B2", "B3", "B4");
         AssertFormulaDatabaseAggregateContrastLocations("DSUM($F$1:$I$5,\"Amount\",$K$1)>0");
     }
 
@@ -1102,6 +1106,16 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAValueStdDevAndVarianceAggregates()
+    {
+        AssertFormulaAggregateContrastLocations("STDEVA($D1:$D3)>8", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("STDEVPA($E1:$E3)=0.5", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("VARA($D1:$D3)=72", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("VARPA($E1:$E3)=0.25", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("VARA(\"5\",TRUE,\"\")=7", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatStdDevWrappersPredicatesAndNestedAggregates()
     {
         AssertFormulaAggregateContrastLocations("AND(STDEV($A1:$A3)>20,$C1=\"Open\")", "B3");
@@ -1272,6 +1286,10 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaAggregateContrastLocations("STDEV.P($A1/0)>0");
         AssertFormulaAggregateContrastLocations("STDEV.P(1E308,0)>0");
         AssertFormulaAggregateContrastLocations("STDEV.P(A0)>0");
+        AssertFormulaAggregateContrastLocations("STDEVA()>0");
+        AssertFormulaAggregateContrastLocations("STDEVA($A1)>0");
+        AssertFormulaAggregateContrastLocations("STDEVA(\"n/a\",$A1)>0");
+        AssertFormulaAggregateContrastLocations("STDEVPA($A1/0)>0");
         AssertFormulaAggregateContrastLocations("VAR()>0");
         AssertFormulaAggregateContrastLocations("VAR($A1)>0");
         AssertFormulaAggregateContrastLocations("VAR($A1:$A20000)>0");
@@ -1287,6 +1305,10 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaAggregateContrastLocations("VAR.P($A1/0)>0");
         AssertFormulaAggregateContrastLocations("VAR.P(1E308,0)>0");
         AssertFormulaAggregateContrastLocations("VAR.P(A0)>0");
+        AssertFormulaAggregateContrastLocations("VARA()>0");
+        AssertFormulaAggregateContrastLocations("VARA($A1)>0");
+        AssertFormulaAggregateContrastLocations("VARA(\"n/a\",$A1)>0");
+        AssertFormulaAggregateContrastLocations("VARPA($A1/0)>0");
         AssertFormulaAggregateContrastLocations("AVERAGEA(\"n/a\",$A1)>0");
         AssertFormulaAggregateContrastLocations("MINA(\"n/a\",$A1)>0");
         AssertFormulaAggregateContrastLocations("MAXA(\"n/a\",$A1)>0");
@@ -6045,6 +6067,12 @@ public sealed partial class AccessibilityCheckerServiceTests
 
         sheet.SetCell(new CellAddress(sheet.Id, 1, 13), new TextValue("Amount"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 13), new TextValue(">75"));
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 14), new TextValue("Units"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 14), new NumberValue(1));
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 15), new TextValue("Status"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 15), new TextValue("Missing"));
 
         return workbook;
     }
