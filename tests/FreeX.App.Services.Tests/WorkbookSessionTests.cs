@@ -555,6 +555,62 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void PasteSpecialClipboardAtActiveCell_ValuesAndNumberFormatsCopiesNumberFormatPreservesSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var c3 = new CellAddress(sheet.Id, 3, 3);
+        var sourceStyle = workbook.RegisterStyle(new CellStyle
+        {
+            Bold = true,
+            NumberFormat = "0.00%"
+        });
+        var destinationStyle = workbook.RegisterStyle(new CellStyle
+        {
+            Italic = true,
+            FillColor = new CellColor(0xEE, 0xDD, 0xCC),
+            NumberFormat = "General"
+        });
+        var sourceCell = Cell.FromFormula("B1+1");
+        sourceCell.Value = new NumberValue(0.25);
+        sourceCell.StyleId = sourceStyle;
+        sheet.SetCell(a1, sourceCell);
+        sheet.SetCell(c3, new Cell { Value = new TextValue("old"), StyleId = destinationStyle });
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+        var clipboardText = session.CopySelectedRangeText();
+        session.SelectCell(c3);
+
+        var result = session.PasteSpecialClipboardAtActiveCell(
+            clipboardText,
+            PasteCellsMode.All,
+            new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.ValuesAndNumberFormats));
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().ContainSingle().Which.Should().Be(c3);
+        session.SelectedRange.Should().Be(new GridRange(c3, c3));
+        var pasted = sheet.GetCell(c3)!;
+        pasted.FormulaText.Should().BeNull();
+        pasted.Value.Should().Be(new NumberValue(0.25));
+        var pastedStyle = workbook.GetStyle(pasted.StyleId);
+        pastedStyle.NumberFormat.Should().Be("0.00%");
+        pastedStyle.Italic.Should().BeTrue();
+        pastedStyle.FillColor.Should().Be(new CellColor(0xEE, 0xDD, 0xCC));
+        pastedStyle.Bold.Should().BeFalse();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.GetValue(c3).Should().Be(new TextValue("old"));
+        sheet.GetCell(c3)!.StyleId.Should().Be(destinationStyle);
+    }
+
+    [Fact]
     public void PasteSpecialClipboardAtActiveCell_RejectsChangedPlatformClipboardText()
     {
         var workbook = CreateWorkbook();

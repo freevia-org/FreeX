@@ -97,7 +97,12 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativePasteSpecialMenuItem,
     bool HasNativePasteSpecialCommentsMenuItem,
     bool HasNativePasteSpecialValidationMenuItem,
+    bool HasNativePasteSpecialAllExceptBordersMenuItem,
+    bool HasNativePasteSpecialAllMergingConditionalFormatsMenuItem,
     bool HasNativePasteSpecialColumnWidthsMenuItem,
+    bool HasNativePasteSpecialFormulasAndNumberFormatsMenuItem,
+    bool HasNativePasteSpecialValuesAndNumberFormatsMenuItem,
+    bool HasNativePasteSpecialValuesAndSourceFormattingMenuItem,
     bool HasNativePasteSpecialKeepSourceColumnWidthsMenuItem,
     bool HasNativePasteSpecialPasteLinkMenuItem,
     bool HasNativeSelectAllMenuItem,
@@ -181,7 +186,12 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativePasteSpecialMenuItem &&
         HasNativePasteSpecialCommentsMenuItem &&
         HasNativePasteSpecialValidationMenuItem &&
+        HasNativePasteSpecialAllExceptBordersMenuItem &&
+        HasNativePasteSpecialAllMergingConditionalFormatsMenuItem &&
         HasNativePasteSpecialColumnWidthsMenuItem &&
+        HasNativePasteSpecialFormulasAndNumberFormatsMenuItem &&
+        HasNativePasteSpecialValuesAndNumberFormatsMenuItem &&
+        HasNativePasteSpecialValuesAndSourceFormattingMenuItem &&
         HasNativePasteSpecialKeepSourceColumnWidthsMenuItem &&
         HasNativePasteSpecialPasteLinkMenuItem &&
         HasNativeSelectAllMenuItem &&
@@ -313,7 +323,12 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_paste_special_menu_item={FormatBool(snapshot.HasNativePasteSpecialMenuItem)}",
                 $"native_paste_special_comments_menu_item={FormatBool(snapshot.HasNativePasteSpecialCommentsMenuItem)}",
                 $"native_paste_special_validation_menu_item={FormatBool(snapshot.HasNativePasteSpecialValidationMenuItem)}",
+                $"native_paste_special_all_except_borders_menu_item={FormatBool(snapshot.HasNativePasteSpecialAllExceptBordersMenuItem)}",
+                $"native_paste_special_all_merging_conditional_formats_menu_item={FormatBool(snapshot.HasNativePasteSpecialAllMergingConditionalFormatsMenuItem)}",
                 $"native_paste_special_column_widths_menu_item={FormatBool(snapshot.HasNativePasteSpecialColumnWidthsMenuItem)}",
+                $"native_paste_special_formulas_and_number_formats_menu_item={FormatBool(snapshot.HasNativePasteSpecialFormulasAndNumberFormatsMenuItem)}",
+                $"native_paste_special_values_and_number_formats_menu_item={FormatBool(snapshot.HasNativePasteSpecialValuesAndNumberFormatsMenuItem)}",
+                $"native_paste_special_values_and_source_formatting_menu_item={FormatBool(snapshot.HasNativePasteSpecialValuesAndSourceFormattingMenuItem)}",
                 $"native_paste_special_keep_source_column_widths_menu_item={FormatBool(snapshot.HasNativePasteSpecialKeepSourceColumnWidthsMenuItem)}",
                 $"native_paste_special_paste_link_menu_item={FormatBool(snapshot.HasNativePasteSpecialPasteLinkMenuItem)}",
                 $"native_select_all_menu_item={FormatBool(snapshot.HasNativeSelectAllMenuItem)}",
