@@ -13430,8 +13430,16 @@ internal static class ExcelOpenSmoke
         if (workbookEntry is null)
             return references;
 
-        var pivotCaches = LoadPackageXml(workbookEntry)
-            .Descendants(SpreadsheetNs + "pivotCache")
+        var workbookXml = LoadPackageXml(workbookEntry);
+        var pivotCacheContainers = workbookXml.Root?
+            .Elements(SpreadsheetNs + "pivotCaches")
+            .ToArray() ?? [];
+        if (pivotCacheContainers.Length == 0)
+            return references;
+
+        AddWorkbookPivotCachesSchemaIssues(pivotCacheContainers, issues);
+        var pivotCaches = pivotCacheContainers
+            .SelectMany(pivotCaches => pivotCaches.Elements(SpreadsheetNs + "pivotCache"))
             .Select((pivotCache, index) => new
             {
                 Ordinal = index + 1,
@@ -13489,6 +13497,61 @@ internal static class ExcelOpenSmoke
         }
 
         return references;
+    }
+
+    private static void AddWorkbookPivotCachesSchemaIssues(
+        XElement[] pivotCacheContainers,
+        List<string> issues)
+    {
+        if (pivotCacheContainers.Length > 1)
+            issues.Add($"{WorkbookPart} has {pivotCacheContainers.Length} pivotCaches elements; expected at most one");
+
+        var seenRelationshipIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pivotCaches in pivotCacheContainers.Select((element, index) => (Element: element, Ordinal: index + 1)))
+        {
+            var description = $"pivotCaches #{pivotCaches.Ordinal}";
+            foreach (var attribute in pivotCaches.Element.Attributes())
+            {
+                if (!attribute.IsNamespaceDeclaration)
+                    issues.Add($"{WorkbookPart} {description} has unsupported attribute {attribute.Name}");
+            }
+
+            var pivotCacheElements = pivotCaches.Element.Elements(SpreadsheetNs + "pivotCache").ToArray();
+            if (pivotCacheElements.Length == 0)
+                issues.Add($"{WorkbookPart} {description} has no pivotCache entries");
+
+            foreach (var unexpectedChild in pivotCaches.Element.Elements().Where(child => child.Name != SpreadsheetNs + "pivotCache"))
+                issues.Add($"{WorkbookPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}; expected pivotCache entries only");
+
+            foreach (var pivotCache in pivotCacheElements.Select((element, index) => (Element: element, Ordinal: index + 1)))
+            {
+                var childDescription = $"{description} pivotCache #{pivotCache.Ordinal}";
+                foreach (var attribute in pivotCache.Element.Attributes())
+                {
+                    if (attribute.IsNamespaceDeclaration ||
+                        (attribute.Name.NamespaceName.Length == 0 && attribute.Name.LocalName == "cacheId") ||
+                        attribute.Name == OfficeRelationshipNs + "id")
+                    {
+                        continue;
+                    }
+
+                    issues.Add($"{WorkbookPart} {childDescription} has unsupported attribute {attribute.Name}");
+                }
+
+                var relationshipId = pivotCache.Element.Attribute(OfficeRelationshipNs + "id")?.Value;
+                if (!string.IsNullOrWhiteSpace(relationshipId))
+                {
+                    var trimmedRelationshipId = relationshipId.Trim();
+                    if (!string.Equals(relationshipId, trimmedRelationshipId, StringComparison.Ordinal))
+                        issues.Add($"{WorkbookPart} {childDescription} has untrimmed relationship id '{relationshipId}'");
+                    if (!seenRelationshipIds.Add(trimmedRelationshipId))
+                        issues.Add($"{WorkbookPart} {childDescription} duplicates relationship id {trimmedRelationshipId}");
+                }
+
+                if (pivotCache.Element.Elements().Any())
+                    issues.Add($"{WorkbookPart} {childDescription} has child elements; expected attributes only");
+            }
+        }
     }
 
     private static void AddPivotCacheDefinitionPackageIssues(
