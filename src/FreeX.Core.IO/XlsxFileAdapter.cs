@@ -673,18 +673,21 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         bool? hasConditionalFormattingBlocks = null;
         bool? hasClosedXmlUnsupportedConditionalFormatting = null;
         bool? hasWorksheetDynamicFilters = null;
+        bool? hasWorksheetRelationshipMarkerSchemaIssues = null;
         IReadOnlySet<string>? mergeCellWorksheetPathsToStrip = null;
         if (!sheetXmlLayoutHadWarnings && sheetXmlLayout.Count > 0)
         {
             hasConditionalFormattingBlocks = false;
             hasClosedXmlUnsupportedConditionalFormatting = false;
             hasWorksheetDynamicFilters = false;
+            hasWorksheetRelationshipMarkerSchemaIssues = false;
             var mergeCellWorksheetPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var layout in sheetXmlLayout.Values)
             {
                 hasConditionalFormattingBlocks |= layout.HasConditionalFormattingBlocks;
                 hasClosedXmlUnsupportedConditionalFormatting |= layout.HasClosedXmlUnsupportedConditionalFormatting;
                 hasWorksheetDynamicFilters |= layout.HasWorksheetDynamicFilters;
+                hasWorksheetRelationshipMarkerSchemaIssues |= layout.HasWorksheetRelationshipMarkerSchemaIssues;
                 if (layout.MergedRegions.Count > 0)
                     mergeCellWorksheetPaths.Add(layout.WorksheetPath);
             }
@@ -713,6 +716,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             null,
             null,
             null,
+            hasWorksheetRelationshipMarkerSchemaIssues,
             mergeCellWorksheetPathsToStrip);
     }
 
