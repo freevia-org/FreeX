@@ -100,7 +100,7 @@ internal static class XlsxWorksheetSheetViewNormalizer
 
     public static bool NormalizeSheetViewsElement(XElement sheetViews)
     {
-        var changed = RemoveUnknownAttributes(sheetViews, EmptyAttributes);
+        var changed = XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(sheetViews, EmptyAttributes);
         foreach (var sheetView in sheetViews.Elements(WorksheetNs + "sheetView"))
             changed |= NormalizeSheetViewElement(sheetView);
 
@@ -123,16 +123,16 @@ internal static class XlsxWorksheetSheetViewNormalizer
 
     public static bool NormalizeSheetViewElement(XElement sheetView)
     {
-        var changed = RemoveUnknownAttributes(sheetView, SheetViewAttributes);
+        var changed = XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(sheetView, SheetViewAttributes);
 
-        changed |= NormalizeAttribute(sheetView, "workbookViewId", NormalizeRequiredUnsignedInt);
-        changed |= NormalizeAttribute(sheetView, "view", value => NormalizeToken(value, ValidViewModes));
-        changed |= NormalizeAttribute(sheetView, "topLeftCell", NormalizeCellReference);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetView, "workbookViewId", NormalizeRequiredUnsignedInt);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetView, "view", value => NormalizeToken(value, ValidViewModes));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetView, "topLeftCell", NormalizeCellReference);
 
         foreach (var attributeName in SheetViewBooleanAttributes)
-            changed |= NormalizeAttribute(sheetView, attributeName, NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetView, attributeName, NormalizeBoolean);
         foreach (var attributeName in SheetViewUnsignedIntAttributes)
-            changed |= NormalizeAttribute(sheetView, attributeName, NormalizeUnsignedIntOrNull);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(sheetView, attributeName, NormalizeUnsignedIntOrNull);
 
         foreach (var pane in sheetView.Elements(WorksheetNs + "pane"))
             changed |= NormalizePaneElement(pane);
@@ -144,46 +144,23 @@ internal static class XlsxWorksheetSheetViewNormalizer
 
     private static bool NormalizePaneElement(XElement pane)
     {
-        var changed = RemoveUnknownAttributes(pane, PaneAttributes);
-        changed |= NormalizeAttribute(pane, "xSplit", NormalizeDouble);
-        changed |= NormalizeAttribute(pane, "ySplit", NormalizeDouble);
-        changed |= NormalizeAttribute(pane, "topLeftCell", NormalizeCellReference);
-        changed |= NormalizeAttribute(pane, "activePane", value => NormalizeToken(value, ValidPaneValues));
-        changed |= NormalizeAttribute(pane, "state", value => NormalizeToken(value, ValidPaneStates));
+        var changed = XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(pane, PaneAttributes);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pane, "xSplit", NormalizeDouble);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pane, "ySplit", NormalizeDouble);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pane, "topLeftCell", NormalizeCellReference);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pane, "activePane", value => NormalizeToken(value, ValidPaneValues));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(pane, "state", value => NormalizeToken(value, ValidPaneStates));
         return changed;
     }
 
     private static bool NormalizeSelectionElement(XElement selection)
     {
-        var changed = RemoveUnknownAttributes(selection, SelectionAttributes);
-        changed |= NormalizeAttribute(selection, "pane", value => NormalizeToken(value, ValidPaneValues));
-        changed |= NormalizeAttribute(selection, "activeCell", NormalizeCellReference);
-        changed |= NormalizeAttribute(selection, "activeCellId", NormalizeUnsignedIntOrNull);
-        changed |= NormalizeAttribute(selection, "sqref", NormalizeSqref);
+        var changed = XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(selection, SelectionAttributes);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(selection, "pane", value => NormalizeToken(value, ValidPaneValues));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(selection, "activeCell", NormalizeCellReference);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(selection, "activeCellId", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(selection, "sqref", NormalizeSqref);
         return changed;
-    }
-
-    private static bool NormalizeAttribute(
-        XElement element,
-        string attributeName,
-        Func<string?, string?> normalize)
-    {
-        var attribute = element.Attribute(attributeName);
-        var normalized = normalize(attribute?.Value);
-        if (normalized is null)
-        {
-            if (attribute is null)
-                return false;
-
-            attribute.Remove();
-            return true;
-        }
-
-        if (attribute is not null && string.Equals(attribute.Value, normalized, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(attributeName, normalized);
-        return true;
     }
 
     private static string? NormalizeBoolean(string? value)
@@ -255,24 +232,6 @@ internal static class XlsxWorksheetSheetViewNormalizer
         return parts.Length == 2 &&
                CellAddress.TryParse(parts[0], SheetId.New(), out _) &&
                CellAddress.TryParse(parts[1], SheetId.New(), out _);
-    }
-
-    private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedNames)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                (attribute.Name.NamespaceName.Length == 0 && allowedNames.Contains(attribute.Name.LocalName)))
-            {
-                continue;
-            }
-
-            attribute.Remove();
-            changed = true;
-        }
-
-        return changed;
     }
 
     private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
