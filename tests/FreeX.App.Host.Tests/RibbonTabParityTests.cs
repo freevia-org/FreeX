@@ -272,7 +272,7 @@ public sealed class RibbonTabParityTests
         CommandTitles(dataGroup).Should().NotContain("Change Source");
         CommandTitles(Group(analyzeTab, "Calculations")).Should().Contain("Calculated Field");
         CommandTitles(Group(analyzeTab, "Tools")).Should().Contain("PivotChart");
-        CommandTitles(Group(analyzeTab, "Show")).Should().Contain("Field List");
+        CommandTitles(Group(analyzeTab, "Show")).Should().ContainInOrder("Field List", "+/- Buttons", "Field Headers");
     }
 
     [Fact]
