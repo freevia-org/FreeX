@@ -65,7 +65,7 @@ internal static class XlsxWorksheetExtensionListNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(extensionList, NoAttributes);
-        changed |= RemoveUnexpectedChildElements(extensionList, WorksheetNs + "ext");
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(extensionList, WorksheetNs + "ext");
 
         foreach (var extension in extensionList.Elements(WorksheetNs + "ext").ToList())
         {
@@ -86,18 +86,6 @@ internal static class XlsxWorksheetExtensionListNormalizer
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(extension, ExtensionAttributes);
         changed |= NormalizeUri(extension);
-        return changed;
-    }
-
-    private static bool RemoveUnexpectedChildElements(XElement element, XName allowedChildName)
-    {
-        var changed = false;
-        foreach (var child in element.Elements().Where(child => child.Name != allowedChildName).ToList())
-        {
-            child.Remove();
-            changed = true;
-        }
-
         return changed;
     }
 

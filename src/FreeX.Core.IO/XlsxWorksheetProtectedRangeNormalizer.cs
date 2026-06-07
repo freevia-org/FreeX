@@ -66,7 +66,7 @@ internal static class XlsxWorksheetProtectedRangeNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(protectedRanges, NoAttributes);
-        changed |= RemoveUnexpectedChildElements(protectedRanges, WorksheetNs + "protectedRange");
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(protectedRanges, WorksheetNs + "protectedRange");
 
         foreach (var protectedRange in protectedRanges.Elements(WorksheetNs + "protectedRange").ToList())
         {
@@ -145,18 +145,6 @@ internal static class XlsxWorksheetProtectedRangeNormalizer
         }
 
         keptExtensionList = true;
-        return changed;
-    }
-
-    private static bool RemoveUnexpectedChildElements(XElement element, XName allowedChildName)
-    {
-        var changed = false;
-        foreach (var child in element.Elements().Where(child => child.Name != allowedChildName).ToList())
-        {
-            child.Remove();
-            changed = true;
-        }
-
         return changed;
     }
 
