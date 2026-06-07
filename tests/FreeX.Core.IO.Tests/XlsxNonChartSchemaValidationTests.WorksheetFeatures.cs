@@ -943,6 +943,51 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Be(sourceProtectedRanges.ToString(SaveOptions.DisableFormatting));
     }
 
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidProtectedRangesForSchemaValidity()
+    {
+        using var source = Save(CreateProtectedRangesSourceWorkbook());
+        SetProtectedRangesInvalidNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertProtectedRangesSanitized(saved);
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidProtectedRangesForSchemaValidity()
+    {
+        using var source = Save(CreateProtectedRangesSourceWorkbook());
+        SetProtectedRangesInvalidNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertProtectedRangesSanitized(saved);
+    }
+
 
     [Fact]
     public void WorksheetCalculationProperties_ProducesSchemaValidWorkbook()
@@ -3343,6 +3388,58 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             new CellAddress(sheet.Id, 2, 2),
             new CellAddress(sheet.Id, 3, 3)));
         return workbook;
+    }
+
+    private static void SetProtectedRangesInvalidNativeMetadata(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        var protectedRanges = worksheetXml.Root!.Element(worksheetNs + "protectedRanges")!;
+        protectedRanges.SetAttributeValue("customProtectedRangesFlag", "removed");
+        protectedRanges.Add(new XElement(worksheetNs + "nativeProtectedRangesChild"));
+
+        var protectedRange = protectedRanges.Element(worksheetNs + "protectedRange")!;
+        protectedRange.SetAttributeValue("name", " NativeEditableRange ");
+        protectedRange.SetAttributeValue("password", "ABCD");
+        protectedRange.SetAttributeValue("securityDescriptor", "D:PAI");
+        protectedRange.SetAttributeValue("spinCount", "not-a-number");
+        protectedRange.SetAttributeValue("customProtectedRangeFlag", "removed");
+        protectedRange.Add(
+            CreateInvalidExtensionList(
+                worksheetNs,
+                "{FREEX-PROTECTED-RANGE-EXT}",
+                "FreeXProtectedRangeExtension",
+                "customProtectedRangeExtLstFlag",
+                "customProtectedRangeExtFlag",
+                "nativeProtectedRangeExtLstChild"),
+            new XElement(worksheetNs + "nativeProtectedRangeChild"));
+
+        protectedRanges.Add(new XElement(
+            worksheetNs + "protectedRange",
+            new XAttribute("sqref", " "),
+            new XAttribute("name", "RemovedProtectedRange")));
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void AssertProtectedRangesSanitized(MemoryStream stream)
+    {
+        var protectedRanges = ReadWorksheetChildElement(stream, "protectedRanges");
+        protectedRanges.Attribute("customProtectedRangesFlag").Should().BeNull();
+        protectedRanges.Element(protectedRanges.Name.Namespace + "nativeProtectedRangesChild").Should().BeNull();
+
+        var protectedRange = protectedRanges.Elements(protectedRanges.Name.Namespace + "protectedRange")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        protectedRange.Attribute("sqref")!.Value.Should().Be("B2:C3");
+        protectedRange.Attribute("name")!.Value.Should().Be("NativeEditableRange");
+        protectedRange.Attribute("password")!.Value.Should().Be("ABCD");
+        protectedRange.Attribute("securityDescriptor")!.Value.Should().Be("D:PAI");
+        protectedRange.Attribute("spinCount").Should().BeNull();
+        protectedRange.Attribute("customProtectedRangeFlag").Should().BeNull();
+        protectedRange.Elements().Should().BeEmpty();
     }
 
     private static Workbook CreateWorksheetCalculationPropertiesSourceWorkbook()
