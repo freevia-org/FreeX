@@ -40,8 +40,8 @@ public static class BackstageInfoPlanner
         var filePath = string.IsNullOrWhiteSpace(currentFilePath)
             ? UiText.Get("Backstage_Info_NotSavedYet")
             : currentFilePath;
-        var format = TryGetWorkbookExtension(currentFilePath, out var extension)
-            ? extension
+        var format = PlannerPathHelpers.TryGetExtension(currentFilePath, out var extension)
+            ? extension.ToLowerInvariant()
             : ".xlsx";
 
         return new BackstageInfoPlan(
@@ -98,31 +98,6 @@ public static class BackstageInfoPlanner
         {
             fileInfo = new FileInfo(currentFilePath);
             return fileInfo.Exists;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (NotSupportedException)
-        {
-            return false;
-        }
-        catch (PathTooLongException)
-        {
-            return false;
-        }
-    }
-
-    private static bool TryGetWorkbookExtension(string? currentFilePath, out string extension)
-    {
-        extension = "";
-        if (string.IsNullOrWhiteSpace(currentFilePath))
-            return false;
-
-        try
-        {
-            extension = System.IO.Path.GetExtension(currentFilePath).ToLowerInvariant();
-            return !string.IsNullOrWhiteSpace(extension);
         }
         catch (ArgumentException)
         {
