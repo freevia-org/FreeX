@@ -15,6 +15,10 @@ internal static class XlsxPackageMetadataMerger
     private const string PersonRelationshipType = "http://schemas.microsoft.com/office/2017/10/relationships/person";
     private const string ChartExStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartStyle";
     private const string ChartExColorStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartColorStyle";
+    private const string SlicerRelationshipType = "http://schemas.microsoft.com/office/2007/relationships/slicer";
+    private const string SlicerCacheRelationshipType = "http://schemas.microsoft.com/office/2007/relationships/slicerCache";
+    private const string TimelineRelationshipType = "http://schemas.microsoft.com/office/2010/relationships/Timeline";
+    private const string TimelineCacheRelationshipType = "http://schemas.microsoft.com/office/2010/relationships/TimelineCache";
 
     public static IReadOnlySet<string> CopyUnknownPackageParts(
         ZipArchive sourceArchive,
@@ -465,6 +469,7 @@ internal static class XlsxPackageMetadataMerger
                 IsXmlMapsPackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
                 IsPivotCacheRecordsPackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
                 isModernCommentPackageGraphRelationship ||
+                IsSlicerTimelinePackageGraphRelationship(relationshipPartPath, relationship, targetPart) ||
                 IsCustomXmlPackageGraphRelationship(relationshipPartPath, relationship, targetPart));
     }
 
@@ -487,6 +492,46 @@ internal static class XlsxPackageMetadataMerger
         }
 
         return false;
+    }
+
+    private static bool IsSlicerTimelinePackageGraphRelationship(
+        string relationshipPartPath,
+        XElement relationship,
+        string targetPart)
+    {
+        var sourcePart = RelationshipPartToSourcePart(relationshipPartPath);
+        var relationshipType = NormalizeRelationshipType(relationship);
+        if (string.Equals(sourcePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return (targetPart.StartsWith("xl/slicerCaches/", StringComparison.OrdinalIgnoreCase) &&
+                    targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(relationshipType, SlicerCacheRelationshipType, StringComparison.OrdinalIgnoreCase)) ||
+                   (targetPart.StartsWith("xl/timelineCaches/", StringComparison.OrdinalIgnoreCase) &&
+                    targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(relationshipType, TimelineCacheRelationshipType, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (sourcePart.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+            sourcePart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return (targetPart.StartsWith("xl/slicers/", StringComparison.OrdinalIgnoreCase) &&
+                    targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(relationshipType, SlicerRelationshipType, StringComparison.OrdinalIgnoreCase)) ||
+                   (targetPart.StartsWith("xl/timelines/", StringComparison.OrdinalIgnoreCase) &&
+                    targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(relationshipType, TimelineRelationshipType, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return (sourcePart.StartsWith("xl/slicers/", StringComparison.OrdinalIgnoreCase) &&
+                sourcePart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+                targetPart.StartsWith("xl/slicerCaches/", StringComparison.OrdinalIgnoreCase) &&
+                targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(relationshipType, SlicerCacheRelationshipType, StringComparison.OrdinalIgnoreCase)) ||
+               (sourcePart.StartsWith("xl/timelines/", StringComparison.OrdinalIgnoreCase) &&
+                sourcePart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+                targetPart.StartsWith("xl/timelineCaches/", StringComparison.OrdinalIgnoreCase) &&
+                targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(relationshipType, TimelineCacheRelationshipType, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsQueryTablePackageGraphRelationship(
@@ -662,7 +707,11 @@ internal static class XlsxPackageMetadataMerger
                string.Equals(relationshipType, ImageRelationshipType, StringComparison.OrdinalIgnoreCase) ||
                string.Equals(relationshipType, PackageRelationshipType, StringComparison.OrdinalIgnoreCase) ||
                string.Equals(relationshipType, PivotCacheDefinitionRelationshipType, StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(relationshipType, PivotCacheRecordsRelationshipType, StringComparison.OrdinalIgnoreCase);
+               string.Equals(relationshipType, PivotCacheRecordsRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(relationshipType, SlicerRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(relationshipType, SlicerCacheRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(relationshipType, TimelineRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(relationshipType, TimelineCacheRelationshipType, StringComparison.OrdinalIgnoreCase);
     }
 
     private static void RebindCopiedPartRelationshipReferences(
@@ -687,6 +736,7 @@ internal static class XlsxPackageMetadataMerger
                 RebindGeneratedPivotCacheRecordsRelationshipReference(targetIndex, sourcePart, relationshipIdMap);
 
             RebindGeneratedWorksheetPictureRelationshipReference(targetIndex, sourcePart, relationshipIdMap);
+            RebindGeneratedSlicerTimelineRelationshipReferences(targetIndex, sourcePart, relationshipIdMap);
             return;
         }
 
@@ -787,6 +837,54 @@ internal static class XlsxPackageMetadataMerger
         foreach (var picture in xml.Root?.Elements(worksheetNs + "picture") ?? [])
         {
             var idAttribute = picture.Attribute(relNs + "id");
+            if (idAttribute is null ||
+                !relationshipIdMap.TryGetValue(idAttribute.Value, out var replacementId))
+            {
+                continue;
+            }
+
+            idAttribute.Value = replacementId;
+            changed = true;
+        }
+
+        if (changed)
+            WriteXml(targetIndex, sourcePart, xml, targetEntry.LastWriteTime, SaveOptions.DisableFormatting);
+    }
+
+    private static void RebindGeneratedSlicerTimelineRelationshipReferences(
+        ArchiveEntryIndex targetIndex,
+        string sourcePart,
+        IReadOnlyDictionary<string, string> relationshipIdMap)
+    {
+        var isWorkbook = string.Equals(sourcePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase);
+        var isWorksheet = sourcePart.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                          sourcePart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
+        if (!isWorkbook && !isWorksheet)
+            return;
+
+        var targetEntry = targetIndex.Get(sourcePart);
+        if (targetEntry is null)
+            return;
+
+        XDocument xml;
+        try
+        {
+            xml = XlsxPackageXmlEditor.LoadXml(targetEntry);
+        }
+        catch
+        {
+            return;
+        }
+
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var referenceNames = isWorkbook
+            ? new HashSet<string>(["slicerCache", "timelineCacheRef"], StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(["slicer", "timelineRef"], StringComparer.OrdinalIgnoreCase);
+        var changed = false;
+        foreach (var reference in xml.Descendants()
+                     .Where(element => referenceNames.Contains(element.Name.LocalName)))
+        {
+            var idAttribute = reference.Attribute(relNs + "id");
             if (idAttribute is null ||
                 !relationshipIdMap.TryGetValue(idAttribute.Value, out var replacementId))
             {
