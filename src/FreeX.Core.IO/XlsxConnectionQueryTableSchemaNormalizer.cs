@@ -104,11 +104,11 @@ internal static class XlsxConnectionQueryTableSchemaNormalizer
             if (attributeName is "id" or "refreshedVersion")
                 continue;
 
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(connection, attributeName, NormalizeUnsignedIntOrNull);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(connection, attributeName, XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         }
 
         foreach (var attributeName in ConnectionBooleanAttributes)
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(connection, attributeName, NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(connection, attributeName, XlsxXmlNormalizationHelpers.NormalizeBoolean);
 
         return changed;
     }
@@ -128,11 +128,11 @@ internal static class XlsxConnectionQueryTableSchemaNormalizer
                 if (attributeName == "connectionId")
                     continue;
 
-                changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(root, attributeName, NormalizeUnsignedIntOrNull);
+                changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(root, attributeName, XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
             }
 
             foreach (var attributeName in QueryTableBooleanAttributes)
-                changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(root, attributeName, NormalizeBoolean);
+                changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(root, attributeName, XlsxXmlNormalizationHelpers.NormalizeBoolean);
 
             if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(archive, entry.FullName, document);
@@ -231,28 +231,9 @@ internal static class XlsxConnectionQueryTableSchemaNormalizer
 
     private static bool NormalizeRequiredUnsignedIntAttribute(XElement element, string attributeName, int fallbackValue)
     {
-        var normalized = NormalizeUnsignedIntOrNull(element.Attribute(attributeName)?.Value) ??
+        var normalized = XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull(element.Attribute(attributeName)?.Value) ??
                          fallbackValue.ToString(CultureInfo.InvariantCulture);
         return XlsxXmlNormalizationHelpers.SetAttributeIfChanged(element, attributeName, normalized);
-    }
-
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed switch
-        {
-            "0" or "1" => trimmed,
-            "true" or "false" => trimmed,
-            _ => null
-        };
-    }
-
-    private static string? NormalizeUnsignedIntOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed.ToString(CultureInfo.InvariantCulture)
-            : null;
     }
 
     private static bool IsQueryTableXmlEntry(ZipArchiveEntry entry)
