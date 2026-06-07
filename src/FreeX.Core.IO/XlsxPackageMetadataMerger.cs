@@ -8,6 +8,7 @@ internal static class XlsxPackageMetadataMerger
     private const string SpreadsheetRelationshipPrefix = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/";
     private const string ImageRelationshipType = SpreadsheetRelationshipPrefix + "image";
     private const string PackageRelationshipType = SpreadsheetRelationshipPrefix + "package";
+    private const string PivotCacheDefinitionRelationshipType = SpreadsheetRelationshipPrefix + "pivotCacheDefinition";
 
     public static IReadOnlySet<string> CopyUnknownPackageParts(
         ZipArchive sourceArchive,
@@ -540,7 +541,8 @@ internal static class XlsxPackageMetadataMerger
     {
         var relationshipType = NormalizeRelationshipType(relationship);
         return string.Equals(relationshipType, ImageRelationshipType, StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(relationshipType, PackageRelationshipType, StringComparison.OrdinalIgnoreCase);
+               string.Equals(relationshipType, PackageRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(relationshipType, PivotCacheDefinitionRelationshipType, StringComparison.OrdinalIgnoreCase);
     }
 
     private static void RebindCopiedPartRelationshipReferences(
