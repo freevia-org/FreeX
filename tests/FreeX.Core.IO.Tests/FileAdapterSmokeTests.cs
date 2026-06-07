@@ -3036,9 +3036,7 @@ public partial class FileAdapterSmokeTests
         using (var archive = new ZipArchive(ms, ZipArchiveMode.Update, leaveOpen: true))
         {
             var entry = archive.GetEntry("xl/worksheets/sheet1.xml")!;
-            XDocument document;
-            using (var entryStream = entry.Open())
-                document = XDocument.Load(entryStream);
+            var document = LoadPackageXml(entry);
 
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
             var sheetView = document.Root!
@@ -4746,9 +4744,8 @@ public partial class FileAdapterSmokeTests
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
-        using var reader = new StreamReader(archive.GetEntry("xl/worksheets/sheet1.xml")!.Open());
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var rule = XDocument.Load(reader)
+        var rule = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!)
             .Descendants(worksheetNs + "cfRule")
             .Should()
             .ContainSingle(element => (string?)element.Attribute("type") == "timePeriod")
@@ -4776,9 +4773,8 @@ public partial class FileAdapterSmokeTests
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
-        using var reader = new StreamReader(archive.GetEntry("xl/worksheets/sheet1.xml")!.Open());
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var rule = XDocument.Load(reader)
+        var rule = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!)
             .Descendants(worksheetNs + "cfRule")
             .Should()
             .ContainSingle(element => (string?)element.Attribute("type") == "timePeriod")
@@ -8811,8 +8807,7 @@ public partial class FileAdapterSmokeTests
         {
             var chartEntry = archive.GetEntry("xl/charts/chart1.xml");
             chartEntry.Should().NotBeNull();
-            using var chartStream = chartEntry.Open();
-            var chartXml = XDocument.Load(chartStream);
+            var chartXml = LoadPackageXml(chartEntry!);
             XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
             var plotArea = chartXml.Root!
                 .Element(chartNs + "chart")!
