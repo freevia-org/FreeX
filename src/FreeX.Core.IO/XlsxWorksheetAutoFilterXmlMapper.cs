@@ -1,4 +1,3 @@
-using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 using System.Globalization;
@@ -322,26 +321,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
 
         foreach (var (name, value) in attributes)
         {
-            TrySetNativeAttributeIfMissing(element, name, value);
-        }
-    }
-
-    private static void TrySetNativeAttributeIfMissing(XElement element, string name, string value)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-            return;
-
-        try
-        {
-            var attributeName = XName.Get(name);
-            if (element.Attribute(attributeName) is null)
-                element.SetAttributeValue(attributeName, value);
-        }
-        catch (ArgumentException)
-        {
-        }
-        catch (XmlException)
-        {
+            XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttributeIfMissing(element, name, value);
         }
     }
 

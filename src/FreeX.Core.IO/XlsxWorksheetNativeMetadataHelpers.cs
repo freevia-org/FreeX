@@ -71,6 +71,30 @@ internal static class XlsxWorksheetNativeMetadataHelpers
         }
     }
 
+    public static bool TrySetNativeAttributeIfMissing(XElement element, string name, string value)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return false;
+
+        try
+        {
+            var attributeName = XName.Get(name);
+            if (element.Attribute(attributeName) is not null)
+                return false;
+
+            element.SetAttributeValue(attributeName, value);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
+    }
+
     public static bool TryAddNativeChildElement(
         XElement target,
         string? childXml,
