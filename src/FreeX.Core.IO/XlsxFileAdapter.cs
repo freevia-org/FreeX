@@ -717,6 +717,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             null,
             null,
             packageParts.HasInspected ? packageParts.HasWorkbookWebPublishingSchemaIssues : null,
+            packageParts.HasInspected ? packageParts.HasWorkbookSmartTagSchemaIssues : null,
             hasWorksheetRelationshipMarkerSchemaIssues,
             mergeCellWorksheetPathsToStrip);
     }
@@ -848,7 +849,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             bool hasSlicerTimelinePackageParts,
             bool hasExternalLinks,
             bool hasStructuredTables,
-            bool? hasWorkbookWebPublishingSchemaIssues)
+            bool? hasWorkbookWebPublishingSchemaIssues,
+            bool? hasWorkbookSmartTagSchemaIssues)
         {
             HasInspected = hasInspected;
             HasWorkbook = hasWorkbook;
@@ -861,6 +863,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             HasExternalLinks = hasExternalLinks;
             HasStructuredTables = hasStructuredTables;
             HasWorkbookWebPublishingSchemaIssues = hasWorkbookWebPublishingSchemaIssues;
+            HasWorkbookSmartTagSchemaIssues = hasWorkbookSmartTagSchemaIssues;
         }
 
         public static XlsxLoadPackageParts Empty => default;
@@ -875,6 +878,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         public bool HasExternalLinks { get; }
         public bool HasStructuredTables { get; }
         public bool? HasWorkbookWebPublishingSchemaIssues { get; }
+        public bool? HasWorkbookSmartTagSchemaIssues { get; }
 
         public static XlsxLoadPackageParts Inspect(ZipArchive archive)
         {
@@ -932,7 +936,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 hasSlicerTimelinePackageParts,
                 hasExternalLinks,
                 hasStructuredTables,
-                InspectWorkbookWebPublishingSchemaIssues(archive));
+                InspectWorkbookWebPublishingSchemaIssues(archive),
+                InspectWorkbookSmartTagSchemaIssues(archive));
         }
 
         private static bool? InspectWorkbookWebPublishingSchemaIssues(ZipArchive archive)
@@ -949,6 +954,37 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 return root is not null &&
                        (XlsxWorkbookWebPublishingNormalizer.NormalizeWorkbookRoot(root, workbookNs) |
                         XlsxWorkbookWebPublishObjectsNormalizer.NormalizeWorkbookRoot(root, workbookNs));
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static bool? InspectWorkbookSmartTagSchemaIssues(ZipArchive archive)
+        {
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return false;
+
+            try
+            {
+                XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+                var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+                var root = workbookXml.Root;
+                if (root is null)
+                    return false;
+
+                var changed = false;
+                if (root.Element(workbookNs + "smartTagPr") is { } smartTagPr)
+                    changed |= XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagPropertiesElement(smartTagPr);
+                if (root.Element(workbookNs + "smartTagTypes") is { } smartTagTypes)
+                {
+                    changed |= XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagTypesElement(smartTagTypes);
+                    changed |= XlsxWorkbookSmartTagNormalizer.ShouldRemoveSmartTagTypesElement(smartTagTypes);
+                }
+
+                return changed;
             }
             catch
             {
