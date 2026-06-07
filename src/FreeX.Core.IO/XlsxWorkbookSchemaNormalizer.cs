@@ -20,6 +20,7 @@ internal static class XlsxWorkbookSchemaNormalizer
         XlsxWorksheetSheetFormatNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetSheetViewNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetProtectedRangeNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetScenarioNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetCustomSheetViewExtensionListNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetPhoneticPropertyNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetCellWatchesNormalizer.NormalizeWorksheets(archive);

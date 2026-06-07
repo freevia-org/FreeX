@@ -867,6 +867,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchWorksheetSheetFormat(archive);
                 NormalizePatchWorksheetSheetViews(archive);
                 NormalizePatchWorksheetProtectedRanges(archive);
+                NormalizePatchWorksheetScenarios(archive);
                 NormalizePatchWorksheetPhoneticProperties(archive);
                 NormalizePatchWorksheetCellWatches(archive);
                 NormalizePatchWorksheetCustomProperties(archive);
@@ -977,6 +978,7 @@ public sealed partial class XlsxFileAdapter
 
                 NormalizePatchWorksheetSingleXmlCells(archive);
                 NormalizePatchWorksheetProtectedRanges(archive);
+                NormalizePatchWorksheetScenarios(archive);
                 NormalizePatchSingleCellTableParts(archive);
 
                 if (invalidatesCalcChain)
@@ -1645,6 +1647,9 @@ public sealed partial class XlsxFileAdapter
 
         private static void NormalizePatchWorksheetProtectedRanges(ZipArchive archive) =>
             XlsxWorksheetProtectedRangeNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetScenarios(ZipArchive archive) =>
+            XlsxWorksheetScenarioNormalizer.NormalizeWorksheets(archive);
 
         private static void NormalizePatchWorksheetPageBreaks(ZipArchive archive)
         {
