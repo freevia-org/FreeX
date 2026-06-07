@@ -1010,9 +1010,7 @@ internal static partial class XlsxCorpusFixtureFactory
         if (contentTypesEntry is null)
             return;
 
-        XDocument contentTypes;
-        using (var stream = contentTypesEntry.Open())
-            contentTypes = XDocument.Load(stream);
+        var contentTypes = LoadPackageXml(contentTypesEntry);
 
         foreach (var partName in partNames.Where(part => !part.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)))
         {

@@ -948,6 +948,9 @@ public static partial class AccessibilityCheckerService
             case ErrorNode error:
                 operand = LiteralFormulaOperand(error.Error);
                 return true;
+            case ArrayConstantNode array when TryCreateFormulaArrayConstantLiteral(array, out var range):
+                operand = LiteralFormulaOperand(range);
+                return true;
             case UnaryOpNode { Operator: UnaryOperator.Negate, Operand: NumberNode number }:
                 operand = LiteralFormulaOperand(new NumberValue(-number.Value));
                 return true;
@@ -994,6 +997,56 @@ public static partial class AccessibilityCheckerService
             null,
             null,
             new ConditionalFormulaReferenceRange(endRow, endCol, isEndRowAbsolute, isEndColAbsolute));
+
+    private static bool TryCreateFormulaArrayConstantLiteral(ArrayConstantNode node, out RangeValue range)
+    {
+        range = default!;
+        if (node.Rows.Count == 0 || node.Rows[0].Count == 0)
+            return false;
+
+        var rowCount = node.Rows.Count;
+        var colCount = node.Rows[0].Count;
+        if ((ulong)rowCount * (ulong)colCount > MaxFormulaAggregateRangeCells)
+            return false;
+
+        var cells = new ScalarValue[rowCount, colCount];
+        for (var row = 0; row < rowCount; row++)
+        {
+            if (node.Rows[row].Count != colCount)
+                return false;
+
+            for (var col = 0; col < colCount; col++)
+            {
+                if (!TryCreateFormulaArrayConstantScalar(node.Rows[row][col], out cells[row, col]))
+                    return false;
+            }
+        }
+
+        range = new RangeValue(cells);
+        return true;
+    }
+
+    private static bool TryCreateFormulaArrayConstantScalar(FormulaNode node, out ScalarValue value)
+    {
+        switch (node)
+        {
+            case NumberNode number when double.IsFinite(number.Value):
+                value = new NumberValue(number.Value);
+                return true;
+            case StringNode text:
+                value = new TextValue(text.Value);
+                return true;
+            case BooleanNode boolean:
+                value = new BoolValue(boolean.Value);
+                return true;
+            case ErrorNode error:
+                value = error.Error;
+                return true;
+            default:
+                value = ErrorValue.Value;
+                return false;
+        }
+    }
 
     private static bool TryCreateFormulaUnaryOperand(
         UnaryOpNode unary,
@@ -1546,6 +1599,18 @@ public static partial class AccessibilityCheckerService
             case "COUPPCD":
                 kind = ConditionalFormulaScalarFunctionKind.Couppcd;
                 return true;
+            case "MMULT":
+                kind = ConditionalFormulaScalarFunctionKind.MMult;
+                return true;
+            case "MDETERM":
+                kind = ConditionalFormulaScalarFunctionKind.MDeterm;
+                return true;
+            case "MINVERSE":
+                kind = ConditionalFormulaScalarFunctionKind.MInverse;
+                return true;
+            case "TRANSPOSE":
+                kind = ConditionalFormulaScalarFunctionKind.Transpose;
+                return true;
             case "PI":
                 kind = ConditionalFormulaScalarFunctionKind.Pi;
                 return true;
@@ -1750,6 +1815,12 @@ public static partial class AccessibilityCheckerService
             case "XMATCH":
                 kind = ConditionalFormulaScalarFunctionKind.XMatch;
                 return true;
+            case "XLOOKUP":
+                kind = ConditionalFormulaScalarFunctionKind.XLookup;
+                return true;
+            case "LOOKUP":
+                kind = ConditionalFormulaScalarFunctionKind.Lookup;
+                return true;
             case "INDEX":
                 kind = ConditionalFormulaScalarFunctionKind.Index;
                 return true;
@@ -1758,6 +1829,9 @@ public static partial class AccessibilityCheckerService
                 return true;
             case "HLOOKUP":
                 kind = ConditionalFormulaScalarFunctionKind.HLookup;
+                return true;
+            case "OFFSET":
+                kind = ConditionalFormulaScalarFunctionKind.Offset;
                 return true;
             case "N":
                 kind = ConditionalFormulaScalarFunctionKind.N;
@@ -2124,8 +2198,11 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Match => argumentCount is 2 or 3,
             ConditionalFormulaScalarFunctionKind.XMatch or
             ConditionalFormulaScalarFunctionKind.Index => argumentCount is >= 2 and <= 4,
+            ConditionalFormulaScalarFunctionKind.XLookup => argumentCount is >= 3 and <= 6,
+            ConditionalFormulaScalarFunctionKind.Lookup => argumentCount is 2 or 3,
             ConditionalFormulaScalarFunctionKind.VLookup or
             ConditionalFormulaScalarFunctionKind.HLookup => argumentCount is 3 or 4,
+            ConditionalFormulaScalarFunctionKind.Offset => argumentCount is >= 3 and <= 5,
             ConditionalFormulaScalarFunctionKind.N or
             ConditionalFormulaScalarFunctionKind.Type or
             ConditionalFormulaScalarFunctionKind.ErrorType => argumentCount == 1,
@@ -2198,6 +2275,10 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Coupncd or
             ConditionalFormulaScalarFunctionKind.Coupnum or
             ConditionalFormulaScalarFunctionKind.Couppcd => argumentCount is 3 or 4,
+            ConditionalFormulaScalarFunctionKind.MDeterm or
+            ConditionalFormulaScalarFunctionKind.MInverse or
+            ConditionalFormulaScalarFunctionKind.Transpose => argumentCount == 1,
+            ConditionalFormulaScalarFunctionKind.MMult => argumentCount == 2,
             ConditionalFormulaScalarFunctionKind.TDistRt or
             ConditionalFormulaScalarFunctionKind.TDist2T or
             ConditionalFormulaScalarFunctionKind.TInv or
@@ -2297,6 +2378,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaAggregateKind.PercentRankInc or
             ConditionalFormulaAggregateKind.PercentRankExc => argumentCount is 2 or 3,
             ConditionalFormulaAggregateKind.Prob => argumentCount is 3 or 4,
+            ConditionalFormulaAggregateKind.TrimMean => argumentCount == 2,
             ConditionalFormulaAggregateKind.ModeSngl => argumentCount is >= 1 and <= MaxFormulaModeArgumentCount,
             _ => argumentCount > 0
         };
@@ -2389,6 +2471,18 @@ public static partial class AccessibilityCheckerService
                 return true;
             case "AVEDEV":
                 kind = ConditionalFormulaAggregateKind.AveDev;
+                return true;
+            case "KURT":
+                kind = ConditionalFormulaAggregateKind.Kurt;
+                return true;
+            case "SKEW":
+                kind = ConditionalFormulaAggregateKind.Skew;
+                return true;
+            case "SKEW.P":
+                kind = ConditionalFormulaAggregateKind.SkewP;
+                return true;
+            case "TRIMMEAN":
+                kind = ConditionalFormulaAggregateKind.TrimMean;
                 return true;
             case "GEOMEAN":
                 kind = ConditionalFormulaAggregateKind.GeoMean;
@@ -2683,6 +2777,18 @@ public static partial class AccessibilityCheckerService
             return leftBool.Value.CompareTo(rightBool.Value);
 
         return FormulaValueTypeOrder(left).CompareTo(FormulaValueTypeOrder(right));
+    }
+
+    private static bool TryGetSingleFormulaRangeValue(RangeValue range, out ScalarValue value)
+    {
+        if (range.RowCount == 1 && range.ColCount == 1)
+        {
+            value = range.Cells[0, 0];
+            return true;
+        }
+
+        value = ErrorValue.Value;
+        return false;
     }
 
     private static int FormulaValueTypeOrder(ScalarValue value) => value switch
@@ -3165,6 +3271,10 @@ public static partial class AccessibilityCheckerService
         Coupncd,
         Coupnum,
         Couppcd,
+        MMult,
+        MDeterm,
+        MInverse,
+        Transpose,
         Pi,
         Arabic,
         Roman,
@@ -3233,9 +3343,12 @@ public static partial class AccessibilityCheckerService
         Choose,
         Match,
         XMatch,
+        XLookup,
+        Lookup,
         Index,
         VLookup,
         HLookup,
+        Offset,
         N,
         Type,
         ErrorType,
@@ -3327,6 +3440,10 @@ public static partial class AccessibilityCheckerService
         VarianceSample,
         VariancePopulation,
         AveDev,
+        Kurt,
+        Skew,
+        SkewP,
+        TrimMean,
         GeoMean,
         HarMean,
         Product,
@@ -3873,6 +3990,20 @@ public static partial class AccessibilityCheckerService
                 return false;
             }
 
+            if (left is RangeValue leftRange &&
+                !TryGetSingleFormulaRangeValue(leftRange, out left))
+            {
+                value = ErrorValue.Value;
+                return false;
+            }
+
+            if (right is RangeValue rightRange &&
+                !TryGetSingleFormulaRangeValue(rightRange, out right))
+            {
+                value = ErrorValue.Value;
+                return false;
+            }
+
             if (left is ErrorValue)
             {
                 value = left;
@@ -3883,12 +4014,6 @@ public static partial class AccessibilityCheckerService
             {
                 value = right;
                 return true;
-            }
-
-            if (left is RangeValue || right is RangeValue)
-            {
-                value = ErrorValue.Value;
-                return false;
             }
 
             var result = CompareFormulaValues(left, right);
@@ -4221,6 +4346,11 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Coupnum:
                 case ConditionalFormulaScalarFunctionKind.Couppcd:
                     return TryEvaluateFormulaFinancialScalarFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.MMult:
+                case ConditionalFormulaScalarFunctionKind.MDeterm:
+                case ConditionalFormulaScalarFunctionKind.MInverse:
+                case ConditionalFormulaScalarFunctionKind.Transpose:
+                    return TryEvaluateFormulaMatrixArrayFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Pi:
                     value = new NumberValue(Math.PI);
                     return true;
@@ -4370,9 +4500,12 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Choose:
                 case ConditionalFormulaScalarFunctionKind.Match:
                 case ConditionalFormulaScalarFunctionKind.XMatch:
+                case ConditionalFormulaScalarFunctionKind.XLookup:
+                case ConditionalFormulaScalarFunctionKind.Lookup:
                 case ConditionalFormulaScalarFunctionKind.Index:
                 case ConditionalFormulaScalarFunctionKind.VLookup:
                 case ConditionalFormulaScalarFunctionKind.HLookup:
+                case ConditionalFormulaScalarFunctionKind.Offset:
                     return TryEvaluateFormulaLookupReferenceFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Bin2Dec:
                 case ConditionalFormulaScalarFunctionKind.Hex2Dec:
@@ -4426,6 +4559,384 @@ public static partial class AccessibilityCheckerService
                     return false;
             }
         }
+
+        private bool TryEvaluateFormulaMatrixArrayFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            switch (function.Kind)
+            {
+                case ConditionalFormulaScalarFunctionKind.MMult:
+                    return TryEvaluateFormulaMMultFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.MDeterm:
+                    return TryEvaluateFormulaMDetermFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.MInverse:
+                    return TryEvaluateFormulaMInverseFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Transpose:
+                    return TryEvaluateFormulaTransposeFunction(function, rowOffset, colOffset, out value);
+                default:
+                    return false;
+            }
+        }
+
+        private bool TryEvaluateFormulaMMultFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaMatrixArrayArgument(function.Arguments[0], rowOffset, colOffset, out var leftRange, out var leftError) ||
+                !TryResolveFormulaMatrixArrayArgument(function.Arguments[1], rowOffset, colOffset, out var rightRange, out var rightError))
+            {
+                return false;
+            }
+
+            if (leftError is not null)
+            {
+                value = leftError;
+                return true;
+            }
+
+            if (rightError is not null)
+            {
+                value = rightError;
+                return true;
+            }
+
+            if (!TryGetFormulaMatrix(leftRange, out var left, out var matrixError) ||
+                !TryGetFormulaMatrix(rightRange, out var right, out matrixError))
+            {
+                value = matrixError ?? ErrorValue.Value;
+                return true;
+            }
+
+            var rows = left.GetLength(0);
+            var shared = left.GetLength(1);
+            if (shared != right.GetLength(0))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            var cols = right.GetLength(1);
+            if ((ulong)rows * (ulong)cols > MaxFormulaAggregateRangeCells)
+                return false;
+
+            var cells = new ScalarValue[rows, cols];
+            for (var row = 0; row < rows; row++)
+            {
+                for (var col = 0; col < cols; col++)
+                {
+                    double sum = 0;
+                    for (var index = 0; index < shared; index++)
+                        sum += left[row, index] * right[index, col];
+
+                    if (!double.IsFinite(sum))
+                    {
+                        value = ErrorValue.Num;
+                        return true;
+                    }
+
+                    cells[row, col] = new NumberValue(sum);
+                }
+            }
+
+            value = new RangeValue(cells);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaMDetermFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaMatrixArrayArgument(function.Arguments[0], rowOffset, colOffset, out var range, out var rangeError))
+                return false;
+
+            if (rangeError is not null)
+            {
+                value = rangeError;
+                return true;
+            }
+
+            if (!TryGetFormulaMatrix(range, out var matrix, out var matrixError))
+            {
+                value = matrixError ?? ErrorValue.Value;
+                return true;
+            }
+
+            value = FormulaMatrixDeterminant(matrix);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaMInverseFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaMatrixArrayArgument(function.Arguments[0], rowOffset, colOffset, out var range, out var rangeError))
+                return false;
+
+            if (rangeError is not null)
+            {
+                value = rangeError;
+                return true;
+            }
+
+            if (!TryGetFormulaMatrix(range, out var matrix, out var matrixError))
+            {
+                value = matrixError ?? ErrorValue.Value;
+                return true;
+            }
+
+            value = FormulaMatrixInverse(matrix);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaTransposeFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            var argument = function.Arguments[0];
+            if (argument.Kind == ConditionalFormulaOperandKind.ReferenceRange)
+            {
+                if (!TryMaterializeFormulaReferenceRange(argument, rowOffset, colOffset, out var range))
+                    return false;
+
+                value = TransposeFormulaRange(range);
+                return true;
+            }
+
+            if (!TryResolveFormulaOperand(argument, rowOffset, colOffset, out var source))
+                return false;
+
+            value = source is RangeValue rangeValue
+                ? TransposeFormulaRange(rangeValue)
+                : source;
+            return true;
+        }
+
+        private bool TryResolveFormulaMatrixArrayArgument(
+            ConditionalFormulaOperand argument,
+            int rowOffset,
+            int colOffset,
+            out RangeValue range,
+            out ErrorValue? error)
+        {
+            range = default!;
+            error = null;
+            if (argument.Kind == ConditionalFormulaOperandKind.ReferenceRange)
+                return TryMaterializeFormulaReferenceRange(argument, rowOffset, colOffset, out range);
+
+            if (!TryResolveFormulaOperand(argument, rowOffset, colOffset, out var value))
+                return false;
+
+            if (value is ErrorValue valueError)
+            {
+                error = valueError;
+                return true;
+            }
+
+            range = value is RangeValue resolvedRange
+                ? resolvedRange
+                : SingleFormulaMatrixArray(value);
+            return true;
+        }
+
+        private static bool TryGetFormulaMatrix(
+            RangeValue range,
+            out double[,] matrix,
+            out ErrorValue? error)
+        {
+            error = null;
+            matrix = new double[range.RowCount, range.ColCount];
+            for (var row = 0; row < range.RowCount; row++)
+            {
+                for (var col = 0; col < range.ColCount; col++)
+                {
+                    var cell = range.Cells[row, col];
+                    if (cell is ErrorValue cellError)
+                    {
+                        error = cellError;
+                        return false;
+                    }
+
+                    if (!TryGetFormulaMatrixNumber(cell, out var number))
+                    {
+                        error = ErrorValue.Value;
+                        return false;
+                    }
+
+                    matrix[row, col] = number;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool TryGetFormulaMatrixNumber(ScalarValue value, out double number)
+        {
+            switch (value)
+            {
+                case NumberValue numeric:
+                    number = numeric.Value;
+                    break;
+                case DateTimeValue dateTime:
+                    number = dateTime.Value;
+                    break;
+                default:
+                    number = 0;
+                    return false;
+            }
+
+            return double.IsFinite(number);
+        }
+
+        private static ScalarValue FormulaMatrixDeterminant(double[,] matrix)
+        {
+            var size = matrix.GetLength(0);
+            if (matrix.GetLength(1) != size)
+                return ErrorValue.Value;
+
+            var lu = (double[,])matrix.Clone();
+            var swaps = 0;
+            for (var col = 0; col < size; col++)
+            {
+                var pivotRow = col;
+                var pivotMax = Math.Abs(lu[col, col]);
+                for (var row = col + 1; row < size; row++)
+                {
+                    var candidate = Math.Abs(lu[row, col]);
+                    if (candidate > pivotMax)
+                    {
+                        pivotMax = candidate;
+                        pivotRow = row;
+                    }
+                }
+
+                if (pivotMax < 1E-300)
+                    return new NumberValue(0);
+
+                if (pivotRow != col)
+                {
+                    for (var index = 0; index < size; index++)
+                        (lu[col, index], lu[pivotRow, index]) = (lu[pivotRow, index], lu[col, index]);
+                    swaps++;
+                }
+
+                var pivot = lu[col, col];
+                for (var row = col + 1; row < size; row++)
+                {
+                    var factor = lu[row, col] / pivot;
+                    lu[row, col] = factor;
+                    for (var index = col + 1; index < size; index++)
+                        lu[row, index] -= factor * lu[col, index];
+                }
+            }
+
+            var determinant = swaps % 2 == 0 ? 1d : -1d;
+            for (var index = 0; index < size; index++)
+                determinant *= lu[index, index];
+
+            return double.IsFinite(determinant)
+                ? new NumberValue(determinant)
+                : ErrorValue.Num;
+        }
+
+        private static ScalarValue FormulaMatrixInverse(double[,] matrix)
+        {
+            var size = matrix.GetLength(0);
+            if (matrix.GetLength(1) != size)
+                return ErrorValue.Value;
+
+            var augmented = new double[size, 2 * size];
+            for (var row = 0; row < size; row++)
+            {
+                for (var col = 0; col < size; col++)
+                    augmented[row, col] = matrix[row, col];
+                augmented[row, size + row] = 1d;
+            }
+
+            for (var col = 0; col < size; col++)
+            {
+                var pivotRow = col;
+                var pivotMax = Math.Abs(augmented[col, col]);
+                for (var row = col + 1; row < size; row++)
+                {
+                    var candidate = Math.Abs(augmented[row, col]);
+                    if (candidate > pivotMax)
+                    {
+                        pivotMax = candidate;
+                        pivotRow = row;
+                    }
+                }
+
+                if (pivotMax < 1E-14)
+                    return ErrorValue.Num;
+
+                if (pivotRow != col)
+                {
+                    for (var index = 0; index < 2 * size; index++)
+                        (augmented[col, index], augmented[pivotRow, index]) = (augmented[pivotRow, index], augmented[col, index]);
+                }
+
+                var pivot = augmented[col, col];
+                for (var index = 0; index < 2 * size; index++)
+                    augmented[col, index] /= pivot;
+
+                for (var row = 0; row < size; row++)
+                {
+                    if (row == col)
+                        continue;
+
+                    var factor = augmented[row, col];
+                    if (factor == 0)
+                        continue;
+
+                    for (var index = 0; index < 2 * size; index++)
+                        augmented[row, index] -= factor * augmented[col, index];
+                }
+            }
+
+            var cells = new ScalarValue[size, size];
+            for (var row = 0; row < size; row++)
+            {
+                for (var col = 0; col < size; col++)
+                {
+                    var number = augmented[row, size + col];
+                    if (!double.IsFinite(number))
+                        return ErrorValue.Num;
+
+                    cells[row, col] = new NumberValue(number);
+                }
+            }
+
+            return new RangeValue(cells);
+        }
+
+        private static RangeValue TransposeFormulaRange(RangeValue range)
+        {
+            var cells = new ScalarValue[range.ColCount, range.RowCount];
+            for (var row = 0; row < range.RowCount; row++)
+                for (var col = 0; col < range.ColCount; col++)
+                    cells[col, row] = range.Cells[row, col];
+
+            return new RangeValue(cells, range.StartRow, range.StartCol) { SheetName = range.SheetName };
+        }
+
+        private static RangeValue SingleFormulaMatrixArray(ScalarValue value) =>
+            new(new[,] { { value } });
 
         private bool TryEvaluateFormulaNFunction(
             ConditionalFormulaScalarFunction function,
@@ -7718,12 +8229,18 @@ public static partial class AccessibilityCheckerService
                     TryEvaluateFormulaMatchFunction(function, rowOffset, colOffset, out value),
                 ConditionalFormulaScalarFunctionKind.XMatch =>
                     TryEvaluateFormulaXMatchFunction(function, rowOffset, colOffset, out value),
+                ConditionalFormulaScalarFunctionKind.XLookup =>
+                    TryEvaluateFormulaXLookupFunction(function, rowOffset, colOffset, out value),
+                ConditionalFormulaScalarFunctionKind.Lookup =>
+                    TryEvaluateFormulaLookupVectorFunction(function, rowOffset, colOffset, out value),
                 ConditionalFormulaScalarFunctionKind.Index =>
                     TryEvaluateFormulaIndexFunction(function, rowOffset, colOffset, out value),
                 ConditionalFormulaScalarFunctionKind.VLookup =>
                     TryEvaluateFormulaLookupFunction(function, rowOffset, colOffset, vertical: true, out value),
                 ConditionalFormulaScalarFunctionKind.HLookup =>
                     TryEvaluateFormulaLookupFunction(function, rowOffset, colOffset, vertical: false, out value),
+                ConditionalFormulaScalarFunctionKind.Offset =>
+                    TryEvaluateFormulaOffsetFunction(function, rowOffset, colOffset, out value),
                 _ => false
             };
         }
@@ -7917,6 +8434,266 @@ public static partial class AccessibilityCheckerService
 
             value = new NumberValue(matchIndex);
             return true;
+        }
+
+        private bool TryEvaluateFormulaXLookupFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaLookupScalarArgument(function.Arguments[0], rowOffset, colOffset, out var lookupValue))
+                return false;
+
+            if (lookupValue is ErrorValue lookupError)
+            {
+                value = lookupError;
+                return true;
+            }
+
+            if (!TryResolveFormulaLookupRangeArgument(
+                    function.Arguments[1],
+                    rowOffset,
+                    colOffset,
+                    out var lookupRange,
+                    out var lookupRangeError))
+            {
+                return false;
+            }
+
+            if (lookupRangeError is not null)
+            {
+                value = lookupRangeError;
+                return true;
+            }
+
+            if (!TryGetFormulaLookupVector(lookupRange, out var lookupVector))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            if (!TryResolveFormulaLookupRangeArgument(
+                    function.Arguments[2],
+                    rowOffset,
+                    colOffset,
+                    out var returnRange,
+                    out var returnRangeError))
+            {
+                return false;
+            }
+
+            if (returnRangeError is not null)
+            {
+                value = returnRangeError;
+                return true;
+            }
+
+            var matchMode = 0;
+            if (function.Arguments.Count > 4)
+            {
+                if (!TryResolveFormulaLookupScalarArgument(function.Arguments[4], rowOffset, colOffset, out var matchModeValue))
+                    return false;
+
+                if (matchModeValue is ErrorValue matchModeError)
+                {
+                    value = matchModeError;
+                    return true;
+                }
+
+                if (!TryGetFormulaLookupInteger(matchModeValue, out matchMode) ||
+                    matchMode is < -1 or > 1)
+                {
+                    return false;
+                }
+            }
+
+            var searchMode = 1;
+            if (function.Arguments.Count > 5)
+            {
+                if (!TryResolveFormulaLookupScalarArgument(function.Arguments[5], rowOffset, colOffset, out var searchModeValue))
+                    return false;
+
+                if (searchModeValue is ErrorValue searchModeError)
+                {
+                    value = searchModeError;
+                    return true;
+                }
+
+                if (!TryGetFormulaLookupInteger(searchModeValue, out searchMode) ||
+                    searchMode is not (1 or -1))
+                {
+                    return false;
+                }
+            }
+
+            if (!TryFindFormulaXMatch(
+                    lookupVector,
+                    lookupValue,
+                    matchMode,
+                    reverse: searchMode < 0,
+                    out var matchIndex,
+                    out var matchError))
+            {
+                if (matchError == ErrorValue.NA && function.Arguments.Count > 3)
+                    return TryResolveFormulaXLookupFallback(function.Arguments[3], rowOffset, colOffset, out value);
+
+                if (matchError is not null)
+                {
+                    value = matchError;
+                    return true;
+                }
+
+                return false;
+            }
+
+            return TryGetFormulaXLookupResult(lookupRange, returnRange, matchIndex, out value);
+        }
+
+        private bool TryResolveFormulaXLookupFallback(
+            ConditionalFormulaOperand fallback,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            if (!TryResolveFormulaLookupResultArgument(fallback, rowOffset, colOffset, out value))
+                return false;
+
+            return value is not RangeValue;
+        }
+
+        private static bool TryGetFormulaXLookupResult(
+            RangeValue lookupRange,
+            RangeValue returnRange,
+            int matchIndex,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (lookupRange.RowCount == 1)
+            {
+                if (returnRange.ColCount != lookupRange.ColCount)
+                {
+                    value = ErrorValue.Value;
+                    return true;
+                }
+
+                if (returnRange.RowCount != 1)
+                    return false;
+
+                value = returnRange.Cells[0, matchIndex - 1];
+                return true;
+            }
+
+            if (lookupRange.ColCount != 1)
+                return false;
+
+            if (returnRange.RowCount != lookupRange.RowCount)
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            if (returnRange.ColCount != 1)
+                return false;
+
+            value = returnRange.Cells[matchIndex - 1, 0];
+            return true;
+        }
+
+        private bool TryEvaluateFormulaLookupVectorFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaLookupScalarArgument(function.Arguments[0], rowOffset, colOffset, out var lookupValue))
+                return false;
+
+            if (lookupValue is ErrorValue lookupError)
+            {
+                value = lookupError;
+                return true;
+            }
+
+            if (!TryResolveFormulaLookupRangeArgument(
+                    function.Arguments[1],
+                    rowOffset,
+                    colOffset,
+                    out var lookupRange,
+                    out var lookupRangeError))
+            {
+                return false;
+            }
+
+            if (lookupRangeError is not null)
+            {
+                value = lookupRangeError;
+                return true;
+            }
+
+            IReadOnlyList<ScalarValue> lookupVector;
+            IReadOnlyList<ScalarValue> resultVector;
+            if (function.Arguments.Count == 2)
+            {
+                (lookupVector, resultVector) = FormulaLookupArrayVectors(lookupRange);
+            }
+            else
+            {
+                if (!TryResolveFormulaLookupRangeArgument(
+                        function.Arguments[2],
+                        rowOffset,
+                        colOffset,
+                        out var resultRange,
+                        out var resultRangeError))
+                {
+                    return false;
+                }
+
+                if (resultRangeError is not null)
+                {
+                    value = resultRangeError;
+                    return true;
+                }
+
+                if (!TryGetFormulaLookupVector(lookupRange, out lookupVector) ||
+                    !TryGetFormulaLookupVector(resultRange, out resultVector) ||
+                    lookupVector.Count != resultVector.Count)
+                {
+                    value = ErrorValue.NA;
+                    return true;
+                }
+            }
+
+            if (!TryFindFormulaLookupMatch(
+                    lookupVector,
+                    lookupValue,
+                    matchType: 1,
+                    reverse: false,
+                    out var matchIndex,
+                    out var matchError))
+            {
+                if (matchError is not null)
+                {
+                    value = matchError;
+                    return true;
+                }
+
+                return false;
+            }
+
+            value = resultVector[matchIndex - 1];
+            return true;
+        }
+
+        private static (IReadOnlyList<ScalarValue> Lookup, IReadOnlyList<ScalarValue> Result) FormulaLookupArrayVectors(
+            RangeValue range)
+        {
+            if (range.ColCount > range.RowCount)
+                return (range.GetRow(1), range.GetRow(range.RowCount));
+
+            return (range.GetColumn(1), range.GetColumn(range.ColCount));
         }
 
         private bool TryEvaluateFormulaIndexFunction(
@@ -8148,6 +8925,176 @@ public static partial class AccessibilityCheckerService
             value = vertical
                 ? tableRange.Cells[matchIndex - 1, resultIndex - 1]
                 : tableRange.Cells[resultIndex - 1, matchIndex - 1];
+            return true;
+        }
+
+        private bool TryEvaluateFormulaOffsetFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaOffsetBaseReference(
+                    function.Arguments[0],
+                    rowOffset,
+                    colOffset,
+                    out var targetSheet,
+                    out var baseStartRow,
+                    out var baseStartCol,
+                    out var baseEndRow,
+                    out var baseEndCol,
+                    out var baseError))
+            {
+                if (baseError is not null)
+                {
+                    value = baseError;
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (!TryResolveFormulaOffsetIntegerArgument(function.Arguments[1], rowOffset, colOffset, out var rowShift, out var rowError))
+            {
+                value = rowError ?? ErrorValue.Value;
+                return true;
+            }
+
+            if (!TryResolveFormulaOffsetIntegerArgument(function.Arguments[2], rowOffset, colOffset, out var colShift, out var colError))
+            {
+                value = colError ?? ErrorValue.Value;
+                return true;
+            }
+
+            var height = (long)baseEndRow - baseStartRow + 1L;
+            if (function.Arguments.Count > 3 &&
+                (!TryResolveFormulaOffsetIntegerArgument(function.Arguments[3], rowOffset, colOffset, out height, out var heightError) ||
+                 height < 1))
+            {
+                value = heightError ?? ErrorValue.Value;
+                return true;
+            }
+
+            var width = (long)baseEndCol - baseStartCol + 1L;
+            if (function.Arguments.Count > 4 &&
+                (!TryResolveFormulaOffsetIntegerArgument(function.Arguments[4], rowOffset, colOffset, out width, out var widthError) ||
+                 width < 1))
+            {
+                value = widthError ?? ErrorValue.Value;
+                return true;
+            }
+
+            var startRow = (long)baseStartRow + rowShift;
+            var startCol = (long)baseStartCol + colShift;
+            var endRow = startRow + height - 1L;
+            var endCol = startCol + width - 1L;
+            if (startRow < 1 ||
+                startCol < 1 ||
+                endRow > CellAddress.MaxRow ||
+                endCol > CellAddress.MaxCol ||
+                endRow < startRow ||
+                endCol < startCol)
+            {
+                value = ErrorValue.Ref;
+                return true;
+            }
+
+            if (!TryMaterializeFormulaRange(
+                    targetSheet,
+                    (uint)startRow,
+                    (uint)startCol,
+                    (uint)endRow,
+                    (uint)endCol,
+                    out var range))
+            {
+                return false;
+            }
+
+            value = FormulaLookupRangeResult(range);
+            return true;
+        }
+
+        private bool TryResolveFormulaOffsetBaseReference(
+            ConditionalFormulaOperand argument,
+            int rowOffset,
+            int colOffset,
+            out Sheet targetSheet,
+            out uint startRow,
+            out uint startCol,
+            out uint endRow,
+            out uint endCol,
+            out ErrorValue? error)
+        {
+            targetSheet = default!;
+            startRow = 0;
+            startCol = 0;
+            endRow = 0;
+            endCol = 0;
+            error = null;
+
+            if (argument.Kind == ConditionalFormulaOperandKind.Reference)
+            {
+                if (!TryResolveFormulaReference(argument, rowOffset, colOffset, out targetSheet, out startRow, out startCol))
+                    return false;
+
+                endRow = startRow;
+                endCol = startCol;
+                return true;
+            }
+
+            if (argument.Kind == ConditionalFormulaOperandKind.ReferenceRange)
+                return TryResolveFormulaReferenceRange(argument, rowOffset, colOffset, out targetSheet, out startRow, out startCol, out endRow, out endCol);
+
+            if (!TryResolveFormulaOperand(argument, rowOffset, colOffset, out var value))
+                return false;
+
+            if (value is ErrorValue valueError)
+            {
+                error = valueError;
+                return false;
+            }
+
+            if (value is not RangeValue range ||
+                range.SheetName is null ||
+                workbook.GetSheet(range.SheetName) is not { } resolvedSheet)
+            {
+                return false;
+            }
+
+            targetSheet = resolvedSheet;
+            startRow = range.StartRow;
+            startCol = range.StartCol;
+            endRow = range.StartRow + (uint)range.RowCount - 1U;
+            endCol = range.StartCol + (uint)range.ColCount - 1U;
+            return true;
+        }
+
+        private bool TryResolveFormulaOffsetIntegerArgument(
+            ConditionalFormulaOperand argument,
+            int rowOffset,
+            int colOffset,
+            out long integer,
+            out ErrorValue? error)
+        {
+            integer = 0;
+            error = null;
+            if (!TryResolveFormulaLookupScalarArgument(argument, rowOffset, colOffset, out var value))
+                return false;
+
+            if (value is ErrorValue valueError)
+            {
+                error = valueError;
+                return false;
+            }
+
+            if (!TryGetFormulaLookupInteger(value, out var intValue))
+            {
+                error = ErrorValue.Value;
+                return false;
+            }
+
+            integer = intValue;
             return true;
         }
 
@@ -17829,6 +18776,18 @@ public static partial class AccessibilityCheckerService
                 return false;
             }
 
+            return TryMaterializeFormulaRange(targetSheet, startRow, startCol, endRow, endCol, out range);
+        }
+
+        private static bool TryMaterializeFormulaRange(
+            Sheet targetSheet,
+            uint startRow,
+            uint startCol,
+            uint endRow,
+            uint endCol,
+            out RangeValue range)
+        {
+            range = default!;
             var rowCount = (ulong)endRow - startRow + 1UL;
             var colCount = (ulong)endCol - startCol + 1UL;
             if (rowCount * colCount > MaxFormulaAggregateRangeCells)
@@ -20239,6 +21198,9 @@ public static partial class AccessibilityCheckerService
             if (IsFormulaPairwiseAggregate(operand.AggregateKind))
                 return TryEvaluateFormulaPairwiseAggregate(operand, rowOffset, colOffset, out value);
 
+            if (operand.AggregateKind == ConditionalFormulaAggregateKind.TrimMean)
+                return TryEvaluateFormulaTrimMeanAggregate(operand, rowOffset, colOffset, out value);
+
             if (operand.AggregateArguments is not { Count: > 0 } arguments)
                 return false;
 
@@ -20270,6 +21232,9 @@ public static partial class AccessibilityCheckerService
                 ConditionalFormulaAggregateKind.VarianceSample when numericValues.Count > 1 => new NumberValue(VarianceFormulaNumbers(numericValues, sample: true)),
                 ConditionalFormulaAggregateKind.VariancePopulation when numericValues.Count > 0 => new NumberValue(VarianceFormulaNumbers(numericValues, sample: false)),
                 ConditionalFormulaAggregateKind.AveDev when numericValues.Count > 0 => new NumberValue(AveDevFormulaNumbers(numericValues)),
+                ConditionalFormulaAggregateKind.Kurt => FormulaKurtAggregateResult(numericValues),
+                ConditionalFormulaAggregateKind.Skew => FormulaSkewAggregateResult(numericValues, population: false),
+                ConditionalFormulaAggregateKind.SkewP => FormulaSkewAggregateResult(numericValues, population: true),
                 ConditionalFormulaAggregateKind.GeoMean when AreFormulaNumbersPositive(numericValues) => new NumberValue(GeoMeanFormulaNumbers(numericValues)),
                 ConditionalFormulaAggregateKind.HarMean when AreFormulaNumbersPositive(numericValues) => new NumberValue(HarMeanFormulaNumbers(numericValues)),
                 ConditionalFormulaAggregateKind.Product => new NumberValue(numericValues.Aggregate(1d, (product, number) => product * number)),
@@ -20286,7 +21251,50 @@ public static partial class AccessibilityCheckerService
                 _ => ErrorValue.Value
             };
 
-            return value is not ErrorValue && TryGetNumber(value, out var number) && double.IsFinite(number);
+            return FormulaAggregateEvaluationSucceeded(operand.AggregateKind, value);
+        }
+
+        private static bool FormulaAggregateEvaluationSucceeded(
+            ConditionalFormulaAggregateKind aggregateKind,
+            ScalarValue value)
+        {
+            if (value is ErrorValue)
+                return IsFormulaShapeOrTrimAggregate(aggregateKind);
+
+            return TryGetNumber(value, out var number) && double.IsFinite(number);
+        }
+
+        private static bool IsFormulaShapeOrTrimAggregate(ConditionalFormulaAggregateKind aggregateKind) =>
+            aggregateKind is
+                ConditionalFormulaAggregateKind.Kurt or
+                ConditionalFormulaAggregateKind.Skew or
+                ConditionalFormulaAggregateKind.SkewP or
+                ConditionalFormulaAggregateKind.TrimMean;
+
+        private bool TryEvaluateFormulaTrimMeanAggregate(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (operand.AggregateArguments is not { Count: 2 } arguments ||
+                !TryResolveFormulaStatisticalArrayArgument(arguments[0], rowOffset, colOffset, out var range))
+            {
+                return false;
+            }
+
+            if (!TryCollectFormulaStatisticalArrayNumbers(range, out var numbers, out var rangeError))
+            {
+                value = rangeError ?? ErrorValue.Value;
+                return true;
+            }
+
+            if (!TryResolveFormulaAggregateControlNumber(arguments[1], rowOffset, colOffset, out var percent, out value))
+                return value is ErrorValue;
+
+            value = FormulaTrimMeanAggregateResult(numbers, percent);
+            return true;
         }
 
         private static double DevSqFormulaNumbers(List<double> numericValues)
@@ -20321,6 +21329,89 @@ public static partial class AccessibilityCheckerService
                 sum += Math.Abs(numericValues[i] - average);
 
             return sum / numericValues.Count;
+        }
+
+        private static ScalarValue FormulaKurtAggregateResult(List<double> numericValues)
+        {
+            var count = numericValues.Count;
+            if (count < 4)
+                return ErrorValue.DivByZero;
+
+            var mean = numericValues.Average();
+            if (!double.IsFinite(mean))
+                return ErrorValue.Num;
+
+            var sampleVariance = DevSqFormulaNumbers(numericValues) / (count - 1);
+            if (sampleVariance == 0d)
+                return ErrorValue.DivByZero;
+
+            if (!double.IsFinite(sampleVariance))
+                return ErrorValue.Num;
+
+            var sampleDeviation = Math.Sqrt(sampleVariance);
+            var fourthMoment = 0d;
+            for (var i = 0; i < numericValues.Count; i++)
+                fourthMoment += Math.Pow((numericValues[i] - mean) / sampleDeviation, 4d);
+
+            var result = count * (count + 1d) / ((count - 1d) * (count - 2d) * (count - 3d)) * fourthMoment -
+                3d * (count - 1d) * (count - 1d) / ((count - 2d) * (count - 3d));
+
+            return FormulaConditionalAggregateNumberResult(result);
+        }
+
+        private static ScalarValue FormulaSkewAggregateResult(List<double> numericValues, bool population)
+        {
+            var count = numericValues.Count;
+            if (count < (population ? 1 : 3))
+                return ErrorValue.DivByZero;
+
+            var mean = numericValues.Average();
+            if (!double.IsFinite(mean))
+                return ErrorValue.Num;
+
+            var variance = DevSqFormulaNumbers(numericValues) / (population ? count : count - 1);
+            if (variance == 0d)
+                return ErrorValue.DivByZero;
+
+            if (!double.IsFinite(variance))
+                return ErrorValue.Num;
+
+            var deviation = Math.Sqrt(variance);
+            var thirdMoment = 0d;
+            for (var i = 0; i < numericValues.Count; i++)
+                thirdMoment += Math.Pow((numericValues[i] - mean) / deviation, 3d);
+
+            var result = population
+                ? thirdMoment / count
+                : thirdMoment * count / ((count - 1d) * (count - 2d));
+
+            return FormulaConditionalAggregateNumberResult(result);
+        }
+
+        private static ScalarValue FormulaTrimMeanAggregateResult(List<double> numericValues, double percent)
+        {
+            if (!double.IsFinite(percent) || percent is < 0d or > 1d)
+                return ErrorValue.Num;
+
+            if (numericValues.Count == 0)
+                return ErrorValue.DivByZero;
+
+            var excludedCount = (int)Math.Floor(numericValues.Count * percent);
+            if (excludedCount % 2 != 0)
+                excludedCount--;
+
+            var remainingCount = numericValues.Count - excludedCount;
+            if (remainingCount <= 0)
+                return ErrorValue.DivByZero;
+
+            var trimCount = excludedCount / 2;
+            numericValues.Sort();
+
+            var total = 0d;
+            for (var i = trimCount; i < numericValues.Count - trimCount; i++)
+                total += numericValues[i];
+
+            return FormulaConditionalAggregateNumberResult(total / remainingCount);
         }
 
         private static bool AreFormulaNumbersPositive(List<double> numericValues)
@@ -20612,6 +21703,9 @@ public static partial class AccessibilityCheckerService
                 ConditionalFormulaAggregateKind.VarianceSample or
                 ConditionalFormulaAggregateKind.VariancePopulation or
                 ConditionalFormulaAggregateKind.AveDev or
+                ConditionalFormulaAggregateKind.Kurt or
+                ConditionalFormulaAggregateKind.Skew or
+                ConditionalFormulaAggregateKind.SkewP or
                 ConditionalFormulaAggregateKind.GeoMean or
                 ConditionalFormulaAggregateKind.HarMean or
                 ConditionalFormulaAggregateKind.Product or

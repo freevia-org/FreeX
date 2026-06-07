@@ -1135,6 +1135,48 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatShapeAndTrimAggregates()
+    {
+        AssertFormulaAggregateContrastLocations("KURT($A$1:$A$4)<-1", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SKEW($A1:$A3)>1", "B1");
+        AssertFormulaAggregateContrastLocations("SKEW.P($A1:$A3)>0.4", "B1");
+        AssertFormulaAggregateContrastLocations("TRIMMEAN($A$1:$A$4,0.5)=87.5", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("TRIMMEAN($A1:$A3,0)=100", "B2", "B3");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatShapeAndTrimWrappersPredicatesAndErrors()
+    {
+        AssertFormulaAggregateContrastLocations("AND(SKEW($A1:$A3)>1,$C1=\"Closed\")", "B1");
+        AssertFormulaAggregateContrastLocations("IF(TRIMMEAN($A$1:$A$4,0.5)=87.5,TRUE,FALSE)", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISNUMBER(KURT($A$1:$A$4))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISERROR(KURT($A1:$A3))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISERROR(TRIMMEAN($A$1:$A$4,-0.1))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(SKEW.P($A1:$A3),1)>1.5", "B1");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatShapeAndTrimUnsupportedShapesOrInvalidData()
+    {
+        AssertFormulaAggregateContrastLocations("KURT()>0");
+        AssertFormulaAggregateContrastLocations("TRIMMEAN($A$1:$A$4)>0");
+        AssertFormulaAggregateContrastLocations("TRIMMEAN($A$1:$A$4,0,1)>0");
+        AssertFormulaAggregateContrastLocations("KURT($A1:$A3)>0");
+        AssertFormulaAggregateContrastLocations("SKEW($A1:$A2)>0");
+        AssertFormulaAggregateContrastLocations("SKEW.P($A1)>0");
+        AssertFormulaAggregateContrastLocations("TRIMMEAN($D3:$D5,0)>0");
+        AssertFormulaAggregateContrastLocations("SKEW($A1:$A20000)>0");
+        AssertFormulaAggregateContrastLocations("TRIMMEAN($A1:$A20000,0)>0");
+        AssertFormulaAggregateContrastLocations("TRIMMEAN($A$1:$A$4,1.1)>0");
+        AssertFormulaAggregateContrastLocations("TRIMMEAN($A$1:$A$4,$A$1:$A$2)>0");
+        AssertFormulaAggregateContrastLocations("KURT(\"n/a\",$A1,$A2,$A3)>0");
+        AssertFormulaAggregateContrastLocations("SKEW(\"n/a\",$A1,$A2)>0");
+        AssertFormulaAggregateContrastLocations("SKEW.P(\"n/a\",$A1)>0");
+        AssertFormulaAggregateContrastLocations("KURT(1E308,0,0,0)>0");
+        AssertFormulaAggregateContrastLocations("KURT(A0,$A1,$A2,$A3)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatProductAggregate()
     {
         AssertFormulaAggregateContrastLocations("PRODUCT($A1)>100", "B4");
@@ -2725,6 +2767,49 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("AND(BITAND($A1,8),$C1=\"Open\")", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("IF(BITXOR($A1,5)=120,TRUE,FALSE)", "B4");
         AssertFormulaArithmeticContrastLocations("ISNUMBER(BITLSHIFT($A1,1))", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatMatrixArrayFunctionComparisons()
+    {
+        AssertFormulaMatrixArrayFunctionContrastLocations("MDETERM($C$1:$D$2)=-2", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("MMULT($I$1:$J$1,$I$2:$I$3)=11", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("MINVERSE($K$1:$K$1)=0.5", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("TRANSPOSE($K$1:$K$1)=2", FormulaMatrixArrayAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatMatrixArrayLiteralsWrappersAndErrorPredicates()
+    {
+        AssertFormulaMatrixArrayFunctionContrastLocations("MMULT({1,2},{3;4})=11", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("MDETERM({1,2;3,4})=-2", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("AND(MDETERM($C$1:$D$2)<0,TRANSPOSE({2})=2)", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("IF(MMULT($I$1:$J$1,$I$2:$I$3)=11,TRUE,FALSE)", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("IFERROR(MMULT($C$1:$D$2,$I$1:$J$1),TRUE)", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("ISERROR(MMULT($C$1:$D$2,$I$1:$J$1))", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("ISNA(MMULT($C$1:$D$2,NA()))", FormulaMatrixArrayAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatMatrixArrayDimensionAndSingularErrors()
+    {
+        AssertFormulaMatrixArrayFunctionContrastLocations("ISERROR(MMULT($C$1:$D$2,$I$1:$J$1))", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("ISERROR(MDETERM($P$1:$R$2))", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("ISERROR(MINVERSE($M$1:$N$2))", FormulaMatrixArrayAllLocations);
+        AssertFormulaMatrixArrayFunctionContrastLocations("ISERR(MINVERSE($M$1:$N$2))", FormulaMatrixArrayAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatMatrixArrayUnsupportedArityAndShapes()
+    {
+        AssertFormulaMatrixArrayFunctionContrastLocations("MMULT($I$1:$J$1)>0");
+        AssertFormulaMatrixArrayFunctionContrastLocations("MDETERM()>0");
+        AssertFormulaMatrixArrayFunctionContrastLocations("MINVERSE($C$1:$D$2,1)>0");
+        AssertFormulaMatrixArrayFunctionContrastLocations("TRANSPOSE()>0");
+        AssertFormulaMatrixArrayFunctionContrastLocations("MMULT($C$1:$D$2,$F$1:$G$2)>0");
+        AssertFormulaMatrixArrayFunctionContrastLocations("MINVERSE($C$1:$D$2)>0");
+        AssertFormulaMatrixArrayFunctionContrastLocations("TRANSPOSE($C$1:$D$2)>0");
+        AssertFormulaMatrixArrayFunctionContrastLocations("MDETERM({1,\"x\";3,4})>0");
     }
 
     [Fact]
@@ -4686,6 +4771,43 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatXLookupExactAndDefaults()
+    {
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,$F$1:$F$4,$G$1:$G$4)=20", "B2", "B4");
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,$H$1:$K$1,$H$2:$K$2)=20", "B2", "B4");
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,$F$1:$F$4,$G$1:$G$4,99)=99", "B5");
+        AssertFormulaLookupReferenceFunctionContrastLocations("ISNA(XLOOKUP($C1,$F$1:$F$4,$G$1:$G$4))", "B5");
+        AssertFormulaLookupReferenceFunctionContrastLocations("IFERROR(XLOOKUP($C1,$F$1:$F$4,$G$1:$G$4)=20,$C1=\"Missing\")", "B2", "B4", "B5");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatXLookupApproximateAndShiftedReferences()
+    {
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($D1,$M$1:$M$4,$N$1:$N$4,\"Missing\",-1)=\"Band3\"", "B4");
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($D1,$M$1:$M$4,$N$1:$N$4,\"Missing\",-1)=\"Missing\"", "B1");
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP(\"Beta\",$F1:$F4,$G1:$G4)=20", "B1", "B2");
+        AssertFormulaLookupReferenceFunctionContrastLocations("AND(XLOOKUP($C1,$F$1:$F$4,$G$1:$G$4,0)=20,$C1=\"Beta\")", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatLookupVectorFunction()
+    {
+        AssertFormulaLookupReferenceFunctionContrastLocations("LOOKUP($D1,$M$1:$M$4,$N$1:$N$4)=\"Band2\"", "B3");
+        AssertFormulaLookupReferenceFunctionContrastLocations("LOOKUP($D1,$M$1:$N$4)=\"Band3\"", "B4");
+        AssertFormulaLookupReferenceFunctionContrastLocations("ISNA(LOOKUP($D1,$M$1:$M$4,$N$1:$N$4))", "B1");
+        AssertFormulaLookupReferenceFunctionContrastLocations("IFERROR(LOOKUP($D1,$M$1:$M$4,$N$1:$N$4)=\"Missing\",$D1<10)", "B1");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatOffsetFunction()
+    {
+        AssertFormulaLookupReferenceFunctionContrastLocations("OFFSET($G$1,MATCH($C1,$F$1:$F$4,0)-1,0)=20", "B2", "B4");
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,OFFSET($F$1,0,0,4,1),OFFSET($G$1,0,0,4,1))=20", "B2", "B4");
+        AssertFormulaLookupReferenceFunctionContrastLocations("OFFSET($F1,1,1)=20", "B1");
+        AssertFormulaLookupReferenceFunctionContrastLocations("ISERROR(OFFSET($G$1,-1,0))", FormulaLookupReferenceAllLocations);
+    }
+
+    [Fact]
     public void FindIssues_DoesNotMatchFormulaConditionalFormatLookupReferenceUnsupportedShapes()
     {
         AssertFormulaLookupReferenceFunctionContrastLocations("MATCH($C1,$F$1:$G$4,0)=1");
@@ -4693,6 +4815,14 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaLookupReferenceFunctionContrastLocations("VLOOKUP($C1,$F$1:$G$4,3,FALSE)=20");
         AssertFormulaLookupReferenceFunctionContrastLocations("INDEX($G$1:$G$4,0,0)=20");
         AssertFormulaLookupReferenceFunctionContrastLocations("MATCH($D1,$U$1:$U$4,1)>0");
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,$F$1:$G$4,$G$1:$G$4)=20");
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,$F$1:$F$4,$F$1:$G$4)=20");
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,$F$1:$F$4,$G$1:$G$4,\"Missing\",2)=20");
+        AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,$F$1:$F$4,$G$1:$G$4,\"Missing\",0,2)=20");
+        AssertFormulaLookupReferenceFunctionContrastLocations("LOOKUP($C1,$F$1:$G$4,$G$1:$G$4)=20");
+        AssertFormulaLookupReferenceFunctionContrastLocations("LOOKUP($D1,$U$1:$U$4,$N$1:$N$4)=\"Band3\"");
+        AssertFormulaLookupReferenceFunctionContrastLocations("OFFSET($A:$A,0,0)>0");
+        AssertFormulaLookupReferenceFunctionContrastLocations("OFFSET($G$1,0,0,1,2)=20");
     }
 
     [Fact]
@@ -5206,7 +5336,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     public void FindIssues_DoesNotMatchUnsupportedFormulaConditionalFormatInsideLogicalWrapper()
     {
         var workbook = CreateFormulaLogicalContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
-        AddFormulaContrastRule(sheet, firstLabel, lastLabel, "AND($A1>=100,KURT($A1)>0)");
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, "AND($A1>=100,UNKNOWNFUNC($A1)>0)");
 
         FindLowContrastCellTextIssues(workbook).Should().BeEmpty();
     }
@@ -5214,18 +5344,18 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_DoesNotMatchUnsupportedFormulaConditionalFormatInsideIfWrapper()
     {
-        AssertFormulaIfContrastLocations("IF(KURT($A1)>0,TRUE,FALSE)");
-        AssertFormulaIfContrastLocations("IF($A1>=100,KURT($A1),FALSE)");
+        AssertFormulaIfContrastLocations("IF(UNKNOWNFUNC($A1)>0,TRUE,FALSE)");
+        AssertFormulaIfContrastLocations("IF($A1>=100,UNKNOWNFUNC($A1),FALSE)");
     }
 
     [Fact]
     public void FindIssues_DoesNotMatchUnsupportedFormulaConditionalFormatInsideSelectorWrappers()
     {
-        AssertFormulaIfContrastLocations("IFERROR(KURT($A1),TRUE)");
+        AssertFormulaIfContrastLocations("IFERROR(UNKNOWNFUNC($A1),TRUE)");
         AssertFormulaIfContrastLocations("IFNA($A1>=100,TRUE,FALSE)");
-        AssertFormulaIfContrastLocations("IFS($A1>=100,TRUE,KURT($A1)>0,TRUE)");
+        AssertFormulaIfContrastLocations("IFS($A1>=100,TRUE,UNKNOWNFUNC($A1)>0,TRUE)");
         AssertFormulaIfContrastLocations("IFS($A1>=100)");
-        AssertFormulaIfContrastLocations("SWITCH($C1,\"Open\",TRUE,KURT($A1),FALSE)");
+        AssertFormulaIfContrastLocations("SWITCH($C1,\"Open\",TRUE,UNKNOWNFUNC($A1),FALSE)");
         AssertFormulaIfContrastLocations("SWITCH($C1,\"Open\")");
         AssertFormulaIfContrastLocations("IFERROR($A1,0)>0");
         AssertFormulaIfContrastLocations("IFS($A1>=100,1,TRUE,0)>0");
@@ -5235,19 +5365,19 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_DoesNotMatchUnsupportedFormulaConditionalFormatInsideXorWrapper()
     {
-        AssertFormulaXorContrastLocations("XOR($A1>=100,KURT($A1)>0)");
+        AssertFormulaXorContrastLocations("XOR($A1>=100,UNKNOWNFUNC($A1)>0)");
         AssertFormulaXorContrastLocations("XOR()");
     }
 
     [Fact]
     public void FindIssues_DoesNotMatchUnsupportedFormulaConditionalFormatInsideIsPredicate()
     {
-        AssertFormulaPredicateContrastLocations("ISNUMBER(KURT($A1))");
-        AssertFormulaParityContrastLocations("ISEVEN(KURT($A1))");
-        AssertFormulaParityContrastLocations("ISODD(KURT($A1))");
-        AssertFormulaReferencePredicateContrastLocations("ISREF(KURT($A1))");
-        AssertFormulaReferencePredicateContrastLocations("ISFORMULA(KURT($A1))");
-        AssertFormulaPredicateContrastLocations("KURT($A1)>0");
+        AssertFormulaPredicateContrastLocations("ISNUMBER(UNKNOWNFUNC($A1))");
+        AssertFormulaParityContrastLocations("ISEVEN(UNKNOWNFUNC($A1))");
+        AssertFormulaParityContrastLocations("ISODD(UNKNOWNFUNC($A1))");
+        AssertFormulaReferencePredicateContrastLocations("ISREF(UNKNOWNFUNC($A1))");
+        AssertFormulaReferencePredicateContrastLocations("ISFORMULA(UNKNOWNFUNC($A1))");
+        AssertFormulaPredicateContrastLocations("UNKNOWNFUNC($A1)>0");
     }
 
     [Fact]
@@ -5512,6 +5642,54 @@ public sealed partial class AccessibilityCheckerServiceTests
 
         return workbook;
     }
+
+    private static Workbook CreateFormulaMatrixArrayFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 4, 2);
+
+        for (uint row = 1; row <= 4; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue($"Matrix row {row}"));
+
+        SetMatrixArrayCell(sheet, 1, 3, 1);
+        SetMatrixArrayCell(sheet, 1, 4, 2);
+        SetMatrixArrayCell(sheet, 2, 3, 3);
+        SetMatrixArrayCell(sheet, 2, 4, 4);
+
+        SetMatrixArrayCell(sheet, 1, 6, 5);
+        SetMatrixArrayCell(sheet, 1, 7, 6);
+        SetMatrixArrayCell(sheet, 2, 6, 7);
+        SetMatrixArrayCell(sheet, 2, 7, 8);
+
+        SetMatrixArrayCell(sheet, 1, 9, 1);
+        SetMatrixArrayCell(sheet, 1, 10, 2);
+        SetMatrixArrayCell(sheet, 2, 9, 3);
+        SetMatrixArrayCell(sheet, 3, 9, 4);
+
+        SetMatrixArrayCell(sheet, 1, 11, 2);
+
+        SetMatrixArrayCell(sheet, 1, 13, 1);
+        SetMatrixArrayCell(sheet, 1, 14, 2);
+        SetMatrixArrayCell(sheet, 2, 13, 2);
+        SetMatrixArrayCell(sheet, 2, 14, 4);
+
+        SetMatrixArrayCell(sheet, 1, 16, 1);
+        SetMatrixArrayCell(sheet, 1, 17, 2);
+        SetMatrixArrayCell(sheet, 1, 18, 3);
+        SetMatrixArrayCell(sheet, 2, 16, 4);
+        SetMatrixArrayCell(sheet, 2, 17, 5);
+        SetMatrixArrayCell(sheet, 2, 18, 6);
+
+        return workbook;
+    }
+
+    private static void SetMatrixArrayCell(Sheet sheet, uint row, uint col, double value) =>
+        sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(value));
 
     private static Workbook CreateFormulaStatisticalSelectionContrastWorkbook(
         out Sheet sheet,
@@ -7994,6 +8172,17 @@ public sealed partial class AccessibilityCheckerServiceTests
             .Equal(expectedLocations);
     }
 
+    private static void AssertFormulaMatrixArrayFunctionContrastLocations(string formulaText, params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaMatrixArrayFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
     private static void AssertFormulaFinancialDepreciationFunctionContrastLocations(
         string formulaText,
         params string[] expectedLocations)
@@ -8392,6 +8581,9 @@ public sealed partial class AccessibilityCheckerServiceTests
 
     private static string[] FormulaLookupReferenceAllLocations =>
         ["B1", "B2", "B3", "B4", "B5"];
+
+    private static string[] FormulaMatrixArrayAllLocations =>
+        ["B1", "B2", "B3", "B4"];
 
     private static string[] FormulaStatisticalSelectionAllLocations =>
         ["B1", "B2", "B3", "B4"];
