@@ -4,6 +4,31 @@ namespace FreeX.App.Host;
 
 internal static class PlannerPathHelpers
 {
+    public static bool TryGetFullPath(string? path, out string fullPath)
+    {
+        fullPath = "";
+        if (string.IsNullOrWhiteSpace(path) || HasInvalidPathChars(path))
+            return false;
+
+        try
+        {
+            fullPath = Path.GetFullPath(path);
+            return !string.IsNullOrWhiteSpace(fullPath);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (NotSupportedException)
+        {
+            return false;
+        }
+        catch (PathTooLongException)
+        {
+            return false;
+        }
+    }
+
     public static bool TryGetExtension(string? path, out string extension)
     {
         if (string.IsNullOrWhiteSpace(path) || HasInvalidPathChars(path))
@@ -30,6 +55,34 @@ internal static class PlannerPathHelpers
         catch (PathTooLongException)
         {
             extension = "";
+            return false;
+        }
+    }
+
+    public static bool FileExists(Func<string, bool> fileExists, string path)
+    {
+        try
+        {
+            return fileExists(path);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (NotSupportedException)
+        {
+            return false;
+        }
+        catch (PathTooLongException)
+        {
+            return false;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
             return false;
         }
     }
