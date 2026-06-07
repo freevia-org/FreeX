@@ -131,8 +131,35 @@ public partial class FileAdapterSmokeTests
                         new XAttribute("guid", "{00112233-4455-6677-8899-AABBCCDDEEFF}"),
                         new XAttribute("dateTime", "2026-05-20T00:00:00Z"),
                         new XAttribute("maxSheetId", "1")))));
+            ReplacePackageXml(archive, "xl/revisionHeaders/_rels/revisionHeader1.xml.rels", new XDocument(
+                new XElement(
+                    packageRelNs + "Relationships",
+                    new XElement(
+                        packageRelNs + "Relationship",
+                        new XAttribute("Id", "rIdFreeXRevisionLog"),
+                        new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/revisionLog"),
+                        new XAttribute("Target", "../revisions/revisionLog1.xml")))));
             ReplacePackageXml(archive, "xl/revisions/revisionLog1.xml", new XDocument(
                 new XElement(workbookNs + "revisions")));
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddDanglingWorkbookRevisionPointer(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.AddFirst(new XElement(
+                workbookNs + "revisionPtr",
+                new XAttribute("revIDLastSave", "1"),
+                new XAttribute("documentId", "FreeXDanglingRevisionDoc"),
+                new XAttribute("coauthVersionLast", "1"),
+                new XAttribute("coauthVersionMax", "1")));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
         packageStream.Position = 0;

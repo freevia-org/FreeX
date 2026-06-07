@@ -30,32 +30,28 @@ internal static class XlsxWorksheetDataConsolidationNormalizer
     public static bool NormalizeElement(XElement dataConsolidate)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(dataConsolidate, DataConsolidateAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(dataConsolidate, DataConsolidateAttributes);
         changed |= RemoveUnexpectedChildren(dataConsolidate, WorksheetNs + "dataRefs");
         changed |= MergeDuplicateDataReferences(dataConsolidate);
-        changed |= NormalizeAttribute(dataConsolidate, "function", value => NormalizeToken(value, ValidFunctions));
-        changed |= NormalizeAttribute(dataConsolidate, "leftLabels", NormalizeBoolean);
-        changed |= NormalizeAttribute(dataConsolidate, "startLabels", NormalizeBoolean);
-        changed |= NormalizeAttribute(dataConsolidate, "topLabels", NormalizeBoolean);
-        changed |= NormalizeAttribute(dataConsolidate, "link", NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(dataConsolidate, "function", value => NormalizeToken(value, ValidFunctions));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(dataConsolidate, "leftLabels", NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(dataConsolidate, "startLabels", NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(dataConsolidate, "topLabels", NormalizeBoolean);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(dataConsolidate, "link", NormalizeBoolean);
 
         foreach (var dataRefs in dataConsolidate.Elements(WorksheetNs + "dataRefs"))
         {
-            changed |= RemoveUnknownAttributes(dataRefs, DataReferencesAttributes);
+            changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(dataRefs, DataReferencesAttributes);
             changed |= RemoveUnexpectedChildren(dataRefs, WorksheetNs + "dataRef");
             foreach (var dataRef in dataRefs.Elements(WorksheetNs + "dataRef"))
             {
                 changed |= RemoveUnknownDataReferenceAttributes(dataRef);
                 changed |= NormalizeRelationshipId(dataRef);
-                changed |= RemoveAllNodes(dataRef);
+                changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(dataRef);
             }
 
             var count = dataRefs.Elements(WorksheetNs + "dataRef").Count().ToString(CultureInfo.InvariantCulture);
-            if (!string.Equals(dataRefs.Attribute("count")?.Value, count, StringComparison.Ordinal))
-            {
-                dataRefs.SetAttributeValue("count", count);
-                changed = true;
-            }
+            changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(dataRefs, "count", count);
         }
 
         return changed;
@@ -112,24 +108,6 @@ internal static class XlsxWorksheetDataConsolidationNormalizer
         return changed;
     }
 
-    private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedNames)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                (attribute.Name.NamespaceName.Length == 0 && allowedNames.Contains(attribute.Name.LocalName)))
-            {
-                continue;
-            }
-
-            attribute.Remove();
-            changed = true;
-        }
-
-        return changed;
-    }
-
     private static bool RemoveUnknownDataReferenceAttributes(XElement element)
     {
         var changed = false;
@@ -166,38 +144,6 @@ internal static class XlsxWorksheetDataConsolidationNormalizer
             return false;
 
         relationshipId.Value = normalized;
-        return true;
-    }
-
-    private static bool RemoveAllNodes(XElement element)
-    {
-        if (!element.Nodes().Any())
-            return false;
-
-        element.RemoveNodes();
-        return true;
-    }
-
-    private static bool NormalizeAttribute(
-        XElement element,
-        string attributeName,
-        Func<string?, string?> normalize)
-    {
-        var attribute = element.Attribute(attributeName);
-        var normalized = normalize(attribute?.Value);
-        if (normalized is null)
-        {
-            if (attribute is null)
-                return false;
-
-            attribute.Remove();
-            return true;
-        }
-
-        if (attribute is not null && string.Equals(attribute.Value, normalized, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(attributeName, normalized);
         return true;
     }
 

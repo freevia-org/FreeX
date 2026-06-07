@@ -17,6 +17,8 @@ internal static class XlsxWorkbookMetadataPreserver
 
         var sourceWorkbookXml = XlsxPackageXmlEditor.LoadXml(sourceWorkbookEntry);
         var sourceRevisionPointer = sourceWorkbookXml.Root?.Element(workbookNs + "revisionPtr");
+        if (sourceRevisionPointer is not null && !HasCompleteRevisionHistorySidecarGraph(sourceArchive))
+            sourceRevisionPointer = null;
         var sourceExtensionList = sourceWorkbookXml.Root?.Element(workbookNs + "extLst");
         var sourceFileVersion = sourceWorkbookXml.Root?.Element(workbookNs + "fileVersion");
         var sourceFileSharing = sourceWorkbookXml.Root?.Element(workbookNs + "fileSharing");
@@ -106,6 +108,82 @@ internal static class XlsxWorkbookMetadataPreserver
 
         targetRoot.Add(new XElement(sourceBlock));
         return true;
+    }
+
+    private static bool HasCompleteRevisionHistorySidecarGraph(ZipArchive sourceArchive)
+    {
+        const string revisionHeadersRelationshipType =
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/revisionHeaders";
+        const string revisionLogRelationshipType =
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/revisionLog";
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var workbookRelationshipsEntry = sourceArchive.GetEntry("xl/_rels/workbook.xml.rels");
+        if (workbookRelationshipsEntry is null)
+            return false;
+
+        var workbookRelationshipsXml = XlsxPackageXmlEditor.LoadXml(workbookRelationshipsEntry);
+        foreach (var relationship in workbookRelationshipsXml.Root?.Elements(relationshipNs + "Relationship") ?? [])
+        {
+            if (!IsInternalRelationshipOfType(relationship, revisionHeadersRelationshipType))
+                continue;
+
+            var revisionHeaderPath = XlsxPackagePath.ResolveRelationshipTarget(
+                "xl/workbook.xml",
+                relationship.Attribute("Target")!.Value.Trim());
+            if (!revisionHeaderPath.StartsWith("xl/revisionHeaders/", StringComparison.OrdinalIgnoreCase) ||
+                sourceArchive.GetEntry(revisionHeaderPath) is null)
+            {
+                continue;
+            }
+
+            if (RevisionHeaderReferencesExistingRevisionLog(sourceArchive, revisionHeaderPath, revisionLogRelationshipType, relationshipNs))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool RevisionHeaderReferencesExistingRevisionLog(
+        ZipArchive sourceArchive,
+        string revisionHeaderPath,
+        string revisionLogRelationshipType,
+        XNamespace relationshipNs)
+    {
+        var revisionHeaderRelationshipsEntry = sourceArchive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(revisionHeaderPath));
+        if (revisionHeaderRelationshipsEntry is null)
+            return false;
+
+        var revisionHeaderRelationshipsXml = XlsxPackageXmlEditor.LoadXml(revisionHeaderRelationshipsEntry);
+        foreach (var relationship in revisionHeaderRelationshipsXml.Root?.Elements(relationshipNs + "Relationship") ?? [])
+        {
+            if (!IsInternalRelationshipOfType(relationship, revisionLogRelationshipType))
+                continue;
+
+            var revisionLogPath = XlsxPackagePath.ResolveRelationshipTarget(
+                revisionHeaderPath,
+                relationship.Attribute("Target")!.Value.Trim());
+            if (revisionLogPath.StartsWith("xl/revisions/", StringComparison.OrdinalIgnoreCase) &&
+                sourceArchive.GetEntry(revisionLogPath) is not null)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsInternalRelationshipOfType(XElement relationship, string relationshipType)
+    {
+        if (!string.Equals(relationship.Attribute("Type")?.Value.Trim(), relationshipType, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (string.IsNullOrWhiteSpace(relationship.Attribute("Target")?.Value))
+            return false;
+
+        var targetMode = relationship.Attribute("TargetMode")?.Value;
+        return string.IsNullOrWhiteSpace(targetMode) ||
+               string.Equals(targetMode.Trim(), "Internal", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool MergeChildBlocks(IReadOnlyCollection<XElement> sourceBlocks, XElement targetRoot, XName blockName)
