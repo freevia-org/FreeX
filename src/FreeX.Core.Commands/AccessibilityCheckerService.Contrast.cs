@@ -948,6 +948,9 @@ public static partial class AccessibilityCheckerService
             case BooleanNode boolean:
                 operand = LiteralFormulaOperand(new BoolValue(boolean.Value));
                 return true;
+            case OmittedArgumentNode:
+                operand = LiteralFormulaOperand(BlankValue.Instance);
+                return true;
             case ErrorNode error:
                 operand = LiteralFormulaOperand(error.Error);
                 return true;
@@ -1659,6 +1662,57 @@ public static partial class AccessibilityCheckerService
                 return true;
             case "TRANSPOSE":
                 kind = ConditionalFormulaScalarFunctionKind.Transpose;
+                return true;
+            case "SEQUENCE":
+                kind = ConditionalFormulaScalarFunctionKind.Sequence;
+                return true;
+            case "TAKE":
+                kind = ConditionalFormulaScalarFunctionKind.Take;
+                return true;
+            case "DROP":
+                kind = ConditionalFormulaScalarFunctionKind.Drop;
+                return true;
+            case "EXPAND":
+                kind = ConditionalFormulaScalarFunctionKind.Expand;
+                return true;
+            case "CHOOSECOLS":
+                kind = ConditionalFormulaScalarFunctionKind.ChooseCols;
+                return true;
+            case "CHOOSEROWS":
+                kind = ConditionalFormulaScalarFunctionKind.ChooseRows;
+                return true;
+            case "TOCOL":
+                kind = ConditionalFormulaScalarFunctionKind.ToCol;
+                return true;
+            case "TOROW":
+                kind = ConditionalFormulaScalarFunctionKind.ToRow;
+                return true;
+            case "WRAPROWS":
+                kind = ConditionalFormulaScalarFunctionKind.WrapRows;
+                return true;
+            case "WRAPCOLS":
+                kind = ConditionalFormulaScalarFunctionKind.WrapCols;
+                return true;
+            case "HSTACK":
+                kind = ConditionalFormulaScalarFunctionKind.HStack;
+                return true;
+            case "VSTACK":
+                kind = ConditionalFormulaScalarFunctionKind.VStack;
+                return true;
+            case "FILTER":
+                kind = ConditionalFormulaScalarFunctionKind.Filter;
+                return true;
+            case "SORT":
+                kind = ConditionalFormulaScalarFunctionKind.Sort;
+                return true;
+            case "SORTBY":
+                kind = ConditionalFormulaScalarFunctionKind.SortBy;
+                return true;
+            case "UNIQUE":
+                kind = ConditionalFormulaScalarFunctionKind.Unique;
+                return true;
+            case "TRIMRANGE":
+                kind = ConditionalFormulaScalarFunctionKind.TrimRange;
                 return true;
             case "PI":
                 kind = ConditionalFormulaScalarFunctionKind.Pi;
@@ -2401,6 +2455,23 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.MInverse or
             ConditionalFormulaScalarFunctionKind.Transpose => argumentCount == 1,
             ConditionalFormulaScalarFunctionKind.MMult => argumentCount == 2,
+            ConditionalFormulaScalarFunctionKind.Sequence => argumentCount is >= 1 and <= 4,
+            ConditionalFormulaScalarFunctionKind.Take or
+            ConditionalFormulaScalarFunctionKind.Drop => argumentCount is 2 or 3,
+            ConditionalFormulaScalarFunctionKind.Expand => argumentCount is >= 2 and <= 4,
+            ConditionalFormulaScalarFunctionKind.ChooseCols or
+            ConditionalFormulaScalarFunctionKind.ChooseRows or
+            ConditionalFormulaScalarFunctionKind.SortBy => argumentCount is >= 2 and <= 255,
+            ConditionalFormulaScalarFunctionKind.HStack or
+            ConditionalFormulaScalarFunctionKind.VStack => argumentCount is >= 1 and <= 255,
+            ConditionalFormulaScalarFunctionKind.ToCol or
+            ConditionalFormulaScalarFunctionKind.ToRow or
+            ConditionalFormulaScalarFunctionKind.Unique or
+            ConditionalFormulaScalarFunctionKind.TrimRange => argumentCount is >= 1 and <= 3,
+            ConditionalFormulaScalarFunctionKind.WrapRows or
+            ConditionalFormulaScalarFunctionKind.WrapCols or
+            ConditionalFormulaScalarFunctionKind.Filter => argumentCount is 2 or 3,
+            ConditionalFormulaScalarFunctionKind.Sort => argumentCount is >= 1 and <= 4,
             ConditionalFormulaScalarFunctionKind.TDistRt or
             ConditionalFormulaScalarFunctionKind.TDist2T or
             ConditionalFormulaScalarFunctionKind.TInv or
@@ -2863,6 +2934,9 @@ public static partial class AccessibilityCheckerService
                 return true;
             case ErrorNode error:
                 argument = LiteralFormulaAggregateArgument(error.Error);
+                return true;
+            case OmittedArgumentNode:
+                argument = LiteralFormulaAggregateArgument(BlankValue.Instance);
                 return true;
             case UnaryOpNode { Operator: UnaryOperator.Negate, Operand: NumberNode number }:
                 argument = LiteralFormulaAggregateArgument(new NumberValue(-number.Value));
@@ -3430,6 +3504,23 @@ public static partial class AccessibilityCheckerService
         MDeterm,
         MInverse,
         Transpose,
+        Sequence,
+        Take,
+        Drop,
+        Expand,
+        ChooseCols,
+        ChooseRows,
+        ToCol,
+        ToRow,
+        WrapRows,
+        WrapCols,
+        HStack,
+        VStack,
+        Filter,
+        Sort,
+        SortBy,
+        Unique,
+        TrimRange,
         Pi,
         Arabic,
         Roman,
@@ -4544,6 +4635,24 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.MInverse:
                 case ConditionalFormulaScalarFunctionKind.Transpose:
                     return TryEvaluateFormulaMatrixArrayFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Sequence:
+                case ConditionalFormulaScalarFunctionKind.Take:
+                case ConditionalFormulaScalarFunctionKind.Drop:
+                case ConditionalFormulaScalarFunctionKind.Expand:
+                case ConditionalFormulaScalarFunctionKind.ChooseCols:
+                case ConditionalFormulaScalarFunctionKind.ChooseRows:
+                case ConditionalFormulaScalarFunctionKind.ToCol:
+                case ConditionalFormulaScalarFunctionKind.ToRow:
+                case ConditionalFormulaScalarFunctionKind.WrapRows:
+                case ConditionalFormulaScalarFunctionKind.WrapCols:
+                case ConditionalFormulaScalarFunctionKind.HStack:
+                case ConditionalFormulaScalarFunctionKind.VStack:
+                case ConditionalFormulaScalarFunctionKind.Filter:
+                case ConditionalFormulaScalarFunctionKind.Sort:
+                case ConditionalFormulaScalarFunctionKind.SortBy:
+                case ConditionalFormulaScalarFunctionKind.Unique:
+                case ConditionalFormulaScalarFunctionKind.TrimRange:
+                    return TryEvaluateFormulaDynamicArrayFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Pi:
                     value = new NumberValue(Math.PI);
                     return true;
@@ -5155,6 +5264,1600 @@ public static partial class AccessibilityCheckerService
 
         private static RangeValue SingleFormulaMatrixArray(ScalarValue value) =>
             new(new[,] { { value } });
+
+        private bool TryEvaluateFormulaDynamicArrayFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            return function.Kind switch
+            {
+                ConditionalFormulaScalarFunctionKind.Sequence =>
+                    TryEvaluateFormulaSequenceFunction(function, rowOffset, colOffset, out value),
+                ConditionalFormulaScalarFunctionKind.Take =>
+                    TryEvaluateFormulaTakeDropFunction(function, rowOffset, colOffset, take: true, out value),
+                ConditionalFormulaScalarFunctionKind.Drop =>
+                    TryEvaluateFormulaTakeDropFunction(function, rowOffset, colOffset, take: false, out value),
+                ConditionalFormulaScalarFunctionKind.Expand =>
+                    TryEvaluateFormulaExpandFunction(function, rowOffset, colOffset, out value),
+                ConditionalFormulaScalarFunctionKind.ChooseCols =>
+                    TryEvaluateFormulaChooseRowsColsFunction(function, rowOffset, colOffset, chooseRows: false, out value),
+                ConditionalFormulaScalarFunctionKind.ChooseRows =>
+                    TryEvaluateFormulaChooseRowsColsFunction(function, rowOffset, colOffset, chooseRows: true, out value),
+                ConditionalFormulaScalarFunctionKind.ToCol =>
+                    TryEvaluateFormulaToRowColFunction(function, rowOffset, colOffset, toRow: false, out value),
+                ConditionalFormulaScalarFunctionKind.ToRow =>
+                    TryEvaluateFormulaToRowColFunction(function, rowOffset, colOffset, toRow: true, out value),
+                ConditionalFormulaScalarFunctionKind.WrapRows =>
+                    TryEvaluateFormulaWrapRowsColsFunction(function, rowOffset, colOffset, wrapRows: true, out value),
+                ConditionalFormulaScalarFunctionKind.WrapCols =>
+                    TryEvaluateFormulaWrapRowsColsFunction(function, rowOffset, colOffset, wrapRows: false, out value),
+                ConditionalFormulaScalarFunctionKind.HStack =>
+                    TryEvaluateFormulaStackFunction(function, rowOffset, colOffset, horizontal: true, out value),
+                ConditionalFormulaScalarFunctionKind.VStack =>
+                    TryEvaluateFormulaStackFunction(function, rowOffset, colOffset, horizontal: false, out value),
+                ConditionalFormulaScalarFunctionKind.Filter =>
+                    TryEvaluateFormulaFilterFunction(function, rowOffset, colOffset, out value),
+                ConditionalFormulaScalarFunctionKind.Sort =>
+                    TryEvaluateFormulaSortFunction(function, rowOffset, colOffset, out value),
+                ConditionalFormulaScalarFunctionKind.SortBy =>
+                    TryEvaluateFormulaSortByFunction(function, rowOffset, colOffset, out value),
+                ConditionalFormulaScalarFunctionKind.Unique =>
+                    TryEvaluateFormulaUniqueFunction(function, rowOffset, colOffset, out value),
+                ConditionalFormulaScalarFunctionKind.TrimRange =>
+                    TryEvaluateFormulaTrimRangeFunction(function, rowOffset, colOffset, out value),
+                _ => false
+            };
+        }
+
+        private bool TryEvaluateFormulaSequenceFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaDynamicArrayOptionalNumber(function, 0, rowOffset, colOffset, 1d, out var rowsNumber, out var rowsError))
+            {
+                value = rowsError ?? ErrorValue.Value;
+                return rowsError is not null;
+            }
+
+            if (!TryResolveFormulaDynamicArrayOptionalNumber(function, 1, rowOffset, colOffset, 1d, out var colsNumber, out var colsError))
+            {
+                value = colsError ?? ErrorValue.Value;
+                return colsError is not null;
+            }
+
+            if (!TryGetFormulaDynamicArrayPositiveDimension(rowsNumber, out var rows) ||
+                !TryGetFormulaDynamicArrayPositiveDimension(colsNumber, out var cols))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            if (!FormulaDynamicArrayCellCountWithinLimit(rows, cols))
+                return false;
+
+            if (!TryResolveFormulaDynamicArrayOptionalNumber(function, 2, rowOffset, colOffset, 1d, out var start, out var startError))
+            {
+                value = startError ?? ErrorValue.Value;
+                return startError is not null;
+            }
+
+            if (!TryResolveFormulaDynamicArrayOptionalNumber(function, 3, rowOffset, colOffset, 1d, out var step, out var stepError))
+            {
+                value = stepError ?? ErrorValue.Value;
+                return stepError is not null;
+            }
+
+            if (!double.IsFinite(start) || !double.IsFinite(step))
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            var cells = new ScalarValue[rows, cols];
+            var current = start;
+            for (var row = 0; row < rows; row++)
+            {
+                for (var col = 0; col < cols; col++)
+                {
+                    if (!double.IsFinite(current))
+                    {
+                        value = ErrorValue.Num;
+                        return true;
+                    }
+
+                    cells[row, col] = new NumberValue(current);
+                    current += step;
+                }
+            }
+
+            value = new RangeValue(cells);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaTakeDropFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            bool take,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaDynamicArrayRangeArgument(function.Arguments[0], rowOffset, colOffset, out var range, out var rangeError))
+                return false;
+
+            if (rangeError is not null)
+            {
+                value = rangeError;
+                return true;
+            }
+
+            var rowStart = 0;
+            var rowCount = range.RowCount;
+            if (!TryResolveFormulaDynamicArrayControlArgument(function.Arguments[1], rowOffset, colOffset, out var rowsValue, out var rowsError))
+            {
+                value = rowsError ?? ErrorValue.Value;
+                return rowsError is not null;
+            }
+
+            if (rowsValue is not BlankValue &&
+                !TryGetFormulaDynamicArraySlice(rowsValue, range.RowCount, take, out rowStart, out rowCount, out value))
+            {
+                return true;
+            }
+
+            var colStart = 0;
+            var colCount = range.ColCount;
+            if (function.Arguments.Count > 2)
+            {
+                if (!TryResolveFormulaDynamicArrayControlArgument(function.Arguments[2], rowOffset, colOffset, out var colsValue, out var colsError))
+                {
+                    value = colsError ?? ErrorValue.Value;
+                    return colsError is not null;
+                }
+
+                if (colsValue is not BlankValue &&
+                    !TryGetFormulaDynamicArraySlice(colsValue, range.ColCount, take, out colStart, out colCount, out value))
+                {
+                    return true;
+                }
+            }
+
+            return TrySliceFormulaDynamicArrayRange(range, rowStart, colStart, rowCount, colCount, out value);
+        }
+
+        private bool TryEvaluateFormulaExpandFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaDynamicArrayRangeArgument(function.Arguments[0], rowOffset, colOffset, out var range, out var rangeError))
+                return false;
+
+            if (rangeError is not null)
+            {
+                value = rangeError;
+                return true;
+            }
+
+            if (!TryResolveFormulaDynamicArrayDimension(function.Arguments[1], rowOffset, colOffset, range.RowCount, out var rowCount, out var rowError))
+            {
+                value = rowError ?? ErrorValue.Value;
+                return rowError is not null;
+            }
+
+            var colCount = range.ColCount;
+            if (function.Arguments.Count > 2)
+            {
+                if (!TryResolveFormulaDynamicArrayDimension(function.Arguments[2], rowOffset, colOffset, range.ColCount, out colCount, out var colError))
+                {
+                    value = colError ?? ErrorValue.Value;
+                    return colError is not null;
+                }
+            }
+
+            if (rowCount < range.RowCount || colCount < range.ColCount)
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            if (!FormulaDynamicArrayCellCountWithinLimit(rowCount, colCount))
+                return false;
+
+            var padWith = (ScalarValue)ErrorValue.NA;
+            if (function.Arguments.Count > 3)
+            {
+                if (!TryResolveFormulaDynamicArrayControlArgument(function.Arguments[3], rowOffset, colOffset, out padWith, out var padError))
+                {
+                    value = padError ?? ErrorValue.Value;
+                    return padError is not null;
+                }
+            }
+
+            var cells = CreateFormulaDynamicArrayFilledRange(rowCount, colCount, padWith);
+            for (var row = 0; row < range.RowCount; row++)
+                for (var col = 0; col < range.ColCount; col++)
+                    cells[row, col] = range.Cells[row, col];
+
+            value = new RangeValue(cells);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaChooseRowsColsFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            bool chooseRows,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaDynamicArrayRangeArgument(function.Arguments[0], rowOffset, colOffset, out var range, out var rangeError))
+                return false;
+
+            if (rangeError is not null)
+            {
+                value = rangeError;
+                return true;
+            }
+
+            var dimensionLength = chooseRows ? range.RowCount : range.ColCount;
+            if (!TryResolveFormulaDynamicArrayChoiceIndexes(
+                    function.Arguments,
+                    rowOffset,
+                    colOffset,
+                    dimensionLength,
+                    out var indexes,
+                    out var indexError))
+            {
+                value = indexError ?? ErrorValue.Value;
+                return true;
+            }
+
+            var rowCount = chooseRows ? indexes.Count : range.RowCount;
+            var colCount = chooseRows ? range.ColCount : indexes.Count;
+            if (!FormulaDynamicArrayCellCountWithinLimit(rowCount, colCount))
+                return false;
+
+            var cells = new ScalarValue[rowCount, colCount];
+            if (chooseRows)
+            {
+                for (var row = 0; row < indexes.Count; row++)
+                    for (var col = 0; col < range.ColCount; col++)
+                        cells[row, col] = range.Cells[indexes[row], col];
+            }
+            else
+            {
+                for (var row = 0; row < range.RowCount; row++)
+                    for (var col = 0; col < indexes.Count; col++)
+                        cells[row, col] = range.Cells[row, indexes[col]];
+            }
+
+            value = new RangeValue(cells);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaToRowColFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            bool toRow,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaDynamicArrayFlattenOptions(function, rowOffset, colOffset, out var ignore, out var scanByColumn, out var optionsError))
+            {
+                value = optionsError ?? ErrorValue.Value;
+                return optionsError is not null;
+            }
+
+            if (!TryResolveFormulaDynamicArrayArgument(function.Arguments[0], rowOffset, colOffset, out var source))
+                return false;
+
+            var ignoreBlanks = (ignore & 1) != 0;
+            var ignoreErrors = (ignore & 2) != 0;
+            var values = new List<ScalarValue>();
+            if (source is ErrorValue sourceError)
+            {
+                if (!ignoreErrors)
+                {
+                    value = sourceError;
+                    return true;
+                }
+            }
+            else if (source is RangeValue range)
+            {
+                AddFormulaDynamicArrayFlattenedRange(range, scanByColumn, ignoreBlanks, ignoreErrors, values);
+            }
+            else
+            {
+                AddFormulaDynamicArrayFlattenedValue(source, ignoreBlanks, ignoreErrors, values);
+            }
+
+            if (values.Count == 0)
+            {
+                value = ErrorValue.Calc;
+                return true;
+            }
+
+            if ((ulong)values.Count > MaxFormulaAggregateRangeCells)
+                return false;
+
+            if (toRow)
+            {
+                var cells = new ScalarValue[1, values.Count];
+                for (var col = 0; col < values.Count; col++)
+                    cells[0, col] = values[col];
+                value = new RangeValue(cells);
+            }
+            else
+            {
+                var cells = new ScalarValue[values.Count, 1];
+                for (var row = 0; row < values.Count; row++)
+                    cells[row, 0] = values[row];
+                value = new RangeValue(cells);
+            }
+
+            return true;
+        }
+
+        private bool TryEvaluateFormulaWrapRowsColsFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            bool wrapRows,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaDynamicArrayArgument(function.Arguments[0], rowOffset, colOffset, out var source))
+                return false;
+
+            if (source is ErrorValue sourceError)
+            {
+                value = sourceError;
+                return true;
+            }
+
+            if (!TryResolveFormulaDynamicArrayControlArgument(function.Arguments[1], rowOffset, colOffset, out var wrapCountValue, out var wrapError))
+            {
+                value = wrapError ?? ErrorValue.Value;
+                return wrapError is not null;
+            }
+
+            if (!TryGetFormulaDynamicArrayInteger(wrapCountValue, out var wrapCount))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            if (wrapCount < 1)
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            var values = new List<ScalarValue>();
+            if (source is RangeValue range)
+            {
+                if (!TryReadFormulaDynamicArrayVector(range, values))
+                {
+                    value = ErrorValue.Value;
+                    return true;
+                }
+            }
+            else
+            {
+                values.Add(source);
+            }
+
+            var padWith = (ScalarValue)ErrorValue.NA;
+            if (function.Arguments.Count > 2)
+            {
+                if (!TryResolveFormulaDynamicArrayControlArgument(function.Arguments[2], rowOffset, colOffset, out padWith, out var padError))
+                {
+                    value = padError ?? ErrorValue.Value;
+                    return padError is not null;
+                }
+            }
+
+            var rowCount = wrapRows ? (values.Count + wrapCount - 1) / wrapCount : wrapCount;
+            var colCount = wrapRows ? wrapCount : (values.Count + wrapCount - 1) / wrapCount;
+            if (!FormulaDynamicArrayCellCountWithinLimit(rowCount, colCount))
+                return false;
+
+            var cells = CreateFormulaDynamicArrayFilledRange(rowCount, colCount, padWith);
+            for (var i = 0; i < values.Count; i++)
+            {
+                if (wrapRows)
+                    cells[i / wrapCount, i % wrapCount] = values[i];
+                else
+                    cells[i % wrapCount, i / wrapCount] = values[i];
+            }
+
+            value = new RangeValue(cells);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaStackFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            bool horizontal,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            var ranges = new RangeValue[function.Arguments.Count];
+            for (var i = 0; i < function.Arguments.Count; i++)
+            {
+                if (!TryResolveFormulaDynamicArrayArgument(function.Arguments[i], rowOffset, colOffset, out var argument))
+                    return false;
+
+                ranges[i] = argument is RangeValue range ? range : SingleFormulaDynamicArray(argument);
+            }
+
+            var rowCount = horizontal ? ranges.Max(static range => range.RowCount) : ranges.Sum(static range => range.RowCount);
+            var colCount = horizontal ? ranges.Sum(static range => range.ColCount) : ranges.Max(static range => range.ColCount);
+            if (!FormulaDynamicArrayCellCountWithinLimit(rowCount, colCount))
+                return false;
+
+            var cells = CreateFormulaDynamicArrayFilledRange(rowCount, colCount, ErrorValue.NA);
+            var rowOffsetOutput = 0;
+            var colOffsetOutput = 0;
+            foreach (var range in ranges)
+            {
+                for (var row = 0; row < range.RowCount; row++)
+                    for (var col = 0; col < range.ColCount; col++)
+                        cells[rowOffsetOutput + row, colOffsetOutput + col] = range.Cells[row, col];
+
+                if (horizontal)
+                    colOffsetOutput += range.ColCount;
+                else
+                    rowOffsetOutput += range.RowCount;
+            }
+
+            value = new RangeValue(cells);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaFilterFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaDynamicArrayRangeArgument(function.Arguments[0], rowOffset, colOffset, out var range, out var rangeError) ||
+                !TryResolveFormulaDynamicArrayRangeArgument(function.Arguments[1], rowOffset, colOffset, out var include, out var includeError))
+            {
+                return false;
+            }
+
+            if (rangeError is not null)
+            {
+                value = rangeError;
+                return true;
+            }
+
+            if (includeError is not null)
+            {
+                value = includeError;
+                return true;
+            }
+
+            ScalarValue ifEmpty = ErrorValue.Calc;
+            if (function.Arguments.Count > 2 &&
+                !TryResolveFormulaDynamicArrayArgument(function.Arguments[2], rowOffset, colOffset, out ifEmpty))
+            {
+                return false;
+            }
+
+            if (include.ColCount == 1 && include.RowCount == range.RowCount)
+                return TryFilterFormulaDynamicArrayRows(range, include, ifEmpty, out value);
+
+            if (include.RowCount == 1 && include.ColCount == range.ColCount)
+                return TryFilterFormulaDynamicArrayColumns(range, include, ifEmpty, out value);
+
+            value = ErrorValue.Value;
+            return true;
+        }
+
+        private bool TryEvaluateFormulaSortFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaDynamicArrayRangeArgument(function.Arguments[0], rowOffset, colOffset, out var range, out var rangeError))
+                return false;
+
+            if (rangeError is not null)
+            {
+                value = rangeError;
+                return true;
+            }
+
+            if (!TryResolveFormulaDynamicArrayOptionalInteger(function, 1, rowOffset, colOffset, 1, out var sortIndex, out var sortIndexError))
+            {
+                value = sortIndexError ?? ErrorValue.Value;
+                return sortIndexError is not null;
+            }
+
+            if (!TryResolveFormulaDynamicArrayOptionalInteger(function, 2, rowOffset, colOffset, 1, out var sortOrder, out var sortOrderError))
+            {
+                value = sortOrderError ?? ErrorValue.Value;
+                return sortOrderError is not null;
+            }
+
+            if (!TryResolveFormulaDynamicArrayOptionalBool(function, 3, rowOffset, colOffset, false, out var byColumn, out var byColumnError))
+            {
+                value = byColumnError ?? ErrorValue.Value;
+                return byColumnError is not null;
+            }
+
+            if (sortIndex < 1 ||
+                sortOrder is not (1 or -1) ||
+                (!byColumn && sortIndex > range.ColCount) ||
+                (byColumn && sortIndex > range.RowCount))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            value = byColumn
+                ? SortFormulaDynamicArrayColumns(range, sortIndex - 1, sortOrder)
+                : SortFormulaDynamicArrayRows(range, sortIndex - 1, sortOrder);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaSortByFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaDynamicArrayRangeArgument(function.Arguments[0], rowOffset, colOffset, out var range, out var rangeError))
+                return false;
+
+            if (rangeError is not null)
+            {
+                value = rangeError;
+                return true;
+            }
+
+            List<(RangeValue Range, int Order)> keys = [];
+            bool? sortRows = null;
+            for (var i = 1; i < function.Arguments.Count; i++)
+            {
+                if (!TryResolveFormulaDynamicArrayRangeArgument(function.Arguments[i], rowOffset, colOffset, out var keyRange, out var keyError))
+                    return false;
+
+                if (keyError is not null)
+                {
+                    value = keyError;
+                    return true;
+                }
+
+                if (!TryGetFormulaDynamicArraySortByOrientation(range, keyRange, out var keySortRows) ||
+                    (sortRows.HasValue && sortRows.Value != keySortRows))
+                {
+                    value = ErrorValue.Value;
+                    return true;
+                }
+
+                sortRows ??= keySortRows;
+                var order = 1;
+                if (i + 1 < function.Arguments.Count)
+                {
+                    if (!TryResolveFormulaDynamicArrayControlArgument(function.Arguments[i + 1], rowOffset, colOffset, out var orderValue, out var orderError))
+                    {
+                        value = orderError ?? ErrorValue.Value;
+                        return orderError is not null;
+                    }
+
+                    if (orderValue is not BlankValue &&
+                        (!TryGetFormulaDynamicArrayInteger(orderValue, out order) || order is not (1 or -1)))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    i++;
+                }
+
+                keys.Add((keyRange, order));
+            }
+
+            if (keys.Count == 0)
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            value = sortRows.GetValueOrDefault(true)
+                ? SortByFormulaDynamicArrayRows(range, keys)
+                : SortByFormulaDynamicArrayColumns(range, keys);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaUniqueFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaDynamicArrayRangeArgument(function.Arguments[0], rowOffset, colOffset, out var range, out var rangeError))
+                return false;
+
+            if (rangeError is not null)
+            {
+                value = rangeError;
+                return true;
+            }
+
+            if (!TryResolveFormulaDynamicArrayOptionalBool(function, 1, rowOffset, colOffset, false, out var byColumn, out var byColumnError))
+            {
+                value = byColumnError ?? ErrorValue.Value;
+                return byColumnError is not null;
+            }
+
+            if (!TryResolveFormulaDynamicArrayOptionalBool(function, 2, rowOffset, colOffset, false, out var exactlyOnce, out var exactlyOnceError))
+            {
+                value = exactlyOnceError ?? ErrorValue.Value;
+                return exactlyOnceError is not null;
+            }
+
+            return byColumn
+                ? TryUniqueFormulaDynamicArrayColumns(range, exactlyOnce, out value)
+                : TryUniqueFormulaDynamicArrayRows(range, exactlyOnce, out value);
+        }
+
+        private bool TryEvaluateFormulaTrimRangeFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaDynamicArrayRangeArgument(function.Arguments[0], rowOffset, colOffset, out var range, out var rangeError))
+                return false;
+
+            if (rangeError is not null)
+            {
+                value = rangeError;
+                return true;
+            }
+
+            if (!TryResolveFormulaDynamicArrayOptionalInteger(function, 1, rowOffset, colOffset, 3, out var trimRows, out var rowsError))
+            {
+                value = rowsError ?? ErrorValue.Value;
+                return rowsError is not null;
+            }
+
+            if (!TryResolveFormulaDynamicArrayOptionalInteger(function, 2, rowOffset, colOffset, 3, out var trimCols, out var colsError))
+            {
+                value = colsError ?? ErrorValue.Value;
+                return colsError is not null;
+            }
+
+            if (trimRows is < 0 or > 3 || trimCols is < 0 or > 3)
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            var rowStart = 0;
+            var rowEnd = range.RowCount - 1;
+            if ((trimRows & 1) != 0)
+                while (rowStart <= rowEnd && IsFormulaDynamicArrayBlankRow(range, rowStart)) rowStart++;
+            if ((trimRows & 2) != 0)
+                while (rowEnd >= rowStart && IsFormulaDynamicArrayBlankRow(range, rowEnd)) rowEnd--;
+
+            var colStart = 0;
+            var colEnd = range.ColCount - 1;
+            if ((trimCols & 1) != 0)
+                while (colStart <= colEnd && IsFormulaDynamicArrayBlankColumn(range, colStart, rowStart, rowEnd)) colStart++;
+            if ((trimCols & 2) != 0)
+                while (colEnd >= colStart && IsFormulaDynamicArrayBlankColumn(range, colEnd, rowStart, rowEnd)) colEnd--;
+
+            if (rowStart > rowEnd || colStart > colEnd)
+            {
+                value = ErrorValue.Calc;
+                return true;
+            }
+
+            return TrySliceFormulaDynamicArrayRange(
+                range,
+                rowStart,
+                colStart,
+                rowEnd - rowStart + 1,
+                colEnd - colStart + 1,
+                out value);
+        }
+
+        private bool TryResolveFormulaDynamicArrayArgument(
+            ConditionalFormulaOperand argument,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (argument.Kind == ConditionalFormulaOperandKind.ReferenceRange)
+            {
+                if (!TryMaterializeFormulaReferenceRange(argument, rowOffset, colOffset, out var range))
+                    return false;
+
+                value = range;
+                return true;
+            }
+
+            return TryResolveFormulaOperand(argument, rowOffset, colOffset, out value);
+        }
+
+        private bool TryResolveFormulaDynamicArrayRangeArgument(
+            ConditionalFormulaOperand argument,
+            int rowOffset,
+            int colOffset,
+            out RangeValue range,
+            out ErrorValue? error)
+        {
+            range = default!;
+            error = null;
+            if (!TryResolveFormulaDynamicArrayArgument(argument, rowOffset, colOffset, out var value))
+                return false;
+
+            if (value is ErrorValue valueError)
+            {
+                error = valueError;
+                return true;
+            }
+
+            range = value is RangeValue resolvedRange ? resolvedRange : SingleFormulaDynamicArray(value);
+            return true;
+        }
+
+        private bool TryResolveFormulaDynamicArrayControlArgument(
+            ConditionalFormulaOperand argument,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value,
+            out ErrorValue? error)
+        {
+            value = ErrorValue.Value;
+            error = null;
+            if (!TryResolveFormulaDynamicArrayArgument(argument, rowOffset, colOffset, out value))
+                return false;
+
+            if (value is RangeValue range &&
+                !TryGetSingleFormulaRangeValue(range, out value))
+            {
+                error = ErrorValue.Value;
+                return false;
+            }
+
+            if (value is ErrorValue valueError)
+            {
+                error = valueError;
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool TryResolveFormulaDynamicArrayOptionalNumber(
+            ConditionalFormulaScalarFunction function,
+            int argumentIndex,
+            int rowOffset,
+            int colOffset,
+            double defaultValue,
+            out double number,
+            out ErrorValue? error)
+        {
+            number = defaultValue;
+            error = null;
+            if (function.Arguments.Count <= argumentIndex)
+                return true;
+
+            if (!TryResolveFormulaDynamicArrayControlArgument(function.Arguments[argumentIndex], rowOffset, colOffset, out var value, out error))
+                return false;
+
+            if (value is BlankValue)
+                return true;
+
+            if (!TryGetFormulaCoercedNumber(value, out number))
+            {
+                error = ErrorValue.Value;
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool TryResolveFormulaDynamicArrayOptionalInteger(
+            ConditionalFormulaScalarFunction function,
+            int argumentIndex,
+            int rowOffset,
+            int colOffset,
+            int defaultValue,
+            out int integer,
+            out ErrorValue? error)
+        {
+            integer = defaultValue;
+            error = null;
+            if (function.Arguments.Count <= argumentIndex)
+                return true;
+
+            if (!TryResolveFormulaDynamicArrayControlArgument(function.Arguments[argumentIndex], rowOffset, colOffset, out var value, out error))
+                return false;
+
+            if (value is BlankValue)
+                return true;
+
+            if (!TryGetFormulaDynamicArrayInteger(value, out integer))
+            {
+                error = ErrorValue.Value;
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool TryResolveFormulaDynamicArrayOptionalBool(
+            ConditionalFormulaScalarFunction function,
+            int argumentIndex,
+            int rowOffset,
+            int colOffset,
+            bool defaultValue,
+            out bool result,
+            out ErrorValue? error)
+        {
+            result = defaultValue;
+            error = null;
+            if (function.Arguments.Count <= argumentIndex)
+                return true;
+
+            if (!TryResolveFormulaDynamicArrayControlArgument(function.Arguments[argumentIndex], rowOffset, colOffset, out var value, out error))
+                return false;
+
+            if (value is BlankValue)
+                return true;
+
+            if (!TryGetFormulaDynamicArrayBool(value, out result))
+            {
+                error = ErrorValue.Value;
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool TryResolveFormulaDynamicArrayDimension(
+            ConditionalFormulaOperand argument,
+            int rowOffset,
+            int colOffset,
+            int defaultValue,
+            out int dimension,
+            out ErrorValue? error)
+        {
+            dimension = defaultValue;
+            error = null;
+            if (!TryResolveFormulaDynamicArrayControlArgument(argument, rowOffset, colOffset, out var value, out error))
+                return false;
+
+            if (value is BlankValue)
+                return true;
+
+            if (!TryGetFormulaDynamicArrayInteger(value, out dimension) || dimension < 1)
+            {
+                error = ErrorValue.Value;
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool FormulaDynamicArrayCellCountWithinLimit(int rowCount, int colCount) =>
+            rowCount > 0 &&
+            colCount > 0 &&
+            (ulong)rowCount * (ulong)colCount <= MaxFormulaAggregateRangeCells;
+
+        private static bool TryGetFormulaDynamicArrayPositiveDimension(double number, out int dimension)
+        {
+            dimension = 0;
+            if (!double.IsFinite(number) ||
+                number <= 0d ||
+                number > int.MaxValue)
+            {
+                return false;
+            }
+
+            dimension = (int)Math.Truncate(number);
+            return dimension > 0;
+        }
+
+        private static bool TryGetFormulaDynamicArrayInteger(ScalarValue value, out int integer)
+        {
+            integer = 0;
+            if (!TryGetFormulaCoercedNumber(value, out var number) ||
+                !double.IsFinite(number) ||
+                number <= int.MinValue ||
+                number > int.MaxValue)
+            {
+                return false;
+            }
+
+            integer = (int)Math.Truncate(number);
+            return true;
+        }
+
+        private static bool TryGetFormulaDynamicArrayBool(ScalarValue value, out bool result)
+        {
+            switch (value)
+            {
+                case BoolValue boolean:
+                    result = boolean.Value;
+                    return true;
+                case NumberValue number:
+                    result = number.Value != 0d;
+                    return double.IsFinite(number.Value);
+                case DateTimeValue dateTime:
+                    result = dateTime.Value != 0d;
+                    return double.IsFinite(dateTime.Value);
+                case BlankValue:
+                    result = false;
+                    return true;
+                default:
+                    result = false;
+                    return false;
+            }
+        }
+
+        private static bool TryGetFormulaDynamicArraySlice(
+            ScalarValue countValue,
+            int dimensionLength,
+            bool take,
+            out int start,
+            out int count,
+            out ScalarValue error)
+        {
+            start = 0;
+            count = dimensionLength;
+            error = ErrorValue.Value;
+            if (!TryGetFormulaDynamicArrayInteger(countValue, out var requested))
+                return false;
+
+            if (requested == 0)
+            {
+                error = ErrorValue.Calc;
+                return false;
+            }
+
+            if (take)
+            {
+                count = Math.Min(Math.Abs(requested), dimensionLength);
+                start = requested > 0 ? 0 : dimensionLength - count;
+                return count > 0;
+            }
+
+            if (Math.Abs(requested) >= dimensionLength)
+            {
+                error = ErrorValue.Calc;
+                return false;
+            }
+
+            if (requested > 0)
+            {
+                start = requested;
+                count = dimensionLength - requested;
+            }
+            else
+            {
+                start = 0;
+                count = dimensionLength + requested;
+            }
+
+            return count > 0;
+        }
+
+        private static bool TrySliceFormulaDynamicArrayRange(
+            RangeValue range,
+            int rowStart,
+            int colStart,
+            int rowCount,
+            int colCount,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!FormulaDynamicArrayCellCountWithinLimit(rowCount, colCount))
+                return false;
+
+            var cells = new ScalarValue[rowCount, colCount];
+            for (var row = 0; row < rowCount; row++)
+                for (var col = 0; col < colCount; col++)
+                    cells[row, col] = range.Cells[rowStart + row, colStart + col];
+
+            value = new RangeValue(cells, range.StartRow + (uint)rowStart, range.StartCol + (uint)colStart)
+            {
+                SheetName = range.SheetName
+            };
+            return true;
+        }
+
+        private static ScalarValue[,] CreateFormulaDynamicArrayFilledRange(
+            int rowCount,
+            int colCount,
+            ScalarValue value)
+        {
+            var cells = new ScalarValue[rowCount, colCount];
+            for (var row = 0; row < rowCount; row++)
+                for (var col = 0; col < colCount; col++)
+                    cells[row, col] = value;
+
+            return cells;
+        }
+
+        private static RangeValue SingleFormulaDynamicArray(ScalarValue value) =>
+            new(new[,] { { value } });
+
+        private bool TryResolveFormulaDynamicArrayChoiceIndexes(
+            IReadOnlyList<ConditionalFormulaOperand> arguments,
+            int rowOffset,
+            int colOffset,
+            int dimensionLength,
+            out List<int> indexes,
+            out ErrorValue? error)
+        {
+            indexes = [];
+            error = null;
+            for (var i = 1; i < arguments.Count; i++)
+            {
+                if (!TryResolveFormulaDynamicArrayArgument(arguments[i], rowOffset, colOffset, out var value))
+                    return false;
+
+                if (value is ErrorValue valueError)
+                {
+                    error = valueError;
+                    return false;
+                }
+
+                if (value is RangeValue range)
+                {
+                    for (var row = 0; row < range.RowCount; row++)
+                    {
+                        for (var col = 0; col < range.ColCount; col++)
+                        {
+                            if (!TryAddFormulaDynamicArrayChoiceIndex(range.Cells[row, col], dimensionLength, indexes, out error))
+                                return false;
+                        }
+                    }
+                }
+                else if (!TryAddFormulaDynamicArrayChoiceIndex(value, dimensionLength, indexes, out error))
+                {
+                    return false;
+                }
+            }
+
+            return indexes.Count > 0;
+        }
+
+        private static bool TryAddFormulaDynamicArrayChoiceIndex(
+            ScalarValue value,
+            int dimensionLength,
+            List<int> indexes,
+            out ErrorValue? error)
+        {
+            error = null;
+            if (value is ErrorValue valueError)
+            {
+                error = valueError;
+                return false;
+            }
+
+            if (!TryGetFormulaDynamicArrayInteger(value, out var requested) || requested == 0)
+            {
+                error = ErrorValue.Value;
+                return false;
+            }
+
+            var zeroBased = requested > 0 ? requested - 1 : dimensionLength + requested;
+            if (zeroBased < 0 || zeroBased >= dimensionLength)
+            {
+                error = ErrorValue.Value;
+                return false;
+            }
+
+            indexes.Add(zeroBased);
+            return true;
+        }
+
+        private bool TryResolveFormulaDynamicArrayFlattenOptions(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out int ignore,
+            out bool scanByColumn,
+            out ErrorValue? error)
+        {
+            ignore = 0;
+            scanByColumn = false;
+            error = null;
+            if (!TryResolveFormulaDynamicArrayOptionalInteger(function, 1, rowOffset, colOffset, 0, out ignore, out error))
+                return false;
+
+            if (ignore is < 0 or > 3)
+            {
+                error = ErrorValue.Value;
+                return false;
+            }
+
+            return TryResolveFormulaDynamicArrayOptionalBool(function, 2, rowOffset, colOffset, false, out scanByColumn, out error);
+        }
+
+        private static void AddFormulaDynamicArrayFlattenedRange(
+            RangeValue range,
+            bool scanByColumn,
+            bool ignoreBlanks,
+            bool ignoreErrors,
+            List<ScalarValue> values)
+        {
+            if (scanByColumn)
+            {
+                for (var col = 0; col < range.ColCount; col++)
+                    for (var row = 0; row < range.RowCount; row++)
+                        AddFormulaDynamicArrayFlattenedValue(range.Cells[row, col], ignoreBlanks, ignoreErrors, values);
+            }
+            else
+            {
+                for (var row = 0; row < range.RowCount; row++)
+                    for (var col = 0; col < range.ColCount; col++)
+                        AddFormulaDynamicArrayFlattenedValue(range.Cells[row, col], ignoreBlanks, ignoreErrors, values);
+            }
+        }
+
+        private static void AddFormulaDynamicArrayFlattenedValue(
+            ScalarValue value,
+            bool ignoreBlanks,
+            bool ignoreErrors,
+            List<ScalarValue> values)
+        {
+            if (ignoreBlanks && value is BlankValue)
+                return;
+
+            if (ignoreErrors && value is ErrorValue)
+                return;
+
+            values.Add(value);
+        }
+
+        private static bool TryReadFormulaDynamicArrayVector(RangeValue range, List<ScalarValue> values)
+        {
+            if (range.RowCount == 1)
+            {
+                for (var col = 0; col < range.ColCount; col++)
+                    values.Add(range.Cells[0, col]);
+                return true;
+            }
+
+            if (range.ColCount == 1)
+            {
+                for (var row = 0; row < range.RowCount; row++)
+                    values.Add(range.Cells[row, 0]);
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryFilterFormulaDynamicArrayRows(
+            RangeValue range,
+            RangeValue include,
+            ScalarValue ifEmpty,
+            out ScalarValue value)
+        {
+            var matchedRows = new List<int>();
+            for (var row = 0; row < range.RowCount; row++)
+            {
+                var includeValue = include.Cells[row, 0];
+                if (includeValue is ErrorValue includeError)
+                {
+                    value = includeError;
+                    return true;
+                }
+
+                if (!TryGetFormulaDynamicArrayFilterIncluded(includeValue, out var included))
+                {
+                    value = ErrorValue.Value;
+                    return true;
+                }
+
+                if (included)
+                    matchedRows.Add(row);
+            }
+
+            if (matchedRows.Count == 0)
+            {
+                value = FormulaDynamicArrayFilterEmptyResult(ifEmpty);
+                return true;
+            }
+
+            if (!FormulaDynamicArrayCellCountWithinLimit(matchedRows.Count, range.ColCount))
+            {
+                value = ErrorValue.Value;
+                return false;
+            }
+
+            var cells = new ScalarValue[matchedRows.Count, range.ColCount];
+            for (var row = 0; row < matchedRows.Count; row++)
+                for (var col = 0; col < range.ColCount; col++)
+                    cells[row, col] = range.Cells[matchedRows[row], col];
+
+            value = new RangeValue(cells);
+            return true;
+        }
+
+        private static bool TryFilterFormulaDynamicArrayColumns(
+            RangeValue range,
+            RangeValue include,
+            ScalarValue ifEmpty,
+            out ScalarValue value)
+        {
+            var matchedCols = new List<int>();
+            for (var col = 0; col < range.ColCount; col++)
+            {
+                var includeValue = include.Cells[0, col];
+                if (includeValue is ErrorValue includeError)
+                {
+                    value = includeError;
+                    return true;
+                }
+
+                if (!TryGetFormulaDynamicArrayFilterIncluded(includeValue, out var included))
+                {
+                    value = ErrorValue.Value;
+                    return true;
+                }
+
+                if (included)
+                    matchedCols.Add(col);
+            }
+
+            if (matchedCols.Count == 0)
+            {
+                value = FormulaDynamicArrayFilterEmptyResult(ifEmpty);
+                return true;
+            }
+
+            if (!FormulaDynamicArrayCellCountWithinLimit(range.RowCount, matchedCols.Count))
+            {
+                value = ErrorValue.Value;
+                return false;
+            }
+
+            var cells = new ScalarValue[range.RowCount, matchedCols.Count];
+            for (var row = 0; row < range.RowCount; row++)
+                for (var col = 0; col < matchedCols.Count; col++)
+                    cells[row, col] = range.Cells[row, matchedCols[col]];
+
+            value = new RangeValue(cells);
+            return true;
+        }
+
+        private static bool TryGetFormulaDynamicArrayFilterIncluded(ScalarValue value, out bool included)
+        {
+            included = false;
+            switch (value)
+            {
+                case BlankValue:
+                    return true;
+                case BoolValue boolean:
+                    included = boolean.Value;
+                    return true;
+                case NumberValue number:
+                    included = number.Value != 0d;
+                    return double.IsFinite(number.Value);
+                case DateTimeValue dateTime:
+                    included = dateTime.Value != 0d;
+                    return double.IsFinite(dateTime.Value);
+                default:
+                    return false;
+            }
+        }
+
+        private static ScalarValue FormulaDynamicArrayFilterEmptyResult(ScalarValue ifEmpty) =>
+            ifEmpty is RangeValue or ErrorValue ? ifEmpty : SingleFormulaDynamicArray(ifEmpty);
+
+        private static RangeValue SortFormulaDynamicArrayRows(RangeValue range, int sortIndex, int sortOrder)
+        {
+            var rowIndexes = FormulaDynamicArraySequentialIndexes(range.RowCount);
+            Array.Sort(rowIndexes, (left, right) =>
+                sortOrder * CompareFormulaValues(range.Cells[left, sortIndex], range.Cells[right, sortIndex]));
+
+            var cells = new ScalarValue[range.RowCount, range.ColCount];
+            for (var row = 0; row < range.RowCount; row++)
+                for (var col = 0; col < range.ColCount; col++)
+                    cells[row, col] = range.Cells[rowIndexes[row], col];
+
+            return new RangeValue(cells);
+        }
+
+        private static RangeValue SortFormulaDynamicArrayColumns(RangeValue range, int sortIndex, int sortOrder)
+        {
+            var colIndexes = FormulaDynamicArraySequentialIndexes(range.ColCount);
+            Array.Sort(colIndexes, (left, right) =>
+                sortOrder * CompareFormulaValues(range.Cells[sortIndex, left], range.Cells[sortIndex, right]));
+
+            var cells = new ScalarValue[range.RowCount, range.ColCount];
+            for (var row = 0; row < range.RowCount; row++)
+                for (var col = 0; col < range.ColCount; col++)
+                    cells[row, col] = range.Cells[row, colIndexes[col]];
+
+            return new RangeValue(cells);
+        }
+
+        private static bool TryGetFormulaDynamicArraySortByOrientation(
+            RangeValue range,
+            RangeValue keyRange,
+            out bool sortRows)
+        {
+            if (keyRange.RowCount == range.RowCount && keyRange.ColCount == 1)
+            {
+                sortRows = true;
+                return true;
+            }
+
+            if (keyRange.RowCount == 1 && keyRange.ColCount == range.ColCount)
+            {
+                sortRows = false;
+                return true;
+            }
+
+            sortRows = true;
+            return false;
+        }
+
+        private static RangeValue SortByFormulaDynamicArrayRows(
+            RangeValue range,
+            IReadOnlyList<(RangeValue Range, int Order)> keys)
+        {
+            var rowIndexes = FormulaDynamicArraySequentialIndexes(range.RowCount);
+            Array.Sort(rowIndexes, (left, right) =>
+            {
+                for (var i = 0; i < keys.Count; i++)
+                {
+                    var comparison = CompareFormulaValues(keys[i].Range.Cells[left, 0], keys[i].Range.Cells[right, 0]);
+                    if (comparison != 0)
+                        return keys[i].Order * comparison;
+                }
+
+                return left.CompareTo(right);
+            });
+
+            var cells = new ScalarValue[range.RowCount, range.ColCount];
+            for (var row = 0; row < range.RowCount; row++)
+                for (var col = 0; col < range.ColCount; col++)
+                    cells[row, col] = range.Cells[rowIndexes[row], col];
+
+            return new RangeValue(cells);
+        }
+
+        private static RangeValue SortByFormulaDynamicArrayColumns(
+            RangeValue range,
+            IReadOnlyList<(RangeValue Range, int Order)> keys)
+        {
+            var colIndexes = FormulaDynamicArraySequentialIndexes(range.ColCount);
+            Array.Sort(colIndexes, (left, right) =>
+            {
+                for (var i = 0; i < keys.Count; i++)
+                {
+                    var comparison = CompareFormulaValues(keys[i].Range.Cells[0, left], keys[i].Range.Cells[0, right]);
+                    if (comparison != 0)
+                        return keys[i].Order * comparison;
+                }
+
+                return left.CompareTo(right);
+            });
+
+            var cells = new ScalarValue[range.RowCount, range.ColCount];
+            for (var row = 0; row < range.RowCount; row++)
+                for (var col = 0; col < range.ColCount; col++)
+                    cells[row, col] = range.Cells[row, colIndexes[col]];
+
+            return new RangeValue(cells);
+        }
+
+        private static int[] FormulaDynamicArraySequentialIndexes(int count)
+        {
+            var indexes = new int[count];
+            for (var i = 0; i < indexes.Length; i++)
+                indexes[i] = i;
+
+            return indexes;
+        }
+
+        private static bool TryUniqueFormulaDynamicArrayRows(
+            RangeValue range,
+            bool exactlyOnce,
+            out ScalarValue value)
+        {
+            var keyIndexes = new Dictionary<string, int>(StringComparer.Ordinal);
+            var keyCounts = new List<int>();
+            var rowIndexes = new List<int>();
+            for (var row = 0; row < range.RowCount; row++)
+            {
+                var key = FormulaDynamicArrayRowKey(range, row);
+                if (keyIndexes.TryGetValue(key, out var index))
+                {
+                    keyCounts[index]++;
+                    continue;
+                }
+
+                keyIndexes[key] = rowIndexes.Count;
+                keyCounts.Add(1);
+                rowIndexes.Add(row);
+            }
+
+            var selectedCount = exactlyOnce ? keyCounts.Count(static count => count == 1) : rowIndexes.Count;
+            if (selectedCount == 0)
+            {
+                value = ErrorValue.Calc;
+                return true;
+            }
+
+            if (!FormulaDynamicArrayCellCountWithinLimit(selectedCount, range.ColCount))
+            {
+                value = ErrorValue.Value;
+                return false;
+            }
+
+            var cells = new ScalarValue[selectedCount, range.ColCount];
+            var rowOut = 0;
+            for (var index = 0; index < rowIndexes.Count; index++)
+            {
+                if (exactlyOnce && keyCounts[index] != 1)
+                    continue;
+
+                for (var col = 0; col < range.ColCount; col++)
+                    cells[rowOut, col] = range.Cells[rowIndexes[index], col];
+                rowOut++;
+            }
+
+            value = new RangeValue(cells);
+            return true;
+        }
+
+        private static bool TryUniqueFormulaDynamicArrayColumns(
+            RangeValue range,
+            bool exactlyOnce,
+            out ScalarValue value)
+        {
+            var keyIndexes = new Dictionary<string, int>(StringComparer.Ordinal);
+            var keyCounts = new List<int>();
+            var colIndexes = new List<int>();
+            for (var col = 0; col < range.ColCount; col++)
+            {
+                var key = FormulaDynamicArrayColumnKey(range, col);
+                if (keyIndexes.TryGetValue(key, out var index))
+                {
+                    keyCounts[index]++;
+                    continue;
+                }
+
+                keyIndexes[key] = colIndexes.Count;
+                keyCounts.Add(1);
+                colIndexes.Add(col);
+            }
+
+            var selectedCount = exactlyOnce ? keyCounts.Count(static count => count == 1) : colIndexes.Count;
+            if (selectedCount == 0)
+            {
+                value = ErrorValue.Calc;
+                return true;
+            }
+
+            if (!FormulaDynamicArrayCellCountWithinLimit(range.RowCount, selectedCount))
+            {
+                value = ErrorValue.Value;
+                return false;
+            }
+
+            var cells = new ScalarValue[range.RowCount, selectedCount];
+            for (var row = 0; row < range.RowCount; row++)
+            {
+                var colOut = 0;
+                for (var index = 0; index < colIndexes.Count; index++)
+                {
+                    if (exactlyOnce && keyCounts[index] != 1)
+                        continue;
+
+                    cells[row, colOut] = range.Cells[row, colIndexes[index]];
+                    colOut++;
+                }
+            }
+
+            value = new RangeValue(cells);
+            return true;
+        }
+
+        private static string FormulaDynamicArrayRowKey(RangeValue range, int row)
+        {
+            var builder = new System.Text.StringBuilder();
+            for (var col = 0; col < range.ColCount; col++)
+            {
+                if (col > 0)
+                    builder.Append('\0');
+                AppendFormulaDynamicArrayUniqueKey(builder, range.Cells[row, col]);
+            }
+
+            return builder.ToString();
+        }
+
+        private static string FormulaDynamicArrayColumnKey(RangeValue range, int col)
+        {
+            var builder = new System.Text.StringBuilder();
+            for (var row = 0; row < range.RowCount; row++)
+            {
+                if (row > 0)
+                    builder.Append('\0');
+                AppendFormulaDynamicArrayUniqueKey(builder, range.Cells[row, col]);
+            }
+
+            return builder.ToString();
+        }
+
+        private static void AppendFormulaDynamicArrayUniqueKey(System.Text.StringBuilder builder, ScalarValue value)
+        {
+            switch (value)
+            {
+                case BlankValue:
+                    builder.Append("blank");
+                    break;
+                case NumberValue number:
+                    builder.Append("number:").Append(number.Value.ToString("R", CultureInfo.InvariantCulture));
+                    break;
+                case DateTimeValue dateTime:
+                    builder.Append("number:").Append(dateTime.Value.ToString("R", CultureInfo.InvariantCulture));
+                    break;
+                case TextValue text:
+                    builder.Append("text:").Append(text.Value.ToUpperInvariant());
+                    break;
+                case BoolValue boolean:
+                    builder.Append("bool:").Append(boolean.Value ? '1' : '0');
+                    break;
+                case ErrorValue error:
+                    builder.Append("error:").Append(error.Code);
+                    break;
+                default:
+                    builder.Append("other:").Append(value.ToString());
+                    break;
+            }
+        }
+
+        private static bool IsFormulaDynamicArrayBlankRow(RangeValue range, int row)
+        {
+            for (var col = 0; col < range.ColCount; col++)
+                if (range.Cells[row, col] is not BlankValue)
+                    return false;
+
+            return true;
+        }
+
+        private static bool IsFormulaDynamicArrayBlankColumn(RangeValue range, int col, int rowStart, int rowEnd)
+        {
+            for (var row = rowStart; row <= rowEnd; row++)
+                if (range.Cells[row, col] is not BlankValue)
+                    return false;
+
+            return true;
+        }
 
         private bool TryEvaluateFormulaNFunction(
             ConditionalFormulaScalarFunction function,
