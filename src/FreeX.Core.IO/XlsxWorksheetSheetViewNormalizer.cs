@@ -9,6 +9,48 @@ internal static class XlsxWorksheetSheetViewNormalizer
 {
     private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
     private static readonly IReadOnlySet<string> EmptyAttributes = new HashSet<string>(StringComparer.Ordinal);
+    private static readonly IReadOnlySet<string> SheetViewAttributes =
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            "workbookViewId",
+            "windowProtection",
+            "showFormulas",
+            "showGridLines",
+            "showRowColHeaders",
+            "showZeros",
+            "rightToLeft",
+            "tabSelected",
+            "showRuler",
+            "showOutlineSymbols",
+            "defaultGridColor",
+            "showWhiteSpace",
+            "view",
+            "topLeftCell",
+            "colorId",
+            "zoomScale",
+            "zoomScaleNormal",
+            "zoomScaleSheetLayoutView",
+            "zoomScalePageLayoutView"
+        };
+
+    private static readonly IReadOnlySet<string> PaneAttributes =
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            "xSplit",
+            "ySplit",
+            "topLeftCell",
+            "activePane",
+            "state"
+        };
+
+    private static readonly IReadOnlySet<string> SelectionAttributes =
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            "pane",
+            "activeCell",
+            "activeCellId",
+            "sqref"
+        };
 
     private static readonly HashSet<string> ValidViewModes =
     [
@@ -81,7 +123,7 @@ internal static class XlsxWorksheetSheetViewNormalizer
 
     public static bool NormalizeSheetViewElement(XElement sheetView)
     {
-        var changed = false;
+        var changed = RemoveUnknownAttributes(sheetView, SheetViewAttributes);
 
         changed |= NormalizeAttribute(sheetView, "workbookViewId", NormalizeRequiredUnsignedInt);
         changed |= NormalizeAttribute(sheetView, "view", value => NormalizeToken(value, ValidViewModes));
@@ -102,7 +144,7 @@ internal static class XlsxWorksheetSheetViewNormalizer
 
     private static bool NormalizePaneElement(XElement pane)
     {
-        var changed = false;
+        var changed = RemoveUnknownAttributes(pane, PaneAttributes);
         changed |= NormalizeAttribute(pane, "xSplit", NormalizeDouble);
         changed |= NormalizeAttribute(pane, "ySplit", NormalizeDouble);
         changed |= NormalizeAttribute(pane, "topLeftCell", NormalizeCellReference);
@@ -113,7 +155,7 @@ internal static class XlsxWorksheetSheetViewNormalizer
 
     private static bool NormalizeSelectionElement(XElement selection)
     {
-        var changed = false;
+        var changed = RemoveUnknownAttributes(selection, SelectionAttributes);
         changed |= NormalizeAttribute(selection, "pane", value => NormalizeToken(value, ValidPaneValues));
         changed |= NormalizeAttribute(selection, "activeCell", NormalizeCellReference);
         changed |= NormalizeAttribute(selection, "activeCellId", NormalizeUnsignedIntOrNull);

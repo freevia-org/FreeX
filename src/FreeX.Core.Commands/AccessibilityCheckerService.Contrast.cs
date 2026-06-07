@@ -1300,6 +1300,12 @@ public static partial class AccessibilityCheckerService
             case "DEC2OCT":
                 kind = ConditionalFormulaScalarFunctionKind.Dec2Oct;
                 return true;
+            case "BASE":
+                kind = ConditionalFormulaScalarFunctionKind.Base;
+                return true;
+            case "DECIMAL":
+                kind = ConditionalFormulaScalarFunctionKind.Decimal;
+                return true;
             case "DELTA":
                 kind = ConditionalFormulaScalarFunctionKind.Delta;
                 return true;
@@ -1439,7 +1445,9 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.BitRShift or
             ConditionalFormulaScalarFunctionKind.EDate or
             ConditionalFormulaScalarFunctionKind.EOMonth or
-            ConditionalFormulaScalarFunctionKind.Days => argumentCount == 2,
+            ConditionalFormulaScalarFunctionKind.Days or
+            ConditionalFormulaScalarFunctionKind.Decimal => argumentCount == 2,
+            ConditionalFormulaScalarFunctionKind.Base or
             ConditionalFormulaScalarFunctionKind.Days360 or
             ConditionalFormulaScalarFunctionKind.Workday or
             ConditionalFormulaScalarFunctionKind.Networkdays or
@@ -2130,6 +2138,8 @@ public static partial class AccessibilityCheckerService
         Dec2Bin,
         Dec2Hex,
         Dec2Oct,
+        Base,
+        Decimal,
         Delta,
         Erf,
         ErfPrecise,
@@ -2809,6 +2819,10 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Dec2Hex:
                 case ConditionalFormulaScalarFunctionKind.Dec2Oct:
                     return TryEvaluateFormulaDecimalToBaseFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Base:
+                    return TryEvaluateFormulaBaseFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Decimal:
+                    return TryEvaluateFormulaDecimalFunction(function, rowOffset, colOffset, out value);
                 default:
                     return false;
             }
@@ -2919,6 +2933,136 @@ public static partial class AccessibilityCheckerService
             return true;
         }
 
+        private const long FormulaBaseFunctionMaxNumber = 9007199254740992L;
+
+        private bool TryEvaluateFormulaBaseFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaOperand(function.Arguments[0], rowOffset, colOffset, out var numberValue))
+                return false;
+
+            if (numberValue is ErrorValue numberError)
+            {
+                value = numberError;
+                return true;
+            }
+
+            if (!TryResolveFormulaOperand(function.Arguments[1], rowOffset, colOffset, out var radixValue))
+                return false;
+
+            if (radixValue is ErrorValue radixError)
+            {
+                value = radixError;
+                return true;
+            }
+
+            ScalarValue minLengthValue = BlankValue.Instance;
+            if (function.Arguments.Count > 2)
+            {
+                if (!TryResolveFormulaOperand(function.Arguments[2], rowOffset, colOffset, out minLengthValue))
+                    return false;
+
+                if (minLengthValue is ErrorValue minLengthError)
+                {
+                    value = minLengthError;
+                    return true;
+                }
+            }
+
+            if (!TryGetFormulaEngineeringTruncatedInteger(numberValue, out var number) ||
+                !TryGetFormulaEngineeringTruncatedInteger(radixValue, out var radix) ||
+                number < 0 ||
+                number >= FormulaBaseFunctionMaxNumber ||
+                radix is < 2 or > 36)
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            var converted = FormulaUnsignedBaseText(number, (int)radix);
+            if (minLengthValue is BlankValue)
+            {
+                value = new TextValue(converted);
+                return true;
+            }
+
+            if (!TryGetFormulaEngineeringTruncatedInteger(minLengthValue, out var minLength) ||
+                minLength < 0 ||
+                minLength > 255)
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            value = new TextValue(converted.PadLeft((int)Math.Max(minLength, converted.Length), '0'));
+            return true;
+        }
+
+        private bool TryEvaluateFormulaDecimalFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaOperand(function.Arguments[0], rowOffset, colOffset, out var textValue))
+                return false;
+
+            if (textValue is ErrorValue textError)
+            {
+                value = textError;
+                return true;
+            }
+
+            if (!TryResolveFormulaOperand(function.Arguments[1], rowOffset, colOffset, out var radixValue))
+                return false;
+
+            if (radixValue is ErrorValue radixError)
+            {
+                value = radixError;
+                return true;
+            }
+
+            if (!TryGetFormulaEngineeringTruncatedInteger(radixValue, out var radix) ||
+                radix is < 2 or > 36)
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            var text = FormulaBaseConversionText(textValue).Trim();
+            if (text.Length == 0 || text.Length > 255)
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            double result = 0;
+            foreach (var ch in text)
+            {
+                var digit = FormulaBase36DigitValue(ch);
+                if (digit < 0 || digit >= radix)
+                {
+                    value = ErrorValue.Num;
+                    return true;
+                }
+
+                result = result * radix + digit;
+                if (result >= FormulaBaseFunctionMaxNumber)
+                {
+                    value = ErrorValue.Num;
+                    return true;
+                }
+            }
+
+            value = new NumberValue(result);
+            return true;
+        }
+
         private static bool TryParseFormulaBaseNumber(
             ScalarValue source,
             int fromBase,
@@ -2986,6 +3130,32 @@ public static partial class AccessibilityCheckerService
             var text = System.Convert.ToString(number, toBase);
             return upper ? text.ToUpperInvariant() : text;
         }
+
+        private static string FormulaUnsignedBaseText(long number, int radix)
+        {
+            const string digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            if (number == 0)
+                return "0";
+
+            Span<char> buffer = stackalloc char[64];
+            var index = buffer.Length;
+            var current = number;
+            while (current > 0)
+            {
+                buffer[--index] = digits[(int)(current % radix)];
+                current /= radix;
+            }
+
+            return new string(buffer[index..]);
+        }
+
+        private static int FormulaBase36DigitValue(char ch) => ch switch
+        {
+            >= '0' and <= '9' => ch - '0',
+            >= 'A' and <= 'Z' => ch - 'A' + 10,
+            >= 'a' and <= 'z' => ch - 'a' + 10,
+            _ => -1
+        };
 
         private static string FormulaBaseConversionText(ScalarValue value) =>
             value switch
