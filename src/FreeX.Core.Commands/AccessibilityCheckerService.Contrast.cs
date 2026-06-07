@@ -1150,6 +1150,33 @@ public static partial class AccessibilityCheckerService
             case "TAN":
                 kind = ConditionalFormulaScalarFunctionKind.Tan;
                 return true;
+            case "NORMDIST":
+            case "NORM.DIST":
+                kind = ConditionalFormulaScalarFunctionKind.NormDist;
+                return true;
+            case "NORMINV":
+            case "NORM.INV":
+                kind = ConditionalFormulaScalarFunctionKind.NormInv;
+                return true;
+            case "NORMSDIST":
+                kind = ConditionalFormulaScalarFunctionKind.NormSDistCompat;
+                return true;
+            case "NORM.S.DIST":
+                kind = ConditionalFormulaScalarFunctionKind.NormSDist;
+                return true;
+            case "NORMSINV":
+            case "NORM.S.INV":
+                kind = ConditionalFormulaScalarFunctionKind.NormSInv;
+                return true;
+            case "PHI":
+                kind = ConditionalFormulaScalarFunctionKind.Phi;
+                return true;
+            case "GAUSS":
+                kind = ConditionalFormulaScalarFunctionKind.Gauss;
+                return true;
+            case "STANDARDIZE":
+                kind = ConditionalFormulaScalarFunctionKind.Standardize;
+                return true;
             case "PI":
                 kind = ConditionalFormulaScalarFunctionKind.Pi;
                 return true;
@@ -1522,6 +1549,10 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Sec or
             ConditionalFormulaScalarFunctionKind.Cot or
             ConditionalFormulaScalarFunctionKind.Tan or
+            ConditionalFormulaScalarFunctionKind.NormSDistCompat or
+            ConditionalFormulaScalarFunctionKind.NormSInv or
+            ConditionalFormulaScalarFunctionKind.Phi or
+            ConditionalFormulaScalarFunctionKind.Gauss or
             ConditionalFormulaScalarFunctionKind.Arabic or
             ConditionalFormulaScalarFunctionKind.ErfPrecise or
             ConditionalFormulaScalarFunctionKind.Erfc or
@@ -1641,7 +1672,11 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Date or
             ConditionalFormulaScalarFunctionKind.Time or
             ConditionalFormulaScalarFunctionKind.Datedif or
+            ConditionalFormulaScalarFunctionKind.NormInv or
+            ConditionalFormulaScalarFunctionKind.Standardize or
             ConditionalFormulaScalarFunctionKind.Convert => argumentCount == 3,
+            ConditionalFormulaScalarFunctionKind.NormDist => argumentCount == 4,
+            ConditionalFormulaScalarFunctionKind.NormSDist => argumentCount == 2,
             ConditionalFormulaScalarFunctionKind.Multinomial => argumentCount is >= 1 and <= MaxFormulaMultinomialArgumentCount,
             ConditionalFormulaScalarFunctionKind.Gcd or
             ConditionalFormulaScalarFunctionKind.Lcm => argumentCount is >= 1 and <= MaxFormulaGcdArgumentCount,
@@ -2272,6 +2307,14 @@ public static partial class AccessibilityCheckerService
         Sec,
         Cot,
         Tan,
+        NormDist,
+        NormInv,
+        NormSDistCompat,
+        NormSDist,
+        NormSInv,
+        Phi,
+        Gauss,
+        Standardize,
         Pi,
         Arabic,
         Roman,
@@ -2952,6 +2995,15 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.BitLShift:
                 case ConditionalFormulaScalarFunctionKind.BitRShift:
                     return TryEvaluateFormulaNumericScalarFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.NormDist:
+                case ConditionalFormulaScalarFunctionKind.NormInv:
+                case ConditionalFormulaScalarFunctionKind.NormSDistCompat:
+                case ConditionalFormulaScalarFunctionKind.NormSDist:
+                case ConditionalFormulaScalarFunctionKind.NormSInv:
+                case ConditionalFormulaScalarFunctionKind.Phi:
+                case ConditionalFormulaScalarFunctionKind.Gauss:
+                case ConditionalFormulaScalarFunctionKind.Standardize:
+                    return TryEvaluateFormulaNormalDistributionFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Pi:
                     value = new NumberValue(Math.PI);
                     return true;
@@ -5477,6 +5529,306 @@ public static partial class AccessibilityCheckerService
             };
 
             return value is NumberValue;
+        }
+
+        private bool TryEvaluateFormulaNormalDistributionFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            var arguments = new ScalarValue[function.Arguments.Count];
+            for (var i = 0; i < function.Arguments.Count; i++)
+            {
+                if (function.Arguments[i].Kind == ConditionalFormulaOperandKind.ReferenceRange ||
+                    !TryResolveFormulaOperand(function.Arguments[i], rowOffset, colOffset, out arguments[i]))
+                {
+                    return false;
+                }
+            }
+
+            for (var i = 0; i < arguments.Length; i++)
+            {
+                if (arguments[i] is ErrorValue error)
+                {
+                    value = error;
+                    return true;
+                }
+            }
+
+            if (arguments.Any(static argument => argument is RangeValue))
+                return false;
+
+            switch (function.Kind)
+            {
+                case ConditionalFormulaScalarFunctionKind.NormDist:
+                    if (!TryGetFormulaNormalNumber(arguments[0], out var normDistX) ||
+                        !TryGetFormulaNormalNumber(arguments[1], out var normDistMean) ||
+                        !TryGetFormulaNormalNumber(arguments[2], out var normDistStdev) ||
+                        !TryGetFormulaNormalBoolean(arguments[3], out var normDistCumulative))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaNormDistScalar(normDistX, normDistMean, normDistStdev, normDistCumulative);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.NormInv:
+                    if (!TryGetFormulaNormalNumber(arguments[0], out var normInvProbability) ||
+                        !TryGetFormulaNormalNumber(arguments[1], out var normInvMean) ||
+                        !TryGetFormulaNormalNumber(arguments[2], out var normInvStdev))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaNormInvScalar(normInvProbability, normInvMean, normInvStdev);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.NormSDistCompat:
+                    if (!TryGetFormulaNormalNumber(arguments[0], out var normSDistCompatZ))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaNormalNumberResult(FormulaNormSCdf(normSDistCompatZ));
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.NormSDist:
+                    if (!TryGetFormulaNormalNumber(arguments[0], out var normSDistZ) ||
+                        !TryGetFormulaNormalBoolean(arguments[1], out var normSDistCumulative))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaNormalNumberResult(normSDistCumulative
+                        ? FormulaNormSCdf(normSDistZ)
+                        : FormulaNormSPdf(normSDistZ));
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.NormSInv:
+                    if (!TryGetFormulaNormalNumber(arguments[0], out var normSInvProbability))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaNormSInvScalar(normSInvProbability);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Phi:
+                    if (!TryGetFormulaNormalNumber(arguments[0], out var phiX))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaNormalNumberResult(FormulaNormSPdf(phiX));
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Gauss:
+                    if (!TryGetFormulaNormalNumber(arguments[0], out var gaussZ))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaNormalNumberResult(FormulaNormSCdf(gaussZ) - 0.5d);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Standardize:
+                    if (!TryGetFormulaNormalNumber(arguments[0], out var standardizeX) ||
+                        !TryGetFormulaNormalNumber(arguments[1], out var standardizeMean) ||
+                        !TryGetFormulaNormalNumber(arguments[2], out var standardizeStdev))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaStandardizeScalar(standardizeX, standardizeMean, standardizeStdev);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static bool TryGetFormulaNormalNumber(ScalarValue value, out double number)
+        {
+            switch (value)
+            {
+                case NumberValue numeric:
+                    number = numeric.Value;
+                    break;
+                case DateTimeValue dateTime:
+                    number = dateTime.Value;
+                    break;
+                case BoolValue boolean:
+                    number = boolean.Value ? 1d : 0d;
+                    break;
+                case BlankValue:
+                    number = 0d;
+                    break;
+                default:
+                    number = 0d;
+                    return false;
+            }
+
+            return double.IsFinite(number);
+        }
+
+        private static bool TryGetFormulaNormalBoolean(ScalarValue value, out bool boolean)
+        {
+            switch (value)
+            {
+                case BoolValue logical:
+                    boolean = logical.Value;
+                    return true;
+                case NumberValue numeric when double.IsFinite(numeric.Value):
+                    boolean = numeric.Value != 0d;
+                    return true;
+                case DateTimeValue dateTime when double.IsFinite(dateTime.Value):
+                    boolean = dateTime.Value != 0d;
+                    return true;
+                case BlankValue:
+                    boolean = false;
+                    return true;
+                default:
+                    boolean = false;
+                    return false;
+            }
+        }
+
+        private static ScalarValue FormulaNormDistScalar(double x, double mean, double stdev, bool cumulative)
+        {
+            if (stdev <= 0d)
+                return ErrorValue.Num;
+
+            var z = (x - mean) / stdev;
+            return FormulaNormalNumberResult(cumulative ? FormulaNormSCdf(z) : FormulaNormSPdf(z) / stdev);
+        }
+
+        private static ScalarValue FormulaNormInvScalar(double probability, double mean, double stdev)
+        {
+            if (stdev <= 0d || probability <= 0d || probability >= 1d)
+                return ErrorValue.Num;
+
+            return FormulaNormalNumberResult(FormulaNormSInv(probability) * stdev + mean);
+        }
+
+        private static ScalarValue FormulaNormSInvScalar(double probability)
+        {
+            if (probability <= 0d || probability >= 1d)
+                return ErrorValue.Num;
+
+            return FormulaNormalNumberResult(FormulaNormSInv(probability));
+        }
+
+        private static ScalarValue FormulaStandardizeScalar(double x, double mean, double stdev)
+        {
+            if (stdev <= 0d)
+                return ErrorValue.Num;
+
+            return FormulaNormalNumberResult((x - mean) / stdev);
+        }
+
+        private static ScalarValue FormulaNormalNumberResult(double result) =>
+            double.IsFinite(result) ? new NumberValue(result) : ErrorValue.Num;
+
+        private static double FormulaNormalErfc(double x)
+        {
+            var z = Math.Abs(x);
+            var t = 2.0d / (2.0d + z);
+            var ty = 4.0d * t - 2.0d;
+            var d = 0.0d;
+            var dd = 0.0d;
+            ReadOnlySpan<double> coefficients =
+            [
+                -1.3026537197817094d,
+                 0.64196979235649026d,
+                 0.019476473204185836d,
+                -0.009561514786808631d,
+                -0.000946595344482036d,
+                 0.000366839497852761d,
+                 0.000042523324806907d,
+                -0.000020278578112534d,
+                -0.000001624290004647d,
+                 0.00000130365583558d,
+                 0.000000015626441722d,
+                -0.000000085238095915d,
+                 0.000000006529054439d,
+                 0.000000005059343495d,
+                -0.000000000991364156d,
+                -0.000000000227365122d,
+                 0.000000000096467911d,
+                 0.000000000002394038d,
+                -0.000000000006886027d,
+                 0.000000000000894487d,
+                 0.000000000000313092d,
+                -0.000000000000112708d,
+                 0.000000000000000381d,
+                 0.000000000000007106d,
+                -0.000000000000001523d,
+                -0.000000000000000094d,
+                 0.000000000000000121d,
+                -0.000000000000000028d
+            ];
+
+            for (var j = coefficients.Length - 1; j > 0; j--)
+            {
+                var previous = d;
+                d = ty * d - dd + coefficients[j];
+                dd = previous;
+            }
+
+            var result = t * Math.Exp(-z * z + 0.5d * (coefficients[0] + ty * d) - dd);
+            return x >= 0.0d ? result : 2.0d - result;
+        }
+
+        private static double FormulaNormalErf(double x) =>
+            x >= 0.0d ? 1.0d - FormulaNormalErfc(x) : FormulaNormalErfc(-x) - 1.0d;
+
+        private static double FormulaNormSCdf(double z) =>
+            0.5d * (1.0d + FormulaNormalErf(z / Math.Sqrt(2.0d)));
+
+        private static double FormulaNormSPdf(double z) =>
+            Math.Exp(-0.5d * z * z) / Math.Sqrt(2.0d * Math.PI);
+
+        private static double FormulaNormSInv(double probability)
+        {
+            if (probability == 0.5d)
+                return 0.0d;
+
+            const double plow = 0.02425d;
+            const double phigh = 1.0d - plow;
+            double x;
+
+            if (probability < plow)
+            {
+                var q = Math.Sqrt(-2.0d * Math.Log(probability));
+                x = (((((-0.007784894002430293d * q - 0.3223964580411365d) * q - 2.400758277161838d) * q - 2.549732539343734d) * q + 4.374664141464968d) * q + 2.938163982698783d) /
+                    ((((0.007784695709041462d * q + 0.3224671290700398d) * q + 2.445134137142996d) * q + 3.754408661907416d) * q + 1.0d);
+            }
+            else if (probability <= phigh)
+            {
+                var q = probability - 0.5d;
+                var r = q * q;
+                x = (((((-39.69683028665376d * r + 220.9460984245205d) * r - 275.9285104469687d) * r + 138.3577518672690d) * r - 30.66479806614716d) * r + 2.506628277459239d) * q /
+                    (((((-54.47609879822406d * r + 161.5858368580409d) * r - 155.6989798598866d) * r + 66.80131188771972d) * r - 13.28068155288572d) * r + 1.0d);
+            }
+            else
+            {
+                var q = Math.Sqrt(-2.0d * Math.Log(1.0d - probability));
+                x = -(((((-0.007784894002430293d * q - 0.3223964580411365d) * q - 2.400758277161838d) * q - 2.549732539343734d) * q + 4.374664141464968d) * q + 2.938163982698783d) /
+                    ((((0.007784695709041462d * q + 0.3224671290700398d) * q + 2.445134137142996d) * q + 3.754408661907416d) * q + 1.0d);
+            }
+
+            for (var i = 0; i < 2; i++)
+            {
+                var pdf = FormulaNormSPdf(x);
+                if (pdf == 0d || !double.IsFinite(pdf))
+                    break;
+
+                x -= (FormulaNormSCdf(x) - probability) / pdf;
+            }
+
+            return x;
         }
 
         private bool TryEvaluateFormulaNumericScalarFunction(

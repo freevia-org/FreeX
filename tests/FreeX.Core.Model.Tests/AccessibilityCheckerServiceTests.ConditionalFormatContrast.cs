@@ -2354,6 +2354,57 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatNormalDistributionScalarFunctions()
+    {
+        AssertFormulaNormalDistributionFunctionContrastLocations("AND($G1,NORMDIST($A1,$C1,$D1,TRUE)>0.8)", "B2", "B4");
+        AssertFormulaNormalDistributionFunctionContrastLocations("AND($G1,NORM.DIST($A1,$C1,$D1,FALSE)>0.39)", "B1");
+        AssertFormulaNormalDistributionFunctionContrastLocations("AND($G1,NORMINV($E1,$C1,$D1)>0.9)", "B2", "B4");
+        AssertFormulaNormalDistributionFunctionContrastLocations("AND($G1,NORM.INV($E1,$C1,$D1)<0)", "B3");
+        AssertFormulaNormalDistributionFunctionContrastLocations("AND($G1,NORMSDIST($A1)>0.8)", "B2", "B4");
+        AssertFormulaNormalDistributionFunctionContrastLocations("AND($G1,NORM.S.DIST($A1,$F1)>0.45)", "B1");
+        AssertFormulaNormalDistributionFunctionContrastLocations("AND($G1,NORMSINV($E1)>0.9)", "B2", "B4");
+        AssertFormulaNormalDistributionFunctionContrastLocations("AND($G1,NORM.S.INV($E1)<0)", "B3");
+        AssertFormulaNormalDistributionFunctionContrastLocations("AND($G1,PHI($A1)>0.24)", "B1", "B2", "B3");
+        AssertFormulaNormalDistributionFunctionContrastLocations("AND($G1,GAUSS($A1)>0.3)", "B2", "B4");
+        AssertFormulaNormalDistributionFunctionContrastLocations("AND($G1,STANDARDIZE($A1,$C1,$D1)>1.5)", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatNormalDistributionNestedScalars()
+    {
+        AssertFormulaNormalDistributionFunctionContrastLocations("AND($G1,NORM.DIST(ABS($A1),$C1,$D1,TRUE)>0.8)", "B2", "B3", "B4");
+        AssertFormulaNormalDistributionFunctionContrastLocations("AND($G1,SUM(NORMSINV($E1),STANDARDIZE($A1,$C1,$D1))>1.9)", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatNormalDistributionErrorPredicates()
+    {
+        AssertFormulaNormalDistributionFunctionContrastLocations("ISERROR(NORM.DIST($A1,$C1,$D1,TRUE))", "B5", "B8", "B9");
+        AssertFormulaNormalDistributionFunctionContrastLocations("ISNA(NORM.DIST($A1,$C1,$D1,TRUE))", "B8");
+        AssertFormulaNormalDistributionFunctionContrastLocations("ISERR(NORM.DIST($A1,$C1,$D1,TRUE))", "B5", "B9");
+        AssertFormulaNormalDistributionFunctionContrastLocations("ISERROR(NORM.INV($E1,$C1,$D1))", "B5", "B6", "B7", "B8", "B9");
+        AssertFormulaNormalDistributionFunctionContrastLocations("ISNA(NORM.INV($E1,$C1,$D1))", "B8");
+        AssertFormulaNormalDistributionFunctionContrastLocations("ISERROR(NORM.S.DIST($A1,$F1))", "B8", "B9");
+        AssertFormulaNormalDistributionFunctionContrastLocations("ISERROR(NORM.S.INV($E1))", "B6", "B7", "B8", "B9");
+        AssertFormulaNormalDistributionFunctionContrastLocations("ISERROR(PHI($A1))", "B8", "B9");
+        AssertFormulaNormalDistributionFunctionContrastLocations("ISERROR(GAUSS($A1))", "B8", "B9");
+        AssertFormulaNormalDistributionFunctionContrastLocations("ISERROR(STANDARDIZE($A1,$C1,$D1))", "B5", "B8", "B9");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatNormalDistributionUnsupportedShapes()
+    {
+        AssertFormulaNormalDistributionFunctionContrastLocations("NORM.DIST($A$1:$A$2,0,1,TRUE)>0");
+        AssertFormulaNormalDistributionFunctionContrastLocations("NORM.INV($E1,$C1)>0");
+        AssertFormulaNormalDistributionFunctionContrastLocations("NORM.S.DIST($A1)>0");
+        AssertFormulaNormalDistributionFunctionContrastLocations("NORMSDIST($A1,TRUE)>0");
+        AssertFormulaNormalDistributionFunctionContrastLocations("PHI($A$1:$A$2)>0");
+        AssertFormulaNormalDistributionFunctionContrastLocations("GAUSS(KURT($A1))>0");
+        AssertFormulaNormalDistributionFunctionContrastLocations("STANDARDIZE($A1,$C1,$D1,1)>0");
+        AssertFormulaNormalDistributionFunctionContrastLocations("NORM.DIST($A1,$C1,$D1,\"TRUE\")>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatConvertScalarComparisons()
     {
         AssertFormulaConvertFunctionContrastLocations("CONVERT($A1,$C1,$D1)=1000", "B1");
@@ -4821,6 +4872,130 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 7), new TextValue(status));
     }
 
+    private static Workbook CreateFormulaNormalDistributionFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 9, 2);
+
+        SetFormulaNormalDistributionFunctionContrastRow(
+            sheet,
+            1,
+            new NumberValue(0),
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(0.5),
+            new BoolValue(true),
+            active: true,
+            "Center");
+        SetFormulaNormalDistributionFunctionContrastRow(
+            sheet,
+            2,
+            new NumberValue(1),
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(0.841344746068543),
+            new BoolValue(false),
+            active: true,
+            "Positive one");
+        SetFormulaNormalDistributionFunctionContrastRow(
+            sheet,
+            3,
+            new NumberValue(-1),
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(0.158655253931457),
+            new BoolValue(true),
+            active: true,
+            "Negative one");
+        SetFormulaNormalDistributionFunctionContrastRow(
+            sheet,
+            4,
+            new NumberValue(2),
+            new NumberValue(1),
+            new NumberValue(0.5),
+            new NumberValue(0.977249868051821),
+            new BoolValue(false),
+            active: true,
+            "Shifted scaled");
+        SetFormulaNormalDistributionFunctionContrastRow(
+            sheet,
+            5,
+            new NumberValue(1),
+            new NumberValue(0),
+            new NumberValue(0),
+            new NumberValue(0.5),
+            new BoolValue(true),
+            active: false,
+            "Zero stdev");
+        SetFormulaNormalDistributionFunctionContrastRow(
+            sheet,
+            6,
+            new NumberValue(0),
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(0),
+            new BoolValue(true),
+            active: false,
+            "Zero probability");
+        SetFormulaNormalDistributionFunctionContrastRow(
+            sheet,
+            7,
+            new NumberValue(0),
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(1),
+            new BoolValue(true),
+            active: false,
+            "One probability");
+        SetFormulaNormalDistributionFunctionContrastRow(
+            sheet,
+            8,
+            ErrorValue.NA,
+            new NumberValue(0),
+            new NumberValue(1),
+            ErrorValue.NA,
+            new BoolValue(true),
+            active: false,
+            "NA source");
+        SetFormulaNormalDistributionFunctionContrastRow(
+            sheet,
+            9,
+            new TextValue("Open"),
+            new NumberValue(0),
+            new NumberValue(1),
+            new TextValue("Open"),
+            new BoolValue(true),
+            active: false,
+            "Value source");
+
+        return workbook;
+    }
+
+    private static void SetFormulaNormalDistributionFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        ScalarValue x,
+        ScalarValue mean,
+        ScalarValue stdev,
+        ScalarValue probability,
+        ScalarValue cumulative,
+        bool active,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), x);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), mean);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 4), stdev);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 5), probability);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 6), cumulative);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 7), new BoolValue(active));
+    }
+
     private static Workbook CreateFormulaConvertFunctionContrastWorkbook(
         out Sheet sheet,
         out CellAddress firstLabel,
@@ -5383,6 +5558,20 @@ public sealed partial class AccessibilityCheckerServiceTests
         params string[] expectedLocations)
     {
         var workbook = CreateFormulaBaseConversionFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaNormalDistributionFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaNormalDistributionFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
 
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
 
