@@ -1347,6 +1347,24 @@ public static partial class AccessibilityCheckerService
             case "PDURATION":
                 kind = ConditionalFormulaScalarFunctionKind.Pduration;
                 return true;
+            case "COUPDAYBS":
+                kind = ConditionalFormulaScalarFunctionKind.Coupdaybs;
+                return true;
+            case "COUPDAYS":
+                kind = ConditionalFormulaScalarFunctionKind.Coupdays;
+                return true;
+            case "COUPDAYSNC":
+                kind = ConditionalFormulaScalarFunctionKind.Coupdaysnc;
+                return true;
+            case "COUPNCD":
+                kind = ConditionalFormulaScalarFunctionKind.Coupncd;
+                return true;
+            case "COUPNUM":
+                kind = ConditionalFormulaScalarFunctionKind.Coupnum;
+                return true;
+            case "COUPPCD":
+                kind = ConditionalFormulaScalarFunctionKind.Couppcd;
+                return true;
             case "PI":
                 kind = ConditionalFormulaScalarFunctionKind.Pi;
                 return true;
@@ -1928,6 +1946,12 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Db or
             ConditionalFormulaScalarFunctionKind.Ddb => argumentCount is 4 or 5,
             ConditionalFormulaScalarFunctionKind.Vdb => argumentCount is >= 5 and <= 7,
+            ConditionalFormulaScalarFunctionKind.Coupdaybs or
+            ConditionalFormulaScalarFunctionKind.Coupdays or
+            ConditionalFormulaScalarFunctionKind.Coupdaysnc or
+            ConditionalFormulaScalarFunctionKind.Coupncd or
+            ConditionalFormulaScalarFunctionKind.Coupnum or
+            ConditionalFormulaScalarFunctionKind.Couppcd => argumentCount is 3 or 4,
             ConditionalFormulaScalarFunctionKind.TDistRt or
             ConditionalFormulaScalarFunctionKind.TDist2T or
             ConditionalFormulaScalarFunctionKind.TInv or
@@ -2724,6 +2748,12 @@ public static partial class AccessibilityCheckerService
         Nominal,
         Rri,
         Pduration,
+        Coupdaybs,
+        Coupdays,
+        Coupdaysnc,
+        Coupncd,
+        Coupnum,
+        Couppcd,
         Pi,
         Arabic,
         Roman,
@@ -3497,6 +3527,12 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Nominal:
                 case ConditionalFormulaScalarFunctionKind.Rri:
                 case ConditionalFormulaScalarFunctionKind.Pduration:
+                case ConditionalFormulaScalarFunctionKind.Coupdaybs:
+                case ConditionalFormulaScalarFunctionKind.Coupdays:
+                case ConditionalFormulaScalarFunctionKind.Coupdaysnc:
+                case ConditionalFormulaScalarFunctionKind.Coupncd:
+                case ConditionalFormulaScalarFunctionKind.Coupnum:
+                case ConditionalFormulaScalarFunctionKind.Couppcd:
                     return TryEvaluateFormulaFinancialScalarFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Pi:
                     value = new NumberValue(Math.PI);
@@ -9351,6 +9387,25 @@ public static partial class AccessibilityCheckerService
 
                     value = FormulaFinancialPdurationScalar(pdurationRate, pdurationPv, pdurationFv);
                     return true;
+                case ConditionalFormulaScalarFunctionKind.Coupdaybs:
+                case ConditionalFormulaScalarFunctionKind.Coupdays:
+                case ConditionalFormulaScalarFunctionKind.Coupdaysnc:
+                case ConditionalFormulaScalarFunctionKind.Coupncd:
+                case ConditionalFormulaScalarFunctionKind.Coupnum:
+                case ConditionalFormulaScalarFunctionKind.Couppcd:
+                    if (!TryGetFormulaFinancialCouponArguments(
+                            arguments,
+                            out var couponSettlement,
+                            out var couponMaturity,
+                            out var couponFrequency,
+                            out var couponBasis,
+                            out value))
+                    {
+                        return true;
+                    }
+
+                    value = FormulaFinancialCouponScalar(function.Kind, couponSettlement, couponMaturity, couponFrequency, couponBasis);
+                    return true;
                 default:
                     return false;
             }
@@ -9645,6 +9700,165 @@ public static partial class AccessibilityCheckerService
                 return ErrorValue.Num;
 
             return FormulaFinancialNumberResult((Math.Log(fv) - Math.Log(pv)) / Math.Log(1d + rate));
+        }
+
+        private static bool TryGetFormulaFinancialCouponArguments(
+            IReadOnlyList<ScalarValue> arguments,
+            out double settlement,
+            out double maturity,
+            out int frequency,
+            out int basis,
+            out ScalarValue error)
+        {
+            settlement = 0d;
+            maturity = 0d;
+            frequency = 0;
+            basis = 0;
+            if (!TryGetFormulaFinancialNumber(arguments[0], out settlement, out error) ||
+                !TryGetFormulaFinancialNumber(arguments[1], out maturity, out error) ||
+                !TryGetFormulaFinancialNumber(arguments[2], out var rawFrequency, out error))
+            {
+                return false;
+            }
+
+            if (!TryGetFormulaFinancialCouponFrequency(rawFrequency, out frequency))
+            {
+                error = ErrorValue.Num;
+                return false;
+            }
+
+            if (!TryGetFormulaFinancialOptionalNumber(arguments, 3, 0d, out var rawBasis, out error))
+                return false;
+
+            if (!TryGetFormulaFinancialCouponBasis(rawBasis, out basis))
+            {
+                error = ErrorValue.Num;
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryGetFormulaFinancialCouponFrequency(double rawFrequency, out int frequency)
+        {
+            frequency = 0;
+            if (!double.IsFinite(rawFrequency) ||
+                rawFrequency < int.MinValue ||
+                rawFrequency > int.MaxValue)
+            {
+                return false;
+            }
+
+            frequency = (int)Math.Truncate(rawFrequency);
+            return frequency is 1 or 2 or 4;
+        }
+
+        private static bool TryGetFormulaFinancialCouponBasis(double rawBasis, out int basis)
+        {
+            basis = 0;
+            if (!double.IsFinite(rawBasis) ||
+                rawBasis < int.MinValue ||
+                rawBasis > int.MaxValue)
+            {
+                return false;
+            }
+
+            basis = (int)Math.Truncate(rawBasis);
+            return basis is >= 0 and <= 4;
+        }
+
+        private static ScalarValue FormulaFinancialCouponScalar(
+            ConditionalFormulaScalarFunctionKind kind,
+            double settlement,
+            double maturity,
+            int frequency,
+            int basis)
+        {
+            if (!TryGetFormulaFinancialCouponDate(settlement, out var settlementDate) ||
+                !TryGetFormulaFinancialCouponDate(maturity, out var maturityDate) ||
+                settlementDate >= maturityDate)
+            {
+                return ErrorValue.Num;
+            }
+
+            try
+            {
+                var previousCouponDate = FormulaFinancialCouponDateBefore(settlementDate, maturityDate, frequency);
+                var nextCouponDate = previousCouponDate.AddMonths(12 / frequency);
+                return kind switch
+                {
+                    ConditionalFormulaScalarFunctionKind.Coupdaybs =>
+                        FormulaFinancialNumberResult((settlementDate - previousCouponDate).TotalDays),
+                    ConditionalFormulaScalarFunctionKind.Coupdays =>
+                        FormulaFinancialNumberResult(basis == 1
+                            ? (nextCouponDate - previousCouponDate).TotalDays
+                            : 365d / frequency),
+                    ConditionalFormulaScalarFunctionKind.Coupdaysnc =>
+                        FormulaFinancialNumberResult((nextCouponDate - settlementDate).TotalDays),
+                    ConditionalFormulaScalarFunctionKind.Coupncd =>
+                        FormulaFinancialNumberResult(FormulaDateToExcelSerial(nextCouponDate)),
+                    ConditionalFormulaScalarFunctionKind.Coupnum =>
+                        FormulaFinancialNumberResult(FormulaFinancialCouponCount(settlementDate, maturityDate, frequency)),
+                    ConditionalFormulaScalarFunctionKind.Couppcd =>
+                        FormulaFinancialNumberResult(FormulaDateToExcelSerial(previousCouponDate)),
+                    _ => ErrorValue.Value
+                };
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return ErrorValue.Num;
+            }
+        }
+
+        private static bool TryGetFormulaFinancialCouponDate(double serial, out DateTime date)
+        {
+            date = default;
+            if (!double.IsFinite(serial) ||
+                serial < 0d ||
+                serial > 2958465d)
+            {
+                return false;
+            }
+
+            try
+            {
+                date = FormulaExcelSerialToDate(serial);
+                return true;
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return false;
+            }
+        }
+
+        private static DateTime FormulaFinancialCouponDateBefore(
+            DateTime settlement,
+            DateTime maturity,
+            int frequency)
+        {
+            var months = 12 / frequency;
+            var previous = maturity;
+            while (previous > settlement)
+                previous = previous.AddMonths(-months);
+
+            return previous;
+        }
+
+        private static int FormulaFinancialCouponCount(
+            DateTime settlement,
+            DateTime maturity,
+            int frequency)
+        {
+            var months = 12 / frequency;
+            var count = 0;
+            var current = maturity;
+            while (current > settlement)
+            {
+                count++;
+                current = current.AddMonths(-months);
+            }
+
+            return count;
         }
 
         private static bool TryGetFormulaFinancialInteger(double value, out int integer)
