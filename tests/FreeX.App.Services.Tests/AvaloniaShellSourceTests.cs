@@ -2329,4 +2329,42 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_session.SelectRange(new GridRange(_session.ActiveCell, address));");
         source.Should().Contain("RefreshShell(\"Ready\");");
     }
+
+    [Fact]
+    public void MainWindow_WiresFindGoToThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("private readonly NativeMenuItem _findMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _findNextMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _goToMenuItem = new();");
+        source.Should().Contain("_findMenuItem.Header = \"Find...\";");
+        source.Should().Contain("_findMenuItem.Gesture = new KeyGesture(Key.F, KeyModifiers.Meta);");
+        source.Should().Contain("_findMenuItem.Click += async (_, _) => await ShowFindDialogAsync();");
+        source.Should().Contain("_findNextMenuItem.Header = \"Find Next\";");
+        source.Should().Contain("_findNextMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Meta);");
+        source.Should().Contain("_findNextMenuItem.Click += (_, _) => FindNext();");
+        source.Should().Contain("_goToMenuItem.Header = \"Go To...\";");
+        source.Should().Contain("_goToMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control);");
+        source.Should().Contain("_goToMenuItem.Click += async (_, _) => await ShowGoToDialogAsync();");
+        source.Should().Contain("editMenu.Items.Add(_findMenuItem);");
+        source.Should().Contain("editMenu.Items.Add(_findNextMenuItem);");
+        source.Should().Contain("editMenu.Items.Add(_goToMenuItem);");
+        source.Should().Contain("_findMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("_findNextMenuItem.IsEnabled = isIdle && !string.IsNullOrWhiteSpace(_session.LastFindText);");
+        source.Should().Contain("_goToMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("private async Task ShowFindDialogAsync()");
+        source.Should().Contain("private void FindNext(string? searchText = null)");
+        source.Should().Contain("private async Task ShowGoToDialogAsync()");
+        source.Should().Contain("private async Task<string?> ShowSingleInputDialogAsync(");
+        source.Should().Contain("\"FindTextBox\"");
+        source.Should().Contain("\"GoToReferenceBox\"");
+        source.Should().Contain("var result = _session.FindNext(searchText);");
+        source.Should().Contain("var result = _session.GoToReference(reference);");
+        source.Should().Contain("FormatRangeReference(result.SelectedRange!.Value)");
+        source.Should().Contain("e.Key == Key.F5");
+        source.Should().Contain("e.Key == Key.F && HasOnlyCommandModifier(e.KeyModifiers)");
+        source.Should().Contain("e.Key == Key.G && e.KeyModifiers == KeyModifiers.Meta");
+        source.Should().Contain("e.Key == Key.G && HasOnlyControlModifier(e.KeyModifiers)");
+    }
 }

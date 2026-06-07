@@ -176,6 +176,87 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void GoToReference_SelectsRangeAcrossSheetsWithoutDirtyingWorkbook()
+    {
+        var workbook = CreateWorkbook();
+        var dataSheet = workbook.AddSheet("Data Sheet");
+        var expectedRange = new GridRange(
+            new CellAddress(dataSheet.Id, 2, 2),
+            new CellAddress(dataSheet.Id, 4, 3));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var result = session.GoToReference("'Data Sheet'!B2:C4");
+
+        result.Success.Should().BeTrue();
+        result.SelectedRange.Should().Be(expectedRange);
+        session.ActiveSheet.Id.Should().Be(dataSheet.Id);
+        session.SelectedRange.Should().Be(expectedRange);
+        session.ActiveCell.Should().Be(expectedRange.Start);
+        session.FormulaEditAddress.Should().BeNull();
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public void GoToReference_RejectsInvalidReferenceWithoutChangingSelection()
+    {
+        var workbook = CreateWorkbook();
+        workbook.AddSheet("Data");
+        var sheet = workbook.Sheets[0];
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        var originalRange = session.SelectedRange;
+
+        var result = session.GoToReference("Missing!A1");
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be("Reference is not valid.");
+        session.ActiveSheet.Id.Should().Be(sheet.Id);
+        session.SelectedRange.Should().Be(originalRange);
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public void FindNext_StartsAfterActiveCellThenWrapsAndStoresLastText()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        var a3 = new CellAddress(sheet.Id, 3, 1);
+        sheet.SetCell(a1, new TextValue("needle one"));
+        sheet.SetCell(c1, new TextValue("needle two"));
+        sheet.SetCell(a3, new TextValue("needle three"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var first = session.FindNext("needle");
+        var second = session.FindNext();
+        var third = session.FindNext();
+
+        first.Success.Should().BeTrue();
+        first.SelectedRange.Should().Be(new GridRange(c1, c1));
+        first.MatchIndex.Should().Be(2);
+        first.MatchCount.Should().Be(3);
+        second.SelectedRange.Should().Be(new GridRange(a3, a3));
+        second.MatchIndex.Should().Be(3);
+        third.SelectedRange.Should().Be(new GridRange(a1, a1));
+        third.MatchIndex.Should().Be(1);
+        session.LastFindText.Should().Be("needle");
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
     public void CreateOpened_CreatesTemplateSessionWithOpenMetadata()
     {
         var path = Path.Combine(Path.GetTempPath(), "Budget.xltx");

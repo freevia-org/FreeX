@@ -192,6 +192,9 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _pasteSpecialMenuItem = new();
     private readonly NativeMenuItem _formatPainterMenuItem = new();
     private readonly NativeMenuItem _selectAllMenuItem = new();
+    private readonly NativeMenuItem _findMenuItem = new();
+    private readonly NativeMenuItem _findNextMenuItem = new();
+    private readonly NativeMenuItem _goToMenuItem = new();
     private readonly NativeMenuItem _autoSumMenuItem = new();
     private readonly NativeMenuItem _autoSumSumMenuItem = new();
     private readonly NativeMenuItem _autoSumAverageMenuItem = new();
@@ -493,6 +496,18 @@ public sealed class MainWindow : Window
         _selectAllMenuItem.Gesture = new KeyGesture(Key.A, KeyModifiers.Meta);
         _selectAllMenuItem.Click += (_, _) => SelectCurrentRegionOrAll();
 
+        _findMenuItem.Header = "Find...";
+        _findMenuItem.Gesture = new KeyGesture(Key.F, KeyModifiers.Meta);
+        _findMenuItem.Click += async (_, _) => await ShowFindDialogAsync();
+
+        _findNextMenuItem.Header = "Find Next";
+        _findNextMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Meta);
+        _findNextMenuItem.Click += (_, _) => FindNext();
+
+        _goToMenuItem.Header = "Go To...";
+        _goToMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control);
+        _goToMenuItem.Click += async (_, _) => await ShowGoToDialogAsync();
+
         _autoSumMenuItem.Header = "AutoSum";
         _autoSumMenuItem.Menu = CreateNativeAutoSumMenu();
 
@@ -745,6 +760,11 @@ public sealed class MainWindow : Window
         editMenu.Items.Add(_formatPainterMenuItem);
         editMenu.Items.Add(new NativeMenuItemSeparator());
         editMenu.Items.Add(_selectAllMenuItem);
+        editMenu.Items.Add(new NativeMenuItemSeparator());
+        editMenu.Items.Add(_findMenuItem);
+        editMenu.Items.Add(_findNextMenuItem);
+        editMenu.Items.Add(_goToMenuItem);
+        editMenu.Items.Add(new NativeMenuItemSeparator());
         editMenu.Items.Add(_autoSumMenuItem);
         editMenu.Items.Add(_fillCellsMenuItem);
         editMenu.Items.Add(_clearMenuItem);
@@ -1456,6 +1476,9 @@ public sealed class MainWindow : Window
         _pasteSpecialMenuItem.IsEnabled = _pasteSpecialButton.IsEnabled;
         _formatPainterMenuItem.IsEnabled = _formatPainterButton.IsEnabled;
         _selectAllMenuItem.IsEnabled = isIdle;
+        _findMenuItem.IsEnabled = isIdle;
+        _findNextMenuItem.IsEnabled = isIdle && !string.IsNullOrWhiteSpace(_session.LastFindText);
+        _goToMenuItem.IsEnabled = isIdle;
         _autoSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
         _autoSumSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
         _autoSumAverageMenuItem.IsEnabled = _autoSumButton.IsEnabled;
@@ -3800,6 +3823,160 @@ public sealed class MainWindow : Window
         return result;
     }
 
+    private async Task ShowFindDialogAsync()
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var searchText = await ShowSingleInputDialogAsync(
+            "Find",
+            "Find what",
+            _session.LastFindText,
+            "Find",
+            "FindTextBox");
+        if (searchText is null)
+            return;
+
+        FindNext(searchText);
+    }
+
+    private void FindNext(string? searchText = null)
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var result = _session.FindNext(searchText);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Find failed.");
+            return;
+        }
+
+        RefreshShell($"Found {FormatRangeReference(result.SelectedRange!.Value)} ({result.MatchIndex} of {result.MatchCount})");
+    }
+
+    private async Task ShowGoToDialogAsync()
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var reference = await ShowSingleInputDialogAsync(
+            "Go To",
+            "Reference",
+            FormatRangeReference(_session.SelectedRange),
+            "Go",
+            "GoToReferenceBox");
+        if (reference is null)
+            return;
+
+        var result = _session.GoToReference(reference);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Go To failed.");
+            return;
+        }
+
+        RefreshShell($"Selected {FormatRangeReference(result.SelectedRange!.Value)}");
+    }
+
+    private async Task<string?> ShowSingleInputDialogAsync(
+        string title,
+        string label,
+        string initialText,
+        string acceptText,
+        string automationId)
+    {
+        string? result = null;
+        var dialog = new Window
+        {
+            Title = title,
+            Width = 380,
+            Height = 165,
+            MinWidth = 340,
+            MinHeight = 155,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+
+        var inputBox = new TextBox
+        {
+            Text = initialText,
+            MinWidth = 280,
+        };
+        AutomationProperties.SetName(inputBox, label);
+        AutomationProperties.SetAutomationId(inputBox, automationId);
+
+        var acceptButton = new Button
+        {
+            Content = acceptText,
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(acceptButton, $"{automationId}AcceptButton");
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(cancelButton, $"{automationId}CancelButton");
+
+        void Accept()
+        {
+            result = inputBox.Text ?? "";
+            dialog.Close();
+        }
+
+        acceptButton.Click += (_, _) => Accept();
+        cancelButton.Click += (_, _) => dialog.Close();
+        inputBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                Accept();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                dialog.Close();
+                e.Handled = true;
+            }
+        };
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Children =
+            {
+                cancelButton,
+                acceptButton,
+            },
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = label },
+                inputBox,
+                buttonRow,
+            },
+        };
+        dialog.Opened += (_, _) =>
+        {
+            inputBox.Focus();
+            inputBox.SelectAll();
+        };
+
+        await dialog.ShowDialog(this);
+        return result;
+    }
+
     private void BeginFormulaEdit(CellAddress address, string? initialText = null)
     {
         ClearSelectedDrawingObject();
@@ -5606,6 +5783,13 @@ public sealed class MainWindow : Window
         if (!e.KeyModifiers.HasFlag(KeyModifiers.Control) &&
             !e.KeyModifiers.HasFlag(KeyModifiers.Meta))
         {
+            if (e.Key == Key.F5)
+            {
+                e.Handled = true;
+                await ShowGoToDialogAsync();
+                return;
+            }
+
             if (_formulaBox.IsFocused)
                 return;
 
@@ -5662,6 +5846,21 @@ public sealed class MainWindow : Window
         else if (e.Key == Key.PageDown && HasOnlyCommandModifier(e.KeyModifiers))
         {
             e.Handled = SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: false);
+        }
+        else if (e.Key == Key.F && HasOnlyCommandModifier(e.KeyModifiers))
+        {
+            e.Handled = true;
+            await ShowFindDialogAsync();
+        }
+        else if (e.Key == Key.G && e.KeyModifiers == KeyModifiers.Meta)
+        {
+            e.Handled = true;
+            FindNext();
+        }
+        else if (e.Key == Key.G && HasOnlyControlModifier(e.KeyModifiers))
+        {
+            e.Handled = true;
+            await ShowGoToDialogAsync();
         }
         else if (e.Key == Key.Z && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {

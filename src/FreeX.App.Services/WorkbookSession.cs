@@ -31,6 +31,11 @@ public sealed class WorkbookSession
     private double _viewportHeight;
     private double _viewportWidth;
     private ulong _selectionStatsRevision;
+    private string? _lastFindText;
+    private FindOptions? _lastFindOptions;
+    private bool _lastFindMatchCase;
+    private bool _lastFindMatchEntireCell;
+    private CellAddress? _lastFindAddress;
 
     internal WorkbookSession(
         StartupWorkbookLoadResult source,
@@ -192,6 +197,8 @@ public sealed class WorkbookSession
     public string SelectionStatsText =>
         WorkbookSelectionStatsFormatter.Format(SelectionStats);
 
+    public string LastFindText => _lastFindText ?? "";
+
     public void SelectCell(CellAddress address)
     {
         ActiveCell = address;
@@ -231,6 +238,79 @@ public sealed class WorkbookSession
             new CellAddress(ActiveSheet.Id, CellAddress.MaxRow, CellAddress.MaxCol));
         SelectRange(wholeSheet);
         return wholeSheet;
+    }
+
+    public WorkbookNavigationResult GoToCell(CellAddress address) =>
+        GoToRange(new GridRange(address, address));
+
+    public WorkbookNavigationResult GoToRange(GridRange range) =>
+        NavigateToRange(range);
+
+    public WorkbookNavigationResult GoToReference(string reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference))
+            return WorkbookNavigationResult.Failed("Reference is required.");
+
+        if (!WorkbookReferenceNavigator.TryParseReferenceRange(
+                reference,
+                ActiveSheet.Id,
+                ResolveSheetIdByName,
+                Workbook.NamedRanges,
+                out var range))
+            return WorkbookNavigationResult.Failed("Reference is not valid.");
+
+        return GoToRange(range);
+    }
+
+    public WorkbookNavigationResult FindNext(
+        string? searchText = null,
+        FindOptions? options = null,
+        bool matchCase = false,
+        bool matchEntireCell = false)
+    {
+        var text = searchText ?? _lastFindText;
+        if (string.IsNullOrEmpty(text))
+            return WorkbookNavigationResult.Failed("Find text is required.");
+
+        var effectiveOptions = options ?? new FindOptions(
+            Within: FindWithin.Sheet,
+            CurrentSheetId: ActiveSheet.Id,
+            SearchOrder: FindSearchOrder.ByRows,
+            LookIn: FindLookIn.Formulas);
+
+        if (effectiveOptions.Within == FindWithin.Sheet && effectiveOptions.CurrentSheetId is null)
+            effectiveOptions = effectiveOptions with { CurrentSheetId = ActiveSheet.Id };
+
+        var sameSearch =
+            string.Equals(_lastFindText, text, StringComparison.Ordinal) &&
+            _lastFindOptions == effectiveOptions &&
+            _lastFindMatchCase == matchCase &&
+            _lastFindMatchEntireCell == matchEntireCell;
+
+        var results = FindReplaceService.Find(Workbook, text, effectiveOptions, matchCase, matchEntireCell);
+        _lastFindText = text;
+        _lastFindOptions = effectiveOptions;
+        _lastFindMatchCase = matchCase;
+        _lastFindMatchEntireCell = matchEntireCell;
+
+        if (results.Count == 0)
+        {
+            _lastFindAddress = null;
+            return WorkbookNavigationResult.Failed($"No matches found for \"{text}\".");
+        }
+
+        var index = GetNextFindResultIndex(results, effectiveOptions.SearchOrder, sameSearch);
+        var result = results[index];
+        var navigation = GoToCell(result.Address);
+        if (!navigation.Success)
+            return navigation;
+
+        _lastFindAddress = result.Address;
+        return WorkbookNavigationResult.Found(
+            navigation.SelectedRange!.Value,
+            result.MatchedText,
+            index + 1,
+            results.Count);
     }
 
     public void MoveActiveCell(int rowDelta, int colDelta)
@@ -1912,6 +1992,96 @@ public sealed class WorkbookSession
         RefreshViewport();
         EnsureActiveCellVisible();
     }
+
+    private WorkbookNavigationResult NavigateToRange(GridRange range)
+    {
+        if (!range.Start.Sheet.Equals(range.End.Sheet))
+            return WorkbookNavigationResult.Failed("Reference must be on one sheet.");
+
+        var targetSheet = Workbook.GetSheet(range.Start.Sheet);
+        if (targetSheet is null)
+            return WorkbookNavigationResult.Failed("Reference sheet was not found.");
+        if (targetSheet.IsHidden || targetSheet.IsVeryHidden)
+            return WorkbookNavigationResult.Failed("Reference sheet is hidden.");
+
+        if (!ActiveSheet.Id.Equals(range.Start.Sheet))
+            SelectSheet(range.Start.Sheet);
+        if (!ActiveSheet.Id.Equals(range.Start.Sheet))
+            return WorkbookNavigationResult.Failed("Reference sheet could not be selected.");
+
+        SelectRange(range);
+        return WorkbookNavigationResult.Selected(range);
+    }
+
+    private int GetNextFindResultIndex(
+        IReadOnlyList<FindResult> results,
+        FindSearchOrder searchOrder,
+        bool sameSearch)
+    {
+        if (sameSearch && _lastFindAddress is { } lastAddress)
+        {
+            var lastIndex = FindResultIndex(results, lastAddress);
+            if (lastIndex >= 0)
+                return (lastIndex + 1) % results.Count;
+        }
+
+        return FindFirstResultAfterActiveCell(results, searchOrder);
+    }
+
+    private int FindFirstResultAfterActiveCell(IReadOnlyList<FindResult> results, FindSearchOrder searchOrder)
+    {
+        for (var index = 0; index < results.Count; index++)
+        {
+            if (CompareFindOrder(results[index].Address, ActiveCell, searchOrder) > 0)
+                return index;
+        }
+
+        return 0;
+    }
+
+    private static int FindResultIndex(IReadOnlyList<FindResult> results, CellAddress address)
+    {
+        for (var index = 0; index < results.Count; index++)
+        {
+            if (results[index].Address.Equals(address))
+                return index;
+        }
+
+        return -1;
+    }
+
+    private int CompareFindOrder(CellAddress left, CellAddress right, FindSearchOrder searchOrder)
+    {
+        var leftSheetIndex = FindSheetIndex(left.Sheet);
+        var rightSheetIndex = FindSheetIndex(right.Sheet);
+        var sheetComparison = leftSheetIndex.CompareTo(rightSheetIndex);
+        if (sheetComparison != 0)
+            return sheetComparison;
+
+        if (searchOrder == FindSearchOrder.ByColumns)
+        {
+            var colComparison = left.Col.CompareTo(right.Col);
+            return colComparison != 0 ? colComparison : left.Row.CompareTo(right.Row);
+        }
+
+        var rowComparison = left.Row.CompareTo(right.Row);
+        return rowComparison != 0 ? rowComparison : left.Col.CompareTo(right.Col);
+    }
+
+    private int FindSheetIndex(SheetId sheetId)
+    {
+        for (var index = 0; index < Workbook.Sheets.Count; index++)
+        {
+            if (Workbook.Sheets[index].Id.Equals(sheetId))
+                return index;
+        }
+
+        return int.MaxValue;
+    }
+
+    private SheetId? ResolveSheetIdByName(string sheetName) =>
+        Workbook.Sheets.FirstOrDefault(sheet =>
+            string.Equals(sheet.Name, sheetName, StringComparison.OrdinalIgnoreCase))?.Id;
 
     private WorkbookCellEditResult SetFreezePanes(uint frozenRows, uint frozenCols)
     {

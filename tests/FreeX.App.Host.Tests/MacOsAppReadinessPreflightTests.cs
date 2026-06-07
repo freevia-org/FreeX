@@ -632,6 +632,13 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "external_image_clipboard_picture_png_bytes=[1-9]" "$artifact_root/launch.txt"
                       grep -q "new_sheet_button=true" "$artifact_root/launch.txt"
                       grep -q "toolbar_format_painter_button=true" "$artifact_root/launch.txt"
+                      grep -q "toolbar_autosum_button=true" "$artifact_root/launch.txt"
+                      grep -q "toolbar_autosum_sum_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "toolbar_autosum_average_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "toolbar_autosum_count_numbers_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "toolbar_autosum_count_all_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "toolbar_autosum_max_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "toolbar_autosum_min_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "toolbar_fill_cells_button=true" "$artifact_root/launch.txt"
                       grep -q "toolbar_fill_down_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "toolbar_fill_right_menu_item=true" "$artifact_root/launch.txt"
@@ -644,6 +651,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "toolbar_clear_comments_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "toolbar_clear_hyperlinks_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "toolbar_borders_button=true" "$artifact_root/launch.txt"
+                      grep -q "toolbar_wrap_text_button=true" "$artifact_root/launch.txt"
                       grep -q "toolbar_merge_and_center_button=true" "$artifact_root/launch.txt"
                       grep -q "native_file_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_new_workbook_menu_item=true" "$artifact_root/launch.txt"
@@ -697,6 +705,13 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_paste_special_picture_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_paste_special_linked_picture_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_select_all_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_autosum_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_autosum_sum_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_autosum_average_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_autosum_count_numbers_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_autosum_count_all_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_autosum_max_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_autosum_min_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_fill_cells_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_fill_down_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_fill_right_menu_item=true" "$artifact_root/launch.txt"
@@ -831,6 +846,29 @@ public sealed class MacOsAppReadinessPreflightTests
                     editMenu.Items.Add(_formatPainterMenuItem);
                     _formatPainterButton.IsEnabled = isIdle;
                     _formatPainterMenuItem.IsEnabled = _formatPainterButton.IsEnabled;
+                    _autoSumButton.Content = "AutoSum";
+                    _autoSumButton.Flyout = CreateAutoSumFlyout();
+                    AutomationProperties.SetAutomationId(_autoSumButton, "HomeAutoSumButton");
+                    AutomationProperties.SetHelpText(_autoSumButton, "Insert a formula using nearby numeric cells.");
+                    _autoSumSumFlyoutItem.Click += (_, _) => InsertAutoSumFormula("SUM");
+                    _autoSumAverageFlyoutItem.Click += (_, _) => InsertAutoSumFormula("AVERAGE");
+                    _autoSumCountNumbersFlyoutItem.Click += (_, _) => InsertAutoSumFormula("COUNT");
+                    _autoSumCountAllFlyoutItem.Click += (_, _) => InsertAutoSumFormula("COUNTA");
+                    _autoSumMaxFlyoutItem.Click += (_, _) => InsertAutoSumFormula("MAX");
+                    _autoSumMinFlyoutItem.Click += (_, _) => InsertAutoSumFormula("MIN");
+                    _autoSumMenuItem.Header = "AutoSum";
+                    _autoSumMenuItem.Menu = CreateNativeAutoSumMenu();
+                    _autoSumSumMenuItem.Gesture = new KeyGesture(Key.OemPlus, KeyModifiers.Alt);
+                    editMenu.Items.Add(_autoSumMenuItem);
+                    _autoSumButton.IsEnabled = isIdle;
+                    _autoSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
+                    private MenuFlyout CreateAutoSumFlyout()
+                    private NativeMenu CreateNativeAutoSumMenu()
+                    private void InsertAutoSumFormula(string functionName)
+                    _session.InsertAutoSumFormula(functionName)
+                    private static bool IsAutoSumShortcut(KeyEventArgs args)
+                    HasAutoSumButton: _autoSumButton.Content?.ToString() == "AutoSum"
+                    HasNativeAutoSumMenuItem: HasNativeMenuItem(_autoSumMenuItem, "AutoSum", requireGesture: false)
                     _fillCellsButton.Content = "Fill Cells";
                     _fillCellsButton.Flyout = CreateFillCellsFlyout();
                     AutomationProperties.SetAutomationId(_fillCellsButton, "HomeFillCellsButton");
@@ -973,6 +1011,36 @@ public sealed class MacOsAppReadinessPreflightTests
                     _selectAllMenuItem.Click += (_, _) => SelectCurrentRegionOrAll();
                     editMenu.Items.Add(_selectAllMenuItem);
                     _selectAllMenuItem.IsEnabled = isIdle;
+                    private readonly NativeMenuItem _findMenuItem = new();
+                    private readonly NativeMenuItem _findNextMenuItem = new();
+                    private readonly NativeMenuItem _goToMenuItem = new();
+                    _findMenuItem.Header = "Find...";
+                    _findMenuItem.Gesture = new KeyGesture(Key.F, KeyModifiers.Meta);
+                    _findMenuItem.Click += async (_, _) => await ShowFindDialogAsync();
+                    _findNextMenuItem.Header = "Find Next";
+                    _findNextMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Meta);
+                    _findNextMenuItem.Click += (_, _) => FindNext();
+                    _goToMenuItem.Header = "Go To...";
+                    _goToMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control);
+                    _goToMenuItem.Click += async (_, _) => await ShowGoToDialogAsync();
+                    editMenu.Items.Add(_findMenuItem);
+                    editMenu.Items.Add(_findNextMenuItem);
+                    editMenu.Items.Add(_goToMenuItem);
+                    _findMenuItem.IsEnabled = isIdle;
+                    _findNextMenuItem.IsEnabled = isIdle && !string.IsNullOrWhiteSpace(_session.LastFindText);
+                    _goToMenuItem.IsEnabled = isIdle;
+                    private async Task ShowFindDialogAsync()
+                    private void FindNext(string? searchText = null)
+                    private async Task ShowGoToDialogAsync()
+                    private async Task<string?> ShowSingleInputDialogAsync(
+                    "FindTextBox"
+                    "GoToReferenceBox"
+                    var result = _session.FindNext(searchText);
+                    var result = _session.GoToReference(reference);
+                    e.Key == Key.F5;
+                    e.Key == Key.F && HasOnlyCommandModifier(e.KeyModifiers);
+                    e.Key == Key.G && e.KeyModifiers == KeyModifiers.Meta;
+                    e.Key == Key.G && HasOnlyControlModifier(e.KeyModifiers);
                     e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.D or Key.I or Key.R or Key.U;
                     else if (e.Key == Key.A && HasOnlyCommandModifier(e.KeyModifiers)) { }
                     else if (e.Key == Key.D && HasOnlyControlModifier(e.KeyModifiers)) { }
@@ -1438,6 +1506,13 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativeClearTabColorMenuItem &&
                     NativeTabColorSwatchCount == CellColorPalettePlanner.BuildDefaultSwatches().Count &&
                     HasFormatPainterButton &&
+                    HasAutoSumButton &&
+                    HasAutoSumSumMenuItem &&
+                    HasAutoSumAverageMenuItem &&
+                    HasAutoSumCountNumbersMenuItem &&
+                    HasAutoSumCountAllMenuItem &&
+                    HasAutoSumMaxMenuItem &&
+                    HasAutoSumMinMenuItem &&
                     HasFillCellsButton &&
                     HasFillDownMenuItem &&
                     HasFillRightMenuItem &&
@@ -1450,6 +1525,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasClearCommentsMenuItem &&
                     HasClearHyperlinksMenuItem &&
                     HasBordersButton &&
+                    HasWrapTextButton &&
                     HasMergeAndCenterButton &&
                     HasFocusableSheetTab &&
                     HasFocusableActiveSheetTab &&
@@ -1491,6 +1567,13 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativePasteSpecialUnicodeTextMenuItem &&
                     HasNativePasteSpecialPictureMenuItem &&
                     HasNativePasteSpecialLinkedPictureMenuItem &&
+                    HasNativeAutoSumMenuItem &&
+                    HasNativeAutoSumSumMenuItem &&
+                    HasNativeAutoSumAverageMenuItem &&
+                    HasNativeAutoSumCountNumbersMenuItem &&
+                    HasNativeAutoSumCountAllMenuItem &&
+                    HasNativeAutoSumMaxMenuItem &&
+                    HasNativeAutoSumMinMenuItem &&
                     HasNativeFillCellsMenuItem &&
                     HasNativeFillDownMenuItem &&
                     HasNativeFillRightMenuItem &&
@@ -1526,6 +1609,13 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativeClearTabColorMenuItem { get; }
                 private int NativeTabColorSwatchCount { get; }
                 private bool HasFormatPainterButton { get; }
+                private bool HasAutoSumButton { get; }
+                private bool HasAutoSumSumMenuItem { get; }
+                private bool HasAutoSumAverageMenuItem { get; }
+                private bool HasAutoSumCountNumbersMenuItem { get; }
+                private bool HasAutoSumCountAllMenuItem { get; }
+                private bool HasAutoSumMaxMenuItem { get; }
+                private bool HasAutoSumMinMenuItem { get; }
                 private bool HasFillCellsButton { get; }
                 private bool HasFillDownMenuItem { get; }
                 private bool HasFillRightMenuItem { get; }
@@ -1538,6 +1628,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasClearCommentsMenuItem { get; }
                 private bool HasClearHyperlinksMenuItem { get; }
                 private bool HasBordersButton { get; }
+                private bool HasWrapTextButton { get; }
                 private bool HasMergeAndCenterButton { get; }
                 private bool HasFocusableSheetTab { get; }
                 private bool HasFocusableActiveSheetTab { get; }
@@ -1581,6 +1672,13 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativePasteSpecialPictureMenuItem { get; }
                 private bool HasNativePasteSpecialLinkedPictureMenuItem { get; }
                 private bool HasNativeFormatPainterMenuItem { get; }
+                private bool HasNativeAutoSumMenuItem { get; }
+                private bool HasNativeAutoSumSumMenuItem { get; }
+                private bool HasNativeAutoSumAverageMenuItem { get; }
+                private bool HasNativeAutoSumCountNumbersMenuItem { get; }
+                private bool HasNativeAutoSumCountAllMenuItem { get; }
+                private bool HasNativeAutoSumMaxMenuItem { get; }
+                private bool HasNativeAutoSumMinMenuItem { get; }
                 private bool HasNativeFillCellsMenuItem { get; }
                 private bool HasNativeFillDownMenuItem { get; }
                 private bool HasNativeFillRightMenuItem { get; }
@@ -1599,7 +1697,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 public int ExternalImageClipboardPicturePngByteCount { get; }
                 public int NativeBordersPresetCount { get; }
                 public int NativeCellStylesPresetCount { get; }
-                public string Report => "external_image_clipboard_paste_required= external_image_clipboard_paste= external_image_clipboard_picture_count= external_image_clipboard_picture_png_bytes= native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= toolbar_format_painter_button= toolbar_fill_cells_button= toolbar_fill_down_menu_item= toolbar_fill_right_menu_item= toolbar_fill_up_menu_item= toolbar_fill_left_menu_item= toolbar_clear_button= toolbar_clear_all_menu_item= toolbar_clear_formats_menu_item= toolbar_clear_contents_menu_item= toolbar_clear_comments_menu_item= toolbar_clear_hyperlinks_menu_item= toolbar_borders_button= toolbar_merge_and_center_button= focusable_sheet_tab= focusable_active_sheet_tab= shell_focus_cycle_targets= sheet_tab_context_keyboard_help= sheet_tab_context_rename_menu_item= sheet_tab_context_tab_color_menu_item= sheet_tab_context_no_color_menu_item= sheet_tab_context_select_all_sheets_menu_item= sheet_tab_context_ungroup_sheets_menu_item= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_select_all_sheets_menu_item= native_ungroup_sheets_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_format_painter_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_fill_cells_menu_item= native_fill_down_menu_item= native_fill_right_menu_item= native_fill_up_menu_item= native_fill_left_menu_item= native_clear_menu_item= native_clear_all_menu_item= native_clear_formats_menu_item= native_clear_contents_menu_item= native_clear_comments_menu_item= native_clear_hyperlinks_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_borders_menu_item= native_borders_preset_count= native_merge_and_center_menu_item= native_unmerge_cells_menu_item= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+                public string Report => "external_image_clipboard_paste_required= external_image_clipboard_paste= external_image_clipboard_picture_count= external_image_clipboard_picture_png_bytes= native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= toolbar_format_painter_button= toolbar_autosum_button= toolbar_autosum_sum_menu_item= toolbar_autosum_average_menu_item= toolbar_autosum_count_numbers_menu_item= toolbar_autosum_count_all_menu_item= toolbar_autosum_max_menu_item= toolbar_autosum_min_menu_item= toolbar_fill_cells_button= toolbar_fill_down_menu_item= toolbar_fill_right_menu_item= toolbar_fill_up_menu_item= toolbar_fill_left_menu_item= toolbar_clear_button= toolbar_clear_all_menu_item= toolbar_clear_formats_menu_item= toolbar_clear_contents_menu_item= toolbar_clear_comments_menu_item= toolbar_clear_hyperlinks_menu_item= toolbar_borders_button= toolbar_wrap_text_button= toolbar_merge_and_center_button= focusable_sheet_tab= focusable_active_sheet_tab= shell_focus_cycle_targets= sheet_tab_context_keyboard_help= sheet_tab_context_rename_menu_item= sheet_tab_context_tab_color_menu_item= sheet_tab_context_no_color_menu_item= sheet_tab_context_select_all_sheets_menu_item= sheet_tab_context_ungroup_sheets_menu_item= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_select_all_sheets_menu_item= native_ungroup_sheets_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_format_painter_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_autosum_menu_item= native_autosum_sum_menu_item= native_autosum_average_menu_item= native_autosum_count_numbers_menu_item= native_autosum_count_all_menu_item= native_autosum_max_menu_item= native_autosum_min_menu_item= native_fill_cells_menu_item= native_fill_down_menu_item= native_fill_right_menu_item= native_fill_up_menu_item= native_fill_left_menu_item= native_clear_menu_item= native_clear_all_menu_item= native_clear_formats_menu_item= native_clear_contents_menu_item= native_clear_comments_menu_item= native_clear_hyperlinks_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_borders_menu_item= native_borders_preset_count= native_merge_and_center_menu_item= native_unmerge_cells_menu_item= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
             }
 
             internal sealed class MacOsLaunchSmokeCoordinator
@@ -1775,6 +1873,10 @@ public sealed class MacOsAppReadinessPreflightTests
                 new ClearDataValidationCommand(sheetId, sheetRange)
                 new ClearCommentsCommand(sheetId, sheetRange)
                 new ClearHyperlinksCommand(sheetId, sheetRange)
+                public WorkbookCellEditResult InsertAutoSumFormula(string functionName)
+                AutoSumFormulaPlanner.BuildFormula(ActiveSheet, functionName, target)
+                CreateEditCellsCommand([(target, Cell.FromFormula(formula))])
+                SelectCell(GetNextAutoSumCell(target));
                 public bool CanFillSelectedRange(FillCellsDirection direction)
                 public WorkbookCellEditResult FillSelectedRange(FillCellsDirection direction)
                 new FillCellsCommand(sheetId, sheetRange, direction)
@@ -1845,6 +1947,17 @@ public sealed class MacOsAppReadinessPreflightTests
                 Func<SheetId, IWorkbookCommand> createCommand
                 bool keepSourceColumnWidths = false
                 if (keepSourceColumnWidths)
+                public string LastFindText => _lastFindText ??
+                public WorkbookNavigationResult GoToReference(string reference)
+                WorkbookReferenceNavigator.TryParseReferenceRange(
+                public WorkbookNavigationResult FindNext(
+                FindReplaceService.Find(Workbook, text, effectiveOptions, matchCase, matchEntireCell)
+                return WorkbookNavigationResult.Found(
+                private WorkbookNavigationResult NavigateToRange(GridRange range)
+                SelectSheet(range.Start.Sheet);
+                private int GetNextFindResultIndex(
+                private int CompareFindOrder(CellAddress left, CellAddress right, FindSearchOrder searchOrder)
+                private SheetId? ResolveSheetIdByName(string sheetName)
                 */
                 public WorkbookCellEditResult AddSheet()
                 {
@@ -1904,6 +2017,27 @@ public sealed class MacOsAppReadinessPreflightTests
 
                 private void ApplySuccessfulWorkbookStructureResult(SheetId preferredSheetId) { }
                 private void ApplySuccessfulWorkbookMetadataResult(SheetId preferredSheetId) { }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Services/WorkbookReferenceNavigator.cs",
+            """
+            namespace FreeX.App.Services;
+
+            public static class WorkbookReferenceNavigator
+            {
+                /*
+                public static bool TryParseAddress(string text, SheetId sheetId, out CellAddress address)
+                public static IReadOnlyList<string> BuildReferenceChoices(
+                public static bool TryParseReference(
+                public static bool TryParseReferenceRange(
+                Func<string, SheetId?> resolveSheetId
+                private static bool TryResolveReferenceSheet(
+                private static string? NormalizeAbsoluteA1Reference(string input)
+                private static bool TryParseAbsoluteR1C1CellReference(string input, SheetId sheetId, out CellAddress address)
+                */
             }
             """);
 
