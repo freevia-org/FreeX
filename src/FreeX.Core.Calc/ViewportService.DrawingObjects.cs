@@ -116,7 +116,16 @@ public sealed partial class ViewportService
             ImageBytes: picture.Kind == PictureKind.Image && picture.ImageBytes is { Length: > 0 } imageBytes
                 ? imageBytes.ToArray()
                 : null,
-            ImageContentType: picture.ContentType));
+            ImageContentType: picture.ContentType,
+            CropLeft: picture.CropLeft,
+            CropTop: picture.CropTop,
+            CropRight: picture.CropRight,
+            CropBottom: picture.CropBottom,
+            SourceRowCount: picture.SourceRowCount,
+            SourceColumnCount: picture.SourceColumnCount,
+            PictureCells: picture.Kind == PictureKind.CellRangeSnapshot
+                ? picture.Cells.ToArray()
+                : []));
     }
 
     private static void AddTextBoxBounds(
