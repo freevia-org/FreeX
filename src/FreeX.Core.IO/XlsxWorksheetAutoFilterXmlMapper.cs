@@ -102,8 +102,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
             autoFilter.FilterColumns
                 .Where(filterColumn => filterColumn.ColumnId >= 0)
                 .Select(filterColumn => ToFilterColumnXml(filterColumn, worksheetNs)));
-        if (autoFilter.NativeAttributes is not null)
-            XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, autoFilter.NativeAttributes);
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, autoFilter.NativeAttributes);
 
         foreach (var nativeChildXml in autoFilter.NativeChildXmls ?? [])
         {
@@ -120,8 +119,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
         var element = new XElement(
             worksheetNs + "filterColumn",
             new XAttribute("colId", filterColumn.ColumnId.ToString(CultureInfo.InvariantCulture)));
-        if (filterColumn.NativeAttributes is not null)
-            XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, filterColumn.NativeAttributes);
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, filterColumn.NativeAttributes);
 
         var hasCustomFilters = filterColumn.CustomFilters.Count > 0;
         var hasTop10 = filterColumn.Top10 is not null;
@@ -139,8 +137,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
                 filterColumn.IncludeBlank ? new XAttribute("blank", "1") : null,
                 filterColumn.Values.Select(value => new XElement(worksheetNs + "filter", new XAttribute("val", value))),
                 filterColumn.DateGroups.Select(dateGroup => ToDateGroupItemXml(dateGroup, worksheetNs)));
-            if (filterColumn.NativeFiltersAttributes is not null)
-                XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(filters, filterColumn.NativeFiltersAttributes);
+            XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(filters, filterColumn.NativeFiltersAttributes);
 
             element.Add(filters);
         }
@@ -155,8 +152,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
             else if (filterColumn.CustomFiltersAnd)
                 customFilters.SetAttributeValue("and", "1");
 
-            if (filterColumn.NativeCustomFiltersAttributes is not null)
-                XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(customFilters, filterColumn.NativeCustomFiltersAttributes);
+            XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(customFilters, filterColumn.NativeCustomFiltersAttributes);
 
             element.Add(customFilters);
         }
@@ -192,8 +188,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
         else if (!colorFilter.CellColor)
             element.SetAttributeValue("cellColor", "0");
 
-        if (colorFilter.NativeAttributes is not null)
-            XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, colorFilter.NativeAttributes);
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, colorFilter.NativeAttributes);
 
         return element;
     }
@@ -208,8 +203,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
         else if (iconFilter.IconId is not null)
             element.SetAttributeValue("iconId", iconFilter.IconId.Value.ToString(CultureInfo.InvariantCulture));
 
-        if (iconFilter.NativeAttributes is not null)
-            XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, iconFilter.NativeAttributes);
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, iconFilter.NativeAttributes);
 
         return element;
     }
@@ -226,8 +220,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
         if (!string.IsNullOrWhiteSpace(dateGroup.DateTimeGrouping))
             element.SetAttributeValue("dateTimeGrouping", dateGroup.DateTimeGrouping);
 
-        if (dateGroup.NativeAttributes is not null)
-            XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, dateGroup.NativeAttributes);
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, dateGroup.NativeAttributes);
 
         return element;
     }
@@ -253,8 +246,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
         else if (dynamicFilter.MaxValue is not null)
             element.SetAttributeValue("maxVal", dynamicFilter.MaxValue.Value.ToString(CultureInfo.InvariantCulture));
 
-        if (dynamicFilter.NativeAttributes is not null)
-            XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, dynamicFilter.NativeAttributes);
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, dynamicFilter.NativeAttributes);
 
         return element;
     }
@@ -284,8 +276,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
         else if (top10.FilterValue is not null)
             element.SetAttributeValue("filterVal", top10.FilterValue.Value.ToString(CultureInfo.InvariantCulture));
 
-        if (top10.NativeAttributes is not null)
-            XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, top10.NativeAttributes);
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, top10.NativeAttributes);
 
         return element;
     }
@@ -298,8 +289,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
         if (customFilter.Value is not null)
             element.SetAttributeValue("val", customFilter.Value);
 
-        if (customFilter.NativeAttributes is not null)
-            XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, customFilter.NativeAttributes);
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, customFilter.NativeAttributes);
 
         return element;
     }
