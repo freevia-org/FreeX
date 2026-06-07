@@ -1294,6 +1294,15 @@ public static partial class AccessibilityCheckerService
             case "NETWORKDAYS.INTL":
                 kind = ConditionalFormulaScalarFunctionKind.NetworkdaysIntl;
                 return true;
+            case "N":
+                kind = ConditionalFormulaScalarFunctionKind.N;
+                return true;
+            case "TYPE":
+                kind = ConditionalFormulaScalarFunctionKind.Type;
+                return true;
+            case "ERROR.TYPE":
+                kind = ConditionalFormulaScalarFunctionKind.ErrorType;
+                return true;
             case "NA":
                 kind = ConditionalFormulaScalarFunctionKind.Na;
                 return true;
@@ -1623,6 +1632,9 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Yearfrac => argumentCount is 2 or 3,
             ConditionalFormulaScalarFunctionKind.WorkdayIntl or
             ConditionalFormulaScalarFunctionKind.NetworkdaysIntl => argumentCount is >= 2 and <= 4,
+            ConditionalFormulaScalarFunctionKind.N or
+            ConditionalFormulaScalarFunctionKind.Type or
+            ConditionalFormulaScalarFunctionKind.ErrorType => argumentCount == 1,
             ConditionalFormulaScalarFunctionKind.Find or
             ConditionalFormulaScalarFunctionKind.Search => argumentCount is 2 or 3,
             ConditionalFormulaScalarFunctionKind.Mid or
@@ -2308,6 +2320,9 @@ public static partial class AccessibilityCheckerService
         WorkdayIntl,
         Networkdays,
         NetworkdaysIntl,
+        N,
+        Type,
+        ErrorType,
         Na,
         Row,
         Column,
@@ -2617,6 +2632,9 @@ public static partial class AccessibilityCheckerService
             if (!TryResolveFormulaOperand(predicate.Operand, rowOffset, colOffset, out var value))
                 return null;
 
+            if (value is RangeValue)
+                return null;
+
             return predicate.Kind switch
             {
                 ConditionalFormulaPredicateKind.IsBlank => value is BlankValue,
@@ -2693,7 +2711,7 @@ public static partial class AccessibilityCheckerService
                 return null;
             }
 
-            if (left is ErrorValue || right is ErrorValue)
+            if (left is ErrorValue or RangeValue || right is ErrorValue or RangeValue)
                 return null;
 
             var result = CompareFormulaValues(left, right);
@@ -3036,6 +3054,12 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Networkdays:
                 case ConditionalFormulaScalarFunctionKind.NetworkdaysIntl:
                     return TryEvaluateFormulaDateScalarFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.N:
+                    return TryEvaluateFormulaNFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Type:
+                    return TryEvaluateFormulaTypeFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.ErrorType:
+                    return TryEvaluateFormulaErrorTypeFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Na:
                     value = ErrorValue.NA;
                     return true;
@@ -3097,6 +3121,162 @@ public static partial class AccessibilityCheckerService
                 default:
                     return false;
             }
+        }
+
+        private bool TryEvaluateFormulaNFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            var argument = function.Arguments[0];
+            if (argument.Kind == ConditionalFormulaOperandKind.ReferenceRange)
+            {
+                if (!TryMaterializeFormulaReferenceRange(argument, rowOffset, colOffset, out var range))
+                {
+                    value = ErrorValue.Ref;
+                    return false;
+                }
+
+                value = MapFormulaRange(range, FormulaNScalar);
+                return true;
+            }
+
+            if (!TryResolveFormulaOperand(argument, rowOffset, colOffset, out var source))
+            {
+                value = ErrorValue.Ref;
+                return false;
+            }
+
+            value = source is RangeValue rangeValue
+                ? MapFormulaRange(rangeValue, FormulaNScalar)
+                : FormulaNScalar(source);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaTypeFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            var argument = function.Arguments[0];
+            if (argument.Kind == ConditionalFormulaOperandKind.ReferenceRange)
+            {
+                if (!TryResolveFormulaReferenceRange(
+                        argument,
+                        rowOffset,
+                        colOffset,
+                        out _,
+                        out _,
+                        out _,
+                        out _,
+                        out _))
+                {
+                    value = ErrorValue.Ref;
+                    return false;
+                }
+
+                value = new NumberValue(64);
+                return true;
+            }
+
+            if (!TryResolveFormulaOperand(argument, rowOffset, colOffset, out var source))
+            {
+                value = ErrorValue.Ref;
+                return false;
+            }
+
+            value = FormulaTypeScalar(source);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaErrorTypeFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            var argument = function.Arguments[0];
+            if (argument.Kind == ConditionalFormulaOperandKind.ReferenceRange)
+            {
+                if (!TryMaterializeFormulaReferenceRange(argument, rowOffset, colOffset, out var range))
+                {
+                    value = ErrorValue.Ref;
+                    return false;
+                }
+
+                value = MapFormulaRange(range, FormulaErrorTypeScalar);
+                return true;
+            }
+
+            if (!TryResolveFormulaOperand(argument, rowOffset, colOffset, out var source))
+            {
+                value = ErrorValue.Ref;
+                return false;
+            }
+
+            value = source is RangeValue rangeValue
+                ? MapFormulaRange(rangeValue, FormulaErrorTypeScalar)
+                : FormulaErrorTypeScalar(source);
+            return true;
+        }
+
+        private static ScalarValue FormulaNScalar(ScalarValue value) =>
+            value switch
+            {
+                NumberValue numeric => numeric,
+                DateTimeValue dateTime => new NumberValue(dateTime.Value),
+                BoolValue boolean => new NumberValue(boolean.Value ? 1d : 0d),
+                ErrorValue error => error,
+                _ => new NumberValue(0d)
+            };
+
+        private static ScalarValue FormulaTypeScalar(ScalarValue value) =>
+            value switch
+            {
+                ErrorValue => new NumberValue(16),
+                RangeValue => new NumberValue(64),
+                BoolValue => new NumberValue(4),
+                TextValue => new NumberValue(2),
+                NumberValue or DateTimeValue => new NumberValue(1),
+                BlankValue => new NumberValue(1),
+                _ => new NumberValue(1)
+            };
+
+        private static ScalarValue FormulaErrorTypeScalar(ScalarValue value)
+        {
+            if (value is not ErrorValue error)
+                return ErrorValue.NA;
+
+            return error.Code switch
+            {
+                "#NULL!" => new NumberValue(1),
+                "#DIV/0!" => new NumberValue(2),
+                "#VALUE!" => new NumberValue(3),
+                "#REF!" => new NumberValue(4),
+                "#NAME?" => new NumberValue(5),
+                "#NUM!" => new NumberValue(6),
+                "#N/A" => new NumberValue(7),
+                "#GETTING_DATA" => new NumberValue(8),
+                "#SPILL!" => new NumberValue(9),
+                "#CONNECT!" => new NumberValue(10),
+                "#BLOCKED!" => new NumberValue(11),
+                "#UNKNOWN!" => new NumberValue(12),
+                "#FIELD!" => new NumberValue(13),
+                "#CALC!" => new NumberValue(14),
+                _ => ErrorValue.NA
+            };
+        }
+
+        private static RangeValue MapFormulaRange(RangeValue range, Func<ScalarValue, ScalarValue> map)
+        {
+            var cells = new ScalarValue[range.RowCount, range.ColCount];
+            for (var row = 0; row < range.RowCount; row++)
+                for (var col = 0; col < range.ColCount; col++)
+                    cells[row, col] = map(range.Cells[row, col]);
+
+            return new RangeValue(cells, range.StartRow, range.StartCol) { SheetName = range.SheetName };
         }
 
         private bool TryEvaluateFormulaBaseToDecimalFunction(
@@ -8701,6 +8881,12 @@ public static partial class AccessibilityCheckerService
                         return false;
                     }
 
+                    if (operandValue is RangeValue operandRange)
+                    {
+                        values = FormulaPairwiseAggregateValuesFromRange(operandRange);
+                        return true;
+                    }
+
                     values = SingleFormulaPairwiseAggregateValue(operandValue, isDirectArgument: true);
                     return true;
                 default:
@@ -8718,6 +8904,23 @@ public static partial class AccessibilityCheckerService
             };
 
             return new ConditionalFormulaPairwiseAggregateValues(1, 1, values);
+        }
+
+        private static ConditionalFormulaPairwiseAggregateValues FormulaPairwiseAggregateValuesFromRange(RangeValue range)
+        {
+            var values = new ConditionalFormulaPairwiseAggregateValue[range.RowCount * range.ColCount];
+            var index = 0;
+            for (var row = 0; row < range.RowCount; row++)
+            {
+                for (var col = 0; col < range.ColCount; col++)
+                {
+                    values[index++] = new ConditionalFormulaPairwiseAggregateValue(
+                        range.Cells[row, col],
+                        IsDirectArgument: false);
+                }
+            }
+
+            return new ConditionalFormulaPairwiseAggregateValues(range.RowCount, range.ColCount, values);
         }
 
         private static bool TryGetFormulaPairwiseAggregateNumber(
@@ -8975,6 +9178,14 @@ public static partial class AccessibilityCheckerService
                         return false;
                     }
 
+                    if (operandValue is RangeValue operandRange)
+                        return AppendFormulaAggregateRangeValue(
+                            operandRange,
+                            aggregateKind,
+                            numericValues,
+                            ref nonBlankCount,
+                            ref blankCount);
+
                     return AppendFormulaAggregateValue(
                         operandValue,
                         aggregateKind,
@@ -8985,6 +9196,33 @@ public static partial class AccessibilityCheckerService
                 default:
                     return false;
             }
+        }
+
+        private static bool AppendFormulaAggregateRangeValue(
+            RangeValue range,
+            ConditionalFormulaAggregateKind aggregateKind,
+            List<double> numericValues,
+            ref int nonBlankCount,
+            ref int blankCount)
+        {
+            for (var row = 0; row < range.RowCount; row++)
+            {
+                for (var col = 0; col < range.ColCount; col++)
+                {
+                    if (!AppendFormulaAggregateValue(
+                            range.Cells[row, col],
+                            aggregateKind,
+                            isDirectArgument: false,
+                            numericValues,
+                            ref nonBlankCount,
+                            ref blankCount))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
         }
 
         private static bool AppendFormulaAggregateValue(
@@ -9199,6 +9437,45 @@ public static partial class AccessibilityCheckerService
             startCol = Math.Min(shiftedStartCol.Value, shiftedEndCol.Value);
             endRow = Math.Max(shiftedStartRow.Value, shiftedEndRow.Value);
             endCol = Math.Max(shiftedStartCol.Value, shiftedEndCol.Value);
+            return true;
+        }
+
+        private bool TryMaterializeFormulaReferenceRange(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out RangeValue range)
+        {
+            range = default!;
+            if (!TryResolveFormulaReferenceRange(
+                    operand,
+                    rowOffset,
+                    colOffset,
+                    out var targetSheet,
+                    out var startRow,
+                    out var startCol,
+                    out var endRow,
+                    out var endCol))
+            {
+                return false;
+            }
+
+            var rowCount = (ulong)endRow - startRow + 1UL;
+            var colCount = (ulong)endCol - startCol + 1UL;
+            if (rowCount * colCount > MaxFormulaAggregateRangeCells)
+                return false;
+
+            var cells = new ScalarValue[(int)rowCount, (int)colCount];
+            for (var currentRow = startRow; currentRow <= endRow; currentRow++)
+            {
+                for (var currentCol = startCol; currentCol <= endCol; currentCol++)
+                {
+                    cells[(int)(currentRow - startRow), (int)(currentCol - startCol)] =
+                        targetSheet.GetValue(currentRow, currentCol);
+                }
+            }
+
+            range = new RangeValue(cells, startRow, startCol) { SheetName = targetSheet.Name };
             return true;
         }
 
