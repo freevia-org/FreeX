@@ -75,6 +75,8 @@ Success means the macOS Release build and non-UI test lane report zero failed te
 
 A separate `macOS App Preview` workflow builds and publishes `src/FreeX.App.Avalonia` on architecture-specific hosted macOS runners for `osx-arm64` and `osx-x64`, wraps the output in `FreeX.app` with `FreeX.icns`, verifies bundle metadata, ad-hoc signs by default, optionally Developer ID signs/notarizes when secrets are configured, self-checks each SHA-256 file with `shasum -a 256 -c`, records `zip_sha256` in evidence, and uploads zipped app artifacts, checksum files, tester instructions, and smoke evidence. The Windows-runnable `tools/Test-MacOsAppReadiness.ps1` preflight statically checks the app project, `Info.plist`, icon asset, workflow markers, source wiring, and portable-source hygiene; hosted macOS runner evidence remains required for runtime launch, LaunchServices activation, signing, notarization, and architecture checks.
 
+Use [release/macos-signing-notarization.md](macos-signing-notarization.md) to configure Developer ID signing secrets, run the non-PR hosted validation, and record the expected `codesign_mode=developer-id`, `notarization_status=accepted`, and `stapler_validated=true` evidence before treating a macOS artifact as externally distributable.
+
 ### macOS App Preview Tester Instructions
 
 This is a preview validation path, not a public release channel. Use `osx-arm64` for Apple Silicon Macs and `osx-x64` for Intel Macs. GitHub downloads the result as an Actions artifact wrapper; unzip that wrapper first, then use the files inside it:

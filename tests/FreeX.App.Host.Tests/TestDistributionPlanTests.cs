@@ -87,6 +87,7 @@ public sealed class TestDistributionPlanTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("docs", "release/test-distribution.md"));
 
         source.Should().Contain("macOS App Preview");
+        source.Should().Contain("[release/macos-signing-notarization.md](macos-signing-notarization.md)");
         source.Should().Contain("self-checks each SHA-256 file with `shasum -a 256 -c`");
         source.Should().Contain("records `zip_sha256` in evidence");
         source.Should().Contain("not a public release channel");
@@ -102,6 +103,36 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("zip_sha256");
         source.Should().Contain("Control-click or right-click > Open");
         source.Should().Contain("Public distribution still requires Developer ID signing, accepted notarization, and stapling evidence.");
+    }
+
+    [Fact]
+    public void MacOsSigningRunbook_DocumentsDeveloperIdSecretsAndHostedEvidence()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("docs", "release/macos-signing-notarization.md"));
+        var readme = File.ReadAllText(WorkspaceFileLocator.Find("docs", "README.md"));
+
+        readme.Should().Contain("[release/macos-signing-notarization.md](release/macos-signing-notarization.md)");
+        source.Should().Contain("macOS Signing And Notarization Runbook");
+        source.Should().Contain("workflow_dispatch");
+        source.Should().Contain("pull request events intentionally fall back to ad-hoc signing");
+        source.Should().Contain("MACOS_CODESIGN_CERTIFICATE_P12");
+        source.Should().Contain("MACOS_CODESIGN_CERTIFICATE_PASSWORD");
+        source.Should().Contain("MACOS_DEVELOPER_ID_APPLICATION");
+        source.Should().Contain("MACOS_NOTARY_APPLE_ID");
+        source.Should().Contain("MACOS_NOTARY_TEAM_ID");
+        source.Should().Contain("MACOS_NOTARY_PASSWORD");
+        source.Should().Contain("security find-identity -v -p codesigning");
+        source.Should().Contain("base64 -i DeveloperIDApplication.p12");
+        source.Should().Contain("codesign_mode=developer-id");
+        source.Should().Contain("notarization_status=accepted");
+        source.Should().Contain("stapler_validated=true");
+        source.Should().Contain("freex-<runtime>-macos-notarization.log");
+        source.Should().Contain("freex-<runtime>-macos-launch-smoke.txt");
+        source.Should().Contain("The workflow submits the zipped `FreeX.app`, waits for an accepted notarization result, staples the ticket to the app bundle, validates stapling, then recreates the zip.");
+        source.Should().Contain("the current workflow uploads Actions artifacts only and has `contents: read`");
+        source.Should().Contain("https://developer.apple.com/support/developer-id/");
+        source.Should().Contain("https://developer.apple.com/documentation/security/notarizing_macos_software_before_distribution");
+        source.Should().Contain("https://developer.apple.com/documentation/security/notarizing_macos_software_before_distribution/customizing_the_notarization_workflow");
     }
 
     [Fact]
