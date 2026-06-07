@@ -139,17 +139,8 @@ internal static class XlsxPivotCacheReader
         return PivotCacheSourceType.Unknown;
     }
 
-    private const string FreeXPivotExtensionNamespace = "urn:freex:pivot:2026";
-
     // Returns the FreeX cacheProps element from the pivotCacheDefinition extLst, or null when absent.
-    private static XElement? ReadFreeXCacheProps(XElement root, XNamespace workbookNs)
-    {
-        XNamespace freeXNs = FreeXPivotExtensionNamespace;
-        return root.Element(workbookNs + "extLst")?
-            .Elements(workbookNs + "ext")
-            .Select(ext => ext.Element(freeXNs + "cacheProps"))
-            .FirstOrDefault(props => props is not null);
-    }
-
+    private static XElement? ReadFreeXCacheProps(XElement root, XNamespace workbookNs) =>
+        XlsxPivotExtensionReader.ReadElement(root, workbookNs, "cacheProps");
 }
 
