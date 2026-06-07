@@ -954,9 +954,6 @@ public static partial class AccessibilityCheckerService
             case ErrorNode error:
                 operand = LiteralFormulaOperand(error.Error);
                 return true;
-            case OmittedArgumentNode:
-                operand = LiteralFormulaOperand(BlankValue.Instance);
-                return true;
             case ArrayConstantNode array when TryCreateFormulaArrayConstantLiteral(array, out var range):
                 operand = LiteralFormulaOperand(range);
                 return true;
