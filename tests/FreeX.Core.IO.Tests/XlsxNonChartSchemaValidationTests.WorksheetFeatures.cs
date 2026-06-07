@@ -954,9 +954,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var workbook = CreateWorksheetAdditionalViewsSourceWorkbook();
         var additionalView = workbook.GetSheetAt(0).AdditionalViews!.Views[0];
         additionalView.NativeXml = """
-            <sheetView xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" workbookViewId="1" view="invalid" showGridLines="maybe" zoomScale="not-a-number" topLeftCell="BAD">
-              <pane xSplit="not-a-number" topLeftCell="BAD" activePane="badPane" state="badState" />
-              <selection pane="badPane" activeCell="BAD" activeCellId="not-a-number" sqref="BAD" />
+            <sheetView xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" workbookViewId="1" view="invalid" showGridLines="maybe" zoomScale="not-a-number" topLeftCell="BAD" customSheetViewAttr="removed">
+              <pane xSplit="not-a-number" topLeftCell="BAD" activePane="badPane" state="badState" customPaneAttr="removed" />
+              <selection pane="badPane" activeCell="BAD" activeCellId="not-a-number" sqref="BAD" customSelectionAttr="removed" />
             </sheetView>
             """;
 
@@ -972,14 +972,17 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheetView.Attribute("showGridLines").Should().BeNull();
         sheetView.Attribute("zoomScale").Should().BeNull();
         sheetView.Attribute("topLeftCell").Should().BeNull();
+        sheetView.Attribute("customSheetViewAttr").Should().BeNull();
         pane.Attribute("xSplit").Should().BeNull();
         pane.Attribute("topLeftCell").Should().BeNull();
         pane.Attribute("activePane").Should().BeNull();
         pane.Attribute("state").Should().BeNull();
+        pane.Attribute("customPaneAttr").Should().BeNull();
         selection.Attribute("pane").Should().BeNull();
         selection.Attribute("activeCell").Should().BeNull();
         selection.Attribute("activeCellId").Should().BeNull();
         selection.Attribute("sqref").Should().BeNull();
+        selection.Attribute("customSelectionAttr").Should().BeNull();
     }
 
     [Fact]
@@ -1374,14 +1377,17 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheetView.Attribute("showGridLines").Should().BeNull();
         sheetView.Attribute("zoomScale").Should().BeNull();
         sheetView.Attribute("topLeftCell").Should().BeNull();
+        sheetView.Attribute("customSheetViewAttr").Should().BeNull();
         pane.Attribute("xSplit").Should().BeNull();
         pane.Attribute("topLeftCell").Should().BeNull();
         pane.Attribute("activePane").Should().BeNull();
         pane.Attribute("state").Should().BeNull();
+        pane.Attribute("customPaneAttr").Should().BeNull();
         selection.Attribute("pane").Should().BeNull();
         selection.Attribute("activeCell").Should().BeNull();
         selection.Attribute("activeCellId").Should().BeNull();
         selection.Attribute("sqref").Should().BeNull();
+        selection.Attribute("customSelectionAttr").Should().BeNull();
     }
 
 
@@ -2848,11 +2854,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheetView.SetAttributeValue("showGridLines", "maybe");
         sheetView.SetAttributeValue("zoomScale", "not-a-number");
         sheetView.SetAttributeValue("topLeftCell", "BAD");
+        sheetView.SetAttributeValue("customSheetViewAttr", "removed");
         var pane = sheetView.Element(workbookNs + "pane")!;
         pane.SetAttributeValue("xSplit", "not-a-number");
         pane.SetAttributeValue("topLeftCell", "BAD");
         pane.SetAttributeValue("activePane", "badPane");
         pane.SetAttributeValue("state", "badState");
+        pane.SetAttributeValue("customPaneAttr", "removed");
         var selection = sheetView.Element(workbookNs + "selection");
         if (selection is null)
         {
@@ -2864,6 +2872,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         selection.SetAttributeValue("activeCell", "BAD");
         selection.SetAttributeValue("activeCellId", "not-a-number");
         selection.SetAttributeValue("sqref", "BAD");
+        selection.SetAttributeValue("customSelectionAttr", "removed");
         ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
     }
 
@@ -2873,9 +2882,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
-        worksheetXml.Root!
-            .Element(workbookNs + "sheetViews")!
-            .SetAttributeValue("nativeSheetViewsAttr", "kept");
+        var sheetViews = worksheetXml.Root!.Element(workbookNs + "sheetViews")!;
+        sheetViews.SetAttributeValue("nativeSheetViewsAttr", "kept");
+        foreach (var sheetView in sheetViews.Elements(workbookNs + "sheetView"))
+            sheetView.SetAttributeValue("customSheetViewAttr", "removed");
         ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
     }
 
@@ -2883,6 +2893,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     {
         var sheetViews = ReadWorksheetChildElement(stream, "sheetViews");
         sheetViews.Attribute("nativeSheetViewsAttr").Should().BeNull();
+        sheetViews.Elements(sheetViews.Name.Namespace + "sheetView")
+            .Should()
+            .OnlyContain(sheetView => sheetView.Attribute("customSheetViewAttr") == null);
     }
 
     private static Workbook CreatePhoneticPropertiesSourceWorkbook()
