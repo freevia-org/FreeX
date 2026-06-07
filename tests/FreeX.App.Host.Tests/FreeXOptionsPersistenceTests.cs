@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using FluentAssertions;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host.Tests;
 
@@ -134,6 +135,16 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
     }
 
     [Fact]
+    public void ResolveStorePath_UsesApplicationDataPathProviderWhenOverrideIsMissing()
+    {
+        var provider = new TestApplicationDataPathProvider(_temp.Path);
+
+        var path = FreeXOptions.ResolveStorePath(provider);
+
+        path.Should().Be(Path.Combine(_temp.Path, "FreeX", "options.json"));
+    }
+
+    [Fact]
     public void SaveToPath_WritesAtomicallyAndClearsPreviousError()
     {
         var path = Path.Combine(_temp.Path, "options.json");
@@ -208,5 +219,10 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
     public void Dispose()
     {
         _temp.Dispose();
+    }
+
+    private sealed class TestApplicationDataPathProvider(string path) : IApplicationDataPathProvider
+    {
+        public string GetApplicationDataDirectory() => path;
     }
 }
