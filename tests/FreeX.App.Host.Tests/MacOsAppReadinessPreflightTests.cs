@@ -1259,7 +1259,11 @@ public sealed class MacOsAppReadinessPreflightTests
                 ClipboardPictureService.CreateInsertCommand(
                 private static string FormatPictureCellText(ScalarValue value)
                 new PasteColumnWidthsCommand(
-                new EditCellsCommand(ActiveSheet.Id, linkedCells)
+                private IWorkbookCommand CreatePasteLinkCommand(
+                var sheetDestination = RemapAddressToSheet(destination, sheetId)
+                IWorkbookCommand command = new EditCellsCommand(sheetId, linkedCells)
+                private IWorkbookCommand CreateGroupedSheetCommand(
+                Func<SheetId, IWorkbookCommand> createCommand
                 bool keepSourceColumnWidths = false
                 if (keepSourceColumnWidths)
                 */

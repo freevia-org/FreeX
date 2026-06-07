@@ -734,10 +734,13 @@ public sealed class WorkbookSession
                 RecalcReport: null);
         }
 
-        var command = new PasteColumnWidthsCommand(
-            ActiveSheet.Id,
-            internalClipboard.SourceRange,
-            ActiveCell.Col);
+        var destination = ActiveCell;
+        var command = CreateGroupedSheetCommand(
+            "Paste Column Widths",
+            sheetId => new PasteColumnWidthsCommand(
+                sheetId,
+                internalClipboard.SourceRange,
+                RemapAddressToSheet(destination, sheetId).Col));
         var result = _cellEditService.ExecuteEditCommand(Workbook, command);
         if (!result.Success)
             return result;
@@ -772,11 +775,13 @@ public sealed class WorkbookSession
 
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            new PasteCommentsCommand(
-                ActiveSheet.Id,
-                internalClipboard.SourceRange,
-                destination,
-                transpose));
+            CreateGroupedSheetCommand(
+                "Paste Comments",
+                sheetId => new PasteCommentsCommand(
+                    sheetId,
+                    internalClipboard.SourceRange,
+                    RemapAddressToSheet(destination, sheetId),
+                    transpose)));
         if (!result.Success)
             return result;
 
@@ -811,11 +816,13 @@ public sealed class WorkbookSession
 
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            new PasteDataValidationCommand(
-                ActiveSheet.Id,
-                internalClipboard.SourceRange,
-                destination,
-                transpose));
+            CreateGroupedSheetCommand(
+                "Paste Data Validation",
+                sheetId => new PasteDataValidationCommand(
+                    sheetId,
+                    internalClipboard.SourceRange,
+                    RemapAddressToSheet(destination, sheetId),
+                    transpose)));
         if (!result.Success)
             return result;
 
@@ -851,21 +858,12 @@ public sealed class WorkbookSession
         }
 
         var destination = ActiveCell;
-        var linkedCells = PasteLinkService.CreateLinkedCells(
-            internalClipboard.SourceRange,
-            destination,
+        var command = CreatePasteLinkCommand(
+            internalClipboard,
             sourceSheet.Name,
-            transpose);
-        IWorkbookCommand command = new EditCellsCommand(ActiveSheet.Id, linkedCells);
-        if (keepSourceColumnWidths)
-        {
-            command = new CompositeWorkbookCommand(
-                "Paste Link",
-                [
-                    command,
-                    new PasteColumnWidthsCommand(ActiveSheet.Id, internalClipboard.SourceRange, destination.Col)
-                ]);
-        }
+            destination,
+            transpose,
+            keepSourceColumnWidths);
 
         var result = _cellEditService.ExecuteEditCommand(Workbook, command);
         if (!result.Success)
@@ -912,13 +910,15 @@ public sealed class WorkbookSession
             .ToList();
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            new PasteRangeAsPictureCommand(
-                ActiveSheet.Id,
-                internalClipboard.SourceRange,
-                sourceCells,
-                destination,
-                linkedPicture,
-                sourceSheet?.Name));
+            CreateGroupedSheetCommand(
+                linkedPicture ? "Paste Linked Picture" : "Paste Picture",
+                sheetId => new PasteRangeAsPictureCommand(
+                    sheetId,
+                    internalClipboard.SourceRange,
+                    sourceCells,
+                    RemapAddressToSheet(destination, sheetId),
+                    linkedPicture,
+                    sourceSheet?.Name)));
         if (!result.Success)
             return result;
 
@@ -945,12 +945,14 @@ public sealed class WorkbookSession
         var destination = ActiveCell;
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            ClipboardPictureService.CreateInsertCommand(
-                ActiveSheet.Id,
-                destination,
-                pngBytes,
-                pixelWidth,
-                pixelHeight));
+            CreateGroupedSheetCommand(
+                "Insert Picture",
+                sheetId => ClipboardPictureService.CreateInsertCommand(
+                    sheetId,
+                    RemapAddressToSheet(destination, sheetId),
+                    pngBytes,
+                    pixelWidth,
+                    pixelHeight)));
         if (!result.Success)
             return result;
 
@@ -1455,6 +1457,40 @@ public sealed class WorkbookSession
         return ToCommand(label, commands);
     }
 
+    private IWorkbookCommand CreatePasteLinkCommand(
+        InternalClipboard clipboard,
+        string sourceSheetName,
+        CellAddress destination,
+        bool transpose,
+        bool keepSourceColumnWidths)
+    {
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        var commands = new List<IWorkbookCommand>(targetSheetIds.Count);
+        foreach (var sheetId in targetSheetIds)
+        {
+            var sheetDestination = RemapAddressToSheet(destination, sheetId);
+            var linkedCells = PasteLinkService.CreateLinkedCells(
+                clipboard.SourceRange,
+                sheetDestination,
+                sourceSheetName,
+                transpose);
+            IWorkbookCommand command = new EditCellsCommand(sheetId, linkedCells);
+            if (keepSourceColumnWidths)
+            {
+                command = new CompositeWorkbookCommand(
+                    "Paste Link",
+                    [
+                        command,
+                        new PasteColumnWidthsCommand(sheetId, clipboard.SourceRange, sheetDestination.Col)
+                    ]);
+            }
+
+            commands.Add(command);
+        }
+
+        return ToCommand("Paste Link", commands);
+    }
+
     private IWorkbookCommand CreateRangeCommand(
         GridRange range,
         string title,
@@ -1463,6 +1499,17 @@ public sealed class WorkbookSession
         var targetSheetIds = CurrentGroupedEditSheetIds();
         var commands = targetSheetIds
             .Select(sheetId => createCommand(sheetId, RemapRangeToSheet(range, sheetId)))
+            .ToList();
+        return ToCommand(title, commands);
+    }
+
+    private IWorkbookCommand CreateGroupedSheetCommand(
+        string title,
+        Func<SheetId, IWorkbookCommand> createCommand)
+    {
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        var commands = targetSheetIds
+            .Select(createCommand)
             .ToList();
         return ToCommand(title, commands);
     }

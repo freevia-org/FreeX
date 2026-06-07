@@ -1437,6 +1437,383 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void PasteColumnWidthsFromClipboardAtActiveCell_PropagatesAcrossGroupedSheetsAndUndoRestores()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var hidden = workbook.AddSheet("Hidden");
+        hidden.IsHidden = true;
+        var summaryA1 = new CellAddress(summary.Id, 1, 1);
+        var summaryB1 = new CellAddress(summary.Id, 1, 2);
+        var summaryD1 = new CellAddress(summary.Id, 1, 4);
+        summary.SetCell(summaryA1, new TextValue("wide"));
+        summary.SetCell(summaryB1, new TextValue("default"));
+        summary.ColumnWidths[1] = 22.5;
+        summary.ColumnWidths[4] = 8;
+        summary.ColumnWidths[5] = 16;
+        details.ColumnWidths[4] = 9;
+        details.ColumnWidths[5] = 18;
+        hidden.ColumnWidths[4] = 7;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(summaryA1, summaryB1));
+        var clipboardText = session.CopySelectedRangeText();
+        session.SelectAllVisibleSheets();
+        session.SelectCell(summaryD1);
+
+        var result = session.PasteColumnWidthsFromClipboardAtActiveCell(clipboardText);
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().BeEmpty();
+        session.ActiveCell.Should().Be(summaryD1);
+        session.SelectedRange.Should().Be(new GridRange(summaryD1, summaryD1));
+        session.IsWorkbookGrouped.Should().BeTrue();
+        summary.ColumnWidths[4].Should().Be(22.5);
+        summary.ColumnWidths.Should().NotContainKey(5);
+        details.ColumnWidths[4].Should().Be(22.5);
+        details.ColumnWidths.Should().NotContainKey(5);
+        hidden.ColumnWidths[4].Should().Be(7);
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        summary.ColumnWidths[4].Should().Be(8);
+        summary.ColumnWidths[5].Should().Be(16);
+        details.ColumnWidths[4].Should().Be(9);
+        details.ColumnWidths[5].Should().Be(18);
+        hidden.ColumnWidths[4].Should().Be(7);
+    }
+
+    [Fact]
+    public void PasteCommentsFromClipboardAtActiveCell_PropagatesAcrossGroupedSheetsAndUndoRestores()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var hidden = workbook.AddSheet("Hidden");
+        hidden.IsHidden = true;
+        var summaryA1 = new CellAddress(summary.Id, 1, 1);
+        var summaryB1 = new CellAddress(summary.Id, 1, 2);
+        var summaryD3 = new CellAddress(summary.Id, 3, 4);
+        var summaryE3 = new CellAddress(summary.Id, 3, 5);
+        var detailsD3 = new CellAddress(details.Id, 3, 4);
+        var detailsE3 = new CellAddress(details.Id, 3, 5);
+        var hiddenD3 = new CellAddress(hidden.Id, 3, 4);
+        summary.SetCell(summaryA1, new TextValue("note source"));
+        summary.SetCell(summaryB1, new TextValue("thread source"));
+        summary.Comments[summaryA1] = "plain note";
+        summary.ThreadedComments[summaryB1] = new ThreadedComment("thread note", "Quinn")
+        {
+            Replies = [new CommentReply("reply", "Codex")],
+            IsResolved = true
+        };
+        details.Comments[detailsD3] = "old note";
+        details.ThreadedComments[detailsE3] = new ThreadedComment("old thread", "FreeX");
+        hidden.Comments[hiddenD3] = "hidden note";
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(summaryA1, summaryB1));
+        var clipboardText = session.CopySelectedRangeText();
+        session.SelectAllVisibleSheets();
+        session.SelectCell(summaryD3);
+
+        var result = session.PasteCommentsFromClipboardAtActiveCell(clipboardText);
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().Equal(summaryD3, summaryE3, detailsD3, detailsE3);
+        session.SelectedRange.Should().Be(new GridRange(summaryD3, summaryE3));
+        session.IsWorkbookGrouped.Should().BeTrue();
+        summary.Comments[summaryD3].Should().Be("plain note");
+        summary.ThreadedComments[summaryE3].Text.Should().Be("thread note");
+        summary.ThreadedComments[summaryE3].Replies.Should().Equal(new CommentReply("reply", "Codex"));
+        details.Comments[detailsD3].Should().Be("plain note");
+        details.ThreadedComments[detailsE3].Text.Should().Be("thread note");
+        hidden.Comments[hiddenD3].Should().Be("hidden note");
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        summary.Comments.Should().NotContainKey(summaryD3);
+        summary.ThreadedComments.Should().NotContainKey(summaryE3);
+        details.Comments[detailsD3].Should().Be("old note");
+        details.ThreadedComments[detailsE3].Text.Should().Be("old thread");
+        hidden.Comments[hiddenD3].Should().Be("hidden note");
+    }
+
+    [Fact]
+    public void PasteCommentsFromClipboardAtActiveCell_RejectsProtectedGroupedTargetAndRollsBackActiveSheet()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var summaryA1 = new CellAddress(summary.Id, 1, 1);
+        var summaryD3 = new CellAddress(summary.Id, 3, 4);
+        var detailsD3 = new CellAddress(details.Id, 3, 4);
+        summary.SetCell(summaryA1, new TextValue("note source"));
+        summary.Comments[summaryA1] = "plain note";
+        summary.Comments[summaryD3] = "active old";
+        details.Comments[detailsD3] = "locked";
+        details.IsProtected = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(summaryA1);
+        var clipboardText = session.CopySelectedRangeText();
+        session.SelectAllVisibleSheets();
+        session.SelectCell(summaryD3);
+
+        var result = session.PasteCommentsFromClipboardAtActiveCell(clipboardText);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("protected");
+        summary.Comments[summaryD3].Should().Be("active old");
+        details.Comments[detailsD3].Should().Be("locked");
+        session.ActiveSheet.Should().BeSameAs(summary);
+        session.ActiveCell.Should().Be(summaryD3);
+        session.IsWorkbookGrouped.Should().BeTrue();
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PasteDataValidationFromClipboardAtActiveCell_PropagatesAcrossGroupedSheetsAndUndoRestores()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var hidden = workbook.AddSheet("Hidden");
+        hidden.IsHidden = true;
+        var summaryA1 = new CellAddress(summary.Id, 1, 1);
+        var summaryB1 = new CellAddress(summary.Id, 1, 2);
+        var summaryD3 = new CellAddress(summary.Id, 3, 4);
+        var detailsD3 = new CellAddress(details.Id, 3, 4);
+        var hiddenD3 = new CellAddress(hidden.Id, 3, 4);
+        var sourceRange = new GridRange(summaryA1, summaryB1);
+        var oldDetailsRule = new DataValidation
+        {
+            AppliesTo = new GridRange(detailsD3, detailsD3),
+            Type = DvType.WholeNumber,
+            Formula1 = "1",
+            Formula2 = "9"
+        };
+        var hiddenRule = new DataValidation
+        {
+            AppliesTo = new GridRange(hiddenD3, hiddenD3),
+            Type = DvType.TextLength,
+            Formula1 = "2"
+        };
+        summary.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = sourceRange,
+            Type = DvType.Custom,
+            Formula1 = "=C1>0",
+            ErrorTitle = "Source rule"
+        });
+        details.DataValidations.Add(oldDetailsRule);
+        hidden.DataValidations.Add(hiddenRule);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(sourceRange);
+        var clipboardText = session.CopySelectedRangeText();
+        session.SelectAllVisibleSheets();
+        session.SelectCell(summaryD3);
+
+        var result = session.PasteDataValidationFromClipboardAtActiveCell(clipboardText, transpose: true);
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().BeEmpty();
+        session.SelectedRange.Should().Be(new GridRange(summaryD3, new CellAddress(summary.Id, 4, 4)));
+        session.IsWorkbookGrouped.Should().BeTrue();
+        summary.DataValidations.Should().ContainSingle(rule =>
+            rule.AppliesTo == new GridRange(summaryD3, new CellAddress(summary.Id, 4, 4)) &&
+            rule.Formula1 == "=F3>0" &&
+            rule.ErrorTitle == "Source rule");
+        details.DataValidations.Should().ContainSingle(rule =>
+            rule.AppliesTo == new GridRange(detailsD3, new CellAddress(details.Id, 4, 4)) &&
+            rule.Formula1 == "=F3>0" &&
+            rule.ErrorTitle == "Source rule");
+        hidden.DataValidations.Should().ContainSingle(rule =>
+            rule.AppliesTo == hiddenRule.AppliesTo &&
+            rule.Type == DvType.TextLength &&
+            rule.Formula1 == "2");
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        summary.DataValidations.Should().ContainSingle(rule => rule.AppliesTo == sourceRange && rule.Formula1 == "=C1>0");
+        details.DataValidations.Should().ContainSingle(rule =>
+            rule.AppliesTo == oldDetailsRule.AppliesTo &&
+            rule.Type == DvType.WholeNumber &&
+            rule.Formula1 == "1" &&
+            rule.Formula2 == "9");
+        hidden.DataValidations.Should().ContainSingle(rule =>
+            rule.AppliesTo == hiddenRule.AppliesTo &&
+            rule.Type == DvType.TextLength &&
+            rule.Formula1 == "2");
+    }
+
+    [Fact]
+    public void PasteLinkFromClipboardAtActiveCell_PropagatesAcrossGroupedSheetsAndUndoRestores()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var hidden = workbook.AddSheet("Hidden");
+        hidden.IsHidden = true;
+        var summaryA1 = new CellAddress(summary.Id, 1, 1);
+        var summaryB1 = new CellAddress(summary.Id, 1, 2);
+        var summaryD3 = new CellAddress(summary.Id, 3, 4);
+        var summaryE3 = new CellAddress(summary.Id, 3, 5);
+        var detailsD3 = new CellAddress(details.Id, 3, 4);
+        var detailsE3 = new CellAddress(details.Id, 3, 5);
+        var hiddenD3 = new CellAddress(hidden.Id, 3, 4);
+        var detailsStyle = workbook.RegisterStyle(new CellStyle { FontColor = new CellColor(0, 0, 0xC0) });
+        summary.SetCell(summaryA1, new NumberValue(10));
+        summary.SetCell(summaryB1, new NumberValue(12));
+        details.SetCell(detailsD3, new Cell { Value = new TextValue("old"), StyleId = detailsStyle });
+        hidden.SetCell(hiddenD3, new TextValue("hidden"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(summaryA1, summaryB1));
+        var clipboardText = session.CopySelectedRangeText();
+        session.SelectAllVisibleSheets();
+        session.SelectCell(summaryD3);
+
+        var result = session.PasteLinkFromClipboardAtActiveCell(clipboardText);
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().Equal(summaryD3, summaryE3, detailsD3, detailsE3);
+        session.SelectedRange.Should().Be(new GridRange(summaryD3, summaryE3));
+        session.IsWorkbookGrouped.Should().BeTrue();
+        summary.GetCell(summaryD3)!.FormulaText.Should().Be("'Sheet1'!A1");
+        summary.GetCell(summaryE3)!.FormulaText.Should().Be("'Sheet1'!B1");
+        details.GetCell(detailsD3)!.FormulaText.Should().Be("'Sheet1'!A1");
+        details.GetCell(detailsE3)!.FormulaText.Should().Be("'Sheet1'!B1");
+        details.GetCell(detailsD3)!.StyleId.Should().Be(detailsStyle);
+        hidden.GetValue(hiddenD3).Should().Be(new TextValue("hidden"));
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        summary.GetCell(summaryD3).Should().BeNull();
+        summary.GetCell(summaryE3).Should().BeNull();
+        details.GetValue(detailsD3).Should().Be(new TextValue("old"));
+        details.GetCell(detailsD3)!.StyleId.Should().Be(detailsStyle);
+        details.GetCell(detailsE3).Should().BeNull();
+        hidden.GetValue(hiddenD3).Should().Be(new TextValue("hidden"));
+    }
+
+    [Fact]
+    public void PastePictureFromClipboardAtActiveCell_PropagatesLinkedPicturesAcrossGroupedSheetsAndUndoRestores()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var hidden = workbook.AddSheet("Hidden");
+        hidden.IsHidden = true;
+        var summaryA1 = new CellAddress(summary.Id, 1, 1);
+        var summaryB2 = new CellAddress(summary.Id, 2, 2);
+        var summaryE5 = new CellAddress(summary.Id, 5, 5);
+        var detailsE5 = new CellAddress(details.Id, 5, 5);
+        var sourceRange = new GridRange(summaryA1, summaryB2);
+        summary.SetCell(summaryA1, new TextValue("source"));
+        summary.SetCell(summaryB2, new NumberValue(42));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(sourceRange);
+        var clipboardText = session.CopySelectedRangeText();
+        session.SelectAllVisibleSheets();
+        session.SelectCell(summaryE5);
+
+        var result = session.PastePictureFromClipboardAtActiveCell(clipboardText, linkedPicture: true);
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().Equal(summaryE5, detailsE5);
+        session.ActiveCell.Should().Be(summaryE5);
+        session.SelectedRange.Should().Be(new GridRange(summaryE5, summaryE5));
+        session.IsWorkbookGrouped.Should().BeTrue();
+        var summaryPicture = summary.Pictures.Should().ContainSingle().Subject;
+        var detailsPicture = details.Pictures.Should().ContainSingle().Subject;
+        summaryPicture.Anchor.Should().Be(summaryE5);
+        detailsPicture.Anchor.Should().Be(detailsE5);
+        summaryPicture.IsLinkedToSourceRange.Should().BeTrue();
+        detailsPicture.IsLinkedToSourceRange.Should().BeTrue();
+        summaryPicture.LinkedSourceRange.Should().Be(sourceRange);
+        detailsPicture.LinkedSourceRange.Should().Be(sourceRange);
+        detailsPicture.LinkedSourceSheetName.Should().Be(summary.Name);
+        hidden.Pictures.Should().BeEmpty();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        summary.Pictures.Should().BeEmpty();
+        details.Pictures.Should().BeEmpty();
+        hidden.Pictures.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void PasteClipboardImageAtActiveCell_PropagatesAcrossGroupedSheetsAndUndoRestores()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var hidden = workbook.AddSheet("Hidden");
+        hidden.IsHidden = true;
+        var summaryD4 = new CellAddress(summary.Id, 4, 4);
+        var detailsD4 = new CellAddress(details.Id, 4, 4);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectAllVisibleSheets();
+        session.SelectCell(summaryD4);
+        var pngBytes = new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 };
+
+        var result = session.PasteClipboardImageAtActiveCell(pngBytes, pixelWidth: 96, pixelHeight: 72);
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().Equal(summaryD4, detailsD4);
+        session.ActiveCell.Should().Be(summaryD4);
+        session.SelectedRange.Should().Be(new GridRange(summaryD4, summaryD4));
+        session.IsWorkbookGrouped.Should().BeTrue();
+        summary.Pictures.Should().ContainSingle(picture =>
+            picture.Anchor == summaryD4 &&
+            picture.Kind == PictureKind.Image &&
+            picture.ImageBytes.SequenceEqual(pngBytes));
+        details.Pictures.Should().ContainSingle(picture =>
+            picture.Anchor == detailsD4 &&
+            picture.Kind == PictureKind.Image &&
+            picture.ImageBytes.SequenceEqual(pngBytes));
+        hidden.Pictures.Should().BeEmpty();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        summary.Pictures.Should().BeEmpty();
+        details.Pictures.Should().BeEmpty();
+        hidden.Pictures.Should().BeEmpty();
+    }
+
+    [Fact]
     public void ClearSelectedRangeContents_ClearsValuesAndFormulasPreservesSelectionAndUndo()
     {
         var workbook = CreateWorkbook();
