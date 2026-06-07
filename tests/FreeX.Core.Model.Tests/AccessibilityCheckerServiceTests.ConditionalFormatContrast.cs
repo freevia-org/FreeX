@@ -572,6 +572,151 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatMaxMinIfsCriteriaAggregates()
+    {
+        AssertFormulaAggregateContrastLocations("MAXIFS($A$1:$A$4,$C$1:$C$4,$C1)=100", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("MAXIFS($A$1:$A$4,$C$1:$C$4,$C1)=125", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("MINIFS($A$1:$A$4,$C$1:$C$4,$C1,$A$1:$A$4,\">100\")=125", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("MAXIFS($A$1:$A$4,$D$1:$D$4,\"*st\")=125", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatMaxMinIfsWrappersAndNestedAggregates()
+    {
+        AssertFormulaAggregateContrastLocations("AND(MAXIFS($A$1:$A$4,$C$1:$C$4,$C1)=100,$C1=\"Closed\")", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("IF(MINIFS($A$1:$A$4,$C$1:$C$4,$C1)=75,TRUE,FALSE)", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISNUMBER(MAXIFS($A$1:$A$4,$C$1:$C$4,$C1))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(MAXIFS($A$1:$A$4,$C$1:$C$4,$C1),MINIFS($A$1:$A$4,$C$1:$C$4,$C1))=175", "B1", "B2");
+    }
+
+    [Fact]
+    public void FindIssues_PropagatesFormulaConditionalFormatMaxMinIfsErrorsAndRejectsUnsupportedShapes()
+    {
+        AssertFormulaAggregateContrastLocations("ISNA(MAXIFS(NA(),$C$1:$C$4,\"Open\"))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISERROR(MINIFS($A$1:$A$4,$C$1:$C$3,\"Open\"))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("MAXIFS($A$1:$A$4,$C$1:$C$3,\"Open\")>0");
+        AssertFormulaAggregateContrastLocations("MINIFS($A$1:$A$4,$C$1:$C$4)>0");
+        AssertFormulaAggregateContrastLocations("MAXIFS($A$1:$A$20000,$C$1:$C$20000,\"Open\")>0");
+        AssertFormulaAggregateContrastLocations("MAXIFS($A$1:$A$4,$C$1:$C$4,NA())>0");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatSubtotalFunctionNumbers()
+    {
+        AssertFormulaAggregateContrastLocations("SUBTOTAL(9,$A1:$A3)>250", "B2");
+        AssertFormulaAggregateContrastLocations("SUBTOTAL(109,$A1:$A3)>250", "B2");
+        AssertFormulaAggregateContrastLocations("SUBTOTAL(4,$A1:$A3)=125", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUBTOTAL(5,$A1:$A3)=75", "B1", "B2", "B3");
+        AssertFormulaAggregateContrastLocations("SUBTOTAL(3,$D1:$D3)=2", "B1", "B2");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatSubtotalWrappersPredicatesAndErrors()
+    {
+        AssertFormulaAggregateContrastLocations("AND(SUBTOTAL(9,$A1:$A3)>250,$C1=\"Closed\")", "B2");
+        AssertFormulaAggregateContrastLocations("IF(SUBTOTAL(5,$A1:$A3)=75,TRUE,FALSE)", "B1", "B2", "B3");
+        AssertFormulaAggregateContrastLocations("ISNUMBER(SUBTOTAL(9,$A1:$A3))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(SUBTOTAL(9,$A1:$A3),1)>251", "B2");
+        AssertFormulaAggregateContrastLocations("ISNA(SUBTOTAL(9,NA()))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISERROR(SUBTOTAL(12,$A1:$A3))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUBTOTAL(9,NA())>0");
+        AssertFormulaAggregateContrastLocations("SUBTOTAL(12,$A1:$A3)>0");
+        AssertFormulaAggregateContrastLocations("SUBTOTAL(9)>0");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatSubtotalHiddenRowsAndNestedAggregates()
+    {
+        var filterWorkbook = CreateFormulaAggregateContrastWorkbook(out var filterSheet, out var filterFirstLabel, out var filterLastLabel);
+        filterSheet.FilterHiddenRows.Add(4);
+        AddFormulaContrastRule(filterSheet, filterFirstLabel, filterLastLabel, "SUBTOTAL(9,$A$1:$A$4)=250");
+        FindLowContrastCellTextIssues(filterWorkbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal("B1", "B2", "B3", "B4");
+
+        var hiddenWorkbook = CreateFormulaAggregateContrastWorkbook(out var hiddenSheet, out var hiddenFirstLabel, out var hiddenLastLabel);
+        hiddenSheet.HiddenRows.Add(2);
+        hiddenSheet.FilterHiddenRows.Add(4);
+        AddFormulaContrastRule(hiddenSheet, hiddenFirstLabel, hiddenLastLabel, "SUBTOTAL(109,$A$1:$A$4)=150");
+        FindLowContrastCellTextIssues(hiddenWorkbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal("B1", "B2", "B3", "B4");
+
+        var nestedWorkbook = CreateFormulaAggregateContrastWorkbook(out var nestedSheet, out var nestedFirstLabel, out var nestedLastLabel);
+        nestedSheet.SetCell(
+            new CellAddress(nestedSheet.Id, 2, 1),
+            new Cell { FormulaText = "SUBTOTAL(9,A1:A1)", Value = new NumberValue(1000) });
+        AddFormulaContrastRule(nestedSheet, nestedFirstLabel, nestedLastLabel, "SUBTOTAL(9,$A$1:$A$4)=275");
+        FindLowContrastCellTextIssues(nestedWorkbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal("B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAggregateFunctionNumbers()
+    {
+        AssertFormulaAggregateContrastLocations("AGGREGATE(9,4,$A1:$A3)>250", "B2");
+        AssertFormulaAggregateContrastLocations("AGGREGATE(4,4,$A1:$A3)=125", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("AGGREGATE(12,4,$A1:$A3)=100", "B2", "B3");
+        AssertFormulaAggregateContrastLocations("AGGREGATE(13,4,$A$1:$A$4)=75", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("AGGREGATE(14,4,$A$1:$A$4,1)=125", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("AGGREGATE(15,4,$A$1:$A$4,2)=75", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("AGGREGATE(16,4,$A$1:$A$4,0.5)=87.5", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAggregateWrappersPredicatesAndOptions()
+    {
+        AssertFormulaAggregateContrastLocations("AND(AGGREGATE(9,4,$A1:$A3)>250,$C1=\"Closed\")", "B2");
+        AssertFormulaAggregateContrastLocations("IF(AGGREGATE(14,4,$A$1:$A$4,1)=125,TRUE,FALSE)", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISNUMBER(AGGREGATE(12,4,$A1:$A3))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(AGGREGATE(9,4,$A1:$A3),1)>251", "B2");
+
+        var errorWorkbook = CreateFormulaAggregateContrastWorkbook(out var errorSheet, out var errorFirstLabel, out var errorLastLabel);
+        errorSheet.SetCell(new CellAddress(errorSheet.Id, 2, 1), ErrorValue.DivByZero);
+        AddFormulaContrastRule(errorSheet, errorFirstLabel, errorLastLabel, "AGGREGATE(9,6,$A$1:$A$4)=275");
+        FindLowContrastCellTextIssues(errorWorkbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal("B1", "B2", "B3", "B4");
+
+        var nestedWorkbook = CreateFormulaAggregateContrastWorkbook(out var nestedSheet, out var nestedFirstLabel, out var nestedLastLabel);
+        nestedSheet.SetCell(
+            new CellAddress(nestedSheet.Id, 2, 1),
+            new Cell { FormulaText = "AGGREGATE(9,4,A1:A1)", Value = new NumberValue(1000) });
+        AddFormulaContrastRule(nestedSheet, nestedFirstLabel, nestedLastLabel, "AGGREGATE(9,0,$A$1:$A$4)=275");
+        FindLowContrastCellTextIssues(nestedWorkbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal("B1", "B2", "B3", "B4");
+
+        var hiddenWorkbook = CreateFormulaAggregateContrastWorkbook(out var hiddenSheet, out var hiddenFirstLabel, out var hiddenLastLabel);
+        hiddenSheet.HiddenRows.Add(4);
+        AddFormulaContrastRule(hiddenSheet, hiddenFirstLabel, hiddenLastLabel, "AGGREGATE(9,5,$A$1:$A$4)=250");
+        FindLowContrastCellTextIssues(hiddenWorkbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal("B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_PropagatesFormulaConditionalFormatAggregateErrorsAndRejectsUnsupportedFunctionShapes()
+    {
+        AssertFormulaAggregateContrastLocations("ISNA(AGGREGATE(9,4,NA()))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISERROR(AGGREGATE(20,4,$A$1:$A$4))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISERROR(AGGREGATE(9,8,$A$1:$A$4))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISERROR(AGGREGATE(14,4,$A$1:$A$4))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("AGGREGATE(9,4)>0");
+        AssertFormulaAggregateContrastLocations("AGGREGATE(14,4,$A$1:$A$4)>0");
+        AssertFormulaAggregateContrastLocations("AGGREGATE(20,4,$A$1:$A$4)>0");
+        AssertFormulaAggregateContrastLocations("AGGREGATE(9,8,$A$1:$A$4)>0");
+        AssertFormulaAggregateContrastLocations("AGGREGATE(9,4,$A1:$A20000)>0");
+    }
+
+    [Fact]
     public void FindIssues_PropagatesFormulaConditionalFormatConditionalAggregateErrorsAndFailsClosedForErrorComparisons()
     {
         AssertFormulaAggregateContrastLocations("ISNA(SUMIF(NA(),\"Open\",$A$1:$A$1))", "B1", "B2", "B3", "B4");
@@ -4777,6 +4922,87 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialAccrualScheduleAndDollarFunctions()
+    {
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("ACCRINT($A1,$C1,$D1,$E1,$F1,$G1,$H1)>=50", "B1", "B2");
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("ACCRINTM($A1,$D1,$E1,$F1,$H1)>45", "B1", "B2");
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("FVSCHEDULE($I1,$J1:$K1)>150", "B2", "B8");
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("DOLLARDE($L1,$N1)>2", "B2", "B8");
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("DOLLARFR($M1,$N1)>2", "B2", "B8");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialAccrualScheduleWrappersDefaultsAndOptionalArguments()
+    {
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("IF(ACCRINT($A1,$C1,$D1,$E1,$F1,$G1)>45,TRUE,FALSE)", "B1", "B2");
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("AND(ISNUMBER(ACCRINTM($A1,$D1,$E1)),FVSCHEDULE($I1,$J1:$K1)>100)", "B1", "B2", "B8");
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("ACCRINT($A1,$C1,$D1,$E1,$F1,$G1,$H1,FALSE)<25", "B3", "B4");
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("SUM(DOLLARDE($L1,$N1),DOLLARFR($M1,$N1))>6", "B8");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialAccrualScheduleErrorPredicates()
+    {
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("ISNA(ACCRINT($A1,$C1,$D1,$E1,$F1,$G1,$H1))", "B5");
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("ISERROR(ACCRINTM($A1,$D1,$E1,$F1,$H1))", "B5", "B6", "B7");
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("ISERROR(FVSCHEDULE($I1,$J1:$K1))", "B5", "B6", "B7");
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("ISERROR(DOLLARDE($L1,$N1))", "B5", "B6", "B7");
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("ISERROR(DOLLARFR($M1,$N1))", "B5", "B6", "B7");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatFinancialAccrualScheduleUnsupportedShapesArityAndComparisons()
+    {
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("ACCRINT($A$1:$A$2,$C1,$D1,$E1,$F1,$G1)>0");
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("ACCRINT($A1,$C1,$D1,$E1,$F1)>0");
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("ACCRINTM($A1,$D1)>0");
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("FVSCHEDULE($I$1:$I$2,$J1:$K1)>0");
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("FVSCHEDULE($I1,$J1:$K1,0)>0");
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("DOLLARDE($L$1:$L$2,$N1)>0");
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("DOLLARFR($M1)>0");
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("ACCRINT($A$6,$C$6,$D$6,$E$6,$F$6,$G$6)>0");
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("FVSCHEDULE($I$6,$J$6:$K$6)>0");
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("DOLLARDE($L$6,$N$6)>0");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialOddCouponFunctions()
+    {
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ODDFPRICE($A1,$C1,$D1,$E1,$F1,$G1,$I1,$J1,$K1)>99", "B1", "B4", "B8");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ODDFYIELD($A1,$C1,$D1,$E1,$F1,$H1,$I1,$J1,$K1)>0.08", "B4");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ODDLPRICE($A1,$L1,$D1,$F1,$G1,$I1,$J1,$K1)>100", "B2", "B4");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ODDLYIELD($A1,$L1,$D1,$F1,$H1,$I1,$J1,$K1)>0.09", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialOddCouponWrappersDefaultsAndOptionalArguments()
+    {
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("IF(ODDFPRICE($A1,$C1,$D1,$E1,$F1,$G1,$I1,$J1)>99,TRUE,FALSE)", "B1", "B4", "B8");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("SUM(ODDFPRICE($A1,$C1,$D1,$E1,$F1,$G1,$I1,$J1,$K1),ODDLPRICE($A1,$L1,$D1,$F1,$G1,$I1,$J1,$K1))>200", "B4");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("AND($M1,ODDLYIELD($A1,$L1,$D1,$F1,$H1,$I1,$J1)>0.09)", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialOddCouponErrorPredicates()
+    {
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ISNUMBER(ODDLYIELD($A1,$L1,$D1,$F1,$H1,$I1,$J1,$K1))", "B1", "B2", "B3", "B4", "B8");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ISNA(ODDFPRICE($A1,$C1,$D1,$E1,$F1,$G1,$I1,$J1,$K1))", "B5");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ISERROR(ODDFYIELD($A1,$C1,$D1,$E1,$F1,$H1,$I1,$J1,$K1))", "B5", "B6", "B7", "B9");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ISERR(ODDLPRICE($A1,$L1,$D1,$F1,$G1,$I1,$J1,$K1))", "B6", "B7", "B9");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatFinancialOddCouponUnsupportedShapesArityAndComparisons()
+    {
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ODDFPRICE($A$1:$A$2,$C1,$D1,$E1,$F1,$G1,$I1,$J1,$K1)>0");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ISERROR(ODDFPRICE($A$1:$A$2,$C1,$D1,$E1,$F1,$G1,$I1,$J1,$K1))");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ODDFYIELD($A1,$C1,$D1,$E1,$F1,$H1,$I1)>0");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ODDLPRICE($A1,$L1,$D1,$F1,$G1,$I1,$J1,$K1,$M1)>0");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ODDLYIELD($A1,$L1,$D1,$F1,$H1,$I1,$J$1:$J$2,$K1)>0");
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ODDFPRICE($A$6,$C$6,$D$6,$E$6,$F$6,$G$6,$I$6,$J$6)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatArithmeticComparison()
     {
         AssertFormulaArithmeticContrastLocations("($A1+25-50)*2/5>=40", "B4");
@@ -7245,6 +7471,380 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 11), discountPrice);
     }
 
+    private static Workbook CreateFormulaFinancialAccrualScheduleFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 8, 2);
+
+        SetFormulaFinancialAccrualScheduleFunctionContrastRow(
+            sheet,
+            1,
+            new NumberValue(43831),
+            new NumberValue(43831),
+            new NumberValue(44197),
+            new NumberValue(0.05),
+            new NumberValue(1000),
+            new NumberValue(2),
+            new NumberValue(0),
+            new NumberValue(100),
+            new NumberValue(0.10),
+            new NumberValue(0.05),
+            new NumberValue(1.02),
+            new NumberValue(1.125),
+            new NumberValue(16),
+            "Annual accrual");
+        SetFormulaFinancialAccrualScheduleFunctionContrastRow(
+            sheet,
+            2,
+            new NumberValue(43862),
+            new NumberValue(43862),
+            new NumberValue(44228),
+            new NumberValue(0.06),
+            new NumberValue(1200),
+            new NumberValue(4),
+            new NumberValue(3),
+            new NumberValue(200),
+            new NumberValue(-0.05),
+            new NumberValue(0.10),
+            new NumberValue(2.16),
+            new NumberValue(2.5),
+            new NumberValue(16),
+            "Actual 365 schedule");
+        SetFormulaFinancialAccrualScheduleFunctionContrastRow(
+            sheet,
+            3,
+            new NumberValue(43831),
+            new NumberValue(43831),
+            new NumberValue(43921),
+            new NumberValue(0.02),
+            new NumberValue(1000),
+            new NumberValue(2),
+            new NumberValue(0),
+            new NumberValue(50),
+            new NumberValue(0.01),
+            new NumberValue(0.02),
+            new NumberValue(1.01),
+            new NumberValue(1.03125),
+            new NumberValue(32),
+            "Small accrual");
+        SetFormulaFinancialAccrualScheduleFunctionContrastRow(
+            sheet,
+            4,
+            new NumberValue(43831),
+            new NumberValue(43921),
+            new NumberValue(44197),
+            new NumberValue(0.03),
+            new NumberValue(1000),
+            new NumberValue(2),
+            new NumberValue(0),
+            new NumberValue(80),
+            new NumberValue(0.05),
+            new NumberValue(0.05),
+            new NumberValue(1.04),
+            new NumberValue(1.125),
+            new NumberValue(32),
+            "First interest partial");
+        SetFormulaFinancialAccrualScheduleFunctionContrastRow(
+            sheet,
+            5,
+            ErrorValue.NA,
+            new NumberValue(43831),
+            new NumberValue(44197),
+            new NumberValue(0.05),
+            new NumberValue(1000),
+            new NumberValue(2),
+            new NumberValue(0),
+            new NumberValue(100),
+            ErrorValue.NA,
+            new NumberValue(0.05),
+            ErrorValue.NA,
+            ErrorValue.NA,
+            new NumberValue(16),
+            "NA inputs");
+        SetFormulaFinancialAccrualScheduleFunctionContrastRow(
+            sheet,
+            6,
+            new NumberValue(44197),
+            new NumberValue(43831),
+            new NumberValue(43831),
+            new NumberValue(0.05),
+            new NumberValue(1000),
+            new NumberValue(2),
+            new NumberValue(0),
+            new TextValue("Open"),
+            new TextValue("Open"),
+            new NumberValue(0.05),
+            new NumberValue(1.02),
+            new NumberValue(1.125),
+            new NumberValue(-1),
+            "Invalid order");
+        SetFormulaFinancialAccrualScheduleFunctionContrastRow(
+            sheet,
+            7,
+            new NumberValue(43831),
+            new NumberValue(43831),
+            new NumberValue(44197),
+            new NumberValue(0.01),
+            new NumberValue(1000),
+            new NumberValue(2),
+            new NumberValue(5),
+            new NumberValue(100),
+            ErrorValue.Value,
+            new NumberValue(0.05),
+            new NumberValue(1.02),
+            new NumberValue(1.125),
+            new NumberValue(0),
+            "Invalid options");
+        SetFormulaFinancialAccrualScheduleFunctionContrastRow(
+            sheet,
+            8,
+            new NumberValue(43831),
+            new NumberValue(43831),
+            new NumberValue(44197),
+            new NumberValue(0.04),
+            new NumberValue(1000),
+            new NumberValue(2.9),
+            new NumberValue(0.9),
+            new NumberValue(150),
+            new NumberValue(0.20),
+            BlankValue.Instance,
+            new NumberValue(3.04),
+            new NumberValue(3.125),
+            new NumberValue(32),
+            "Truncated options");
+
+        return workbook;
+    }
+
+    private static void SetFormulaFinancialAccrualScheduleFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        ScalarValue issue,
+        ScalarValue firstInterest,
+        ScalarValue settlement,
+        ScalarValue rate,
+        ScalarValue par,
+        ScalarValue frequency,
+        ScalarValue basis,
+        ScalarValue principal,
+        ScalarValue scheduleFirst,
+        ScalarValue scheduleSecond,
+        ScalarValue fractionalDollar,
+        ScalarValue decimalDollar,
+        ScalarValue fraction,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), issue);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), firstInterest);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 4), settlement);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 5), rate);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 6), par);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 7), frequency);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 8), basis);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 9), principal);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 10), scheduleFirst);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 11), scheduleSecond);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 12), fractionalDollar);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 13), decimalDollar);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 14), fraction);
+    }
+
+    private static Workbook CreateFormulaFinancialOddCouponFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 9, 2);
+
+        SetFormulaFinancialOddCouponFunctionContrastRow(
+            sheet,
+            1,
+            new NumberValue(43900),
+            new NumberValue(44562),
+            new NumberValue(43831),
+            new NumberValue(44197),
+            new NumberValue(0.05),
+            new NumberValue(0.05),
+            new NumberValue(99),
+            new NumberValue(100),
+            new NumberValue(2),
+            new NumberValue(0),
+            new NumberValue(44197),
+            active: true,
+            "Odd first par");
+        SetFormulaFinancialOddCouponFunctionContrastRow(
+            sheet,
+            2,
+            new NumberValue(43910),
+            new NumberValue(44592),
+            new NumberValue(43840),
+            new NumberValue(44228),
+            new NumberValue(0.06),
+            new NumberValue(0.07),
+            new NumberValue(101),
+            new NumberValue(110),
+            new NumberValue(4),
+            new NumberValue(1),
+            new NumberValue(44228),
+            active: false,
+            "Quarter actual");
+        SetFormulaFinancialOddCouponFunctionContrastRow(
+            sheet,
+            3,
+            new NumberValue(43900),
+            new NumberValue(44562),
+            new NumberValue(43831),
+            new NumberValue(44197),
+            new NumberValue(0.02),
+            new NumberValue(0.10),
+            new NumberValue(105),
+            new NumberValue(100),
+            new NumberValue(2),
+            new NumberValue(0),
+            new NumberValue(44197),
+            active: true,
+            "Below threshold");
+        SetFormulaFinancialOddCouponFunctionContrastRow(
+            sheet,
+            4,
+            new NumberValue(44000),
+            new NumberValue(44562),
+            new NumberValue(43831),
+            new NumberValue(44197),
+            new NumberValue(0.08),
+            new NumberValue(0.04),
+            new NumberValue(98),
+            new NumberValue(100),
+            new NumberValue(2),
+            new NumberValue(0),
+            new NumberValue(44197),
+            active: true,
+            "High coupon");
+        SetFormulaFinancialOddCouponFunctionContrastRow(
+            sheet,
+            5,
+            ErrorValue.NA,
+            new NumberValue(44562),
+            new NumberValue(43831),
+            new NumberValue(44197),
+            new NumberValue(0.05),
+            new NumberValue(0.05),
+            new NumberValue(99),
+            new NumberValue(100),
+            new NumberValue(2),
+            new NumberValue(0),
+            new NumberValue(44197),
+            active: true,
+            "NA settlement");
+        SetFormulaFinancialOddCouponFunctionContrastRow(
+            sheet,
+            6,
+            new NumberValue(43900),
+            new NumberValue(44562),
+            new NumberValue(43831),
+            new NumberValue(43890),
+            new NumberValue(0.05),
+            new NumberValue(0.05),
+            new NumberValue(99),
+            new NumberValue(100),
+            new NumberValue(2),
+            new NumberValue(0),
+            new NumberValue(43890),
+            active: true,
+            "Invalid order");
+        SetFormulaFinancialOddCouponFunctionContrastRow(
+            sheet,
+            7,
+            new TextValue("Open"),
+            new NumberValue(44562),
+            new NumberValue(43831),
+            new NumberValue(44197),
+            new NumberValue(0.05),
+            new NumberValue(0.05),
+            new NumberValue(99),
+            new NumberValue(100),
+            new NumberValue(2),
+            new NumberValue(0),
+            new NumberValue(44197),
+            active: true,
+            "Value settlement");
+        SetFormulaFinancialOddCouponFunctionContrastRow(
+            sheet,
+            8,
+            new NumberValue(43900),
+            new NumberValue(44562),
+            new NumberValue(43831),
+            new NumberValue(44197),
+            new NumberValue(0.05),
+            new NumberValue(0.05),
+            new NumberValue(99),
+            new NumberValue(100),
+            new NumberValue(2.9),
+            new NumberValue(0.9),
+            new NumberValue(44197),
+            active: true,
+            "Fractional optional");
+        SetFormulaFinancialOddCouponFunctionContrastRow(
+            sheet,
+            9,
+            new NumberValue(43900),
+            new NumberValue(44562),
+            new NumberValue(43831),
+            new NumberValue(44197),
+            new NumberValue(0.05),
+            new NumberValue(0.05),
+            new NumberValue(99),
+            new NumberValue(100),
+            new NumberValue(3),
+            new NumberValue(0),
+            new NumberValue(44197),
+            active: true,
+            "Invalid frequency");
+
+        return workbook;
+    }
+
+    private static void SetFormulaFinancialOddCouponFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        ScalarValue settlement,
+        ScalarValue maturity,
+        ScalarValue issueOrLastInterest,
+        ScalarValue firstCoupon,
+        ScalarValue rate,
+        ScalarValue yieldRate,
+        ScalarValue price,
+        ScalarValue redemption,
+        ScalarValue frequency,
+        ScalarValue basis,
+        ScalarValue shortMaturity,
+        bool active,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), settlement);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), maturity);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 4), issueOrLastInterest);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 5), firstCoupon);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 6), rate);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 7), yieldRate);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 8), price);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 9), redemption);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 10), frequency);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 11), basis);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 12), shortMaturity);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 13), new BoolValue(active));
+    }
+
     private static void AssertFormulaBooleanContrastLocations(string formulaText, params string[] expectedLocations)
     {
         var workbook = CreateFormulaBooleanContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
@@ -7390,6 +7990,32 @@ public sealed partial class AccessibilityCheckerServiceTests
         params string[] expectedLocations)
     {
         var workbook = CreateFormulaFinancialBondYieldFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaFinancialAccrualScheduleFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaFinancialAccrualScheduleFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaFinancialOddCouponFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaFinancialOddCouponFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
 
         FindLowContrastCellTextIssues(workbook)
