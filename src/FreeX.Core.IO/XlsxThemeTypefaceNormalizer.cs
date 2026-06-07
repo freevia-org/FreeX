@@ -37,11 +37,6 @@ internal static class XlsxThemeTypefaceNormalizer
         return changed;
     }
 
-    private static bool IsThemeXmlEntry(ZipArchiveEntry entry)
-    {
-        var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
-        return path.StartsWith("xl/theme/", StringComparison.OrdinalIgnoreCase) &&
-               path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
-               !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool IsThemeXmlEntry(ZipArchiveEntry entry) =>
+        XlsxPackagePath.IsXmlEntryInDirectory(entry, "xl/theme/");
 }

@@ -249,11 +249,6 @@ internal static class XlsxExternalLinkSchemaNormalizer
         child.Name == WorkbookNs + "sheetDataSet" ? 2 :
         90;
 
-    private static bool IsExternalLinkXmlEntry(ZipArchiveEntry entry)
-    {
-        var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
-        return path.StartsWith("xl/externalLinks/", StringComparison.OrdinalIgnoreCase) &&
-               path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
-               !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool IsExternalLinkXmlEntry(ZipArchiveEntry entry) =>
+        XlsxPackagePath.IsXmlEntryInDirectory(entry, "xl/externalLinks/");
 }
