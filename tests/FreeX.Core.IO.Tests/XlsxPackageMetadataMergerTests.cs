@@ -565,6 +565,54 @@ public sealed partial class XlsxPackageMetadataMergerTests
                 </we:webextension>
                 """));
 
+    private static MemoryStream CreatePackageWithGeneratedWebExtensionTaskpaneRelationshipCollision() =>
+        XlsxPackageTestFixtures.CreatePackage(
+            ("[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/workbook.xml"
+                            ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+                  <Override PartName="/xl/webextensions/taskpanes.xml"
+                            ContentType="application/vnd.ms-office.webextensiontaskpanes+xml"/>
+                  <Override PartName="/xl/webextensions/webextension1.xml"
+                            ContentType="application/vnd.ms-office.webextension+xml"/>
+                </Types>
+                """),
+            ("xl/workbook.xml", """
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheets/>
+                </workbook>
+                """),
+            ("xl/_rels/workbook.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>
+                """),
+            ("xl/webextensions/taskpanes.xml", """
+                <wetp:taskpanes xmlns:wetp="http://schemas.microsoft.com/office/webextensions/taskpanes/2010/11">
+                  <wetp:taskpane dockstate="right" visibility="0" width="350" row="4">
+                    <wetp:webextensionref xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rIdWebExtension1"/>
+                  </wetp:taskpane>
+                </wetp:taskpanes>
+                """),
+            ("xl/webextensions/_rels/taskpanes.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdWebExtension1"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
+                                Target="https://example.com/generated"
+                                TargetMode="External"/>
+                </Relationships>
+                """),
+            ("xl/webextensions/webextension1.xml", """
+                <we:webextension xmlns:we="http://schemas.microsoft.com/office/webextensions/webextension/2010/11">
+                  <we:reference id="generated" version="1.0.0.0" store="en-US" storeType="OMEX"/>
+                  <we:alternateReferences/>
+                  <we:properties/>
+                  <we:bindings/>
+                  <we:snapshot>BBBB</we:snapshot>
+                </we:webextension>
+                """));
+
     private static MemoryStream CreatePackageWithWorkbookXmlMapsGraph(string relationshipTarget = "xmlMaps.xml") =>
         XlsxPackageTestFixtures.CreatePackage(
             ("[Content_Types].xml", """
