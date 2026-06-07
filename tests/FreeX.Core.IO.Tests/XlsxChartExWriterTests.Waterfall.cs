@@ -14,7 +14,7 @@ public sealed partial class XlsxChartExWriterTests
         var saved = SaveWorkbookWithChart(ChartType.Waterfall);
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
-        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        var chartXml = XlsxPackageTestFixtures.LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
         var plotArea = chartXml.Root!
             .Element(ChartExNs + "chart")!
             .Element(ChartExNs + "plotArea")!;
@@ -47,7 +47,7 @@ public sealed partial class XlsxChartExWriterTests
             chart.WaterfallTotalPointIndices = [0, 2]);
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
-        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        var chartXml = XlsxPackageTestFixtures.LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
         var layoutPr = chartXml.Descendants(ChartExNs + "layoutPr").Should().ContainSingle().Subject;
         layoutPr.Elements().Select(element => element.Name.LocalName).Should().Equal("visibility", "subtotals");
         layoutPr.Element(ChartExNs + "visibility")!
