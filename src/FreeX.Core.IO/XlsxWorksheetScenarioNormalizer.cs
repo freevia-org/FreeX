@@ -61,8 +61,8 @@ internal static class XlsxWorksheetScenarioNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(scenarios, ScenarioContainerAttributes);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenarios, "current", NormalizeUnsignedIntOrNull);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenarios, "show", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenarios, "current", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenarios, "show", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(scenarios, "sqref", NormalizeSqref);
         changed |= RemoveUnexpectedChildren(scenarios, WorksheetNs + "scenario");
 
@@ -115,7 +115,7 @@ internal static class XlsxWorksheetScenarioNormalizer
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(inputCell, "r", NormalizeCellReference);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(inputCell, "deleted", NormalizeBooleanOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(inputCell, "undone", NormalizeBooleanOrNull);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(inputCell, "numFmtId", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(inputCell, "numFmtId", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(inputCell);
         return changed;
     }
@@ -171,14 +171,6 @@ internal static class XlsxWorksheetScenarioNormalizer
         }
 
         return null;
-    }
-
-    private static string? NormalizeUnsignedIntOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed.ToString(CultureInfo.InvariantCulture)
-            : null;
     }
 
     private static string? NormalizeCellReference(string? value)
