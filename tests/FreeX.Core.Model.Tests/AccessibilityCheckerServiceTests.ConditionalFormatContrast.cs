@@ -520,6 +520,40 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatConditionalAggregates()
+    {
+        AssertFormulaAggregateContrastLocations("SUMIF($C$1:$C$4,$C1,$A$1:$A$4)>175", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("COUNTIF($C$1:$C$4,$C1)=2", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("AVERAGEIF($C$1:$C$4,$C1,$A$1:$A$4)>90", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUMIFS($A$1:$A$4,$C$1:$C$4,$C1,$A$1:$A$4,\">100\")>0", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("COUNTIFS($C$1:$C$4,$C1,$A$1:$A$4,\">100\")=1", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("AVERAGEIFS($A$1:$A$4,$C$1:$C$4,$C1,$A$1:$A$4,\">=100\")>110", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatConditionalAggregateRangeExpansionAndWildcards()
+    {
+        AssertFormulaAggregateContrastLocations("SUMIF($C$1:$C$4,\"O*\",$A$1)>175", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("AVERAGEIF($C$1:$C$4,\"<>C*\",$A$1)>90", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("COUNTIF($C$1:$C$4,\"<>O*\")=2", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_PropagatesFormulaConditionalFormatConditionalAggregateErrorsAndFailsClosedForErrorComparisons()
+    {
+        AssertFormulaAggregateContrastLocations("ISNA(SUMIF(NA(),\"Open\",$A$1:$A$1))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISNA(COUNTIF(NA(),\"Open\"))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISERROR(AVERAGEIF($C$1:$C$4,\"Missing\",$A$1:$A$4))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISNA(SUMIFS(NA(),$C$1:$C$4,\"Open\"))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISNA(COUNTIFS(NA(),\"Open\"))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISNA(AVERAGEIFS(NA(),$C$1:$C$4,\"Open\"))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISERROR(SUMIFS($A$1:$A$4,$C$1:$C$3,\"Open\"))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUMIF(NA(),\"Open\",$A$1:$A$1)>0");
+        AssertFormulaAggregateContrastLocations("AVERAGEIF($C$1:$C$4,\"Missing\",$A$1:$A$4)>0");
+        AssertFormulaAggregateContrastLocations("SUMIFS($A$1:$A$4,$C$1:$C$3,\"Open\")>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAValueAggregates()
     {
         AssertFormulaAggregateContrastLocations("AVERAGEA($D1:$D3)=6", "B1", "B2");

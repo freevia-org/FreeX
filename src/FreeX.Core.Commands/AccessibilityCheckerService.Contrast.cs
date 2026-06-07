@@ -726,6 +726,7 @@ public static partial class AccessibilityCheckerService
     private const int MaxFormulaMultinomialArgumentCount = 255;
     private const int MaxFormulaModeArgumentCount = 255;
     private const int MaxFormulaSumProductArgumentCount = 255;
+    private const int MaxFormulaConditionalAggregateArgumentCount = 255;
     private const double MaxFormulaGcdInputExclusive = 9_223_372_036_854_775_808d;
     private const ulong MaxFormulaBitwiseInput = 281_474_976_710_655UL;
     private const int MaxFormulaBitwiseShift = 53;
@@ -1781,6 +1782,14 @@ public static partial class AccessibilityCheckerService
         int argumentCount) =>
         aggregateKind switch
         {
+            ConditionalFormulaAggregateKind.SumIf or
+            ConditionalFormulaAggregateKind.AverageIf => argumentCount is 2 or 3,
+            ConditionalFormulaAggregateKind.CountIf => argumentCount == 2,
+            ConditionalFormulaAggregateKind.SumIfs or
+            ConditionalFormulaAggregateKind.AverageIfs => argumentCount is >= 3 and <= MaxFormulaConditionalAggregateArgumentCount &&
+                (argumentCount - 1) % 2 == 0,
+            ConditionalFormulaAggregateKind.CountIfs => argumentCount is >= 2 and <= MaxFormulaConditionalAggregateArgumentCount &&
+                argumentCount % 2 == 0,
             ConditionalFormulaAggregateKind.SumProduct => argumentCount is >= 1 and <= MaxFormulaSumProductArgumentCount,
             _ when IsFormulaPairwiseAggregate(aggregateKind) => argumentCount == 2,
             ConditionalFormulaAggregateKind.Large or
@@ -1808,6 +1817,12 @@ public static partial class AccessibilityCheckerService
         {
             case "SUM":
                 kind = ConditionalFormulaAggregateKind.Sum;
+                return true;
+            case "SUMIF":
+                kind = ConditionalFormulaAggregateKind.SumIf;
+                return true;
+            case "SUMIFS":
+                kind = ConditionalFormulaAggregateKind.SumIfs;
                 return true;
             case "SUMSQ":
                 kind = ConditionalFormulaAggregateKind.SumSq;
@@ -1858,6 +1873,12 @@ public static partial class AccessibilityCheckerService
             case "AVERAGE":
                 kind = ConditionalFormulaAggregateKind.Average;
                 return true;
+            case "AVERAGEIF":
+                kind = ConditionalFormulaAggregateKind.AverageIf;
+                return true;
+            case "AVERAGEIFS":
+                kind = ConditionalFormulaAggregateKind.AverageIfs;
+                return true;
             case "AVERAGEA":
                 kind = ConditionalFormulaAggregateKind.AverageA;
                 return true;
@@ -1878,6 +1899,12 @@ public static partial class AccessibilityCheckerService
                 return true;
             case "COUNT":
                 kind = ConditionalFormulaAggregateKind.Count;
+                return true;
+            case "COUNTIF":
+                kind = ConditionalFormulaAggregateKind.CountIf;
+                return true;
+            case "COUNTIFS":
+                kind = ConditionalFormulaAggregateKind.CountIfs;
                 return true;
             case "COUNTA":
                 kind = ConditionalFormulaAggregateKind.CountA;
@@ -1942,6 +1969,15 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaAggregateKind.SumXMy2 or
             ConditionalFormulaAggregateKind.SumX2My2 or
             ConditionalFormulaAggregateKind.SumX2Py2;
+
+    private static bool IsFormulaConditionalAggregate(ConditionalFormulaAggregateKind aggregateKind) =>
+        aggregateKind is
+            ConditionalFormulaAggregateKind.SumIf or
+            ConditionalFormulaAggregateKind.CountIf or
+            ConditionalFormulaAggregateKind.AverageIf or
+            ConditionalFormulaAggregateKind.SumIfs or
+            ConditionalFormulaAggregateKind.CountIfs or
+            ConditionalFormulaAggregateKind.AverageIfs;
 
     private static bool TryCreateFormulaAggregateArgument(
         FormulaNode node,
@@ -2551,6 +2587,8 @@ public static partial class AccessibilityCheckerService
     private enum ConditionalFormulaAggregateKind
     {
         Sum,
+        SumIf,
+        SumIfs,
         SumSq,
         SumProduct,
         SumXMy2,
@@ -2566,6 +2604,8 @@ public static partial class AccessibilityCheckerService
         HarMean,
         Product,
         Average,
+        AverageIf,
+        AverageIfs,
         AverageA,
         Median,
         Min,
@@ -2573,6 +2613,8 @@ public static partial class AccessibilityCheckerService
         Max,
         MaxA,
         Count,
+        CountIf,
+        CountIfs,
         CountA,
         CountBlank,
         Large,
@@ -11460,6 +11502,868 @@ public static partial class AccessibilityCheckerService
         private static ScalarValue FormulaStatisticalNumberResult(double value) =>
             double.IsFinite(value) ? new NumberValue(value) : ErrorValue.Num;
 
+        private bool TryEvaluateFormulaConditionalAggregate(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (operand.AggregateArguments is not { Count: > 0 } arguments)
+                return false;
+
+            return operand.AggregateKind switch
+            {
+                ConditionalFormulaAggregateKind.SumIf =>
+                    TryEvaluateFormulaSumAverageIfAggregate(arguments, rowOffset, colOffset, average: false, out value),
+                ConditionalFormulaAggregateKind.CountIf =>
+                    TryEvaluateFormulaCountIfAggregate(arguments, rowOffset, colOffset, out value),
+                ConditionalFormulaAggregateKind.AverageIf =>
+                    TryEvaluateFormulaSumAverageIfAggregate(arguments, rowOffset, colOffset, average: true, out value),
+                ConditionalFormulaAggregateKind.SumIfs =>
+                    TryEvaluateFormulaSumAverageIfsAggregate(arguments, rowOffset, colOffset, average: false, out value),
+                ConditionalFormulaAggregateKind.CountIfs =>
+                    TryEvaluateFormulaCountIfsAggregate(arguments, rowOffset, colOffset, out value),
+                ConditionalFormulaAggregateKind.AverageIfs =>
+                    TryEvaluateFormulaSumAverageIfsAggregate(arguments, rowOffset, colOffset, average: true, out value),
+                _ => false
+            };
+        }
+
+        private bool TryEvaluateFormulaSumAverageIfAggregate(
+            IReadOnlyList<ConditionalFormulaAggregateArgument> arguments,
+            int rowOffset,
+            int colOffset,
+            bool average,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (arguments.Count is < 2 or > 3)
+                return false;
+
+            if (!TryResolveFormulaConditionalAggregateRangeArgument(arguments[0], rowOffset, colOffset, out var range, out var rangeError))
+            {
+                value = rangeError ?? ErrorValue.Value;
+                return rangeError is not null;
+            }
+
+            if (!TryResolveFormulaConditionalAggregateScalarArgument(arguments[1], rowOffset, colOffset, out var criteriaValue))
+                return false;
+
+            if (criteriaValue is ErrorValue criteriaError)
+            {
+                value = criteriaError;
+                return true;
+            }
+
+            RangeValue? aggregateRange = null;
+            if (arguments.Count == 3)
+            {
+                if (!TryResolveFormulaConditionalAggregateRangeArgument(arguments[2], rowOffset, colOffset, out var resolvedAggregateRange, out var aggregateRangeError))
+                {
+                    value = aggregateRangeError ?? ErrorValue.Value;
+                    return aggregateRangeError is not null;
+                }
+
+                aggregateRange = resolvedAggregateRange;
+            }
+
+            var criteria = FormulaConditionalCriteriaMatcher.Create(criteriaValue);
+            var total = 0d;
+            var count = 0;
+            var flatCount = range.RowCount * range.ColCount;
+            for (var i = 0; i < flatCount; i++)
+            {
+                if (!criteria.Matches(FormulaConditionalAggregateCellAtFlatIndex(range, i)))
+                    continue;
+
+                var aggregateValue = aggregateRange is not null
+                    ? FormulaConditionalAggregateCellAtRelativeOffsetOrContext(
+                        aggregateRange,
+                        i / range.ColCount,
+                        i % range.ColCount)
+                    : FormulaConditionalAggregateCellAtFlatIndex(range, i);
+
+                if (aggregateValue is ErrorValue aggregateError)
+                {
+                    value = aggregateError;
+                    return true;
+                }
+
+                if (TryGetFormulaConditionalAggregateCellNumber(aggregateValue, out var number))
+                {
+                    total += number;
+                    count++;
+                    if (!double.IsFinite(total))
+                    {
+                        value = ErrorValue.Num;
+                        return true;
+                    }
+                }
+            }
+
+            value = average
+                ? count == 0
+                    ? ErrorValue.DivByZero
+                    : FormulaConditionalAggregateNumberResult(total / count)
+                : FormulaConditionalAggregateNumberResult(total);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaCountIfAggregate(
+            IReadOnlyList<ConditionalFormulaAggregateArgument> arguments,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (arguments.Count != 2)
+                return false;
+
+            if (!TryResolveFormulaConditionalAggregateRangeArgument(arguments[0], rowOffset, colOffset, out var range, out var rangeError))
+            {
+                value = rangeError ?? ErrorValue.Value;
+                return rangeError is not null;
+            }
+
+            if (!TryResolveFormulaConditionalAggregateScalarArgument(arguments[1], rowOffset, colOffset, out var criteriaValue))
+                return false;
+
+            if (criteriaValue is ErrorValue criteriaError)
+            {
+                value = criteriaError;
+                return true;
+            }
+
+            var criteria = FormulaConditionalCriteriaMatcher.Create(criteriaValue);
+            var count = 0;
+            for (var row = 0; row < range.RowCount; row++)
+            {
+                for (var col = 0; col < range.ColCount; col++)
+                {
+                    if (criteria.Matches(range.Cells[row, col]))
+                        count++;
+                }
+            }
+
+            value = new NumberValue(count);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaSumAverageIfsAggregate(
+            IReadOnlyList<ConditionalFormulaAggregateArgument> arguments,
+            int rowOffset,
+            int colOffset,
+            bool average,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (arguments.Count < 3 || (arguments.Count - 1) % 2 != 0)
+                return false;
+
+            if (!TryResolveFormulaConditionalAggregateRangeArgument(arguments[0], rowOffset, colOffset, out var aggregateRange, out var aggregateRangeError))
+            {
+                value = aggregateRangeError ?? ErrorValue.Value;
+                return aggregateRangeError is not null;
+            }
+
+            var pairCount = (arguments.Count - 1) / 2;
+            if (!TryCreateFormulaConditionalCriteriaSet(
+                    arguments,
+                    firstCriteriaRangeIndex: 1,
+                    pairCount,
+                    aggregateRange,
+                    rowOffset,
+                    colOffset,
+                    out var criteriaSet,
+                    out var criteriaSetError))
+            {
+                value = criteriaSetError ?? ErrorValue.Value;
+                return criteriaSetError is not null;
+            }
+
+            var total = 0d;
+            var count = 0;
+            for (var row = 0; row < aggregateRange.RowCount; row++)
+            {
+                for (var col = 0; col < aggregateRange.ColCount; col++)
+                {
+                    if (!criteriaSet.Includes(row, col))
+                        continue;
+
+                    var aggregateValue = aggregateRange.Cells[row, col];
+                    if (aggregateValue is ErrorValue aggregateError)
+                    {
+                        value = aggregateError;
+                        return true;
+                    }
+
+                    if (TryGetFormulaConditionalAggregateCellNumber(aggregateValue, out var number))
+                    {
+                        total += number;
+                        count++;
+                        if (!double.IsFinite(total))
+                        {
+                            value = ErrorValue.Num;
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            value = average
+                ? count == 0
+                    ? ErrorValue.DivByZero
+                    : FormulaConditionalAggregateNumberResult(total / count)
+                : FormulaConditionalAggregateNumberResult(total);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaCountIfsAggregate(
+            IReadOnlyList<ConditionalFormulaAggregateArgument> arguments,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (arguments.Count < 2 || arguments.Count % 2 != 0)
+                return false;
+
+            var pairCount = arguments.Count / 2;
+            if (!TryCreateFormulaConditionalCriteriaSet(
+                    arguments,
+                    firstCriteriaRangeIndex: 0,
+                    pairCount,
+                    requiredShape: null,
+                    rowOffset,
+                    colOffset,
+                    out var criteriaSet,
+                    out var criteriaSetError))
+            {
+                value = criteriaSetError ?? ErrorValue.Value;
+                return criteriaSetError is not null;
+            }
+
+            var count = 0;
+            var shapeRange = criteriaSet.ShapeRange;
+            for (var row = 0; row < shapeRange.RowCount; row++)
+            {
+                for (var col = 0; col < shapeRange.ColCount; col++)
+                {
+                    if (criteriaSet.Includes(row, col))
+                        count++;
+                }
+            }
+
+            value = new NumberValue(count);
+            return true;
+        }
+
+        private bool TryCreateFormulaConditionalCriteriaSet(
+            IReadOnlyList<ConditionalFormulaAggregateArgument> arguments,
+            int firstCriteriaRangeIndex,
+            int pairCount,
+            RangeValue? requiredShape,
+            int rowOffset,
+            int colOffset,
+            out FormulaConditionalCriteriaSet criteriaSet,
+            out ErrorValue? error)
+        {
+            criteriaSet = default;
+            error = null;
+            var pairs = new FormulaConditionalCriteriaPair[pairCount];
+            var shapeRange = requiredShape;
+
+            for (var pairIndex = 0; pairIndex < pairCount; pairIndex++)
+            {
+                var rangeIndex = firstCriteriaRangeIndex + pairIndex * 2;
+                var criteriaIndex = rangeIndex + 1;
+
+                if (!TryResolveFormulaConditionalAggregateRangeArgument(
+                        arguments[rangeIndex],
+                        rowOffset,
+                        colOffset,
+                        out var criteriaRange,
+                        out error))
+                {
+                    return false;
+                }
+
+                shapeRange ??= criteriaRange;
+                if (!FormulaConditionalAggregateSameShape(shapeRange, criteriaRange))
+                {
+                    error = ErrorValue.Value;
+                    return false;
+                }
+
+                if (!TryResolveFormulaConditionalAggregateScalarArgument(
+                        arguments[criteriaIndex],
+                        rowOffset,
+                        colOffset,
+                        out var criteriaValue))
+                {
+                    return false;
+                }
+
+                if (criteriaValue is ErrorValue criteriaError)
+                {
+                    error = criteriaError;
+                    return false;
+                }
+
+                pairs[pairIndex] = new FormulaConditionalCriteriaPair(
+                    criteriaRange,
+                    FormulaConditionalCriteriaMatcher.Create(criteriaValue));
+            }
+
+            if (shapeRange is null)
+                return false;
+
+            criteriaSet = new FormulaConditionalCriteriaSet(shapeRange, pairs);
+            return true;
+        }
+
+        private bool TryResolveFormulaConditionalAggregateRangeArgument(
+            ConditionalFormulaAggregateArgument argument,
+            int rowOffset,
+            int colOffset,
+            out RangeValue range,
+            out ErrorValue? error)
+        {
+            range = default!;
+            error = null;
+            switch (argument.Kind)
+            {
+                case ConditionalFormulaAggregateArgumentKind.Literal:
+                    error = argument.Literal is ErrorValue literalError ? literalError : ErrorValue.Value;
+                    return false;
+                case ConditionalFormulaAggregateArgumentKind.Reference:
+                    if (!TryResolveFormulaAggregateReference(argument, rowOffset, colOffset, out var targetSheet, out var row, out var col))
+                        return false;
+
+                    range = SingleFormulaConditionalAggregateRange(targetSheet.GetValue(row, col), row, col, targetSheet.Name);
+                    return true;
+                case ConditionalFormulaAggregateArgumentKind.Range:
+                    return TryMaterializeFormulaAggregateArgumentRange(argument, rowOffset, colOffset, out range);
+                case ConditionalFormulaAggregateArgumentKind.Operand:
+                    if (!argument.Operand.HasValue)
+                        return false;
+
+                    if (argument.Operand.Value.Kind == ConditionalFormulaOperandKind.ReferenceRange)
+                        return TryMaterializeFormulaReferenceRange(argument.Operand.Value, rowOffset, colOffset, out range);
+
+                    if (!TryResolveFormulaOperand(argument.Operand.Value, rowOffset, colOffset, out var value))
+                        return false;
+
+                    if (value is ErrorValue operandError)
+                    {
+                        error = operandError;
+                        return false;
+                    }
+
+                    if (value is RangeValue resolvedRange)
+                    {
+                        range = resolvedRange;
+                        return true;
+                    }
+
+                    error = ErrorValue.Value;
+                    return false;
+                default:
+                    return false;
+            }
+        }
+
+        private bool TryResolveFormulaConditionalAggregateScalarArgument(
+            ConditionalFormulaAggregateArgument argument,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            switch (argument.Kind)
+            {
+                case ConditionalFormulaAggregateArgumentKind.Literal:
+                    value = argument.Literal ?? BlankValue.Instance;
+                    return true;
+                case ConditionalFormulaAggregateArgumentKind.Reference:
+                    if (!TryResolveFormulaAggregateReference(argument, rowOffset, colOffset, out var targetSheet, out var row, out var col))
+                        return false;
+
+                    value = targetSheet.GetValue(row, col);
+                    return true;
+                case ConditionalFormulaAggregateArgumentKind.Range:
+                    if (!TryMaterializeFormulaAggregateArgumentRange(argument, rowOffset, colOffset, out var range))
+                        return false;
+
+                    value = FormulaConditionalAggregateScalarFromRange(range);
+                    return true;
+                case ConditionalFormulaAggregateArgumentKind.Operand:
+                    if (!argument.Operand.HasValue)
+                        return false;
+
+                    if (argument.Operand.Value.Kind == ConditionalFormulaOperandKind.ReferenceRange)
+                    {
+                        if (!TryMaterializeFormulaReferenceRange(argument.Operand.Value, rowOffset, colOffset, out var referenceRange))
+                            return false;
+
+                        value = FormulaConditionalAggregateScalarFromRange(referenceRange);
+                        return true;
+                    }
+
+                    if (!TryResolveFormulaOperand(argument.Operand.Value, rowOffset, colOffset, out value))
+                        return false;
+
+                    if (value is RangeValue resolvedRange)
+                        value = FormulaConditionalAggregateScalarFromRange(resolvedRange);
+
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private ScalarValue FormulaConditionalAggregateCellAtRelativeOffsetOrContext(
+            RangeValue range,
+            int rowOffset,
+            int colOffset)
+        {
+            if (rowOffset < range.RowCount && colOffset < range.ColCount)
+                return range.Cells[rowOffset, colOffset];
+
+            var targetRow = range.StartRow + (ulong)rowOffset;
+            var targetCol = range.StartCol + (ulong)colOffset;
+            if (targetRow > CellAddress.MaxRow || targetCol > CellAddress.MaxCol)
+                return ErrorValue.Ref;
+
+            var targetSheet = string.IsNullOrEmpty(range.SheetName)
+                ? sheet
+                : workbook.GetSheet(range.SheetName);
+            return targetSheet is null
+                ? ErrorValue.Ref
+                : targetSheet.GetValue((uint)targetRow, (uint)targetCol);
+        }
+
+        private static ScalarValue FormulaConditionalAggregateScalarFromRange(RangeValue range) =>
+            range.RowCount == 1 && range.ColCount == 1
+                ? range.Cells[0, 0]
+                : range;
+
+        private static RangeValue SingleFormulaConditionalAggregateRange(
+            ScalarValue value,
+            uint row,
+            uint col,
+            string? sheetName) =>
+            new(new[,] { { value } }, row, col) { SheetName = sheetName };
+
+        private static ScalarValue FormulaConditionalAggregateCellAtFlatIndex(RangeValue range, int index)
+        {
+            var row = index / range.ColCount;
+            var col = index - row * range.ColCount;
+            return range.Cells[row, col];
+        }
+
+        private static bool FormulaConditionalAggregateSameShape(RangeValue left, RangeValue right) =>
+            left.RowCount == right.RowCount && left.ColCount == right.ColCount;
+
+        private static bool TryGetFormulaConditionalAggregateCellNumber(ScalarValue value, out double number)
+        {
+            switch (value)
+            {
+                case NumberValue numeric:
+                    number = numeric.Value;
+                    return true;
+                case DateTimeValue dateTime:
+                    number = dateTime.Value;
+                    return true;
+                default:
+                    number = 0d;
+                    return false;
+            }
+        }
+
+        private static ScalarValue FormulaConditionalAggregateNumberResult(double value) =>
+            double.IsFinite(value) ? new NumberValue(value) : ErrorValue.Num;
+
+        private readonly record struct FormulaConditionalCriteriaPair(
+            RangeValue Range,
+            FormulaConditionalCriteriaMatcher Criteria);
+
+        private readonly record struct FormulaConditionalCriteriaSet(
+            RangeValue ShapeRange,
+            IReadOnlyList<FormulaConditionalCriteriaPair> Pairs)
+        {
+            public bool Includes(int row, int col)
+            {
+                for (var i = 0; i < Pairs.Count; i++)
+                {
+                    var pair = Pairs[i];
+                    if (!pair.Criteria.Matches(pair.Range.Cells[row, col]))
+                        return false;
+                }
+
+                return true;
+            }
+        }
+
+        private enum FormulaConditionalCriteriaMatcherKind : byte
+        {
+            AlwaysFalse,
+            NumberEquals,
+            BoolEquals,
+            TextEquals,
+            NumericOrTextEquals,
+            WildcardText,
+            NumericComparison,
+            TextComparison,
+            WildcardComparison
+        }
+
+        private enum FormulaConditionalCriteriaComparisonOp : byte
+        {
+            None,
+            GreaterThan,
+            GreaterThanOrEqual,
+            LessThan,
+            LessThanOrEqual,
+            Equal,
+            NotEqual
+        }
+
+        private readonly struct FormulaConditionalCriteriaMatcher
+        {
+            private readonly FormulaConditionalCriteriaMatcherKind _kind;
+            private readonly FormulaConditionalCriteriaComparisonOp _op;
+            private readonly string _text;
+            private readonly double _number;
+            private readonly bool _bool;
+
+            private FormulaConditionalCriteriaMatcher(
+                FormulaConditionalCriteriaMatcherKind kind,
+                FormulaConditionalCriteriaComparisonOp op = FormulaConditionalCriteriaComparisonOp.None,
+                string? text = null,
+                double number = 0d,
+                bool boolean = false)
+            {
+                _kind = kind;
+                _op = op;
+                _text = text ?? string.Empty;
+                _number = number;
+                _bool = boolean;
+            }
+
+            public static FormulaConditionalCriteriaMatcher Create(ScalarValue criteria)
+            {
+                if (criteria is BlankValue)
+                    return new FormulaConditionalCriteriaMatcher(FormulaConditionalCriteriaMatcherKind.TextEquals, text: string.Empty);
+
+                if (criteria is NumberValue number)
+                    return new FormulaConditionalCriteriaMatcher(FormulaConditionalCriteriaMatcherKind.NumberEquals, number: number.Value);
+
+                if (criteria is DateTimeValue dateTime)
+                    return new FormulaConditionalCriteriaMatcher(FormulaConditionalCriteriaMatcherKind.NumberEquals, number: dateTime.Value);
+
+                if (criteria is BoolValue boolean)
+                    return new FormulaConditionalCriteriaMatcher(FormulaConditionalCriteriaMatcherKind.BoolEquals, boolean: boolean.Value);
+
+                if (criteria is not TextValue text)
+                    return new FormulaConditionalCriteriaMatcher(FormulaConditionalCriteriaMatcherKind.AlwaysFalse);
+
+                var criteriaText = text.Value;
+                if (TrySplitFormulaConditionalCriteriaComparison(criteriaText, out var op, out var rhs))
+                {
+                    if (TryParseFormulaConditionalCriteriaNumber(rhs, out var rhsNumber))
+                    {
+                        return new FormulaConditionalCriteriaMatcher(
+                            FormulaConditionalCriteriaMatcherKind.NumericComparison,
+                            op,
+                            number: rhsNumber);
+                    }
+
+                    return IsFormulaConditionalWildcardCriteria(rhs) &&
+                        op is FormulaConditionalCriteriaComparisonOp.Equal or FormulaConditionalCriteriaComparisonOp.NotEqual
+                            ? new FormulaConditionalCriteriaMatcher(
+                                FormulaConditionalCriteriaMatcherKind.WildcardComparison,
+                                op,
+                                rhs)
+                            : new FormulaConditionalCriteriaMatcher(
+                                FormulaConditionalCriteriaMatcherKind.TextComparison,
+                                op,
+                                rhs);
+                }
+
+                if (IsFormulaConditionalWildcardCriteria(criteriaText))
+                    return new FormulaConditionalCriteriaMatcher(FormulaConditionalCriteriaMatcherKind.WildcardText, text: criteriaText);
+
+                if (TryParseFormulaConditionalCriteriaNumber(criteriaText, out var numericCriteria))
+                {
+                    return new FormulaConditionalCriteriaMatcher(
+                        FormulaConditionalCriteriaMatcherKind.NumericOrTextEquals,
+                        text: criteriaText,
+                        number: numericCriteria);
+                }
+
+                return new FormulaConditionalCriteriaMatcher(FormulaConditionalCriteriaMatcherKind.TextEquals, text: criteriaText);
+            }
+
+            public bool Matches(ScalarValue cellValue) => _kind switch
+            {
+                FormulaConditionalCriteriaMatcherKind.NumberEquals =>
+                    TryGetFormulaConditionalCriteriaCellNumber(cellValue, out var cellNumber) &&
+                    cellNumber == _number,
+
+                FormulaConditionalCriteriaMatcherKind.BoolEquals =>
+                    cellValue is BoolValue boolValue && boolValue.Value == _bool,
+
+                FormulaConditionalCriteriaMatcherKind.TextEquals =>
+                    string.Equals(
+                        FormulaConditionalCriteriaComparableText(cellValue),
+                        _text,
+                        StringComparison.OrdinalIgnoreCase),
+
+                FormulaConditionalCriteriaMatcherKind.NumericOrTextEquals =>
+                    TryGetFormulaConditionalCriteriaCellNumber(cellValue, out var comparableNumber)
+                        ? comparableNumber == _number
+                        : string.Equals(
+                            FormulaConditionalCriteriaComparableText(cellValue),
+                            _text,
+                            StringComparison.OrdinalIgnoreCase),
+
+                FormulaConditionalCriteriaMatcherKind.WildcardText =>
+                    cellValue is TextValue wildcardText &&
+                    FormulaConditionalCriteriaWildcardMatch(wildcardText.Value, _text),
+
+                FormulaConditionalCriteriaMatcherKind.NumericComparison =>
+                    MatchesNumericComparison(cellValue),
+
+                FormulaConditionalCriteriaMatcherKind.TextComparison =>
+                    MatchesTextComparison(cellValue),
+
+                FormulaConditionalCriteriaMatcherKind.WildcardComparison =>
+                    MatchesWildcardComparison(cellValue),
+
+                _ => false
+            };
+
+            private bool MatchesNumericComparison(ScalarValue cellValue)
+            {
+                if (!TryGetFormulaConditionalCriteriaCellNumber(cellValue, out var value))
+                    return false;
+
+                return _op switch
+                {
+                    FormulaConditionalCriteriaComparisonOp.GreaterThan => value > _number,
+                    FormulaConditionalCriteriaComparisonOp.GreaterThanOrEqual => value >= _number,
+                    FormulaConditionalCriteriaComparisonOp.LessThan => value < _number,
+                    FormulaConditionalCriteriaComparisonOp.LessThanOrEqual => value <= _number,
+                    FormulaConditionalCriteriaComparisonOp.Equal => value == _number,
+                    FormulaConditionalCriteriaComparisonOp.NotEqual => value != _number,
+                    _ => false
+                };
+            }
+
+            private bool MatchesTextComparison(ScalarValue cellValue)
+            {
+                var cellText = cellValue is TextValue text ? text.Value : FormulaConditionalCriteriaToText(cellValue);
+                var comparison = string.Compare(cellText, _text, StringComparison.OrdinalIgnoreCase);
+                return _op switch
+                {
+                    FormulaConditionalCriteriaComparisonOp.GreaterThan => comparison > 0,
+                    FormulaConditionalCriteriaComparisonOp.GreaterThanOrEqual => comparison >= 0,
+                    FormulaConditionalCriteriaComparisonOp.LessThan => comparison < 0,
+                    FormulaConditionalCriteriaComparisonOp.LessThanOrEqual => comparison <= 0,
+                    FormulaConditionalCriteriaComparisonOp.Equal => comparison == 0,
+                    FormulaConditionalCriteriaComparisonOp.NotEqual => comparison != 0,
+                    _ => false
+                };
+            }
+
+            private bool MatchesWildcardComparison(ScalarValue cellValue)
+            {
+                var matches = cellValue is TextValue text &&
+                    FormulaConditionalCriteriaWildcardMatch(text.Value, _text);
+                return _op == FormulaConditionalCriteriaComparisonOp.Equal
+                    ? matches
+                    : !matches;
+            }
+        }
+
+        private static bool TrySplitFormulaConditionalCriteriaComparison(
+            string criteria,
+            out FormulaConditionalCriteriaComparisonOp op,
+            out string rhs)
+        {
+            if (criteria.StartsWith(">=", StringComparison.Ordinal))
+            {
+                op = FormulaConditionalCriteriaComparisonOp.GreaterThanOrEqual;
+                rhs = criteria[2..];
+                return true;
+            }
+
+            if (criteria.StartsWith("<=", StringComparison.Ordinal))
+            {
+                op = FormulaConditionalCriteriaComparisonOp.LessThanOrEqual;
+                rhs = criteria[2..];
+                return true;
+            }
+
+            if (criteria.StartsWith("<>", StringComparison.Ordinal))
+            {
+                op = FormulaConditionalCriteriaComparisonOp.NotEqual;
+                rhs = criteria[2..];
+                return true;
+            }
+
+            if (criteria.StartsWith(">", StringComparison.Ordinal))
+            {
+                op = FormulaConditionalCriteriaComparisonOp.GreaterThan;
+                rhs = criteria[1..];
+                return true;
+            }
+
+            if (criteria.StartsWith("<", StringComparison.Ordinal))
+            {
+                op = FormulaConditionalCriteriaComparisonOp.LessThan;
+                rhs = criteria[1..];
+                return true;
+            }
+
+            if (criteria.StartsWith("=", StringComparison.Ordinal))
+            {
+                op = FormulaConditionalCriteriaComparisonOp.Equal;
+                rhs = criteria[1..];
+                return true;
+            }
+
+            op = FormulaConditionalCriteriaComparisonOp.None;
+            rhs = string.Empty;
+            return false;
+        }
+
+        private static bool TryParseFormulaConditionalCriteriaNumber(string text, out double number)
+        {
+            var trimmed = text.Trim();
+            var percentCount = 0;
+            while (trimmed.EndsWith('%'))
+            {
+                percentCount++;
+                trimmed = trimmed[..^1].TrimEnd();
+            }
+
+            if (percentCount > 0 &&
+                double.TryParse(trimmed, NumberStyles.Any, FormulaTextScalarNumberCulture, out var percent))
+            {
+                for (var i = 0; i < percentCount; i++)
+                    percent /= 100d;
+
+                number = percent;
+                return true;
+            }
+
+            if (double.TryParse(trimmed, NumberStyles.Any, FormulaTextScalarNumberCulture, out number))
+                return true;
+
+            if (TryParseFormulaExcelFakeLeapDayValueText(trimmed, out number))
+                return true;
+
+            if (DateTime.TryParse(trimmed, FormulaTextScalarNumberCulture, DateTimeStyles.None, out var dateTime))
+            {
+                number = IsFormulaConditionalCriteriaTimeOnlyText(trimmed)
+                    ? dateTime.TimeOfDay.TotalDays
+                    : FormulaDateToExcelSerial(dateTime);
+                return true;
+            }
+
+            number = 0d;
+            return false;
+        }
+
+        private static bool IsFormulaConditionalCriteriaTimeOnlyText(string text)
+        {
+            if (text.Contains('/') || text.Contains('-'))
+                return false;
+
+            if (FormulaDateTimeTextHasMonthNameRegex.IsMatch(text))
+                return false;
+
+            return text.Contains(':') ||
+                FormulaDateTimeTextHasAmPmRegex.IsMatch(text);
+        }
+
+        private static string FormulaConditionalCriteriaComparableText(ScalarValue value) =>
+            value switch
+            {
+                TextValue text => text.Value,
+                BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+                ErrorValue error => error.Code,
+                _ when TryGetFormulaConditionalCriteriaCellNumber(value, out var number) =>
+                    number.ToString(CultureInfo.InvariantCulture),
+                _ => string.Empty
+            };
+
+        private static string FormulaConditionalCriteriaToText(ScalarValue value) =>
+            value switch
+            {
+                TextValue text => text.Value,
+                NumberValue number => number.Value.ToString(CultureInfo.InvariantCulture),
+                DateTimeValue dateTime => dateTime.Value.ToString(CultureInfo.InvariantCulture),
+                BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+                BlankValue => string.Empty,
+                ErrorValue error => error.Code,
+                _ => value.ToString() ?? string.Empty
+            };
+
+        private static bool TryGetFormulaConditionalCriteriaCellNumber(ScalarValue value, out double number)
+        {
+            switch (value)
+            {
+                case NumberValue numeric:
+                    number = numeric.Value;
+                    return true;
+                case DateTimeValue dateTime:
+                    number = dateTime.Value;
+                    return true;
+                default:
+                    number = 0d;
+                    return false;
+            }
+        }
+
+        private static bool IsFormulaConditionalWildcardCriteria(string criteria)
+        {
+            for (var i = 0; i < criteria.Length; i++)
+            {
+                var ch = criteria[i];
+                if (ch is '*' or '?')
+                    return true;
+
+                if (ch == '~' &&
+                    i + 1 < criteria.Length &&
+                    criteria[i + 1] is '*' or '?' or '~')
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool FormulaConditionalCriteriaWildcardMatch(string text, string pattern)
+        {
+            try
+            {
+                return Regex.IsMatch(
+                    text,
+                    FormulaWildcardToRegexPattern(pattern, anchored: true),
+                    RegexOptions.IgnoreCase,
+                    FormulaTextSearchRegexTimeout);
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                return false;
+            }
+        }
+
         private bool TryEvaluateFormulaAggregate(
             ConditionalFormulaOperand operand,
             int rowOffset,
@@ -11467,6 +12371,9 @@ public static partial class AccessibilityCheckerService
             out ScalarValue value)
         {
             value = ErrorValue.Value;
+            if (IsFormulaConditionalAggregate(operand.AggregateKind))
+                return TryEvaluateFormulaConditionalAggregate(operand, rowOffset, colOffset, out value);
+
             if (IsFormulaStatisticalSelectionAggregate(operand.AggregateKind))
                 return TryEvaluateFormulaStatisticalSelectionAggregate(operand, rowOffset, colOffset, out value);
 
