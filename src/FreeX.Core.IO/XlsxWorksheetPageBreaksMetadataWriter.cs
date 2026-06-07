@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -128,7 +127,7 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
                     continue;
                 }
 
-                changed |= TrySetNativeAttributeIfDifferent(pageBreaks, attribute.Key, attribute.Value);
+                changed |= XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttributeIfDifferent(pageBreaks, attribute.Key, attribute.Value);
             }
 
             foreach (var (breakId, attributes) in metadata.BreakNativeAttributes)
@@ -144,7 +143,7 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
                         continue;
                     }
 
-                    changed |= TrySetNativeAttributeIfDifferent(breakElement, attribute.Key, attribute.Value);
+                    changed |= XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttributeIfDifferent(breakElement, attribute.Key, attribute.Value);
                 }
             }
         }
@@ -239,19 +238,4 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
         return true;
     }
 
-    private static bool TrySetNativeAttributeIfDifferent(XElement element, string name, string value)
-    {
-        try
-        {
-            return SetAttributeIfDifferent(element, XName.Get(name), value);
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (XmlException)
-        {
-            return false;
-        }
-    }
 }
