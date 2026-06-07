@@ -5209,6 +5209,50 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatInfoReferenceScalarFunctions()
+    {
+        AssertFormulaInfoReferenceParityContrastLocations(
+            "ADDRESS(2,3,4,TRUE,\"Sales\")=\"Sales!C2\"",
+            FormulaInfoReferenceParityAllLocations);
+        AssertFormulaInfoReferenceParityContrastLocations(
+            "ADDRESS(2,3,4,FALSE,\"Data Set\")=\"'Data Set'!R[2]C[3]\"",
+            FormulaInfoReferenceParityAllLocations);
+        AssertFormulaInfoReferenceParityContrastLocations("CELL(\"address\",$A1)=\"$A$1\"", "B1");
+        AssertFormulaInfoReferenceParityContrastLocations("CELL(\"type\",$A1)=\"l\"", "B2");
+        AssertFormulaInfoReferenceParityContrastLocations("CELL(\"contents\",$A1)=2", "B3");
+        AssertFormulaInfoReferenceParityContrastLocations("CELL(\"format\",$A1)=\"F0\"", "B5");
+        AssertFormulaInfoReferenceParityContrastLocations("CELL(\"protect\",$A1)=0", "B5");
+        AssertFormulaInfoReferenceParityContrastLocations("CELL(\"prefix\",$A1)=\"^\"", "B5");
+        AssertFormulaInfoReferenceParityContrastLocations("FORMULATEXT($A1)=\"=SUM(1,1)\"", "B3");
+        AssertFormulaInfoReferenceParityContrastLocations("HYPERLINK($C1,$D1)=\"Friendly\"", "B4");
+        AssertFormulaInfoReferenceParityContrastLocations("HYPERLINK($C1)=\"https://example.com/friendly\"", "B4");
+        AssertFormulaInfoReferenceParityContrastLocations("SHEET()=1", FormulaInfoReferenceParityAllLocations);
+        AssertFormulaInfoReferenceParityContrastLocations("SHEET(\"Data Set\")=2", FormulaInfoReferenceParityAllLocations);
+        AssertFormulaInfoReferenceParityContrastLocations("SHEETS()=2", FormulaInfoReferenceParityAllLocations);
+        AssertFormulaInfoReferenceParityContrastLocations("SHEETS($A1)=1", FormulaInfoReferenceParityAllLocations);
+        AssertFormulaInfoReferenceParityContrastLocations("INFO(\"numfile\")=2", FormulaInfoReferenceParityAllLocations);
+        AssertFormulaInfoReferenceParityContrastLocations("INFO(\"recalc\")=\"Manual\"", FormulaInfoReferenceParityAllLocations);
+        AssertFormulaInfoReferenceParityContrastLocations(
+            "GETPIVOTDATA(\"Sum of Amount\",$E$1)=30",
+            FormulaInfoReferenceParityAllLocations);
+        AssertFormulaInfoReferenceParityContrastLocations(
+            "GETPIVOTDATA(\"Sum of Amount\",$E$1,\"Region\",\"East\")=20",
+            FormulaInfoReferenceParityAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatInfoReferenceScalarUnsupportedShapes()
+    {
+        AssertFormulaInfoReferenceParityContrastLocations("INFO(\"directory\")<>\"\"");
+        AssertFormulaInfoReferenceParityContrastLocations("INFO(\"system\")=\"pcdos\"");
+        AssertFormulaInfoReferenceParityContrastLocations("CELL(\"type\",1)=\"v\"");
+        AssertFormulaInfoReferenceParityContrastLocations("FORMULATEXT(42)<>\"\"");
+        AssertFormulaInfoReferenceParityContrastLocations("GETPIVOTDATA(\"Missing\",$E$1)>0");
+        AssertFormulaInfoReferenceParityContrastLocations(
+            "GETPIVOTDATA(\"Sum of Amount\",$E$1,\"Region\",\"East\",\"Region\",\"West\")>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialDepreciationFunctions()
     {
         AssertFormulaFinancialDepreciationFunctionContrastLocations("SLN($A1,$C1,$D1)>170", "B1", "B2", "B8");
@@ -7619,6 +7663,79 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 3), new NumberValue(weight));
     }
 
+    private static Workbook CreateFormulaInfoReferenceParityContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility")
+        {
+            CalculationMode = WorkbookCalculationMode.Manual
+        };
+        sheet = workbook.AddSheet("Sales");
+        workbook.AddSheet("Data Set");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 5, 2);
+
+        sheet.ColumnWidths[1] = 12.4;
+        var centeredUnlocked = CellStyle.Default.Clone();
+        centeredUnlocked.NumberFormat = "0";
+        centeredUnlocked.HorizontalAlignment = HorizontalAlignment.Center;
+        centeredUnlocked.Locked = false;
+        var centeredUnlockedStyleId = workbook.RegisterStyle(centeredUnlocked);
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(42));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("hello"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new Cell
+        {
+            FormulaText = "SUM(1,1)",
+            Value = new NumberValue(2)
+        });
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new Cell
+        {
+            Value = new NumberValue(7),
+            StyleId = centeredUnlockedStyleId
+        });
+
+        for (uint row = 1; row <= 5; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue($"Info row {row}"));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 3), new TextValue($"https://example.com/{row}"));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 4), new TextValue($"Link {row}"));
+        }
+
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 3), new TextValue("https://example.com/friendly"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new TextValue("Friendly"));
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 5), new TextValue("Row Labels"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 6), new TextValue("Sum of Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 5), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 6), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 5), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 6), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 5), new TextValue("Grand Total"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 6), new NumberValue(30));
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 8), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 9), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 8), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 9), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 8), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 9), new NumberValue(20));
+
+        var pivot = new PivotTableModel
+        {
+            Name = "SalesPivot",
+            SourceRange = new GridRange(new CellAddress(sheet.Id, 1, 8), new CellAddress(sheet.Id, 3, 9)),
+            TargetRange = new GridRange(new CellAddress(sheet.Id, 1, 5), new CellAddress(sheet.Id, 4, 6))
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+
+        return workbook;
+    }
+
     private static Workbook CreateFormulaFinancialDepreciationFunctionContrastWorkbook(
         out Sheet sheet,
         out CellAddress firstLabel,
@@ -9055,6 +9172,19 @@ public sealed partial class AccessibilityCheckerServiceTests
             .Equal(expectedLocations);
     }
 
+    private static void AssertFormulaInfoReferenceParityContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaInfoReferenceParityContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
     private static void AssertFormulaIfContrastLocations(string formulaText, params string[] expectedLocations)
     {
         var workbook = CreateFormulaLogicalContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
@@ -9120,6 +9250,9 @@ public sealed partial class AccessibilityCheckerServiceTests
 
     private static string[] FormulaInfoScalarAllLocations =>
         ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9", "B10", "B11", "B12", "B13", "B14", "B15", "B16"];
+
+    private static string[] FormulaInfoReferenceParityAllLocations =>
+        ["B1", "B2", "B3", "B4", "B5"];
 
     private static string[] FormulaLookupReferenceAllLocations =>
         ["B1", "B2", "B3", "B4", "B5"];
