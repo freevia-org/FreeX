@@ -308,6 +308,52 @@ public sealed partial class XlsxPackageMetadataMergerTests
                 """),
             ("xl/embeddings/package1.bin", "package"));
 
+    private static MemoryStream CreatePackageWithExternalLinkPathRelationshipIdCollisionSource() =>
+        XlsxPackageTestFixtures.CreatePackage(
+            ("[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/externalLinks/externalLink1.xml"
+                            ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml"/>
+                </Types>
+                """),
+            ("xl/externalLinks/externalLink1.xml", """
+                <externalLink xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                              xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <externalBook r:id="rIdExternalBook">
+                    <sheetNames>
+                      <sheetName val="LinkedData"/>
+                    </sheetNames>
+                  </externalBook>
+                </externalLink>
+                """),
+            ("xl/externalLinks/_rels/externalLink1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdExternalBook"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath"
+                                Target="file:///C:/source.xlsx"
+                                TargetMode="External"/>
+                </Relationships>
+                """));
+
+    private static MemoryStream CreatePackageWithExternalLinkPathRelationshipIdCollisionTarget() =>
+        XlsxPackageTestFixtures.CreatePackage(
+            ("[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                </Types>
+                """),
+            ("xl/externalLinks/_rels/externalLink1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdExternalBook"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath"
+                                Target="file:///C:/existing.xlsx"
+                                TargetMode="External"/>
+                </Relationships>
+                """));
+
     private static MemoryStream CreatePackageWithWhitespacePaddedCorePropertiesRelationship() =>
         XlsxPackageTestFixtures.CreatePackage(
             ("[Content_Types].xml", """

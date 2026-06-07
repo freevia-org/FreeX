@@ -6,6 +6,7 @@ namespace FreeX.Core.IO;
 internal static class XlsxPackageMetadataMerger
 {
     private const string SpreadsheetRelationshipPrefix = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/";
+    private const string ExternalLinkPathRelationshipType = SpreadsheetRelationshipPrefix + "externalLinkPath";
     private const string ImageRelationshipType = SpreadsheetRelationshipPrefix + "image";
     private const string PackageRelationshipType = SpreadsheetRelationshipPrefix + "package";
 
@@ -539,7 +540,8 @@ internal static class XlsxPackageMetadataMerger
     private static bool ShouldRebindRelationshipReferenceOnCopiedPart(XElement relationship)
     {
         var relationshipType = NormalizeRelationshipType(relationship);
-        return string.Equals(relationshipType, ImageRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+        return string.Equals(relationshipType, ExternalLinkPathRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(relationshipType, ImageRelationshipType, StringComparison.OrdinalIgnoreCase) ||
                string.Equals(relationshipType, PackageRelationshipType, StringComparison.OrdinalIgnoreCase);
     }
 
