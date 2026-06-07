@@ -635,13 +635,16 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
-    public void ReplaceAllValues_NotesLookInDoesNotMutateCellValues()
+    public void ReplaceAllValues_WithNotesLookInReplacesSimpleNoteTextAndPreservesCells()
     {
         var workbook = CreateWorkbook();
         var sheet = workbook.Sheets.Single();
         var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
         sheet.SetCell(a1, new TextValue("foo value"));
+        sheet.SetCell(b1, Cell.FromFormula("FOO(A1)"));
         sheet.Comments[a1] = "foo note";
+        sheet.Comments[b1] = "foo formula note";
         var session = CreateSession(new StartupWorkbookLoadResult(
             workbook,
             "Book.fxl",
@@ -654,11 +657,74 @@ public sealed class WorkbookSessionTests
             new FindOptions(Within: FindWithin.Sheet, LookIn: FindLookIn.Notes));
 
         result.Success.Should().BeTrue();
-        result.ReplacedCount.Should().Be(0);
-        result.MatchCount.Should().Be(1);
-        session.IsDirty.Should().BeFalse();
+        result.ReplacedCount.Should().Be(2);
+        result.MatchCount.Should().Be(2);
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
         sheet.GetCell(a1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("foo value");
+        sheet.GetCell(b1)!.FormulaText.Should().Be("FOO(A1)");
+        sheet.Comments[a1].Should().Be("bar note");
+        sheet.Comments[b1].Should().Be("bar formula note");
+
+        session.UndoLastEdit().Success.Should().BeTrue();
         sheet.Comments[a1].Should().Be("foo note");
+        sheet.Comments[b1].Should().Be("foo formula note");
+        session.CanRedo.Should().BeTrue();
+
+        session.RedoLastEdit().Success.Should().BeTrue();
+        sheet.Comments[a1].Should().Be("bar note");
+        sheet.Comments[b1].Should().Be("bar formula note");
+    }
+
+    [Fact]
+    public void ReplaceAllValues_WithCommentsLookInReplacesThreadedRootTextAndPreservesRepliesAndCells()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(a1, new TextValue("foo value"));
+        sheet.SetCell(b1, Cell.FromFormula("FOO(A1)"));
+        sheet.ThreadedComments[a1] = new ThreadedComment("foo root", "Quinn")
+        {
+            Replies = [new CommentReply("foo reply", "Codex")],
+            IsResolved = true
+        };
+        sheet.ThreadedComments[b1] = new ThreadedComment("foo formula root", "FreeX");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var result = session.ReplaceAllValues(
+            "foo",
+            "bar",
+            new FindOptions(Within: FindWithin.Sheet, LookIn: FindLookIn.Comments));
+
+        result.Success.Should().BeTrue();
+        result.ReplacedCount.Should().Be(2);
+        result.MatchCount.Should().Be(2);
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        sheet.GetCell(a1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("foo value");
+        sheet.GetCell(b1)!.FormulaText.Should().Be("FOO(A1)");
+        sheet.ThreadedComments[a1].Text.Should().Be("bar root");
+        sheet.ThreadedComments[a1].Author.Should().Be("Quinn");
+        sheet.ThreadedComments[a1].Replies.Should().Equal(new CommentReply("foo reply", "Codex"));
+        sheet.ThreadedComments[a1].IsResolved.Should().BeTrue();
+        sheet.ThreadedComments[b1].Text.Should().Be("bar formula root");
+
+        session.UndoLastEdit().Success.Should().BeTrue();
+        sheet.ThreadedComments[a1].Text.Should().Be("foo root");
+        sheet.ThreadedComments[a1].Replies.Should().Equal(new CommentReply("foo reply", "Codex"));
+        sheet.ThreadedComments[a1].IsResolved.Should().BeTrue();
+        sheet.ThreadedComments[b1].Text.Should().Be("foo formula root");
+        session.CanRedo.Should().BeTrue();
+
+        session.RedoLastEdit().Success.Should().BeTrue();
+        sheet.ThreadedComments[a1].Text.Should().Be("bar root");
+        sheet.ThreadedComments[b1].Text.Should().Be("bar formula root");
     }
 
     [Fact]
@@ -865,6 +931,104 @@ public sealed class WorkbookSessionTests
 
         session.UndoLastEdit().Success.Should().BeTrue();
         sheet.GetCell(c1)!.FormulaText.Should().Be("SUM(C2:C3)");
+    }
+
+    [Fact]
+    public void ReplaceNextValue_WithNotesLookInReplacesSimpleNoteTextAndPreservesCells()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(a1, new TextValue("foo value"));
+        sheet.SetCell(c1, Cell.FromFormula("FOO(A1)"));
+        sheet.Comments[a1] = "foo first note";
+        sheet.Comments[c1] = "foo next note";
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.ReplaceNextValue(
+            "foo",
+            "bar",
+            new FindOptions(Within: FindWithin.Sheet, LookIn: FindLookIn.Notes));
+
+        result.Success.Should().BeTrue();
+        result.ReplacedCount.Should().Be(1);
+        result.ReplacedRange.Should().Be(new GridRange(c1, c1));
+        result.MatchIndex.Should().Be(2);
+        result.MatchCount.Should().Be(2);
+        session.SelectedRange.Should().Be(new GridRange(c1, c1));
+        session.ActiveCell.Should().Be(c1);
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        sheet.GetCell(a1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("foo value");
+        sheet.GetCell(c1)!.FormulaText.Should().Be("FOO(A1)");
+        sheet.Comments[a1].Should().Be("foo first note");
+        sheet.Comments[c1].Should().Be("bar next note");
+
+        session.UndoLastEdit().Success.Should().BeTrue();
+        sheet.Comments[c1].Should().Be("foo next note");
+        session.CanRedo.Should().BeTrue();
+
+        session.RedoLastEdit().Success.Should().BeTrue();
+        sheet.Comments[c1].Should().Be("bar next note");
+    }
+
+    [Fact]
+    public void ReplaceNextValue_WithCommentsLookInReplacesThreadedRootTextAndPreservesRepliesAndCells()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(a1, new TextValue("foo value"));
+        sheet.SetCell(c1, Cell.FromFormula("FOO(A1)"));
+        sheet.ThreadedComments[a1] = new ThreadedComment("foo first root", "Quinn");
+        sheet.ThreadedComments[c1] = new ThreadedComment("foo next root", "Quinn")
+        {
+            Replies = [new CommentReply("foo reply", "Codex")],
+            IsResolved = true
+        };
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.ReplaceNextValue(
+            "foo",
+            "bar",
+            new FindOptions(Within: FindWithin.Sheet, LookIn: FindLookIn.Comments));
+
+        result.Success.Should().BeTrue();
+        result.ReplacedCount.Should().Be(1);
+        result.ReplacedRange.Should().Be(new GridRange(c1, c1));
+        result.MatchIndex.Should().Be(2);
+        result.MatchCount.Should().Be(2);
+        session.SelectedRange.Should().Be(new GridRange(c1, c1));
+        session.ActiveCell.Should().Be(c1);
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        sheet.GetCell(a1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("foo value");
+        sheet.GetCell(c1)!.FormulaText.Should().Be("FOO(A1)");
+        sheet.ThreadedComments[a1].Text.Should().Be("foo first root");
+        sheet.ThreadedComments[c1].Text.Should().Be("bar next root");
+        sheet.ThreadedComments[c1].Replies.Should().Equal(new CommentReply("foo reply", "Codex"));
+        sheet.ThreadedComments[c1].IsResolved.Should().BeTrue();
+
+        session.UndoLastEdit().Success.Should().BeTrue();
+        sheet.ThreadedComments[c1].Text.Should().Be("foo next root");
+        sheet.ThreadedComments[c1].Replies.Should().Equal(new CommentReply("foo reply", "Codex"));
+        sheet.ThreadedComments[c1].IsResolved.Should().BeTrue();
+        session.CanRedo.Should().BeTrue();
+
+        session.RedoLastEdit().Success.Should().BeTrue();
+        sheet.ThreadedComments[c1].Text.Should().Be("bar next root");
     }
 
     [Fact]

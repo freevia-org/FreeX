@@ -234,6 +234,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("public WorkbookReplaceResult ReplaceNextValue(");
         script.Should().Contain("GetReplaceTargetIndex(matches, effectiveOptions.SearchOrder, sameSearch)");
         script.Should().Contain("FindLookIn.Formulas => cell.FormulaText");
+        script.Should().Contain("new SetCommentCommand(");
+        script.Should().Contain("new UpdateThreadedCommentTextCommand(");
         script.Should().Contain("_bordersButton.Flyout = CreateBorderPresetFlyout();");
         script.Should().Contain("_bordersMenuItem.Menu = CreateNativeBorderPresetMenu();");
         script.Should().Contain("PasteSpecialClipboardAtActiveCell(text, mode, options)");
@@ -2078,6 +2080,10 @@ public sealed class MacOsAppReadinessPreflightTests
                 FindLookIn.Formulas => cell.FormulaText
                 FindLookIn.Values => cell.HasFormula ? null : GetReplaceableDisplayText(cell.Value)
                 newCell = cell.Clone();
+                FindLookIn.Notes when sheet.Comments.TryGetValue(address, out var note) => note
+                FindLookIn.Comments when sheet.ThreadedComments.TryGetValue(address, out var threadedComment) => threadedComment.Text
+                new SetCommentCommand(
+                new UpdateThreadedCommentTextCommand(
                 return WorkbookReplaceResult.Replaced(1, replacedRange, index + 1, matches.Count);
                 public WorkbookNavigationResult GoToReference(string reference)
                 public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)

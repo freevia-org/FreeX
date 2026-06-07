@@ -2462,6 +2462,10 @@ public sealed class AvaloniaShellSourceTests
         sessionSource.Should().Contain("FindLookIn.Formulas => cell.FormulaText");
         sessionSource.Should().Contain("FindLookIn.Values => cell.HasFormula ? null : GetReplaceableDisplayText(cell.Value)");
         sessionSource.Should().Contain("newCell = cell.Clone();");
+        sessionSource.Should().Contain("FindLookIn.Notes when sheet.Comments.TryGetValue(address, out var note) => note");
+        sessionSource.Should().Contain("FindLookIn.Comments when sheet.ThreadedComments.TryGetValue(address, out var threadedComment) => threadedComment.Text");
+        sessionSource.Should().Contain("new SetCommentCommand(");
+        sessionSource.Should().Contain("new UpdateThreadedCommentTextCommand(");
         sessionSource.Should().Contain("return WorkbookReplaceResult.Replaced(1, replacedRange, index + 1, matches.Count);");
         sessionSource.Should().Contain("public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)");
         sessionSource.Should().Contain("GoToSpecialService.Find(Workbook, ActiveSheet, SelectedRange, kind, ActiveCell, options)");
