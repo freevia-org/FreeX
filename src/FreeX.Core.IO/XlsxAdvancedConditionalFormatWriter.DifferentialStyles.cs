@@ -150,13 +150,12 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
 
         foreach (var (localName, sourceXml) in style.NativeDifferentialElementXmls)
         {
-            if (string.IsNullOrWhiteSpace(localName) || string.IsNullOrWhiteSpace(sourceXml))
+            if (string.IsNullOrWhiteSpace(localName))
                 continue;
 
             try
             {
-                var sourceElement = XElement.Parse(sourceXml);
-                if (sourceElement.Name.Namespace != workbookNs || !IsModeledDifferentialStyleElement(sourceElement.Name.LocalName))
+                if (TryCreateNativeDifferentialStyleElement(sourceXml, workbookNs) is not { } sourceElement)
                     continue;
 
                 var targetElement = dxf.Element(workbookNs + localName);
@@ -169,6 +168,26 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             {
                 // Ignore malformed nested dxf metadata from older saves.
             }
+        }
+    }
+
+    private static XElement? TryCreateNativeDifferentialStyleElement(string? sourceXml, XNamespace workbookNs)
+    {
+        if (string.IsNullOrWhiteSpace(sourceXml))
+            return null;
+
+        try
+        {
+            var sourceElement = XElement.Parse(sourceXml);
+            return sourceElement.Name.Namespace == workbookNs &&
+                   IsModeledDifferentialStyleElement(sourceElement.Name.LocalName)
+                ? sourceElement
+                : null;
+        }
+        catch
+        {
+            // Ignore malformed nested dxf metadata from older saves.
+            return null;
         }
     }
 
