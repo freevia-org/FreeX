@@ -3138,6 +3138,18 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(2023,4,30),DATE(2023,5,31))=30", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(2023,1,31),DATE(2023,2,28),TRUE)=28", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(2023,1,31),DATE(2023,3,31),1)=60", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("WORKDAY($A1,1)>DATE(2023,3,16)", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("WORKDAY($A1,2)=DATE(2023,3,20)", "B2");
+        AssertFormulaDateFunctionContrastLocations("WORKDAY($A1,-1)<DATE(2023,3,16)", "B1", "B2");
+        AssertFormulaDateFunctionContrastLocations("WORKDAY(DATE(2023,3,17),1)=DATE(2023,3,20)", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("WORKDAY(DATE(2023,3,20),-1)=DATE(2023,3,17)", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("WORKDAY(DATE(2023,3,16),1,$E$1:$E$1)=DATE(2023,3,20)", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("WORKDAY(DATE(2023,3,16),1,DATE(2023,3,17))=DATE(2023,3,20)", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("NETWORKDAYS(DATE(2023,3,13),$A1)=3", "B1");
+        AssertFormulaDateFunctionContrastLocations("NETWORKDAYS(DATE(2023,3,17),DATE(2023,3,19))=1", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("NETWORKDAYS($A1,DATE(2023,3,13))<=-4", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("NETWORKDAYS(DATE(2023,3,16),DATE(2023,3,20),$E$1:$E$2)=1", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("NETWORKDAYS(DATE(2023,3,16),DATE(2023,3,20),DATE(2023,3,17))=2", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("YEARFRAC(DATE(2023,3,15),$A1)>0.09", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("YEARFRAC(DATE(2023,3,15),$A1,0)>0.09", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("YEARFRAC(DATE(2023,3,15),$A1,1)>1", "B3");
@@ -3187,6 +3199,11 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("IF(DAYS360(DATE(2023,3,15),$A1)>=30,TRUE,FALSE)", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("AND(ISNUMBER(DAYS360(DATE(2023,3,15),$A1)),DAYS360(DATE(2023,3,15),$A1)>=30)", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(2023,3,15),$A1)+1>31", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("IF(WORKDAY($A1,1)>DATE(2023,3,16),TRUE,FALSE)", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("AND(ISNUMBER(WORKDAY($A1,1)),WORKDAY($A1,2)=DATE(2023,3,20))", "B2");
+        AssertFormulaDateFunctionContrastLocations("WORKDAY($A1,1)-$A1=1", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("IF(NETWORKDAYS(DATE(2023,3,13),$A1)>=4,TRUE,FALSE)", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("AND(ISNUMBER(NETWORKDAYS(DATE(2023,3,13),$A1)),NETWORKDAYS(DATE(2023,3,13),$A1)=3)", "B1");
         AssertFormulaDateFunctionContrastLocations("IF(DATEDIF($A1,DATE(2024,4,20),\"M\")>=12,TRUE,FALSE)", "B1", "B2", "B4");
         AssertFormulaDateFunctionContrastLocations("AND(ISNUMBER(DATEDIF($A1,DATE(2024,4,20),\"Y\")),DATEDIF($A1,DATE(2024,4,20),\"Y\")=1)", "B1", "B2", "B4");
         AssertFormulaDateFunctionContrastLocations("DATEDIF($A1,DATE(2024,4,20),\"YM\")", "B1", "B2", "B3");
@@ -3210,6 +3227,10 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("AVERAGE(TIME(6,0,0),TIME(18,0,0))=0.5", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("SUM(DAYS360(DATE(2023,3,15),$A1),1)>31", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("AVERAGE(DAYS360(DATE(2023,3,15),$A1),1)>15", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("SUM(WORKDAY($A1,1),1)>DATE(2023,3,17)", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("AVERAGE(WORKDAY($A1,1),DATE(2023,3,16))>DATE(2023,3,16)", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("SUM(NETWORKDAYS(DATE(2023,3,13),$A1),1)>4", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("AVERAGE(NETWORKDAYS(DATE(2023,3,13),$A1),1)>2", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("SUM(DATEDIF($A1,DATE(2024,4,20),\"D\"),1)>366", "B1", "B2", "B4");
         AssertFormulaDateFunctionContrastLocations("AVERAGE(DATEDIF($A1,DATE(2024,4,20),\"YD\"),1)>15", "B1", "B2", "B3");
         AssertFormulaDateFunctionContrastLocations("SUM(YEARFRAC(DATE(2023,3,15),$A1,2),1)>2", "B3");
@@ -3264,6 +3285,14 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("DAYS360($A1,DATE(2023,3,15),\"TRUE\")>0");
         AssertFormulaDateFunctionContrastLocations("DAYS360($A1,DATE(2023,3,15),1E308*1E308)>0");
         AssertFormulaDateFunctionContrastLocations("DAYS360(A0,DATE(2023,3,15))>0");
+        AssertFormulaDateFunctionContrastLocations("WORKDAY($A1)>0");
+        AssertFormulaDateFunctionContrastLocations("WORKDAY($A1,1,DATE(2023,3,17),1)>0");
+        AssertFormulaDateFunctionContrastLocations("WORKDAY($A1,$C1)>0");
+        AssertFormulaDateFunctionContrastLocations("WORKDAY(A0,1)>0");
+        AssertFormulaDateFunctionContrastLocations("NETWORKDAYS($A1)>0");
+        AssertFormulaDateFunctionContrastLocations("NETWORKDAYS($A1,DATE(2023,3,20),DATE(2023,3,17),1)>0");
+        AssertFormulaDateFunctionContrastLocations("NETWORKDAYS($A1,$C1)>0");
+        AssertFormulaDateFunctionContrastLocations("NETWORKDAYS(A0,DATE(2023,3,20))>0");
         AssertFormulaDateFunctionContrastLocations("DATEDIF($A1,DATE(2024,4,20))>0");
         AssertFormulaDateFunctionContrastLocations("DATEDIF($A1,DATE(2024,4,20),\"D\",1)>0");
         AssertFormulaDateFunctionContrastLocations("DATEDIF(\"2023-03-15\",DATE(2024,4,20),\"D\")>0");
@@ -3295,6 +3324,20 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("TIME(32768,0,0)>0");
         AssertFormulaDateFunctionContrastLocations("TIME(1E308*1E308,0,0)>0");
         AssertFormulaDateFunctionContrastLocations("TIME(A0,0,0)>0");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatWorkdayNetworkdaysErrors()
+    {
+        AssertFormulaDateFunctionContrastLocations("ISERROR(WORKDAY(-1,1))", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("ISERROR(WORKDAY(DATE(2023,3,15),1E308))", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("ISERROR(WORKDAY(2958465,1))", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("ISERROR(NETWORKDAYS(DATE(2023,3,15),-1))", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("ISERROR(NETWORKDAYS(DATE(2023,3,15),DATE(2023,3,16),-1))", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("ISNA(WORKDAY(DATE(2023,3,15),1,NA()))", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("ISNA(WORKDAY(DATE(2023,3,15),1,$E$4:$E$4))", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("ISNA(NETWORKDAYS(DATE(2023,3,15),DATE(2023,3,16),NA()))", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("ISNA(NETWORKDAYS(DATE(2023,3,15),DATE(2023,3,16),$E$4:$E$4))", "B1", "B2", "B3", "B4");
     }
 
     [Fact]
@@ -4142,6 +4185,10 @@ public sealed partial class AccessibilityCheckerServiceTests
         SetFormulaDateFunctionContrastRow(sheet, 2, new DateTime(2023, 3, 16), "Closed", "March second half", 1.5242592592592593);
         SetFormulaDateFunctionContrastRow(sheet, 3, new DateTime(2024, 3, 20), "Open", "Next March", 2.0035532407407406);
         SetFormulaDateFunctionContrastRow(sheet, 4, new DateTime(2023, 4, 20), "Open", "April second half", 3.999988425925926);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 5), DateTimeValue.FromDateTime(new DateTime(2023, 3, 17)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 5), DateTimeValue.FromDateTime(new DateTime(2023, 3, 20)));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 5), new TextValue("ignored"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 5), ErrorValue.NA);
 
         return workbook;
     }
