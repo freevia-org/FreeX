@@ -14394,6 +14394,47 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_RebindsPrinterSettingsWhenWorksheetRelationshipIdCollides()
+    {
+        var workbook = new Workbook("PrinterSettingsRelationshipCollisionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("print me"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalPrinterSettingsPackage(source);
+        RewritePrinterSettingsRelationship(source, "rId1");
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var hyperlinkAddress = new CellAddress(loadedSheet.Id, 2, 1);
+        loadedSheet.SetCell(hyperlinkAddress, new TextValue("link"));
+        loadedSheet.Hyperlinks[hyperlinkAddress] = "https://example.com/printer";
+        loaded.Uses1904DateSystem = !loaded.Uses1904DateSystem;
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var pageSetupRelId = worksheetXml.Root!.Element(worksheetNs + "pageSetup")!.Attribute(relNs + "id")!.Value;
+        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var printerRelationship = worksheetRelsXml.Root!.Elements(packageRelNs + "Relationship")
+            .Single(rel => string.Equals(rel.Attribute("Id")?.Value, pageSetupRelId, StringComparison.Ordinal));
+        printerRelationship.Attribute("Type")!.Value.Should().Be("http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings");
+        printerRelationship.Attribute("Target")!.Value.Should().Be("../printerSettings/printerSettings1.bin");
+        archive.GetEntry("xl/printerSettings/printerSettings1.bin").Should().NotBeNull();
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesEmbeddedOlePackageAndWorksheetReference()
     {
         var workbook = new Workbook("EmbeddedOleRetentionTest");
@@ -14519,6 +14560,60 @@ public partial class FileAdapterSmokeTests
         var reloadedSheet = adapter.Load(reload).GetSheetAt(0);
         reloadedSheet.PageHeaderPictures.Left.Should().NotBeNull();
         reloadedSheet.GetCell(2, 1)!.Value.Should().Be(new TextValue("edited"));
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_RebindsHeaderFooterLegacyDrawingWhenWorksheetRelationshipIdCollides()
+    {
+        var workbook = new Workbook("HeaderFooterDrawingRelationshipCollisionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("header image"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddHeaderFooterLegacyDrawingPackage(source);
+        RewriteHeaderFooterLegacyDrawingRelationshipId(source, "rId1");
+        var sourceBytes = source.ToArray();
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var hyperlinkAddress = new CellAddress(loadedSheet.Id, 2, 1);
+        loadedSheet.SetCell(hyperlinkAddress, new TextValue("link"));
+        loadedSheet.Hyperlinks[hyperlinkAddress] = "https://example.com/header";
+        loaded.Uses1904DateSystem = !loaded.Uses1904DateSystem;
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        ReadPackageEntry(savedBytes, "xl/drawings/vmlDrawing1.vml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/drawings/vmlDrawing1.vml"));
+        ReadPackageEntry(savedBytes, "xl/drawings/_rels/vmlDrawing1.vml.rels")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/drawings/_rels/vmlDrawing1.vml.rels"));
+        ReadPackageEntry(savedBytes, "xl/media/headerFooterImage1.png")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/media/headerFooterImage1.png"));
+
+        using var archive = new ZipArchive(new MemoryStream(savedBytes, writable: false), ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var legacyDrawingRelId = worksheetXml.Root!.Element(worksheetNs + "legacyDrawingHF")!.Attribute(relNs + "id")!.Value;
+        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var legacyDrawingRelationship = worksheetRelsXml.Root!.Elements(packageRelNs + "Relationship")
+            .Single(rel => string.Equals(rel.Attribute("Id")?.Value, legacyDrawingRelId, StringComparison.Ordinal));
+        legacyDrawingRelationship.Attribute("Type")!.Value.Should().Be("http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing");
+        legacyDrawingRelationship.Attribute("Target")!.Value.Should().Be("../drawings/vmlDrawing1.vml");
+
+        using var reload = new MemoryStream(savedBytes, writable: false);
+        adapter.Load(reload).GetSheetAt(0).PageHeaderPictures.Left.Should().NotBeNull();
     }
 
     [Fact]
