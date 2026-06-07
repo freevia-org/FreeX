@@ -31,8 +31,8 @@ public sealed class AddTextBoxCommand : IWorkbookCommand
     {
         if (_textBox.Anchor.Sheet != _sheetId)
             return new CommandOutcome(false, "Text box anchor must be on the target sheet.");
-        if (!double.IsFinite(_textBox.Width) || !double.IsFinite(_textBox.Height) || _textBox.Width <= 0 || _textBox.Height <= 0)
-            return new CommandOutcome(false, "Text box size must be positive.");
+        if (TextBoxCommandGuards.RejectInvalidSize(_textBox.Width, _textBox.Height) is { } invalidSize)
+            return invalidSize;
 
         var sheet = ctx.GetSheet(_sheetId);
         if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
@@ -75,8 +75,8 @@ public sealed class ResizeTextBoxCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
-        if (!double.IsFinite(_width) || !double.IsFinite(_height) || _width <= 0 || _height <= 0)
-            return new CommandOutcome(false, "Text box size must be positive.");
+        if (TextBoxCommandGuards.RejectInvalidSize(_width, _height) is { } invalidSize)
+            return invalidSize;
 
         var sheet = ctx.GetSheet(_sheetId);
         if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
@@ -255,6 +255,13 @@ public sealed class RepositionTextBoxCommand : IWorkbookCommand
 
 internal static class TextBoxCommandGuards
 {
+    private const string InvalidTextBoxSizeMessage = "Text box size must be positive.";
+
     public static CommandOutcome? RejectIfEditObjectsBlocked(Sheet sheet) =>
         CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects);
+
+    public static CommandOutcome? RejectInvalidSize(double width, double height) =>
+        double.IsFinite(width) && double.IsFinite(height) && width > 0 && height > 0
+            ? null
+            : new CommandOutcome(false, InvalidTextBoxSizeMessage);
 }
