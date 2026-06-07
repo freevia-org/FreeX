@@ -114,6 +114,59 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void Save_LoadedWorkbookWithOfficeAddIn_PreservesWebExtensionPackageGraph()
+    {
+        var sourceBytes = AddOfficeWebExtensionPackageGraph(CreateSourcePackage());
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("patched add-in workbook value"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        ReadPackageEntry(savedBytes, "xl/webextensions/taskpanes.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/webextensions/taskpanes.xml"));
+        ReadPackageEntry(savedBytes, "xl/webextensions/_rels/taskpanes.xml.rels")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/webextensions/_rels/taskpanes.xml.rels"));
+        ReadPackageEntry(savedBytes, "xl/webextensions/webextension1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/webextensions/webextension1.xml"));
+        ReadContentTypeOverrides(savedBytes)
+            .Should()
+            .Contain(new[]
+            {
+                "/xl/webextensions/taskpanes.xml",
+                "/xl/webextensions/webextension1.xml"
+            });
+        WorkbookRelationshipsContain(
+                savedBytes,
+                "http://schemas.microsoft.com/office/2011/relationships/webextensiontaskpanes",
+                "webextensions/taskpanes.xml")
+            .Should()
+            .BeTrue();
+        PackageRelationshipsContain(
+                savedBytes,
+                "xl/webextensions/_rels/taskpanes.xml.rels",
+                "http://schemas.microsoft.com/office/2011/relationships/webextension",
+                "webextension1.xml")
+            .Should()
+            .BeTrue();
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "A1")
+            .Should()
+            .Be("patched add-in workbook value");
+    }
+
+    [Fact]
     public void Save_LoadedWorkbookWithUnpreparedDirectEdit_FallsBackInsteadOfCapturingEditAsBaseline()
     {
         var sourceBytes = CreateSourcePackage();
@@ -2005,6 +2058,85 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         return stream.ToArray();
     }
 
+    private static byte[] AddOfficeWebExtensionPackageGraph(byte[] sourceBytes)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(sourceBytes, 0, sourceBytes.Length);
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+            var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+            contentTypesXml.Root!
+                .Elements(contentTypeNs + "Override")
+                .Where(element =>
+                    string.Equals((string?)element.Attribute("PartName"), "/xl/webextensions/taskpanes.xml", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals((string?)element.Attribute("PartName"), "/xl/webextensions/webextension1.xml", StringComparison.OrdinalIgnoreCase))
+                .Remove();
+            contentTypesXml.Root.Add(
+                new XElement(
+                    contentTypeNs + "Override",
+                    new XAttribute("PartName", "/xl/webextensions/taskpanes.xml"),
+                    new XAttribute("ContentType", "application/vnd.ms-office.webextensiontaskpanes+xml")),
+                new XElement(
+                    contentTypeNs + "Override",
+                    new XAttribute("PartName", "/xl/webextensions/webextension1.xml"),
+                    new XAttribute("ContentType", "application/vnd.ms-office.webextension+xml")));
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var workbookRelationshipsXml = LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
+            workbookRelationshipsXml.Root!.Add(new XElement(
+                relationshipNs + "Relationship",
+                new XAttribute("Id", "rIdFreeXOfficeAddinTaskpanes"),
+                new XAttribute("Type", "http://schemas.microsoft.com/office/2011/relationships/webextensiontaskpanes"),
+                new XAttribute("Target", "webextensions/taskpanes.xml")));
+            ReplacePackageXml(archive, "xl/_rels/workbook.xml.rels", workbookRelationshipsXml);
+
+            ReplacePackageXml(
+                archive,
+                "xl/webextensions/taskpanes.xml",
+                new XDocument(new XElement(
+                    XNamespace.Get("http://schemas.microsoft.com/office/webextensions/taskpanes/2010/11") + "taskpanes",
+                    new XElement(
+                        XNamespace.Get("http://schemas.microsoft.com/office/webextensions/taskpanes/2010/11") + "taskpane",
+                        new XAttribute("dockstate", "right"),
+                        new XAttribute("visibility", "0"),
+                        new XAttribute("width", "350"),
+                        new XAttribute("row", "4"),
+                        new XElement(
+                            XNamespace.Get("http://schemas.microsoft.com/office/webextensions/taskpanes/2010/11") + "webextensionref",
+                            new XAttribute(XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships") + "id", "rIdWebExtension1"))))));
+            ReplacePackageXml(
+                archive,
+                "xl/webextensions/_rels/taskpanes.xml.rels",
+                new XDocument(new XElement(
+                    relationshipNs + "Relationships",
+                    new XElement(
+                        relationshipNs + "Relationship",
+                        new XAttribute("Id", "rIdWebExtension1"),
+                        new XAttribute("Type", "http://schemas.microsoft.com/office/2011/relationships/webextension"),
+                        new XAttribute("Target", "webextension1.xml")))));
+            ReplacePackageXml(
+                archive,
+                "xl/webextensions/webextension1.xml",
+                new XDocument(new XElement(
+                    XNamespace.Get("http://schemas.microsoft.com/office/webextensions/webextension/2010/11") + "webextension",
+                    new XElement(
+                        XNamespace.Get("http://schemas.microsoft.com/office/webextensions/webextension/2010/11") + "reference",
+                        new XAttribute("id", "wa104379955"),
+                        new XAttribute("version", "1.0.0.0"),
+                        new XAttribute("store", "en-US"),
+                        new XAttribute("storeType", "OMEX")),
+                    new XElement(XNamespace.Get("http://schemas.microsoft.com/office/webextensions/webextension/2010/11") + "alternateReferences"),
+                    new XElement(XNamespace.Get("http://schemas.microsoft.com/office/webextensions/webextension/2010/11") + "properties"),
+                    new XElement(XNamespace.Get("http://schemas.microsoft.com/office/webextensions/webextension/2010/11") + "bindings"),
+                    new XElement(XNamespace.Get("http://schemas.microsoft.com/office/webextensions/webextension/2010/11") + "snapshot", "AAAA"))));
+        }
+
+        return stream.ToArray();
+    }
+
     private static byte[] CreateDenseSourcePackage(int rowCount, int columnCount)
     {
         using var stream = new MemoryStream();
@@ -3301,6 +3433,19 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
         var document = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
+        var ns = document.Root!.Name.Namespace;
+        return document.Root!
+            .Elements(ns + "Relationship")
+            .Any(element =>
+                string.Equals(element.Attribute("Type")?.Value, type, StringComparison.Ordinal) &&
+                string.Equals(element.Attribute("Target")?.Value, target, StringComparison.Ordinal));
+    }
+
+    private static bool PackageRelationshipsContain(byte[] packageBytes, string relationshipsPath, string type, string target)
+    {
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var document = XlsxPackageTestFixtures.LoadPackageXml(archive, relationshipsPath);
         var ns = document.Root!.Name.Namespace;
         return document.Root!
             .Elements(ns + "Relationship")
