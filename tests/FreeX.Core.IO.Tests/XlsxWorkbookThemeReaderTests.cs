@@ -492,8 +492,7 @@ public sealed class XlsxWorkbookThemeReaderTests
 
     private static XDocument LoadThemeDocument(ZipArchive archive)
     {
-        using var reader = new StreamReader(archive.GetEntry("xl/theme/theme1.xml")!.Open());
-        return XDocument.Load(reader);
+        return XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/theme/theme1.xml", "xl/theme/theme1.xml");
     }
 
     private const string NativeThemeWithDeepSchemesXml = """
