@@ -2401,6 +2401,11 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaComplexFunctionContrastLocations("IMAGINARY($A1)=-1", "B6");
         AssertFormulaComplexFunctionContrastLocations("IMABS($A1)=5", "B1");
         AssertFormulaComplexFunctionContrastLocations("IMABS($A1)=13", "B2");
+        AssertFormulaComplexFunctionContrastLocations(
+            "ABS(IMARGUMENT($A1)-0.927295218001612)<0.000000000001",
+            "B1");
+        AssertFormulaComplexFunctionContrastLocations("IMARGUMENT($A1)>0.9", "B1", "B3");
+        AssertFormulaComplexFunctionContrastLocations("IMARGUMENT($A1)<-1", "B2", "B6");
     }
 
     [Fact]
@@ -2413,6 +2418,21 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaComplexFunctionContrastLocations("IMCONJUGATE($A1)=\"3-4i\"", "B1");
         AssertFormulaComplexFunctionContrastLocations("IMCONJUGATE($A1)=\"5+12j\"", "B2");
         AssertFormulaComplexFunctionContrastLocations("IMCONJUGATE($A1)=\"j\"", "B6");
+        AssertFormulaComplexFunctionContrastLocations("IMSQRT($A1)=\"2+i\"", "B1");
+        AssertFormulaComplexFunctionContrastLocations("IMSQRT($A1)=\"3-2j\"", "B2");
+        AssertFormulaComplexFunctionContrastLocations(
+            "IMEXP($A1)=\"-13.1287830814622-15.200784463068i\"",
+            "B1");
+        AssertFormulaComplexFunctionContrastLocations(
+            "IMLN($A1)=\"1.6094379124341+0.927295218001612i\"",
+            "B1");
+        AssertFormulaComplexFunctionContrastLocations(
+            "IMLOG10($A1)=\"1.11394335230684-0.510732572130908j\"",
+            "B2");
+        AssertFormulaComplexFunctionContrastLocations(
+            "IMLOG2($A1)=\"2.32192809488736+1.33780421245098i\"",
+            "B1");
+        AssertFormulaComplexFunctionContrastLocations("IMLOG2($A1)=\"2.8073549220576\"", "B5");
         AssertFormulaComplexFunctionContrastLocations(
             "EXACT(IMCONJUGATE(COMPLEX($C1,$D1,$E1)),\"5+12j\")",
             "B2");
@@ -2422,12 +2442,16 @@ public sealed partial class AccessibilityCheckerServiceTests
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatComplexWrappersPredicatesAndAggregates()
     {
         AssertFormulaComplexFunctionContrastLocations("AND(IMABS($A1)>6,$F1)", "B2");
+        AssertFormulaComplexFunctionContrastLocations("AND(IMARGUMENT($A1)>0,$F1)", "B1");
         AssertFormulaComplexFunctionContrastLocations("IF(IMAGINARY($A1)<0,TRUE,FALSE)", "B2", "B6");
         AssertFormulaComplexFunctionContrastLocations("ISNUMBER(IMREAL($A1))", "B1", "B2", "B3", "B4", "B5", "B6");
         AssertFormulaComplexFunctionContrastLocations("ISTEXT(COMPLEX($C1,$D1,$E1))", "B1", "B2", "B3", "B4", "B5", "B6");
+        AssertFormulaComplexFunctionContrastLocations("ISTEXT(IMLN($A1))", "B1", "B2", "B3", "B4", "B5", "B6");
         AssertFormulaComplexFunctionContrastLocations("COMPLEX(0,1,LOWER(\"J\"))=\"j\"", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("IF(EXACT(IMSQRT($A1),\"3-2j\"),TRUE,FALSE)", "B2");
         AssertFormulaComplexFunctionContrastLocations("IMREAL($A1)+IMAGINARY($A1)=7", "B1", "B5");
         AssertFormulaComplexFunctionContrastLocations("SUM(IMABS($A1),1)>13", "B2");
+        AssertFormulaComplexFunctionContrastLocations("SUM(IMARGUMENT($A1),1)>2", "B3");
         AssertFormulaComplexFunctionContrastLocations("ABS(IMABS($A1)-5)<0.000000000001", "B1");
     }
 
@@ -2437,15 +2461,24 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaComplexFunctionContrastLocations("ISERROR(IMREAL($A1))", "B7", "B8", "B9");
         AssertFormulaComplexFunctionContrastLocations("ISNA(IMREAL($A1))", "B8");
         AssertFormulaComplexFunctionContrastLocations("ISERR(IMREAL($A1))", "B7", "B9");
+        AssertFormulaComplexFunctionContrastLocations("ISERROR(IMLN($A1))", "B7", "B8", "B9");
         AssertFormulaComplexFunctionContrastLocations("ISERROR(COMPLEX($C1,$D1,$E1))", "B7", "B8", "B9");
         AssertFormulaComplexFunctionContrastLocations("ISNA(COMPLEX($C1,$D1,$E1))", "B8");
         AssertFormulaComplexFunctionContrastLocations("ISERR(COMPLEX($C1,$D1,$E1))", "B7", "B9");
         AssertFormulaComplexFunctionContrastLocations("ISERROR(COMPLEX(1,2,\"x\"))", FormulaComplexAllLocations);
         AssertFormulaComplexFunctionContrastLocations("ISERROR(COMPLEX(1E309,0))", FormulaComplexAllLocations);
         AssertFormulaComplexFunctionContrastLocations("ISERROR(COMPLEX(\"Open\",2))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISERROR(IMARGUMENT(0))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISERR(IMARGUMENT(0))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISERROR(IMLN(0))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISERR(IMLOG10(COMPLEX(0,0)))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISERROR(IMLOG2(\"0\"))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISERROR(IMEXP(\"1000\"))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISERROR(IMSQRT(\"1E309i\"))", FormulaComplexAllLocations);
         AssertFormulaComplexFunctionContrastLocations("ISERROR(IMREAL(\"not complex\"))", FormulaComplexAllLocations);
         AssertFormulaComplexFunctionContrastLocations("ISERROR(IMREAL(\"1,234\"))", FormulaComplexAllLocations);
         AssertFormulaComplexFunctionContrastLocations("ISERROR(IMAGINARY(\"1E309i\"))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISNA(IMSQRT(NA()))", FormulaComplexAllLocations);
         AssertFormulaComplexFunctionContrastLocations("ISNA(COMPLEX(NA(),2))", FormulaComplexAllLocations);
         AssertFormulaComplexFunctionContrastLocations("ISNA(COMPLEX(1,NA()))", FormulaComplexAllLocations);
         AssertFormulaComplexFunctionContrastLocations("ISNA(COMPLEX(1,2,NA()))", FormulaComplexAllLocations);
@@ -2456,6 +2489,18 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         AssertFormulaComplexFunctionContrastLocations("COMPLEX($C1)>0");
         AssertFormulaComplexFunctionContrastLocations("COMPLEX($C1,$D1,$E1,1)>0");
+        AssertFormulaComplexFunctionContrastLocations("IMARGUMENT()>0");
+        AssertFormulaComplexFunctionContrastLocations("IMARGUMENT($A1,1)>0");
+        AssertFormulaComplexFunctionContrastLocations("IMSQRT()>\"\"");
+        AssertFormulaComplexFunctionContrastLocations("IMSQRT($A1,1)>\"\"");
+        AssertFormulaComplexFunctionContrastLocations("IMEXP()>\"\"");
+        AssertFormulaComplexFunctionContrastLocations("IMEXP($A1,1)>\"\"");
+        AssertFormulaComplexFunctionContrastLocations("IMLN()>\"\"");
+        AssertFormulaComplexFunctionContrastLocations("IMLN($A1,1)>\"\"");
+        AssertFormulaComplexFunctionContrastLocations("IMLOG10()>\"\"");
+        AssertFormulaComplexFunctionContrastLocations("IMLOG10($A1,1)>\"\"");
+        AssertFormulaComplexFunctionContrastLocations("IMLOG2()>\"\"");
+        AssertFormulaComplexFunctionContrastLocations("IMLOG2($A1,1)>\"\"");
         AssertFormulaComplexFunctionContrastLocations("IMREAL()>0");
         AssertFormulaComplexFunctionContrastLocations("IMREAL($A1,1)>0");
         AssertFormulaComplexFunctionContrastLocations("IMAGINARY()>0");
