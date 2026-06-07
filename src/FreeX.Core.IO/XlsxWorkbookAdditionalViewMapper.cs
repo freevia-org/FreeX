@@ -95,23 +95,8 @@ internal static class XlsxWorkbookAdditionalViewMapper
 
     private static XElement? ToXml(WorkbookAdditionalViewModel model)
     {
-        if (!string.IsNullOrWhiteSpace(model.NativeXml))
-        {
-            try
-            {
-                var nativeElement = XElement.Parse(model.NativeXml);
-                if (nativeElement.Name == WorkbookNs + "workbookView")
-                {
-                    RemoveOfficeRevisionAttributes(nativeElement);
-                    XlsxWorkbookViewNormalizer.NormalizeWorkbookViewElement(nativeElement);
-                    return nativeElement;
-                }
-            }
-            catch
-            {
-                // Fall back to native attributes below.
-            }
-        }
+        if (TryCreateNativeWorkbookView(model.NativeXml) is { } nativeElement)
+            return nativeElement;
 
         if (model.NativeAttributes.Count == 0)
             return null;
@@ -121,6 +106,27 @@ internal static class XlsxWorkbookAdditionalViewMapper
         RemoveOfficeRevisionAttributes(element);
         XlsxWorkbookViewNormalizer.NormalizeWorkbookViewElement(element);
         return element;
+    }
+
+    private static XElement? TryCreateNativeWorkbookView(string? nativeXml)
+    {
+        if (string.IsNullOrWhiteSpace(nativeXml))
+            return null;
+
+        try
+        {
+            var nativeElement = XElement.Parse(nativeXml);
+            if (nativeElement.Name != WorkbookNs + "workbookView")
+                return null;
+
+            RemoveOfficeRevisionAttributes(nativeElement);
+            XlsxWorkbookViewNormalizer.NormalizeWorkbookViewElement(nativeElement);
+            return nativeElement;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static void RemoveOfficeRevisionAttributes(XElement element)
