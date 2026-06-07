@@ -2318,6 +2318,27 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidPageLayoutForSchemaValidity()
+    {
+        using var source = Save(CreatePageLayoutSourceWorkbook());
+        SetPageLayoutInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertPageLayoutSanitized(saved);
+    }
+
+    [Fact]
     public void LoadedWorkbookFullSave_SanitizesInvalidWorksheetSheetPropertiesForSchemaValidity()
     {
         using var source = Save(CreatePageLayoutSourceWorkbook());
@@ -2450,6 +2471,27 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.Save(workbook, saved);
 
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertManualPageBreaksSanitized(saved);
+    }
+
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidManualPageBreaksForSchemaValidity()
+    {
+        using var source = Save(CreateManualPageBreakSourceWorkbook());
+        SetManualPageBreakInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 6, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         AssertManualPageBreaksSanitized(saved);
     }
