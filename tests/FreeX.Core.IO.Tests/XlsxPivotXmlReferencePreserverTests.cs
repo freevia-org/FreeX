@@ -1,6 +1,4 @@
-using System.IO;
 using System.IO.Compression;
-using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.IO;
 using Xunit;
@@ -18,26 +16,19 @@ public sealed class XlsxPivotXmlReferencePreserverTests
     [Fact]
     public void Preserve_InsertsPivotCachesAfterSheets_AndBeforeTrailingElements()
     {
-        using var sourcePackage = new MemoryStream();
-        using (var archive = new ZipArchive(sourcePackage, ZipArchiveMode.Create, leaveOpen: true))
-        {
-            Write(archive, "xl/workbook.xml",
+        using var sourcePackage = XlsxPackageTestFixtures.CreatePackage(
+            ("xl/workbook.xml",
                 $"<workbook xmlns=\"{Main}\" xmlns:r=\"{Rel}\">" +
                 "<sheets><sheet name=\"Data\" sheetId=\"1\" r:id=\"rId1\"/></sheets>" +
                 "<pivotCaches><pivotCache cacheId=\"1\" r:id=\"rId2\"/></pivotCaches>" +
-                "</workbook>");
-        }
+                "</workbook>"));
 
-        sourcePackage.Position = 0;
-        using var targetPackage = new MemoryStream();
-        using (var archive = new ZipArchive(targetPackage, ZipArchiveMode.Create, leaveOpen: true))
-        {
-            Write(archive, "xl/workbook.xml",
+        using var targetPackage = XlsxPackageTestFixtures.CreatePackage(
+            ("xl/workbook.xml",
                 $"<workbook xmlns=\"{Main}\" xmlns:r=\"{Rel}\">" +
                 "<sheets><sheet name=\"Data\" sheetId=\"1\" r:id=\"rId1\"/></sheets>" +
                 "<extLst/>" +
-                "</workbook>");
-        }
+                "</workbook>"));
 
         targetPackage.Position = 0;
         using (var source = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true))
@@ -48,8 +39,7 @@ public sealed class XlsxPivotXmlReferencePreserverTests
 
         targetPackage.Position = 0;
         using var result = new ZipArchive(targetPackage, ZipArchiveMode.Read);
-        XNamespace main = Main;
-        var children = XDocument.Load(result.GetEntry("xl/workbook.xml")!.Open()).Root!
+        var children = XlsxPackageTestFixtures.LoadPackageXml(result, "xl/workbook.xml").Root!
             .Elements()
             .Select(element => element.Name.LocalName)
             .ToList();
@@ -59,12 +49,5 @@ public sealed class XlsxPivotXmlReferencePreserverTests
             "pivotCaches must come after sheets per CT_Workbook");
         children.IndexOf("pivotCaches").Should().BeLessThan(children.IndexOf("extLst"),
             "pivotCaches must come before extLst per CT_Workbook");
-    }
-
-    private static void Write(ZipArchive archive, string path, string content)
-    {
-        var entry = archive.CreateEntry(path);
-        using var writer = new StreamWriter(entry.Open());
-        writer.Write(content);
     }
 }
