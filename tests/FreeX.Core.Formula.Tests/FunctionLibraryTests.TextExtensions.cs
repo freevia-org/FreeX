@@ -700,7 +700,7 @@ public partial class FunctionLibraryTests
     [Fact]
     public void Asc_NonDbcsCultureLeavesTextUnchanged()
     {
-        using var culture = new CultureScope("en-US");
+        using var culture = new TestCultureScope("en-US");
 
         _eval.Evaluate("=ASC(\"ＡＢＣ１２３\")", MakeSheet())
             .Should().Be(new TextValue("ＡＢＣ１２３"));
@@ -709,7 +709,7 @@ public partial class FunctionLibraryTests
     [Fact]
     public void Dbcs_NonDbcsCultureLeavesTextUnchanged()
     {
-        using var culture = new CultureScope("en-US");
+        using var culture = new TestCultureScope("en-US");
 
         _eval.Evaluate("=DBCS(\"ABC123\")", MakeSheet())
             .Should().Be(new TextValue("ABC123"));
@@ -718,7 +718,7 @@ public partial class FunctionLibraryTests
     [Fact]
     public void Asc_DbcsCultureConvertsFullWidthAsciiAndKanaToHalfWidthText()
     {
-        using var culture = new CultureScope("ja-JP");
+        using var culture = new TestCultureScope("ja-JP");
 
         _eval.Evaluate("=ASC(\"ＡＢＣ１２３！　アイウ\")", MakeSheet())
             .Should().Be(new TextValue("ABC123! ｱｲｳ"));
@@ -727,7 +727,7 @@ public partial class FunctionLibraryTests
     [Fact]
     public void Dbcs_DbcsCultureConvertsHalfWidthAsciiAndKanaToFullWidthText()
     {
-        using var culture = new CultureScope("ja-JP");
+        using var culture = new TestCultureScope("ja-JP");
 
         _eval.Evaluate("=DBCS(\"ABC123! ｱｲｳ\")", MakeSheet())
             .Should().Be(new TextValue("ＡＢＣ１２３！　アイウ"));
