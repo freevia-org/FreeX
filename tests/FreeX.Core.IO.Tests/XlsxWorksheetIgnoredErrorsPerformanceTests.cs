@@ -37,7 +37,7 @@ public sealed class XlsxWorksheetIgnoredErrorsPerformanceTests
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
-        var worksheetXml = XlsxPackageTestFixtures.LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var ignoredError = worksheetXml.Root!
             .Element(worksheetNs + "ignoredErrors")!
@@ -65,7 +65,7 @@ public sealed class XlsxWorksheetIgnoredErrorsPerformanceTests
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
-        var worksheetXml = XlsxPackageTestFixtures.LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var ignoredError = worksheetXml.Root!
             .Element(worksheetNs + "ignoredErrors")!
