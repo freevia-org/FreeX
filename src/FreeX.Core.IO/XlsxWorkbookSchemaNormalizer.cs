@@ -235,8 +235,12 @@ internal static class XlsxWorkbookSchemaNormalizer
             return false;
 
         var changed = false;
+        if (root.Element(workbookNs + "fileSharing") is { } fileSharing)
+            changed |= XlsxWorkbookFileSharingNormalizer.NormalizeElement(fileSharing);
         if (root.Element(workbookNs + "workbookPr") is { } workbookPr)
             changed |= XlsxWorkbookPropertiesNormalizer.NormalizeElement(workbookPr);
+        if (root.Element(workbookNs + "workbookProtection") is { } workbookProtection)
+            changed |= XlsxWorkbookProtectionNormalizer.NormalizeElement(workbookProtection);
         if (root.Element(workbookNs + "bookViews") is { } bookViews)
             changed |= XlsxWorkbookViewNormalizer.NormalizeBookViewsElement(bookViews);
         foreach (var customWorkbookViews in root.Elements(workbookNs + "customWorkbookViews").ToList())
@@ -269,6 +273,10 @@ internal static class XlsxWorkbookSchemaNormalizer
 
         if (root.Element(workbookNs + "fileVersion") is { } fileVersion)
             changed |= XlsxWorkbookFileVersionNormalizer.NormalizeElement(fileVersion);
+        if (root.Element(workbookNs + "calcPr") is { } calcPr)
+            changed |= XlsxWorkbookCalculationPropertyNormalizer.NormalizeElement(calcPr);
+        foreach (var fileRecoveryPr in root.Elements(workbookNs + "fileRecoveryPr"))
+            changed |= XlsxWorkbookFileRecoveryPropertyNormalizer.NormalizeElement(fileRecoveryPr);
         if (root.Element(workbookNs + "functionGroups") is { } functionGroups)
             changed |= XlsxWorkbookFunctionGroupsNormalizer.NormalizeElement(functionGroups);
         if (root.Element(workbookNs + "smartTagPr") is { } smartTagPr)
