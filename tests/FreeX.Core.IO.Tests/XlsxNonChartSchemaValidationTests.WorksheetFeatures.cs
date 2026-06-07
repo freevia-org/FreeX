@@ -908,6 +908,51 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Be(sourceScenarios.ToString(SaveOptions.DisableFormatting));
     }
 
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidWorksheetScenariosForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetScenariosSourceWorkbook());
+        SetWorksheetScenariosInvalidNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetScenariosSanitized(saved);
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorksheetScenariosForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetScenariosSourceWorkbook());
+        SetWorksheetScenariosInvalidNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetScenariosSanitized(saved);
+    }
+
 
     [Fact]
     public void ProtectedRanges_ProducesSchemaValidWorkbook()
@@ -3409,6 +3454,97 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             Locked: true,
             User: "FreeXTest"));
         return workbook;
+    }
+
+    private static void SetWorksheetScenariosInvalidNativeMetadata(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        var scenarios = worksheetXml.Root!.Element(worksheetNs + "scenarios")!;
+        scenarios.SetAttributeValue("current", "not-a-number");
+        scenarios.SetAttributeValue("show", "-1");
+        scenarios.SetAttributeValue("sqref", "A1:B1 NotARef");
+        scenarios.SetAttributeValue("nativeScenariosFlag", "removed");
+        scenarios.Add(new XElement(worksheetNs + "nativeScenariosChild"));
+
+        var scenario = scenarios.Element(worksheetNs + "scenario")!;
+        scenario.SetAttributeValue("name", " BestCase ");
+        scenario.SetAttributeValue("hidden", "true");
+        scenario.SetAttributeValue("locked", "maybe");
+        scenario.SetAttributeValue("count", "not-a-number");
+        scenario.SetAttributeValue("nativeScenarioFlag", "removed");
+        scenario.Add(new XElement(worksheetNs + "nativeScenarioChild"));
+
+        var inputCell = scenario.Element(worksheetNs + "inputCells")!;
+        inputCell.SetAttributeValue("r", " a1 ");
+        inputCell.SetAttributeValue("deleted", "true");
+        inputCell.SetAttributeValue("undone", "maybe");
+        inputCell.SetAttributeValue("numFmtId", "not-a-number");
+        inputCell.SetAttributeValue("nativeInputCellFlag", "removed");
+        inputCell.Add(
+            CreateInvalidExtensionList(
+                worksheetNs,
+                "{FREEX-SCENARIO-INPUT-EXT}",
+                "FreeXScenarioInputExtension",
+                "customScenarioInputExtLstFlag",
+                "customScenarioInputExtFlag",
+                "nativeScenarioInputExtLstChild"),
+            new XElement(worksheetNs + "nativeInputCellChild"));
+
+        scenario.Add(new XElement(
+            worksheetNs + "inputCells",
+            new XAttribute("r", "NotARef"),
+            new XAttribute("val", "removed")));
+        worksheetXml.Root!.Add(new XElement(
+            worksheetNs + "scenarios",
+            new XAttribute("nativeDuplicateContainer", "removed"),
+            new XElement(
+                worksheetNs + "scenario",
+                new XAttribute("name", "RemovedDuplicate"),
+                new XAttribute("count", "1"),
+                new XElement(
+                    worksheetNs + "inputCells",
+                    new XAttribute("r", "NotARef"),
+                    new XAttribute("val", "removed")))));
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void AssertWorksheetScenariosSanitized(MemoryStream stream)
+    {
+        var scenarios = ReadWorksheetChildElement(stream, "scenarios");
+        var worksheetNs = scenarios.Name.Namespace;
+        scenarios.Attribute("current").Should().BeNull();
+        scenarios.Attribute("show").Should().BeNull();
+        scenarios.Attribute("sqref")!.Value.Should().Be("A1:B1");
+        scenarios.Attribute("nativeScenariosFlag").Should().BeNull();
+        scenarios.Element(worksheetNs + "nativeScenariosChild").Should().BeNull();
+
+        var scenario = scenarios.Elements(worksheetNs + "scenario")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        scenario.Attribute("name")!.Value.Should().Be("BestCase");
+        scenario.Attribute("count")!.Value.Should().Be("2");
+        scenario.Attribute("hidden")!.Value.Should().Be("1");
+        scenario.Attribute("locked").Should().BeNull();
+        scenario.Attribute("nativeScenarioFlag").Should().BeNull();
+        scenario.Element(worksheetNs + "nativeScenarioChild").Should().BeNull();
+
+        var inputCells = scenario.Elements(worksheetNs + "inputCells").ToList();
+        inputCells.Should().HaveCount(2);
+        inputCells.Select(inputCell => inputCell.Attribute("r")?.Value).Should().NotContain("NotARef");
+        foreach (var inputCell in inputCells)
+        {
+            inputCell.Attribute("nativeInputCellFlag").Should().BeNull();
+            inputCell.Attribute("undone").Should().BeNull();
+            inputCell.Attribute("numFmtId").Should().BeNull();
+            inputCell.Elements().Should().BeEmpty();
+        }
+
+        var a1 = inputCells.Single(inputCell => inputCell.Attribute("r")?.Value == "A1");
+        a1.Attribute("deleted")!.Value.Should().Be("1");
     }
 
     private static Workbook CreateProtectedRangesSourceWorkbook()
