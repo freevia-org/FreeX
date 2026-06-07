@@ -4955,7 +4955,7 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void XlsxAdapter_LoadSave_RoundTripsDataValidationNativeMetadata()
+    public void XlsxAdapter_LoadSave_SanitizesDataValidationNativeMetadata()
     {
         var workbook = new Workbook("DvNativeMetadataTest");
         var sheet = workbook.AddSheet("S1");
@@ -5020,9 +5020,7 @@ public partial class FileAdapterSmokeTests
         savedValidation.Attribute("imeMode")!.Value.Should().Be("noControl");
         savedDataValidations.Attributes().Select(attribute => attribute.Name.LocalName).Should().NotContain("invalid validations attr");
         savedValidation.Attributes().Select(attribute => attribute.Name.LocalName).Should().NotContain("invalid validation attr");
-        savedValidation.Element(savedWorksheetNs + "extLst")!
-            .Element(savedWorksheetNs + "ext")!
-            .Attribute("uri")!.Value.Should().Be("{FREEX-DV-NATIVE}");
+        savedValidation.Element(savedWorksheetNs + "extLst").Should().BeNull();
     }
 
     [Fact]

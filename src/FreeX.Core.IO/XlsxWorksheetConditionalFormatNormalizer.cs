@@ -56,7 +56,7 @@ internal static class XlsxWorksheetConditionalFormatNormalizer
         var changed = false;
         changed |= RemoveUnknownAttributes(conditionalFormatting, ConditionalFormattingAttributes);
         changed |= RemoveUnexpectedChildren(conditionalFormatting, ConditionalFormattingChildren);
-        changed |= RemoveDuplicateChildren(conditionalFormatting, "extLst");
+        changed |= NormalizeExtensionLists(conditionalFormatting);
 
         foreach (var rule in conditionalFormatting.Elements(WorksheetNs + "cfRule").ToList())
             changed |= NormalizeCfRule(rule);
@@ -73,8 +73,35 @@ internal static class XlsxWorksheetConditionalFormatNormalizer
         changed |= RemoveDuplicateChildren(rule, "colorScale");
         changed |= RemoveDuplicateChildren(rule, "dataBar");
         changed |= RemoveDuplicateChildren(rule, "iconSet");
-        changed |= RemoveDuplicateChildren(rule, "extLst");
+        changed |= NormalizeExtensionLists(rule);
         changed |= NormalizeChildOrder(rule, CfRuleChildOrder);
+        return changed;
+    }
+
+    private static bool NormalizeExtensionLists(XElement parent)
+    {
+        var changed = false;
+        var keptExtensionList = false;
+        foreach (var extensionList in parent.Elements(WorksheetNs + "extLst").ToList())
+        {
+            if (keptExtensionList)
+            {
+                extensionList.Remove();
+                changed = true;
+                continue;
+            }
+
+            changed |= XlsxWorksheetExtensionListNormalizer.NormalizeExtensionListElement(extensionList);
+            if (XlsxWorksheetExtensionListNormalizer.ShouldRemoveExtensionListElement(extensionList))
+            {
+                extensionList.Remove();
+                changed = true;
+                continue;
+            }
+
+            keptExtensionList = true;
+        }
+
         return changed;
     }
 
