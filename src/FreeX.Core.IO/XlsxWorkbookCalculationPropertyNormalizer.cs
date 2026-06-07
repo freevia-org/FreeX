@@ -56,34 +56,16 @@ internal static class XlsxWorkbookCalculationPropertyNormalizer
     public static bool NormalizeElement(XElement calcPr)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(calcPr);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(calcPr, CalculationPropertyAttributes);
         changed |= RemoveAllNodes(calcPr);
-        changed |= NormalizeAttribute(calcPr, "calcMode", value => NormalizeToken(value, ValidCalculationModes));
-        changed |= NormalizeAttribute(calcPr, "refMode", value => NormalizeToken(value, ValidReferenceModes));
-        changed |= NormalizeAttribute(calcPr, "iterateDelta", NormalizeDouble);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(calcPr, "calcMode", value => NormalizeToken(value, ValidCalculationModes));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(calcPr, "refMode", value => NormalizeToken(value, ValidReferenceModes));
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(calcPr, "iterateDelta", NormalizeDouble);
 
         foreach (var attributeName in BooleanAttributes)
-            changed |= NormalizeAttribute(calcPr, attributeName, NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(calcPr, attributeName, NormalizeBoolean);
         foreach (var attributeName in UnsignedIntAttributes)
-            changed |= NormalizeAttribute(calcPr, attributeName, NormalizeUnsignedIntOrNull);
-
-        return changed;
-    }
-
-    private static bool RemoveUnknownAttributes(XElement element)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                (attribute.Name.NamespaceName.Length == 0 && CalculationPropertyAttributes.Contains(attribute.Name.LocalName)))
-            {
-                continue;
-            }
-
-            attribute.Remove();
-            changed = true;
-        }
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(calcPr, attributeName, NormalizeUnsignedIntOrNull);
 
         return changed;
     }
@@ -94,29 +76,6 @@ internal static class XlsxWorkbookCalculationPropertyNormalizer
             return false;
 
         element.RemoveNodes();
-        return true;
-    }
-
-    private static bool NormalizeAttribute(
-        XElement element,
-        string attributeName,
-        Func<string?, string?> normalize)
-    {
-        var attribute = element.Attribute(attributeName);
-        var normalized = normalize(attribute?.Value);
-        if (normalized is null)
-        {
-            if (attribute is null)
-                return false;
-
-            attribute.Remove();
-            return true;
-        }
-
-        if (attribute is not null && string.Equals(attribute.Value, normalized, StringComparison.Ordinal))
-            return false;
-
-        element.SetAttributeValue(attributeName, normalized);
         return true;
     }
 
