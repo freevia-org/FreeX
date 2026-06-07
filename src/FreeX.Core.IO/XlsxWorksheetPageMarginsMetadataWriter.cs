@@ -41,14 +41,7 @@ internal static class XlsxWorksheetPageMarginsMetadataWriter
                 pmAttrs,
                 ["left", "right", "top", "bottom", "header", "footer"]);
 
-            if (pmChildren.Count > 0)
-            {
-                pageMargins.Elements().Remove();
-                foreach (var childXml in pmChildren)
-                {
-                    XlsxWorksheetNativeMetadataHelpers.TryAddNativeChildElement(pageMargins, childXml);
-                }
-            }
+            XlsxWorksheetNativeMetadataHelpers.ReplaceChildrenFromNativeXml(pageMargins, pmChildren);
 
             XlsxWorksheetPageLayoutNormalizer.NormalizePageMargins(pageMargins);
             session.MarkDirty(worksheetEdit);
