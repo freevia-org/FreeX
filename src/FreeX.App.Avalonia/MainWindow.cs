@@ -64,7 +64,7 @@ public sealed class MainWindow : Window
     private const int ZoomStepPercent = 10;
     private const string NativeWorkbookExtension = ".fxl";
     private const string PlatformAboutSummary = "Built with .NET 10, Avalonia, ClosedXML.";
-    private const string SheetTabContextHelpText = "Selects this sheet. Right-click or press Shift+F10 for sheet tab options.";
+    private const string SheetTabContextHelpText = "Selects this sheet. Press F6 to focus sheet tabs, use arrow keys to switch sheets, or right-click/press Shift+F10 for sheet tab options.";
     private static readonly IBrush WindowBackground = Brush(246, 247, 249);
     private static readonly IBrush HeaderBackground = Brush(241, 243, 246);
     private static readonly IBrush HeaderForeground = Brush(73, 80, 93);
@@ -1318,7 +1318,7 @@ public sealed class MainWindow : Window
             button.ContextMenu = CreateSheetTabContextMenu(tab);
             button.PointerPressed += (_, args) => SelectSheetFromPointer(tab.Id, args);
             button.DoubleTapped += async (_, args) => await RenameSheetFromTabAsync(tab.Id, args);
-            button.KeyDown += (_, args) => OpenSheetTabContextMenuFromKeyboard(tab.Id, button, args);
+            button.KeyDown += (_, args) => HandleSheetTabKeyDown(tab.Id, button, args);
             button.Click += (_, _) => SelectSheet(tab.Id);
             AutomationProperties.SetName(button, tab.Name);
             AutomationProperties.SetHelpText(button, SheetTabContextHelpText);
@@ -2608,6 +2608,15 @@ public sealed class MainWindow : Window
         await RenameActiveSheetAsync();
     }
 
+    private void HandleSheetTabKeyDown(SheetId sheetId, Button button, KeyEventArgs args)
+    {
+        OpenSheetTabContextMenuFromKeyboard(sheetId, button, args);
+        if (args.Handled)
+            return;
+
+        NavigateSheetTabFromKeyboard(sheetId, args);
+    }
+
     private void OpenSheetTabContextMenuFromKeyboard(SheetId sheetId, Button button, KeyEventArgs args)
     {
         if (!IsSheetTabContextMenuKey(args))
@@ -2631,6 +2640,90 @@ public sealed class MainWindow : Window
     private static bool IsSheetTabContextMenuKey(KeyEventArgs args) =>
         args.Key == Key.Apps ||
         args.Key == Key.F10 && args.KeyModifiers == KeyModifiers.Shift;
+
+    private void NavigateSheetTabFromKeyboard(SheetId sheetId, KeyEventArgs args)
+    {
+        if (args.KeyModifiers != KeyModifiers.None)
+            return;
+
+        var targetSheetId = args.Key switch
+        {
+            Key.Left => GetAdjacentSheetTabId(sheetId, direction: -1),
+            Key.Right => GetAdjacentSheetTabId(sheetId, direction: 1),
+            Key.Home => GetEdgeSheetTabId(first: true),
+            Key.End => GetEdgeSheetTabId(first: false),
+            _ => null
+        };
+        if (targetSheetId is null)
+            return;
+
+        args.Handled = true;
+        SelectSheetTabFromKeyboard(targetSheetId.Value, selectRange: false);
+    }
+
+    private bool SelectAdjacentVisibleSheetFromKeyboard(int direction, bool selectRange)
+    {
+        var targetSheetId = GetAdjacentSheetTabId(_session.ActiveSheet.Id, direction);
+        if (targetSheetId is null)
+            return false;
+
+        SelectSheetTabFromKeyboard(targetSheetId.Value, selectRange);
+        return true;
+    }
+
+    private void SelectSheetTabFromKeyboard(SheetId sheetId, bool selectRange)
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var changed = _session.SelectSheetFromTab(sheetId, selectRange, toggle: false);
+        if (changed)
+        {
+            ClearSelectedDrawingObject();
+            RefreshShell($"Selected {_session.ActiveSheet.Name}");
+        }
+
+        FocusActiveSheetTab();
+    }
+
+    private SheetId? GetAdjacentSheetTabId(SheetId sheetId, int direction)
+    {
+        if (_session.SheetTabs.Count == 0)
+            return null;
+
+        var index = FindSheetTabIndex(sheetId);
+        if (index < 0)
+            index = direction switch
+            {
+                < 0 => _session.SheetTabs.Count,
+                0 => 0,
+                _ => -1
+            };
+
+        var targetIndex = index + Math.Sign(direction);
+        targetIndex = Math.Clamp(targetIndex, 0, _session.SheetTabs.Count - 1);
+        return _session.SheetTabs[targetIndex].Id;
+    }
+
+    private SheetId? GetEdgeSheetTabId(bool first)
+    {
+        if (_session.SheetTabs.Count == 0)
+            return null;
+
+        return _session.SheetTabs[first ? 0 : _session.SheetTabs.Count - 1].Id;
+    }
+
+    private void FocusActiveSheetTab()
+        => FocusSheetTab(_session.ActiveSheet.Id);
+
+    private bool FocusSheetTab(SheetId sheetId)
+    {
+        if (FindSheetTabButton(sheetId) is not { } button)
+            return false;
+
+        button.Focus();
+        return button.IsFocused;
+    }
 
     private static void SheetTabContextMenu_Opened(object? sender, RoutedEventArgs args)
     {
@@ -4405,6 +4498,7 @@ public sealed class MainWindow : Window
             IsOpening: _isOpening,
             HasNewSheetButton: _newSheetButton.Content?.ToString() == "+",
             HasFocusableSheetTab: HasSheetTabButton(button => button.Focusable),
+            HasFocusableActiveSheetTab: FindSheetTabButton(_session.ActiveSheet.Id)?.Focusable == true,
             HasSheetTabContextKeyboardHelp: HasSheetTabButton(button =>
                 string.Equals(AutomationProperties.GetHelpText(button), SheetTabContextHelpText, StringComparison.Ordinal)),
             HasSheetTabContextRenameMenuItem: HasSheetTabContextMenuItem("Rename..."),
@@ -4667,11 +4761,30 @@ public sealed class MainWindow : Window
             (modifiers & ~commandModifiers) == 0;
     }
 
+    private static bool HasCommandAndShiftModifiers(KeyModifiers modifiers)
+    {
+        const KeyModifiers commandModifiers = KeyModifiers.Control | KeyModifiers.Meta;
+        return modifiers.HasFlag(KeyModifiers.Shift) &&
+            (modifiers & commandModifiers) != 0 &&
+            (modifiers & ~(commandModifiers | KeyModifiers.Shift)) == 0;
+    }
+
+    private static bool IsSheetTabFocusKey(KeyEventArgs args) =>
+        args.Key == Key.F6 &&
+        (args.KeyModifiers == KeyModifiers.None || args.KeyModifiers == KeyModifiers.Shift);
+
     private static bool HasOnlyControlModifier(KeyModifiers modifiers) =>
         modifiers == KeyModifiers.Control;
 
     private async void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {
+        if (IsSheetTabFocusKey(e))
+        {
+            e.Handled = true;
+            FocusActiveSheetTab();
+            return;
+        }
+
         if (!e.KeyModifiers.HasFlag(KeyModifiers.Control) &&
             !e.KeyModifiers.HasFlag(KeyModifiers.Meta))
         {
@@ -4709,7 +4822,23 @@ public sealed class MainWindow : Window
             return;
         }
 
-        if (e.Key == Key.Z && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+        if (e.Key == Key.PageUp && HasCommandAndShiftModifiers(e.KeyModifiers))
+        {
+            e.Handled = SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: true);
+        }
+        else if (e.Key == Key.PageDown && HasCommandAndShiftModifiers(e.KeyModifiers))
+        {
+            e.Handled = SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: true);
+        }
+        else if (e.Key == Key.PageUp && HasOnlyCommandModifier(e.KeyModifiers))
+        {
+            e.Handled = SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: false);
+        }
+        else if (e.Key == Key.PageDown && HasOnlyCommandModifier(e.KeyModifiers))
+        {
+            e.Handled = SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: false);
+        }
+        else if (e.Key == Key.Z && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {
             e.Handled = true;
             RedoLastEdit();

@@ -69,6 +69,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool IsOpening,
     bool HasNewSheetButton,
     bool HasFocusableSheetTab,
+    bool HasFocusableActiveSheetTab,
     bool HasSheetTabContextKeyboardHelp,
     bool HasSheetTabContextRenameMenuItem,
     bool HasSheetTabContextTabColorMenuItem,
@@ -184,6 +185,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         ViewportColumnCount > 0 &&
         HasNewSheetButton &&
         HasFocusableSheetTab &&
+        HasFocusableActiveSheetTab &&
         HasSheetTabContextKeyboardHelp &&
         HasSheetTabContextRenameMenuItem &&
         HasSheetTabContextTabColorMenuItem &&
@@ -347,6 +349,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"is_opening={FormatBool(snapshot.IsOpening)}",
                 $"new_sheet_button={FormatBool(snapshot.HasNewSheetButton)}",
                 $"focusable_sheet_tab={FormatBool(snapshot.HasFocusableSheetTab)}",
+                $"focusable_active_sheet_tab={FormatBool(snapshot.HasFocusableActiveSheetTab)}",
                 $"sheet_tab_context_keyboard_help={FormatBool(snapshot.HasSheetTabContextKeyboardHelp)}",
                 $"sheet_tab_context_rename_menu_item={FormatBool(snapshot.HasSheetTabContextRenameMenuItem)}",
                 $"sheet_tab_context_tab_color_menu_item={FormatBool(snapshot.HasSheetTabContextTabColorMenuItem)}",
