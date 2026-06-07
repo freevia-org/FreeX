@@ -12,13 +12,7 @@ internal static class XlsxWorksheetPageBreaksMetadataReader
             return null;
 
         var model = new WorksheetPageBreaksMetadataModel();
-        foreach (var attribute in pageBreaks.Attributes())
-        {
-            if (attribute.IsNamespaceDeclaration || string.Equals(attribute.Name.LocalName, "count", StringComparison.Ordinal))
-                continue;
-
-            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
-        }
+        XlsxWorksheetNativeMetadataHelpers.ReadNativeAttributes(pageBreaks, model.NativeAttributes, ["count"]);
 
         foreach (var breakElement in pageBreaks.Elements())
         {
@@ -29,13 +23,7 @@ internal static class XlsxWorksheetPageBreaksMetadataReader
                 continue;
 
             var attributes = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var attribute in breakElement.Attributes())
-            {
-                if (attribute.IsNamespaceDeclaration || string.Equals(attribute.Name.LocalName, "id", StringComparison.Ordinal))
-                    continue;
-
-                attributes[attribute.Name.ToString()] = attribute.Value;
-            }
+            XlsxWorksheetNativeMetadataHelpers.ReadNativeAttributes(breakElement, attributes, ["id"]);
 
             if (attributes.Count > 0)
                 model.BreakNativeAttributes[id] = attributes;
