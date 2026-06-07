@@ -62,6 +62,36 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Be(sourceItemRelationships.ToString(SaveOptions.DisableFormatting));
     }
 
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithInvalidCustomXmlProperties_DropsInvalidSidecarGraph()
+    {
+        using var source = CreateCustomXmlSourcePackage();
+        ReplaceCustomXmlPropertiesWithInvalidRoot(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadPackageEntryText(saved, "customXml/item1.xml")
+            .Should()
+            .Contain("retained-custom-xml");
+        PackageEntryNames(saved).Should().NotContain("customXml/itemProps1.xml");
+        PackageEntryNames(saved).Should().NotContain("customXml/_rels/item1.xml.rels");
+        ContentTypeOverridePartNames(saved).Should().NotContain("/customXml/itemProps1.xml");
+    }
+
     private static MemoryStream CreateCustomXmlSourcePackage()
     {
         var workbook = new Workbook("CustomXmlPatchSave");
@@ -108,6 +138,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             "rIdFreeXCustomXml",
             "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml",
             "customXml/item1.xml");
+    }
+
+    private static void ReplaceCustomXmlPropertiesWithInvalidRoot(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        ReplacePackageXml(archive, "customXml/itemProps1.xml", new XDocument(new XElement("notDatastoreItem")));
     }
 
     private static void AssertCustomXmlPackage(Stream stream)
@@ -161,5 +198,22 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
         using var reader = new StreamReader(archive.GetEntry(entryName)!.Open(), Encoding.UTF8);
         return reader.ReadToEnd();
+    }
+
+    private static List<string> PackageEntryNames(Stream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        return archive.Entries.Select(entry => entry.FullName).ToList();
+    }
+
+    private static List<string> ContentTypeOverridePartNames(Stream stream)
+    {
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        return ReadPackageRootElement(stream, "[Content_Types].xml")
+            .Elements(contentTypeNs + "Override")
+            .Select(element => element.Attribute("PartName")?.Value)
+            .OfType<string>()
+            .ToList();
     }
 }
