@@ -352,8 +352,8 @@ internal static class XlsxStylesheetSchemaNormalizer
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(
             tableStyleElement,
             TableStyleElementAttributes);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tableStyleElement, "dxfId", NormalizeUnsignedInt);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tableStyleElement, "size", NormalizeUnsignedInt);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tableStyleElement, "dxfId", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tableStyleElement, "size", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(tableStyleElement);
         return changed;
     }
@@ -457,14 +457,6 @@ internal static class XlsxStylesheetSchemaNormalizer
         }
 
         return null;
-    }
-
-    private static string? NormalizeUnsignedInt(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, System.Globalization.NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed.ToString(CultureInfo.InvariantCulture)
-            : null;
     }
 
     private static bool RemoveUnexpectedChildren(XElement element, XName allowedChildName)

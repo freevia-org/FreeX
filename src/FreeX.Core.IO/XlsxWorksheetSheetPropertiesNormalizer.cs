@@ -135,8 +135,8 @@ internal static class XlsxWorksheetSheetPropertiesNormalizer
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(tabColor, ColorAttributes);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tabColor, "auto", NormalizeBoolean);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tabColor, "indexed", NormalizeUnsignedIntOrNull);
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tabColor, "theme", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tabColor, "indexed", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tabColor, "theme", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tabColor, "rgb", NormalizeRgbHex);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(tabColor, "tint", NormalizeTint);
         changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(tabColor);
@@ -256,14 +256,6 @@ internal static class XlsxWorksheetSheetPropertiesNormalizer
         }
 
         return null;
-    }
-
-    private static string? NormalizeUnsignedIntOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed.ToString(CultureInfo.InvariantCulture)
-            : null;
     }
 
     private static string? NormalizeRgbHex(string? value)
