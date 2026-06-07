@@ -49,17 +49,7 @@ internal static class XlsxWorksheetPageMarginsMetadataWriter
                 pageMargins.Elements().Remove();
                 foreach (var childXml in pmChildren)
                 {
-                    if (string.IsNullOrWhiteSpace(childXml))
-                        continue;
-
-                    try
-                    {
-                        pageMargins.Add(XElement.Parse(childXml));
-                    }
-                    catch
-                    {
-                        // Skip malformed native payloads in authored native JSON files.
-                    }
+                    XlsxWorksheetNativeMetadataHelpers.TryAddNativeChildElement(pageMargins, childXml);
                 }
             }
 

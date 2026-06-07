@@ -52,17 +52,7 @@ internal static class XlsxWorksheetSheetPropertiesMetadataWriter
 
                 foreach (var childXml in spChildren)
                 {
-                    if (string.IsNullOrWhiteSpace(childXml))
-                        continue;
-
-                    try
-                    {
-                        sheetProperties.Add(XElement.Parse(childXml));
-                    }
-                    catch
-                    {
-                        // Skip malformed native payloads in authored native JSON files.
-                    }
+                    XlsxWorksheetNativeMetadataHelpers.TryAddNativeChildElement(sheetProperties, childXml);
                 }
             }
 
