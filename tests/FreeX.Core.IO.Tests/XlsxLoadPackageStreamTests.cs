@@ -173,6 +173,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookFileSharingSchemaIssues: false,
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
             HasWorkbookProtectionSchemaIssues: false,
+            HasWorkbookWebPublishingSchemaIssues: false,
             HasWorksheetRelationshipMarkerSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
@@ -247,6 +248,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookFileSharingSchemaIssues: false,
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
             HasWorkbookProtectionSchemaIssues: false,
+            HasWorkbookWebPublishingSchemaIssues: false,
             HasWorksheetRelationshipMarkerSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
@@ -293,6 +295,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookFileSharingSchemaIssues: false,
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
             HasWorkbookProtectionSchemaIssues: false,
+            HasWorkbookWebPublishingSchemaIssues: false,
             HasWorksheetRelationshipMarkerSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
@@ -335,6 +338,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookFileSharingSchemaIssues: false,
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
             HasWorkbookProtectionSchemaIssues: false,
+            HasWorkbookWebPublishingSchemaIssues: false,
             HasWorksheetRelationshipMarkerSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
@@ -406,6 +410,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookFileSharingSchemaIssues: false,
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
             HasWorkbookProtectionSchemaIssues: false,
+            HasWorkbookWebPublishingSchemaIssues: false,
             HasWorksheetRelationshipMarkerSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
@@ -486,6 +491,54 @@ public sealed class XlsxLoadPackageStreamTests
     }
 
     [Fact]
+    public void ClosedXmlLoadSanitizer_NormalizesWorkbookWebPublishingMetadata()
+    {
+        using var package = CreatePackageWithWorkbook(
+            """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <sheets/>
+              <webPublishing css="true" targetScreenSize="800x600" dpi=" 96 " customWebPublishingFlag="removed">
+                <nativeWebPublishingChild/>
+              </webPublishing>
+              <webPublishObjects count="not-a-number" customWebPublishObjectsFlag="removed">
+                <webPublishObject id=" 1 " divId=" FreeXWebPublish " sourceObject=" Sheet1 " destinationFile=" report.htm " customWebPublishObjectFlag="removed">
+                  <nativeWebPublishObjectChild/>
+                </webPublishObject>
+                <webPublishObject id="not-a-number" divId="Removed" sourceObject="Sheet1" destinationFile="removed.htm"/>
+                <nativeWebPublishObjectsChild/>
+              </webPublishObjects>
+            </workbook>
+            """);
+
+        using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(package);
+
+        sanitized.Should().NotBeSameAs(package);
+        using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/workbook.xml");
+        var webPublishing = workbookXml.Root!.Element(workbookNs + "webPublishing")!;
+        webPublishing.Attribute("css")!.Value.Should().Be("true");
+        webPublishing.Attribute("dpi")!.Value.Should().Be("96");
+        webPublishing.Attribute("customWebPublishingFlag").Should().BeNull();
+        webPublishing.Elements().Should().BeEmpty();
+
+        var webPublishObjects = workbookXml.Root!.Element(workbookNs + "webPublishObjects")!;
+        webPublishObjects.Attribute("count")!.Value.Should().Be("1");
+        webPublishObjects.Attribute("customWebPublishObjectsFlag").Should().BeNull();
+        webPublishObjects.Element(workbookNs + "nativeWebPublishObjectsChild").Should().BeNull();
+        var webPublishObject = webPublishObjects.Elements(workbookNs + "webPublishObject")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        webPublishObject.Attribute("id")!.Value.Should().Be("1");
+        webPublishObject.Attribute("divId")!.Value.Should().Be("FreeXWebPublish");
+        webPublishObject.Attribute("sourceObject")!.Value.Should().Be("Sheet1");
+        webPublishObject.Attribute("destinationFile")!.Value.Should().Be("report.htm");
+        webPublishObject.Attribute("customWebPublishObjectFlag").Should().BeNull();
+        webPublishObject.Elements().Should().BeEmpty();
+    }
+
+    [Fact]
     public void ClosedXmlLoadSanitizer_RemovesMergeCellsFromHintedWorksheets()
     {
         using var package = CreatePackageWithWorksheets(
@@ -529,6 +582,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookFileSharingSchemaIssues: false,
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
             HasWorkbookProtectionSchemaIssues: false,
+            HasWorkbookWebPublishingSchemaIssues: false,
             HasWorksheetRelationshipMarkerSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -801,6 +855,18 @@ public sealed class XlsxLoadPackageStreamTests
 
     private static MemoryStream CreatePackageWithWorksheet(string worksheetXml, bool includeLargePayload)
         => CreatePackageWithWorksheets([("xl/worksheets/sheet1.xml", worksheetXml)], includeLargePayload);
+
+    private static MemoryStream CreatePackageWithWorkbook(string workbookXml)
+    {
+        var package = new MemoryStream();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WritePackageEntry(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        package.Position = 0;
+        return package;
+    }
 
     private static MemoryStream CreatePackageWithMalformedDocumentPropertyRootRelationship()
     {

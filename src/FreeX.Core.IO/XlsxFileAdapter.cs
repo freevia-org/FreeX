@@ -716,6 +716,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             null,
             null,
             null,
+            packageParts.HasInspected ? packageParts.HasWorkbookWebPublishingSchemaIssues : null,
             hasWorksheetRelationshipMarkerSchemaIssues,
             mergeCellWorksheetPathsToStrip);
     }
@@ -846,7 +847,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             bool hasDrawingPackageParts,
             bool hasSlicerTimelinePackageParts,
             bool hasExternalLinks,
-            bool hasStructuredTables)
+            bool hasStructuredTables,
+            bool? hasWorkbookWebPublishingSchemaIssues)
         {
             HasInspected = hasInspected;
             HasWorkbook = hasWorkbook;
@@ -858,6 +860,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             HasSlicerTimelinePackageParts = hasSlicerTimelinePackageParts;
             HasExternalLinks = hasExternalLinks;
             HasStructuredTables = hasStructuredTables;
+            HasWorkbookWebPublishingSchemaIssues = hasWorkbookWebPublishingSchemaIssues;
         }
 
         public static XlsxLoadPackageParts Empty => default;
@@ -871,6 +874,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         public bool HasSlicerTimelinePackageParts { get; }
         public bool HasExternalLinks { get; }
         public bool HasStructuredTables { get; }
+        public bool? HasWorkbookWebPublishingSchemaIssues { get; }
 
         public static XlsxLoadPackageParts Inspect(ZipArchive archive)
         {
@@ -927,7 +931,29 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 hasDrawingPackageParts,
                 hasSlicerTimelinePackageParts,
                 hasExternalLinks,
-                hasStructuredTables);
+                hasStructuredTables,
+                InspectWorkbookWebPublishingSchemaIssues(archive));
+        }
+
+        private static bool? InspectWorkbookWebPublishingSchemaIssues(ZipArchive archive)
+        {
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return false;
+
+            try
+            {
+                XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+                var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+                var root = workbookXml.Root;
+                return root is not null &&
+                       (XlsxWorkbookWebPublishingNormalizer.NormalizeWorkbookRoot(root, workbookNs) |
+                        XlsxWorkbookWebPublishObjectsNormalizer.NormalizeWorkbookRoot(root, workbookNs));
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private static bool? InspectChartExChartParts(ZipArchive archive)
