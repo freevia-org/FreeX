@@ -108,7 +108,7 @@ internal static class XlsxWorksheetWebPublishItemsNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(webPublishItems, WebPublishItemsAttributes, RelNs + "id");
-        changed |= RemoveUnexpectedChildElements(webPublishItems, WorksheetNs + "webPublishItem");
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(webPublishItems, WorksheetNs + "webPublishItem");
 
         foreach (var webPublishItem in webPublishItems.Elements(WorksheetNs + "webPublishItem").ToList())
         {
@@ -148,18 +148,6 @@ internal static class XlsxWorksheetWebPublishItemsNormalizer
     {
         var count = webPublishItems.Elements(WorksheetNs + "webPublishItem").Count().ToString(CultureInfo.InvariantCulture);
         return XlsxXmlNormalizationHelpers.SetAttributeIfChanged(webPublishItems, "count", count);
-    }
-
-    private static bool RemoveUnexpectedChildElements(XElement element, XName allowedChildName)
-    {
-        var changed = false;
-        foreach (var child in element.Elements().Where(child => child.Name != allowedChildName).ToList())
-        {
-            child.Remove();
-            changed = true;
-        }
-
-        return changed;
     }
 
     private static string? NormalizeOptionalText(string? value)

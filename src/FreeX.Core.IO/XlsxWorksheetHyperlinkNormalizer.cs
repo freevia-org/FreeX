@@ -48,7 +48,7 @@ internal static class XlsxWorksheetHyperlinkNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(hyperlinks, EmptyAttributes);
-        changed |= RemoveUnexpectedChildren(hyperlinks, WorksheetNs + "hyperlink");
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(hyperlinks, WorksheetNs + "hyperlink");
 
         var seenRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var hyperlink in hyperlinks.Elements(WorksheetNs + "hyperlink").ToList())
@@ -162,21 +162,6 @@ internal static class XlsxWorksheetHyperlinkNormalizer
         }
 
         return null;
-    }
-
-    private static bool RemoveUnexpectedChildren(XElement element, XName allowedChildName)
-    {
-        var changed = false;
-        foreach (var child in element.Elements().ToList())
-        {
-            if (child.Name == allowedChildName)
-                continue;
-
-            child.Remove();
-            changed = true;
-        }
-
-        return changed;
     }
 
     private static bool RemoveUnknownHyperlinkAttributes(XElement element)
