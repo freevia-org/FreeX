@@ -84,6 +84,7 @@ public sealed partial class XlsxFileAdapter
         XlsxWorksheetHyperlinkNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxWorksheetConditionalFormatNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxWorksheetWebPublishItemsNormalizer.NormalizePackage(generatedArchive);
+        XlsxWorksheetOleControlNormalizer.NormalizeWorksheets(generatedArchive);
         return sourceParts;
     }
 
