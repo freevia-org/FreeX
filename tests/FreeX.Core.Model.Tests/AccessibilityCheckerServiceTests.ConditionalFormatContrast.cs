@@ -2439,6 +2439,42 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatComplexTrigTextComparisons()
+    {
+        AssertFormulaComplexFunctionContrastLocations("IMSIN($A1)=\"1.1752011936438i\"", "B3");
+        AssertFormulaComplexFunctionContrastLocations("IMCOS($A1)=\"1.54308063481524\"", "B3", "B6");
+        AssertFormulaComplexFunctionContrastLocations("IMTAN($A1)=\"0.761594155955765i\"", "B3");
+        AssertFormulaComplexFunctionContrastLocations("IMSEC($A1)=\"0.648054273663885\"", "B3", "B6");
+        AssertFormulaComplexFunctionContrastLocations("IMCSC($A1)=\"-0.850918128239322i\"", "B3");
+        AssertFormulaComplexFunctionContrastLocations("IMCOT($A1)=\"-1.31303528549933i\"", "B3");
+        AssertFormulaComplexFunctionContrastLocations("IMSINH($A1)=\"0.841470984807897i\"", "B3");
+        AssertFormulaComplexFunctionContrastLocations("IMCOSH($A1)=\"0.54030230586814\"", "B3", "B6");
+        AssertFormulaComplexFunctionContrastLocations("IMSECH($A1)=\"1.85081571768093\"", "B3", "B6");
+        AssertFormulaComplexFunctionContrastLocations("IMCSCH($A1)=\"-1.18839510577812i\"", "B3");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatComplexTrigWrappersPredicatesAndSuffixes()
+    {
+        AssertFormulaComplexFunctionContrastLocations("AND(ISTEXT(IMSIN($A1)),RIGHT(IMSIN($A1),1)=\"j\")", "B2", "B6");
+        AssertFormulaComplexFunctionContrastLocations("IF(IMSECH($A1)=\"1.85081571768093\",TRUE,FALSE)", "B3", "B6");
+        AssertFormulaComplexFunctionContrastLocations("ISERROR(IMCSC(0))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("IMSIN(COMPLEX(0,1,LOWER(\"J\")))=\"1.1752011936438j\"", FormulaComplexAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatComplexTrigErrors()
+    {
+        AssertFormulaComplexFunctionContrastLocations("ISERROR(IMTAN(1.5707963267948966))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISERROR(IMCSC(0))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISERROR(IMCOT(0))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISERROR(IMCSCH(0))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISERROR(IMCOS(COMPLEX(1,1E308)))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("ISNA(IMSEC(NA()))", FormulaComplexAllLocations);
+        AssertFormulaComplexFunctionContrastLocations("IMCSC(0)=\"0\"");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatComplexWrappersPredicatesAndAggregates()
     {
         AssertFormulaComplexFunctionContrastLocations("AND(IMABS($A1)>6,$F1)", "B2");
@@ -2509,6 +2545,9 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaComplexFunctionContrastLocations("COMPLEX(1,2,\"x\")=\"1+2i\"");
         AssertFormulaComplexFunctionContrastLocations("IMREAL(\"not complex\")>0");
         AssertFormulaComplexFunctionContrastLocations("IMREAL(NA())>0");
+        AssertFormulaComplexFunctionContrastLocations("IMSIN()>\"\"");
+        AssertFormulaComplexFunctionContrastLocations("IMCOS($A1,1)>\"\"");
+        AssertFormulaComplexFunctionContrastLocations("IMCSCH($A1,1)>\"\"");
     }
 
     [Fact]
