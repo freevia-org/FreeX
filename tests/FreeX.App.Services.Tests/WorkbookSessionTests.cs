@@ -3823,6 +3823,199 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void CommitCellText_PropagatesAcrossGroupedSheetsAndUndoRestores()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var hidden = workbook.AddSheet("Hidden");
+        hidden.IsHidden = true;
+        var summaryB2 = new CellAddress(summary.Id, 2, 2);
+        var detailsB2 = new CellAddress(details.Id, 2, 2);
+        var hiddenB2 = new CellAddress(hidden.Id, 2, 2);
+        details.SetCell(detailsB2, new TextValue("old"));
+        hidden.SetCell(hiddenB2, new TextValue("hidden"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectAllVisibleSheets();
+        session.SelectCell(summaryB2);
+
+        var result = session.CommitCellText("42");
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().Equal(summaryB2, detailsB2);
+        result.AffectedCells.Should().NotContain(hiddenB2);
+        session.ActiveSheet.Should().BeSameAs(summary);
+        session.ActiveCell.Should().Be(summaryB2);
+        session.IsWorkbookGrouped.Should().BeTrue();
+        summary.GetValue(summaryB2).Should().Be(new NumberValue(42));
+        details.GetValue(detailsB2).Should().Be(new NumberValue(42));
+        hidden.GetValue(hiddenB2).Should().Be(new TextValue("hidden"));
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        summary.GetCell(summaryB2).Should().BeNull();
+        details.GetValue(detailsB2).Should().Be(new TextValue("old"));
+        hidden.GetValue(hiddenB2).Should().Be(new TextValue("hidden"));
+        session.IsWorkbookGrouped.Should().BeTrue();
+        session.ActiveSheet.Should().BeSameAs(summary);
+    }
+
+    [Fact]
+    public void CommitCellText_RejectsProtectedGroupedTargetWithoutChangingActiveSheet()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var summaryB2 = new CellAddress(summary.Id, 2, 2);
+        var detailsB2 = new CellAddress(details.Id, 2, 2);
+        details.SetCell(detailsB2, new TextValue("locked"));
+        details.IsProtected = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectAllVisibleSheets();
+        session.SelectCell(summaryB2);
+
+        var result = session.CommitCellText("42");
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("protected");
+        summary.GetCell(summaryB2).Should().BeNull();
+        details.GetValue(detailsB2).Should().Be(new TextValue("locked"));
+        session.ActiveSheet.Should().BeSameAs(summary);
+        session.ActiveCell.Should().Be(summaryB2);
+        session.IsWorkbookGrouped.Should().BeTrue();
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ClearSelectedRangeContents_PropagatesAcrossGroupedSheetsAndUndoRestores()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var summaryA1 = new CellAddress(summary.Id, 1, 1);
+        var summaryB1 = new CellAddress(summary.Id, 1, 2);
+        var detailsA1 = new CellAddress(details.Id, 1, 1);
+        var detailsB1 = new CellAddress(details.Id, 1, 2);
+        summary.SetCell(summaryA1, new NumberValue(10));
+        summary.SetFormula(summaryB1, "A1+1");
+        details.SetCell(detailsA1, new NumberValue(20));
+        details.SetFormula(detailsB1, "A1+2");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectAllVisibleSheets();
+        session.SelectRange(new GridRange(summaryA1, summaryB1));
+
+        var result = session.ClearSelectedRangeContents();
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().Equal(summaryA1, summaryB1, detailsA1, detailsB1);
+        summary.GetValue(summaryA1).Should().Be(BlankValue.Instance);
+        summary.GetCell(summaryB1)!.FormulaText.Should().BeNull();
+        details.GetValue(detailsA1).Should().Be(BlankValue.Instance);
+        details.GetCell(detailsB1)!.FormulaText.Should().BeNull();
+        session.SelectedRange.Should().Be(new GridRange(summaryA1, summaryB1));
+        session.IsWorkbookGrouped.Should().BeTrue();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        summary.GetValue(summaryA1).Should().Be(new NumberValue(10));
+        summary.GetCell(summaryB1)!.FormulaText.Should().Be("A1+1");
+        details.GetValue(detailsA1).Should().Be(new NumberValue(20));
+        details.GetCell(detailsB1)!.FormulaText.Should().Be("A1+2");
+    }
+
+    [Fact]
+    public void SetSelectedRangeBold_PropagatesAcrossGroupedSheetsAndUndoRestores()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var summaryA1 = new CellAddress(summary.Id, 1, 1);
+        var summaryB1 = new CellAddress(summary.Id, 1, 2);
+        var detailsA1 = new CellAddress(details.Id, 1, 1);
+        var detailsB1 = new CellAddress(details.Id, 1, 2);
+        summary.SetCell(summaryA1, new TextValue("summary"));
+        details.SetCell(detailsA1, new TextValue("details"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectAllVisibleSheets();
+        session.SelectRange(new GridRange(summaryA1, summaryB1));
+
+        var result = session.SetSelectedRangeBold(true);
+
+        result.Success.Should().BeTrue();
+        GetStyle(workbook, summary, summaryA1).Bold.Should().BeTrue();
+        GetStyle(workbook, summary, summaryB1).Bold.Should().BeTrue();
+        GetStyle(workbook, details, detailsA1).Bold.Should().BeTrue();
+        GetStyle(workbook, details, detailsB1).Bold.Should().BeTrue();
+        session.SelectedRange.Should().Be(new GridRange(summaryA1, summaryB1));
+        session.IsWorkbookGrouped.Should().BeTrue();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        GetStyle(workbook, summary, summaryA1).Bold.Should().BeFalse();
+        summary.GetStyleOnly(summaryB1.Row, summaryB1.Col).Should().BeNull();
+        GetStyle(workbook, details, detailsA1).Bold.Should().BeFalse();
+        details.GetStyleOnly(detailsB1.Row, detailsB1.Col).Should().BeNull();
+    }
+
+    [Fact]
+    public void SetSelectedRangeFontSize_PropagatesStyleAndRowHeightAcrossGroupedSheets()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var summaryA1 = new CellAddress(summary.Id, 1, 1);
+        var detailsA1 = new CellAddress(details.Id, 1, 1);
+        summary.SetCell(summaryA1, new TextValue("summary"));
+        details.SetCell(detailsA1, new TextValue("details"));
+        var expectedRowHeight = Math.Min(409.5, FontSizePlanner.EstimateFittingRowHeight(24));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectAllVisibleSheets();
+        session.SelectCell(summaryA1);
+
+        var result = session.SetSelectedRangeFontSize(24);
+
+        result.Success.Should().BeTrue();
+        GetStyle(workbook, summary, summaryA1).FontSize.Should().Be(24);
+        GetStyle(workbook, details, detailsA1).FontSize.Should().Be(24);
+        summary.RowHeights[1].Should().Be(expectedRowHeight);
+        details.RowHeights[1].Should().Be(expectedRowHeight);
+        session.ActiveSheet.Should().BeSameAs(summary);
+        session.IsWorkbookGrouped.Should().BeTrue();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        GetStyle(workbook, summary, summaryA1).FontSize.Should().Be(11);
+        GetStyle(workbook, details, detailsA1).FontSize.Should().Be(11);
+        summary.RowHeights.Should().NotContainKey(1);
+        details.RowHeights.Should().NotContainKey(1);
+    }
+
+    [Fact]
     public void HideActiveSheet_HidesSheetSelectsVisibleSurvivorAndKeepsUndoRedoCoherent()
     {
         var workbook = CreateWorkbook();
@@ -4315,6 +4508,14 @@ public sealed class WorkbookSessionTests
 
     private static WorkbookSession CreateSession(StartupWorkbookLoadResult source) =>
         new WorkbookSessionFactory().Create(source, viewportHeight: 240, viewportWidth: 320);
+
+    private static CellStyle GetStyle(Workbook workbook, Sheet sheet, CellAddress address)
+    {
+        var styleId = sheet.GetCell(address)?.StyleId ??
+            sheet.GetStyleOnly(address.Row, address.Col) ??
+            StyleId.Default;
+        return workbook.GetStyle(styleId);
+    }
 
     private static Workbook CreateWorkbook(string name = "Book")
     {

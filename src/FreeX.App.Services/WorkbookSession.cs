@@ -632,13 +632,16 @@ public sealed class WorkbookSession
 
     public WorkbookCellEditResult CommitCellText(string text, bool useR1C1ReferenceStyle = false)
     {
+        ArgumentNullException.ThrowIfNull(text);
+
         var address = FormulaEditAddress ?? ActiveCell;
-        var result = _cellEditService.CommitCellText(
+        if (!address.Sheet.Equals(ActiveSheet.Id))
+            throw new InvalidOperationException("Cell edit address must belong to the active sheet.");
+
+        var cell = CellEntryParser.CreateCell(text, address, useR1C1ReferenceStyle);
+        var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            ActiveSheet.Id,
-            address,
-            text,
-            useR1C1ReferenceStyle);
+            CreateEditCellsCommand([(address, cell)]));
 
         if (!result.Success)
             return result;
@@ -982,7 +985,10 @@ public sealed class WorkbookSession
         var range = SelectedRange;
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            new ClearContentsCommand(ActiveSheet.Id, range));
+            CreateRangeCommand(
+                range,
+                "Clear Contents",
+                static (sheetId, sheetRange) => new ClearContentsCommand(sheetId, sheetRange)));
         if (!result.Success)
             return result;
 
@@ -990,109 +996,29 @@ public sealed class WorkbookSession
         return result;
     }
 
-    public WorkbookCellEditResult SetSelectedRangeBold(bool enabled)
-    {
-        var range = SelectedRange;
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(Bold: enabled)));
-        if (!result.Success)
-            return result;
+    public WorkbookCellEditResult SetSelectedRangeBold(bool enabled) =>
+        ApplySelectedRangeStyle(new StyleDiff(Bold: enabled));
 
-        ApplySuccessfulRangeEditResult(result, range);
-        return result;
-    }
+    public WorkbookCellEditResult SetSelectedRangeItalic(bool enabled) =>
+        ApplySelectedRangeStyle(new StyleDiff(Italic: enabled));
 
-    public WorkbookCellEditResult SetSelectedRangeItalic(bool enabled)
-    {
-        var range = SelectedRange;
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(Italic: enabled)));
-        if (!result.Success)
-            return result;
+    public WorkbookCellEditResult SetSelectedRangeUnderline(bool enabled) =>
+        ApplySelectedRangeStyle(CreateUnderlineStyleDiff(enabled));
 
-        ApplySuccessfulRangeEditResult(result, range);
-        return result;
-    }
+    public WorkbookCellEditResult SetSelectedRangeStrikethrough(bool enabled) =>
+        ApplySelectedRangeStyle(CreateStrikethroughStyleDiff(enabled));
 
-    public WorkbookCellEditResult SetSelectedRangeUnderline(bool enabled)
-    {
-        var range = SelectedRange;
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            new ApplyStyleCommand(ActiveSheet.Id, range, CreateUnderlineStyleDiff(enabled)));
-        if (!result.Success)
-            return result;
+    public WorkbookCellEditResult SetSelectedRangeDoubleUnderline(bool enabled) =>
+        ApplySelectedRangeStyle(CreateDoubleUnderlineStyleDiff(enabled));
 
-        ApplySuccessfulRangeEditResult(result, range);
-        return result;
-    }
+    public WorkbookCellEditResult SetSelectedRangeHorizontalAlignment(HorizontalAlignment alignment) =>
+        ApplySelectedRangeStyle(new StyleDiff(HAlign: alignment));
 
-    public WorkbookCellEditResult SetSelectedRangeStrikethrough(bool enabled)
-    {
-        var range = SelectedRange;
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            new ApplyStyleCommand(ActiveSheet.Id, range, CreateStrikethroughStyleDiff(enabled)));
-        if (!result.Success)
-            return result;
+    public WorkbookCellEditResult SetSelectedRangeVerticalAlignment(VerticalAlignment alignment) =>
+        ApplySelectedRangeStyle(new StyleDiff(VAlign: alignment));
 
-        ApplySuccessfulRangeEditResult(result, range);
-        return result;
-    }
-
-    public WorkbookCellEditResult SetSelectedRangeDoubleUnderline(bool enabled)
-    {
-        var range = SelectedRange;
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            new ApplyStyleCommand(ActiveSheet.Id, range, CreateDoubleUnderlineStyleDiff(enabled)));
-        if (!result.Success)
-            return result;
-
-        ApplySuccessfulRangeEditResult(result, range);
-        return result;
-    }
-
-    public WorkbookCellEditResult SetSelectedRangeHorizontalAlignment(HorizontalAlignment alignment)
-    {
-        var range = SelectedRange;
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(HAlign: alignment)));
-        if (!result.Success)
-            return result;
-
-        ApplySuccessfulRangeEditResult(result, range);
-        return result;
-    }
-
-    public WorkbookCellEditResult SetSelectedRangeVerticalAlignment(VerticalAlignment alignment)
-    {
-        var range = SelectedRange;
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(VAlign: alignment)));
-        if (!result.Success)
-            return result;
-
-        ApplySuccessfulRangeEditResult(result, range);
-        return result;
-    }
-
-    public WorkbookCellEditResult SetSelectedRangeWrapText(bool enabled)
-    {
-        var range = SelectedRange;
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(WrapText: enabled)));
-        if (!result.Success)
-            return result;
-
-        ApplySuccessfulRangeEditResult(result, range);
-        return result;
-    }
+    public WorkbookCellEditResult SetSelectedRangeWrapText(bool enabled) =>
+        ApplySelectedRangeStyle(new StyleDiff(WrapText: enabled));
 
     public WorkbookCellEditResult IncreaseSelectedRangeIndent() =>
         SetSelectedRangeIndentLevel(Math.Min(15, SelectedRangeStartIndentLevel + 1));
@@ -1101,61 +1027,22 @@ public sealed class WorkbookSession
         SetSelectedRangeIndentLevel(Math.Max(0, SelectedRangeStartIndentLevel - 1));
 
     public WorkbookCellEditResult SetSelectedRangeIndentLevel(int indentLevel)
-    {
-        var range = SelectedRange;
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            new ApplyStyleCommand(
-                ActiveSheet.Id,
-                range,
-                new StyleDiff(IndentLevel: Math.Clamp(indentLevel, 0, 15))));
-        if (!result.Success)
-            return result;
-
-        ApplySuccessfulRangeEditResult(result, range);
-        return result;
-    }
+        => ApplySelectedRangeStyle(new StyleDiff(IndentLevel: Math.Clamp(indentLevel, 0, 15)));
 
     public WorkbookCellEditResult SetSelectedRangeNumberFormat(string numberFormat)
     {
         ArgumentNullException.ThrowIfNull(numberFormat);
 
-        var range = SelectedRange;
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(NumberFormat: numberFormat)));
-        if (!result.Success)
-            return result;
-
-        ApplySuccessfulRangeEditResult(result, range);
-        return result;
+        return ApplySelectedRangeStyle(new StyleDiff(NumberFormat: numberFormat));
     }
 
     public WorkbookCellEditResult SetSelectedRangeTextRotation(int textRotation)
-    {
-        var range = SelectedRange;
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(TextRotation: textRotation)));
-        if (!result.Success)
-            return result;
-
-        ApplySuccessfulRangeEditResult(result, range);
-        return result;
-    }
+        => ApplySelectedRangeStyle(new StyleDiff(TextRotation: textRotation));
 
     public WorkbookCellEditResult SetSelectedRangeCellStylePreset(CellStylePreset preset)
     {
-        var range = SelectedRange;
         var diff = CellStyleDiffPlanner.GetCellStylePresetDiff(preset, Workbook.Theme);
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            new ApplyStyleCommand(ActiveSheet.Id, range, diff));
-        if (!result.Success)
-            return result;
-
-        ApplySuccessfulRangeEditResult(result, range);
-        return result;
+        return ApplySelectedRangeStyle(diff);
     }
 
     public WorkbookCellEditResult IncreaseSelectedRangeDecimalPlaces() =>
@@ -1176,12 +1063,7 @@ public sealed class WorkbookSession
         var rowHeight = Math.Min(MaximumRowHeight, FontSizePlanner.EstimateFittingRowHeight(fontSize));
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            new CompositeWorkbookCommand(
-                "Set Font Size",
-                [
-                    new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(FontSize: fontSize)),
-                    new SetRowHeightCommand(ActiveSheet.Id, range.Start.Row, range.End.Row, rowHeight)
-                ]));
+            CreateSetFontSizeCommand(range, fontSize, rowHeight));
         if (!result.Success)
             return result;
 
@@ -1189,44 +1071,14 @@ public sealed class WorkbookSession
         return result;
     }
 
-    public WorkbookCellEditResult SetSelectedRangeFontColor(CellColor fontColor)
-    {
-        var range = SelectedRange;
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(FontColor: fontColor)));
-        if (!result.Success)
-            return result;
+    public WorkbookCellEditResult SetSelectedRangeFontColor(CellColor fontColor) =>
+        ApplySelectedRangeStyle(new StyleDiff(FontColor: fontColor));
 
-        ApplySuccessfulRangeEditResult(result, range);
-        return result;
-    }
+    public WorkbookCellEditResult SetSelectedRangeFillColor(CellColor fillColor) =>
+        ApplySelectedRangeStyle(new StyleDiff(FillColor: fillColor));
 
-    public WorkbookCellEditResult SetSelectedRangeFillColor(CellColor fillColor)
-    {
-        var range = SelectedRange;
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(FillColor: fillColor)));
-        if (!result.Success)
-            return result;
-
-        ApplySuccessfulRangeEditResult(result, range);
-        return result;
-    }
-
-    public WorkbookCellEditResult ClearSelectedRangeFill()
-    {
-        var range = SelectedRange;
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(ClearFill: true)));
-        if (!result.Success)
-            return result;
-
-        ApplySuccessfulRangeEditResult(result, range);
-        return result;
-    }
+    public WorkbookCellEditResult ClearSelectedRangeFill() =>
+        ApplySelectedRangeStyle(new StyleDiff(ClearFill: true));
 
     public WorkbookCellEditResult UndoLastEdit()
     {
@@ -1507,6 +1359,85 @@ public sealed class WorkbookSession
         ActiveSheet = selection.Sheet;
         SheetTabs = selection.Tabs;
     }
+
+    private IReadOnlyList<SheetId> CurrentGroupedEditSheetIds()
+    {
+        if (!IsWorkbookGrouped)
+            return [ActiveSheet.Id];
+
+        var groupedVisibleSheetIds = GetSelectableSheetIds()
+            .Where(_groupedSheetIds.Contains)
+            .ToList();
+        if (groupedVisibleSheetIds.Count <= 1 || !groupedVisibleSheetIds.Contains(ActiveSheet.Id))
+            return [ActiveSheet.Id];
+
+        return [ActiveSheet.Id, .. groupedVisibleSheetIds.Where(sheetId => sheetId != ActiveSheet.Id)];
+    }
+
+    private IWorkbookCommand CreateEditCellsCommand(IReadOnlyList<(CellAddress Address, Cell NewCell)> edits)
+    {
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        return targetSheetIds.Count > 1
+            ? new GroupedEditCellsCommand(targetSheetIds, ActiveSheet.Id, edits)
+            : new EditCellsCommand(ActiveSheet.Id, edits);
+    }
+
+    private IWorkbookCommand CreateApplyStyleCommand(GridRange range, StyleDiff diff)
+    {
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        return targetSheetIds.Count > 1
+            ? new GroupedApplyStyleCommand(targetSheetIds, range, diff)
+            : new ApplyStyleCommand(ActiveSheet.Id, range, diff);
+    }
+
+    private IWorkbookCommand CreateSetFontSizeCommand(GridRange range, double fontSize, double rowHeight)
+    {
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        var commands = new List<IWorkbookCommand>(targetSheetIds.Count * 2);
+        foreach (var sheetId in targetSheetIds)
+        {
+            var sheetRange = RemapRangeToSheet(range, sheetId);
+            commands.Add(new ApplyStyleCommand(sheetId, sheetRange, new StyleDiff(FontSize: fontSize)));
+            commands.Add(new SetRowHeightCommand(sheetId, sheetRange.Start.Row, sheetRange.End.Row, rowHeight));
+        }
+
+        return ToCommand("Set Font Size", commands);
+    }
+
+    private IWorkbookCommand CreateRangeCommand(
+        GridRange range,
+        string title,
+        Func<SheetId, GridRange, IWorkbookCommand> createCommand)
+    {
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        var commands = targetSheetIds
+            .Select(sheetId => createCommand(sheetId, RemapRangeToSheet(range, sheetId)))
+            .ToList();
+        return ToCommand(title, commands);
+    }
+
+    private WorkbookCellEditResult ApplySelectedRangeStyle(StyleDiff diff)
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            CreateApplyStyleCommand(range, diff));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
+    private static IWorkbookCommand ToCommand(string title, IReadOnlyList<IWorkbookCommand> commands) =>
+        commands.Count == 1
+            ? commands[0]
+            : new CompositeWorkbookCommand(title, commands);
+
+    private static GridRange RemapRangeToSheet(GridRange range, SheetId sheetId) =>
+        new(
+            new CellAddress(sheetId, range.Start.Row, range.Start.Col),
+            new CellAddress(sheetId, range.End.Row, range.End.Col));
 
     private void ApplySuccessfulWorkbookStructureResult(SheetId preferredSheetId)
     {
