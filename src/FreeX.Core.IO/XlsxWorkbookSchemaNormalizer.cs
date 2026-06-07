@@ -217,6 +217,8 @@ internal static class XlsxWorkbookSchemaNormalizer
         var changed = false;
         if (root.Element(workbookNs + "workbookPr") is { } workbookPr)
             changed |= XlsxWorkbookPropertiesNormalizer.NormalizeElement(workbookPr);
+        if (root.Element(workbookNs + "bookViews") is { } bookViews)
+            changed |= XlsxWorkbookViewNormalizer.NormalizeBookViewsElement(bookViews);
         if (root.Element(workbookNs + "fileVersion") is { } fileVersion)
             changed |= XlsxWorkbookFileVersionNormalizer.NormalizeElement(fileVersion);
         if (root.Element(workbookNs + "functionGroups") is { } functionGroups)

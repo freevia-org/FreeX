@@ -5013,6 +5013,11 @@ internal static class ExcelOpenSmoke
             ],
             issues);
 
+        foreach (var attribute in bookViews.Attributes().Where(attribute => !attribute.IsNamespaceDeclaration))
+        {
+            issues.Add($"{WorkbookPart} {description} has unsupported attribute {attribute.Name}");
+        }
+
         foreach (var unexpectedChild in bookViews.Elements().Where(element => element.Name != SpreadsheetNs + "workbookView"))
         {
             issues.Add($"{WorkbookPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}; expected workbookView entries only");
@@ -5041,6 +5046,17 @@ internal static class ExcelOpenSmoke
             AddOptionalWorkbookMetadataBooleanIssue(description, attribute.Name.LocalName, attribute.Value, issues);
         }
 
+        foreach (var attribute in workbookView.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                (attribute.Name.NamespaceName.Length == 0 && IsKnownWorkbookViewAttribute(attribute.Name.LocalName)))
+            {
+                continue;
+            }
+
+            issues.Add($"{WorkbookPart} {description} has unsupported attribute {attribute.Name}");
+        }
+
         var visibility = workbookView.Attribute("visibility")?.Value;
         if (!string.IsNullOrWhiteSpace(visibility) && !IsKnownWorkbookViewVisibility(visibility))
             issues.Add($"{WorkbookPart} {description} has invalid visibility value '{visibility}'");
@@ -5060,9 +5076,26 @@ internal static class ExcelOpenSmoke
             AddOptionalWorkbookMetadataUnsignedIntIssue(description, attributeName, workbookView.Attribute(attributeName)?.Value, issues);
         }
 
-        if (workbookView.Elements().Any())
-            issues.Add($"{WorkbookPart} {description} has child elements; expected attributes only");
+        foreach (var unexpectedChild in workbookView.Elements().Where(element => element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{WorkbookPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}; expected extLst only");
+        }
     }
+
+    private static bool IsKnownWorkbookViewAttribute(string name) =>
+        name is "visibility" or
+            "minimized" or
+            "showHorizontalScroll" or
+            "showVerticalScroll" or
+            "showSheetTabs" or
+            "xWindow" or
+            "yWindow" or
+            "windowWidth" or
+            "windowHeight" or
+            "tabRatio" or
+            "firstSheet" or
+            "activeTab" or
+            "autoFilterDateGrouping";
 
     private static bool IsKnownWorkbookViewBooleanAttribute(string name) =>
         name is "minimized" or
