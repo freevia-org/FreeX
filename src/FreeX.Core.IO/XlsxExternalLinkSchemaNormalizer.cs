@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
 
@@ -198,7 +197,7 @@ internal static class XlsxExternalLinkSchemaNormalizer
             XName.Get("sheetId"));
         changed |= NormalizeOptionalTextAttribute(definedName, "name");
         changed |= NormalizeOptionalTextAttribute(definedName, "refersTo");
-        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(definedName, "sheetId", NormalizeUnsignedIntOrNull);
+        changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(definedName, "sheetId", XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(definedName);
         return changed;
     }
@@ -237,14 +236,6 @@ internal static class XlsxExternalLinkSchemaNormalizer
         }
 
         return XlsxXmlNormalizationHelpers.SetAttributeIfChanged(element, attributeName, trimmed);
-    }
-
-    private static string? NormalizeUnsignedIntOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed.ToString(CultureInfo.InvariantCulture)
-            : null;
     }
 
     private static bool NormalizeChildOrder(XElement parent, Func<XElement, int> orderSelector)

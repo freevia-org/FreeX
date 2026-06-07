@@ -69,17 +69,17 @@ internal static class XlsxStructuredTableSchemaNormalizer
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(
             table,
             "tableType",
-            value => NormalizeToken(value, ValidTableTypes));
+            value => XlsxXmlNormalizationHelpers.NormalizeToken(value, ValidTableTypes));
         foreach (var attributeName in TableUnsignedIntAttributes)
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(
                 table,
                 attributeName,
-                NormalizeUnsignedIntOrNull);
+                XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
         foreach (var attributeName in TableBooleanAttributes)
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(
                 table,
                 attributeName,
-                NormalizeBoolean);
+                XlsxXmlNormalizationHelpers.NormalizeBoolean);
 
         var autoFilter = table.Element(WorksheetNs + "autoFilter");
         if (autoFilter is not null)
@@ -141,17 +141,17 @@ internal static class XlsxStructuredTableSchemaNormalizer
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(
             tableColumn,
             "totalsRowFunction",
-            value => NormalizeToken(value, ValidTotalsRowFunctions));
+            value => XlsxXmlNormalizationHelpers.NormalizeToken(value, ValidTotalsRowFunctions));
         foreach (var attributeName in TableColumnUnsignedIntAttributes)
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(
                 tableColumn,
                 attributeName,
-                NormalizeUnsignedIntOrNull);
+                XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull);
 
         foreach (var formula in tableColumn.Elements(WorksheetNs + "calculatedColumnFormula"))
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(formula, "array", NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(formula, "array", XlsxXmlNormalizationHelpers.NormalizeBoolean);
         foreach (var formula in tableColumn.Elements(WorksheetNs + "totalsRowFormula"))
-            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(formula, "array", NormalizeBoolean);
+            changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(formula, "array", XlsxXmlNormalizationHelpers.NormalizeBoolean);
 
         changed |= NormalizeExtensionLists(tableColumn);
         changed |= NormalizeChildOrder(tableColumn, TableColumnChildOrder);
@@ -165,7 +165,7 @@ internal static class XlsxStructuredTableSchemaNormalizer
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(
                 tableStyleInfo,
                 attributeName,
-                NormalizeBoolean);
+                XlsxXmlNormalizationHelpers.NormalizeBoolean);
 
         return changed;
     }
@@ -277,34 +277,9 @@ internal static class XlsxStructuredTableSchemaNormalizer
         string attributeName,
         int fallbackValue)
     {
-        var normalized = NormalizeUnsignedIntOrNull(element.Attribute(attributeName)?.Value) ??
+        var normalized = XlsxXmlNormalizationHelpers.NormalizeUnsignedIntOrNull(element.Attribute(attributeName)?.Value) ??
             Math.Max(1, fallbackValue).ToString(CultureInfo.InvariantCulture);
         return XlsxXmlNormalizationHelpers.SetAttributeIfChanged(element, attributeName, normalized);
-    }
-
-    private static string? NormalizeBoolean(string? value)
-    {
-        var trimmed = value?.Trim();
-        return trimmed switch
-        {
-            "0" or "1" => trimmed,
-            "true" or "false" => trimmed,
-            _ => null
-        };
-    }
-
-    private static string? NormalizeToken(string? value, IReadOnlySet<string> allowedValues)
-    {
-        var trimmed = value?.Trim();
-        return trimmed is not null && allowedValues.Contains(trimmed) ? trimmed : null;
-    }
-
-    private static string? NormalizeUnsignedIntOrNull(string? value)
-    {
-        var trimmed = value?.Trim();
-        return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed.ToString(CultureInfo.InvariantCulture)
-            : null;
     }
 
     private static int ExtractTrailingNumber(string? text)
