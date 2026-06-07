@@ -82,7 +82,9 @@ internal static class XlsxWorksheetVmlReferencePreserver
                 VmlDrawingRelationshipType,
                 context.PackageRelNs,
                 out var vmlPath) ||
-            targetArchive.GetEntry(vmlPath) is null)
+            targetArchive.GetEntry(vmlPath) is null ||
+            (markerName.LocalName == "legacyDrawingHF" &&
+             !XlsxHeaderFooterPicturePackageGraphNormalizer.Normalize(targetArchive, vmlPath)))
         {
             return;
         }

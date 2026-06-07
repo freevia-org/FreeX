@@ -22,6 +22,26 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void HeaderFooterPictures_WithRepeatedFileNames_WritesDistinctMediaRelationshipTargets()
+    {
+        var workbook = CreateHeaderFooterPictureSourceWorkbook();
+        var sheet = workbook.GetSheetAt(0);
+        var duplicateName = "logo.png";
+        sheet.PageHeaderPictures = new WorksheetHeaderFooterPictureSet(
+            new WorksheetHeaderFooterPicture(MinimalPngBytes(), "image/png", duplicateName, 96, 32),
+            new WorksheetHeaderFooterPicture(MinimalPngBytes(), "image/png", duplicateName, 80, 28),
+            null);
+
+        using var saved = Save(workbook);
+
+        SchemaErrors(saved).Should().BeEmpty();
+        var vmlPath = ReadHeaderFooterVmlPath(saved);
+        var imageTargets = ReadHeaderFooterImageRelationshipTargets(saved, vmlPath);
+        imageTargets.Should().HaveCount(2);
+        imageTargets.Distinct(StringComparer.OrdinalIgnoreCase).Should().HaveCount(2);
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithHeaderFooterPictures_ProducesSchemaValidWorkbook()
     {
         using var source = CreateExcelAuthoredHeaderFooterPictureSourcePackage();
@@ -62,6 +82,51 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Should()
             .Be(sourceVmlRelationships.ToString(SaveOptions.DisableFormatting));
         ReadHeaderFooterImageBytes(saved, sourceVmlPath).Should().Equal(sourceImageBytes);
+    }
+
+    [Fact]
+    public void LoadedWorkbookFullSave_WithStaleHeaderFooterImageRelationship_PrunesStaleRelationship()
+    {
+        using var source = CreateExcelAuthoredHeaderFooterPictureSourcePackage();
+        AddStaleHeaderFooterImageRelationship(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var vmlPath = ReadHeaderFooterVmlPath(saved);
+        var relationships = ReadPackageRootElement(saved, XlsxPackagePath.GetRelationshipPartPath(vmlPath));
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        relationships
+            .Elements(packageRelNs + "Relationship")
+            .Select(element => element.Attribute("Id")?.Value)
+            .Should()
+            .Equal("rIdImage1");
+    }
+
+    [Fact]
+    public void HeaderFooterPicturePackageGraphNormalizer_WithMissingContentTypes_RestoresContentTypes()
+    {
+        using var source = CreateExcelAuthoredHeaderFooterPictureSourcePackage();
+        RemoveHeaderFooterPictureContentTypes(source);
+        source.Position = 0;
+
+        using (var archive = new ZipArchive(source, ZipArchiveMode.Update, leaveOpen: true))
+            XlsxHeaderFooterPicturePackageGraphNormalizer.Normalize(archive, "xl/drawings/vmlDrawing1.vml").Should().BeTrue();
+
+        SchemaErrors(source).Should().BeEmpty();
+        HasEffectiveContentType(source, "xl/drawings/vmlDrawing1.vml", "application/vnd.openxmlformats-officedocument.vmlDrawing")
+            .Should()
+            .BeTrue();
+        HasEffectiveContentType(source, "xl/media/headerFooterImage1.png", "image/png")
+            .Should()
+            .BeTrue();
     }
 
     [Fact]
@@ -178,6 +243,47 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             "image/png");
     }
 
+    private static void AddStaleHeaderFooterImageRelationship(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationshipsPath = "xl/drawings/_rels/vmlDrawing1.vml.rels";
+        var relationshipsXml = LoadPackageXml(archive, relationshipsPath);
+        relationshipsXml.Root!.Add(new XElement(
+            packageRelNs + "Relationship",
+            new XAttribute("Id", "rIdStaleImage"),
+            new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"),
+            new XAttribute("Target", "../media/staleHeaderFooterImage.png")));
+        ReplacePackageXml(archive, relationshipsPath, relationshipsXml);
+
+        archive.GetEntry("xl/media/staleHeaderFooterImage.png")?.Delete();
+        var imageEntry = archive.CreateEntry("xl/media/staleHeaderFooterImage.png");
+        using (var imageStream = imageEntry.Open())
+            imageStream.Write(MinimalPngBytes());
+
+        AddPackageContentTypeOverride(archive, "/xl/media/staleHeaderFooterImage.png", "image/png");
+    }
+
+    private static void RemoveHeaderFooterPictureContentTypes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+        contentTypesXml.Root!
+            .Elements(contentTypeNs + "Override")
+            .Where(element =>
+                string.Equals(element.Attribute("PartName")?.Value, "/xl/drawings/vmlDrawing1.vml", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(element.Attribute("PartName")?.Value, "/xl/media/headerFooterImage1.png", StringComparison.OrdinalIgnoreCase))
+            .Remove();
+        contentTypesXml.Root
+            .Elements(contentTypeNs + "Default")
+            .Where(element => string.Equals(element.Attribute("Extension")?.Value, "png", StringComparison.OrdinalIgnoreCase))
+            .Remove();
+        ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+    }
+
     private static void SetHeaderFooterLegacyDrawingMarkerInvalidMetadata(MemoryStream stream)
     {
         stream.Position = 0;
@@ -277,6 +383,40 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Single(element => element.Attribute("Type")?.Value == imageRelationshipType);
         var imagePath = XlsxPackagePath.ResolveRelationshipTarget(vmlPath, imageRelationship.Attribute("Target")!.Value);
         return ReadPackageEntryBytes(stream, imagePath);
+    }
+
+    private static List<string> ReadHeaderFooterImageRelationshipTargets(Stream stream, string vmlPath)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        const string imageRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+
+        var vmlRelationships = ReadPackageRootElement(stream, XlsxPackagePath.GetRelationshipPartPath(vmlPath));
+        return vmlRelationships
+            .Elements(packageRelNs + "Relationship")
+            .Where(element => element.Attribute("Type")?.Value == imageRelationshipType)
+            .Select(element => XlsxPackagePath.ResolveRelationshipTarget(vmlPath, element.Attribute("Target")!.Value))
+            .ToList();
+    }
+
+    private static bool HasEffectiveContentType(Stream stream, string partPath, string contentType)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+        var normalizedPartName = $"/{partPath.TrimStart('/')}";
+        var overrideElement = contentTypesXml.Root!
+            .Elements(contentTypeNs + "Override")
+            .FirstOrDefault(element => string.Equals(element.Attribute("PartName")?.Value, normalizedPartName, StringComparison.OrdinalIgnoreCase));
+        if (overrideElement is not null)
+            return string.Equals(overrideElement.Attribute("ContentType")?.Value, contentType, StringComparison.OrdinalIgnoreCase);
+
+        var extension = Path.GetExtension(partPath).TrimStart('.');
+        return contentTypesXml.Root!
+            .Elements(contentTypeNs + "Default")
+            .Any(element =>
+                string.Equals(element.Attribute("Extension")?.Value, extension, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(element.Attribute("ContentType")?.Value, contentType, StringComparison.OrdinalIgnoreCase));
     }
 
     private static byte[] ReadPackageEntryBytes(Stream stream, string entryName)
