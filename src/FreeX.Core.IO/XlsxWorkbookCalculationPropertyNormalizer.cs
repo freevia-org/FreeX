@@ -57,7 +57,7 @@ internal static class XlsxWorkbookCalculationPropertyNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(calcPr, CalculationPropertyAttributes);
-        changed |= RemoveAllNodes(calcPr);
+        changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(calcPr);
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(calcPr, "calcMode", value => NormalizeToken(value, ValidCalculationModes));
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(calcPr, "refMode", value => NormalizeToken(value, ValidReferenceModes));
         changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(calcPr, "iterateDelta", NormalizeDouble);
@@ -68,15 +68,6 @@ internal static class XlsxWorkbookCalculationPropertyNormalizer
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(calcPr, attributeName, NormalizeUnsignedIntOrNull);
 
         return changed;
-    }
-
-    private static bool RemoveAllNodes(XElement element)
-    {
-        if (!element.Nodes().Any())
-            return false;
-
-        element.RemoveNodes();
-        return true;
     }
 
     private static string? NormalizeBoolean(string? value)
