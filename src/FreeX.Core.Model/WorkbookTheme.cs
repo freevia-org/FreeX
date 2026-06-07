@@ -136,38 +136,24 @@ public sealed record WorkbookTheme(
 
     private static string? RenameNativeFormatScheme(string? formatSchemeXml, string effectsName)
     {
-        if (string.IsNullOrWhiteSpace(formatSchemeXml))
+        var formatScheme = TryParseFormatScheme(formatSchemeXml);
+        if (formatScheme is null)
             return null;
 
-        try
-        {
-            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
-            var formatScheme = XElement.Parse(formatSchemeXml);
-            if (formatScheme.Name != drawingNs + "fmtScheme")
-                return null;
-
-            var renamedFormatScheme = new XElement(formatScheme);
-            renamedFormatScheme.SetAttributeValue("name", effectsName);
-            return renamedFormatScheme.ToString(SaveOptions.DisableFormatting);
-        }
-        catch
-        {
-            return null;
-        }
+        var renamedFormatScheme = new XElement(formatScheme);
+        renamedFormatScheme.SetAttributeValue("name", effectsName);
+        return renamedFormatScheme.ToString(SaveOptions.DisableFormatting);
     }
 
     private static WorkbookThemeEffectDefaults? ReadFormatSchemeEffectDefaults(string? formatSchemeXml)
     {
-        if (string.IsNullOrWhiteSpace(formatSchemeXml))
+        var formatScheme = TryParseFormatScheme(formatSchemeXml);
+        if (formatScheme is null)
             return null;
 
         try
         {
             XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
-            var formatScheme = XElement.Parse(formatSchemeXml);
-            if (formatScheme.Name != drawingNs + "fmtScheme")
-                return null;
-
             var effectStyleList = formatScheme.Element(drawingNs + "effectStyleLst");
             if (effectStyleList is null)
                 return null;
@@ -242,6 +228,23 @@ public sealed record WorkbookTheme(
                 innerShadow?.BlurRadius ?? 0,
                 hasBevel,
                 hasThreeDRotation);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static XElement? TryParseFormatScheme(string? formatSchemeXml)
+    {
+        if (string.IsNullOrWhiteSpace(formatSchemeXml))
+            return null;
+
+        try
+        {
+            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            var formatScheme = XElement.Parse(formatSchemeXml);
+            return formatScheme.Name == drawingNs + "fmtScheme" ? formatScheme : null;
         }
         catch
         {
