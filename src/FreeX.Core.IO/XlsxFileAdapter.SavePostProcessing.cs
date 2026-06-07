@@ -274,6 +274,12 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetPostProcessingMetadataBatchWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
+        if (featurePlan.HasThreadedComments)
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetThreadedCommentMapper.NormalizePackageGraph(packageStream, workbook, GetWorksheetPathMap());
+        }
+
         if (numberFormatIdMap.Any(pair => pair.Key != pair.Value))
         {
             packageStream.Position = 0;
