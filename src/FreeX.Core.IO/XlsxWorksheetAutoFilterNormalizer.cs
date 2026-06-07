@@ -20,6 +20,15 @@ internal static class XlsxWorksheetAutoFilterNormalizer
         "iconFilter",
         "extLst"
     ];
+    private static readonly HashSet<string> FiltersAttributes = ["blank", "calendarType"];
+    private static readonly HashSet<string> FilterAttributes = ["val"];
+    private static readonly HashSet<string> DateGroupItemAttributes = ["year", "month", "day", "hour", "minute", "second", "dateTimeGrouping"];
+    private static readonly HashSet<string> CustomFiltersAttributes = ["and"];
+    private static readonly HashSet<string> CustomFilterAttributes = ["operator", "val"];
+    private static readonly HashSet<string> Top10Attributes = ["top", "percent", "val", "filterVal"];
+    private static readonly HashSet<string> DynamicFilterAttributes = ["type", "val", "maxVal"];
+    private static readonly HashSet<string> ColorFilterAttributes = ["dxfId", "cellColor"];
+    private static readonly HashSet<string> IconFilterAttributes = ["iconSet", "iconId"];
 
     private static readonly HashSet<string> ValidCalendarTypes =
     [
@@ -177,8 +186,15 @@ internal static class XlsxWorksheetAutoFilterNormalizer
     private static bool NormalizeFiltersElement(XElement filters)
     {
         var changed = false;
+        changed |= RemoveUnknownAttributes(filters, FiltersAttributes);
         changed |= NormalizeAttribute(filters, "blank", NormalizeBoolean);
         changed |= NormalizeAttribute(filters, "calendarType", value => NormalizeToken(value, ValidCalendarTypes));
+
+        foreach (var filter in filters.Elements(WorksheetNs + "filter"))
+        {
+            changed |= RemoveUnknownAttributes(filter, FilterAttributes);
+            changed |= RemoveAllNodes(filter);
+        }
 
         foreach (var dateGroupItem in filters.Elements(WorksheetNs + "dateGroupItem").ToList())
             changed |= NormalizeDateGroupItemElement(dateGroupItem);
@@ -198,6 +214,7 @@ internal static class XlsxWorksheetAutoFilterNormalizer
         }
 
         var changed = false;
+        changed |= RemoveUnknownAttributes(dateGroupItem, DateGroupItemAttributes);
         changed |= SetAttributeIfChanged(dateGroupItem, "dateTimeGrouping", normalizedGrouping);
         changed |= NormalizeAttribute(dateGroupItem, "year", NormalizeUnsignedShortOrNull);
         changed |= NormalizeAttribute(dateGroupItem, "month", NormalizeUnsignedShortOrNull);
@@ -211,14 +228,17 @@ internal static class XlsxWorksheetAutoFilterNormalizer
     private static bool NormalizeCustomFiltersElement(XElement customFilters)
     {
         var changed = false;
+        changed |= RemoveUnknownAttributes(customFilters, CustomFiltersAttributes);
         changed |= NormalizeAttribute(customFilters, "and", NormalizeBoolean);
 
         foreach (var customFilter in customFilters.Elements(WorksheetNs + "customFilter"))
         {
+            changed |= RemoveUnknownAttributes(customFilter, CustomFilterAttributes);
             changed |= NormalizeAttribute(
                 customFilter,
                 "operator",
                 value => NormalizeToken(value, ValidCustomFilterOperators));
+            changed |= RemoveAllNodes(customFilter);
         }
 
         return changed;
@@ -227,6 +247,7 @@ internal static class XlsxWorksheetAutoFilterNormalizer
     private static bool NormalizeTop10Element(XElement top10)
     {
         var changed = false;
+        changed |= RemoveUnknownAttributes(top10, Top10Attributes);
         changed |= NormalizeAttribute(top10, "top", NormalizeBoolean);
         changed |= NormalizeAttribute(top10, "percent", NormalizeBoolean);
         changed |= NormalizeAttribute(top10, "val", value => NormalizeDouble(value) ?? "10");
@@ -237,6 +258,7 @@ internal static class XlsxWorksheetAutoFilterNormalizer
     private static bool NormalizeDynamicFilterElement(XElement dynamicFilter)
     {
         var changed = false;
+        changed |= RemoveUnknownAttributes(dynamicFilter, DynamicFilterAttributes);
         changed |= NormalizeAttribute(
             dynamicFilter,
             "type",
@@ -255,6 +277,7 @@ internal static class XlsxWorksheetAutoFilterNormalizer
         }
 
         var changed = false;
+        changed |= RemoveUnknownAttributes(colorFilter, ColorFilterAttributes);
         changed |= SetAttributeIfChanged(colorFilter, "dxfId", normalizedDxfId);
         changed |= NormalizeAttribute(colorFilter, "cellColor", NormalizeBoolean);
         return changed;
@@ -271,6 +294,7 @@ internal static class XlsxWorksheetAutoFilterNormalizer
         }
 
         var changed = false;
+        changed |= RemoveUnknownAttributes(iconFilter, IconFilterAttributes);
         changed |= SetAttributeIfChanged(iconFilter, "iconSet", normalizedIconSet);
         changed |= SetAttributeIfChanged(iconFilter, "iconId", normalizedIconId);
         return changed;
@@ -326,6 +350,15 @@ internal static class XlsxWorksheetAutoFilterNormalizer
         }
 
         return changed;
+    }
+
+    private static bool RemoveAllNodes(XElement element)
+    {
+        if (!element.Nodes().Any())
+            return false;
+
+        element.RemoveNodes();
+        return true;
     }
 
     private static bool NormalizeChildOrder(XElement element, Func<XElement, int> orderSelector)

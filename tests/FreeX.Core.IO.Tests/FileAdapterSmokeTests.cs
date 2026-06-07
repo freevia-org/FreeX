@@ -18051,11 +18051,11 @@ public partial class FileAdapterSmokeTests
             .Element(worksheetNs + "customFilters");
         customFilters.Should().NotBeNull();
         customFilters!.Attribute("and")!.Value.Should().Be("1");
-        customFilters.Attribute("customFiltersFlag")!.Value.Should().Be("keep");
-        customFilters.Attribute(XName.Get("customFiltersNsFlag", "urn:freex:test"))!.Value.Should().Be("keep");
+        customFilters.Attribute("customFiltersFlag").Should().BeNull();
+        customFilters.Attribute(XName.Get("customFiltersNsFlag", "urn:freex:test")).Should().BeNull();
         customFilters.Elements(worksheetNs + "customFilter").Should().HaveCount(2);
-        customFilters.Elements(worksheetNs + "customFilter").First().Attribute("customFilterFlag")!.Value.Should().Be("first");
-        customFilters.Elements(worksheetNs + "customFilter").First().Attribute(XName.Get("customFilterNsFlag", "urn:freex:test"))!.Value.Should().Be("first");
+        customFilters.Elements(worksheetNs + "customFilter").First().Attribute("customFilterFlag").Should().BeNull();
+        customFilters.Elements(worksheetNs + "customFilter").First().Attribute(XName.Get("customFilterNsFlag", "urn:freex:test")).Should().BeNull();
         customFilters.ToString().Should().Contain("operator=\"greaterThan\"");
         customFilters.ToString().Should().Contain("operator=\"lessThan\"");
     }
@@ -18132,6 +18132,7 @@ public partial class FileAdapterSmokeTests
         loadedFilterColumn.Top10.NativeAttributes.Should().Contain("{urn:freex:test}top10Flag", "keep");
         loadedFilterColumn.NativeFilterXmls.Should().BeEmpty();
         loadedSheet.FilterHiddenRows.Should().Equal(2u);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 6, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -18147,7 +18148,7 @@ public partial class FileAdapterSmokeTests
         top10.Should().NotBeNull();
         top10!.Attribute("val")!.Value.Should().Be("2");
         top10.Attribute("filterVal")!.Value.Should().Be("20");
-        top10.Attribute(XName.Get("top10Flag", "urn:freex:test"))!.Value.Should().Be("keep");
+        top10.Attribute(XName.Get("top10Flag", "urn:freex:test")).Should().BeNull();
     }
 
     [Fact]
@@ -18210,6 +18211,7 @@ public partial class FileAdapterSmokeTests
         loadedFilterColumn.DynamicFilter.NativeAttributes.Should().Contain("{urn:freex:test}dynamicFilterFlag", "keep");
         loadedFilterColumn.NativeFilterXmls.Should().BeEmpty();
         loadedSheet.FilterHiddenRows.Should().Equal(2u, 4u);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 5, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -18224,7 +18226,7 @@ public partial class FileAdapterSmokeTests
             .Element(worksheetNs + "dynamicFilter");
         dynamicFilter.Should().NotBeNull();
         dynamicFilter!.Attribute("type")!.Value.Should().Be("aboveAverage");
-        dynamicFilter.Attribute(XName.Get("dynamicFilterFlag", "urn:freex:test"))!.Value.Should().Be("keep");
+        dynamicFilter.Attribute(XName.Get("dynamicFilterFlag", "urn:freex:test")).Should().BeNull();
     }
 
     [Fact]
@@ -18294,6 +18296,7 @@ public partial class FileAdapterSmokeTests
         loadedFilterColumn.ColorFilter.NativeAttributes.Should().Contain("{urn:freex:test}colorFilterFlag", "keep");
         loadedFilterColumn.NativeFilterXmls.Should().BeEmpty();
         loadedSheet.FilterHiddenRows.Should().BeEmpty();
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 4, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -18309,7 +18312,7 @@ public partial class FileAdapterSmokeTests
         colorFilter.Should().NotBeNull();
         colorFilter!.Attribute("dxfId")!.Value.Should().Be("3");
         colorFilter.Attribute("cellColor")!.Value.Should().Be("0");
-        colorFilter.Attribute(XName.Get("colorFilterFlag", "urn:freex:test"))!.Value.Should().Be("keep");
+        colorFilter.Attribute(XName.Get("colorFilterFlag", "urn:freex:test")).Should().BeNull();
     }
 
     [Fact]
@@ -18338,6 +18341,7 @@ public partial class FileAdapterSmokeTests
         loadedFilterColumn.IconFilter.NativeAttributes.Should().Contain("{urn:freex:test}iconFilterFlag", "keep");
         loadedFilterColumn.NativeFilterXmls.Should().BeEmpty();
         loadedSheet.FilterHiddenRows.Should().BeEmpty();
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 4, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -18353,7 +18357,7 @@ public partial class FileAdapterSmokeTests
         iconFilter.Should().NotBeNull();
         iconFilter!.Attribute("iconSet")!.Value.Should().Be("3TrafficLights1");
         iconFilter.Attribute("iconId")!.Value.Should().Be("2");
-        iconFilter.Attribute(XName.Get("iconFilterFlag", "urn:freex:test"))!.Value.Should().Be("keep");
+        iconFilter.Attribute(XName.Get("iconFilterFlag", "urn:freex:test")).Should().BeNull();
     }
 
     [Fact]
@@ -18385,6 +18389,7 @@ public partial class FileAdapterSmokeTests
         dateGroup.NativeAttributes.Should().Contain("{urn:freex:test}dateGroupFlag", "keep");
         loadedFilterColumn.NativeFilterXmls.Should().BeEmpty();
         loadedSheet.FilterHiddenRows.Should().BeEmpty();
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 4, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -18399,13 +18404,13 @@ public partial class FileAdapterSmokeTests
             .Element(worksheetNs + "filters");
         filters.Should().NotBeNull();
         filters!.Attribute("blank")!.Value.Should().Be("1");
-        filters.Attribute(XName.Get("filtersFlag", "urn:freex:test"))!.Value.Should().Be("keep");
+        filters.Attribute(XName.Get("filtersFlag", "urn:freex:test")).Should().BeNull();
         var savedDateGroup = filters.Element(worksheetNs + "dateGroupItem");
         savedDateGroup.Should().NotBeNull();
         savedDateGroup!.Attribute("year")!.Value.Should().Be("2023");
         savedDateGroup.Attribute("month")!.Value.Should().Be("3");
         savedDateGroup.Attribute("dateTimeGrouping")!.Value.Should().Be("month");
-        savedDateGroup.Attribute(XName.Get("dateGroupFlag", "urn:freex:test"))!.Value.Should().Be("keep");
+        savedDateGroup.Attribute(XName.Get("dateGroupFlag", "urn:freex:test")).Should().BeNull();
     }
 
     [Fact]
@@ -18465,22 +18470,23 @@ public partial class FileAdapterSmokeTests
         var autoFilter = worksheetXml.Root!.Element(worksheetNs + "autoFilter");
         autoFilter.Should().NotBeNull();
         autoFilter!.Attribute("ref")!.Value.Should().Be("A1:B3");
-        autoFilter.Attribute("customAutoFilterFlag")!.Value.Should().Be("keep");
+        autoFilter.Attribute("customAutoFilterFlag").Should().BeNull();
         autoFilter.Attributes().Select(attribute => attribute.Name.LocalName).Should().NotContain("invalid autoFilter attr");
         autoFilter.Element(worksheetNs + "extLst").Should().NotBeNull();
         var filterColumns = autoFilter.Elements(worksheetNs + "filterColumn").ToArray();
         filterColumns.Should().HaveCount(2);
         filterColumns.Select(column => column.Attribute("colId")?.Value).Should().NotContain("-1");
         var valueFilterColumn = filterColumns.Single(column => column.Attribute("colId")?.Value == "0");
-        valueFilterColumn.Attribute("customFilterColumnFlag")!.Value.Should().Be("keep");
+        valueFilterColumn.Attribute("customFilterColumnFlag").Should().BeNull();
         valueFilterColumn.Attributes().Select(attribute => attribute.Name.LocalName).Should().NotContain("invalid filterColumn attr");
         valueFilterColumn.Element(worksheetNs + "filters")!.Attribute("blank")!.Value.Should().Be("1");
         valueFilterColumn.Element(worksheetNs + "filters")!.Element(worksheetNs + "filter")!.Attribute("val")!.Value.Should().Be("A");
         valueFilterColumn.Element(worksheetNs + "customFilters").Should().BeNull();
         var customFilterColumn = filterColumns.Single(column => column.Attribute("colId")?.Value == "1");
         customFilterColumn.Element(worksheetNs + "filters").Should().BeNull();
-        customFilterColumn.Element(worksheetNs + "customFilters")!.Attribute("customFiltersFlag")!.Value.Should().Be("keep");
-        customFilterColumn.Element(worksheetNs + "customFilters")!.Element(worksheetNs + "customFilter")!.Attribute("customFilterFlag")!.Value.Should().Be("keep");
+        customFilterColumn.Attribute("customFilterColumnFlag").Should().BeNull();
+        customFilterColumn.Element(worksheetNs + "customFilters")!.Attribute("customFiltersFlag").Should().BeNull();
+        customFilterColumn.Element(worksheetNs + "customFilters")!.Element(worksheetNs + "customFilter")!.Attribute("customFilterFlag").Should().BeNull();
     }
 
     [Fact]
@@ -20913,6 +20919,7 @@ public partial class FileAdapterSmokeTests
         filter.NativeCustomFiltersAttributes.Should().Contain("{urn:freex:test}customFiltersNsFlag", "keep");
         filter.NativeFilterXmls.Should().BeEmpty();
         loaded.GetSheetAt(0).FilterHiddenRows.Should().BeEmpty();
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 5, 5), new NumberValue(42));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -20922,9 +20929,9 @@ public partial class FileAdapterSmokeTests
         var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
         tableXml.Should().Contain("customFilters");
         tableXml.Should().Contain("customFilter operator=\"greaterThan\" val=\"10\"");
-        tableXml.Should().Contain("customFiltersFlag=\"keep\"");
-        tableXml.Should().Contain("customFiltersNsFlag=\"keep\"");
-        tableXml.Should().Contain("customFilterNsFlag=\"keep\"");
+        tableXml.Should().NotContain("customFiltersFlag=\"keep\"");
+        tableXml.Should().NotContain("customFiltersNsFlag=\"keep\"");
+        tableXml.Should().NotContain("customFilterNsFlag=\"keep\"");
     }
 
     [Fact]
@@ -21390,7 +21397,7 @@ public partial class FileAdapterSmokeTests
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
         var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
         tableXml.Should().Contain("headerRowDxfId=\"2\"");
-        tableXml.Should().Contain("customAutoFilterFlag=\"keep\"");
+        tableXml.Should().NotContain("customAutoFilterFlag=\"keep\"");
         tableXml.Should().Contain("pivot=\"0\"");
         tableXml.Should().Contain("uniqueName=\"CategoryNative\"");
         tableXml.Should().Contain("hiddenButton=\"1\"");
