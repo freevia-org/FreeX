@@ -167,6 +167,42 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void Save_LoadedWorkbookWithXmlMaps_PreservesMapInfoPackageGraph()
+    {
+        var sourceBytes = AddWorkbookXmlMapsPackageGraph(CreateSourcePackage());
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("patched xml map workbook value"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        ReadPackageEntry(savedBytes, "xl/xmlMaps.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/xmlMaps.xml"));
+        ReadContentTypeOverrides(savedBytes)
+            .Should()
+            .Contain("/xl/xmlMaps.xml");
+        WorkbookRelationshipsContain(
+                savedBytes,
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/xmlMaps",
+                "xmlMaps.xml")
+            .Should()
+            .BeTrue();
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "A1")
+            .Should()
+            .Be("patched xml map workbook value");
+    }
+
+    [Fact]
     public void Save_LoadedWorkbookWithRichDataGraph_PreservesRichDataPartsRelationshipsAndContentTypes()
     {
         var sourceBytes = AddRichDataPackageParts(CreateSourcePackage());
@@ -2262,6 +2298,60 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
                     new XElement(XNamespace.Get("http://schemas.microsoft.com/office/webextensions/webextension/2010/11") + "properties"),
                     new XElement(XNamespace.Get("http://schemas.microsoft.com/office/webextensions/webextension/2010/11") + "bindings"),
                     new XElement(XNamespace.Get("http://schemas.microsoft.com/office/webextensions/webextension/2010/11") + "snapshot", "AAAA"))));
+        }
+
+        return stream.ToArray();
+    }
+
+    private static byte[] AddWorkbookXmlMapsPackageGraph(byte[] sourceBytes)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(sourceBytes, 0, sourceBytes.Length);
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+            var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+            contentTypesXml.Root!
+                .Elements(contentTypeNs + "Override")
+                .Where(element => string.Equals(
+                    (string?)element.Attribute("PartName"),
+                    "/xl/xmlMaps.xml",
+                    StringComparison.OrdinalIgnoreCase))
+                .Remove();
+            contentTypesXml.Root.Add(new XElement(
+                contentTypeNs + "Override",
+                new XAttribute("PartName", "/xl/xmlMaps.xml"),
+                new XAttribute("ContentType", "application/xml")));
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var workbookRelationshipsXml = LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
+            workbookRelationshipsXml.Root!.Add(new XElement(
+                relationshipNs + "Relationship",
+                new XAttribute("Id", "rIdFreeXXmlMaps"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/xmlMaps"),
+                new XAttribute("Target", "xmlMaps.xml")));
+            ReplacePackageXml(archive, "xl/_rels/workbook.xml.rels", workbookRelationshipsXml);
+
+            ReplacePackageXml(
+                archive,
+                "xl/xmlMaps.xml",
+                new XDocument(new XElement(
+                    workbookNs + "MapInfo",
+                    new XAttribute("SelectionNamespaces", "xmlns:fx='urn:freex:xml-map'"),
+                    new XElement(
+                        workbookNs + "Schema",
+                        new XAttribute("ID", "schema1"),
+                        new XAttribute("SchemaRef", "customXml/item1.xml")),
+                    new XElement(
+                        workbookNs + "Map",
+                        new XAttribute("ID", "1"),
+                        new XAttribute("Name", "FreeXXmlMap"),
+                        new XAttribute("RootElement", "root"),
+                        new XAttribute("SchemaID", "schema1"),
+                        new XAttribute("ShowImportExportValidationErrors", "1")))));
         }
 
         return stream.ToArray();

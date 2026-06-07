@@ -363,6 +363,69 @@ public sealed partial class XlsxPackageMetadataMergerTests
                 </we:webextension>
                 """));
 
+    private static MemoryStream CreatePackageWithWorkbookXmlMapsGraph(string relationshipTarget = "xmlMaps.xml") =>
+        XlsxPackageTestFixtures.CreatePackage(
+            ("[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/workbook.xml"
+                            ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+                  <Override PartName="/xl/xmlMaps.xml"
+                            ContentType="application/xml"/>
+                </Types>
+                """),
+            ("xl/workbook.xml", """
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheets/>
+                </workbook>
+                """),
+            ("xl/_rels/workbook.xml.rels", $$"""
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdXmlMaps"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/xmlMaps"
+                                Target="{{relationshipTarget}}"/>
+                </Relationships>
+                """),
+            ("xl/xmlMaps.xml", """
+                <MapInfo xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                         SelectionNamespaces="xmlns:fx='urn:freex:xml-map'">
+                  <Schema ID="schema1" SchemaRef="customXml/item1.xml"/>
+                  <Map ID="1" Name="FreeXXmlMap" RootElement="root" SchemaID="schema1" ShowImportExportValidationErrors="1"/>
+                </MapInfo>
+                """));
+
+    private static MemoryStream CreatePackageWithGeneratedXmlMapsPart() =>
+        XlsxPackageTestFixtures.CreatePackage(
+            ("[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/workbook.xml"
+                            ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+                </Types>
+                """),
+            ("_rels/.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdWorkbook"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
+                                Target="xl/workbook.xml"/>
+                </Relationships>
+                """),
+            ("xl/workbook.xml", """
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheets/>
+                </workbook>
+                """),
+            ("xl/_rels/workbook.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>
+                """),
+            ("xl/xmlMaps.xml", """
+                <MapInfo xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """));
+
     private static MemoryStream CreatePackageWithMissingMediaWorksheetRelationship() =>
         XlsxPackageTestFixtures.CreatePackage(
             ("[Content_Types].xml", """
