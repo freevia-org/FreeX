@@ -5,14 +5,14 @@ namespace FreeX.Core.Model.Tests;
 internal static class ModelSourceTestSupport
 {
     public static string ReadCommandsSource(string fileName) =>
-        WorkspaceFileLocator.ReadAllText("src", "FreeX.Core.Commands", fileName);
+        TestWorkspaceFileLocator.ReadAllText("src", "FreeX.Core.Commands", fileName);
 
     public static string ReadCommandsSourceFromCurrentDirectoryOrFallback(string fileName) =>
-        WorkspaceFileLocator.ReadAllTextFromCurrentDirectoryOrFallback("src", "FreeX.Core.Commands", fileName);
+        TestWorkspaceFileLocator.ReadAllTextFromCurrentDirectoryOrFallback("src", "FreeX.Core.Commands", fileName);
 
     public static string ReadCommandsSourcesMatching(string primaryFileName, string searchPattern)
     {
-        var directory = WorkspaceFileLocator.FindContainingDirectory("src", "FreeX.Core.Commands", primaryFileName);
+        var directory = TestWorkspaceFileLocator.FindContainingDirectory("src", "FreeX.Core.Commands", primaryFileName);
         var files = Directory.EnumerateFiles(directory, searchPattern)
             .OrderBy(static path => path, StringComparer.Ordinal);
 
@@ -20,5 +20,5 @@ internal static class ModelSourceTestSupport
     }
 
     public static string ReadModelSource(string fileName) =>
-        WorkspaceFileLocator.ReadAllText("src", "FreeX.Core.Model", fileName);
+        TestWorkspaceFileLocator.ReadAllText("src", "FreeX.Core.Model", fileName);
 }
