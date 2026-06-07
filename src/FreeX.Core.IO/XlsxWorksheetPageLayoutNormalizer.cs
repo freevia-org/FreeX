@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO.Compression;
 using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
@@ -128,6 +129,20 @@ internal static class XlsxWorksheetPageLayoutNormalizer
         changed |= XlsxWorksheetSheetPropertiesNormalizer.NormalizeWorksheetRoot(worksheetRoot);
 
         return changed;
+    }
+
+    public static void NormalizeWorksheets(ZipArchive archive)
+    {
+        foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
+        {
+            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+            var root = worksheetXml.Root;
+            if (root is not null &&
+                NormalizeWorksheetRoot(root))
+            {
+                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+            }
+        }
     }
 
     public static bool NormalizePrintOptions(XElement printOptions)
@@ -346,5 +361,13 @@ internal static class XlsxWorksheetPageLayoutNormalizer
             parsed >= 0
             ? parsed.ToString(CultureInfo.InvariantCulture)
             : null;
+    }
+
+    private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
+    {
+        var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+        return path.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+               path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+               !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
     }
 }
