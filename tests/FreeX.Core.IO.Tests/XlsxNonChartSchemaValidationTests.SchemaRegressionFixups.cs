@@ -214,7 +214,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
                 new XElement(workbookNs + "definedName", new XAttribute("name", "OrderProbe"), "Sheet1!$A$1")),
             new XElement(workbookNs + "calcPr"),
             new XElement(workbookNs + "revisionPtr"),
-            new XElement(workbookNs + "extLst")));
+            new XElement(
+                workbookNs + "extLst",
+                new XElement(workbookNs + "ext", new XAttribute("uri", "{FREEX-WORKBOOK-ORDER-PROBE}")))));
 
         XlsxWorkbookSchemaNormalizer.NormalizeWorkbook(workbookXml, workbookNs).Should().BeTrue();
 
