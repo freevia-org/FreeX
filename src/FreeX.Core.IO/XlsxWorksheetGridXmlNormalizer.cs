@@ -223,15 +223,15 @@ internal static class XlsxWorksheetGridXmlNormalizer
     private static bool NormalizeRowChildren(XElement row)
     {
         var changed = false;
-        var seenExtensionList = false;
+        var keptExtensionList = false;
         foreach (var child in row.Elements().ToList())
         {
             if (child.Name == WorksheetNs + "c")
                 continue;
 
-            if (child.Name == WorksheetNs + "extLst" && !seenExtensionList)
+            if (child.Name == WorksheetNs + "extLst")
             {
-                seenExtensionList = true;
+                changed |= NormalizeExtensionListChild(child, ref keptExtensionList);
                 continue;
             }
 
@@ -248,7 +248,7 @@ internal static class XlsxWorksheetGridXmlNormalizer
         var seenFormula = false;
         var seenValue = false;
         var seenInlineString = false;
-        var seenExtensionList = false;
+        var keptExtensionList = false;
 
         foreach (var child in cell.Elements().ToList())
         {
@@ -272,9 +272,9 @@ internal static class XlsxWorksheetGridXmlNormalizer
                 continue;
             }
 
-            if (child.Name == WorksheetNs + "extLst" && !seenExtensionList)
+            if (child.Name == WorksheetNs + "extLst")
             {
-                seenExtensionList = true;
+                changed |= NormalizeExtensionListChild(child, ref keptExtensionList);
                 continue;
             }
 
@@ -282,6 +282,25 @@ internal static class XlsxWorksheetGridXmlNormalizer
             changed = true;
         }
 
+        return changed;
+    }
+
+    private static bool NormalizeExtensionListChild(XElement extensionList, ref bool keptExtensionList)
+    {
+        if (keptExtensionList)
+        {
+            extensionList.Remove();
+            return true;
+        }
+
+        var changed = XlsxWorksheetExtensionListNormalizer.NormalizeExtensionListElement(extensionList);
+        if (XlsxWorksheetExtensionListNormalizer.ShouldRemoveExtensionListElement(extensionList))
+        {
+            extensionList.Remove();
+            return true;
+        }
+
+        keptExtensionList = true;
         return changed;
     }
 
