@@ -54,7 +54,7 @@ internal static class XlsxWorksheetConditionalFormatNormalizer
     private static bool NormalizeConditionalFormatting(XElement conditionalFormatting)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(conditionalFormatting, ConditionalFormattingAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(conditionalFormatting, ConditionalFormattingAttributes);
         changed |= RemoveUnexpectedChildren(conditionalFormatting, ConditionalFormattingChildren);
         changed |= NormalizeExtensionLists(conditionalFormatting);
 
@@ -68,7 +68,7 @@ internal static class XlsxWorksheetConditionalFormatNormalizer
     private static bool NormalizeCfRule(XElement rule)
     {
         var changed = false;
-        changed |= RemoveUnknownAttributes(rule, CfRuleAttributes);
+        changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(rule, CfRuleAttributes);
         changed |= RemoveUnexpectedChildren(rule, CfRuleChildren);
         changed |= RemoveDuplicateChildren(rule, "colorScale");
         changed |= RemoveDuplicateChildren(rule, "dataBar");
@@ -126,24 +126,6 @@ internal static class XlsxWorksheetConditionalFormatNormalizer
             }
 
             keptExtensionList = true;
-        }
-
-        return changed;
-    }
-
-    private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedNames)
-    {
-        var changed = false;
-        foreach (var attribute in element.Attributes().ToList())
-        {
-            if (attribute.IsNamespaceDeclaration ||
-                (attribute.Name.NamespaceName.Length == 0 && allowedNames.Contains(attribute.Name.LocalName)))
-            {
-                continue;
-            }
-
-            attribute.Remove();
-            changed = true;
         }
 
         return changed;

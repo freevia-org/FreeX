@@ -112,6 +112,14 @@ internal static class XlsxPackageMetadataMerger
                 mergedOverride.SetAttributeValue("PartName", $"/{normalizedPartName}");
                 targetRoot.Add(mergedOverride);
                 changed = true;
+                continue;
+            }
+
+            if (TryNormalizeContentTypePartName(partName, out normalizedPartName) &&
+                targetPartNames.Contains(normalizedPartName) &&
+                TryPreserveMacroEnabledWorkbookContentType(targetRoot, sourceOverride, normalizedPartName, contentTypeNs))
+            {
+                changed = true;
             }
         }
 
@@ -361,6 +369,39 @@ internal static class XlsxPackageMetadataMerger
 
     private static string NormalizeContentTypeExtension(string value) =>
         value.Trim().TrimStart('.');
+
+    private static bool TryPreserveMacroEnabledWorkbookContentType(
+        XElement targetRoot,
+        XElement sourceOverride,
+        string normalizedPartName,
+        XNamespace contentTypeNs)
+    {
+        if (!string.Equals(normalizedPartName, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var sourceContentType = sourceOverride.Attribute("ContentType")?.Value;
+        if (!string.Equals(
+                sourceContentType,
+                "application/vnd.ms-excel.sheet.macroEnabled.main+xml",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var targetOverride = targetRoot
+            .Elements(contentTypeNs + "Override")
+            .FirstOrDefault(element =>
+                TryNormalizeContentTypePartName(element.Attribute("PartName")?.Value, out var targetPartName) &&
+                string.Equals(targetPartName, normalizedPartName, StringComparison.OrdinalIgnoreCase));
+        if (targetOverride is null ||
+            string.Equals(targetOverride.Attribute("ContentType")?.Value, sourceContentType, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        targetOverride.SetAttributeValue("ContentType", sourceContentType);
+        return true;
+    }
 
     private static bool ShouldPreserveRelationship(
         string relationshipPartPath,
