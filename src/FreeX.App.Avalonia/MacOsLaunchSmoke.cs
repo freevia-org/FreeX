@@ -81,6 +81,11 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool IsOpening,
     bool HasNewSheetButton,
     bool HasFormatPainterButton,
+    bool HasFillCellsButton,
+    bool HasFillDownMenuItem,
+    bool HasFillRightMenuItem,
+    bool HasFillUpMenuItem,
+    bool HasFillLeftMenuItem,
     bool HasClearButton,
     bool HasClearAllMenuItem,
     bool HasClearFormatsMenuItem,
@@ -146,6 +151,11 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativePasteSpecialPictureMenuItem,
     bool HasNativePasteSpecialLinkedPictureMenuItem,
     bool HasNativeSelectAllMenuItem,
+    bool HasNativeFillCellsMenuItem,
+    bool HasNativeFillDownMenuItem,
+    bool HasNativeFillRightMenuItem,
+    bool HasNativeFillUpMenuItem,
+    bool HasNativeFillLeftMenuItem,
     bool HasNativeClearMenuItem,
     bool HasNativeClearAllMenuItem,
     bool HasNativeClearFormatsMenuItem,
@@ -217,6 +227,11 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         ViewportColumnCount > 0 &&
         HasNewSheetButton &&
         HasFormatPainterButton &&
+        HasFillCellsButton &&
+        HasFillDownMenuItem &&
+        HasFillRightMenuItem &&
+        HasFillUpMenuItem &&
+        HasFillLeftMenuItem &&
         HasClearButton &&
         HasClearAllMenuItem &&
         HasClearFormatsMenuItem &&
@@ -282,6 +297,11 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativePasteSpecialPictureMenuItem &&
         HasNativePasteSpecialLinkedPictureMenuItem &&
         HasNativeSelectAllMenuItem &&
+        HasNativeFillCellsMenuItem &&
+        HasNativeFillDownMenuItem &&
+        HasNativeFillRightMenuItem &&
+        HasNativeFillUpMenuItem &&
+        HasNativeFillLeftMenuItem &&
         HasNativeClearMenuItem &&
         HasNativeClearAllMenuItem &&
         HasNativeClearFormatsMenuItem &&
@@ -441,6 +461,11 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"is_opening={FormatBool(snapshot.IsOpening)}",
                 $"new_sheet_button={FormatBool(snapshot.HasNewSheetButton)}",
                 $"toolbar_format_painter_button={FormatBool(snapshot.HasFormatPainterButton)}",
+                $"toolbar_fill_cells_button={FormatBool(snapshot.HasFillCellsButton)}",
+                $"toolbar_fill_down_menu_item={FormatBool(snapshot.HasFillDownMenuItem)}",
+                $"toolbar_fill_right_menu_item={FormatBool(snapshot.HasFillRightMenuItem)}",
+                $"toolbar_fill_up_menu_item={FormatBool(snapshot.HasFillUpMenuItem)}",
+                $"toolbar_fill_left_menu_item={FormatBool(snapshot.HasFillLeftMenuItem)}",
                 $"toolbar_clear_button={FormatBool(snapshot.HasClearButton)}",
                 $"toolbar_clear_all_menu_item={FormatBool(snapshot.HasClearAllMenuItem)}",
                 $"toolbar_clear_formats_menu_item={FormatBool(snapshot.HasClearFormatsMenuItem)}",
@@ -506,6 +531,11 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_paste_special_picture_menu_item={FormatBool(snapshot.HasNativePasteSpecialPictureMenuItem)}",
                 $"native_paste_special_linked_picture_menu_item={FormatBool(snapshot.HasNativePasteSpecialLinkedPictureMenuItem)}",
                 $"native_select_all_menu_item={FormatBool(snapshot.HasNativeSelectAllMenuItem)}",
+                $"native_fill_cells_menu_item={FormatBool(snapshot.HasNativeFillCellsMenuItem)}",
+                $"native_fill_down_menu_item={FormatBool(snapshot.HasNativeFillDownMenuItem)}",
+                $"native_fill_right_menu_item={FormatBool(snapshot.HasNativeFillRightMenuItem)}",
+                $"native_fill_up_menu_item={FormatBool(snapshot.HasNativeFillUpMenuItem)}",
+                $"native_fill_left_menu_item={FormatBool(snapshot.HasNativeFillLeftMenuItem)}",
                 $"native_clear_menu_item={FormatBool(snapshot.HasNativeClearMenuItem)}",
                 $"native_clear_all_menu_item={FormatBool(snapshot.HasNativeClearAllMenuItem)}",
                 $"native_clear_formats_menu_item={FormatBool(snapshot.HasNativeClearFormatsMenuItem)}",

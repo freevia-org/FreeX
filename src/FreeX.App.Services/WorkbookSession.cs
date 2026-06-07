@@ -1053,6 +1053,30 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public bool CanFillSelectedRange(FillCellsDirection direction) =>
+        direction switch
+        {
+            FillCellsDirection.Down or FillCellsDirection.Up => SelectedRange.RowCount > 1,
+            FillCellsDirection.Right or FillCellsDirection.Left => SelectedRange.ColCount > 1,
+            _ => false
+        };
+
+    public WorkbookCellEditResult FillSelectedRange(FillCellsDirection direction)
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            CreateRangeCommand(
+                range,
+                GetFillCellsTitle(direction),
+                (sheetId, sheetRange) => new FillCellsCommand(sheetId, sheetRange, direction)));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
     public bool CaptureFormatPainterSource(bool persistent = false)
     {
         _formatPainterSourceSheetId = ActiveSheet.Id;
@@ -1785,6 +1809,16 @@ public sealed class WorkbookSession
             .AllCells()
             .Any(address => BorderShortcutService.HasBorderChanges(CellBorderPresetPlanner.Plan(preset, range, address)));
     }
+
+    private static string GetFillCellsTitle(FillCellsDirection direction) =>
+        direction switch
+        {
+            FillCellsDirection.Down => "Fill Down",
+            FillCellsDirection.Right => "Fill Right",
+            FillCellsDirection.Up => "Fill Up",
+            FillCellsDirection.Left => "Fill Left",
+            _ => "Fill"
+        };
 
     private static GridRange RemapRangeToSheet(GridRange range, SheetId sheetId) =>
         new(

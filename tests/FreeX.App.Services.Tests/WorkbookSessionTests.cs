@@ -2109,6 +2109,188 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void CanFillSelectedRange_RequiresTargetCellsByDirection()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        session.SelectCell(a1);
+
+        session.CanFillSelectedRange(FillCellsDirection.Down).Should().BeFalse();
+        session.CanFillSelectedRange(FillCellsDirection.Right).Should().BeFalse();
+        session.CanFillSelectedRange(FillCellsDirection.Up).Should().BeFalse();
+        session.CanFillSelectedRange(FillCellsDirection.Left).Should().BeFalse();
+
+        session.SelectRange(new GridRange(a1, a2));
+
+        session.CanFillSelectedRange(FillCellsDirection.Down).Should().BeTrue();
+        session.CanFillSelectedRange(FillCellsDirection.Up).Should().BeTrue();
+        session.CanFillSelectedRange(FillCellsDirection.Right).Should().BeFalse();
+        session.CanFillSelectedRange(FillCellsDirection.Left).Should().BeFalse();
+
+        session.SelectRange(new GridRange(a1, b1));
+
+        session.CanFillSelectedRange(FillCellsDirection.Down).Should().BeFalse();
+        session.CanFillSelectedRange(FillCellsDirection.Up).Should().BeFalse();
+        session.CanFillSelectedRange(FillCellsDirection.Right).Should().BeTrue();
+        session.CanFillSelectedRange(FillCellsDirection.Left).Should().BeTrue();
+
+        session.SelectRange(new GridRange(a1, b2));
+
+        session.CanFillSelectedRange(FillCellsDirection.Down).Should().BeTrue();
+        session.CanFillSelectedRange(FillCellsDirection.Right).Should().BeTrue();
+        session.CanFillSelectedRange(FillCellsDirection.Up).Should().BeTrue();
+        session.CanFillSelectedRange(FillCellsDirection.Left).Should().BeTrue();
+    }
+
+    [Fact]
+    public void FillSelectedRange_DownCopiesFormulaAndHyperlinkPreservesSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetFormula(a1, "B1+$C$1");
+        sheet.Hyperlinks[a1] = "https://example.com";
+        sheet.HyperlinkMetadata[a1] = new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Open example",
+            "section-one");
+        sheet.SetCell(a2, new TextValue("old"));
+        sheet.Hyperlinks[a2] = "mailto:old@example.com";
+        sheet.HyperlinkMetadata[a2] = new HyperlinkMetadata(
+            HyperlinkTargetKind.EmailAddress,
+            "Email old",
+            "old@example.com");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, a2));
+
+        var result = session.FillSelectedRange(FillCellsDirection.Down);
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().ContainSingle().Which.Should().Be(a2);
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveCell.Should().Be(a1);
+        session.SelectedRange.Should().Be(new GridRange(a1, a2));
+        sheet.GetCell(a2)!.FormulaText.Should().Be("B2+$C$1");
+        sheet.Hyperlinks[a2].Should().Be("https://example.com");
+        sheet.HyperlinkMetadata[a2].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Open example",
+            "section-one"));
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        session.CanRedo.Should().BeTrue();
+        sheet.GetCell(a2)!.FormulaText.Should().BeNull();
+        sheet.GetValue(a2).Should().Be(new TextValue("old"));
+        sheet.Hyperlinks[a2].Should().Be("mailto:old@example.com");
+        sheet.HyperlinkMetadata[a2].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.EmailAddress,
+            "Email old",
+            "old@example.com"));
+    }
+
+    [Fact]
+    public void FillSelectedRange_RightPropagatesAcrossGroupedSheetsAndUndoRestores()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var hidden = workbook.AddSheet("Hidden");
+        hidden.IsHidden = true;
+        var summaryA1 = new CellAddress(summary.Id, 1, 1);
+        var summaryB1 = new CellAddress(summary.Id, 1, 2);
+        var detailsA1 = new CellAddress(details.Id, 1, 1);
+        var detailsB1 = new CellAddress(details.Id, 1, 2);
+        var hiddenA1 = new CellAddress(hidden.Id, 1, 1);
+        var hiddenB1 = new CellAddress(hidden.Id, 1, 2);
+        summary.SetCell(summaryA1, new TextValue("summary source"));
+        summary.SetCell(summaryB1, new TextValue("summary old"));
+        details.SetCell(detailsA1, new TextValue("details source"));
+        details.SetCell(detailsB1, new TextValue("details old"));
+        hidden.SetCell(hiddenA1, new TextValue("hidden source"));
+        hidden.SetCell(hiddenB1, new TextValue("hidden old"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectAllVisibleSheets();
+        session.SelectRange(new GridRange(summaryA1, summaryB1));
+
+        var result = session.FillSelectedRange(FillCellsDirection.Right);
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().Contain([summaryB1, detailsB1]);
+        result.AffectedCells.Should().NotContain(hiddenB1);
+        session.SelectedRange.Should().Be(new GridRange(summaryA1, summaryB1));
+        session.IsWorkbookGrouped.Should().BeTrue();
+        summary.GetValue(summaryB1).Should().Be(new TextValue("summary source"));
+        details.GetValue(detailsB1).Should().Be(new TextValue("details source"));
+        hidden.GetValue(hiddenB1).Should().Be(new TextValue("hidden old"));
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        summary.GetValue(summaryB1).Should().Be(new TextValue("summary old"));
+        details.GetValue(detailsB1).Should().Be(new TextValue("details old"));
+        hidden.GetValue(hiddenB1).Should().Be(new TextValue("hidden old"));
+        session.IsWorkbookGrouped.Should().BeTrue();
+    }
+
+    [Fact]
+    public void FillSelectedRange_RejectsProtectedGroupedTargetAndRollsBackActiveSheet()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var summaryA1 = new CellAddress(summary.Id, 1, 1);
+        var summaryB1 = new CellAddress(summary.Id, 1, 2);
+        var detailsA1 = new CellAddress(details.Id, 1, 1);
+        var detailsB1 = new CellAddress(details.Id, 1, 2);
+        summary.SetCell(summaryA1, new TextValue("summary source"));
+        summary.SetCell(summaryB1, new TextValue("summary old"));
+        details.SetCell(detailsA1, new TextValue("details source"));
+        details.SetCell(detailsB1, new TextValue("locked"));
+        details.IsProtected = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectAllVisibleSheets();
+        session.SelectRange(new GridRange(summaryA1, summaryB1));
+
+        var result = session.FillSelectedRange(FillCellsDirection.Right);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("protected");
+        summary.GetValue(summaryB1).Should().Be(new TextValue("summary old"));
+        details.GetValue(detailsB1).Should().Be(new TextValue("locked"));
+        session.ActiveSheet.Should().BeSameAs(summary);
+        session.ActiveCell.Should().Be(summaryA1);
+        session.IsWorkbookGrouped.Should().BeTrue();
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void SetSelectedRangeBold_AppliesStylePreservesSelectionAndUndo()
     {
         var workbook = CreateWorkbook();

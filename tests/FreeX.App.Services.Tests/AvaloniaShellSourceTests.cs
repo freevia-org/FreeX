@@ -1074,7 +1074,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private void SelectCurrentRegionOrAll()");
         source.Should().Contain("var range = _session.SelectCurrentRegionOrAll();");
         source.Should().Contain("if (_formulaBox.IsFocused &&");
-        source.Should().Contain("e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.I or Key.U or Key.D4 or Key.NumPad4 or Key.D5 or Key.NumPad5)");
+        source.Should().Contain("e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.D or Key.I or Key.R or Key.U or Key.D4 or Key.NumPad4 or Key.D5 or Key.NumPad5)");
         source.Should().Contain("else if (e.Key == Key.X)");
         source.Should().Contain("await CutSelectedRangeToClipboardAsync();");
         source.Should().Contain("else if (e.Key == Key.C)");
@@ -1128,6 +1128,122 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("HasNativeFormatPainterMenuItem &&");
         smokeSource.Should().Contain("toolbar_format_painter_button={FormatBool(snapshot.HasFormatPainterButton)}");
         smokeSource.Should().Contain("native_format_painter_menu_item={FormatBool(snapshot.HasNativeFormatPainterMenuItem)}");
+    }
+
+    [Fact]
+    public void MainWindow_WiresFillMenuThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+
+        sessionSource.Should().Contain("public bool CanFillSelectedRange(FillCellsDirection direction)");
+        sessionSource.Should().Contain("public WorkbookCellEditResult FillSelectedRange(FillCellsDirection direction)");
+        sessionSource.Should().Contain("new FillCellsCommand(sheetId, sheetRange, direction)");
+        sessionSource.Should().Contain("private static string GetFillCellsTitle(FillCellsDirection direction)");
+        sessionSource.Should().Contain("FillCellsDirection.Down => \"Fill Down\"");
+        sessionSource.Should().Contain("FillCellsDirection.Right => \"Fill Right\"");
+        sessionSource.Should().Contain("FillCellsDirection.Up => \"Fill Up\"");
+        sessionSource.Should().Contain("FillCellsDirection.Left => \"Fill Left\"");
+
+        source.Should().Contain("private readonly DropDownButton _fillCellsButton = new();");
+        source.Should().Contain("private readonly MenuItem _fillDownFlyoutItem = new();");
+        source.Should().Contain("private readonly MenuItem _fillRightFlyoutItem = new();");
+        source.Should().Contain("private readonly MenuItem _fillUpFlyoutItem = new();");
+        source.Should().Contain("private readonly MenuItem _fillLeftFlyoutItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _fillCellsMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _fillDownMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _fillRightMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _fillUpMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _fillLeftMenuItem = new();");
+        source.Should().Contain("_fillCellsButton.Content = \"Fill Cells\";");
+        source.Should().Contain("_fillCellsButton.Flyout = CreateFillCellsFlyout();");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_fillCellsButton, \"HomeFillCellsButton\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_fillCellsButton, \"Copy the edge cells across the selected range.\");");
+        source.Should().Contain("_fillDownFlyoutItem.Header = \"Down\";");
+        source.Should().Contain("_fillDownFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Down);");
+        source.Should().Contain("_fillRightFlyoutItem.Header = \"Right\";");
+        source.Should().Contain("_fillRightFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Right);");
+        source.Should().Contain("_fillUpFlyoutItem.Header = \"Up\";");
+        source.Should().Contain("_fillUpFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Up);");
+        source.Should().Contain("_fillLeftFlyoutItem.Header = \"Left\";");
+        source.Should().Contain("_fillLeftFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Left);");
+        source.Should().Contain("_fillCellsMenuItem.Header = \"Fill\";");
+        source.Should().Contain("_fillCellsMenuItem.Menu = CreateNativeFillCellsMenu();");
+        source.Should().Contain("_fillDownMenuItem.Header = \"Down\";");
+        source.Should().Contain("_fillDownMenuItem.Gesture = new KeyGesture(Key.D, KeyModifiers.Control);");
+        source.Should().Contain("_fillDownMenuItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Down);");
+        source.Should().Contain("_fillRightMenuItem.Header = \"Right\";");
+        source.Should().Contain("_fillRightMenuItem.Gesture = new KeyGesture(Key.R, KeyModifiers.Control);");
+        source.Should().Contain("_fillRightMenuItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Right);");
+        source.Should().Contain("_fillUpMenuItem.Header = \"Up\";");
+        source.Should().Contain("_fillUpMenuItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Up);");
+        source.Should().Contain("_fillLeftMenuItem.Header = \"Left\";");
+        source.Should().Contain("_fillLeftMenuItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Left);");
+        source.Should().Contain("editMenu.Items.Add(_fillCellsMenuItem);");
+        source.Should().Contain("private MenuFlyout CreateFillCellsFlyout()");
+        source.Should().Contain("private NativeMenu CreateNativeFillCellsMenu()");
+        source.Should().Contain("_fillDownFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Down);");
+        source.Should().Contain("_fillRightFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Right);");
+        source.Should().Contain("_fillUpFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Up);");
+        source.Should().Contain("_fillLeftFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Left);");
+        source.Should().Contain("_fillCellsMenuItem.IsEnabled = _fillCellsButton.IsEnabled;");
+        source.Should().Contain("_fillDownMenuItem.IsEnabled = _fillDownFlyoutItem.IsEnabled;");
+        source.Should().Contain("_fillRightMenuItem.IsEnabled = _fillRightFlyoutItem.IsEnabled;");
+        source.Should().Contain("_fillUpMenuItem.IsEnabled = _fillUpFlyoutItem.IsEnabled;");
+        source.Should().Contain("_fillLeftMenuItem.IsEnabled = _fillLeftFlyoutItem.IsEnabled;");
+        source.Should().Contain("_fillCellsButton,");
+        source.Should().Contain("private void FillSelectedRange(FillCellsDirection direction)");
+        source.Should().Contain("var result = _session.FillSelectedRange(direction);");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? $\"{FormatFillCellsAction(direction)} failed.\");");
+        source.Should().Contain("RefreshShell($\"{FormatFillCellsAction(direction)} in {rangeReference}\");");
+        source.Should().Contain("private static string FormatFillCellsAction(FillCellsDirection direction)");
+        source.Should().Contain("e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.D or Key.I or Key.R or Key.U");
+        source.Should().Contain("else if (e.Key == Key.D && HasOnlyControlModifier(e.KeyModifiers))");
+        source.Should().Contain("FillSelectedRange(FillCellsDirection.Down);");
+        source.Should().Contain("else if (e.Key == Key.R && HasOnlyControlModifier(e.KeyModifiers))");
+        source.Should().Contain("FillSelectedRange(FillCellsDirection.Right);");
+        source.Should().Contain("HasFillCellsButton: _fillCellsButton.Content?.ToString() == \"Fill Cells\"");
+        source.Should().Contain("HasFillDownMenuItem: HasToolbarMenuItem(_fillDownFlyoutItem, \"Down\")");
+        source.Should().Contain("HasFillRightMenuItem: HasToolbarMenuItem(_fillRightFlyoutItem, \"Right\")");
+        source.Should().Contain("HasFillUpMenuItem: HasToolbarMenuItem(_fillUpFlyoutItem, \"Up\")");
+        source.Should().Contain("HasFillLeftMenuItem: HasToolbarMenuItem(_fillLeftFlyoutItem, \"Left\")");
+        source.Should().Contain("HasNativeFillCellsMenuItem: HasNativeMenuItem(_fillCellsMenuItem, \"Fill\", requireGesture: false)");
+        source.Should().Contain("HasNativeFillDownMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, \"Down\")");
+        source.Should().Contain("HasNativeFillRightMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, \"Right\")");
+        source.Should().Contain("HasNativeFillUpMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, \"Up\")");
+        source.Should().Contain("HasNativeFillLeftMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, \"Left\")");
+
+        smokeSource.Should().Contain("bool HasFillCellsButton,");
+        smokeSource.Should().Contain("bool HasFillDownMenuItem,");
+        smokeSource.Should().Contain("bool HasFillRightMenuItem,");
+        smokeSource.Should().Contain("bool HasFillUpMenuItem,");
+        smokeSource.Should().Contain("bool HasFillLeftMenuItem,");
+        smokeSource.Should().Contain("bool HasNativeFillCellsMenuItem,");
+        smokeSource.Should().Contain("bool HasNativeFillDownMenuItem,");
+        smokeSource.Should().Contain("bool HasNativeFillRightMenuItem,");
+        smokeSource.Should().Contain("bool HasNativeFillUpMenuItem,");
+        smokeSource.Should().Contain("bool HasNativeFillLeftMenuItem,");
+        smokeSource.Should().Contain("HasFillCellsButton &&");
+        smokeSource.Should().Contain("HasFillDownMenuItem &&");
+        smokeSource.Should().Contain("HasFillRightMenuItem &&");
+        smokeSource.Should().Contain("HasFillUpMenuItem &&");
+        smokeSource.Should().Contain("HasFillLeftMenuItem &&");
+        smokeSource.Should().Contain("HasNativeFillCellsMenuItem &&");
+        smokeSource.Should().Contain("HasNativeFillDownMenuItem &&");
+        smokeSource.Should().Contain("HasNativeFillRightMenuItem &&");
+        smokeSource.Should().Contain("HasNativeFillUpMenuItem &&");
+        smokeSource.Should().Contain("HasNativeFillLeftMenuItem &&");
+        smokeSource.Should().Contain("toolbar_fill_cells_button={FormatBool(snapshot.HasFillCellsButton)}");
+        smokeSource.Should().Contain("toolbar_fill_down_menu_item={FormatBool(snapshot.HasFillDownMenuItem)}");
+        smokeSource.Should().Contain("toolbar_fill_right_menu_item={FormatBool(snapshot.HasFillRightMenuItem)}");
+        smokeSource.Should().Contain("toolbar_fill_up_menu_item={FormatBool(snapshot.HasFillUpMenuItem)}");
+        smokeSource.Should().Contain("toolbar_fill_left_menu_item={FormatBool(snapshot.HasFillLeftMenuItem)}");
+        smokeSource.Should().Contain("native_fill_cells_menu_item={FormatBool(snapshot.HasNativeFillCellsMenuItem)}");
+        smokeSource.Should().Contain("native_fill_down_menu_item={FormatBool(snapshot.HasNativeFillDownMenuItem)}");
+        smokeSource.Should().Contain("native_fill_right_menu_item={FormatBool(snapshot.HasNativeFillRightMenuItem)}");
+        smokeSource.Should().Contain("native_fill_up_menu_item={FormatBool(snapshot.HasNativeFillUpMenuItem)}");
+        smokeSource.Should().Contain("native_fill_left_menu_item={FormatBool(snapshot.HasNativeFillLeftMenuItem)}");
     }
 
     [Fact]

@@ -122,6 +122,11 @@ public sealed class MainWindow : Window
     private readonly Button _pasteButton = new();
     private readonly DropDownButton _pasteSpecialButton = new();
     private readonly Button _formatPainterButton = new();
+    private readonly DropDownButton _fillCellsButton = new();
+    private readonly MenuItem _fillDownFlyoutItem = new();
+    private readonly MenuItem _fillRightFlyoutItem = new();
+    private readonly MenuItem _fillUpFlyoutItem = new();
+    private readonly MenuItem _fillLeftFlyoutItem = new();
     private readonly DropDownButton _clearButton = new();
     private readonly MenuItem _clearAllFlyoutItem = new();
     private readonly MenuItem _clearFormatsFlyoutItem = new();
@@ -180,6 +185,11 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _pasteSpecialMenuItem = new();
     private readonly NativeMenuItem _formatPainterMenuItem = new();
     private readonly NativeMenuItem _selectAllMenuItem = new();
+    private readonly NativeMenuItem _fillCellsMenuItem = new();
+    private readonly NativeMenuItem _fillDownMenuItem = new();
+    private readonly NativeMenuItem _fillRightMenuItem = new();
+    private readonly NativeMenuItem _fillUpMenuItem = new();
+    private readonly NativeMenuItem _fillLeftMenuItem = new();
     private readonly NativeMenuItem _clearMenuItem = new();
     private readonly NativeMenuItem _clearAllMenuItem = new();
     private readonly NativeMenuItem _clearFormatsMenuItem = new();
@@ -469,6 +479,23 @@ public sealed class MainWindow : Window
         _selectAllMenuItem.Gesture = new KeyGesture(Key.A, KeyModifiers.Meta);
         _selectAllMenuItem.Click += (_, _) => SelectCurrentRegionOrAll();
 
+        _fillCellsMenuItem.Header = "Fill";
+        _fillCellsMenuItem.Menu = CreateNativeFillCellsMenu();
+
+        _fillDownMenuItem.Header = "Down";
+        _fillDownMenuItem.Gesture = new KeyGesture(Key.D, KeyModifiers.Control);
+        _fillDownMenuItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Down);
+
+        _fillRightMenuItem.Header = "Right";
+        _fillRightMenuItem.Gesture = new KeyGesture(Key.R, KeyModifiers.Control);
+        _fillRightMenuItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Right);
+
+        _fillUpMenuItem.Header = "Up";
+        _fillUpMenuItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Up);
+
+        _fillLeftMenuItem.Header = "Left";
+        _fillLeftMenuItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Left);
+
         _clearMenuItem.Header = "Clear";
         _clearMenuItem.Menu = CreateNativeClearMenu();
 
@@ -682,6 +709,7 @@ public sealed class MainWindow : Window
         editMenu.Items.Add(_formatPainterMenuItem);
         editMenu.Items.Add(new NativeMenuItemSeparator());
         editMenu.Items.Add(_selectAllMenuItem);
+        editMenu.Items.Add(_fillCellsMenuItem);
         editMenu.Items.Add(_clearMenuItem);
 
         var formatMenu = new NativeMenu();
@@ -898,6 +926,26 @@ public sealed class MainWindow : Window
         AutomationProperties.SetAutomationId(_formatPainterButton, "HomeFormatPainterButton");
         AutomationProperties.SetName(_formatPainterButton, "Format Painter");
         AutomationProperties.SetHelpText(_formatPainterButton, "Copy formatting from the selection and apply it to another range.");
+
+        _fillCellsButton.Content = "Fill Cells";
+        _fillCellsButton.Padding = new Thickness(10, 4);
+        _fillCellsButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _fillCellsButton.Flyout = CreateFillCellsFlyout();
+        AutomationProperties.SetAutomationId(_fillCellsButton, "HomeFillCellsButton");
+        AutomationProperties.SetName(_fillCellsButton, "Fill Cells");
+        AutomationProperties.SetHelpText(_fillCellsButton, "Copy the edge cells across the selected range.");
+
+        _fillDownFlyoutItem.Header = "Down";
+        _fillDownFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Down);
+
+        _fillRightFlyoutItem.Header = "Right";
+        _fillRightFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Right);
+
+        _fillUpFlyoutItem.Header = "Up";
+        _fillUpFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Up);
+
+        _fillLeftFlyoutItem.Header = "Left";
+        _fillLeftFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Left);
 
         _clearButton.Content = "Clear";
         _clearButton.Padding = new Thickness(10, 4);
@@ -1135,6 +1183,7 @@ public sealed class MainWindow : Window
                     _pasteButton,
                     _pasteSpecialButton,
                     _formatPainterButton,
+                    _fillCellsButton,
                     _clearButton,
                     _boldButton,
                     _italicButton,
@@ -1265,6 +1314,14 @@ public sealed class MainWindow : Window
         _pasteButton.IsEnabled = isIdle;
         _pasteSpecialButton.IsEnabled = isIdle;
         _formatPainterButton.IsEnabled = isIdle;
+        _fillDownFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Down);
+        _fillRightFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Right);
+        _fillUpFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Up);
+        _fillLeftFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Left);
+        _fillCellsButton.IsEnabled = _fillDownFlyoutItem.IsEnabled ||
+            _fillRightFlyoutItem.IsEnabled ||
+            _fillUpFlyoutItem.IsEnabled ||
+            _fillLeftFlyoutItem.IsEnabled;
         _clearButton.IsEnabled = isIdle;
         _boldButton.IsEnabled = isIdle;
         _italicButton.IsEnabled = isIdle;
@@ -1324,6 +1381,11 @@ public sealed class MainWindow : Window
         _pasteSpecialMenuItem.IsEnabled = _pasteSpecialButton.IsEnabled;
         _formatPainterMenuItem.IsEnabled = _formatPainterButton.IsEnabled;
         _selectAllMenuItem.IsEnabled = isIdle;
+        _fillCellsMenuItem.IsEnabled = _fillCellsButton.IsEnabled;
+        _fillDownMenuItem.IsEnabled = _fillDownFlyoutItem.IsEnabled;
+        _fillRightMenuItem.IsEnabled = _fillRightFlyoutItem.IsEnabled;
+        _fillUpMenuItem.IsEnabled = _fillUpFlyoutItem.IsEnabled;
+        _fillLeftMenuItem.IsEnabled = _fillLeftFlyoutItem.IsEnabled;
         _clearMenuItem.IsEnabled = _clearButton.IsEnabled;
         _clearAllMenuItem.IsEnabled = _clearButton.IsEnabled;
         _clearFormatsMenuItem.IsEnabled = _clearButton.IsEnabled;
@@ -2384,6 +2446,18 @@ public sealed class MainWindow : Window
             },
         };
 
+    private MenuFlyout CreateFillCellsFlyout() =>
+        new()
+        {
+            ItemsSource = new[]
+            {
+                _fillDownFlyoutItem,
+                _fillRightFlyoutItem,
+                _fillUpFlyoutItem,
+                _fillLeftFlyoutItem,
+            },
+        };
+
     private NativeMenu CreateNativeClearMenu()
     {
         var menu = new NativeMenu();
@@ -2392,6 +2466,16 @@ public sealed class MainWindow : Window
         menu.Items.Add(_clearContentsMenuItem);
         menu.Items.Add(_clearCommentsMenuItem);
         menu.Items.Add(_clearHyperlinksMenuItem);
+        return menu;
+    }
+
+    private NativeMenu CreateNativeFillCellsMenu()
+    {
+        var menu = new NativeMenu();
+        menu.Items.Add(_fillDownMenuItem);
+        menu.Items.Add(_fillRightMenuItem);
+        menu.Items.Add(_fillUpMenuItem);
+        menu.Items.Add(_fillLeftMenuItem);
         return menu;
     }
 
@@ -3753,6 +3837,25 @@ public sealed class MainWindow : Window
         ClearSelectedRangeContents();
     }
 
+    private void FillSelectedRange(FillCellsDirection direction)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.FillSelectedRange(direction);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? $"{FormatFillCellsAction(direction)} failed.");
+            return;
+        }
+
+        RefreshShell($"{FormatFillCellsAction(direction)} in {rangeReference}");
+    }
+
     private void BoldButton_Click(object? sender, RoutedEventArgs e)
     {
         ApplySelectedRangeBold(_boldButton.IsChecked == true);
@@ -5004,6 +5107,14 @@ public sealed class MainWindow : Window
             HasFormatPainterButton: _formatPainterButton.Content?.ToString() == "Format Painter" &&
                 string.Equals(AutomationProperties.GetAutomationId(_formatPainterButton), "HomeFormatPainterButton", StringComparison.Ordinal) &&
                 string.Equals(AutomationProperties.GetHelpText(_formatPainterButton), "Copy formatting from the selection and apply it to another range.", StringComparison.Ordinal),
+            HasFillCellsButton: _fillCellsButton.Content?.ToString() == "Fill Cells" &&
+                _fillCellsButton.Flyout is MenuFlyout &&
+                string.Equals(AutomationProperties.GetAutomationId(_fillCellsButton), "HomeFillCellsButton", StringComparison.Ordinal) &&
+                string.Equals(AutomationProperties.GetHelpText(_fillCellsButton), "Copy the edge cells across the selected range.", StringComparison.Ordinal),
+            HasFillDownMenuItem: HasToolbarMenuItem(_fillDownFlyoutItem, "Down"),
+            HasFillRightMenuItem: HasToolbarMenuItem(_fillRightFlyoutItem, "Right"),
+            HasFillUpMenuItem: HasToolbarMenuItem(_fillUpFlyoutItem, "Up"),
+            HasFillLeftMenuItem: HasToolbarMenuItem(_fillLeftFlyoutItem, "Left"),
             HasClearButton: _clearButton.Content?.ToString() == "Clear" &&
                 _clearButton.Flyout is MenuFlyout &&
                 string.Equals(AutomationProperties.GetAutomationId(_clearButton), "HomeClearButton", StringComparison.Ordinal) &&
@@ -5081,6 +5192,11 @@ public sealed class MainWindow : Window
             HasNativePasteSpecialPictureMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Picture"),
             HasNativePasteSpecialLinkedPictureMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Linked Picture"),
             HasNativeSelectAllMenuItem: HasNativeMenuItem(_selectAllMenuItem, "Select All"),
+            HasNativeFillCellsMenuItem: HasNativeMenuItem(_fillCellsMenuItem, "Fill", requireGesture: false),
+            HasNativeFillDownMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, "Down"),
+            HasNativeFillRightMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, "Right"),
+            HasNativeFillUpMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, "Up"),
+            HasNativeFillLeftMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, "Left"),
             HasNativeClearMenuItem: HasNativeMenuItem(_clearMenuItem, "Clear", requireGesture: false),
             HasNativeClearAllMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, "Clear All"),
             HasNativeClearFormatsMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, "Clear Formats"),
@@ -5364,7 +5480,7 @@ public sealed class MainWindow : Window
         }
 
         if (_formulaBox.IsFocused &&
-            e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.I or Key.U or Key.D4 or Key.NumPad4 or Key.D5 or Key.NumPad5)
+            e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.D or Key.I or Key.R or Key.U or Key.D4 or Key.NumPad4 or Key.D5 or Key.NumPad5)
         {
             return;
         }
@@ -5434,6 +5550,16 @@ public sealed class MainWindow : Window
         {
             e.Handled = true;
             ToggleSelectedRangeUnderline();
+        }
+        else if (e.Key == Key.D && HasOnlyControlModifier(e.KeyModifiers))
+        {
+            e.Handled = true;
+            FillSelectedRange(FillCellsDirection.Down);
+        }
+        else if (e.Key == Key.R && HasOnlyControlModifier(e.KeyModifiers))
+        {
+            e.Handled = true;
+            FillSelectedRange(FillCellsDirection.Right);
         }
         else if (e.Key is Key.D4 or Key.NumPad4 && HasOnlyControlModifier(e.KeyModifiers))
         {
@@ -5544,6 +5670,7 @@ public sealed class MainWindow : Window
         _pasteButton,
         _pasteSpecialButton,
         _formatPainterButton,
+        _fillCellsButton,
         _clearButton,
         _boldButton,
         _italicButton,
@@ -6463,6 +6590,16 @@ public sealed class MainWindow : Window
             ? start
             : $"{start}:{end}";
     }
+
+    private static string FormatFillCellsAction(FillCellsDirection direction) =>
+        direction switch
+        {
+            FillCellsDirection.Down => "Filled down",
+            FillCellsDirection.Right => "Filled right",
+            FillCellsDirection.Up => "Filled up",
+            FillCellsDirection.Left => "Filled left",
+            _ => "Filled"
+        };
 
     private static string FormatHorizontalAlignmentStatus(CellHAlign alignment) =>
         alignment switch

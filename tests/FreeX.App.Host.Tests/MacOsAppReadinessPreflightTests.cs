@@ -24,6 +24,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_fill_color_swatch_count=69");
         script.Should().Contain("native_font_color_swatch_count=69");
         script.Should().Contain("toolbar_format_painter_button=true");
+        script.Should().Contain("toolbar_fill_cells_button=true");
+        script.Should().Contain("toolbar_fill_down_menu_item=true");
+        script.Should().Contain("toolbar_fill_right_menu_item=true");
+        script.Should().Contain("toolbar_fill_up_menu_item=true");
+        script.Should().Contain("toolbar_fill_left_menu_item=true");
         script.Should().Contain("toolbar_clear_button=true");
         script.Should().Contain("toolbar_clear_all_menu_item=true");
         script.Should().Contain("toolbar_clear_formats_menu_item=true");
@@ -52,6 +57,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_open_recent_item_count=[1-9]");
         script.Should().Contain("native_close_workbook_menu_item=true");
         script.Should().Contain("native_select_all_menu_item=true");
+        script.Should().Contain("native_fill_cells_menu_item=true");
+        script.Should().Contain("native_fill_down_menu_item=true");
+        script.Should().Contain("native_fill_right_menu_item=true");
+        script.Should().Contain("native_fill_up_menu_item=true");
+        script.Should().Contain("native_fill_left_menu_item=true");
         script.Should().Contain("native_clear_menu_item=true");
         script.Should().Contain("native_clear_all_menu_item=true");
         script.Should().Contain("native_clear_formats_menu_item=true");
@@ -86,6 +96,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("HasNativeRenameSheetMenuItem &&");
         script.Should().Contain("HasNativeTabColorMenuItem &&");
         script.Should().Contain("HasFormatPainterButton &&");
+        script.Should().Contain("HasFillCellsButton &&");
+        script.Should().Contain("HasFillDownMenuItem &&");
+        script.Should().Contain("HasFillRightMenuItem &&");
+        script.Should().Contain("HasFillUpMenuItem &&");
+        script.Should().Contain("HasFillLeftMenuItem &&");
         script.Should().Contain("HasClearButton &&");
         script.Should().Contain("HasClearAllMenuItem &&");
         script.Should().Contain("HasClearFormatsMenuItem &&");
@@ -107,6 +122,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("HasNativeUngroupSheetsMenuItem &&");
         script.Should().Contain("HasNativeDeleteSheetMenuItem &&");
         script.Should().Contain("HasNativeFormatPainterMenuItem &&");
+        script.Should().Contain("HasNativeFillCellsMenuItem &&");
+        script.Should().Contain("HasNativeFillDownMenuItem &&");
+        script.Should().Contain("HasNativeFillRightMenuItem &&");
+        script.Should().Contain("HasNativeFillUpMenuItem &&");
+        script.Should().Contain("HasNativeFillLeftMenuItem &&");
         script.Should().Contain("HasNativeClearMenuItem &&");
         script.Should().Contain("HasNativeClearAllMenuItem &&");
         script.Should().Contain("HasNativeClearFormatsMenuItem &&");
@@ -118,6 +138,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("HasNativeMergeAndCenterMenuItem &&");
         script.Should().Contain("HasNativeUnmergeCellsMenuItem &&");
         script.Should().Contain("toolbar_format_painter_button=");
+        script.Should().Contain("toolbar_fill_cells_button=");
+        script.Should().Contain("toolbar_fill_down_menu_item=");
+        script.Should().Contain("toolbar_fill_right_menu_item=");
+        script.Should().Contain("toolbar_fill_up_menu_item=");
+        script.Should().Contain("toolbar_fill_left_menu_item=");
         script.Should().Contain("toolbar_clear_button=");
         script.Should().Contain("toolbar_clear_all_menu_item=");
         script.Should().Contain("toolbar_clear_formats_menu_item=");
@@ -127,6 +152,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("toolbar_borders_button=");
         script.Should().Contain("toolbar_merge_and_center_button=");
         script.Should().Contain("native_format_painter_menu_item=");
+        script.Should().Contain("native_fill_cells_menu_item=");
+        script.Should().Contain("native_fill_down_menu_item=");
+        script.Should().Contain("native_fill_right_menu_item=");
+        script.Should().Contain("native_fill_up_menu_item=");
+        script.Should().Contain("native_fill_left_menu_item=");
         script.Should().Contain("native_clear_menu_item=");
         script.Should().Contain("native_clear_all_menu_item=");
         script.Should().Contain("native_clear_formats_menu_item=");
@@ -229,6 +259,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("_newWorkbookMenuItem.Click += (_, _) => CreateNewWorkbook();");
         script.Should().Contain("_openRecentMenuItem.Header = `\"Open Recent`\";");
         script.Should().Contain("_selectAllMenuItem.Header = `\"Select All`\";");
+        script.Should().Contain("_fillCellsButton.Content = `\"Fill Cells`\";");
+        script.Should().Contain("_fillDownMenuItem.Gesture = new KeyGesture(Key.D, KeyModifiers.Control);");
+        script.Should().Contain("_fillRightMenuItem.Gesture = new KeyGesture(Key.R, KeyModifiers.Control);");
+        script.Should().Contain("private void FillSelectedRange(FillCellsDirection direction)");
+        script.Should().Contain("_session.FillSelectedRange(direction)");
         script.Should().Contain("private void SelectCurrentRegionOrAll()");
         script.Should().Contain("private NativeMenu CreateNativeOpenRecentMenu(bool isIdle)");
         script.Should().Contain("private void RecordRecentWorkbook(string path)");
@@ -285,6 +320,9 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("public WorkbookCellEditResult SetShowHeadings(bool showHeadings)");
         script.Should().Contain("new SetWorksheetViewOptionsCommand(ActiveSheet.Id, showGridlines, showHeadings, showRulers)");
         script.Should().Contain("public WorkbookCellEditResult SetSelectedRangeBorderPreset(CellBorderPreset preset)");
+        script.Should().Contain("public bool CanFillSelectedRange(FillCellsDirection direction)");
+        script.Should().Contain("public WorkbookCellEditResult FillSelectedRange(FillCellsDirection direction)");
+        script.Should().Contain("new FillCellsCommand(sheetId, sheetRange, direction)");
         script.Should().Contain("CreateBorderPresetCommand(range, preset)");
         script.Should().Contain("CellBorderPresetPlanner.Plan(preset, range, range.Start)");
         script.Should().Contain("CellBorderPresetPlanner.RequiresPerCellPlanning(preset)");
@@ -594,6 +632,11 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "external_image_clipboard_picture_png_bytes=[1-9]" "$artifact_root/launch.txt"
                       grep -q "new_sheet_button=true" "$artifact_root/launch.txt"
                       grep -q "toolbar_format_painter_button=true" "$artifact_root/launch.txt"
+                      grep -q "toolbar_fill_cells_button=true" "$artifact_root/launch.txt"
+                      grep -q "toolbar_fill_down_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "toolbar_fill_right_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "toolbar_fill_up_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "toolbar_fill_left_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "toolbar_clear_button=true" "$artifact_root/launch.txt"
                       grep -q "toolbar_clear_all_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "toolbar_clear_formats_menu_item=true" "$artifact_root/launch.txt"
@@ -654,6 +697,11 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_paste_special_picture_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_paste_special_linked_picture_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_select_all_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_fill_cells_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_fill_down_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_fill_right_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_fill_up_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_fill_left_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_clear_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_clear_all_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_clear_formats_menu_item=true" "$artifact_root/launch.txt"
@@ -783,6 +831,28 @@ public sealed class MacOsAppReadinessPreflightTests
                     editMenu.Items.Add(_formatPainterMenuItem);
                     _formatPainterButton.IsEnabled = isIdle;
                     _formatPainterMenuItem.IsEnabled = _formatPainterButton.IsEnabled;
+                    _fillCellsButton.Content = "Fill Cells";
+                    _fillCellsButton.Flyout = CreateFillCellsFlyout();
+                    AutomationProperties.SetAutomationId(_fillCellsButton, "HomeFillCellsButton");
+                    AutomationProperties.SetHelpText(_fillCellsButton, "Copy the edge cells across the selected range.");
+                    _fillDownFlyoutItem.Header = "Down";
+                    _fillDownFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Down);
+                    _fillRightFlyoutItem.Header = "Right";
+                    _fillRightFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Right);
+                    _fillUpFlyoutItem.Header = "Up";
+                    _fillUpFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Up);
+                    _fillLeftFlyoutItem.Header = "Left";
+                    _fillLeftFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Left);
+                    _fillCellsMenuItem.Header = "Fill";
+                    _fillCellsMenuItem.Menu = CreateNativeFillCellsMenu();
+                    _fillDownMenuItem.Gesture = new KeyGesture(Key.D, KeyModifiers.Control);
+                    _fillRightMenuItem.Gesture = new KeyGesture(Key.R, KeyModifiers.Control);
+                    editMenu.Items.Add(_fillCellsMenuItem);
+                    _fillDownFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Down);
+                    _fillRightFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Right);
+                    _fillUpFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Up);
+                    _fillLeftFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Left);
+                    _fillCellsMenuItem.IsEnabled = _fillCellsButton.IsEnabled;
                     _clearButton.Content = "Clear";
                     AutomationProperties.SetAutomationId(_clearButton, "HomeClearButton");
                     AutomationProperties.SetHelpText(_clearButton, "Clear contents, formatting, comments, hyperlinks, or all cell state from the selected range.");
@@ -903,8 +973,10 @@ public sealed class MacOsAppReadinessPreflightTests
                     _selectAllMenuItem.Click += (_, _) => SelectCurrentRegionOrAll();
                     editMenu.Items.Add(_selectAllMenuItem);
                     _selectAllMenuItem.IsEnabled = isIdle;
-                    e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A;
+                    e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.D or Key.I or Key.R or Key.U;
                     else if (e.Key == Key.A && HasOnlyCommandModifier(e.KeyModifiers)) { }
+                    else if (e.Key == Key.D && HasOnlyControlModifier(e.KeyModifiers)) { }
+                    else if (e.Key == Key.R && HasOnlyControlModifier(e.KeyModifiers)) { }
                     Header = "(No Recent Workbooks)";
                     entries.Sort(static (left, right) => right.LastOpened.CompareTo(left.LastOpened));
                     _recentFiles.AddOrUpdate(path);
@@ -1112,6 +1184,16 @@ public sealed class MacOsAppReadinessPreflightTests
                     _zoomText.Focusable;
                     HasFormatPainterButton: _formatPainterButton.Content?.ToString() == "Format Painter";
                     HasNativeFormatPainterMenuItem: HasNativeMenuItem(_formatPainterMenuItem, "Format Painter", requireGesture: false);
+                    HasFillCellsButton: _fillCellsButton.Content?.ToString() == "Fill Cells";
+                    HasFillDownMenuItem: HasToolbarMenuItem(_fillDownFlyoutItem, "Down");
+                    HasFillRightMenuItem: HasToolbarMenuItem(_fillRightFlyoutItem, "Right");
+                    HasFillUpMenuItem: HasToolbarMenuItem(_fillUpFlyoutItem, "Up");
+                    HasFillLeftMenuItem: HasToolbarMenuItem(_fillLeftFlyoutItem, "Left");
+                    HasNativeFillCellsMenuItem: HasNativeMenuItem(_fillCellsMenuItem, "Fill", requireGesture: false);
+                    HasNativeFillDownMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, "Down");
+                    HasNativeFillRightMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, "Right");
+                    HasNativeFillUpMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, "Up");
+                    HasNativeFillLeftMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, "Left");
                     HasClearButton: _clearButton.Content?.ToString() == "Clear";
                     HasClearAllMenuItem: HasToolbarMenuItem(_clearAllFlyoutItem, "Clear All");
                     HasNativeClearMenuItem: HasNativeMenuItem(_clearMenuItem, "Clear", requireGesture: false);
@@ -1162,6 +1244,14 @@ public sealed class MacOsAppReadinessPreflightTests
                 {
                     _session.CancelFormatPainter();
                 }
+                private MenuFlyout CreateFillCellsFlyout() => new();
+                private NativeMenu CreateNativeFillCellsMenu() => new();
+                private void FillSelectedRange(FillCellsDirection direction)
+                {
+                    var result = _session.FillSelectedRange(direction);
+                    FormatFillCellsAction(direction);
+                }
+                private static string FormatFillCellsAction(FillCellsDirection direction) => "";
                 private MenuFlyout CreateClearFlyout() => new();
                 private NativeMenu CreateNativeClearMenu() => new();
                 private void ClearSelectedRangeAll()
@@ -1348,6 +1438,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativeClearTabColorMenuItem &&
                     NativeTabColorSwatchCount == CellColorPalettePlanner.BuildDefaultSwatches().Count &&
                     HasFormatPainterButton &&
+                    HasFillCellsButton &&
+                    HasFillDownMenuItem &&
+                    HasFillRightMenuItem &&
+                    HasFillUpMenuItem &&
+                    HasFillLeftMenuItem &&
                     HasClearButton &&
                     HasClearAllMenuItem &&
                     HasClearFormatsMenuItem &&
@@ -1396,6 +1491,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativePasteSpecialUnicodeTextMenuItem &&
                     HasNativePasteSpecialPictureMenuItem &&
                     HasNativePasteSpecialLinkedPictureMenuItem &&
+                    HasNativeFillCellsMenuItem &&
+                    HasNativeFillDownMenuItem &&
+                    HasNativeFillRightMenuItem &&
+                    HasNativeFillUpMenuItem &&
+                    HasNativeFillLeftMenuItem &&
                     HasNativeClearMenuItem &&
                     HasNativeClearAllMenuItem &&
                     HasNativeClearFormatsMenuItem &&
@@ -1426,6 +1526,11 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativeClearTabColorMenuItem { get; }
                 private int NativeTabColorSwatchCount { get; }
                 private bool HasFormatPainterButton { get; }
+                private bool HasFillCellsButton { get; }
+                private bool HasFillDownMenuItem { get; }
+                private bool HasFillRightMenuItem { get; }
+                private bool HasFillUpMenuItem { get; }
+                private bool HasFillLeftMenuItem { get; }
                 private bool HasClearButton { get; }
                 private bool HasClearAllMenuItem { get; }
                 private bool HasClearFormatsMenuItem { get; }
@@ -1476,6 +1581,11 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativePasteSpecialPictureMenuItem { get; }
                 private bool HasNativePasteSpecialLinkedPictureMenuItem { get; }
                 private bool HasNativeFormatPainterMenuItem { get; }
+                private bool HasNativeFillCellsMenuItem { get; }
+                private bool HasNativeFillDownMenuItem { get; }
+                private bool HasNativeFillRightMenuItem { get; }
+                private bool HasNativeFillUpMenuItem { get; }
+                private bool HasNativeFillLeftMenuItem { get; }
                 private bool HasNativeClearMenuItem { get; }
                 private bool HasNativeClearAllMenuItem { get; }
                 private bool HasNativeClearFormatsMenuItem { get; }
@@ -1489,7 +1599,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 public int ExternalImageClipboardPicturePngByteCount { get; }
                 public int NativeBordersPresetCount { get; }
                 public int NativeCellStylesPresetCount { get; }
-                public string Report => "external_image_clipboard_paste_required= external_image_clipboard_paste= external_image_clipboard_picture_count= external_image_clipboard_picture_png_bytes= native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= toolbar_format_painter_button= toolbar_clear_button= toolbar_clear_all_menu_item= toolbar_clear_formats_menu_item= toolbar_clear_contents_menu_item= toolbar_clear_comments_menu_item= toolbar_clear_hyperlinks_menu_item= toolbar_borders_button= toolbar_merge_and_center_button= focusable_sheet_tab= focusable_active_sheet_tab= shell_focus_cycle_targets= sheet_tab_context_keyboard_help= sheet_tab_context_rename_menu_item= sheet_tab_context_tab_color_menu_item= sheet_tab_context_no_color_menu_item= sheet_tab_context_select_all_sheets_menu_item= sheet_tab_context_ungroup_sheets_menu_item= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_select_all_sheets_menu_item= native_ungroup_sheets_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_format_painter_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_clear_menu_item= native_clear_all_menu_item= native_clear_formats_menu_item= native_clear_contents_menu_item= native_clear_comments_menu_item= native_clear_hyperlinks_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_borders_menu_item= native_borders_preset_count= native_merge_and_center_menu_item= native_unmerge_cells_menu_item= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
+                public string Report => "external_image_clipboard_paste_required= external_image_clipboard_paste= external_image_clipboard_picture_count= external_image_clipboard_picture_png_bytes= native_new_workbook_menu_item= native_open_recent_menu_item= native_open_recent_item_count= native_close_workbook_menu_item= new_sheet_button= toolbar_format_painter_button= toolbar_fill_cells_button= toolbar_fill_down_menu_item= toolbar_fill_right_menu_item= toolbar_fill_up_menu_item= toolbar_fill_left_menu_item= toolbar_clear_button= toolbar_clear_all_menu_item= toolbar_clear_formats_menu_item= toolbar_clear_contents_menu_item= toolbar_clear_comments_menu_item= toolbar_clear_hyperlinks_menu_item= toolbar_borders_button= toolbar_merge_and_center_button= focusable_sheet_tab= focusable_active_sheet_tab= shell_focus_cycle_targets= sheet_tab_context_keyboard_help= sheet_tab_context_rename_menu_item= sheet_tab_context_tab_color_menu_item= sheet_tab_context_no_color_menu_item= sheet_tab_context_select_all_sheets_menu_item= sheet_tab_context_ungroup_sheets_menu_item= native_view_menu= native_sheet_menu= native_new_sheet_menu_item= native_rename_sheet_menu_item= native_duplicate_sheet_menu_item= native_move_sheet_left_menu_item= native_move_sheet_right_menu_item= native_tab_color_menu_item= native_tab_color_clear_item= native_tab_color_swatch_count= native_select_all_sheets_menu_item= native_ungroup_sheets_menu_item= native_hide_sheet_menu_item= native_unhide_sheet_menu_item= native_delete_sheet_menu_item= native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_format_painter_menu_item= native_paste_special_comments_menu_item= native_paste_special_validation_menu_item= native_paste_special_all_except_borders_menu_item= native_paste_special_all_merging_conditional_formats_menu_item= native_paste_special_column_widths_menu_item= native_paste_special_formulas_and_number_formats_menu_item= native_paste_special_values_and_number_formats_menu_item= native_paste_special_values_and_source_formatting_menu_item= native_paste_special_keep_source_column_widths_menu_item= native_paste_special_paste_link_menu_item= native_paste_special_text_menu_item= native_paste_special_unicode_text_menu_item= native_paste_special_picture_menu_item= native_paste_special_linked_picture_menu_item= native_select_all_menu_item= native_fill_cells_menu_item= native_fill_down_menu_item= native_fill_right_menu_item= native_fill_up_menu_item= native_fill_left_menu_item= native_clear_menu_item= native_clear_all_menu_item= native_clear_formats_menu_item= native_clear_contents_menu_item= native_clear_comments_menu_item= native_clear_hyperlinks_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_borders_menu_item= native_borders_preset_count= native_merge_and_center_menu_item= native_unmerge_cells_menu_item= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item= native_show_gridlines_menu_item= native_show_headings_menu_item= native_zoom_in_menu_item= native_zoom_out_menu_item= native_zoom_100_menu_item= native_zoom_to_selection_menu_item= native_freeze_panes_menu_item= native_freeze_top_row_menu_item= native_freeze_first_column_menu_item= native_unfreeze_panes_menu_item= native_show_formulas_menu_item= native_help_menu= native_help_online_menu_item= native_send_feedback_menu_item= native_check_for_updates_menu_item= native_about_menu_item= native_legal_notices_menu_item=";
             }
 
             internal sealed class MacOsLaunchSmokeCoordinator
@@ -1665,6 +1775,14 @@ public sealed class MacOsAppReadinessPreflightTests
                 new ClearDataValidationCommand(sheetId, sheetRange)
                 new ClearCommentsCommand(sheetId, sheetRange)
                 new ClearHyperlinksCommand(sheetId, sheetRange)
+                public bool CanFillSelectedRange(FillCellsDirection direction)
+                public WorkbookCellEditResult FillSelectedRange(FillCellsDirection direction)
+                new FillCellsCommand(sheetId, sheetRange, direction)
+                private static string GetFillCellsTitle(FillCellsDirection direction)
+                FillCellsDirection.Down => "Fill Down"
+                FillCellsDirection.Right => "Fill Right"
+                FillCellsDirection.Up => "Fill Up"
+                FillCellsDirection.Left => "Fill Left"
                 public WorkbookCellEditResult SetSelectedRangeBorderPreset(CellBorderPreset preset)
                 CreateBorderPresetCommand(range, preset)
                 CellBorderPresetPlanner.Plan(preset, range, range.Start)
