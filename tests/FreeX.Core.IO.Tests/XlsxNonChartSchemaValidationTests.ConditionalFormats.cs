@@ -148,6 +148,54 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void ConditionalFormat_NativeRuleAndContainerMetadata_SanitizesInvalidXmlForSchemaValidity()
+    {
+        var workbook = new Workbook("ConditionalFormatNativeMetadata");
+        var sheet = workbook.AddSheet("Data");
+        SeedNumericGrid(sheet);
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = Range(sheet, 2, 1, 5, 1),
+            Priority = 1,
+            RuleType = CfRuleType.ColorScale,
+            UseThreeColorScale = true,
+            NativeContainerAttributes = new Dictionary<string, string> { ["customBlockAttr"] = "removed" },
+            NativeContainerChildXmls =
+            [
+                "<extLst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ext uri=\"{FREEX-CF-CONTAINER-EXT}\" /></extLst>",
+                "<nativeContainerChild xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" />"
+            ],
+            NativeAttributes = new Dictionary<string, string> { ["customAttr"] = "removed" },
+            NativeChildXmls =
+            [
+                "<extLst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ext uri=\"{FREEX-CF-RULE-EXT}\" /></extLst>",
+                "<nativeRuleChild xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" />"
+            ],
+            MinThresholdType = CfThresholdType.Number,
+            MinThresholdValue = "0",
+            MaxThresholdType = CfThresholdType.Number,
+            MaxThresholdValue = "50",
+            MinColor = new RgbColor(99, 190, 123),
+            MaxColor = new RgbColor(248, 105, 107)
+        });
+
+        using var stream = Save(workbook);
+
+        SchemaErrors(stream).Should().BeEmpty();
+        var conditionalFormatting = ReadWorksheetChildElement(stream, "conditionalFormatting");
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        conditionalFormatting.Attribute("customBlockAttr").Should().BeNull();
+        conditionalFormatting.Element(worksheetNs + "nativeContainerChild").Should().BeNull();
+        conditionalFormatting.Element(worksheetNs + "extLst").Should().NotBeNull();
+        var rule = conditionalFormatting.Element(worksheetNs + "cfRule")!;
+        rule.Attribute("customAttr").Should().BeNull();
+        rule.Element(worksheetNs + "nativeRuleChild").Should().BeNull();
+        rule.Element(worksheetNs + "extLst").Should().NotBeNull();
+        rule.Element(worksheetNs + "colorScale").Should().NotBeNull();
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithStandardConditionalFormats_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreateStandardConditionalFormatsSourceWorkbook());
@@ -176,6 +224,31 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Select(element => element.ToString(SaveOptions.DisableFormatting))
             .Should()
             .Equal(sourceConditionalFormattings);
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidConditionalFormatMetadataForSchemaValidity()
+    {
+        using var source = Save(CreateStandardConditionalFormatsSourceWorkbook());
+        SetConditionalFormatInvalidNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 8, 8), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var conditionalFormatting = ReadWorksheetChildElements(saved, "conditionalFormatting").First();
+        AssertConditionalFormatInvalidNativeMetadataSanitized(conditionalFormatting);
     }
 
 
@@ -418,6 +491,38 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         });
 
         return workbook;
+    }
+
+    private static void SetConditionalFormatInvalidNativeMetadata(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var conditionalFormatting = worksheetXml.Root!.Elements(worksheetNs + "conditionalFormatting").First();
+        conditionalFormatting.SetAttributeValue("customBlockAttr", "removed");
+        conditionalFormatting.Add(
+            new XElement(worksheetNs + "extLst", new XElement(worksheetNs + "ext", new XAttribute("uri", "{FREEX-CF-CONTAINER-EXT}"))),
+            new XElement(worksheetNs + "nativeContainerChild"));
+
+        var rule = conditionalFormatting.Element(worksheetNs + "cfRule")!;
+        rule.SetAttributeValue("customAttr", "removed");
+        rule.Add(
+            new XElement(worksheetNs + "extLst", new XElement(worksheetNs + "ext", new XAttribute("uri", "{FREEX-CF-RULE-EXT}"))),
+            new XElement(worksheetNs + "nativeRuleChild"));
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void AssertConditionalFormatInvalidNativeMetadataSanitized(XElement conditionalFormatting)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        conditionalFormatting.Attribute("customBlockAttr").Should().BeNull();
+        conditionalFormatting.Element(worksheetNs + "nativeContainerChild").Should().BeNull();
+        conditionalFormatting.Element(worksheetNs + "extLst").Should().NotBeNull();
+        var rule = conditionalFormatting.Element(worksheetNs + "cfRule")!;
+        rule.Attribute("customAttr").Should().BeNull();
+        rule.Element(worksheetNs + "nativeRuleChild").Should().BeNull();
+        rule.Element(worksheetNs + "extLst").Should().NotBeNull();
     }
 
     private static XElement ReadWorksheetChildElement(Stream stream, string localName)
