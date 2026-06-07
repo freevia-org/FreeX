@@ -435,7 +435,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         saved.Position = 0;
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var formula = worksheetXml
             .Descendants(worksheetNs + "c")
             .Single(element => element.Attribute("r")?.Value == reference)
@@ -479,7 +479,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         saved.Position = 0;
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        return new XElement(LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!)
+        return new XElement(LoadPackageXml(archive, "xl/worksheets/sheet1.xml")
             .Descendants(worksheetNs + "c")
             .Single(element => element.Attribute("r")?.Value == reference));
     }

@@ -213,7 +213,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
+        var stylesXml = LoadPackageXml(archive, "xl/styles.xml");
         var root = stylesXml.Root!;
 
         ReplaceStylesheetChildInOrder(root, new XElement(
@@ -275,7 +275,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace freexNs = "urn:freex:test";
-        var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
+        var stylesXml = LoadPackageXml(archive, "xl/styles.xml");
         var tableStyles = stylesXml.Root!.Element(workbookNs + "tableStyles")!;
         tableStyles.SetAttributeValue("nativeTableStylesAttr", "removed");
         tableStyles.Add(new XElement(freexNs + "tableStylesNativeChild"));
@@ -298,7 +298,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace freexNs = "urn:freex:test";
-        var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
+        var stylesXml = LoadPackageXml(archive, "xl/styles.xml");
         var differentialStyles = stylesXml.Root!.Element(workbookNs + "dxfs")!;
         differentialStyles.SetAttributeValue("customDxfsAttr", "removed");
         differentialStyles.Add(new XElement(freexNs + "dxfsNativeChild"));

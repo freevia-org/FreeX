@@ -143,7 +143,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             "../webPublishItems.xml");
         ReplacePackageXml(archive, worksheetRelationshipsPath, worksheetRelationshipsXml);
 
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var root = worksheetXml.Root!;
         ReplaceWorksheetChildInOrder(root, new XElement(
             worksheetNs + "oleObjects",
