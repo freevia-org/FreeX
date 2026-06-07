@@ -4401,6 +4401,38 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatLookupReferenceExactBasics()
+    {
+        AssertFormulaLookupReferenceFunctionContrastLocations("CHOOSE($A1,FALSE,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaLookupReferenceFunctionContrastLocations("MATCH($C1,$F$1:$F$4,0)=2", "B2", "B4");
+        AssertFormulaLookupReferenceFunctionContrastLocations("XMATCH($C1,$F$1:$F$4)=2", "B2", "B4");
+        AssertFormulaLookupReferenceFunctionContrastLocations("INDEX($G$1:$G$4,MATCH($C1,$F$1:$F$4,0))=20", "B2", "B4");
+        AssertFormulaLookupReferenceFunctionContrastLocations("VLOOKUP($C1,$F$1:$G$4,2,FALSE)=20", "B2", "B4");
+        AssertFormulaLookupReferenceFunctionContrastLocations("HLOOKUP($C1,$H$1:$K$2,2,FALSE)=20", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatLookupReferenceApproximateAndErrors()
+    {
+        AssertFormulaLookupReferenceFunctionContrastLocations("MATCH($D1,$M$1:$M$4,1)=2", "B3");
+        AssertFormulaLookupReferenceFunctionContrastLocations("VLOOKUP($D1,$M$1:$N$4,2,TRUE)=\"Band3\"", "B4");
+        AssertFormulaLookupReferenceFunctionContrastLocations("HLOOKUP($D1,$P$1:$S$2,2,TRUE)=\"Band3\"", "B4");
+        AssertFormulaLookupReferenceFunctionContrastLocations("ISNA(MATCH($C1,$F$1:$F$4,0))", "B5");
+        AssertFormulaLookupReferenceFunctionContrastLocations("ISNA(VLOOKUP($C1,$F$1:$G$4,2,FALSE))", "B5");
+        AssertFormulaLookupReferenceFunctionContrastLocations("ISERROR(INDEX($G$1:$G$4,99))", FormulaLookupReferenceAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatLookupReferenceUnsupportedShapes()
+    {
+        AssertFormulaLookupReferenceFunctionContrastLocations("MATCH($C1,$F$1:$G$4,0)=1");
+        AssertFormulaLookupReferenceFunctionContrastLocations("XMATCH($C1,$F$1:$F$4,0,2)=2");
+        AssertFormulaLookupReferenceFunctionContrastLocations("VLOOKUP($C1,$F$1:$G$4,3,FALSE)=20");
+        AssertFormulaLookupReferenceFunctionContrastLocations("INDEX($G$1:$G$4,0,0)=20");
+        AssertFormulaLookupReferenceFunctionContrastLocations("MATCH($D1,$U$1:$U$4,1)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTypeFunctionComparisons()
     {
         AssertFormulaInfoScalarFunctionContrastLocations("TYPE($A1)=1", "B1", "B4", "B5");
@@ -6247,6 +6279,92 @@ public sealed partial class AccessibilityCheckerServiceTests
         return workbook;
     }
 
+    private static Workbook CreateFormulaLookupReferenceFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 5, 2);
+
+        SetFormulaLookupReferenceFunctionContrastRow(sheet, 1, selector: 1, key: "Alpha", amount: 5, label: "Alpha row");
+        SetFormulaLookupReferenceFunctionContrastRow(sheet, 2, selector: 2, key: "Beta", amount: 15, label: "Beta row");
+        SetFormulaLookupReferenceFunctionContrastRow(sheet, 3, selector: 3, key: "Gamma", amount: 25, label: "Gamma row");
+        SetFormulaLookupReferenceFunctionContrastRow(sheet, 4, selector: 2, key: "Beta", amount: 35, label: "Repeated beta");
+        SetFormulaLookupReferenceFunctionContrastRow(sheet, 5, selector: 99, key: "Missing", amount: 45, label: "Missing row");
+
+        SetFormulaLookupReferenceTableRow(sheet, 1, key: "Alpha", result: 10);
+        SetFormulaLookupReferenceTableRow(sheet, 2, key: "Beta", result: 20);
+        SetFormulaLookupReferenceTableRow(sheet, 3, key: "Gamma", result: 30);
+        SetFormulaLookupReferenceTableRow(sheet, 4, key: "Delta", result: 40);
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 8), new TextValue("Alpha"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 9), new TextValue("Beta"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 10), new TextValue("Gamma"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 11), new TextValue("Delta"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 8), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 9), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 10), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 11), new NumberValue(40));
+
+        SetFormulaLookupReferenceApproximateRow(sheet, 1, threshold: 10, band: "Band1");
+        SetFormulaLookupReferenceApproximateRow(sheet, 2, threshold: 20, band: "Band2");
+        SetFormulaLookupReferenceApproximateRow(sheet, 3, threshold: 30, band: "Band3");
+        SetFormulaLookupReferenceApproximateRow(sheet, 4, threshold: 40, band: "Band4");
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 16), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 17), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 18), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 19), new NumberValue(40));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 16), new TextValue("Band1"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 17), new TextValue("Band2"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 18), new TextValue("Band3"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 19), new TextValue("Band4"));
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 21), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 21), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 21), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 21), new NumberValue(40));
+
+        return workbook;
+    }
+
+    private static void SetFormulaLookupReferenceFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        double selector,
+        string key,
+        double amount,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(selector));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), new TextValue(key));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 4), new NumberValue(amount));
+    }
+
+    private static void SetFormulaLookupReferenceTableRow(
+        Sheet sheet,
+        uint row,
+        string key,
+        double result)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 6), new TextValue(key));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 7), new NumberValue(result));
+    }
+
+    private static void SetFormulaLookupReferenceApproximateRow(
+        Sheet sheet,
+        uint row,
+        double threshold,
+        string band)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 13), new NumberValue(threshold));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 14), new TextValue(band));
+    }
+
     private static Workbook CreateFormulaReferencePredicateContrastWorkbook(
         out Sheet sheet,
         out CellAddress firstLabel,
@@ -6954,6 +7072,19 @@ public sealed partial class AccessibilityCheckerServiceTests
             .Equal(expectedLocations);
     }
 
+    private static void AssertFormulaLookupReferenceFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaLookupReferenceFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
     private static void AssertFormulaInfoScalarFunctionContrastLocations(
         string formulaText,
         params string[] expectedLocations)
@@ -7032,6 +7163,9 @@ public sealed partial class AccessibilityCheckerServiceTests
 
     private static string[] FormulaInfoScalarAllLocations =>
         ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9", "B10", "B11", "B12", "B13", "B14", "B15", "B16"];
+
+    private static string[] FormulaLookupReferenceAllLocations =>
+        ["B1", "B2", "B3", "B4", "B5"];
 
     private static string[] FormulaStatisticalSelectionAllLocations =>
         ["B1", "B2", "B3", "B4"];
