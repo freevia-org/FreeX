@@ -25,7 +25,7 @@ public sealed partial class XlsxChartExWriterTests
         });
         using (var archive = new ZipArchive(source, ZipArchiveMode.Update, leaveOpen: true))
         {
-            var chartXml = XlsxPackageTestFixtures.LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+            var chartXml = LoadChartXml(archive);
             chartXml.Root!.Add(new XElement(ChartExNs + "sourceMarker", "original-source-chart"));
             ReplacePackageXml(archive, "xl/charts/chart1.xml", chartXml);
         }
@@ -42,7 +42,7 @@ public sealed partial class XlsxChartExWriterTests
         saved.Position = 0;
 
         using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
-        var savedChartXml = XlsxPackageTestFixtures.LoadPackageXml(savedArchive.GetEntry("xl/charts/chart1.xml")!);
+        var savedChartXml = LoadChartXml(savedArchive);
         var savedText = savedChartXml.ToString(SaveOptions.DisableFormatting);
         savedText.Should().Contain("original-source-chart");
         var legend = savedChartXml.Root!
@@ -60,7 +60,7 @@ public sealed partial class XlsxChartExWriterTests
         var source = SaveWorkbookWithChart(ChartType.Treemap);
         using (var archive = new ZipArchive(source, ZipArchiveMode.Update, leaveOpen: true))
         {
-            var chartXml = XlsxPackageTestFixtures.LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+            var chartXml = LoadChartXml(archive);
             chartXml.Root!.Add(new XElement(ChartExNs + "sourceMarker", "original-source-chart"));
             ReplacePackageXml(archive, "xl/charts/chart1.xml", chartXml);
         }
@@ -74,7 +74,7 @@ public sealed partial class XlsxChartExWriterTests
         saved.Position = 0;
 
         using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
-        var savedChartXml = XlsxPackageTestFixtures.LoadPackageXml(savedArchive.GetEntry("xl/charts/chart1.xml")!);
+        var savedChartXml = LoadChartXml(savedArchive);
         savedChartXml.ToString(SaveOptions.DisableFormatting)
             .Should().Contain("original-source-chart")
             .And.Contain("Edited ChartEx Title");
@@ -86,7 +86,7 @@ public sealed partial class XlsxChartExWriterTests
         var source = SaveWorkbookWithChart(ChartType.Treemap);
         using (var archive = new ZipArchive(source, ZipArchiveMode.Update, leaveOpen: true))
         {
-            var chartXml = XlsxPackageTestFixtures.LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+            var chartXml = LoadChartXml(archive);
             chartXml.Root!.Add(new XElement(ChartExNs + "sourceMarker", "original-source-chart"));
             ReplacePackageXml(archive, "xl/charts/chart1.xml", chartXml);
         }
@@ -104,7 +104,7 @@ public sealed partial class XlsxChartExWriterTests
         saved.Position = 0;
 
         using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
-        var savedChartXml = XlsxPackageTestFixtures.LoadPackageXml(savedArchive.GetEntry("xl/charts/chart1.xml")!);
+        var savedChartXml = LoadChartXml(savedArchive);
         var savedText = savedChartXml.ToString(SaveOptions.DisableFormatting);
         savedText.Should().Contain("original-source-chart");
         savedText.Should().Contain("$A$2:$A$5");

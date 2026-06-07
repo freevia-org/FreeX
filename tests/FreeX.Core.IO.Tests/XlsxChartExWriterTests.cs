@@ -221,4 +221,7 @@ public sealed partial class XlsxChartExWriterTests
         using var stream = entry.Open();
         xml.Save(stream);
     }
+
+    private static XDocument LoadChartXml(ZipArchive archive) =>
+        XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/charts/chart1.xml", "xl/charts/chart1.xml");
 }
