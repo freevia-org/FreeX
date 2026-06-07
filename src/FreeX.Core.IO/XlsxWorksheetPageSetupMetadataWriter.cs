@@ -148,13 +148,17 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
     }
 
     private static bool SetOptionalBoolAttribute(XElement element, XName name, bool? value) =>
-        value is { } flag
-            ? SetAttributeIfDifferent(element, name, flag ? "1" : "0")
-            : RemoveAttributeIfPresent(element, name);
+        SetOptionalAttribute(element, name, value is { } flag ? flag ? "1" : "0" : null);
 
     private static bool SetOptionalIntAttribute(XElement element, XName name, int? value) =>
-        value is > 0
-            ? SetAttributeIfDifferent(element, name, value.Value.ToString(CultureInfo.InvariantCulture))
+        SetOptionalAttribute(
+            element,
+            name,
+            value is > 0 ? value.Value.ToString(CultureInfo.InvariantCulture) : null);
+
+    private static bool SetOptionalAttribute(XElement element, XName name, string? value) =>
+        value is not null
+            ? SetAttributeIfDifferent(element, name, value)
             : RemoveAttributeIfPresent(element, name);
 
     private static bool SetAttributeIfDifferent(XElement element, XName name, string value)
