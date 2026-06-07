@@ -159,6 +159,10 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativePasteSpecialPictureMenuItem,
     bool HasNativePasteSpecialLinkedPictureMenuItem,
     bool HasNativeSelectAllMenuItem,
+    bool HasNativeFindMenuItem,
+    bool HasNativeFindNextMenuItem,
+    bool HasNativeReplaceMenuItem,
+    bool HasNativeGoToMenuItem,
     bool HasNativeGoToSpecialMenuItem,
     bool HasNativeAutoSumMenuItem,
     bool HasNativeAutoSumSumMenuItem,
@@ -321,6 +325,10 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativePasteSpecialPictureMenuItem &&
         HasNativePasteSpecialLinkedPictureMenuItem &&
         HasNativeSelectAllMenuItem &&
+        HasNativeFindMenuItem &&
+        HasNativeFindNextMenuItem &&
+        HasNativeReplaceMenuItem &&
+        HasNativeGoToMenuItem &&
         HasNativeGoToSpecialMenuItem &&
         HasNativeAutoSumMenuItem &&
         HasNativeAutoSumSumMenuItem &&
@@ -571,6 +579,10 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_paste_special_picture_menu_item={FormatBool(snapshot.HasNativePasteSpecialPictureMenuItem)}",
                 $"native_paste_special_linked_picture_menu_item={FormatBool(snapshot.HasNativePasteSpecialLinkedPictureMenuItem)}",
                 $"native_select_all_menu_item={FormatBool(snapshot.HasNativeSelectAllMenuItem)}",
+                $"native_find_menu_item={FormatBool(snapshot.HasNativeFindMenuItem)}",
+                $"native_find_next_menu_item={FormatBool(snapshot.HasNativeFindNextMenuItem)}",
+                $"native_replace_menu_item={FormatBool(snapshot.HasNativeReplaceMenuItem)}",
+                $"native_go_to_menu_item={FormatBool(snapshot.HasNativeGoToMenuItem)}",
                 $"native_go_to_special_menu_item={FormatBool(snapshot.HasNativeGoToSpecialMenuItem)}",
                 $"native_autosum_menu_item={FormatBool(snapshot.HasNativeAutoSumMenuItem)}",
                 $"native_autosum_sum_menu_item={FormatBool(snapshot.HasNativeAutoSumSumMenuItem)}",

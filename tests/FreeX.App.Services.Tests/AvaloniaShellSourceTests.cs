@@ -565,6 +565,10 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("HasNativePasteSpecialUnicodeTextMenuItem &&");
         smokeSource.Should().Contain("HasNativePasteSpecialPictureMenuItem &&");
         smokeSource.Should().Contain("HasNativePasteSpecialLinkedPictureMenuItem &&");
+        smokeSource.Should().Contain("HasNativeFindMenuItem &&");
+        smokeSource.Should().Contain("HasNativeFindNextMenuItem &&");
+        smokeSource.Should().Contain("HasNativeReplaceMenuItem &&");
+        smokeSource.Should().Contain("HasNativeGoToMenuItem &&");
         smokeSource.Should().Contain("HasNativeGoToSpecialMenuItem &&");
         smokeSource.Should().Contain("HasNativeBordersMenuItem &&");
         smokeSource.Should().Contain("NativeBordersPresetCount == Enum.GetValues<CellBorderPreset>().Length");
@@ -624,6 +628,10 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_paste_special_unicode_text_menu_item={FormatBool(snapshot.HasNativePasteSpecialUnicodeTextMenuItem)}");
         smokeSource.Should().Contain("native_paste_special_picture_menu_item={FormatBool(snapshot.HasNativePasteSpecialPictureMenuItem)}");
         smokeSource.Should().Contain("native_paste_special_linked_picture_menu_item={FormatBool(snapshot.HasNativePasteSpecialLinkedPictureMenuItem)}");
+        smokeSource.Should().Contain("native_find_menu_item={FormatBool(snapshot.HasNativeFindMenuItem)}");
+        smokeSource.Should().Contain("native_find_next_menu_item={FormatBool(snapshot.HasNativeFindNextMenuItem)}");
+        smokeSource.Should().Contain("native_replace_menu_item={FormatBool(snapshot.HasNativeReplaceMenuItem)}");
+        smokeSource.Should().Contain("native_go_to_menu_item={FormatBool(snapshot.HasNativeGoToMenuItem)}");
         smokeSource.Should().Contain("native_go_to_special_menu_item={FormatBool(snapshot.HasNativeGoToSpecialMenuItem)}");
         smokeSource.Should().Contain("native_tab_color_menu_item={FormatBool(snapshot.HasNativeTabColorMenuItem)}");
         smokeSource.Should().Contain("native_tab_color_clear_item={FormatBool(snapshot.HasNativeClearTabColorMenuItem)}");
@@ -768,6 +776,10 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativePasteSpecialLinkedPictureMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, \"Linked Picture\")");
         windowSource.Should().Contain("private static bool HasNativeSubmenuItem(NativeMenu? menu, string expectedHeader)");
         windowSource.Should().Contain("HasNativeSelectAllMenuItem: HasNativeMenuItem(_selectAllMenuItem, \"Select All\")");
+        windowSource.Should().Contain("HasNativeFindMenuItem: HasNativeMenuItem(_findMenuItem, \"Find...\")");
+        windowSource.Should().Contain("HasNativeFindNextMenuItem: HasNativeMenuItem(_findNextMenuItem, \"Find Next\")");
+        windowSource.Should().Contain("HasNativeReplaceMenuItem: HasNativeMenuItem(_replaceMenuItem, \"Replace...\")");
+        windowSource.Should().Contain("HasNativeGoToMenuItem: HasNativeMenuItem(_goToMenuItem, \"Go To...\")");
         windowSource.Should().Contain("HasClearButton: _clearButton.Content?.ToString() == \"Clear\"");
         windowSource.Should().Contain("HasClearAllMenuItem: HasToolbarMenuItem(_clearAllFlyoutItem, \"Clear All\")");
         windowSource.Should().Contain("HasClearFormatsMenuItem: HasToolbarMenuItem(_clearFormatsFlyoutItem, \"Clear Formats\")");
@@ -2449,6 +2461,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("e.Key == Key.G && e.KeyModifiers == KeyModifiers.Meta");
         source.Should().Contain("e.Key == Key.H && HasOnlyControlModifier(e.KeyModifiers)");
         source.Should().Contain("e.Key == Key.G && HasOnlyControlModifier(e.KeyModifiers)");
+        source.Should().Contain("HasNativeFindMenuItem: HasNativeMenuItem(_findMenuItem, \"Find...\")");
+        source.Should().Contain("HasNativeFindNextMenuItem: HasNativeMenuItem(_findNextMenuItem, \"Find Next\")");
+        source.Should().Contain("HasNativeReplaceMenuItem: HasNativeMenuItem(_replaceMenuItem, \"Replace...\")");
+        source.Should().Contain("HasNativeGoToMenuItem: HasNativeMenuItem(_goToMenuItem, \"Go To...\")");
         source.Should().Contain("HasNativeGoToSpecialMenuItem: HasNativeMenuItem(_goToSpecialMenuItem, \"Go To Special...\", requireGesture: false)");
         sessionSource.Should().Contain("public IReadOnlyList<GridRange> SelectedRanges { get; private set; } = [];");
         sessionSource.Should().Contain("public WorkbookFindAllResult FindAll(");
@@ -2485,8 +2501,20 @@ public sealed class AvaloniaShellSourceTests
         findReplaceSearchPlannerSource.Should().Contain("public readonly record struct SearchText(");
         findReplaceSearchPlannerSource.Should().Contain("comment.Replies[replyIndex].Text");
         findReplaceSearchPlannerSource.Should().Contain("FindResultTarget.ThreadedCommentReply,");
+        smokeSource.Should().Contain("bool HasNativeFindMenuItem,");
+        smokeSource.Should().Contain("bool HasNativeFindNextMenuItem,");
+        smokeSource.Should().Contain("bool HasNativeReplaceMenuItem,");
+        smokeSource.Should().Contain("bool HasNativeGoToMenuItem,");
         smokeSource.Should().Contain("bool HasNativeGoToSpecialMenuItem,");
+        smokeSource.Should().Contain("HasNativeFindMenuItem &&");
+        smokeSource.Should().Contain("HasNativeFindNextMenuItem &&");
+        smokeSource.Should().Contain("HasNativeReplaceMenuItem &&");
+        smokeSource.Should().Contain("HasNativeGoToMenuItem &&");
         smokeSource.Should().Contain("HasNativeGoToSpecialMenuItem &&");
+        smokeSource.Should().Contain("native_find_menu_item={FormatBool(snapshot.HasNativeFindMenuItem)}");
+        smokeSource.Should().Contain("native_find_next_menu_item={FormatBool(snapshot.HasNativeFindNextMenuItem)}");
+        smokeSource.Should().Contain("native_replace_menu_item={FormatBool(snapshot.HasNativeReplaceMenuItem)}");
+        smokeSource.Should().Contain("native_go_to_menu_item={FormatBool(snapshot.HasNativeGoToMenuItem)}");
         smokeSource.Should().Contain("native_go_to_special_menu_item={FormatBool(snapshot.HasNativeGoToSpecialMenuItem)}");
     }
 }
