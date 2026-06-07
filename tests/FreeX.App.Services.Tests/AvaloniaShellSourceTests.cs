@@ -2345,6 +2345,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _replaceMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _goToMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _goToSpecialMenuItem = new();");
+        source.Should().Contain("private enum FindDialogAction");
+        source.Should().Contain("private sealed record FindDialogResult(string FindText, FindDialogAction Action);");
         source.Should().Contain("private enum ReplaceDialogAction");
         source.Should().Contain("private sealed record ReplaceDialogResult(string FindText, string ReplaceText, ReplaceDialogAction Action);");
         source.Should().Contain("private sealed record GoToSpecialDialogResult(GoToSpecialKind Kind, GoToSpecialOptions Options);");
@@ -2374,6 +2376,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_goToMenuItem.IsEnabled = isIdle;");
         source.Should().Contain("_goToSpecialMenuItem.IsEnabled = isIdle;");
         source.Should().Contain("private async Task ShowFindDialogAsync()");
+        source.Should().Contain("private async Task<FindDialogResult?> ShowFindInputDialogAsync()");
+        source.Should().Contain("private async Task ShowFindAllResultsDialogAsync(string searchText, IReadOnlyList<WorkbookFindAllMatch> matches)");
+        source.Should().Contain("private void NavigateToFindAllMatch(WorkbookFindAllMatch match)");
         source.Should().Contain("private void FindNext(string? searchText = null)");
         source.Should().Contain("private async Task ShowReplaceDialogAsync()");
         source.Should().Contain("private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync()");
@@ -2386,6 +2391,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private bool SelectGoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)");
         source.Should().Contain("private async Task<string?> ShowSingleInputDialogAsync(");
         source.Should().Contain("\"FindTextBox\"");
+        source.Should().Contain("\"FindNextButton\"");
+        source.Should().Contain("\"FindAllButton\"");
+        source.Should().Contain("\"FindAllResultsStatusText\"");
+        source.Should().Contain("\"FindAllResultsList\"");
+        source.Should().Contain("\"FindAllCloseButton\"");
         source.Should().Contain("\"ReplaceFindTextBox\"");
         source.Should().Contain("\"ReplaceWithTextBox\"");
         source.Should().Contain("\"ReplaceButton\"");
@@ -2400,6 +2410,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("new(GoToSpecialKind.Blanks, \"Blanks\")");
         source.Should().Contain("new(GoToSpecialKind.VisibleCellsOnly, \"Visible cells only\")");
         source.Should().Contain("var result = _session.FindNext(searchText);");
+        source.Should().Contain("var result = _session.FindAll(search.FindText);");
+        source.Should().Contain("await ShowFindAllResultsDialogAsync(search.FindText, result.Matches);");
+        source.Should().Contain("var result = _session.GoToCell(match.Address);");
         source.Should().Contain("replacement.Action == ReplaceDialogAction.ReplaceAll");
         source.Should().Contain("_session.ReplaceNextValue(replacement.FindText, replacement.ReplaceText)");
         source.Should().Contain("_session.ReplaceAllValues(replacement.FindText, replacement.ReplaceText)");
@@ -2416,6 +2429,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("e.Key == Key.G && HasOnlyControlModifier(e.KeyModifiers)");
         source.Should().Contain("HasNativeGoToSpecialMenuItem: HasNativeMenuItem(_goToSpecialMenuItem, \"Go To Special...\", requireGesture: false)");
         sessionSource.Should().Contain("public IReadOnlyList<GridRange> SelectedRanges { get; private set; } = [];");
+        sessionSource.Should().Contain("public WorkbookFindAllResult FindAll(");
+        sessionSource.Should().Contain("return WorkbookFindAllResult.Found(results.Select(CreateFindAllMatch).ToList());");
+        sessionSource.Should().Contain("private WorkbookFindAllMatch CreateFindAllMatch(FindResult result)");
+        sessionSource.Should().Contain("private string FindNameForAddress(CellAddress address)");
         sessionSource.Should().Contain("public WorkbookReplaceResult ReplaceNextValue(");
         sessionSource.Should().Contain("var options = CreateActiveSheetFindOptions(FindLookIn.Values);");
         sessionSource.Should().Contain("GetReplaceTargetIndex(matches, options.SearchOrder, sameSearch)");

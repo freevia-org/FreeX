@@ -371,6 +371,112 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void FindAll_ProjectsRowsWithoutChangingSelectionOrDirtyingWorkbook()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Budget");
+        workbook.ActiveSheetIndex = 0;
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var c3 = new CellAddress(sheet.Id, 3, 3);
+        sheet.SetCell(a1, Cell.FromFormula("=SUM(B2:B3)"));
+        sheet.SetCell(b2, new TextValue("Budget match"));
+        workbook.DefineNamedRange("InputCell", new GridRange(b2, b2));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book1.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(c3);
+        var originalSelection = session.SelectedRange;
+
+        var formulaResult = session.FindAll("SUM");
+        var valueResult = session.FindAll("Budget");
+
+        formulaResult.Success.Should().BeTrue();
+        formulaResult.Matches.Should().Equal(
+            new WorkbookFindAllMatch("Book1", "Budget", "", a1, "A1", "=SUM(B2:B3)", "=SUM(B2:B3)"));
+        valueResult.Success.Should().BeTrue();
+        valueResult.Matches.Should().Equal(
+            new WorkbookFindAllMatch("Book1", "Budget", "InputCell", b2, "B2", "Budget match", ""));
+        valueResult.MatchCount.Should().Be(1);
+        session.SelectedRange.Should().Be(originalSelection);
+        session.ActiveCell.Should().Be(c3);
+        session.LastFindText.Should().Be("Budget");
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public void FindAll_CanSearchWorkbookScopeWithoutChangingActiveSheet()
+    {
+        var workbook = CreateWorkbook();
+        var first = workbook.Sheets.Single();
+        var second = workbook.AddSheet("Second");
+        var firstA1 = new CellAddress(first.Id, 1, 1);
+        var secondA1 = new CellAddress(second.Id, 1, 1);
+        first.SetCell(firstA1, new TextValue("needle first"));
+        second.SetCell(secondA1, new TextValue("needle second"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var result = session.FindAll(
+            "needle",
+            new FindOptions(Within: FindWithin.Workbook, LookIn: FindLookIn.Values));
+
+        result.Success.Should().BeTrue();
+        result.Matches.Select(match => match.Address).Should().Equal(firstA1, secondA1);
+        result.Matches.Select(match => match.Sheet).Should().Equal("Sheet1", "Second");
+        session.ActiveSheet.Should().BeSameAs(first);
+        session.SelectedRange.Should().Be(new GridRange(new CellAddress(first.Id, 1, 1), new CellAddress(first.Id, 1, 1)));
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public void FindAll_NoMatchesUpdatesLastFindTextWithoutChangingSelectionOrDirtyingWorkbook()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("value"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(b2);
+
+        var result = session.FindAll("missing");
+
+        result.Success.Should().BeTrue();
+        result.MatchCount.Should().Be(0);
+        result.Matches.Should().BeEmpty();
+        session.LastFindText.Should().Be("missing");
+        session.SelectedRange.Should().Be(new GridRange(b2, b2));
+        session.ActiveCell.Should().Be(b2);
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public void FindAll_RejectsEmptyFindText()
+    {
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            CreateWorkbook(),
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var result = session.FindAll("");
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be("Find text is required.");
+        result.Matches.Should().BeEmpty();
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
     public void ReplaceAllValues_ReplacesActiveSheetValuesPreservesSelectionAndSupportsUndoRedo()
     {
         var workbook = CreateWorkbook();

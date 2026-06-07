@@ -58,12 +58,19 @@ public sealed class MainWindow : Window
         StatusBar
     }
 
+    private enum FindDialogAction
+    {
+        FindNext,
+        FindAll
+    }
+
     private enum ReplaceDialogAction
     {
         Replace,
         ReplaceAll
     }
 
+    private sealed record FindDialogResult(string FindText, FindDialogAction Action);
     private sealed record ReplaceDialogResult(string FindText, string ReplaceText, ReplaceDialogAction Action);
     private sealed record GoToSpecialDialogResult(GoToSpecialKind Kind, GoToSpecialOptions Options);
     private sealed record GoToSpecialChoice(GoToSpecialKind Kind, string Label)
@@ -3857,16 +3864,130 @@ public sealed class MainWindow : Window
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var searchText = await ShowSingleInputDialogAsync(
-            "Find",
-            "Find what",
-            _session.LastFindText,
-            "Find",
-            "FindTextBox");
-        if (searchText is null)
+        var search = await ShowFindInputDialogAsync();
+        if (search is null)
             return;
 
-        FindNext(searchText);
+        if (search.Action == FindDialogAction.FindNext)
+        {
+            FindNext(search.FindText);
+            return;
+        }
+
+        var result = _session.FindAll(search.FindText);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Find All failed.");
+            return;
+        }
+
+        RefreshShell(result.MatchCount == 0
+            ? "No matches found."
+            : $"Found {result.MatchCount} cells");
+        await ShowFindAllResultsDialogAsync(search.FindText, result.Matches);
+    }
+
+    private async Task<FindDialogResult?> ShowFindInputDialogAsync()
+    {
+        FindDialogResult? result = null;
+        var dialog = new Window
+        {
+            Title = "Find",
+            Width = 420,
+            Height = 170,
+            MinWidth = 360,
+            MinHeight = 150,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+
+        var findBox = new TextBox
+        {
+            Text = _session.LastFindText,
+            MinWidth = 300,
+        };
+        AutomationProperties.SetName(findBox, "Find what");
+        AutomationProperties.SetAutomationId(findBox, "FindTextBox");
+
+        var findNextButton = new Button
+        {
+            Content = "Find Next",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(findNextButton, "FindNextButton");
+
+        var findAllButton = new Button
+        {
+            Content = "Find All",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(findAllButton, "FindAllButton");
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(cancelButton, "FindCancelButton");
+
+        void Accept(FindDialogAction action)
+        {
+            result = new FindDialogResult(findBox.Text ?? "", action);
+            dialog.Close();
+        }
+
+        findNextButton.Click += (_, _) => Accept(FindDialogAction.FindNext);
+        findAllButton.Click += (_, _) => Accept(FindDialogAction.FindAll);
+        cancelButton.Click += (_, _) => dialog.Close();
+        findBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                e.Handled = true;
+                Accept(FindDialogAction.FindNext);
+            }
+            else if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                dialog.Close();
+            }
+        };
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Children =
+            {
+                cancelButton,
+                findNextButton,
+                findAllButton,
+            },
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = "Find what" },
+                findBox,
+                buttonRow,
+            },
+        };
+        dialog.Opened += (_, _) =>
+        {
+            findBox.Focus();
+            findBox.SelectAll();
+        };
+
+        await dialog.ShowDialog(this);
+        return result;
     }
 
     private void FindNext(string? searchText = null)
@@ -3882,6 +4003,92 @@ public sealed class MainWindow : Window
         }
 
         RefreshShell($"Found {FormatRangeReference(result.SelectedRange!.Value)} ({result.MatchIndex} of {result.MatchCount})");
+    }
+
+    private async Task ShowFindAllResultsDialogAsync(string searchText, IReadOnlyList<WorkbookFindAllMatch> matches)
+    {
+        var dialog = new Window
+        {
+            Title = "Find All",
+            Width = 720,
+            Height = 420,
+            MinWidth = 520,
+            MinHeight = 320,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+
+        var statusText = new TextBlock
+        {
+            Text = matches.Count == 0
+                ? "No matches found."
+                : $"{matches.Count} {(matches.Count == 1 ? "cell" : "cells")} found for \"{searchText}\"",
+        };
+        AutomationProperties.SetAutomationId(statusText, "FindAllResultsStatusText");
+
+        var resultsList = new ListBox
+        {
+            ItemsSource = matches,
+            MinHeight = 240,
+        };
+        AutomationProperties.SetName(resultsList, "Find all results");
+        AutomationProperties.SetAutomationId(resultsList, "FindAllResultsList");
+        resultsList.SelectionChanged += (_, _) =>
+        {
+            if (resultsList.SelectedItem is WorkbookFindAllMatch match)
+                NavigateToFindAllMatch(match);
+        };
+
+        var closeButton = new Button
+        {
+            Content = "Close",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+        };
+        AutomationProperties.SetAutomationId(closeButton, "FindAllCloseButton");
+        closeButton.Click += (_, _) => dialog.Close();
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                dialog.Close();
+            }
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 10,
+            Children =
+            {
+                statusText,
+                resultsList,
+                closeButton,
+            },
+        };
+        dialog.Opened += (_, _) =>
+        {
+            if (matches.Count > 0)
+                resultsList.Focus();
+            else
+                closeButton.Focus();
+        };
+
+        await dialog.ShowDialog(this);
+    }
+
+    private void NavigateToFindAllMatch(WorkbookFindAllMatch match)
+    {
+        var result = _session.GoToCell(match.Address);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Find result could not be selected.");
+            return;
+        }
+
+        RefreshShell($"Found {match.Sheet}!{match.Cell}");
     }
 
     private async Task ShowReplaceDialogAsync()

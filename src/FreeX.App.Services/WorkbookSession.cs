@@ -346,6 +346,28 @@ public sealed class WorkbookSession
             results.Count);
     }
 
+    public WorkbookFindAllResult FindAll(
+        string searchText,
+        FindOptions? options = null,
+        bool matchCase = false,
+        bool matchEntireCell = false)
+    {
+        ArgumentNullException.ThrowIfNull(searchText);
+
+        if (string.IsNullOrEmpty(searchText))
+            return WorkbookFindAllResult.Failed("Find text is required.");
+
+        var effectiveOptions = options ?? CreateActiveSheetFindOptions(FindLookIn.Formulas);
+        if (effectiveOptions.Within == FindWithin.Sheet && effectiveOptions.CurrentSheetId is null)
+            effectiveOptions = effectiveOptions with { CurrentSheetId = ActiveSheet.Id };
+
+        var results = FindReplaceService.Find(Workbook, searchText, effectiveOptions, matchCase, matchEntireCell);
+        RememberFindSearch(searchText, effectiveOptions, matchCase, matchEntireCell);
+        _lastFindAddress = null;
+
+        return WorkbookFindAllResult.Found(results.Select(CreateFindAllMatch).ToList());
+    }
+
     public WorkbookReplaceResult ReplaceAllValues(
         string searchText,
         string replaceText,
@@ -2203,6 +2225,31 @@ public sealed class WorkbookSession
         _lastFindOptions = options;
         _lastFindMatchCase = matchCase;
         _lastFindMatchEntireCell = matchEntireCell;
+    }
+
+    private WorkbookFindAllMatch CreateFindAllMatch(FindResult result)
+    {
+        var sheet = Workbook.GetSheet(result.Address.Sheet);
+        var cell = sheet?.GetCell(result.Address);
+        return new WorkbookFindAllMatch(
+            Workbook.Name,
+            sheet?.Name ?? "",
+            FindNameForAddress(result.Address),
+            result.Address,
+            result.Address.ToA1(),
+            result.MatchedText,
+            cell?.HasFormula == true ? cell.FormulaText ?? "" : "");
+    }
+
+    private string FindNameForAddress(CellAddress address)
+    {
+        var namedRange = Workbook.NamedRanges
+            .Where(pair => pair.Value.Contains(address))
+            .OrderBy(pair => pair.Value.CellCount)
+            .ThenBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+
+        return string.IsNullOrEmpty(namedRange.Key) ? "" : namedRange.Key;
     }
 
     private int FindFirstResultAfterActiveCell(IReadOnlyList<FindResult> results, FindSearchOrder searchOrder)

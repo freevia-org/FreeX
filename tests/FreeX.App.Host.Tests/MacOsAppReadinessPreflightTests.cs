@@ -209,6 +209,14 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("public static class CellTextOrientationLayoutPlanner");
         script.Should().Contain("public static bool ShouldClip(");
         script.Should().Contain("CreateNativePasteSpecialMenu()");
+        script.Should().Contain("private enum FindDialogAction");
+        script.Should().Contain("FindDialogResult(string FindText, FindDialogAction Action)");
+        script.Should().Contain("`\"FindAllButton`\"");
+        script.Should().Contain("`\"FindAllResultsStatusText`\"");
+        script.Should().Contain("`\"FindAllResultsList`\"");
+        script.Should().Contain("_session.FindAll(search.FindText)");
+        script.Should().Contain("public WorkbookFindAllResult FindAll(");
+        script.Should().Contain("private WorkbookFindAllMatch CreateFindAllMatch(FindResult result)");
         script.Should().Contain("private enum ReplaceDialogAction");
         script.Should().Contain("ReplaceDialogResult(string FindText, string ReplaceText, ReplaceDialogAction Action)");
         script.Should().Contain("`\"ReplaceButton`\"");
@@ -1025,6 +1033,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     private readonly NativeMenuItem _replaceMenuItem = new();
                     private readonly NativeMenuItem _goToMenuItem = new();
                     private readonly NativeMenuItem _goToSpecialMenuItem = new();
+                    private enum FindDialogAction
+                    private sealed record FindDialogResult(string FindText, FindDialogAction Action);
                     private enum ReplaceDialogAction
                     private sealed record ReplaceDialogResult(string FindText, string ReplaceText, ReplaceDialogAction Action);
                     private sealed record GoToSpecialDialogResult(GoToSpecialKind Kind, GoToSpecialOptions Options);
@@ -1054,6 +1064,9 @@ public sealed class MacOsAppReadinessPreflightTests
                     _goToMenuItem.IsEnabled = isIdle;
                     _goToSpecialMenuItem.IsEnabled = isIdle;
                     private async Task ShowFindDialogAsync()
+                    private async Task<FindDialogResult?> ShowFindInputDialogAsync()
+                    private async Task ShowFindAllResultsDialogAsync(string searchText, IReadOnlyList<WorkbookFindAllMatch> matches)
+                    private void NavigateToFindAllMatch(WorkbookFindAllMatch match)
                     private void FindNext(string? searchText = null)
                     private async Task ShowReplaceDialogAsync()
                     private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync()
@@ -1064,6 +1077,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     private bool SelectGoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
                     private async Task<string?> ShowSingleInputDialogAsync(
                     "FindTextBox"
+                    "FindNextButton"
+                    "FindAllButton"
+                    "FindAllResultsStatusText"
+                    "FindAllResultsList"
+                    "FindAllCloseButton"
                     "ReplaceFindTextBox"
                     "ReplaceWithTextBox"
                     "ReplaceButton"
@@ -1076,6 +1094,9 @@ public sealed class MacOsAppReadinessPreflightTests
                     "GoToSpecialErrorsBox"
                     "GoToSpecialOkButton"
                     var result = _session.FindNext(searchText);
+                    var result = _session.FindAll(search.FindText);
+                    await ShowFindAllResultsDialogAsync(search.FindText, result.Matches);
+                    var result = _session.GoToCell(match.Address);
                     replacement.Action == ReplaceDialogAction.ReplaceAll
                     _session.ReplaceNextValue(replacement.FindText, replacement.ReplaceText)
                     _session.ReplaceAllValues(replacement.FindText, replacement.ReplaceText)
@@ -2000,6 +2021,10 @@ public sealed class MacOsAppReadinessPreflightTests
                 if (keepSourceColumnWidths)
                 public string LastFindText => _lastFindText ??
                 public IReadOnlyList<GridRange> SelectedRanges { get; private set; } = [];
+                public WorkbookFindAllResult FindAll(
+                return WorkbookFindAllResult.Found(results.Select(CreateFindAllMatch).ToList());
+                private WorkbookFindAllMatch CreateFindAllMatch(FindResult result)
+                private string FindNameForAddress(CellAddress address)
                 public WorkbookReplaceResult ReplaceNextValue(
                 var options = CreateActiveSheetFindOptions(FindLookIn.Values);
                 GetReplaceTargetIndex(matches, options.SearchOrder, sameSearch)
