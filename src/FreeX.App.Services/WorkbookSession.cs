@@ -23,6 +23,7 @@ public sealed class WorkbookSession
     private readonly bool _includeObjects;
     private readonly WorkbookSelectionStatsCache _selectionStatsCache = new();
     private readonly HashSet<SheetId> _groupedSheetIds = [];
+    private SheetId? _sheetGroupAnchor;
     private InternalClipboard? _internalClipboard;
     private double _viewportHeight;
     private double _viewportWidth;
@@ -267,6 +268,12 @@ public sealed class WorkbookSession
     }
 
     public bool SelectSheet(SheetId sheetId)
+        => SelectSheet(sheetId, selectRange: false, toggle: false);
+
+    public bool SelectSheetFromTab(SheetId sheetId, bool selectRange, bool toggle)
+        => SelectSheet(sheetId, selectRange, toggle);
+
+    private bool SelectSheet(SheetId sheetId, bool selectRange, bool toggle)
     {
         var previousSheetId = ActiveSheet.Id;
         var previousGroupedSheetIds = _groupedSheetIds.ToHashSet();
@@ -274,7 +281,7 @@ public sealed class WorkbookSession
         var sheetChanged = previousSheetId != selection.Sheet.Id;
 
         ActiveSheet = selection.Sheet;
-        SelectSingleSheetGroup(ActiveSheet.Id);
+        UpdateGroupedSheetsForTabSelection(ActiveSheet.Id, selectRange, toggle);
         RefreshSheetTabsForActiveSheet();
         FormulaEditAddress = null;
 
@@ -293,6 +300,7 @@ public sealed class WorkbookSession
         var changed = SetGroupedSheetIds(
             SheetGroupSelectionService.SelectAll(GetSelectableSheetIds()),
             ActiveSheet.Id);
+        _sheetGroupAnchor = ActiveSheet.Id;
         RefreshSheetTabsForActiveSheet();
         return changed;
     }
@@ -300,6 +308,7 @@ public sealed class WorkbookSession
     public bool UngroupSheets()
     {
         var changed = SetGroupedSheetIds([ActiveSheet.Id], ActiveSheet.Id);
+        _sheetGroupAnchor = ActiveSheet.Id;
         RefreshSheetTabsForActiveSheet();
         return changed;
     }
@@ -1436,7 +1445,33 @@ public sealed class WorkbookSession
     }
 
     private void SelectSingleSheetGroup(SheetId sheetId) =>
-        SetGroupedSheetIds([sheetId], sheetId);
+        UpdateGroupedSheetsForTabSelection(sheetId, selectRange: false, toggle: false);
+
+    private void UpdateGroupedSheetsForTabSelection(SheetId sheetId, bool selectRange, bool toggle)
+    {
+        var selectableSheetIds = GetSelectableSheetIds();
+        IReadOnlyList<SheetId> selectedSheetIds;
+
+        if (selectRange && _sheetGroupAnchor.HasValue)
+        {
+            selectedSheetIds = SheetGroupSelectionService.SelectRange(
+                selectableSheetIds,
+                _sheetGroupAnchor.Value,
+                sheetId);
+        }
+        else if (toggle)
+        {
+            selectedSheetIds = SheetGroupSelectionService.Toggle(sheetId, _groupedSheetIds);
+            _sheetGroupAnchor = sheetId;
+        }
+        else
+        {
+            selectedSheetIds = SheetGroupSelectionService.SelectSingle(sheetId);
+            _sheetGroupAnchor = sheetId;
+        }
+
+        SetGroupedSheetIds(selectedSheetIds, sheetId);
+    }
 
     private bool SetGroupedSheetIds(IEnumerable<SheetId> sheetIds, SheetId fallbackSheetId)
     {

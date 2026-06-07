@@ -3719,6 +3719,63 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SelectSheetFromTab_TogglesSheetGroupWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var charts = workbook.AddSheet("Charts");
+        var hidden = workbook.AddSheet("Hidden");
+        hidden.IsHidden = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var changed = session.SelectSheetFromTab(details.Id, selectRange: false, toggle: true);
+
+        changed.Should().BeTrue();
+        session.ActiveSheet.Should().BeSameAs(details);
+        session.IsWorkbookGrouped.Should().BeTrue();
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+        session.SheetTabs.Should().Equal(
+            new WorkbookSheetTab(summary.Id, "Sheet1", IsActive: false, TabColor: null, IsGrouped: true),
+            new WorkbookSheetTab(details.Id, "Details", IsActive: true, TabColor: null, IsGrouped: true),
+            new WorkbookSheetTab(charts.Id, "Charts", IsActive: false));
+    }
+
+    [Fact]
+    public void SelectSheetFromTab_ShiftSelectsVisibleSheetRangeWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var hidden = workbook.AddSheet("Hidden");
+        var charts = workbook.AddSheet("Charts");
+        hidden.IsHidden = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectSheet(details.Id);
+
+        var changed = session.SelectSheetFromTab(charts.Id, selectRange: true, toggle: false);
+
+        changed.Should().BeTrue();
+        session.ActiveSheet.Should().BeSameAs(charts);
+        session.IsWorkbookGrouped.Should().BeTrue();
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+        session.SheetTabs.Should().Equal(
+            new WorkbookSheetTab(summary.Id, "Sheet1", IsActive: false),
+            new WorkbookSheetTab(details.Id, "Details", IsActive: false, TabColor: null, IsGrouped: true),
+            new WorkbookSheetTab(charts.Id, "Charts", IsActive: true, TabColor: null, IsGrouped: true));
+    }
+
+    [Fact]
     public void UngroupSheets_RestoresActiveSheetGroupWithoutMarkingDirty()
     {
         var workbook = CreateWorkbook();

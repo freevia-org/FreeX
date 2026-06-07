@@ -123,6 +123,13 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("private async Task<string?> ShowRenameSheetDialogAsync(string currentName)");
         script.Should().Contain("AutomationProperties.SetAutomationId(nameBox, `\"RenameSheetNameBox`\");");
         script.Should().Contain("var validationError = _session.Workbook.ValidateSheetName(proposedName, _session.ActiveSheet.Id);");
+        script.Should().Contain("button.PointerPressed += (_, args) => SelectSheetFromPointer(tab.Id, args);");
+        script.Should().Contain("private void SelectSheetFromPointer(SheetId sheetId, PointerPressedEventArgs args)");
+        script.Should().Contain("if (!args.GetCurrentPoint(this).Properties.IsLeftButtonPressed)");
+        script.Should().Contain("var selectRange = modifiers.HasFlag(KeyModifiers.Shift);");
+        script.Should().Contain("var toggle = modifiers.HasFlag(KeyModifiers.Control) || modifiers.HasFlag(KeyModifiers.Meta);");
+        script.Should().Contain("args.Handled = true;");
+        script.Should().Contain("_session.SelectSheetFromTab(sheetId, selectRange, toggle)");
         script.Should().Contain("var result = _session.DuplicateActiveSheet();");
         script.Should().Contain("var result = _session.SetActiveSheetTabColor(color);");
         script.Should().Contain("var result = _session.DeleteActiveSheet();");
@@ -751,6 +758,12 @@ public sealed class MacOsAppReadinessPreflightTests
                     ShowRenameSheetDialogAsync(currentName).ToString();
                     AutomationProperties.SetAutomationId(nameBox, "RenameSheetNameBox");
                     var validationError = _session.Workbook.ValidateSheetName(proposedName, _session.ActiveSheet.Id);
+                    button.PointerPressed += (_, args) => SelectSheetFromPointer(tab.Id, args);
+                    if (!args.GetCurrentPoint(this).Properties.IsLeftButtonPressed);
+                    var selectRange = modifiers.HasFlag(KeyModifiers.Shift);
+                    var toggle = modifiers.HasFlag(KeyModifiers.Control) || modifiers.HasFlag(KeyModifiers.Meta);
+                    args.Handled = true;
+                    _session.SelectSheetFromTab(sheetId, selectRange, toggle);
                     var result = _session.DuplicateActiveSheet();
                     var result = _session.MoveActiveSheetLeft();
                     var result = _session.MoveActiveSheetRight();
@@ -824,6 +837,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 private async Task PasteSpecialExternalTextFromClipboardAsync(string label) => await Task.CompletedTask;
                 private async Task UnhideSheetAsync() => await Task.CompletedTask;
                 private async Task<WorkbookHiddenSheet?> ShowUnhideSheetDialogAsync(IReadOnlyList<WorkbookHiddenSheet> hiddenSheets) => await Task.FromResult<WorkbookHiddenSheet?>(null);
+                private void SelectSheetFromPointer(SheetId sheetId, PointerPressedEventArgs args) { }
                 private NativeMenu CreateNativeSheetTabColorMenu() => new();
                 private NativeMenuItem CreateNativeSheetTabColorSwatchMenuItem(CellColorSwatch swatch) => new();
                 private void ApplyActiveSheetTabColor(CellColor? color) { }
@@ -1041,6 +1055,9 @@ public sealed class MacOsAppReadinessPreflightTests
                 public bool IsWorkbookGrouped =>
                 public WorkbookCellEditResult SetActiveSheetTabColor(CellColor? color)
                 new SetSheetTabColorCommand(ActiveSheet.Id, color)
+                public bool SelectSheetFromTab(SheetId sheetId, bool selectRange, bool toggle)
+                SheetGroupSelectionService.SelectRange(
+                SheetGroupSelectionService.Toggle(sheetId, _groupedSheetIds)
                 public bool SelectAllVisibleSheets()
                 SheetGroupSelectionService.SelectAll(GetSelectableSheetIds())
                 public bool UngroupSheets()

@@ -1309,6 +1309,7 @@ public sealed class MainWindow : Window
                 BorderThickness = new Thickness(1),
                 Content = content,
             };
+            button.PointerPressed += (_, args) => SelectSheetFromPointer(tab.Id, args);
             button.Click += (_, _) => SelectSheet(tab.Id);
             panel.Children.Add(button);
         }
@@ -2452,11 +2453,29 @@ public sealed class MainWindow : Window
     }
 
     private void SelectSheet(SheetId sheetId)
+        => SelectSheet(sheetId, selectRange: false, toggle: false);
+
+    private void SelectSheetFromPointer(SheetId sheetId, PointerPressedEventArgs args)
+    {
+        if (!args.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            return;
+
+        var modifiers = args.KeyModifiers;
+        var selectRange = modifiers.HasFlag(KeyModifiers.Shift);
+        var toggle = modifiers.HasFlag(KeyModifiers.Control) || modifiers.HasFlag(KeyModifiers.Meta);
+        if (!selectRange && !toggle)
+            return;
+
+        args.Handled = true;
+        SelectSheet(sheetId, selectRange, toggle);
+    }
+
+    private void SelectSheet(SheetId sheetId, bool selectRange, bool toggle)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        if (!_session.SelectSheet(sheetId))
+        if (!_session.SelectSheetFromTab(sheetId, selectRange, toggle))
             return;
 
         ClearSelectedDrawingObject();

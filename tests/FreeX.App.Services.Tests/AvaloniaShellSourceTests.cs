@@ -1604,6 +1604,13 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(nameBox, \"RenameSheetNameBox\");");
         source.Should().Contain("var validationError = _session.Workbook.ValidateSheetName(proposedName, _session.ActiveSheet.Id);");
         source.Should().Contain("nameBox.SelectAll();");
+        source.Should().Contain("button.PointerPressed += (_, args) => SelectSheetFromPointer(tab.Id, args);");
+        source.Should().Contain("private void SelectSheetFromPointer(SheetId sheetId, PointerPressedEventArgs args)");
+        source.Should().Contain("if (!args.GetCurrentPoint(this).Properties.IsLeftButtonPressed)");
+        source.Should().Contain("var selectRange = modifiers.HasFlag(KeyModifiers.Shift);");
+        source.Should().Contain("var toggle = modifiers.HasFlag(KeyModifiers.Control) || modifiers.HasFlag(KeyModifiers.Meta);");
+        source.Should().Contain("args.Handled = true;");
+        source.Should().Contain("_session.SelectSheetFromTab(sheetId, selectRange, toggle)");
         source.Should().Contain("private void DuplicateActiveSheet()");
         source.Should().Contain("var result = _session.DuplicateActiveSheet();");
         source.Should().Contain("RefreshShell($\"Duplicated {sourceName}\");");
