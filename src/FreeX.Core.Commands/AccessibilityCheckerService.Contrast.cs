@@ -1236,6 +1236,12 @@ public static partial class AccessibilityCheckerService
             case "YEARFRAC":
                 kind = ConditionalFormulaScalarFunctionKind.Yearfrac;
                 return true;
+            case "WORKDAY":
+                kind = ConditionalFormulaScalarFunctionKind.Workday;
+                return true;
+            case "NETWORKDAYS":
+                kind = ConditionalFormulaScalarFunctionKind.Networkdays;
+                return true;
             case "NA":
                 kind = ConditionalFormulaScalarFunctionKind.Na;
                 return true;
@@ -1410,6 +1416,8 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.EOMonth or
             ConditionalFormulaScalarFunctionKind.Days => argumentCount == 2,
             ConditionalFormulaScalarFunctionKind.Days360 or
+            ConditionalFormulaScalarFunctionKind.Workday or
+            ConditionalFormulaScalarFunctionKind.Networkdays or
             ConditionalFormulaScalarFunctionKind.Yearfrac => argumentCount is 2 or 3,
             ConditionalFormulaScalarFunctionKind.Find or
             ConditionalFormulaScalarFunctionKind.Search => argumentCount is 2 or 3,
@@ -2080,6 +2088,8 @@ public static partial class AccessibilityCheckerService
         Datedif,
         Days360,
         Yearfrac,
+        Workday,
+        Networkdays,
         Na,
         Row,
         Column,
@@ -2746,6 +2756,8 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Datedif:
                 case ConditionalFormulaScalarFunctionKind.Days360:
                 case ConditionalFormulaScalarFunctionKind.Yearfrac:
+                case ConditionalFormulaScalarFunctionKind.Workday:
+                case ConditionalFormulaScalarFunctionKind.Networkdays:
                     return TryEvaluateFormulaDateScalarFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Na:
                     value = ErrorValue.NA;
@@ -3959,6 +3971,10 @@ public static partial class AccessibilityCheckerService
 
                     value = new NumberValue(yearfrac);
                     return true;
+                case ConditionalFormulaScalarFunctionKind.Workday:
+                    return TryEvaluateFormulaWorkday(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Networkdays:
+                    return TryEvaluateFormulaNetworkdays(function, rowOffset, colOffset, out value);
                 default:
                     return false;
             }
@@ -4106,6 +4122,354 @@ public static partial class AccessibilityCheckerService
                 30 * (end.Month - start.Month) +
                 (endDay - startDay);
             return true;
+        }
+
+        private bool TryEvaluateFormulaWorkday(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaWorkdayDate(function.Arguments[0], rowOffset, colOffset, out var current, out var startError))
+            {
+                if (startError is not null)
+                {
+                    value = startError;
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (!TryResolveFormulaWorkdayNumber(function.Arguments[1], rowOffset, colOffset, out var rawDays, out var daysError))
+            {
+                if (daysError is not null)
+                {
+                    value = daysError;
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (!TryCollectFormulaWorkdayHolidays(function, rowOffset, colOffset, out var holidays, out var holidayError))
+            {
+                value = holidayError ?? ErrorValue.Value;
+                return holidayError is not null;
+            }
+
+            if (!double.IsFinite(rawDays) ||
+                rawDays < int.MinValue + 1d ||
+                rawDays > int.MaxValue)
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            var sign = rawDays < 0 ? -1 : 1;
+            var remaining = Math.Abs((int)rawDays);
+            try
+            {
+                if (remaining > 5 && holidays.Count == 0)
+                {
+                    var fullWeeks = (remaining - 1) / 5;
+                    current = current.AddDays((long)sign * fullWeeks * 7);
+                    remaining -= fullWeeks * 5;
+                }
+
+                while (remaining > 0)
+                {
+                    current = current.AddDays(sign);
+                    if (FormulaExcelDowToMonIndex(current) < 5 &&
+                        !holidays.Contains(current.Date))
+                    {
+                        remaining--;
+                    }
+                }
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            if (!TryGetFormulaDateSerial(current, out var serial))
+            {
+                value = ErrorValue.Num;
+                return true;
+            }
+
+            value = new NumberValue(serial);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaNetworkdays(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaWorkdayDate(function.Arguments[0], rowOffset, colOffset, out var startRaw, out var startError))
+            {
+                if (startError is not null)
+                {
+                    value = startError;
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (!TryResolveFormulaWorkdayDate(function.Arguments[1], rowOffset, colOffset, out var endRaw, out var endError))
+            {
+                if (endError is not null)
+                {
+                    value = endError;
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (!TryCollectFormulaWorkdayHolidays(function, rowOffset, colOffset, out var holidays, out var holidayError))
+            {
+                value = holidayError ?? ErrorValue.Value;
+                return holidayError is not null;
+            }
+
+            var start = startRaw.Date;
+            var end = endRaw.Date;
+            var sign = start <= end ? 1 : -1;
+            var lo = start <= end ? start : end;
+            var hi = start <= end ? end : start;
+            var count = CountFormulaExcelWeekdaysInclusive(lo, hi);
+            foreach (var holiday in holidays)
+            {
+                if (holiday >= lo &&
+                    holiday <= hi &&
+                    FormulaExcelDowToMonIndex(holiday) < 5)
+                {
+                    count--;
+                }
+            }
+
+            value = new NumberValue(sign * count);
+            return true;
+        }
+
+        private bool TryResolveFormulaWorkdayDate(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out DateTime date,
+            out ErrorValue? error)
+        {
+            date = default;
+            error = null;
+            if (!TryResolveFormulaOperand(operand, rowOffset, colOffset, out var value))
+                return false;
+
+            if (value is ErrorValue valueError)
+            {
+                error = valueError;
+                return false;
+            }
+
+            if (value is DateTimeValue dateTime)
+            {
+                if (TrySerialToDate(dateTime.Value, out date) &&
+                    IsValidFormulaWorkdaySerial(dateTime.Value))
+                {
+                    return true;
+                }
+
+                error = ErrorValue.Num;
+                return false;
+            }
+
+            if (!TryGetFormulaWorkdayNumber(value, out var serial))
+            {
+                error = ErrorValue.Value;
+                return false;
+            }
+
+            if (!IsValidFormulaWorkdaySerial(serial))
+            {
+                error = ErrorValue.Num;
+                return false;
+            }
+
+            try
+            {
+                date = FormulaExcelSerialToDate(serial).Date;
+                return true;
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                error = ErrorValue.Num;
+                return false;
+            }
+        }
+
+        private bool TryResolveFormulaWorkdayNumber(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out double number,
+            out ErrorValue? error)
+        {
+            number = 0;
+            error = null;
+            if (!TryResolveFormulaOperand(operand, rowOffset, colOffset, out var value))
+                return false;
+
+            if (value is ErrorValue valueError)
+            {
+                error = valueError;
+                return false;
+            }
+
+            if (TryGetFormulaWorkdayNumber(value, out number))
+                return true;
+
+            error = ErrorValue.Value;
+            return false;
+        }
+
+        private bool TryCollectFormulaWorkdayHolidays(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out HashSet<DateTime> holidays,
+            out ErrorValue? error)
+        {
+            holidays = [];
+            error = null;
+            if (function.Arguments.Count < 3)
+                return true;
+
+            var operand = function.Arguments[2];
+            if (operand.Kind == ConditionalFormulaOperandKind.ReferenceRange)
+            {
+                if (!TryResolveFormulaReferenceRange(
+                        operand,
+                        rowOffset,
+                        colOffset,
+                        out var targetSheet,
+                        out var startRow,
+                        out var startCol,
+                        out var endRow,
+                        out var endCol))
+                {
+                    return false;
+                }
+
+                var rowCount = (ulong)endRow - startRow + 1UL;
+                var colCount = (ulong)endCol - startCol + 1UL;
+                if (rowCount * colCount > MaxFormulaAggregateRangeCells)
+                    return false;
+
+                for (var currentRow = startRow; currentRow <= endRow; currentRow++)
+                {
+                    for (var currentCol = startCol; currentCol <= endCol; currentCol++)
+                    {
+                        if (!TryAppendFormulaWorkdayHoliday(targetSheet.GetValue(currentRow, currentCol), holidays, out error))
+                            return false;
+                    }
+                }
+
+                return true;
+            }
+
+            if (!TryResolveFormulaOperand(operand, rowOffset, colOffset, out var value))
+                return false;
+
+            return TryAppendFormulaWorkdayHoliday(value, holidays, out error);
+        }
+
+        private static bool TryAppendFormulaWorkdayHoliday(
+            ScalarValue value,
+            HashSet<DateTime> holidays,
+            out ErrorValue? error)
+        {
+            error = null;
+            if (value is ErrorValue valueError)
+            {
+                error = valueError;
+                return false;
+            }
+
+            if (value is DateTimeValue dateTime)
+            {
+                if (!TrySerialToDate(dateTime.Value, out var holiday) ||
+                    !IsValidFormulaWorkdaySerial(dateTime.Value))
+                {
+                    error = ErrorValue.Num;
+                    return false;
+                }
+
+                holidays.Add(holiday.Date);
+                return true;
+            }
+
+            if (value is not NumberValue numeric)
+                return true;
+
+            if (!IsValidFormulaWorkdaySerial(numeric.Value))
+            {
+                error = ErrorValue.Num;
+                return false;
+            }
+
+            try
+            {
+                holidays.Add(FormulaExcelSerialToDate(numeric.Value).Date);
+                return true;
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                error = ErrorValue.Num;
+                return false;
+            }
+        }
+
+        private static bool TryGetFormulaWorkdayNumber(ScalarValue value, out double number) =>
+            value switch
+            {
+                NumberValue numeric => TryFiniteFormulaWorkdayNumber(numeric.Value, out number),
+                DateTimeValue dateTime => TryFiniteFormulaWorkdayNumber(dateTime.Value, out number),
+                BoolValue boolean => TryFiniteFormulaWorkdayNumber(boolean.Value ? 1d : 0d, out number),
+                BlankValue => TryFiniteFormulaWorkdayNumber(0d, out number),
+                TextValue text when TryParseFormulaValueText(text.Value, out var parsed) =>
+                    TryFiniteFormulaWorkdayNumber(parsed, out number),
+                _ => TryFiniteFormulaWorkdayNumber(double.NaN, out number)
+            };
+
+        private static bool TryFiniteFormulaWorkdayNumber(double candidate, out double number)
+        {
+            number = candidate;
+            return double.IsFinite(number);
+        }
+
+        private static bool IsValidFormulaWorkdaySerial(double serial) =>
+            double.IsFinite(serial) && serial >= 0 && serial <= 2958465.0;
+
+        private static int CountFormulaExcelWeekdaysInclusive(DateTime lo, DateTime hi)
+        {
+            var totalDays = (int)(hi - lo).TotalDays + 1;
+            var fullWeeks = totalDays / 7;
+            var count = fullWeeks * 5;
+            var startDow = FormulaExcelDowToMonIndex(lo);
+            for (var i = 0; i < totalDays % 7; i++)
+            {
+                var dow = (startDow + i) % 7;
+                if (dow < 5)
+                    count++;
+            }
+
+            return count;
         }
 
         private bool TryEvaluateFormulaYearfrac(
