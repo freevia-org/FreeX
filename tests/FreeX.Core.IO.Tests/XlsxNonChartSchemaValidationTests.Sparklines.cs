@@ -15,7 +15,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     {
         using var stream = Save(CreateSparklineSourceWorkbook());
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
 
         worksheetXml.Root!
             .Elements()
