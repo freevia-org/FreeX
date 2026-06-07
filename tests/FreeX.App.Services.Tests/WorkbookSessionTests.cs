@@ -606,6 +606,131 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void PasteColumnWidthsFromClipboardAtActiveCell_CopiesWidthsPreservesSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var d3 = new CellAddress(sheet.Id, 3, 4);
+        sheet.SetCell(a1, new TextValue("wide"));
+        sheet.SetCell(b1, new TextValue("default"));
+        sheet.ColumnWidths[1] = 22.5;
+        sheet.ColumnWidths[4] = 9;
+        sheet.ColumnWidths[5] = 18;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b1));
+        var clipboardText = session.CopySelectedRangeText();
+        session.SelectCell(d3);
+
+        var result = session.PasteColumnWidthsFromClipboardAtActiveCell(clipboardText);
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().BeEmpty();
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveCell.Should().Be(d3);
+        session.SelectedRange.Should().Be(new GridRange(d3, d3));
+        sheet.ColumnWidths[4].Should().Be(22.5);
+        sheet.ColumnWidths.Should().NotContainKey(5);
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.ColumnWidths[4].Should().Be(9);
+        sheet.ColumnWidths[5].Should().Be(18);
+        session.CanRedo.Should().BeTrue();
+
+        var redo = session.RedoLastEdit();
+
+        redo.Success.Should().BeTrue();
+        sheet.ColumnWidths[4].Should().Be(22.5);
+        sheet.ColumnWidths.Should().NotContainKey(5);
+    }
+
+    [Fact]
+    public void PasteColumnWidthsFromClipboardAtActiveCell_RejectsChangedPlatformClipboardText()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var d1 = new CellAddress(sheet.Id, 1, 4);
+        sheet.SetCell(a1, new TextValue("source"));
+        sheet.ColumnWidths[1] = 22;
+        sheet.ColumnWidths[4] = 9;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+        session.CopySelectedRangeText();
+        session.SelectCell(d1);
+
+        var result = session.PasteColumnWidthsFromClipboardAtActiveCell("external");
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be("Paste Column Widths requires copied FreeX cells.");
+        sheet.ColumnWidths[4].Should().Be(9);
+    }
+
+    [Fact]
+    public void PasteSpecialClipboardAtActiveCell_KeepSourceColumnWidthsPastesValuesAndWidthsWithoutClearingCutSource()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var d1 = new CellAddress(sheet.Id, 1, 4);
+        var e1 = new CellAddress(sheet.Id, 1, 5);
+        sheet.SetCell(a1, new TextValue("source"));
+        sheet.SetCell(b1, new NumberValue(7));
+        sheet.SetCell(d1, new TextValue("old"));
+        sheet.SetCell(e1, new TextValue("old2"));
+        sheet.ColumnWidths[1] = 24;
+        sheet.ColumnWidths[4] = 9;
+        sheet.ColumnWidths[5] = 18;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b1));
+        var clipboardText = session.CutSelectedRangeText();
+        session.SelectCell(d1);
+
+        var result = session.PasteSpecialClipboardAtActiveCell(
+            clipboardText,
+            PasteCellsMode.All,
+            default,
+            keepSourceColumnWidths: true);
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().Contain([d1, e1]);
+        session.SelectedRange.Should().Be(new GridRange(d1, e1));
+        sheet.GetValue(a1).Should().Be(new TextValue("source"));
+        sheet.GetValue(b1).Should().Be(new NumberValue(7));
+        sheet.GetValue(d1).Should().Be(new TextValue("source"));
+        sheet.GetValue(e1).Should().Be(new NumberValue(7));
+        sheet.ColumnWidths[4].Should().Be(24);
+        sheet.ColumnWidths.Should().NotContainKey(5);
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.GetValue(a1).Should().Be(new TextValue("source"));
+        sheet.GetValue(b1).Should().Be(new NumberValue(7));
+        sheet.GetValue(d1).Should().Be(new TextValue("old"));
+        sheet.GetValue(e1).Should().Be(new TextValue("old2"));
+        sheet.ColumnWidths[4].Should().Be(9);
+        sheet.ColumnWidths[5].Should().Be(18);
+    }
+
+    [Fact]
     public void ClearSelectedRangeContents_ClearsValuesAndFormulasPreservesSelectionAndUndo()
     {
         var workbook = CreateWorkbook();

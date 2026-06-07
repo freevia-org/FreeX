@@ -1878,6 +1878,8 @@ public sealed class MainWindow : Window
         yield return CreatePasteSpecialMenuItem("Values", PasteCellsMode.Values, default);
         yield return CreatePasteSpecialMenuItem("Formulas", PasteCellsMode.Formulas, default);
         yield return CreatePasteSpecialMenuItem("Formats", PasteCellsMode.Formats, default);
+        yield return CreatePasteColumnWidthsMenuItem("Column Widths");
+        yield return CreatePasteSpecialMenuItem("Keep Source Column Widths", PasteCellsMode.All, default, keepSourceColumnWidths: true);
         yield return CreatePasteSpecialMenuItem("Transpose", PasteCellsMode.All, new PasteSpecialOptions(Transpose: true));
         yield return CreatePasteSpecialMenuItem("Skip Blanks", PasteCellsMode.All, new PasteSpecialOptions(SkipBlanks: true));
         yield return CreatePasteSpecialMenuItem("Add", PasteCellsMode.All, new PasteSpecialOptions(Operation: PasteSpecialOperation.Add));
@@ -1889,10 +1891,19 @@ public sealed class MainWindow : Window
     private MenuItem CreatePasteSpecialMenuItem(
         string header,
         PasteCellsMode mode,
-        PasteSpecialOptions options)
+        PasteSpecialOptions options,
+        bool keepSourceColumnWidths = false)
     {
         var menuItem = new MenuItem { Header = header };
-        menuItem.Click += async (_, _) => await PasteSpecialClipboardTextAsync(mode, options, header);
+        menuItem.Click += async (_, _) =>
+            await PasteSpecialClipboardTextAsync(mode, options, header, keepSourceColumnWidths);
+        return menuItem;
+    }
+
+    private MenuItem CreatePasteColumnWidthsMenuItem(string header)
+    {
+        var menuItem = new MenuItem { Header = header };
+        menuItem.Click += async (_, _) => await PasteColumnWidthsFromClipboardAsync(header);
         return menuItem;
     }
 
@@ -1902,6 +1913,8 @@ public sealed class MainWindow : Window
         menu.Items.Add(CreateNativePasteSpecialMenuItem("Values", PasteCellsMode.Values, default));
         menu.Items.Add(CreateNativePasteSpecialMenuItem("Formulas", PasteCellsMode.Formulas, default));
         menu.Items.Add(CreateNativePasteSpecialMenuItem("Formats", PasteCellsMode.Formats, default));
+        menu.Items.Add(CreateNativePasteColumnWidthsMenuItem("Column Widths"));
+        menu.Items.Add(CreateNativePasteSpecialMenuItem("Keep Source Column Widths", PasteCellsMode.All, default, keepSourceColumnWidths: true));
         menu.Items.Add(CreateNativePasteSpecialMenuItem("Transpose", PasteCellsMode.All, new PasteSpecialOptions(Transpose: true)));
         menu.Items.Add(CreateNativePasteSpecialMenuItem("Skip Blanks", PasteCellsMode.All, new PasteSpecialOptions(SkipBlanks: true)));
         menu.Items.Add(new NativeMenuItemSeparator());
@@ -1915,10 +1928,19 @@ public sealed class MainWindow : Window
     private NativeMenuItem CreateNativePasteSpecialMenuItem(
         string header,
         PasteCellsMode mode,
-        PasteSpecialOptions options)
+        PasteSpecialOptions options,
+        bool keepSourceColumnWidths = false)
     {
         var menuItem = new NativeMenuItem { Header = header };
-        menuItem.Click += async (_, _) => await PasteSpecialClipboardTextAsync(mode, options, header);
+        menuItem.Click += async (_, _) =>
+            await PasteSpecialClipboardTextAsync(mode, options, header, keepSourceColumnWidths);
+        return menuItem;
+    }
+
+    private NativeMenuItem CreateNativePasteColumnWidthsMenuItem(string header)
+    {
+        var menuItem = new NativeMenuItem { Header = header };
+        menuItem.Click += async (_, _) => await PasteColumnWidthsFromClipboardAsync(header);
         return menuItem;
     }
 
@@ -2944,7 +2966,8 @@ public sealed class MainWindow : Window
     private async Task PasteSpecialClipboardTextAsync(
         PasteCellsMode mode,
         PasteSpecialOptions options,
-        string label)
+        string label,
+        bool keepSourceColumnWidths = false)
     {
         if (_isOpening || _isSaving)
             return;
@@ -2961,10 +2984,39 @@ public sealed class MainWindow : Window
 
         var text = await clipboard.TryGetTextAsync();
         var destination = _session.ActiveCell;
-        var result = _session.PasteSpecialClipboardAtActiveCell(text, mode, options);
+        var result = keepSourceColumnWidths
+            ? _session.PasteSpecialClipboardAtActiveCell(text, mode, options, keepSourceColumnWidths: true)
+            : _session.PasteSpecialClipboardAtActiveCell(text, mode, options);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? "Paste Special failed.");
+            return;
+        }
+
+        RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
+    }
+
+    private async Task PasteColumnWidthsFromClipboardAsync(string label)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard is null)
+        {
+            ShowEditIssue("Clipboard unavailable on this platform.");
+            return;
+        }
+
+        var text = await clipboard.TryGetTextAsync();
+        var destination = _session.ActiveCell;
+        var result = _session.PasteColumnWidthsFromClipboardAtActiveCell(text);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Paste Column Widths failed.");
             return;
         }
 
@@ -3535,6 +3587,8 @@ public sealed class MainWindow : Window
             HasNativeCopyMenuItem: HasNativeMenuItem(_copyMenuItem, "Copy"),
             HasNativePasteMenuItem: HasNativeMenuItem(_pasteMenuItem, "Paste"),
             HasNativePasteSpecialMenuItem: HasNativeMenuItem(_pasteSpecialMenuItem, "Paste Special"),
+            HasNativePasteSpecialColumnWidthsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Column Widths"),
+            HasNativePasteSpecialKeepSourceColumnWidthsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Keep Source Column Widths"),
             HasNativeSelectAllMenuItem: HasNativeMenuItem(_selectAllMenuItem, "Select All"),
             HasNativeClearContentsMenuItem: HasNativeMenuItem(_clearContentsMenuItem, "Clear Contents"),
             HasNativeBoldMenuItem: HasNativeMenuItem(_boldMenuItem, "Bold"),
@@ -3583,6 +3637,12 @@ public sealed class MainWindow : Window
     private static bool HasNativeMenuItem(NativeMenuItem item, string expectedHeader, bool requireGesture = true) =>
         string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal) &&
         (!requireGesture || item.Gesture is not null);
+
+    private static bool HasNativeSubmenuItem(NativeMenu? menu, string expectedHeader) =>
+        menu?
+            .Items
+            .OfType<NativeMenuItem>()
+            .Any(item => string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal)) == true;
 
     private static int CountNativeColorPaletteSwatches(NativeMenu? menu) =>
         menu?

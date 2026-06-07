@@ -550,7 +550,8 @@ public sealed class WorkbookSession
     public WorkbookCellEditResult PasteSpecialClipboardAtActiveCell(
         string? text,
         PasteCellsMode mode,
-        PasteSpecialOptions options)
+        PasteSpecialOptions options,
+        bool keepSourceColumnWidths = false)
     {
         if (!Enum.IsDefined(mode))
         {
@@ -572,7 +573,32 @@ public sealed class WorkbookSession
                 RecalcReport: null);
         }
 
-        return PasteInternalClipboardAtActiveCell(internalClipboard, mode, options);
+        return PasteInternalClipboardAtActiveCell(internalClipboard, mode, options, keepSourceColumnWidths);
+    }
+
+    public WorkbookCellEditResult PasteColumnWidthsFromClipboardAtActiveCell(string? text)
+    {
+        if (_internalClipboard is not { } internalClipboard ||
+            (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
+        {
+            _internalClipboard = null;
+            return new WorkbookCellEditResult(
+                false,
+                "Paste Column Widths requires copied FreeX cells.",
+                [],
+                RecalcReport: null);
+        }
+
+        var command = new PasteColumnWidthsCommand(
+            ActiveSheet.Id,
+            internalClipboard.SourceRange,
+            ActiveCell.Col);
+        var result = _cellEditService.ExecuteEditCommand(Workbook, command);
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
+        return result;
     }
 
     public WorkbookCellEditResult PasteExternalTextAtActiveCell(string text, bool preserveText = false)
@@ -1136,7 +1162,8 @@ public sealed class WorkbookSession
     private WorkbookCellEditResult PasteInternalClipboardAtActiveCell(
         InternalClipboard clipboard,
         PasteCellsMode mode,
-        PasteSpecialOptions options)
+        PasteSpecialOptions options,
+        bool keepSourceColumnWidths = false)
     {
         var destination = ActiveCell;
         var command = PasteCommandFactory.CreateInternalPasteCommand(
@@ -1147,7 +1174,17 @@ public sealed class WorkbookSession
             destination,
             mode,
             options);
-        if (ShouldClearCutSourceAfterPaste(clipboard, destination, mode, options))
+        if (keepSourceColumnWidths)
+        {
+            command = new CompositeWorkbookCommand(
+                "Paste Special",
+                [
+                    command,
+                    new PasteColumnWidthsCommand(ActiveSheet.Id, clipboard.SourceRange, destination.Col)
+                ]);
+        }
+
+        if (ShouldClearCutSourceAfterPaste(clipboard, destination, mode, options, keepSourceColumnWidths))
         {
             command = new CompositeWorkbookCommand(
                 "Cut and Paste",
@@ -1185,9 +1222,10 @@ public sealed class WorkbookSession
         InternalClipboard clipboard,
         CellAddress destination,
         PasteCellsMode mode,
-        PasteSpecialOptions options)
+        PasteSpecialOptions options,
+        bool keepSourceColumnWidths)
     {
-        if (!clipboard.IsCut || mode == PasteCellsMode.Formats)
+        if (!clipboard.IsCut || mode == PasteCellsMode.Formats || keepSourceColumnWidths)
             return false;
 
         var rowCount = options.Transpose ? clipboard.SourceRange.ColCount : clipboard.SourceRange.RowCount;
