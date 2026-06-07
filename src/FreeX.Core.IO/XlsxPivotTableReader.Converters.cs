@@ -6,17 +6,11 @@ namespace FreeX.Core.IO;
 
 internal static partial class XlsxPivotTableReader
 {
-    private const string FreeXPivotExtensionNamespace = "urn:freex:pivot:2026";
-
     // Reads a boolean from the FreeX tableProps extLst extension on a pivotTableDefinition; null when absent
     // so callers can fall back to a legacy definition-level attribute. Values are "0"/"1" (default true).
     private static bool? ReadFreeXTableBool(XElement root, XNamespace workbookNs, string attributeName)
     {
-        XNamespace freeXNs = FreeXPivotExtensionNamespace;
-        var props = root.Element(workbookNs + "extLst")?
-            .Elements(workbookNs + "ext")
-            .Select(ext => ext.Element(freeXNs + "tableProps"))
-            .FirstOrDefault(element => element is not null);
+        var props = ReadFreeXTableProps(root, workbookNs);
         if (props?.Attribute(attributeName) is not { } attribute)
             return null;
 
@@ -25,11 +19,7 @@ internal static partial class XlsxPivotTableReader
 
     private static string? ReadFreeXTableText(XElement root, XNamespace workbookNs, string attributeName)
     {
-        XNamespace freeXNs = FreeXPivotExtensionNamespace;
-        var props = root.Element(workbookNs + "extLst")?
-            .Elements(workbookNs + "ext")
-            .Select(ext => ext.Element(freeXNs + "tableProps"))
-            .FirstOrDefault(element => element is not null);
+        var props = ReadFreeXTableProps(root, workbookNs);
         var value = props?.Attribute(attributeName)?.Value;
         return string.IsNullOrWhiteSpace(value) ? null : value;
     }
@@ -98,14 +88,15 @@ internal static partial class XlsxPivotTableReader
         XElement root,
         XNamespace workbookNs)
     {
-        XNamespace freeXNs = FreeXPivotExtensionNamespace;
-        return root.Element(workbookNs + "extLst")?
-            .Elements(workbookNs + "ext")
-            .Elements(freeXNs + "tableProps")
+        var freeXNs = XlsxPivotExtensionReader.FreeXNamespace;
+        return ReadFreeXTableProps(root, workbookNs)?
             .Elements(freeXNs + "fields")
             .Elements(freeXNs + "field")
             ?? [];
     }
+
+    private static XElement? ReadFreeXTableProps(XElement root, XNamespace workbookNs) =>
+        XlsxPivotExtensionReader.ReadElement(root, workbookNs, "tableProps");
 
     private static Dictionary<TKey, TValue> MergeMissing<TKey, TValue>(
         IReadOnlyDictionary<TKey, TValue> primary,
