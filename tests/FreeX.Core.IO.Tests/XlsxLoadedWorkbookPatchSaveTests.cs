@@ -72,6 +72,48 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void Save_LoadedWorkbookWithWorkbookMetadataPart_PreservesMetadataPackageGraphAndCellIndexes()
+    {
+        var sourceBytes = AddWorkbookMetadataPackageParts(CreateSourcePackage());
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("patched metadata-backed value"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        ReadPackageEntry(savedBytes, "xl/metadata.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/metadata.xml"));
+        ReadContentTypeOverrides(savedBytes)
+            .Should()
+            .Contain("/xl/metadata.xml");
+        WorkbookRelationshipsContain(
+                savedBytes,
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata",
+                "metadata.xml")
+            .Should()
+            .BeTrue();
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "A1")
+            .Should()
+            .Be("patched metadata-backed value");
+        ReadCellAttribute(savedBytes, "xl/worksheets/sheet1.xml", "A1", "cm")
+            .Should()
+            .Be("1");
+        ReadCellAttribute(savedBytes, "xl/worksheets/sheet1.xml", "A1", "vm")
+            .Should()
+            .Be("1");
+    }
+
+    [Fact]
     public void Save_LoadedWorkbookWithUnpreparedDirectEdit_FallsBackInsteadOfCapturingEditAsBaseline()
     {
         var sourceBytes = CreateSourcePackage();
@@ -1865,6 +1907,104 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         return stream.ToArray();
     }
 
+    private static byte[] AddWorkbookMetadataPackageParts(byte[] sourceBytes)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(sourceBytes, 0, sourceBytes.Length);
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace xdaNs = "http://schemas.microsoft.com/office/spreadsheetml/2017/dynamicarray";
+
+            var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+            contentTypesXml.Root!
+                .Elements(contentTypeNs + "Override")
+                .Where(element => string.Equals((string?)element.Attribute("PartName"), "/xl/metadata.xml", StringComparison.OrdinalIgnoreCase))
+                .Remove();
+            contentTypesXml.Root.Add(new XElement(
+                contentTypeNs + "Override",
+                new XAttribute("PartName", "/xl/metadata.xml"),
+                new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml")));
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var workbookRelationshipsXml = LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
+            workbookRelationshipsXml.Root!.Add(new XElement(
+                relationshipNs + "Relationship",
+                new XAttribute("Id", "rIdFreeXMetadata"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata"),
+                new XAttribute("Target", "metadata.xml")));
+            ReplacePackageXml(archive, "xl/_rels/workbook.xml.rels", workbookRelationshipsXml);
+
+            var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+            var metadataCell = worksheetXml
+                .Descendants(workbookNs + "c")
+                .Single(element => element.Attribute("r")?.Value == "A1");
+            metadataCell.SetAttributeValue("cm", "1");
+            metadataCell.SetAttributeValue("vm", "1");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+            var metadataXml = new XDocument(new XElement(
+                workbookNs + "metadata",
+                new XAttribute(XNamespace.Xmlns + "xda", xdaNs.NamespaceName),
+                new XElement(
+                    workbookNs + "metadataTypes",
+                    new XAttribute("count", "1"),
+                    new XElement(
+                        workbookNs + "metadataType",
+                        new XAttribute("name", "XLDAPR"),
+                        new XAttribute("minSupportedVersion", "120000"),
+                        new XAttribute("copy", "1"),
+                        new XAttribute("pasteAll", "1"),
+                        new XAttribute("pasteValues", "1"),
+                        new XAttribute("merge", "1"),
+                        new XAttribute("splitFirst", "1"),
+                        new XAttribute("rowColShift", "1"),
+                        new XAttribute("clearFormats", "1"),
+                        new XAttribute("clearComments", "1"),
+                        new XAttribute("assign", "1"),
+                        new XAttribute("coerce", "1"),
+                        new XAttribute("cellMeta", "1"))),
+                new XElement(
+                    workbookNs + "futureMetadata",
+                    new XAttribute("name", "XLDAPR"),
+                    new XAttribute("count", "1"),
+                    new XElement(
+                        workbookNs + "bk",
+                        new XElement(
+                            workbookNs + "extLst",
+                            new XElement(
+                                workbookNs + "ext",
+                                new XAttribute("uri", "{bdbb8cdc-fa1e-496e-a857-3c3f30c029c3}"),
+                                new XElement(
+                                    xdaNs + "dynamicArrayProperties",
+                                    new XAttribute("fDynamic", "1"),
+                                    new XAttribute("fCollapsed", "0")))))),
+                new XElement(
+                    workbookNs + "cellMetadata",
+                    new XAttribute("count", "1"),
+                    new XElement(
+                        workbookNs + "bk",
+                        new XElement(
+                            workbookNs + "rc",
+                            new XAttribute("t", "1"),
+                            new XAttribute("v", "0")))),
+                new XElement(
+                    workbookNs + "valueMetadata",
+                    new XAttribute("count", "1"),
+                    new XElement(
+                        workbookNs + "bk",
+                        new XElement(
+                            workbookNs + "rc",
+                            new XAttribute("t", "1"),
+                            new XAttribute("v", "0"))))));
+            ReplacePackageXml(archive, "xl/metadata.xml", metadataXml);
+        }
+
+        return stream.ToArray();
+    }
+
     private static byte[] CreateDenseSourcePackage(int rowCount, int columnCount)
     {
         using var stream = new MemoryStream();
@@ -3130,6 +3270,19 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
             .ToList();
     }
 
+    private static bool WorkbookRelationshipsContain(byte[] packageBytes, string type, string target)
+    {
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var document = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
+        var ns = document.Root!.Name.Namespace;
+        return document.Root!
+            .Elements(ns + "Relationship")
+            .Any(element =>
+                string.Equals(element.Attribute("Type")?.Value, type, StringComparison.Ordinal) &&
+                string.Equals(element.Attribute("Target")?.Value, target, StringComparison.Ordinal));
+    }
+
     private static string? ReadCellText(byte[] packageBytes, string worksheetPath, string reference)
     {
         var cell = ReadCellElement(packageBytes, worksheetPath, reference);
@@ -3163,6 +3316,9 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
 
     private static string? ReadCellStyleIndex(byte[] packageBytes, string worksheetPath, string reference) =>
         ReadCellElement(packageBytes, worksheetPath, reference).Attribute("s")?.Value;
+
+    private static string? ReadCellAttribute(byte[] packageBytes, string worksheetPath, string reference, string attributeName) =>
+        ReadCellElement(packageBytes, worksheetPath, reference).Attribute(attributeName)?.Value;
 
     private static string? ReadPrimarySheetViewAttribute(byte[] packageBytes, string worksheetPath, string attributeName)
     {
