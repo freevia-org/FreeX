@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -36,7 +37,7 @@ public static class BackstageInfoPlanner
         var summary = InfoPanelSummaryPlanner.Create(workbook, activeSheet, culture);
         var sharingStatus = ShareWorkbookPlanner.FormatStatus(
             ShareWorkbookPlanner.CreatePlan(currentFilePath, fileExists));
-        var exportStatus = ExportReadinessPlanner.Create(workbook, hasSelection).StatusText;
+        var exportStatus = WorkbookExportReadinessPlanner.Create(workbook, hasSelection).StatusText;
         var filePath = string.IsNullOrWhiteSpace(currentFilePath)
             ? UiText.Get("Backstage_Info_NotSavedYet")
             : currentFilePath;
