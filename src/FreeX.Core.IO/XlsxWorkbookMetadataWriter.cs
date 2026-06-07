@@ -302,6 +302,8 @@ internal static class XlsxWorkbookMetadataWriter
             functionGroups.Add(element);
         }
 
+        XlsxWorkbookFunctionGroupsNormalizer.NormalizeElement(functionGroups);
+
         var oleSize = root.Element(WorkbookNs + "oleSize");
         if (oleSize is not null)
             oleSize.AddBeforeSelf(functionGroups);

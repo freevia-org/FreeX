@@ -13272,8 +13272,8 @@ public partial class FileAdapterSmokeTests
         xml.Should().Contain("validWorkbookPrAttr=\"keep\"");
         xml.Should().NotContain("validFileVersionAttr=\"keep\"");
         xml.Should().NotContain("validRecoveryAttr=\"keep\"");
-        xml.Should().Contain("validFunctionGroupsAttr=\"keep\"");
-        xml.Should().Contain("validFunctionGroupAttr=\"keep\"");
+        xml.Should().NotContain("validFunctionGroupsAttr=\"keep\"");
+        xml.Should().NotContain("validFunctionGroupAttr=\"keep\"");
         xml.Should().Contain("validSmartTagPrAttr=\"keep\"");
         xml.Should().Contain("validSmartTagTypesAttr=\"keep\"");
         xml.Should().Contain("validSmartTagTypeAttr=\"keep\"");
@@ -13564,9 +13564,9 @@ public partial class FileAdapterSmokeTests
         var functionGroups = workbookXml.Root!.Element(workbookNs + "functionGroups");
         functionGroups.Should().NotBeNull();
         functionGroups!.ToString().Should().Contain("builtInGroupCount=\"16\"");
-        functionGroups.ToString().Should().Contain("customFunctionGroupFlag=\"keep\"");
+        functionGroups.ToString().Should().NotContain("customFunctionGroupFlag=\"keep\"");
         functionGroups.ToString().Should().Contain("name=\"FreeXNativeFunctions\"");
-        functionGroups.ToString().Should().Contain("customGroupFlag=\"keep\"");
+        functionGroups.ToString().Should().NotContain("customGroupFlag=\"keep\"");
     }
 
     [Fact]
