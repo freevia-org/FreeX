@@ -127,6 +127,51 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         AssertWorksheetWebPublishItemsSanitized(saved);
     }
 
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidWorksheetOleControlsForSchemaValidity()
+    {
+        using var source = CreateWorksheetNativeMetadataSourcePackage();
+        SetWorksheetOleControlInvalidMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetOleControlsSanitized(saved);
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorksheetOleControlsForSchemaValidity()
+    {
+        using var source = CreateWorksheetNativeMetadataSourcePackage();
+        SetWorksheetOleControlInvalidMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetOleControlsSanitized(saved);
+    }
+
     private static MemoryStream CreateWorksheetNativeMetadataSourcePackage()
     {
         var workbook = new Workbook("WorksheetNativeMetadataPatchSave");
@@ -270,6 +315,48 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         ReplacePackageXml(archive, "xl/webPublishItems.xml", partXml);
     }
 
+    private static void SetWorksheetOleControlInvalidMetadata(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        var root = worksheetXml.Root!;
+
+        var oleObjects = root.Element(worksheetNs + "oleObjects")!;
+        oleObjects.SetAttributeValue("customOleObjectsFlag", "removed");
+        oleObjects.Add(new XElement(worksheetNs + "nativeOleObjectsChild"));
+        var oleObject = oleObjects.Element(worksheetNs + "oleObject")!;
+        oleObject.SetAttributeValue("progId", " Package ");
+        oleObject.SetAttributeValue("shapeId", " 1025 ");
+        oleObject.SetAttributeValue("autoLoad", "true");
+        oleObject.SetAttributeValue("oleUpdate", "OLEUPDATE_ALWAYS");
+        oleObject.SetAttributeValue("customOleObjectFlag", "removed");
+        oleObject.Add(new XElement(worksheetNs + "nativeOleObjectChild"));
+        oleObjects.Add(new XElement(
+            worksheetNs + "oleObject",
+            new XAttribute("progId", "RemovedPackage"),
+            new XAttribute("shapeId", "not-a-number"),
+            new XAttribute(relNs + "id", "rIdFreeXOleObject")));
+
+        var controls = root.Element(worksheetNs + "controls")!;
+        controls.SetAttributeValue("customControlsFlag", "removed");
+        controls.Add(new XElement(worksheetNs + "nativeControlsChild"));
+        var control = controls.Element(worksheetNs + "control")!;
+        control.SetAttributeValue("shapeId", " 1026 ");
+        control.SetAttributeValue("name", " Button 1 ");
+        control.SetAttributeValue("customControlFlag", "removed");
+        control.Add(new XElement(worksheetNs + "nativeControlChild"));
+        controls.Add(new XElement(
+            worksheetNs + "control",
+            new XAttribute("shapeId", "not-a-number"),
+            new XAttribute("name", "Removed Control"),
+            new XAttribute(relNs + "id", "rIdFreeXControl")));
+
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
     private static void SetInvalidWebPublishItemsPayload(XElement webPublishItems, XNamespace worksheetNs)
     {
         webPublishItems.RemoveNodes();
@@ -382,6 +469,40 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         webPublishItem.Attribute("autoRepublish")!.Value.Should().Be("true");
         webPublishItem.Attribute("customWebPublishItemFlag").Should().BeNull();
         webPublishItem.Elements().Should().BeEmpty();
+    }
+
+    private static void AssertWorksheetOleControlsSanitized(Stream stream)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+        var oleObjects = ReadWorksheetChildElement(stream, "oleObjects");
+        oleObjects.Attribute("customOleObjectsFlag").Should().BeNull();
+        oleObjects.Element(worksheetNs + "nativeOleObjectsChild").Should().BeNull();
+        var oleObject = oleObjects.Elements(worksheetNs + "oleObject")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        oleObject.Attribute("progId")!.Value.Should().Be("Package");
+        oleObject.Attribute("shapeId")!.Value.Should().Be("1025");
+        oleObject.Attribute(relNs + "id")!.Value.Should().Be("rIdFreeXOleObject");
+        oleObject.Attribute("autoLoad")!.Value.Should().Be("true");
+        oleObject.Attribute("oleUpdate")!.Value.Should().Be("OLEUPDATE_ALWAYS");
+        oleObject.Attribute("customOleObjectFlag").Should().BeNull();
+        oleObject.Elements().Should().BeEmpty();
+
+        var controls = ReadWorksheetChildElement(stream, "controls");
+        controls.Attribute("customControlsFlag").Should().BeNull();
+        controls.Element(worksheetNs + "nativeControlsChild").Should().BeNull();
+        var control = controls.Elements(worksheetNs + "control")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        control.Attribute("shapeId")!.Value.Should().Be("1026");
+        control.Attribute("name")!.Value.Should().Be("Button 1");
+        control.Attribute(relNs + "id")!.Value.Should().Be("rIdFreeXControl");
+        control.Attribute("customControlFlag").Should().BeNull();
+        control.Elements().Should().BeEmpty();
     }
 
     private static void AssertWorksheetNativeMetadataOrder(XElement worksheetRoot)

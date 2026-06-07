@@ -880,6 +880,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchWorksheetDataValidations(archive);
                 NormalizePatchWorksheetExtensionLists(archive);
                 NormalizePatchWorksheetWebPublishItems(archive);
+                NormalizePatchWorksheetOleControls(archive);
                 NormalizePatchWorksheetPageLayout(archive);
                 NormalizePatchWorksheetPageBreaks(archive);
                 NormalizePatchWorksheetSingleXmlCells(archive);
@@ -987,6 +988,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchWorksheetScenarios(archive);
                 NormalizePatchWorksheetSmartTags(archive);
                 NormalizePatchWorksheetWebPublishItems(archive);
+                NormalizePatchWorksheetOleControls(archive);
                 NormalizePatchSingleCellTableParts(archive);
 
                 if (invalidatesCalcChain)
@@ -1603,6 +1605,9 @@ public sealed partial class XlsxFileAdapter
 
         private static void NormalizePatchWorksheetWebPublishItems(ZipArchive archive)
             => XlsxWorksheetWebPublishItemsNormalizer.NormalizePackage(archive);
+
+        private static void NormalizePatchWorksheetOleControls(ZipArchive archive)
+            => XlsxWorksheetOleControlNormalizer.NormalizeWorksheets(archive);
 
         private static void NormalizePatchWorksheetSingleXmlCells(ZipArchive archive)
         {
