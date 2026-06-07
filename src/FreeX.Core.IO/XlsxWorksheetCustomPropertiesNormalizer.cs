@@ -58,7 +58,7 @@ internal static class XlsxWorksheetCustomPropertiesNormalizer
             changed |= RemoveUnknownCustomPropertyAttributes(customProperty);
             changed |= NormalizeLegacyId(customProperty);
             changed |= NormalizeRelationshipId(customProperty);
-            changed |= RemoveAllNodes(customProperty);
+            changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(customProperty);
         }
 
         return changed;
@@ -159,15 +159,6 @@ internal static class XlsxWorksheetCustomPropertiesNormalizer
         }
 
         return changed;
-    }
-
-    private static bool RemoveAllNodes(XElement element)
-    {
-        if (!element.Nodes().Any())
-            return false;
-
-        element.RemoveNodes();
-        return true;
     }
 
     private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)

@@ -61,7 +61,7 @@ internal static class XlsxWorksheetCellWatchesNormalizer
 
             changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(cellWatch, CellWatchAttributes);
             changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(cellWatch, "r", normalizedReference);
-            changed |= RemoveAllChildren(cellWatch);
+            changed |= XlsxXmlNormalizationHelpers.RemoveChildElements(cellWatch);
         }
 
         return changed;
@@ -94,15 +94,6 @@ internal static class XlsxWorksheetCellWatchesNormalizer
         }
 
         return changed;
-    }
-
-    private static bool RemoveAllChildren(XElement element)
-    {
-        if (!element.HasElements)
-            return false;
-
-        element.Elements().Remove();
-        return true;
     }
 
     private static string? NormalizeCellReference(string? value)

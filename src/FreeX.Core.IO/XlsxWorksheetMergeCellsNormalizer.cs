@@ -71,7 +71,7 @@ internal static class XlsxWorksheetMergeCellsNormalizer
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(mergeCell, MergeCellAttributes);
         changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(mergeCell, "ref", normalizedReference);
-        changed |= RemoveAllChildren(mergeCell);
+        changed |= XlsxXmlNormalizationHelpers.RemoveChildElements(mergeCell);
         return changed;
     }
 
@@ -88,15 +88,6 @@ internal static class XlsxWorksheetMergeCellsNormalizer
         }
 
         return changed;
-    }
-
-    private static bool RemoveAllChildren(XElement element)
-    {
-        if (!element.HasElements)
-            return false;
-
-        element.Elements().Remove();
-        return true;
     }
 
     private static string? NormalizeCellRange(string? value)

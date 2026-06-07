@@ -41,7 +41,7 @@ internal static class XlsxWorksheetDimensionNormalizer
             keptDimension = true;
             changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(dimension, DimensionAttributes);
             changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(dimension, "ref", normalizedReference);
-            changed |= RemoveAllChildren(dimension);
+            changed |= XlsxXmlNormalizationHelpers.RemoveChildElements(dimension);
         }
 
         return changed;
@@ -59,15 +59,6 @@ internal static class XlsxWorksheetDimensionNormalizer
             if (NormalizeWorksheetRoot(root))
                 XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
         }
-    }
-
-    private static bool RemoveAllChildren(XElement element)
-    {
-        if (!element.HasElements)
-            return false;
-
-        element.Elements().Remove();
-        return true;
     }
 
     private static string? NormalizeCellRange(string? value)

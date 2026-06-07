@@ -86,7 +86,7 @@ internal static class XlsxWorksheetProtectionNormalizer
         foreach (var attributeName in BooleanAttributes)
             changed |= XlsxXmlNormalizationHelpers.NormalizeAttribute(protection, attributeName, NormalizeBoolean);
         changed |= RemoveLegacyPasswordWhenAdvancedHashExists(protection);
-        changed |= RemoveAllNodes(protection);
+        changed |= XlsxXmlNormalizationHelpers.RemoveAllNodes(protection);
         return changed;
     }
 
@@ -117,15 +117,6 @@ internal static class XlsxWorksheetProtectionNormalizer
         }
 
         return changed;
-    }
-
-    private static bool RemoveAllNodes(XElement element)
-    {
-        if (!element.Nodes().Any())
-            return false;
-
-        element.RemoveNodes();
-        return true;
     }
 
     private static bool RemoveLegacyPasswordWhenAdvancedHashExists(XElement protection)
