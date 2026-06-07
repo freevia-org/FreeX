@@ -1280,6 +1280,30 @@ public static partial class AccessibilityCheckerService
             case "WEIBULL.DIST":
                 kind = ConditionalFormulaScalarFunctionKind.WeibullDist;
                 return true;
+            case "PMT":
+                kind = ConditionalFormulaScalarFunctionKind.Pmt;
+                return true;
+            case "PV":
+                kind = ConditionalFormulaScalarFunctionKind.Pv;
+                return true;
+            case "FV":
+                kind = ConditionalFormulaScalarFunctionKind.Fv;
+                return true;
+            case "NPER":
+                kind = ConditionalFormulaScalarFunctionKind.Nper;
+                return true;
+            case "RATE":
+                kind = ConditionalFormulaScalarFunctionKind.Rate;
+                return true;
+            case "IPMT":
+                kind = ConditionalFormulaScalarFunctionKind.Ipmt;
+                return true;
+            case "PPMT":
+                kind = ConditionalFormulaScalarFunctionKind.Ppmt;
+                return true;
+            case "ISPMT":
+                kind = ConditionalFormulaScalarFunctionKind.Ispmt;
+                return true;
             case "PI":
                 kind = ConditionalFormulaScalarFunctionKind.Pi;
                 return true;
@@ -1854,6 +1878,14 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.ChiSqDistRt or
             ConditionalFormulaScalarFunctionKind.ChiSqInv or
             ConditionalFormulaScalarFunctionKind.ChiSqInvRt => argumentCount == 2,
+            ConditionalFormulaScalarFunctionKind.Pmt or
+            ConditionalFormulaScalarFunctionKind.Pv or
+            ConditionalFormulaScalarFunctionKind.Fv or
+            ConditionalFormulaScalarFunctionKind.Nper => argumentCount is >= 3 and <= 5,
+            ConditionalFormulaScalarFunctionKind.Rate => argumentCount is >= 3 and <= 6,
+            ConditionalFormulaScalarFunctionKind.Ipmt or
+            ConditionalFormulaScalarFunctionKind.Ppmt => argumentCount is >= 4 and <= 6,
+            ConditionalFormulaScalarFunctionKind.Ispmt => argumentCount == 4,
             ConditionalFormulaScalarFunctionKind.Multinomial => argumentCount is >= 1 and <= MaxFormulaMultinomialArgumentCount,
             ConditionalFormulaScalarFunctionKind.Gcd or
             ConditionalFormulaScalarFunctionKind.Lcm => argumentCount is >= 1 and <= MaxFormulaGcdArgumentCount,
@@ -2613,6 +2645,14 @@ public static partial class AccessibilityCheckerService
         LogNormInv,
         ExponDist,
         WeibullDist,
+        Pmt,
+        Pv,
+        Fv,
+        Nper,
+        Rate,
+        Ipmt,
+        Ppmt,
+        Ispmt,
         Pi,
         Arabic,
         Roman,
@@ -3362,6 +3402,15 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.ExponDist:
                 case ConditionalFormulaScalarFunctionKind.WeibullDist:
                     return TryEvaluateFormulaContinuousDistributionFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Pmt:
+                case ConditionalFormulaScalarFunctionKind.Pv:
+                case ConditionalFormulaScalarFunctionKind.Fv:
+                case ConditionalFormulaScalarFunctionKind.Nper:
+                case ConditionalFormulaScalarFunctionKind.Rate:
+                case ConditionalFormulaScalarFunctionKind.Ipmt:
+                case ConditionalFormulaScalarFunctionKind.Ppmt:
+                case ConditionalFormulaScalarFunctionKind.Ispmt:
+                    return TryEvaluateFormulaFinancialAnnuityFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Pi:
                     value = new NumberValue(Math.PI);
                     return true;
@@ -6830,6 +6879,373 @@ public static partial class AccessibilityCheckerService
 
             return value is NumberValue;
         }
+
+        private bool TryEvaluateFormulaFinancialAnnuityFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            var arguments = new ScalarValue[function.Arguments.Count];
+            for (var i = 0; i < function.Arguments.Count; i++)
+            {
+                if (function.Arguments[i].Kind == ConditionalFormulaOperandKind.ReferenceRange ||
+                    !TryResolveFormulaOperand(function.Arguments[i], rowOffset, colOffset, out arguments[i]))
+                {
+                    return false;
+                }
+            }
+
+            for (var i = 0; i < arguments.Length; i++)
+            {
+                if (arguments[i] is ErrorValue error)
+                {
+                    value = error;
+                    return true;
+                }
+            }
+
+            if (arguments.Any(static argument => argument is RangeValue))
+                return false;
+
+            switch (function.Kind)
+            {
+                case ConditionalFormulaScalarFunctionKind.Pmt:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var pmtRate) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var pmtNper) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var pmtPv) ||
+                        !TryGetFormulaFinancialOptionalNumber(arguments, 3, 0d, out var pmtFv) ||
+                        !TryGetFormulaFinancialOptionalNumber(arguments, 4, 0d, out var pmtType))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaPmtScalar(pmtRate, pmtNper, pmtPv, pmtFv, pmtType);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Pv:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var pvRate) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var pvNper) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var pvPmt) ||
+                        !TryGetFormulaFinancialOptionalNumber(arguments, 3, 0d, out var pvFv) ||
+                        !TryGetFormulaFinancialOptionalNumber(arguments, 4, 0d, out var pvType))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaPvScalar(pvRate, pvNper, pvPmt, pvFv, pvType);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Fv:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var fvRate) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var fvNper) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var fvPmt) ||
+                        !TryGetFormulaFinancialOptionalNumber(arguments, 3, 0d, out var fvPv) ||
+                        !TryGetFormulaFinancialOptionalNumber(arguments, 4, 0d, out var fvType))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaFvScalar(fvRate, fvNper, fvPmt, fvPv, fvType);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Nper:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var nperRate) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var nperPmt) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var nperPv) ||
+                        !TryGetFormulaFinancialOptionalNumber(arguments, 3, 0d, out var nperFv) ||
+                        !TryGetFormulaFinancialOptionalNumber(arguments, 4, 0d, out var nperType))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaNperScalar(nperRate, nperPmt, nperPv, nperFv, nperType);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Rate:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var rateNper) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var ratePmt) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var ratePv) ||
+                        !TryGetFormulaFinancialOptionalNumber(arguments, 3, 0d, out var rateFv) ||
+                        !TryGetFormulaFinancialOptionalNumber(arguments, 4, 0d, out var rateType) ||
+                        !TryGetFormulaFinancialOptionalNumber(arguments, 5, 0.1d, out var rateGuess))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaRateScalar(rateNper, ratePmt, ratePv, rateFv, rateType, rateGuess);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Ipmt:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var ipmtRate) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var ipmtPer) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var ipmtNper) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var ipmtPv) ||
+                        !TryGetFormulaFinancialOptionalNumber(arguments, 4, 0d, out var ipmtFv) ||
+                        !TryGetFormulaFinancialOptionalNumber(arguments, 5, 0d, out var ipmtType))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaIpmtScalar(ipmtRate, ipmtPer, ipmtNper, ipmtPv, ipmtFv, ipmtType);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Ppmt:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var ppmtRate) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var ppmtPer) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var ppmtNper) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var ppmtPv) ||
+                        !TryGetFormulaFinancialOptionalNumber(arguments, 4, 0d, out var ppmtFv) ||
+                        !TryGetFormulaFinancialOptionalNumber(arguments, 5, 0d, out var ppmtType))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaPpmtScalar(ppmtRate, ppmtPer, ppmtNper, ppmtPv, ppmtFv, ppmtType);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Ispmt:
+                    if (!TryGetFormulaFinancialNumber(arguments[0], out var ispmtRate) ||
+                        !TryGetFormulaFinancialNumber(arguments[1], out var ispmtPer) ||
+                        !TryGetFormulaFinancialNumber(arguments[2], out var ispmtNper) ||
+                        !TryGetFormulaFinancialNumber(arguments[3], out var ispmtPv))
+                    {
+                        value = ErrorValue.Value;
+                        return true;
+                    }
+
+                    value = FormulaIspmtScalar(ispmtRate, ispmtPer, ispmtNper, ispmtPv);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static bool TryGetFormulaFinancialNumber(ScalarValue value, out double number) =>
+            TryGetFormulaCoercedNumber(value, out number);
+
+        private static bool TryGetFormulaFinancialOptionalNumber(
+            IReadOnlyList<ScalarValue> arguments,
+            int index,
+            double defaultValue,
+            out double number)
+        {
+            if (arguments.Count <= index || arguments[index] is BlankValue)
+            {
+                number = defaultValue;
+                return true;
+            }
+
+            return TryGetFormulaFinancialNumber(arguments[index], out number);
+        }
+
+        private static bool IsValidFormulaFinancialPaymentType(double type) =>
+            double.IsFinite(type) && (type == 0d || type == 1d);
+
+        private static ScalarValue FormulaPmtScalar(double rate, double nper, double pv, double fv, double type)
+        {
+            if (!double.IsFinite(rate) || !double.IsFinite(nper) || !double.IsFinite(pv) || !double.IsFinite(fv) || !double.IsFinite(type))
+                return ErrorValue.Num;
+
+            if (!IsValidFormulaFinancialPaymentType(type))
+                return ErrorValue.Num;
+
+            if (nper == 0d)
+                return ErrorValue.DivByZero;
+
+            if (Math.Abs(rate) < 1e-10d)
+                return FormulaFinancialNumberResult(-(pv + fv) / nper);
+
+            var rn = Math.Pow(1d + rate, nper);
+            return FormulaFinancialNumberResult(-(pv * rn + fv) * rate / ((1d + rate * type) * (rn - 1d)));
+        }
+
+        private static ScalarValue FormulaPvScalar(double rate, double nper, double pmt, double fv, double type)
+        {
+            if (!double.IsFinite(rate) || !double.IsFinite(nper) || !double.IsFinite(pmt) || !double.IsFinite(fv) || !double.IsFinite(type))
+                return ErrorValue.Num;
+
+            if (!IsValidFormulaFinancialPaymentType(type))
+                return ErrorValue.Num;
+
+            if (nper == 0d)
+                return ErrorValue.DivByZero;
+
+            if (Math.Abs(rate) < 1e-10d)
+                return FormulaFinancialNumberResult(-pmt * nper - fv);
+
+            var rn = Math.Pow(1d + rate, nper);
+            return FormulaFinancialNumberResult((-pmt * (1d + rate * type) * (rn - 1d) / rate - fv) / rn);
+        }
+
+        private static ScalarValue FormulaFvScalar(double rate, double nper, double pmt, double pv, double type)
+        {
+            if (!double.IsFinite(rate) || !double.IsFinite(nper) || !double.IsFinite(pmt) || !double.IsFinite(pv) || !double.IsFinite(type))
+                return ErrorValue.Num;
+
+            if (!IsValidFormulaFinancialPaymentType(type))
+                return ErrorValue.Num;
+
+            if (Math.Abs(rate) < 1e-10d)
+                return FormulaFinancialNumberResult(-pv - pmt * nper);
+
+            var rn = Math.Pow(1d + rate, nper);
+            return FormulaFinancialNumberResult(-pv * rn - pmt * (1d + rate * type) * (rn - 1d) / rate);
+        }
+
+        private static ScalarValue FormulaNperScalar(double rate, double pmt, double pv, double fv, double type)
+        {
+            if (!double.IsFinite(rate) || !double.IsFinite(pmt) || !double.IsFinite(pv) || !double.IsFinite(fv) || !double.IsFinite(type))
+                return ErrorValue.Num;
+
+            if (!IsValidFormulaFinancialPaymentType(type))
+                return ErrorValue.Num;
+
+            if (Math.Abs(rate) < 1e-10d)
+            {
+                if (Math.Abs(pmt) < 1e-10d)
+                    return ErrorValue.DivByZero;
+
+                return FormulaFinancialNumberResult(-(pv + fv) / pmt);
+            }
+
+            var pmtAdjusted = pmt * (1d + rate * type);
+            var ratio = (pmtAdjusted - fv * rate) / (pmtAdjusted + pv * rate);
+            if (ratio <= 0d)
+                return ErrorValue.Num;
+
+            return FormulaFinancialNumberResult(Math.Log(ratio) / Math.Log(1d + rate));
+        }
+
+        private static ScalarValue FormulaRateScalar(double nper, double pmt, double pv, double fv, double type, double guess)
+        {
+            if (!double.IsFinite(nper) || !double.IsFinite(pmt) || !double.IsFinite(pv) || !double.IsFinite(fv) || !double.IsFinite(type) || !double.IsFinite(guess))
+                return ErrorValue.Num;
+
+            if (!IsValidFormulaFinancialPaymentType(type))
+                return ErrorValue.Num;
+
+            if (nper == 0d)
+                return ErrorValue.DivByZero;
+
+            var rate = guess;
+            for (var i = 0; i < 100; i++)
+            {
+                var rn = Math.Pow(1d + rate, nper);
+                var rn1 = nper * Math.Pow(1d + rate, nper - 1d);
+                double f;
+                double df;
+                if (Math.Abs(rate) < 1e-10d)
+                {
+                    f = pv + pmt * nper + fv;
+                    df = pv * nper + pmt * nper * (nper - 1d) / 2d;
+                }
+                else
+                {
+                    f = pv * rn + pmt * (1d + rate * type) * (rn - 1d) / rate + fv;
+                    df = pv * rn1
+                        + pmt * type * (rn - 1d) / rate
+                        + pmt * (1d + rate * type) * (rn1 * rate - (rn - 1d)) / (rate * rate);
+                }
+
+                if (Math.Abs(df) < 1e-15d)
+                    break;
+
+                var delta = f / df;
+                rate -= delta;
+                if (Math.Abs(delta) < 1e-10d)
+                    break;
+            }
+
+            return FormulaFinancialNumberResult(rate);
+        }
+
+        private static ScalarValue FormulaIpmtScalar(double rate, double per, double nper, double pv, double fv, double type)
+        {
+            if (!TryGetFormulaFinancialPaymentPeriod(rate, per, nper, pv, fv, type, out var period, out var paymentType))
+                return ErrorValue.Num;
+
+            return FormulaFinancialNumberResult(FormulaFinancialCalcIpmt(rate, period, nper, pv, fv, paymentType));
+        }
+
+        private static ScalarValue FormulaPpmtScalar(double rate, double per, double nper, double pv, double fv, double type)
+        {
+            if (!TryGetFormulaFinancialPaymentPeriod(rate, per, nper, pv, fv, type, out var period, out var paymentType))
+                return ErrorValue.Num;
+
+            var pmt = FormulaFinancialCalcPmt(rate, nper, pv, fv, paymentType);
+            var ipmt = FormulaFinancialCalcIpmt(rate, period, nper, pv, fv, paymentType);
+            return FormulaFinancialNumberResult(pmt - ipmt);
+        }
+
+        private static ScalarValue FormulaIspmtScalar(double rate, double per, double nper, double pv)
+        {
+            per = Math.Truncate(per);
+            if (!double.IsFinite(rate) || !double.IsFinite(per) || !double.IsFinite(nper) || !double.IsFinite(pv))
+                return ErrorValue.Num;
+
+            if (nper <= 0d || per < 0d || per > nper)
+                return ErrorValue.Num;
+
+            return FormulaFinancialNumberResult(-pv * rate * (nper - per) / nper);
+        }
+
+        private static bool TryGetFormulaFinancialPaymentPeriod(
+            double rate,
+            double per,
+            double nper,
+            double pv,
+            double fv,
+            double type,
+            out int period,
+            out int paymentType)
+        {
+            period = 0;
+            paymentType = 0;
+            if (!double.IsFinite(rate) || !double.IsFinite(per) || !double.IsFinite(nper) ||
+                !double.IsFinite(pv) || !double.IsFinite(fv) || !double.IsFinite(type) ||
+                per < int.MinValue || per > int.MaxValue ||
+                nper < int.MinValue || nper > int.MaxValue ||
+                type < int.MinValue || type > int.MaxValue)
+            {
+                return false;
+            }
+
+            paymentType = (int)Math.Truncate(type);
+            if (paymentType != 0 && paymentType != 1)
+                return false;
+
+            if (nper <= 0d)
+                return false;
+
+            period = (int)Math.Truncate(per);
+            var periodCount = (int)Math.Truncate(nper);
+            return period >= 1 && period <= periodCount;
+        }
+
+        private static double FormulaFinancialCalcPmt(double rate, double nper, double pv, double fv, int type)
+        {
+            if (Math.Abs(rate) < 1e-14d)
+                return -(pv + fv) / nper;
+
+            var r1 = Math.Pow(1d + rate, nper);
+            return -(pv * r1 + fv) * rate / ((1d + rate * type) * (r1 - 1d));
+        }
+
+        private static double FormulaFinancialCalcIpmt(double rate, double per, double nper, double pv, double fv, int type)
+        {
+            var pmt = FormulaFinancialCalcPmt(rate, nper, pv, fv, type);
+            if (Math.Abs(rate) < 1e-14d)
+                return 0d;
+
+            var pvAtPeriod = pv * Math.Pow(1d + rate, per - 1d)
+                + pmt * (1d + rate * type) * (Math.Pow(1d + rate, per - 1d) - 1d) / rate;
+            return type == 0 ? -(pvAtPeriod * rate) : -((pvAtPeriod - pmt) * rate);
+        }
+
+        private static ScalarValue FormulaFinancialNumberResult(double result) =>
+            double.IsFinite(result) ? new NumberValue(result) : ErrorValue.Num;
 
         private bool TryEvaluateFormulaNormalDistributionFunction(
             ConditionalFormulaScalarFunction function,

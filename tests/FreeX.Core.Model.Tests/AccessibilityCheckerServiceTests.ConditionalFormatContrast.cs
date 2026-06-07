@@ -2618,6 +2618,41 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialAnnuityFunctions()
+    {
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("PMT($A1,$C1,$D1,$G1,$H1)<-180", "B1", "B3", "B6");
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("PV($A1,$C1,$E1,$G1,$H1)<-9000", "B1", "B3", "B6");
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("FV($A1,12,$F1)>1500", "B1", "B3", "B4", "B6");
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("NPER($A1,$F1,$D1,$G1,$H1)>50", "B1", "B3", "B6");
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("RATE($C1,$F1,$D1,$G1,$H1)>0.004", "B1", "B3", "B6");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialPaymentBreakdownFunctions()
+    {
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("IPMT($A1,$I1,$C1,$D1,$G1,$H1)<0", "B1", "B3");
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("PPMT($A1,$I1,$C1,$D1,$G1,$H1)<0", "B1", "B2", "B3");
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("ISPMT($A1,$I1,$C1,$D1)<0", "B1", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialDefaultsWrappersAndPredicates()
+    {
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("IF(PMT($A1,$C1,$D1)<-180,TRUE,FALSE)", "B1", "B3", "B4", "B6");
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("AND(RATE($C1,$F1,$D1)>0.004,$H1=0)", "B1", "B6");
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("ISNUMBER(PV($A1,$C1,$E1))", "B1", "B2", "B3", "B4", "B6");
+    }
+
+    [Fact]
+    public void FindIssues_PropagatesFormulaConditionalFormatFinancialErrorsAndRejectsRanges()
+    {
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("ISNA(PMT($A1,$C1,$D1))", "B5");
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("ISERROR(IPMT($A1,$I1,$C1,$D1,$G1,$H1))", "B4", "B5", "B6");
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("PMT($A$1:$A$2,$C1,$D1)<0");
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("ISERROR(PMT($A$1:$A$1,$C1,$D1))");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatConvertScalarComparisons()
     {
         AssertFormulaConvertFunctionContrastLocations("CONVERT($A1,$C1,$D1)=1000", "B1");
@@ -5553,6 +5588,116 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 12), lambda);
     }
 
+    private static Workbook CreateFormulaFinancialAnnuityFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 6, 2);
+
+        SetFormulaFinancialAnnuityFunctionContrastRow(
+            sheet,
+            1,
+            new NumberValue(0.05 / 12),
+            new NumberValue(60),
+            new NumberValue(10000),
+            new NumberValue(188.71),
+            new NumberValue(-188.71),
+            new NumberValue(0),
+            new NumberValue(0),
+            new NumberValue(1),
+            "Standard loan");
+        SetFormulaFinancialAnnuityFunctionContrastRow(
+            sheet,
+            2,
+            new NumberValue(0),
+            new NumberValue(10),
+            new NumberValue(1000),
+            new NumberValue(100),
+            new NumberValue(-100),
+            new NumberValue(0),
+            new NumberValue(0),
+            new NumberValue(2),
+            "Zero rate");
+        SetFormulaFinancialAnnuityFunctionContrastRow(
+            sheet,
+            3,
+            new NumberValue(0.05 / 12),
+            new NumberValue(60),
+            new NumberValue(10000),
+            new NumberValue(195),
+            new NumberValue(-195),
+            new NumberValue(500),
+            new NumberValue(1),
+            new NumberValue(2),
+            "Beginning period");
+        SetFormulaFinancialAnnuityFunctionContrastRow(
+            sheet,
+            4,
+            new NumberValue(0.05 / 12),
+            new NumberValue(60),
+            new NumberValue(10000),
+            new NumberValue(188.71),
+            new NumberValue(-188.71),
+            new NumberValue(0),
+            new NumberValue(2),
+            new NumberValue(1),
+            "Invalid type");
+        SetFormulaFinancialAnnuityFunctionContrastRow(
+            sheet,
+            5,
+            ErrorValue.NA,
+            ErrorValue.NA,
+            new NumberValue(10000),
+            new NumberValue(188.71),
+            new NumberValue(-188.71),
+            new NumberValue(0),
+            new NumberValue(0),
+            new NumberValue(1),
+            "NA source");
+        SetFormulaFinancialAnnuityFunctionContrastRow(
+            sheet,
+            6,
+            new NumberValue(0.05 / 12),
+            new NumberValue(60),
+            new NumberValue(10000),
+            new NumberValue(188.71),
+            new NumberValue(-188.71),
+            new NumberValue(0),
+            new NumberValue(0),
+            new NumberValue(61),
+            "Invalid period");
+
+        return workbook;
+    }
+
+    private static void SetFormulaFinancialAnnuityFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        ScalarValue rate,
+        ScalarValue nper,
+        ScalarValue presentValue,
+        ScalarValue positivePayment,
+        ScalarValue outgoingPayment,
+        ScalarValue futureValue,
+        ScalarValue paymentType,
+        ScalarValue period,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), rate);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), nper);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 4), presentValue);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 5), positivePayment);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 6), outgoingPayment);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 7), futureValue);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 8), paymentType);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 9), period);
+    }
+
     private static Workbook CreateFormulaConvertFunctionContrastWorkbook(
         out Sheet sheet,
         out CellAddress firstLabel,
@@ -6168,6 +6313,20 @@ public sealed partial class AccessibilityCheckerServiceTests
         params string[] expectedLocations)
     {
         var workbook = CreateFormulaContinuousDistributionFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaFinancialAnnuityFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaFinancialAnnuityFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
 
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
 
