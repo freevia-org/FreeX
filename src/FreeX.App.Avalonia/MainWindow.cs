@@ -313,6 +313,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _goToSpecialMenuItem = new();
     private readonly NativeMenuItem _sortAscendingMenuItem = new();
     private readonly NativeMenuItem _sortDescendingMenuItem = new();
+    private readonly NativeMenuItem _dataValidationMenuItem = new();
     private readonly NativeMenuItem _autoSumMenuItem = new();
     private readonly NativeMenuItem _autoSumSumMenuItem = new();
     private readonly NativeMenuItem _autoSumAverageMenuItem = new();
@@ -648,6 +649,9 @@ public sealed class MainWindow : Window
         _sortDescendingMenuItem.Header = "Sort Z to A";
         _sortDescendingMenuItem.Click += (_, _) => SortSelectedRange(ascending: false);
 
+        _dataValidationMenuItem.Header = "Data Validation...";
+        _dataValidationMenuItem.Click += async (_, _) => await ShowDataValidationPreviewDialogAsync();
+
         _autoSumMenuItem.Header = "AutoSum";
         _autoSumMenuItem.Menu = CreateNativeAutoSumMenu();
 
@@ -920,6 +924,8 @@ public sealed class MainWindow : Window
         var dataMenu = new NativeMenu();
         dataMenu.Items.Add(_sortAscendingMenuItem);
         dataMenu.Items.Add(_sortDescendingMenuItem);
+        dataMenu.Items.Add(new NativeMenuItemSeparator());
+        dataMenu.Items.Add(_dataValidationMenuItem);
 
         var formatMenu = new NativeMenu();
         formatMenu.Items.Add(_boldMenuItem);
@@ -1643,6 +1649,7 @@ public sealed class MainWindow : Window
         _goToSpecialMenuItem.IsEnabled = isIdle;
         _sortAscendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
+        _dataValidationMenuItem.IsEnabled = isIdle;
         _autoSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
         _autoSumSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
         _autoSumAverageMenuItem.IsEnabled = _autoSumButton.IsEnabled;
@@ -6217,6 +6224,19 @@ public sealed class MainWindow : Window
         }
 
         RefreshShell($"Sorted {rangeReference} {(ascending ? "A to Z" : "Z to A")}");
+    }
+
+    private async Task ShowDataValidationPreviewDialogAsync()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        var preview = DataValidationPreviewPlanner.Create(
+            _session.Workbook,
+            _session.ActiveSheet,
+            _session.ActiveCell,
+            _session.SelectedRange);
+        await ShowTextDialogAsync("Data Validation", preview.Text, 520, 360);
     }
 
     private void BoldButton_Click(object? sender, RoutedEventArgs e)
