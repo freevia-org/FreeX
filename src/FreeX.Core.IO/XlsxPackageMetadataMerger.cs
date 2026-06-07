@@ -29,6 +29,8 @@ internal static class XlsxPackageMetadataMerger
                 continue;
             if (IsPackageMetadataEntry(sourceEntryName))
                 continue;
+            if (IsInvalidCustomXmlSidecar(sourceEntryName, sourceEntry))
+                continue;
             if (!existingPartNames.Add(sourceEntryName))
                 continue;
 
@@ -278,6 +280,41 @@ internal static class XlsxPackageMetadataMerger
     private static bool IsPackageMetadataEntry(string entryName) =>
         string.Equals(entryName, "[Content_Types].xml", StringComparison.OrdinalIgnoreCase) ||
         entryName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsInvalidCustomXmlSidecar(string entryName, ZipArchiveEntry entry)
+    {
+        if (!IsCustomXmlItemPart(entryName) && !IsCustomXmlPropertiesPart(entryName))
+            return false;
+
+        XDocument xml;
+        try
+        {
+            xml = XlsxPackageXmlEditor.LoadXml(entry);
+        }
+        catch
+        {
+            return true;
+        }
+
+        return IsCustomXmlPropertiesPart(entryName) && !IsValidCustomXmlProperties(xml);
+    }
+
+    private static bool IsCustomXmlItemPart(string entryName) =>
+        entryName.StartsWith("customXml/item", StringComparison.OrdinalIgnoreCase) &&
+        entryName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+        !IsCustomXmlPropertiesPart(entryName);
+
+    private static bool IsCustomXmlPropertiesPart(string entryName) =>
+        entryName.StartsWith("customXml/itemProps", StringComparison.OrdinalIgnoreCase) &&
+        entryName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsValidCustomXmlProperties(XDocument xml)
+    {
+        XNamespace customXmlNs = "http://schemas.openxmlformats.org/officeDocument/2006/customXml";
+        var root = xml.Root;
+        return root?.Name == customXmlNs + "datastoreItem" &&
+               !string.IsNullOrWhiteSpace(root.Attribute(customXmlNs + "itemID")?.Value);
+    }
 
     private static bool TryNormalizeCopyableEntryName(string entryName, out string normalized)
     {
