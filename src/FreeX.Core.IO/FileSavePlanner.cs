@@ -40,9 +40,6 @@ public static class FileSavePlanner
             return false;
 
         var savePath = currentFilePath.Trim();
-        if (ContainsInvalidPathCharacters(savePath))
-            return false;
-
         if (!TryGetExtension(savePath, out var extension))
             return false;
 
