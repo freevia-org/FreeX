@@ -144,12 +144,27 @@ public static partial class BuiltInFunctions
         return null;
     }
 
-    private static int FindPivotDataFieldIndex(PivotTableModel pivotTable, string caption) =>
-        pivotTable.DataFields.FindIndex(field =>
-            string.Equals(field.Name, caption, StringComparison.CurrentCultureIgnoreCase));
+    private static int FindPivotDataFieldIndex(PivotTableModel pivotTable, string caption)
+    {
+        for (var i = 0; i < pivotTable.DataFields.Count; i++)
+        {
+            if (string.Equals(pivotTable.DataFields[i].Name, caption, StringComparison.CurrentCultureIgnoreCase))
+                return i;
+        }
 
-    private static PivotTableModel? FindPivotTableContaining(Sheet sheet, CellAddress address) =>
-        sheet.PivotTables.FirstOrDefault(pivot => pivot.TargetRange.Contains(address));
+        return -1;
+    }
+
+    private static PivotTableModel? FindPivotTableContaining(Sheet sheet, CellAddress address)
+    {
+        foreach (var pivot in sheet.PivotTables)
+        {
+            if (pivot.TargetRange.Contains(address))
+                return pivot;
+        }
+
+        return null;
+    }
 
     private static uint? ResolveGetPivotDataRow(
         Sheet sheet,
