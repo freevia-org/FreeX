@@ -8,7 +8,7 @@ The workflow is `.github/workflows/macos-app.yml`. It runs on `workflow_dispatch
 
 The workflow builds two app artifacts:
 
-- `osx-arm64` on `macos-latest`
+- `osx-arm64` on `macos-15`
 - `osx-x64` on `macos-15-intel`
 
 Each runtime uploads an Actions artifact named `freex-<run-id>-<run-attempt>-<runtime>-macos-app` with:
