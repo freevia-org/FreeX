@@ -286,6 +286,12 @@ public sealed class GitHubWorkflowPreflightTests
         var manifestStep = ExtractRequiredYamlBlock(aggregateJob, "- name: Write aggregate manifest");
         manifestStep.Should().Contain("GH_TOKEN: ${{ github.token }}");
         manifestStep.Should().Contain("gh api \"repos/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID/artifacts?per_page=100\"");
+        manifestStep.Should().Contain("function Find-DownloadedArtifactFile");
+        manifestStep.Should().Contain("Get-ChildItem -LiteralPath $Root -Recurse -File -Filter $FileName");
+        manifestStep.Should().Contain("contains multiple '$FileName' files");
+        manifestStep.Should().Contain("Find-DownloadedArtifactFile -Root $appDirectory -FileName \"freex-$runtime-macos-app.zip\" -ArtifactName $appArtifactName");
+        manifestStep.Should().Contain("Find-DownloadedArtifactFile -Root $appDirectory -FileName \"freex-$runtime-macos-app.zip.sha256\" -ArtifactName $appArtifactName");
+        manifestStep.Should().Contain("Find-DownloadedArtifactFile -Root $appDirectory -FileName \"freex-$runtime-macos-evidence.txt\" -ArtifactName $appArtifactName");
         manifestStep.Should().Contain("app_artifact_digest = $artifactDigestByName[$appArtifactName]");
         manifestStep.Should().Contain("diagnostics_artifact_digest = $artifactDigestByName[$diagnosticsArtifactName]");
         manifestStep.Should().Contain("schema = \"io.github.tony-xmelon.freex.macos-preview-readiness.v1\"");
