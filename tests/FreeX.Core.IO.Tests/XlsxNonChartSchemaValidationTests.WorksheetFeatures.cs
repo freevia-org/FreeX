@@ -499,6 +499,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .BeTrue(blockReason);
 
         var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetOutlineAndFormatModel(sheet);
         sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(42));
 
         using var saved = new MemoryStream();
@@ -2446,6 +2447,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceRow4.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        AssertWorksheetOutlineAndFormatModel(adapter.Load(saved).GetSheetAt(0));
     }
 
     [Fact]
@@ -4950,6 +4954,29 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.ApplyOutlineStyles = true;
         sheet.SheetFormatMetadata = CreateWorksheetOutlineSheetFormatMetadata();
         return workbook;
+    }
+
+    private static void AssertWorksheetOutlineAndFormatModel(Sheet sheet)
+    {
+        sheet.DefaultColumnWidth.Should().Be(10.5);
+        sheet.DefaultRowHeight.Should().Be(24.0);
+        sheet.ColumnWidths.Should().ContainKey(2).WhoseValue.Should().Be(14.25);
+        sheet.ColumnWidths.Should().ContainKey(3).WhoseValue.Should().Be(16.5);
+        sheet.RowHeights.Should().ContainKey(3).WhoseValue.Should().Be(28.0);
+        sheet.RowOutlineLevels.Should().ContainKey(3).WhoseValue.Should().Be(1);
+        sheet.RowOutlineLevels.Should().ContainKey(4).WhoseValue.Should().Be(2);
+        sheet.ColOutlineLevels.Should().ContainKey(2).WhoseValue.Should().Be(1);
+        sheet.ColOutlineLevels.Should().ContainKey(3).WhoseValue.Should().Be(2);
+        sheet.OutlineSummaryBelow.Should().BeFalse();
+        sheet.OutlineSummaryRight.Should().BeFalse();
+        sheet.ShowOutlineSymbols.Should().BeFalse();
+        sheet.ApplyOutlineStyles.Should().BeTrue();
+        sheet.SheetFormatMetadata.Should().NotBeNull();
+        sheet.SheetFormatMetadata!.Get("sheetFormatPr")
+            .Should()
+            .Contain("outlineLevelRow=\"2\"")
+            .And
+            .Contain("outlineLevelCol=\"2\"");
     }
 
     private static NativeXmlPreserveBag CreateWorksheetOutlineSheetFormatMetadata()
