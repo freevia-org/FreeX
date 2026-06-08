@@ -148,6 +148,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         PackageEntryNames(saved).Should().NotContain("customXml/itemProps1.xml");
         PackageEntryNames(saved).Should().NotContain("customXml/_rels/item1.xml.rels");
         ContentTypeOverridePartNames(saved).Should().NotContain("/customXml/itemProps1.xml");
+
+        saved.Position = 0;
+        adapter.Load(saved)
+            .GetSheetAt(0)
+            .GetValue(3, 3)
+            .Should()
+            .Be(new NumberValue(42));
     }
 
     [Fact]
@@ -173,6 +180,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
         SchemaErrors(saved).Should().BeEmpty();
         AssertCustomXmlPackage(saved);
+
+        saved.Position = 0;
+        adapter.Load(saved)
+            .GetSheetAt(0)
+            .GetValue(3, 3)
+            .Should()
+            .Be(new NumberValue(42));
     }
 
     private static MemoryStream CreateCustomXmlSourcePackage()
