@@ -413,6 +413,7 @@ function Test-MacOsWorkflow {
         "FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests",
