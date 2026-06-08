@@ -1066,7 +1066,7 @@ function Test-AggregateReadinessArtifact {
     Assert-JsonPropertyEquals -Object $manifest -PropertyName "run_attempt" -ExpectedValue $aggregateIdentity.RunAttempt -Label "macOS aggregate readiness manifest"
     Assert-JsonPropertyEquals -Object $manifest -PropertyName "readiness_script" -ExpectedValue "tools/Test-MacOsPublicPreviewReadiness.ps1" -Label "macOS aggregate readiness manifest"
 
-    $expectedSourceArtifactPattern = "freex-$($aggregateIdentity.RunId)-$($aggregateIdentity.RunAttempt)-osx-*-macos-{app,diagnostics}"
+    $expectedSourceArtifactPattern = "freex-$($aggregateIdentity.RunId)-$($aggregateIdentity.RunAttempt)-osx-*-macos-*"
     Assert-JsonPropertyEquals -Object $manifest -PropertyName "source_artifact_pattern" -ExpectedValue $expectedSourceArtifactPattern -Label "macOS aggregate readiness manifest"
 
     $requiresSeparateDiagnostics = Get-JsonPropertyValue -Object $manifest -PropertyName "require_separate_diagnostics_artifact"

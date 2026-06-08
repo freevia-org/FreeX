@@ -940,7 +940,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
             "macos_preview_readiness=passed",
             "run_id=42",
             "run_attempt=1",
-            "source_artifact_pattern=freex-42-1-osx-*-macos-{app,diagnostics}"
+            "source_artifact_pattern=freex-42-1-osx-*-macos-*"
         };
 
         foreach (var bundle in bundles)
@@ -996,7 +996,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
             ["run_attempt"] = "1",
             ["commit"] = "0123abcdef0123456789abcdef0123456789abcd",
             ["generated_at_utc"] = "2026-06-08T00:00:00.0000000Z",
-            ["source_artifact_pattern"] = "freex-42-1-osx-*-macos-{app,diagnostics}",
+            ["source_artifact_pattern"] = "freex-42-1-osx-*-macos-*",
             ["readiness_script"] = "tools/Test-MacOsPublicPreviewReadiness.ps1",
             ["require_separate_diagnostics_artifact"] = true,
             ["runtimes"] = runtimeEntries
