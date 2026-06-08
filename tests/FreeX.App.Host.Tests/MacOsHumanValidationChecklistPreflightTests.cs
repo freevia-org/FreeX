@@ -87,6 +87,83 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
     }
 
     [Fact]
+    public void HumanValidationChecklistPreflight_FailsWhenWorkflowIdentityIsMalformed()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var checklistPath = Path.Combine(temp.Path, "malformed-run-macos-human-checklist.md");
+        var checklist = CreateCompletedChecklist()
+            .Replace("| Workflow run id / attempt | 42 / 1 |", "| Workflow run id / attempt | run 42 / attempt 1 |");
+        File.WriteAllText(checklistPath, checklist);
+
+        var result = RunChecklistPreflight(checklistPath);
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("Candidate Summary 'Workflow run id / attempt' must be '<numeric run id> / <numeric run attempt>', but was 'run 42 / attempt 1'.");
+        result.CombinedOutput.Should().Contain("macOS human validation checklist failed");
+    }
+
+    [Fact]
+    public void HumanValidationChecklistPreflight_FailsWhenWrapperNamesDoNotMatchSummaryIdentityWithoutExpectedArgs()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var checklistPath = Path.Combine(temp.Path, "wrong-wrapper-run-macos-human-checklist.md");
+        var checklist = CreateCompletedChecklist()
+            .Replace("| Artifact wrapper name | freex-42-1-osx-arm64-macos-app |", "| Artifact wrapper name | freex-41-1-osx-arm64-macos-app |")
+            .Replace("| Diagnostics artifact name | freex-42-1-osx-arm64-macos-diagnostics |", "| Diagnostics artifact name | freex-42-2-osx-arm64-macos-diagnostics |");
+        File.WriteAllText(checklistPath, checklist);
+
+        var result = RunChecklistPreflight(checklistPath);
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("Candidate Summary 'Artifact wrapper name' must be 'freex-42-1-osx-arm64-macos-app'");
+        result.CombinedOutput.Should().Contain("Candidate Summary 'Diagnostics artifact name' must be 'freex-42-1-osx-arm64-macos-diagnostics'");
+        result.CombinedOutput.Should().Contain("macOS human validation checklist failed");
+    }
+
+    [Fact]
+    public void HumanValidationChecklistPreflight_FailsWhenChecksumEvidenceDoesNotCopyCandidateZipAndHash()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var checklistPath = Path.Combine(temp.Path, "wrong-checksum-evidence-macos-human-checklist.md");
+        var zipHash = new string('a', 64);
+        var checklist = CreateCompletedChecklist()
+            .Replace(
+                $"| Checksum | OK | freex-osx-arm64-macos-app.zip: OK; sha256 {zipHash} | Pass | checksum.txt |",
+                "| Checksum | OK | shasum verified | Pass | checksum.txt |");
+        File.WriteAllText(checklistPath, checklist);
+
+        var result = RunChecklistPreflight(checklistPath);
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("Hosted Evidence Copy-Forward 'Checksum' evidence must include 'freex-osx-arm64-macos-app.zip'.");
+        result.CombinedOutput.Should().Contain($"Hosted Evidence Copy-Forward 'Checksum' evidence must include '{zipHash}'.");
+        result.CombinedOutput.Should().Contain("macOS human validation checklist failed");
+    }
+
+    [Fact]
+    public void HumanValidationChecklistPreflight_FailsWhenLogCollectionRowsDoNotNameExpectedArtifacts()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var checklistPath = Path.Combine(temp.Path, "generic-log-artifacts-macos-human-checklist.md");
+        var checklist = CreateCompletedChecklist()
+            .Replace("| GitHub Actions app artifact wrapper | Yes | freex-42-1-osx-arm64-macos-app | retained |", "| GitHub Actions app artifact wrapper | Yes | app-wrapper | retained |")
+            .Replace("| Inner app ZIP and .sha256 file | Yes | freex-osx-arm64-macos-app.zip; freex-osx-arm64-macos-app.zip.sha256 | retained |", "| Inner app ZIP and .sha256 file | Yes | zip bundle | retained |")
+            .Replace("| freex-osx-arm64-macos-evidence.txt | Yes | freex-osx-arm64-macos-evidence.txt | retained |", "| freex-osx-arm64-macos-evidence.txt | Yes | evidence.txt | retained |")
+            .Replace("| Diagnostics artifact | Yes | freex-42-1-osx-arm64-macos-diagnostics | retained |", "| Diagnostics artifact | Yes | diagnostics.zip | retained |");
+        File.WriteAllText(checklistPath, checklist);
+
+        var result = RunChecklistPreflight(checklistPath);
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("Log And Artifact Collection 'GitHub Actions app artifact wrapper' must include 'freex-42-1-osx-arm64-macos-app'.");
+        result.CombinedOutput.Should().Contain("Log And Artifact Collection 'Inner app ZIP and .sha256 file' must include 'freex-osx-arm64-macos-app.zip'.");
+        result.CombinedOutput.Should().Contain("Log And Artifact Collection 'Inner app ZIP and .sha256 file' must include 'freex-osx-arm64-macos-app.zip.sha256'.");
+        result.CombinedOutput.Should().Contain("Log And Artifact Collection 'freex-osx-arm64-macos-evidence.txt' must include 'freex-osx-arm64-macos-evidence.txt'.");
+        result.CombinedOutput.Should().Contain("Log And Artifact Collection 'Diagnostics artifact' must include 'freex-42-1-osx-arm64-macos-diagnostics'.");
+        result.CombinedOutput.Should().Contain("macOS human validation checklist failed");
+    }
+
+    [Fact]
     public void HumanValidationChecklistPreflight_FailsWhenImportantTemplateRowsAreOmitted()
     {
         var missingRows = new (string Section, string Label)[]
@@ -195,7 +272,7 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
 
             | Required check | Expected public-preview evidence | Actual evidence | Status | Attachment |
             | --- | --- | --- | --- | --- |
-            | Checksum | OK | shasum verified | Pass | checksum.txt |
+            | Checksum | OK | freex-osx-arm64-macos-app.zip: OK; sha256 {{zipHash}} | Pass | checksum.txt |
             | Artifact channel | distribution candidate | artifact_channel=distribution-candidate | Pass | evidence.txt |
             | Distribution readiness | ready | distribution_readiness=distribution_candidate_ready | Pass | evidence.txt |
             | Signing | Developer ID | codesign_mode=developer-id | Pass | codesign.txt |
@@ -292,13 +369,13 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
             | --- | --- | --- | --- |
             | Completed checklist/report | Yes | checklist.md | retained |
             | GitHub Actions app artifact wrapper | Yes | freex-42-1-osx-arm64-macos-app | retained |
-            | Inner app ZIP and .sha256 file | Yes | freex-osx-arm64-macos-app.zip | retained |
-            | freex-osx-arm64-macos-evidence.txt | Yes | evidence.txt | retained |
+            | Inner app ZIP and .sha256 file | Yes | freex-osx-arm64-macos-app.zip; freex-osx-arm64-macos-app.zip.sha256 | retained |
+            | freex-osx-arm64-macos-evidence.txt | Yes | freex-osx-arm64-macos-evidence.txt | retained |
             | Packaging smoke log | Yes | packaging.log | retained |
             | Launch smoke file | Yes | launch.txt | retained |
             | Notarization log | Yes | notarization.log | retained |
             | Tester instructions | Yes | tester-instructions.md | retained |
-            | Diagnostics artifact | Yes | diagnostics.zip | retained |
+            | Diagnostics artifact | Yes | freex-42-1-osx-arm64-macos-diagnostics | retained |
             | Screenshots or recordings | Required for failures and Gatekeeper/default-handler proof | screenshots.zip | retained |
             | Terminal transcript | Required for checksum/signing/stapler commands | terminal.txt | retained |
 
