@@ -196,10 +196,6 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 "tableParts",
                 "extLst"
             ],
-            "queryTableParts" =>
-            [
-                "extLst"
-            ],
             _ =>
             [
                 "singleXmlCells",

@@ -26,7 +26,6 @@ internal static partial class XlsxWorksheetMetadataPreserver
         "protectedRanges",
         "rowBreaks",
         "colBreaks",
-        "queryTableParts",
         "webPublishItems",
         "oleObjects",
         "controls"

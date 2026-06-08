@@ -28,9 +28,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         using var saved = new MemoryStream();
         adapter.Save(loaded, saved);
 
-        SchemaErrors(saved)
-            .Should()
-            .OnlyContain(error => error.Contains("queryTableParts", StringComparison.Ordinal));
+        SchemaErrors(saved).Should().BeEmpty();
 
         var connections = ReadPackageRootElement(saved, "xl/connections.xml");
         var connection = connections.Element(connections.Name.Namespace + "connection")!;
@@ -46,8 +44,21 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         queryTable.Attribute("applyNumberFormats").Should().BeNull();
 
         var worksheet = ReadPackageRootElement(saved, "xl/worksheets/sheet1.xml");
-        var queryTableParts = worksheet.Element(worksheet.Name.Namespace + "queryTableParts")!;
-        queryTableParts.Attribute("count")!.Value.Should().Be("1");
+        worksheet.Element(worksheet.Name.Namespace + "queryTableParts").Should().BeNull();
+
+        saved.Position = 0;
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        archive.GetEntry("xl/queryTables/queryTable1.xml").Should().NotBeNull();
+        var worksheetRelationships = LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        worksheetRelationships.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Id")?.Value == "rIdFreeXQueryTable" &&
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/queryTable" &&
+                relationship.Attribute("Target")?.Value == "../queryTables/queryTable1.xml")
+            .Should()
+            .ContainSingle();
     }
 
     [Fact]
