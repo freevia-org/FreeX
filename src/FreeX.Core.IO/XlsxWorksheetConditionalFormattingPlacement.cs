@@ -37,8 +37,16 @@ internal static class XlsxWorksheetConditionalFormattingPlacement
             return;
         }
 
-        var anchor = root.Elements()
-            .FirstOrDefault(element => ElementsAfterConditionalFormatting.Contains(element.Name.LocalName));
+        XElement? anchor = null;
+        foreach (var element in root.Elements())
+        {
+            if (ElementsAfterConditionalFormatting.Contains(element.Name.LocalName))
+            {
+                anchor = element;
+                break;
+            }
+        }
+
         if (anchor is not null)
             anchor.AddBeforeSelf(conditionalFormatting);
         else
