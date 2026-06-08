@@ -78,6 +78,10 @@ public sealed class GitHubWorkflowPreflightTests
         script.Should().Contain("macOS release publication must be the only workflow scope requesting contents: write");
         script.Should().Contain("cancel-in-progress: false");
         script.Should().Contain("macOS release publication checkout must use actions/checkout@v6 with persist-credentials: false");
+        script.Should().Contain("macOS app hosted test command must use a focused --filter");
+        script.Should().Contain("macOS app workflow focused test filter is missing");
+        script.Should().Contain("MacOsLaunchSmokeReportKeyDriftGuardTests");
+        script.Should().Contain("macOS release publication job must not run dotnet test");
         script.Should().Contain("Validated $($workflows.Count) GitHub workflow file(s).");
     }
 
@@ -106,6 +110,26 @@ public sealed class GitHubWorkflowPreflightTests
 
         workflow.Replace(releaseJob, string.Empty, StringComparison.Ordinal)
             .Should().NotContain("contents: write");
+    }
+
+    [Fact]
+    public void MacOsAppWorkflow_UsesFocusedHostedTestFiltersForAppJobOnly()
+    {
+        var workflow = ReadMacOsAppWorkflow();
+
+        var appJob = ExtractRequiredYamlBlock(workflow, "macos-app:");
+        appJob.Should().Contain("runs-on: ${{ matrix.runner }}");
+        appJob.Should().Contain("dotnet test tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj");
+        appJob.Should().Contain("dotnet test tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj");
+        appJob.Should().Contain(
+            "--filter 'FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests|FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests'");
+        appJob.Should().Contain("--filter 'FullyQualifiedName~FreeX.Core.Model.Tests.ExportPathPlannerTests'");
+        appJob.Should().NotContain("dotnet test FreeX.slnx");
+        appJob.Should().NotContain("dotnet test FreeX.DefaultTests.slnx");
+        appJob.Should().NotContain("dotnet test FreeX.UiTests.slnx");
+
+        var releaseJob = ExtractRequiredYamlBlock(workflow, "publish-distribution-candidate:");
+        releaseJob.Should().NotContain("dotnet test");
     }
 
     [Fact]
@@ -546,6 +570,74 @@ public sealed class GitHubWorkflowPreflightTests
         result.ExitCode.Should().NotBe(0);
         result.CombinedOutput.Should().Contain("macOS release publication checkout must use actions/checkout@v6 with persist-credentials: false");
         result.CombinedOutput.Should().Contain("actions/checkout steps must set persist-credentials: false");
+        result.CombinedOutput.Should().Contain("macos-app.yml");
+    }
+
+    [Fact]
+    public void GitHubWorkflowPreflight_FailsWhenMacOsHostedTestFilterDrifts()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var brokenWorkflow = ReplaceRequiredText(
+            ReadMacOsAppWorkflow(),
+            "FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests",
+            "FreeX.App.Services.Tests.RenamedMacOsLaunchSmokeReportTests");
+
+        WriteMacOsWorkflow(temp, brokenWorkflow);
+
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        result.NormalizedCombinedOutput.Should().Contain("macOS app workflow focused test filter is missing 'FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests'");
+        result.NormalizedCombinedOutput.Should().Contain("macOS app workflow has unexpected focused test filter 'FreeX.App.Services.Tests.RenamedMacOsLaunchSmokeReportTests'");
+        result.CombinedOutput.Should().Contain("macos-app.yml");
+    }
+
+    [Fact]
+    public void GitHubWorkflowPreflight_FailsWhenMacOsHostedTestUsesBroadLane()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var brokenWorkflow = ReplaceRequiredText(
+            ReadMacOsAppWorkflow(),
+            "dotnet test tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj \\",
+            "dotnet test FreeX.DefaultTests.slnx \\");
+
+        WriteMacOsWorkflow(temp, brokenWorkflow);
+
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("macOS app hosted test command must not run broad test target 'FreeX.DefaultTests.slnx'");
+        result.NormalizedCombinedOutput.Should().Contain("macOS app workflow must run exactly one focused dotnet test command for tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj");
+        result.CombinedOutput.Should().Contain("macos-app.yml");
+    }
+
+    [Fact]
+    public void GitHubWorkflowPreflight_FailsWhenMacOsReleasePublicationRunsTests()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var brokenWorkflow = ReplaceRequiredText(
+            ReadMacOsAppWorkflow(),
+            "      - name: Download macOS app artifacts",
+            """
+                  - name: Broad release tests
+                    shell: pwsh
+                    run: dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build
+
+                  - name: Download macOS app artifacts
+            """);
+
+        WriteMacOsWorkflow(temp, brokenWorkflow);
+
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("macOS release publication job must not run dotnet test");
         result.CombinedOutput.Should().Contain("macos-app.yml");
     }
 
