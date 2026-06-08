@@ -18,6 +18,7 @@ internal static class CommandGuards
     private const string RowRangeOutsideWorksheetBoundsMessage = "Row range is outside the worksheet bounds.";
     private const string ColumnRangeOutsideWorksheetBoundsMessage = "Column range is outside the worksheet bounds.";
     private const string AllowedEditRangeOnTargetSheetMessage = "Allowed edit range must be on the target sheet.";
+    private const string CouldNotInsertSubtotalRowMessage = "Could not insert subtotal row.";
 
     public static CommandOutcome? RejectIfProtected(Sheet sheet)
     {
@@ -74,6 +75,9 @@ internal static class CommandGuards
 
     public static CommandOutcome RejectAllowedEditRangeOnTargetSheet() =>
         new(false, AllowedEditRangeOnTargetSheetMessage);
+
+    public static CommandOutcome RejectCouldNotInsertSubtotalRow() =>
+        new(false, CouldNotInsertSubtotalRowMessage);
 
     public static CommandOutcome RejectStructuredTableNotFound() =>
         new(false, StructuredTableNotFoundMessage);
