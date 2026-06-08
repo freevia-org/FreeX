@@ -74,19 +74,44 @@ internal static class XlsxChartDataLabelReader
         }
     }
 
-    private static XElement? FindPlotChartElement(XElement? plotArea) =>
-        plotArea?.Elements().FirstOrDefault(element => element.Name == ChartNs + "barChart"
-            || element.Name == ChartNs + "lineChart"
-            || element.Name == ChartNs + "line3DChart"
-            || element.Name == ChartNs + "scatterChart"
-            || element.Name == ChartNs + "areaChart"
-            || element.Name == ChartNs + "area3DChart"
-            || element.Name == ChartNs + "radarChart"
-            || element.Name == ChartNs + "stockChart"
-            || element.Name == ChartNs + "bubbleChart"
-            || element.Name == ChartNs + "pie3DChart"
-            || element.Name == ChartNs + "pieChart"
-            || element.Name == ChartNs + "doughnutChart");
+    private static XElement? FindPlotChartElement(XElement? plotArea)
+    {
+        if (plotArea is null)
+            return null;
+
+        foreach (var element in plotArea.Elements())
+        {
+            if (IsPlotChartElement(element.Name))
+                return element;
+        }
+
+        return null;
+    }
+
+    private static bool IsPlotChartElement(XName name) =>
+        name == ChartNs + "barChart"
+        || name == ChartNs + "lineChart"
+        || name == ChartNs + "line3DChart"
+        || name == ChartNs + "scatterChart"
+        || name == ChartNs + "areaChart"
+        || name == ChartNs + "area3DChart"
+        || name == ChartNs + "radarChart"
+        || name == ChartNs + "stockChart"
+        || name == ChartNs + "bubbleChart"
+        || name == ChartNs + "pie3DChart"
+        || name == ChartNs + "pieChart"
+        || name == ChartNs + "doughnutChart";
+
+    private static XElement? FirstDescendant(XElement? element, XName name)
+    {
+        if (element is null)
+            return null;
+
+        foreach (var descendant in element.Descendants(name))
+            return descendant;
+
+        return null;
+    }
 
     private static void ApplyDataLabelShapeProperties(XElement? shapeProperties, ChartModel chart)
     {
@@ -134,9 +159,7 @@ internal static class XlsxChartDataLabelReader
         if (int.TryParse(bodyProperties?.Attribute("rot")?.Value, out var rotation))
             chart.DataLabelAngle = Math.Clamp(rotation / 60000.0, -90, 90);
 
-        var textProperties = textPropertiesRoot?
-            .Descendants(DrawingNs + "defRPr")
-            .FirstOrDefault();
+        var textProperties = FirstDescendant(textPropertiesRoot, DrawingNs + "defRPr");
         if (textProperties is null)
             return;
 
@@ -285,10 +308,7 @@ internal static class XlsxChartDataLabelReader
             }
         }
 
-        var textProperties = label
-            .Element(ChartNs + "txPr")?
-            .Descendants(DrawingNs + "defRPr")
-            .FirstOrDefault();
+        var textProperties = FirstDescendant(label.Element(ChartNs + "txPr"), DrawingNs + "defRPr");
         if (textProperties is not null)
         {
             if (int.TryParse(textProperties.Attribute("sz")?.Value, out var size))
