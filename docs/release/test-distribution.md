@@ -21,6 +21,10 @@ https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x
 
 https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.msix
 
+https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos-arm64.zip
+
+https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos-x64.zip
+
 Latest verified tester release:
 
 - Release: [FreeX (Test Release) v0.8.96](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-96-2026-06-08-10-13-38-run96-attempt1%2B9cd4f40e)
@@ -28,22 +32,45 @@ Latest verified tester release:
 - GitHub Actions run: [27130409777](https://github.com/tony-xmelon/FreeX/actions/runs/27130409777), run number 96 attempt 1, completed successfully
 - Target commit: `9cd4f40ecb37c5b91e953459243808bf256c9355`
 - Release posture: internal-only latest tester build; not a public-preview candidate because live keyboard-only, screen-reader, and known-issues accessibility gate evidence was not recorded
-- Asset check: stable latest `.exe`, `.exe.sha256`, MSIX, and MSIX checksum assets were published by the workflow after successful hosted release-gate verification
+- Asset check: stable latest `.exe`, `.exe.sha256`, MSIX, and MSIX checksum assets were published by the workflow after successful hosted release-gate verification. macOS release assets are attached by later tester-release dispatches when `include_macos_preview=true` and a successful matching `macOS App Preview` run exists for the release commit.
 
-The `Tester Release` GitHub Actions workflow runs repository preflight, restore, build, the default test lane, and the UI test lane before publishing a framework-dependent single-file Windows x64 `.exe` plus an MSIX package. It uses normal .NET restore/build caching and parallelism for speed, preserves `default-tests.trx` and `ui-tests.trx` results for every run, including failed release-gate attempts, then uploads both versioned artifacts produced by `tools/Publish-UserTestBuild.ps1` and stable latest assets:
+The `Tester Release` GitHub Actions workflow runs repository preflight, restore, build, the default test lane, and the UI test lane before publishing a framework-dependent single-file Windows x64 `.exe` plus an MSIX package. When `include_macos_preview=true`, it also finds or uses the requested successful `macOS App Preview` run for the same commit, downloads both runtime app artifacts, and attaches stable macOS internal-preview assets to the same GitHub Release. It uses normal .NET restore/build caching and parallelism for speed, preserves `default-tests.trx` and `ui-tests.trx` results for every run, including failed release-gate attempts, then uploads both versioned artifacts produced by `tools/Publish-UserTestBuild.ps1` and stable latest assets:
 
 - `FreeX-latest-win-x64.exe`
 - `FreeX-latest-win-x64.exe.sha256`
 - `FreeX-latest-win-x64.msix`
 - `FreeX-latest-win-x64.msix.sha256`
+- `FreeX-latest-macos-arm64.zip`
+- `FreeX-latest-macos-arm64.zip.sha256`
+- `FreeX-latest-macos-x64.zip`
+- `FreeX-latest-macos-x64.zip.sha256`
+- `FreeX-latest-macos-<runtime>-instructions.md`
+- `FreeX-latest-macos-<runtime>-evidence.txt`
 
 Release dispatches must run from `main` or an isolated `codex/daily-tester-release-*` branch because the workflow publishes stable latest assets, and a workflow-level `tester-release` concurrency group prevents overlapping dispatches from moving `latest` backward. Use the daily branch path only for a frozen verified candidate when `origin/main` has already advanced with work intentionally deferred to the next release.
 
 The hosted MSIX publish path signs the package when `FREEX_MSIX_CERTIFICATE_BASE64` is configured, with optional `FREEX_MSIX_CERTIFICATE_PASSWORD` and `FREEX_MSIX_TIMESTAMP_URL` inputs. Until a release certificate is available, the workflow passes `-AllowUnsignedMsix` and publishes an unsigned MSIX for tester continuity. `tools/Publish-UserTestBuild.ps1` derives the manifest `Publisher` from the signing certificate subject when signing is enabled, while direct local unsigned MSIX output still requires explicitly passing `-AllowUnsignedMsix`. Installer trust validation and Store-style submission remain release-gate work.
 
+Windows tester steps:
+
+1. Download `FreeX-latest-win-x64.exe` and `FreeX-latest-win-x64.exe.sha256` from the release.
+2. Verify the checksum with PowerShell: `Get-FileHash .\FreeX-latest-win-x64.exe -Algorithm SHA256`, then compare it with the `.sha256` file.
+3. Run `FreeX-latest-win-x64.exe`. If Windows SmartScreen warns about an unknown publisher, continue only if the checksum matches the GitHub Release asset and the tester expected this internal build.
+4. Prefer the `.exe` for normal testing. Use the MSIX only for package/install validation; unsigned MSIX packages may need trusted internal-test machine settings until signing is configured.
+
+macOS tester release steps while Developer ID/notarization is pending:
+
+1. Download `FreeX-latest-macos-arm64.zip` for Apple Silicon Macs or `FreeX-latest-macos-x64.zip` for Intel Macs, plus the matching `.sha256`.
+2. Verify the checksum from Terminal: `shasum -a 256 -c FreeX-latest-macos-arm64.zip.sha256`, or use the x64 checksum file on Intel.
+3. Extract the app with Finder/Archive Utility, or run `ditto -x -k FreeX-latest-macos-arm64.zip .` from Terminal.
+4. Open `FreeX.app`. If macOS blocks the unsigned/internal preview, use Control-click or right-click > Open. If needed, open System Settings > Privacy & Security and choose Open Anyway.
+5. Do not disable Gatekeeper globally. These macOS builds remain internal previews until Developer ID signing, notarization, and stapling evidence are attached.
+
+Tester-facing warning for both platforms: this is an internal preview while signing certificates are pending. macOS and Windows may warn that the publisher cannot be verified. Only open the build if it was expected from the FreeX team and the checksum matches the release asset.
+
 Default tester versions come from `release/progress.json`: the current `overallCompletion` value maps to a minor-version band, and the GitHub run number becomes the patch number. At 95% completion, default tester releases use the `v0.8.<run>` stream. Manual `release_version` overrides remain available for special validation builds.
 
-Current release gate: do not treat a new tester release as available until the workflow completes successfully through repository preflight, build, default tests, UI tests, test-result artifact collection, release metadata, artifact upload, and GitHub release publication.
+Current release gate: do not treat a new tester release as available until the workflow completes successfully through repository preflight, build, default tests, UI tests, test-result artifact collection, release metadata, artifact upload, optional macOS preview artifact bundling when requested, and GitHub release publication.
 
 Before dispatching a candidate, run `tools/Test-TesterReleaseReadiness.ps1` from the repo root to preflight `release/progress.json`, workflow accessibility inputs, release docs, and checklist alignment. For a public-preview candidate, include `-PublicPreviewCandidate -AccessibilityKeyboardOnly -AccessibilityScreenReader -AccessibilityUiaCatalog -AccessibilityKnownIssues`; otherwise the preflight reports the build as internal-only.
 
@@ -85,7 +112,7 @@ GitHub-hosted macOS runners can produce downloadable macOS app artifacts without
 - `freex-<run-id>-<run-attempt>-osx-x64-macos-app`
 - `freex-<run-id>-<run-attempt>-macos-release-assets` for distribution-candidate dispatches
 
-Each download is a GitHub Actions artifact wrapper. Preserve the `freex-<run-id>-<run-attempt>-<runtime>-macos-app` wrapper directory names under the artifact root. For distribution-candidate dispatches, also preserve the `freex-<run-id>-<run-attempt>-macos-release-assets` wrapper directory name under the artifact root, then use the inner app ZIP, checksum, tester instructions, evidence file, smoke logs, release manifest, and release instructions. Do not flatten wrapper contents directly into the artifact root; the Windows evidence validator uses wrapper names to detect duplicate stale downloads, split or stale release-assets manifests/instructions, mixed runtime runs, and expected run identity mismatches. Internal-preview workflow outputs remain Actions artifacts only; distribution-candidate dispatches also run a guarded publication job that prepares stable GitHub Release assets and uploads the macOS release-assets artifact.
+Each download is a GitHub Actions artifact wrapper. Preserve the `freex-<run-id>-<run-attempt>-<runtime>-macos-app` wrapper directory names under the artifact root. For distribution-candidate dispatches, also preserve the `freex-<run-id>-<run-attempt>-macos-release-assets` wrapper directory name under the artifact root, then use the inner app ZIP, checksum, tester instructions, evidence file, smoke logs, release manifest, and release instructions. Do not flatten wrapper contents directly into the artifact root; the Windows evidence validator uses wrapper names to detect duplicate stale downloads, split or stale release-assets manifests/instructions, mixed runtime runs, and expected run identity mismatches. Internal-preview workflow outputs can also be bundled into the normal `Tester Release` GitHub Release when `include_macos_preview=true`; the tester-release workflow preserves the same-commit guard before attaching `FreeX-latest-macos-arm64.zip`, `FreeX-latest-macos-x64.zip`, matching checksum files, and per-runtime instruction/evidence files. Distribution-candidate dispatches also run a guarded publication job that prepares stable GitHub Release assets and uploads the macOS release-assets artifact.
 
 Signed and internal ad-hoc outputs use the same artifact names. Treat `codesign_mode=ad-hoc` or a skipped notarization status as internal preview evidence only. External distribution requires `codesign_mode=developer-id`, `notarization_status=accepted`, `stapler_validated=true`, and a release-asset publication path.
 
@@ -125,7 +152,7 @@ Before opening the app, testers should run this from the directory containing th
 shasum -a 256 -c freex-<runtime>-macos-app.zip.sha256
 ```
 
-The expected result is `<zip-name>: OK`. After the checksum passes, extract the inner app ZIP with Finder/Archive Utility, or run `ditto -x -k freex-<runtime>-macos-app.zip .` from Terminal, then open `FreeX.app`. This preserves macOS signing metadata from the bundle ZIP. If macOS Gatekeeper blocks the preview, testers should inspect `codesign_mode`, `notarization_status`, `stapler_validated`, and `zip_sha256` in the evidence file. Ad-hoc signed or non-notarized previews are internal validation artifacts and may require Control-click or right-click > Open on trusted test machines. Public distribution still requires Developer ID signing, accepted notarization, and stapling evidence.
+The expected result is `<zip-name>: OK`. After the checksum passes, extract the inner app ZIP with Finder/Archive Utility, or run `ditto -x -k freex-<runtime>-macos-app.zip .` from Terminal, then open `FreeX.app`. This preserves macOS signing metadata from the bundle ZIP. When the app is attached directly to a tester release, use `FreeX-latest-macos-arm64.zip` or `FreeX-latest-macos-x64.zip` and the matching checksum name instead. If macOS Gatekeeper blocks the preview, testers should inspect `codesign_mode`, `notarization_status`, `stapler_validated`, and `zip_sha256` in the evidence file. Ad-hoc signed or non-notarized previews are internal validation artifacts and may require Control-click or right-click > Open on trusted test machines, or System Settings > Privacy & Security > Open Anyway after the first blocked launch. Public distribution still requires Developer ID signing, accepted notarization, and stapling evidence.
 
 ## Conservative Rerun Fallback
 
