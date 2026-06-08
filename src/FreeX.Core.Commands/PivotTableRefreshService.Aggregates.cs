@@ -174,7 +174,7 @@ public static partial class PivotTableRefreshService
         if (dataField.BaseFieldIndex is not { } baseFieldIndex || !IsValidField(baseFieldIndex, headers.Count))
             return Aggregate(rows, dataField with { ShowValuesAs = PivotShowValuesAs.None }, pivotTable, headers);
 
-        var currentItem = rows.Select(row => KeyText(row[baseFieldIndex])).FirstOrDefault();
+        var currentItem = FirstBaseFieldItem(rows, baseFieldIndex);
         if (currentItem is null)
             return 0;
 
@@ -220,7 +220,7 @@ public static partial class PivotTableRefreshService
         if (dataField.BaseFieldIndex is not { } baseFieldIndex || !IsValidField(baseFieldIndex, headers.Count))
             return 0;
 
-        var currentItem = rows.Select(row => KeyText(row[baseFieldIndex])).FirstOrDefault();
+        var currentItem = FirstBaseFieldItem(rows, baseFieldIndex);
         if (currentItem is null)
             return 0;
 
@@ -246,14 +246,20 @@ public static partial class PivotTableRefreshService
 
         if (!string.IsNullOrWhiteSpace(dataField.CalculatedFieldName))
         {
-            var calculated = pivotTable.CalculatedFields.FirstOrDefault(field =>
-                string.Equals(field.Name, dataField.CalculatedFieldName, StringComparison.OrdinalIgnoreCase));
+            var calculated = FindCalculatedField(pivotTable, dataField.CalculatedFieldName);
             if (calculated is not null)
                 return new NumberValue(EvaluateCalculatedField(calculated.Formula, row, headers));
         }
 
         return BlankValue.Instance;
     }
+
+    private static string? FirstBaseFieldItem(IEnumerable<IReadOnlyList<ScalarValue>> rows, int baseFieldIndex) =>
+        rows.Select(row => KeyText(row[baseFieldIndex])).FirstOrDefault();
+
+    private static PivotCalculatedFieldModel? FindCalculatedField(PivotTableModel pivotTable, string fieldName) =>
+        pivotTable.CalculatedFields.FirstOrDefault(field =>
+            string.Equals(field.Name, fieldName, StringComparison.OrdinalIgnoreCase));
 
     private static double EvaluateCalculatedField(
         string formula,
@@ -309,10 +315,15 @@ public static partial class PivotTableRefreshService
     {
         return PivotCalculatedExpressionEvaluator.Evaluate(formula, name =>
         {
-            var group = groups.FirstOrDefault(candidate =>
-                candidate.Key.Values.Count > 0 &&
-                string.Equals(candidate.Key.Values[0], name, StringComparison.CurrentCultureIgnoreCase));
+            var group = FindCalculatedItemGroup(groups, name);
             return group is null ? 0 : Aggregate(group, dataField, pivotTable, headers);
         });
     }
+
+    private static IGrouping<PivotKey, IReadOnlyList<ScalarValue>>? FindCalculatedItemGroup(
+        IReadOnlyList<IGrouping<PivotKey, IReadOnlyList<ScalarValue>>> groups,
+        string itemName) =>
+        groups.FirstOrDefault(candidate =>
+            candidate.Key.Values.Count > 0 &&
+            string.Equals(candidate.Key.Values[0], itemName, StringComparison.CurrentCultureIgnoreCase));
 }

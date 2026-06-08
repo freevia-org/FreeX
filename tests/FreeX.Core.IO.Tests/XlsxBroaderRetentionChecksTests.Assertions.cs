@@ -46,6 +46,22 @@ public sealed partial class XlsxBroaderRetentionChecksTests
         customXml.Should().Contain("MSIP_Label_01234567-89ab-cdef-0123-456789abcdef_Enabled");
     }
 
+    private static void AssertRootPackageRelationshipsWereRetained(ZipArchive archive)
+    {
+        var relationships = LoadXml(archive, "_rels/.rels")
+            .Root!
+            .Elements(PackageRelNs + "Relationship")
+            .Select(relationship => (
+                Type: relationship.Attribute("Type")?.Value,
+                Target: relationship.Attribute("Target")?.Value))
+            .ToList();
+
+        relationships.Should().Contain(("http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties", "docProps/core.xml"));
+        relationships.Should().Contain(("http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties", "docProps/app.xml"));
+        relationships.Should().Contain(("http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties", "docProps/custom.xml"));
+        relationships.Should().Contain(("http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml", "customXml/item1.xml"));
+    }
+
     private static void AssertWorkbookMetadataWasRetainedWithoutOverridingModeledState(ZipArchive archive)
     {
         var workbookXml = LoadXml(archive, "xl/workbook.xml");
