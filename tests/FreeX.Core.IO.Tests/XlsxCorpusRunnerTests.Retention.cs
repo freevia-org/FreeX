@@ -498,7 +498,7 @@ public partial class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(54, "the generated metadata-pass manifest currently declares fifty-four deterministic package-retention rows");
+        rows.Should().HaveCount(55, "the generated metadata-pass manifest currently declares fifty-five deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();

@@ -136,7 +136,6 @@ public static class XlsxFeatureInspector
         if (normalized.StartsWith("xl/threadedcomments/", StringComparison.Ordinal) ||
             normalized.StartsWith("xl/persons/", StringComparison.Ordinal))
         {
-            yield return Feature(XlsxUnsupportedFeatureKind.ThreadedComments);
             yield break;
         }
 
@@ -392,7 +391,6 @@ public static class XlsxFeatureInspector
         if (normalizedType.EndsWith("/threadedcomment", StringComparison.OrdinalIgnoreCase) ||
             normalizedType.EndsWith("/person", StringComparison.OrdinalIgnoreCase))
         {
-            AddFeature(ref result, XlsxUnsupportedFeatureKind.ThreadedComments);
             return;
         }
 

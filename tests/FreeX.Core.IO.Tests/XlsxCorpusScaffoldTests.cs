@@ -337,7 +337,7 @@ public class XlsxCorpusScaffoldTests
         manifestRows.Should().Contain(row =>
             row.Path == "generated/threaded-comments-001.xlsx" &&
             row.FeatureTags.Contains("threaded-comments", StringComparison.Ordinal));
-        const string reportLine = "| Threaded comment package references | Worksheet threaded-comment relationships and workbook persons relationships are exercised by generated known-gap retention coverage |";
+        const string reportLine = "| Threaded comment package references | Worksheet threaded-comment relationships and workbook persons relationships are exercised by generated metadata-pass retention coverage without unsupported-feature warnings |";
         report.Should().Contain(reportLine);
         report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
     }
@@ -625,8 +625,6 @@ public class XlsxCorpusScaffoldTests
             warnings.Add("unsupported chart package disclosed");
         if (tags.Contains("embedded-objects"))
             warnings.Add("unsupported embedded object disclosed");
-        if (tags.Contains("threaded-comments"))
-            warnings.Add("unsupported threaded comment disclosed");
         if (tags.Contains("track-changes") || tags.Contains("revision-history"))
             warnings.Add("unsupported track changes disclosed");
         if (tags.Contains("form-controls") || tags.Contains("activex"))
