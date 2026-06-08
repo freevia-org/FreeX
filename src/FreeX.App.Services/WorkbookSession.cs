@@ -1080,7 +1080,7 @@ public sealed class WorkbookSession
     public WorkbookCellEditResult DuplicateActiveSheet()
     {
         var sourceSheetId = ActiveSheet.Id;
-        var sourceIndex = Workbook.Sheets.ToList().FindIndex(sheet => sheet.Id == sourceSheetId);
+        var sourceIndex = FindSheetIndex(sourceSheetId, notFoundIndex: -1);
         if (sourceIndex < 0)
         {
             return new WorkbookCellEditResult(
@@ -1227,7 +1227,7 @@ public sealed class WorkbookSession
     public WorkbookCellEditResult HideActiveSheet()
     {
         var sheetId = ActiveSheet.Id;
-        var sheetIndex = Workbook.Sheets.ToList().FindIndex(sheet => sheet.Id == sheetId);
+        var sheetIndex = FindSheetIndex(sheetId, notFoundIndex: -1);
         if (sheetIndex < 0)
         {
             return new WorkbookCellEditResult(
@@ -1291,7 +1291,7 @@ public sealed class WorkbookSession
     public WorkbookCellEditResult DeleteActiveSheet()
     {
         var sheetId = ActiveSheet.Id;
-        var sheetIndex = Workbook.Sheets.ToList().FindIndex(sheet => sheet.Id == sheetId);
+        var sheetIndex = FindSheetIndex(sheetId, notFoundIndex: -1);
         if (sheetIndex < 0)
         {
             return new WorkbookCellEditResult(
@@ -1337,7 +1337,7 @@ public sealed class WorkbookSession
     private WorkbookCellEditResult MoveActiveSheetBy(int offset)
     {
         var sheetId = ActiveSheet.Id;
-        var fromIndex = Workbook.Sheets.ToList().FindIndex(sheet => sheet.Id == sheetId);
+        var fromIndex = FindSheetIndex(sheetId, notFoundIndex: -1);
         if (fromIndex < 0)
         {
             return new WorkbookCellEditResult(
@@ -3326,7 +3326,7 @@ public sealed class WorkbookSession
         return rowComparison != 0 ? rowComparison : left.Col.CompareTo(right.Col);
     }
 
-    private int FindSheetIndex(SheetId sheetId)
+    private int FindSheetIndex(SheetId sheetId, int notFoundIndex = int.MaxValue)
     {
         for (var index = 0; index < Workbook.Sheets.Count; index++)
         {
@@ -3334,7 +3334,7 @@ public sealed class WorkbookSession
                 return index;
         }
 
-        return int.MaxValue;
+        return notFoundIndex;
     }
 
     private static bool TryCreateReplacementCommand(
