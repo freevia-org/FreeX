@@ -37,17 +37,21 @@ public static partial class XlsxChartPartReader
         {
             var hasParetoLine = chartExSeries.Any(series =>
                 string.Equals(series.Attribute("layoutId")?.Value, "paretoLine", StringComparison.OrdinalIgnoreCase));
-            var primarySeries = chartExSeries.FirstOrDefault(series =>
-                !string.Equals(series.Attribute("layoutId")?.Value, "paretoLine", StringComparison.OrdinalIgnoreCase));
+            var primarySeries = FindPrimaryChartExSeries(chartExSeries);
             if (primarySeries is not null && ToChartExChartType(primarySeries.Attribute("layoutId")?.Value, hasParetoLine) is { } chartType)
                 return (primarySeries.Parent ?? primarySeries, chartType);
         }
 
-        var mapChart = plotArea
-            .Descendants()
-            .FirstOrDefault(IsMapChartElement);
+        var mapChart = FindMapChartElement(plotArea);
         return mapChart is null ? null : (mapChart, ChartType.Map);
     }
+
+    private static XElement? FindPrimaryChartExSeries(IEnumerable<XElement> chartExSeries) =>
+        chartExSeries.FirstOrDefault(series =>
+            !string.Equals(series.Attribute("layoutId")?.Value, "paretoLine", StringComparison.OrdinalIgnoreCase));
+
+    private static XElement? FindMapChartElement(XElement plotArea) =>
+        plotArea.Descendants().FirstOrDefault(IsMapChartElement);
 
     private static ChartType? ToChartExChartType(string? layoutId, bool hasParetoLine) =>
         layoutId?.ToLowerInvariant() switch
