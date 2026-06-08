@@ -121,6 +121,113 @@ public sealed class XlsxPackageHealthValidatorTests
     }
 
     [Fact]
+    public void Validate_FlagsRelationshipPartWithoutOwningPackagePart()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            extraEntries:
+            [
+                ("xl/drawings/_rels/drawing1.xml.rels", RelationshipsXml(
+                    Relationship(
+                        "rId1",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+                        "../media/image1.png"))),
+                ("xl/media/image1.png", "")
+            ],
+            contentTypeDefaults:
+            [
+                """<Default Extension="png" ContentType="image/png" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("xl/drawings/_rels/drawing1.xml.rels has no owning package part xl/drawings/drawing1.xml", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsMissingPackageRootRelationshipsPart()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            omitRootRelationships: true);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("missing package root relationships part _rels/.rels", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsPackageRootRelationshipsWithoutOfficeDocument()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            rootRelationships:
+            [
+                Relationship("rIdMetadata", "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties", "docProps/core.xml")
+            ],
+            extraEntries:
+            [
+                ("docProps/core.xml", "<coreProperties />")
+            ],
+            contentTypeOverrides:
+            [
+                """<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("has no http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument relationship", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsDuplicatePackageRootOfficeDocumentRelationships()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            rootRelationships:
+            [
+                Relationship("rIdWorkbook1", OfficeDocumentRelationshipType, "xl/workbook.xml"),
+                Relationship("rIdWorkbook2", OfficeDocumentRelationshipType, "xl/workbook.xml")
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("has multiple http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument relationships", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsExternalPackageRootOfficeDocumentRelationship()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            rootRelationships:
+            [
+                $"""<Relationship Id="rIdWorkbook" Type="{OfficeDocumentRelationshipType}" Target="https://example.invalid/workbook.xml" TargetMode="External" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("Relationship rIdWorkbook must target the workbook package part internally", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsPackageRootOfficeDocumentTargetWithNonWorkbookContentType()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            rootRelationships:
+            [
+                Relationship("rIdWorkbook", OfficeDocumentRelationshipType, "xl/not-a-workbook.xml")
+            ],
+            extraEntries:
+            [
+                ("xl/not-a-workbook.xml", "<worksheet />")
+            ],
+            contentTypeOverrides:
+            [
+                """<Override PartName="/xl/not-a-workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("targets xl/not-a-workbook.xml with non-workbook content type application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Validate_FlagsRelationshipContentTypeOnNonRelationshipPart()
     {
         using var package = CreateMinimalWorkbookPackage(
@@ -321,16 +428,16 @@ public sealed class XlsxPackageHealthValidatorTests
     }
 
     private static MemoryStream CreateMinimalWorkbookPackage(
+        IReadOnlyList<string>? rootRelationships = null,
         IReadOnlyList<string>? workbookRelationships = null,
         IReadOnlyList<string>? contentTypeOverrides = null,
         IReadOnlyList<string>? contentTypeDefaults = null,
-        IReadOnlyList<(string Path, string Content)>? extraEntries = null)
+        IReadOnlyList<(string Path, string Content)>? extraEntries = null,
+        bool omitRootRelationships = false)
     {
         var entries = new List<(string Path, string Content)>
         {
             ("[Content_Types].xml", ContentTypesXml(contentTypeOverrides, contentTypeDefaults)),
-            ("_rels/.rels", RelationshipsXml(
-                Relationship("rIdWorkbook", OfficeDocumentRelationshipType, "xl/workbook.xml"))),
             ("xl/workbook.xml", """
                 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
                           xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
@@ -350,6 +457,15 @@ public sealed class XlsxPackageHealthValidatorTests
                 </worksheet>
                 """)
         };
+
+        if (!omitRootRelationships)
+        {
+            entries.Add(("_rels/.rels", RelationshipsXml(
+                rootRelationships?.ToArray() ??
+                [
+                    Relationship("rIdWorkbook", OfficeDocumentRelationshipType, "xl/workbook.xml")
+                ])));
+        }
 
         if (extraEntries is not null)
             entries.AddRange(extraEntries);
