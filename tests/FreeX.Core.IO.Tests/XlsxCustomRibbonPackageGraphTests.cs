@@ -88,6 +88,9 @@ public sealed class XlsxCustomRibbonPackageGraphTests
         AssertRootRelationshipIdsAreUnique(rootRelsXml);
         AssertRelationship(rootRelsXml, CustomUiRelationshipType, CustomUiPath)
             .Attribute("Id")?.Value.Should().NotBe("rId1", "the generated officeDocument relationship already owns rId1");
+
+        saved.Position = 0;
+        adapter.Load(saved).GetSheetAt(0).GetValue(3, 1).Should().Be(new TextValue("collision edit"));
     }
 
     [Fact]
@@ -118,6 +121,9 @@ public sealed class XlsxCustomRibbonPackageGraphTests
 
         var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "[Content_Types].xml");
         AssertContentTypeOverrideMissing(contentTypesXml, DanglingCustomUiPath);
+
+        saved.Position = 0;
+        adapter.Load(saved).GetSheetAt(0).GetValue(4, 1).Should().Be(new TextValue("patch edit"));
     }
 
     private static MemoryStream CreateWorkbookWithCustomRibbonPackageGraph(
