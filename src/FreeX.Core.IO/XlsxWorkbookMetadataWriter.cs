@@ -42,7 +42,7 @@ internal static class XlsxWorkbookMetadataWriter
             if (model.FileSharing is not null)
                 ApplyFileSharing(root, model);
             if (model.FileRecoveryProperties.Count > 0)
-                ApplyFileRecoveryProperties(root, model);
+                ApplyFileRecoveryProperties(root, model, preserveRepairLoad: false);
             if (model.IsStructureProtected || model.ProtectionMetadata is not null)
                 ApplyProtection(root, model);
 
@@ -64,7 +64,7 @@ internal static class XlsxWorkbookMetadataWriter
             if (model.FileSharing is not null)
                 changed |= ApplyFileSharing(root, model);
             if (model.FileRecoveryProperties.Count > 0)
-                changed |= ApplyFileRecoveryProperties(root, model);
+                changed |= ApplyFileRecoveryProperties(root, model, preserveRepairLoad: true);
 
             return changed;
         });
@@ -189,10 +189,10 @@ internal static class XlsxWorkbookMetadataWriter
 
     public static void SaveFileRecoveryProperties(Stream xlsxStream, Workbook workbook)
     {
-        SaveWorkbookXml(xlsxStream, workbook, static (_, root, model) => ApplyFileRecoveryProperties(root, model));
+        SaveWorkbookXml(xlsxStream, workbook, static (_, root, model) => ApplyFileRecoveryProperties(root, model, preserveRepairLoad: false));
     }
 
-    private static bool ApplyFileRecoveryProperties(XElement root, Workbook workbook)
+    private static bool ApplyFileRecoveryProperties(XElement root, Workbook workbook, bool preserveRepairLoad)
     {
         root.Elements(WorkbookNs + "fileRecoveryPr").Remove();
         if (workbook.FileRecoveryProperties.Count == 0)
@@ -208,13 +208,17 @@ internal static class XlsxWorkbookMetadataWriter
                 item.NativeAttributes,
                 "autoRecover",
                 "crashSave",
-                "dataExtractLoad",
-                "repairLoad");
+                "dataExtractLoad");
+            if (preserveRepairLoad)
+                XlsxWorkbookMetadataXmlHelper.ApplyNativeAttributes(element, item.NativeAttributes, "repairLoad");
 
             SetBooleanAttribute(element, "autoRecover", item.AutoRecover);
             SetBooleanAttribute(element, "crashSave", item.CrashSave);
             SetBooleanAttribute(element, "dataExtractLoad", item.DataExtractLoad);
-            SetBooleanAttribute(element, "repairLoad", item.RepairLoad);
+            SetBooleanAttribute(
+                element,
+                "repairLoad",
+                preserveRepairLoad || item.RepairLoad != true ? item.RepairLoad : null);
             XlsxWorkbookFileRecoveryPropertyNormalizer.NormalizeElement(element);
             return element;
         }).ToArray();
