@@ -17851,6 +17851,14 @@ internal static class ExcelOpenSmoke
                 MinFreeXReopenedNamedRanges = saveReopen ? 12 : 0
             };
         }
+        else if (string.Equals(row.Id, "generated-cf-retention-package-003", StringComparison.OrdinalIgnoreCase))
+        {
+            expectations = EnsureExpectations() with
+            {
+                MinExcelOpenedConditionalFormats = 16,
+                MinExcelReopenedConditionalFormats = saveReopen ? 16 : 0
+            };
+        }
 
         return expectations;
     }
