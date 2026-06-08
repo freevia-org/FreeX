@@ -49,6 +49,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .BeTrue(blockReason);
 
         var sheet = workbook.GetSheetAt(0);
+        AssertSparklineModel(sheet);
         sheet.SetCell(new CellAddress(sheet.Id, 4, 7), new NumberValue(42));
 
         using var saved = new MemoryStream();
@@ -61,6 +62,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceExtensionList.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloadedWorkbook = adapter.Load(saved);
+        AssertSparklineModel(reloadedWorkbook.GetSheetAt(0));
     }
 
     [Fact]
@@ -131,6 +136,17 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         });
 
         return workbook;
+    }
+
+    private static void AssertSparklineModel(Sheet sheet)
+    {
+        sheet.Sparklines
+            .Select(sparkline => (sparkline.Kind, sparkline.DataRange, sparkline.Location))
+            .Should()
+            .Equal(
+                (SparklineKind.Line, Range(sheet, 1, 1, 1, 5), new CellAddress(sheet.Id, 1, 6)),
+                (SparklineKind.Column, Range(sheet, 2, 1, 2, 5), new CellAddress(sheet.Id, 2, 6)),
+                (SparklineKind.WinLoss, Range(sheet, 3, 1, 3, 5), new CellAddress(sheet.Id, 3, 6)));
     }
 
     private static string SetWorksheetExtensionListInvalidAttributes(MemoryStream stream)
