@@ -65,8 +65,8 @@ public partial class MainWindow
         var vp = SheetGrid.Viewport;
         if (vp == null) { FormulaBar.Focus(); return; }
 
-        var rowMetric = vp.RowMetrics.FirstOrDefault(r => r.Row == addr.Row);
-        var colMetric = vp.ColMetrics.FirstOrDefault(c => c.Col == addr.Col);
+        var rowMetric = FindRowMetric(vp.RowMetrics, addr.Row);
+        var colMetric = FindColMetric(vp.ColMetrics, addr.Col);
         if (rowMetric == null || colMetric == null) { FormulaBar.Focus(); return; }
 
         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr);
@@ -163,6 +163,28 @@ public partial class MainWindow
         _inlineEditor.CaretIndex = _inlineEditor.Text.Length;
         _inlineEditor.SelectionLength = 0;
         SetStatusBarModeText(UiText.Get("StatusBar_EditMode"));
+
+        static RowMetric? FindRowMetric(IReadOnlyList<RowMetric> metrics, uint row)
+        {
+            foreach (var metric in metrics)
+            {
+                if (metric.Row == row)
+                    return metric;
+            }
+
+            return null;
+        }
+
+        static ColMetric? FindColMetric(IReadOnlyList<ColMetric> metrics, uint col)
+        {
+            foreach (var metric in metrics)
+            {
+                if (metric.Col == col)
+                    return metric;
+            }
+
+            return null;
+        }
     }
 
     private void SyncFormulaBarTextFromInlineEditor()
