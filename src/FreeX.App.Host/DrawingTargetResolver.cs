@@ -114,23 +114,38 @@ public static class DrawingTargetResolver
         Sheet sheet,
         DrawingObjectTargetKind kind,
         Guid selectedObjectId,
-        bool includePictures) =>
-        kind switch
+        bool includePictures)
+    {
+        switch (kind)
         {
-            DrawingObjectTargetKind.Picture when includePictures =>
-                sheet.Pictures.FirstOrDefault(picture => picture.Id == selectedObjectId && picture.IsVisible) is { } picture
-                    ? DrawingObjectTarget.FromPicture(picture)
-                    : null,
-            DrawingObjectTargetKind.Shape =>
-                sheet.DrawingShapes.FirstOrDefault(shape => shape.Id == selectedObjectId && shape.IsVisible) is { } shape
-                    ? DrawingObjectTarget.FromShape(shape)
-                    : null,
-            DrawingObjectTargetKind.TextBox =>
-                sheet.TextBoxes.FirstOrDefault(textBox => textBox.Id == selectedObjectId && textBox.IsVisible) is { } textBox
-                    ? DrawingObjectTarget.FromTextBox(textBox)
-                    : null,
-            _ => null
-        };
+            case DrawingObjectTargetKind.Picture when includePictures:
+                foreach (var picture in sheet.Pictures)
+                {
+                    if (picture.Id == selectedObjectId && picture.IsVisible)
+                        return DrawingObjectTarget.FromPicture(picture);
+                }
+
+                return null;
+            case DrawingObjectTargetKind.Shape:
+                foreach (var shape in sheet.DrawingShapes)
+                {
+                    if (shape.Id == selectedObjectId && shape.IsVisible)
+                        return DrawingObjectTarget.FromShape(shape);
+                }
+
+                return null;
+            case DrawingObjectTargetKind.TextBox:
+                foreach (var textBox in sheet.TextBoxes)
+                {
+                    if (textBox.Id == selectedObjectId && textBox.IsVisible)
+                        return DrawingObjectTarget.FromTextBox(textBox);
+                }
+
+                return null;
+            default:
+                return null;
+        }
+    }
 
     private static TextBoxModel? GetTargetTextBox(
         Sheet sheet,
