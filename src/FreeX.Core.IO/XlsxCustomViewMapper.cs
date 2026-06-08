@@ -215,10 +215,7 @@ internal static class XlsxCustomViewMapper
             "extLst"
         ];
 
-        var insertionPoint = workbookRoot.Elements()
-            .FirstOrDefault(element =>
-                element.Name.Namespace == workbookNs &&
-                laterWorkbookElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
+        var insertionPoint = FindFirstLaterElement(workbookRoot, workbookNs, laterWorkbookElements);
         if (insertionPoint is null)
             workbookRoot.Add(customWorkbookViews);
         else
@@ -259,16 +256,32 @@ internal static class XlsxCustomViewMapper
             "extLst"
         ];
 
-        var insertionPoint = worksheetRoot.Elements()
-            .FirstOrDefault(element =>
-                element.Name.Namespace == workbookNs &&
-                laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
+        var insertionPoint = FindFirstLaterElement(worksheetRoot, workbookNs, laterWorksheetElements);
         if (insertionPoint is null)
             worksheetRoot.Add(customSheetViews);
         else
             insertionPoint.AddBeforeSelf(customSheetViews);
     }
 
+    private static XElement? FindFirstLaterElement(
+        XElement root,
+        XNamespace workbookNs,
+        string[] laterElementNames)
+    {
+        foreach (var element in root.Elements())
+        {
+            if (element.Name.Namespace != workbookNs)
+                continue;
+
+            foreach (var laterElementName in laterElementNames)
+            {
+                if (string.Equals(element.Name.LocalName, laterElementName, StringComparison.Ordinal))
+                    return element;
+            }
+        }
+
+        return null;
+    }
 }
 
 internal sealed record XlsxWorksheetCustomViewState(string Id, WorksheetCustomViewState State);
