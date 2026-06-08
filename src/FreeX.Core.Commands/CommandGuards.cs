@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -81,6 +82,15 @@ internal static class CommandGuards
 
     public static CommandOutcome RejectStructuredTableNotFound() =>
         new(false, StructuredTableNotFoundMessage);
+
+    public static bool TryFindStructuredTable(
+        Sheet sheet,
+        int tableId,
+        [NotNullWhen(true)] out StructuredTableModel? table)
+    {
+        table = sheet.StructuredTables.FirstOrDefault(candidate => candidate.Id == tableId);
+        return table is not null;
+    }
 
     public static CommandOutcome RejectStructuredTableHasNoColumns() =>
         new(false, StructuredTableHasNoColumnsMessage);
