@@ -74,7 +74,17 @@ public sealed class MacOsPublicPreviewHumanChecklistTests
         source.Should().Contain("| First launch | VoiceOver identifies the app/window and initial focus |");
         source.Should().Contain("| Workbook grid focus | Active cell or grid location is announced with useful context |");
         source.Should().Contain("| Dialog titles and buttons | Find, Replace, Go To, Format Cells, warnings, About, and Legal Notices announce titles, fields, default buttons, and destructive actions |");
-        source.Should().Contain("| Known issues review | Every confusing announcement or missing name has severity, workaround, owner, and public-preview blocking decision |");
+        source.Should().Contain("| Known issues review | `Accessibility Known Issues` is complete; every confusing announcement or missing name has severity, workaround, owner, and public-preview blocking decision |");
+
+        source.Should().Contain("## Accessibility Known Issues");
+        source.Should().Contain("If no issues are known for this runtime, keep exactly one explicit `None` row.");
+        source.Should().Contain("The VoiceOver `Known issues review` row and the Public-Preview Decision known-issues row must both reflect this table.");
+        source.Should().Contain("| Issue ID | Affected workflow | Severity | User impact / evidence | Workaround | Owner | Public-preview blocking | Decision / rationale |");
+        source.Should().Contain("| None | None | None | No keyboard-only or VoiceOver known issues found during this runtime validation | None | Release owner | No | No known accessibility issues; public preview may proceed |");
+
+        source.Should().Contain("## Log And Artifact Collection");
+        source.Should().Contain("| macOS release-assets wrapper | Yes |");
+        source.Should().Contain("| `FreeX-latest-macos-distribution-candidate-manifest.json` | Yes |");
 
         source.Should().Contain("## Public-Preview Decision");
         source.Should().Contain("| This runtime passed human Finder/Gatekeeper validation | Pass / Fail |");

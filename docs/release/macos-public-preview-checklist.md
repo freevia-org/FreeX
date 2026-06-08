@@ -163,7 +163,15 @@ Turn on VoiceOver in the tester session and capture the spoken text when practic
 | Drawing objects, if present | Object names/status are announced enough to identify the selected object |  | Pass / Fail / N/A |  |
 | Dialog titles and buttons | Find, Replace, Go To, Format Cells, warnings, About, and Legal Notices announce titles, fields, default buttons, and destructive actions |  | Pass / Fail |  |
 | Gatekeeper or accessibility prompts | System prompts are understandable and do not leave FreeX in a confusing state |  | Pass / Fail / N/A |  |
-| Known issues review | Every confusing announcement or missing name has severity, workaround, owner, and public-preview blocking decision |  | Pass / Fail |  |
+| Known issues review | `Accessibility Known Issues` is complete; every confusing announcement or missing name has severity, workaround, owner, and public-preview blocking decision |  | Pass / Fail |  |
+
+## Accessibility Known Issues
+
+Use this section to record every accessibility issue found during keyboard-only or VoiceOver validation. If no issues are known for this runtime, keep exactly one explicit `None` row. If any issue is listed, remove the `None` row and fill every field for each issue. The VoiceOver `Known issues review` row and the Public-Preview Decision known-issues row must both reflect this table.
+
+| Issue ID | Affected workflow | Severity | User impact / evidence | Workaround | Owner | Public-preview blocking | Decision / rationale |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| None | None | None | No keyboard-only or VoiceOver known issues found during this runtime validation | None | Release owner | No | No known accessibility issues; public preview may proceed |
 
 ## Log And Artifact Collection
 
@@ -173,6 +181,8 @@ Turn on VoiceOver in the tester session and capture the spoken text when practic
 | GitHub Actions app artifact wrapper | Yes |  |  |
 | Inner app ZIP and `.sha256` file | Yes |  |  |
 | `freex-<runtime>-macos-evidence.txt` | Yes |  |  |
+| macOS release-assets wrapper | Yes |  | Retain `freex-<run-id>-<run-attempt>-macos-release-assets` with the stable public-preview assets for both runtimes. |
+| `FreeX-latest-macos-distribution-candidate-manifest.json` | Yes |  | Retain from the macOS release-assets wrapper and compare to the release record. |
 | Packaging smoke log | Yes |  |  |
 | Launch smoke file | Yes |  |  |
 | Notarization log | Yes |  |  |
