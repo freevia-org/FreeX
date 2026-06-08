@@ -221,13 +221,27 @@ public partial class OptionsDialog : Window
     private static bool QuickAccessCommandTextMatches(string text, string filter) =>
         text.Contains(filter, StringComparison.CurrentCultureIgnoreCase);
 
-    private static QuickAccessCommandChoice? FindQuickAccessCommandChoice(ListBox listBox, string commandId) =>
-        listBox.Items
-            .OfType<QuickAccessCommandChoice>()
-            .FirstOrDefault(choice => QuickAccessCommandIdsEqual(choice.Id, commandId));
+    private static QuickAccessCommandChoice? FindQuickAccessCommandChoice(ListBox listBox, string commandId)
+    {
+        foreach (var item in listBox.Items)
+        {
+            if (item is QuickAccessCommandChoice choice && QuickAccessCommandIdsEqual(choice.Id, commandId))
+                return choice;
+        }
 
-    private int IndexOfQuickAccessCommandId(string commandId) =>
-        _quickAccessCommandIds.FindIndex(id => QuickAccessCommandIdsEqual(id, commandId));
+        return null;
+    }
+
+    private int IndexOfQuickAccessCommandId(string commandId)
+    {
+        for (var index = 0; index < _quickAccessCommandIds.Count; index++)
+        {
+            if (QuickAccessCommandIdsEqual(_quickAccessCommandIds[index], commandId))
+                return index;
+        }
+
+        return -1;
+    }
 
     private static bool QuickAccessCommandIdsEqual(string id, string otherId) =>
         string.Equals(id, otherId, StringComparison.OrdinalIgnoreCase);
@@ -490,11 +504,27 @@ public partial class OptionsDialog : Window
         UpdateProofingCustomDictionaryButtons();
     }
 
-    private string? FindCustomDictionaryWord(string word) =>
-        _customDictionaryWords.FirstOrDefault(candidate => CustomDictionaryWordsEqual(candidate, word));
+    private string? FindCustomDictionaryWord(string word)
+    {
+        foreach (var candidate in _customDictionaryWords)
+        {
+            if (CustomDictionaryWordsEqual(candidate, word))
+                return candidate;
+        }
 
-    private int IndexOfCustomDictionaryWord(string word) =>
-        _customDictionaryWords.FindIndex(candidate => CustomDictionaryWordsEqual(candidate, word));
+        return null;
+    }
+
+    private int IndexOfCustomDictionaryWord(string word)
+    {
+        for (var index = 0; index < _customDictionaryWords.Count; index++)
+        {
+            if (CustomDictionaryWordsEqual(_customDictionaryWords[index], word))
+                return index;
+        }
+
+        return -1;
+    }
 
     private static bool CustomDictionaryWordsEqual(string word, string otherWord) =>
         string.Equals(word, otherWord, StringComparison.OrdinalIgnoreCase);
