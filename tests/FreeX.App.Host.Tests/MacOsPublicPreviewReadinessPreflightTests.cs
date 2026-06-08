@@ -453,6 +453,24 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
     }
 
     [Fact]
+    public void ReadinessPreflight_FailsWhenAppEvidenceUsesStaleRunAttempt()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false);
+        ReplaceInFile(arm64.EvidencePath, "github_run_attempt=1", "github_run_attempt=2");
+
+        var result = RunPreflight(temp.Path);
+
+        AssertPreflightRejected(
+            result,
+            "osx-arm64 evidence GitHub Actions identity",
+            "github_run_attempt=1",
+            "Actual value(s):",
+            "2.");
+    }
+
+    [Fact]
     public void ReadinessPreflight_FailsWhenRuntimeArtifactsComeFromMixedRuns()
     {
         using var temp = new TestTemporaryDirectory();

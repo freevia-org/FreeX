@@ -68,6 +68,74 @@ function Get-IndentedYamlBlock {
     return $null
 }
 
+function Get-DotNetTestCommandBlocks {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string[]]$Lines
+    )
+
+    $commands = [System.Collections.Generic.List[string]]::new()
+    for ($lineIndex = 0; $lineIndex -lt $Lines.Count; $lineIndex++) {
+        if ($Lines[$lineIndex] -notmatch "\bdotnet\s+test\b") {
+            continue
+        }
+
+        $commandLines = [System.Collections.Generic.List[string]]::new()
+        $commandLines.Add($Lines[$lineIndex].Trim())
+        $commandEndIndex = $lineIndex
+        while ($commandLines[$commandLines.Count - 1].TrimEnd().EndsWith('\') -and
+            $commandEndIndex + 1 -lt $Lines.Count) {
+            $commandEndIndex++
+            $commandLines.Add($Lines[$commandEndIndex].Trim())
+        }
+
+        $commands.Add($commandLines -join "`n")
+        $lineIndex = $commandEndIndex
+    }
+
+    return @($commands)
+}
+
+function Get-FullyQualifiedNameFilterEntries {
+    param(
+        [Parameter(Mandatory = $true)][string]$CommandBlock
+    )
+
+    return @(
+        [regex]::Matches($CommandBlock, "FullyQualifiedName~(?<name>[A-Za-z0-9_.]+)") |
+            ForEach-Object { $_.Groups["name"].Value }
+    )
+}
+
+function Test-CSharpTestClassExists {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepoRoot,
+        [Parameter(Mandatory = $true)][string]$FullyQualifiedName
+    )
+
+    $lastDotIndex = $FullyQualifiedName.LastIndexOf(".", [System.StringComparison]::Ordinal)
+    if ($lastDotIndex -le 0 -or $lastDotIndex -ge $FullyQualifiedName.Length - 1) {
+        return $false
+    }
+
+    $namespace = $FullyQualifiedName.Substring(0, $lastDotIndex)
+    $className = $FullyQualifiedName.Substring($lastDotIndex + 1)
+    $testsRoot = Join-Path $RepoRoot "tests"
+    if (-not (Test-Path -LiteralPath $testsRoot -PathType Container)) {
+        return $false
+    }
+
+    $namespacePattern = "\bnamespace\s+$([regex]::Escape($namespace))\s*[;{]"
+    $classPattern = "(?m)^\s*(?:public|internal)?\s*(?:sealed\s+|partial\s+|abstract\s+)*class\s+$([regex]::Escape($className))\b"
+    foreach ($classFile in @(Get-ChildItem -LiteralPath $testsRoot -Recurse -File -Filter "$className.cs" -ErrorAction SilentlyContinue)) {
+        $source = Get-Content -LiteralPath $classFile.FullName -Raw
+        if ($source -match $namespacePattern -and $source -match $classPattern) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
 $errors = [System.Collections.Generic.List[string]]::new()
 foreach ($workflow in $workflows) {
     $content = Get-Content -LiteralPath $workflow.FullName -Raw
@@ -176,6 +244,28 @@ foreach ($workflow in $workflows) {
     }
 
     if ($workflow.Name -eq "macos-app.yml") {
+        $requiredMacOsFocusedTestFilters = @(
+            [pscustomobject]@{
+                Project = "tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj"
+                Entries = @(
+                    "FreeX.App.Services.Tests.PortablePdfDocumentExporterTests",
+                    "FreeX.App.Services.Tests.PortablePdfExportPlannerTests",
+                    "FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests",
+                    "FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests",
+                    "FreeX.App.Services.Tests.AppServicesPortabilityGuardTests",
+                    "FreeX.App.Services.Tests.ApplicationDataPathGuardTests",
+                    "FreeX.App.Services.Tests.AvaloniaShellSourceTests",
+                    "FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests"
+                )
+            },
+            [pscustomobject]@{
+                Project = "tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj"
+                Entries = @(
+                    "FreeX.Core.Model.Tests.ExportPathPlannerTests"
+                )
+            }
+        )
+
         $requiredMacOsEvidenceMarkers = @(
             "- name: Capture runner toolchain evidence",
             'evidence_path="$artifact_root/freex-$runtime-macos-evidence.txt"',
@@ -259,6 +349,68 @@ foreach ($workflow in $workflows) {
             if ($releasePublicationJobBlock -notmatch "(?ms)^      - name:\s+Checkout\s*(?:#.*)?\r?\n        uses:\s+actions/checkout@v6\s*(?:#.*)?\r?\n        with:\s*(?:#.*)?\r?\n(?:          [^\r\n]*\r?\n)*?          persist-credentials:\s*false\s*(?:#.*)?(?:\r?\n|$)") {
                 $errors.Add("$($workflow.Name): macOS release publication checkout must use actions/checkout@v6 with persist-credentials: false.")
             }
+        }
+
+        $macOsAppJobBlock = Get-IndentedYamlBlock `
+            -Lines $lines `
+            -Pattern "^(?<indent>\s*)macos-app\s*:\s*(?:#.*)?$"
+        if ([string]::IsNullOrWhiteSpace($macOsAppJobBlock)) {
+            $errors.Add("$($workflow.Name): macOS app job 'macos-app' is missing.")
+        } else {
+            $macOsAppTestCommands = @(Get-DotNetTestCommandBlocks -Lines ($macOsAppJobBlock -split "\r?\n"))
+            if ($macOsAppTestCommands.Count -eq 0) {
+                $errors.Add("$($workflow.Name): macOS app job must run focused hosted dotnet test filters before packaging.")
+            }
+
+            foreach ($command in $macOsAppTestCommands) {
+                if ($command -notmatch "(?m)--filter\s+") {
+                    $errors.Add("$($workflow.Name): macOS app hosted test command must use a focused --filter: $($command.Split("`n")[0])")
+                }
+
+                foreach ($broadTarget in @("FreeX.slnx", "FreeX.DefaultTests.slnx", "FreeX.UiTests.slnx")) {
+                    if ($command.IndexOf($broadTarget, [System.StringComparison]::Ordinal) -ge 0) {
+                        $errors.Add("$($workflow.Name): macOS app hosted test command must not run broad test target '$broadTarget'.")
+                    }
+                }
+            }
+
+            foreach ($requiredFilter in $requiredMacOsFocusedTestFilters) {
+                $matchingCommands = @(
+                    $macOsAppTestCommands |
+                        Where-Object { $_.IndexOf($requiredFilter.Project, [System.StringComparison]::Ordinal) -ge 0 }
+                )
+                if ($matchingCommands.Count -ne 1) {
+                    $errors.Add("$($workflow.Name): macOS app workflow must run exactly one focused dotnet test command for $($requiredFilter.Project).")
+                    continue
+                }
+
+                $actualEntries = @(Get-FullyQualifiedNameFilterEntries -CommandBlock $matchingCommands[0])
+                $actualDistinctEntries = @($actualEntries | Sort-Object -Unique)
+                foreach ($expectedEntry in $requiredFilter.Entries) {
+                    if ($actualDistinctEntries -notcontains $expectedEntry) {
+                        $errors.Add("$($workflow.Name): macOS app workflow focused test filter is missing '$expectedEntry'.")
+                    }
+
+                    if (-not (Test-CSharpTestClassExists -RepoRoot $repoRoot -FullyQualifiedName $expectedEntry)) {
+                        $errors.Add("$($workflow.Name): macOS app workflow focused test filter references missing test class '$expectedEntry'.")
+                    }
+                }
+
+                foreach ($actualEntry in $actualDistinctEntries) {
+                    if ($requiredFilter.Entries -notcontains $actualEntry) {
+                        $errors.Add("$($workflow.Name): macOS app workflow has unexpected focused test filter '$actualEntry' for $($requiredFilter.Project).")
+                    }
+                }
+
+                foreach ($duplicateGroup in @($actualEntries | Group-Object | Where-Object { $_.Count -gt 1 })) {
+                    $errors.Add("$($workflow.Name): macOS app workflow duplicates focused test filter '$($duplicateGroup.Name)'.")
+                }
+            }
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($releasePublicationJobBlock) -and
+            $releasePublicationJobBlock -match "\bdotnet\s+test\b") {
+            $errors.Add("$($workflow.Name): macOS release publication job must not run dotnet test; publish artifacts from the focused macOS app job instead.")
         }
     }
 
