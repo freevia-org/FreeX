@@ -889,6 +889,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
             .Should()
             .BeTrue(blockReason);
+        AssertWorksheetCustomPropertiesModel(workbook.GetSheetAt(0));
 
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
@@ -904,6 +905,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Should()
             .Be(sourceCustomProperties.ToString(SaveOptions.DisableFormatting));
         ReadWorksheetCustomPropertyPartBytes(saved).Should().Equal(sourceCustomPropertyPart);
+
+        saved.Position = 0;
+        var reloadedSheet = new XlsxFileAdapter().Load(saved).GetSheetAt(0);
+        reloadedSheet.GetCell(3, 3)!.Value.Should().Be(new NumberValue(42));
+        AssertWorksheetCustomPropertiesModel(reloadedSheet);
     }
 
     [Fact]
@@ -1130,6 +1136,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
             .Should()
             .BeTrue(blockReason);
+        AssertWorksheetScenariosModel(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
@@ -1144,6 +1151,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceScenarios.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        reloaded.GetSheetAt(0).GetCell(3, 3)!.Value.Should().Be(new NumberValue(42));
+        AssertWorksheetScenariosModel(reloaded);
     }
 
     [Fact]
@@ -3965,6 +3977,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         return workbook;
     }
 
+    private static void AssertWorksheetCustomPropertiesModel(Sheet sheet)
+    {
+        sheet.CustomProperties.Should().ContainSingle()
+            .Which.Should().Be(new WorksheetCustomProperty("FreeXModeledProperty", 7));
+    }
+
     private static void SetWorksheetCustomPropertiesInvalidAttributes(MemoryStream stream)
     {
         stream.Position = 0;
@@ -4147,6 +4165,20 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             Locked: true,
             User: "FreeXTest"));
         return workbook;
+    }
+
+    private static void AssertWorksheetScenariosModel(Workbook workbook)
+    {
+        var sheet = workbook.GetSheetAt(0);
+        var scenario = workbook.Scenarios.Should().ContainSingle().Subject;
+        scenario.Name.Should().Be("BestCase");
+        scenario.Comment.Should().Be("Scenario comment");
+        scenario.Hidden.Should().BeTrue();
+        scenario.Locked.Should().BeTrue();
+        scenario.User.Should().Be("FreeXTest");
+        scenario.ChangingCells.Should().Equal(
+            new ScenarioCellValue(new CellAddress(sheet.Id, 1, 1), new NumberValue(42)),
+            new ScenarioCellValue(new CellAddress(sheet.Id, 1, 2), new TextValue("Seattle")));
     }
 
     private static void SetWorksheetScenariosInvalidNativeMetadata(MemoryStream stream)
