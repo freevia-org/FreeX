@@ -2717,6 +2717,7 @@ public sealed class AvaloniaShellSourceTests
 
         plannerSource.Should().Contain("public enum HyperlinkNavigationKind");
         plannerSource.Should().Contain("HyperlinkTargetKind.PlaceInThisDocument");
+        plannerSource.Should().Contain("HyperlinkNavigationKind.LocalFile");
         plannerSource.Should().Contain("HyperlinkNavigationKind.External");
         plannerSource.Should().Contain("\"http\", \"https\", \"mailto\", \"ftp\"");
         launcherSource.Should().Contain("public static class ExternalUriLauncher");
@@ -2724,9 +2725,11 @@ public sealed class AvaloniaShellSourceTests
         launcherSource.Should().Contain("HyperlinkNavigationPlanner.IsAllowedScheme(normalizedTarget)");
 
         sessionSource.Should().Contain("public bool CanOpenSelectedHyperlink");
+        sessionSource.Should().Contain("HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, SelectedRange.Start, CurrentFilePath, out _)");
         sessionSource.Should().Contain("public bool TryGetSelectedHyperlinkPlan(out HyperlinkNavigationPlan? plan)");
         sessionSource.Should().Contain("public WorkbookNavigationResult OpenSelectedHyperlink()");
-        sessionSource.Should().Contain("return GoToReference(plan.Target);");
+        sessionSource.Should().Contain("HyperlinkNavigationKind.WorksheetCell => GoToReference(plan.Target)");
+        sessionSource.Should().Contain("Local file hyperlinks require a platform file-opening route.");
         sessionSource.Should().Contain("External hyperlinks are not supported on this platform.");
 
         source.Should().Contain("private readonly NativeMenuItem _openHyperlinkMenuItem = new();");
@@ -2737,7 +2740,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private async Task OpenSelectedHyperlinkAsync()");
         source.Should().Contain("if (!_session.TryGetSelectedHyperlinkPlan(out var plan) || plan is null)");
         source.Should().Contain("await OpenExternalHyperlinkAsync(plan.Target);");
+        source.Should().Contain("await OpenLocalFileHyperlinkAsync(plan);");
         source.Should().Contain("var result = _session.OpenSelectedHyperlink();");
+        source.Should().Contain("private async Task OpenLocalFileHyperlinkAsync(HyperlinkNavigationPlan plan)");
         source.Should().Contain("private async Task OpenExternalHyperlinkAsync(string target)");
         source.Should().Contain("private async Task<ExternalUriLaunchResult> OpenExternalUriAsync(string target)");
         source.Should().Contain("ExternalUriLauncher.OpenAsync(target, launchAsync)");
@@ -2747,7 +2752,18 @@ public sealed class AvaloniaShellSourceTests
             "private async Task OpenSelectedHyperlinkAsync()",
             "private async Task OpenExternalHyperlinkAsync(string target)");
         openHyperlinkSource.Should().Contain("await OpenExternalHyperlinkAsync(plan.Target);");
+        openHyperlinkSource.Should().Contain("await OpenLocalFileHyperlinkAsync(plan);");
         openHyperlinkSource.Should().NotContain("Process.Start");
+
+        var localFileHyperlinkSource = ExtractSourceBlock(
+            source,
+            "private async Task OpenLocalFileHyperlinkAsync(HyperlinkNavigationPlan plan)",
+            "private async Task OpenExternalHyperlinkAsync(string target)");
+        localFileHyperlinkSource.Should().Contain("_session.TryResolveOpenTarget(plan.LocalPath, out var target, out var message)");
+        localFileHyperlinkSource.Should().Contain("await OpenWorkbookPathAsync(target.Path);");
+        localFileHyperlinkSource.Should().NotContain("OpenExternalUriAsync");
+        localFileHyperlinkSource.Should().NotContain("LaunchFile");
+        localFileHyperlinkSource.Should().NotContain("LaunchUriAsync");
     }
 
     [Fact]
