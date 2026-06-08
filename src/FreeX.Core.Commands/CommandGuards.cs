@@ -63,6 +63,9 @@ internal static class CommandGuards
         return pivotTable is not null;
     }
 
+    public static PivotCacheModel? FindPivotCache(Workbook workbook, PivotTableModel pivotTable) =>
+        workbook.PivotCaches.FirstOrDefault(cache => cache.CacheId == pivotTable.CacheId);
+
     public static CommandOutcome RejectPivotTableNameRequired() =>
         new(false, PivotTableNameRequiredMessage);
 

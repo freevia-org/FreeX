@@ -153,7 +153,7 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
             return new CommandOutcome(false, "Existing PivotTable fields are outside the new source range.");
         }
 
-        var cache = ctx.Workbook.PivotCaches.FirstOrDefault(item => item.CacheId == pivotTable.CacheId);
+        var cache = CommandGuards.FindPivotCache(ctx.Workbook, pivotTable);
         _snapshot = PivotSourceSnapshot.Capture(pivotTable, cache);
         _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
 
@@ -176,7 +176,7 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
         {
-            var cache = ctx.Workbook.PivotCaches.FirstOrDefault(item => item.CacheId == pivotTable.CacheId);
+            var cache = CommandGuards.FindPivotCache(ctx.Workbook, pivotTable);
             if (_snapshot is not null)
                 _snapshot.Restore(pivotTable, cache);
         }
