@@ -1151,7 +1151,6 @@ public sealed class MacOsAppReadinessPreflightTests
                       NSPasteboard.general
                       pasteboard.clearContents()
                       pasteboard.writeObjects([image])
-                      SWIFT
                       open -W -n -b io.github.tony-xmelon.freex "$RUNNER_TEMP/launch.csv" --args --macos-launch-smoke "$artifact_root/launch.txt" --macos-launch-smoke-verify-image-clipboard --macos-launch-smoke-verify-live-command-keys
                       live_command_key_ready=false
                       grep -q "live_command_key_smoke_ready=true" "$artifact_root/launch.txt"
