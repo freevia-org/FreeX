@@ -267,7 +267,7 @@ public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand
         if (!configureOutcome.Success)
             return configureOutcome;
 
-        table = sheet.StructuredTables.First(candidate => candidate.Id == _tableId);
+        table = FindRequiredStructuredTable(sheet, _tableId);
         foreach (var styleCommand in BuildStyleCommands(table))
         {
             var styleOutcome = styleCommand.Apply(ctx);
@@ -284,6 +284,9 @@ public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand
     }
 
     public void Revert(ICommandContext ctx) => RevertAppliedCommands(ctx);
+
+    private static StructuredTableModel FindRequiredStructuredTable(Sheet sheet, int tableId) =>
+        sheet.StructuredTables.First(table => table.Id == tableId);
 
     private IEnumerable<IWorkbookCommand> BuildStyleCommands(StructuredTableModel table)
     {
