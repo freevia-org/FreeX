@@ -1,7 +1,7 @@
 # Third-Party Notices
 
 This file summarizes third-party NuGet packages referenced by the FreeX
-solution after restore on 2026-05-30. Each package remains governed by its own
+solution after restore on 2026-06-06. Each package remains governed by its own
 license. This notice does not change those license terms.
 
 See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for bundled common
@@ -10,16 +10,16 @@ license text and package-provided license text found in the restored packages.
 ## Audit Status
 
 - Audit command: `dotnet restore FreeX.slnx --disable-parallel -v:minimal`.
-- Restored package inventory: 41 unique NuGet packages across 15
+- Restored package inventory: 66 unique NuGet packages across 18
   `project.assets.json` files.
 - Coverage: every restored package is listed below.
 - Runtime package posture: the publishable app dependency set is covered by
-  MIT, Apache-2.0, and BSD-3-Clause style licenses.
+  MIT, Apache-2.0, BSD-3-Clause, and BSD-style package licenses.
 - Package-provided `NOTICE` files found in the local NuGet cache:
   Microsoft.NET.ILLink.Tasks `THIRD-PARTY-NOTICES.TXT`.
-- Package-provided license files found: FluentAssertions `LICENSE`,
-  Newtonsoft.Json `LICENSE.md`, SharpVectors.Wpf `lib/License.txt`, and
-  System.IO.Packaging `LICENSE.TXT`.
+- Package-provided license files found: Avalonia.Angle.Windows.Natives
+  `LICENSE`, FluentAssertions `LICENSE`, Newtonsoft.Json `LICENSE.md`,
+  SharpVectors.Wpf `lib/License.txt`, and System.IO.Packaging `LICENSE.TXT`.
 
 ## Commercial-Use Note
 
@@ -33,18 +33,38 @@ replace this dependency or confirm the project has the required Xceed license.
 
 | Package | Version | License | Project |
 | --- | --- | --- | --- |
+| Avalonia | 12.0.4 | MIT | https://avaloniaui.net/ |
+| Avalonia.Angle.Windows.Natives | 2.1.27548.20260419 | BSD-style package license file | https://avaloniaui.net/ |
+| Avalonia.BuildServices | 11.3.2 | MIT | https://avaloniaui.net/ |
+| Avalonia.Desktop | 12.0.4 | MIT | https://avaloniaui.net/ |
+| Avalonia.Fonts.Inter | 12.0.4 | MIT | https://avaloniaui.net/ |
+| Avalonia.FreeDesktop | 12.0.4 | MIT | https://avaloniaui.net/ |
+| Avalonia.FreeDesktop.AtSpi | 12.0.4 | MIT | https://avaloniaui.net/ |
+| Avalonia.HarfBuzz | 12.0.4 | MIT | https://avaloniaui.net/ |
+| Avalonia.Native | 12.0.4 | MIT | https://avaloniaui.net/ |
+| Avalonia.Remote.Protocol | 12.0.4 | MIT | https://avaloniaui.net/ |
+| Avalonia.Skia | 12.0.4 | MIT | https://avaloniaui.net/ |
+| Avalonia.Themes.Fluent | 12.0.4 | MIT | https://avaloniaui.net/ |
+| Avalonia.Win32 | 12.0.4 | MIT | https://avaloniaui.net/ |
+| Avalonia.X11 | 12.0.4 | MIT | https://avaloniaui.net/ |
 | ClosedXML | 0.105.0 | MIT | https://github.com/ClosedXML/ClosedXML |
 | ClosedXML.Parser | 2.0.0 | MIT | https://github.com/ClosedXML/ClosedXML.Parser |
 | DocumentFormat.OpenXml | 3.1.1 | MIT | https://github.com/dotnet/Open-XML-SDK |
 | DocumentFormat.OpenXml.Framework | 3.1.1 | MIT | https://github.com/dotnet/Open-XML-SDK |
 | ExcelDataReader | 3.8.0 | MIT | https://github.com/ExcelDataReader/ExcelDataReader |
 | ExcelNumberFormat | 1.1.0 | MIT | https://github.com/andersnm/ExcelNumberFormat |
+| HarfBuzzSharp | 8.3.1.3 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
+| HarfBuzzSharp.NativeAssets.Linux | 8.3.1.3 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
+| HarfBuzzSharp.NativeAssets.macOS | 8.3.1.3 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
+| HarfBuzzSharp.NativeAssets.WebAssembly | 8.3.1.3 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
+| HarfBuzzSharp.NativeAssets.Win32 | 8.3.1.3 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | Microsoft.Extensions.DependencyInjection | 10.0.7 | MIT | https://dot.net/ |
 | Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.7 | MIT | https://dot.net/ |
 | Microsoft.Extensions.Logging | 10.0.7 | MIT | https://dot.net/ |
 | Microsoft.Extensions.Logging.Abstractions | 10.0.7 | MIT | https://dot.net/ |
 | Microsoft.Extensions.Options | 10.0.7 | MIT | https://dot.net/ |
 | Microsoft.Extensions.Primitives | 10.0.7 | MIT | https://dot.net/ |
+| MicroCom.Runtime | 0.11.4 | MIT |  |
 | OxyPlot.Core | 2.2.0 | MIT | https://oxyplot.github.io/ |
 | OxyPlot.Wpf | 2.2.0 | MIT | https://oxyplot.github.io/ |
 | OxyPlot.Wpf.Shared | 2.2.0 | MIT | https://oxyplot.github.io/ |
@@ -57,7 +77,13 @@ replace this dependency or confirm the project has the required Xceed license.
 | Serilog.Sinks.File | 7.0.0 | Apache-2.0 | https://github.com/serilog/serilog-sinks-file |
 | SharpVectors.Wpf | 1.8.5 | BSD-3-Clause | https://github.com/ElinamLLC/SharpVectors |
 | SixLabors.Fonts | 1.0.0 | Apache-2.0 | https://github.com/SixLabors/Fonts |
+| SkiaSharp | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
+| SkiaSharp.NativeAssets.Linux | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
+| SkiaSharp.NativeAssets.macOS | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
+| SkiaSharp.NativeAssets.WebAssembly | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
+| SkiaSharp.NativeAssets.Win32 | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | System.IO.Packaging | 8.0.1 | MIT | https://dot.net/ |
+| Tmds.DBus.Protocol | 0.92.0 | MIT |  |
 
 ## Test And Development Packages
 

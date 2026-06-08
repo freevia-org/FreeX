@@ -64,9 +64,12 @@ public sealed class GitHubWorkflowPreflightTests
         script.Should().Contain("workflow must declare top-level permissions explicitly");
         script.Should().Contain("workflow must not request write-all permissions");
         script.Should().Contain("must be pinned to an explicit major version");
+        script.Should().Contain("\"actions/download-artifact\" = \"v7\"");
         script.Should().Contain("must declare an explicit shell");
         script.Should().Contain("must stay within the workflow workspace");
         script.Should().Contain("workflow YAML must use spaces for indentation");
+        script.Should().Contain("$allowedActionMajors");
+        script.Should().Contain("must use supported major");
         script.Should().Contain("Validated $($workflows.Count) GitHub workflow file(s).");
     }
 
@@ -385,6 +388,42 @@ public sealed class GitHubWorkflowPreflightTests
         result.ExitCode.Should().NotBe(0);
         result.CombinedOutput.Should().Contain("GitHub workflow validation failed");
         result.CombinedOutput.Should().Contain("actions/checkout@main");
+    }
+
+    [Fact]
+    public void GitHubWorkflowPreflight_FailsForUnsupportedKnownActionMajor()
+    {
+        using var temp = new TestTemporaryDirectory();
+
+        File.WriteAllText(
+            Path.Combine(temp.Path, "broken.yml"),
+            """
+            name: Broken
+
+            on:
+              workflow_dispatch:
+
+            permissions:
+              contents: read
+
+            jobs:
+              build:
+                runs-on: windows-latest
+                timeout-minutes: 5
+                steps:
+                  - name: Checkout
+                    uses: actions/checkout@v99
+                    with:
+                      persist-credentials: false
+            """);
+
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("actions/checkout@v99");
+        result.CombinedOutput.Should().Contain("must use supported major v6");
     }
 
 }

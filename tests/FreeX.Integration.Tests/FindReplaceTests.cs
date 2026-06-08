@@ -78,7 +78,14 @@ public class FindReplaceTests
         sheet1.SetCell(a2, new TextValue("needle in A2"));
         sheet2.SetCell(sheet2Cell, new TextValue("needle elsewhere"));
         sheet1.Comments[a2] = "needle note";
-        sheet1.ThreadedComments[b1] = new ThreadedComment("needle thread");
+        sheet1.ThreadedComments[b1] = new ThreadedComment("needle thread")
+        {
+            Replies =
+            [
+                new CommentReply("needle thread reply", "Codex"),
+                new CommentReply("other reply", "FreeX")
+            ]
+        };
 
         var valueResults = FindReplaceService.Find(
             workbook,
@@ -86,6 +93,7 @@ public class FindReplaceTests
             new FindOptions(Within: FindWithin.Sheet, CurrentSheetId: sheet1.Id, SearchOrder: FindSearchOrder.ByColumns));
 
         valueResults.Select(result => result.Address).Should().Equal(a2, b1);
+        valueResults.Select(result => result.Target).Should().OnlyContain(target => target == FindResultTarget.Cell);
 
         var noteResults = FindReplaceService.Find(
             workbook,
@@ -93,13 +101,19 @@ public class FindReplaceTests
             new FindOptions(Within: FindWithin.Sheet, CurrentSheetId: sheet1.Id, LookIn: FindLookIn.Notes));
 
         noteResults.Should().ContainSingle().Which.Address.Should().Be(a2);
+        noteResults.Single().Target.Should().Be(FindResultTarget.Note);
 
         var commentResults = FindReplaceService.Find(
             workbook,
             "needle thread",
             new FindOptions(Within: FindWithin.Sheet, CurrentSheetId: sheet1.Id, LookIn: FindLookIn.Comments));
 
-        commentResults.Should().ContainSingle().Which.Address.Should().Be(b1);
+        commentResults.Select(result => result.Address).Should().Equal(b1, b1);
+        commentResults.Select(result => result.MatchedText).Should().Equal("needle thread", "needle thread reply");
+        commentResults.Select(result => result.Target).Should().Equal(
+            FindResultTarget.ThreadedComment,
+            FindResultTarget.ThreadedCommentReply);
+        commentResults.Select(result => result.ReplyIndex).Should().Equal(null, 0);
     }
 
     [Fact]

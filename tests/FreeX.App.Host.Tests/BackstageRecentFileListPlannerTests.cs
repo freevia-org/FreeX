@@ -1,6 +1,8 @@
+using System.IO;
 using System.Text.Json;
 using FluentAssertions;
 using FreeX.App.Host;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host.Tests;
 
@@ -132,9 +134,10 @@ public sealed class BackstageRecentFileListPlannerTests
     [Fact]
     public void RecentFilesStore_UsesUtcClockForPersistedTimestamps()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("RecentFilesStore.cs");
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Services", "RecentFilesStore.cs"));
 
-        source.Should().Contain("LastOpened = DateTimeOffset.UtcNow");
+        source.Should().Contain("DateTimeOffset.UtcNow");
+        source.Should().Contain("LastOpened = _clock()");
         source.Should().NotContain("LastOpened = DateTime.Now");
     }
 }
