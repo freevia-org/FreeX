@@ -7,6 +7,7 @@ internal static class CommandGuards
     private const string SheetProtectedMessage = "The sheet is protected.";
     private const string PivotTableNotFoundMessage = "PivotTable was not found.";
     private const string StructuredTableNotFoundMessage = "Table was not found.";
+    private const string StructuredTableHasNoColumnsMessage = "Table has no columns.";
     private const string SourceSheetNotFoundMessage = "Source sheet was not found.";
     private const string TargetSheetNotFoundMessage = "Target sheet was not found.";
     private const string PivotTableNameRequiredMessage = "PivotTable name is required.";
@@ -76,6 +77,9 @@ internal static class CommandGuards
 
     public static CommandOutcome RejectStructuredTableNotFound() =>
         new(false, StructuredTableNotFoundMessage);
+
+    public static CommandOutcome RejectStructuredTableHasNoColumns() =>
+        new(false, StructuredTableHasNoColumnsMessage);
 
     public static CommandOutcome RejectSourceSheetNotFound() =>
         new(false, SourceSheetNotFoundMessage);

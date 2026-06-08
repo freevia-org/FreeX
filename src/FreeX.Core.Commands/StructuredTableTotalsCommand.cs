@@ -28,7 +28,7 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
         if (!table.TotalsRowShown)
             return new CommandOutcome(false, "Table totals row is not shown.");
         if (table.Columns.Count == 0)
-            return new CommandOutcome(false, "Table has no columns.");
+            return CommandGuards.RejectStructuredTableHasNoColumns();
 
         _previousCells.Clear();
         var totalsRow = table.Range.End.Row;
@@ -193,7 +193,7 @@ public sealed class SetStructuredTableTotalsRowCommand : IWorkbookCommand
         if (table.TotalsRowShown == _showTotalsRow)
             return new CommandOutcome(true, AffectedCells: [table.Range.End]);
         if (table.Columns.Count == 0)
-            return new CommandOutcome(false, "Table has no columns.");
+            return CommandGuards.RejectStructuredTableHasNoColumns();
 
         return _showTotalsRow
             ? ShowTotalsRow(ctx, sheet, table)
