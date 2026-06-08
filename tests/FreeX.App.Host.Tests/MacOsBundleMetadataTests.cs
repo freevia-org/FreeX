@@ -44,8 +44,21 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("app_info_plist=\"$unzip_root/FreeX.app/Contents/Info.plist\"");
         workflow.Should().Contain("assert_bundle_document_extensions \"$app_info_plist\" 0 \"${native_document_extensions[@]}\"");
         workflow.Should().Contain("assert_bundle_document_extensions \"$app_info_plist\" 1 \"${imported_document_extensions[@]}\"");
+        workflow.Should().Contain("test \"$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' \"$app_info_plist\")\" = \"io.github.tony-xmelon.freex\"");
+        workflow.Should().Contain("test \"$(/usr/libexec/PlistBuddy -c 'Print :CFBundlePackageType' \"$app_info_plist\")\" = \"APPL\"");
+        workflow.Should().Contain("test \"$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' \"$app_info_plist\")\" = \"12.0\"");
+        workflow.Should().Contain("test \"$(/usr/libexec/PlistBuddy -c 'Print :NSHighResolutionCapable' \"$app_info_plist\")\" = \"true\"");
+        workflow.Should().Contain("artifact_bundle_metadata_subject=unzipped_app_bundle");
+        workflow.Should().Contain("bundle_executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' \"$app_info_plist\")");
+        workflow.Should().Contain("bundle_icon=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' \"$app_info_plist\")");
+        workflow.Should().Contain("bundle_identifier=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' \"$app_info_plist\")");
+        workflow.Should().Contain("bundle_package_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundlePackageType' \"$app_info_plist\")");
+        workflow.Should().Contain("bundle_minimum_system_version=$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' \"$app_info_plist\")");
+        workflow.Should().Contain("bundle_high_resolution_capable=$(/usr/libexec/PlistBuddy -c 'Print :NSHighResolutionCapable' \"$app_info_plist\")");
         workflow.Should().Contain("artifact_document_extensions_subject=unzipped_app_bundle");
+        workflow.Should().Contain("native_document_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeName' \"$app_info_plist\")");
         workflow.Should().Contain("native_document_extensions=$(IFS=';'; echo \"${native_document_extensions[*]}\")");
+        workflow.Should().Contain("imported_document_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeName' \"$app_info_plist\")");
         workflow.Should().Contain("imported_document_extensions=$(IFS=';'; echo \"${imported_document_extensions[*]}\")");
     }
 

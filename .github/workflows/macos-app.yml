@@ -236,6 +236,10 @@ jobs:
           }
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")" = "FreeX"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app/Contents/Info.plist")" = "FreeX.icns"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = "io.github.tony-xmelon.freex"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundlePackageType' "$app/Contents/Info.plist")" = "APPL"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app/Contents/Info.plist")" = "12.0"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :NSHighResolutionCapable' "$app/Contents/Info.plist")" = "true"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeName' "$app/Contents/Info.plist")" = "FreeX Workbook"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeExtensions:0' "$app/Contents/Info.plist")" = "fxl"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:LSHandlerRank' "$app/Contents/Info.plist")" = "Owner"
@@ -336,6 +340,10 @@ jobs:
           test -f "$app_info_plist"
           test -x "$unzip_root/FreeX.app/Contents/MacOS/FreeX"
           test -f "$unzip_root/FreeX.app/Contents/MacOS/FreeX.dll"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_info_plist")" = "io.github.tony-xmelon.freex"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundlePackageType' "$app_info_plist")" = "APPL"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app_info_plist")" = "12.0"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :NSHighResolutionCapable' "$app_info_plist")" = "true"
           assert_bundle_document_extensions "$app_info_plist" 0 "${native_document_extensions[@]}"
           assert_bundle_document_extensions "$app_info_plist" 1 "${imported_document_extensions[@]}"
           codesign --verify --deep --strict "$unzip_root/FreeX.app"
@@ -393,17 +401,22 @@ jobs:
             echo "host_arch=$host_arch"
             echo "binary_archs=$binary_archs"
             echo "zip_name=$zip_name"
-            echo "bundle_executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")"
-            echo "bundle_icon=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app/Contents/Info.plist")"
-            echo "native_document_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeName' "$app/Contents/Info.plist")"
-            echo "native_document_extension=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeExtensions:0' "$app/Contents/Info.plist")"
+            echo "artifact_bundle_metadata_subject=unzipped_app_bundle"
+            echo "bundle_executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app_info_plist")"
+            echo "bundle_icon=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app_info_plist")"
+            echo "bundle_identifier=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_info_plist")"
+            echo "bundle_package_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundlePackageType' "$app_info_plist")"
+            echo "bundle_minimum_system_version=$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app_info_plist")"
+            echo "bundle_high_resolution_capable=$(/usr/libexec/PlistBuddy -c 'Print :NSHighResolutionCapable' "$app_info_plist")"
+            echo "native_document_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeName' "$app_info_plist")"
+            echo "native_document_extension=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeExtensions:0' "$app_info_plist")"
             echo "artifact_document_extensions_subject=unzipped_app_bundle"
             echo "native_document_extensions=$(IFS=';'; echo "${native_document_extensions[*]}")"
-            echo "native_document_handler_rank=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:LSHandlerRank' "$app/Contents/Info.plist")"
-            echo "imported_document_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeName' "$app/Contents/Info.plist")"
-            echo "imported_document_extension=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeExtensions:0' "$app/Contents/Info.plist")"
+            echo "native_document_handler_rank=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:LSHandlerRank' "$app_info_plist")"
+            echo "imported_document_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeName' "$app_info_plist")"
+            echo "imported_document_extension=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeExtensions:0' "$app_info_plist")"
             echo "imported_document_extensions=$(IFS=';'; echo "${imported_document_extensions[*]}")"
-            echo "imported_document_handler_rank=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:LSHandlerRank' "$app/Contents/Info.plist")"
+            echo "imported_document_handler_rank=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:LSHandlerRank' "$app_info_plist")"
             echo "codesign_verified=true"
             echo "codesign_mode=$signing_mode"
             echo "notarization_status=$notarization_status"
@@ -1169,6 +1182,22 @@ jobs:
             "distribution_candidate",
             "distribution_readiness",
             "smoke_status",
+            "artifact_bundle_metadata_subject",
+            "bundle_executable",
+            "bundle_icon",
+            "bundle_identifier",
+            "bundle_package_type",
+            "bundle_minimum_system_version",
+            "bundle_high_resolution_capable",
+            "artifact_document_extensions_subject",
+            "native_document_type",
+            "native_document_extension",
+            "native_document_extensions",
+            "native_document_handler_rank",
+            "imported_document_type",
+            "imported_document_extension",
+            "imported_document_extensions",
+            "imported_document_handler_rank",
             "codesign_mode",
             "notarization_status",
             "stapler_validated",
@@ -1243,6 +1272,8 @@ jobs:
             $summaryLines += "artifact_channel=$($entry.evidence_markers.artifact_channel)"
             $summaryLines += "distribution_readiness=$($entry.evidence_markers.distribution_readiness)"
             $summaryLines += "smoke_status=$($entry.evidence_markers.smoke_status)"
+            $summaryLines += "bundle_identifier=$($entry.evidence_markers.bundle_identifier)"
+            $summaryLines += "bundle_package_type=$($entry.evidence_markers.bundle_package_type)"
           }
 
           Set-Content -LiteralPath (Join-Path $outputRoot "macos-preview-readiness-summary.txt") -Value $summaryLines -Encoding ascii
