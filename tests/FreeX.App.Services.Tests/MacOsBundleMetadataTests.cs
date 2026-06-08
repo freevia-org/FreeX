@@ -203,6 +203,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("keystroke \"b\" using {command down}");
         workflow.Should().Contain("keystroke \"i\" using {command down}");
         workflow.Should().Contain("keystroke \"u\" using {command down}");
+        workflow.Should().NotContain("<<'APPLESCRIPT'");
         workflow.Should().Contain("live_command_key_system_events_result=blocked_or_failed");
         workflow.Should().Contain("macos_launch_smoke=missing_report");
         workflow.Should().Contain("grep -q \"macos_launch_smoke=passed\" \"$launch_smoke_report\"");
