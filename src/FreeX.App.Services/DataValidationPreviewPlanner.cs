@@ -28,9 +28,15 @@ public static class DataValidationPreviewPlanner
             $"Selection: {selectionReference}",
         };
 
-        var rule = activeCell.Sheet == sheet.Id
-            ? DataValidationService.GetApplicable(sheet, activeCell).FirstOrDefault()
-            : null;
+        DataValidation? rule = null;
+        if (activeCell.Sheet == sheet.Id)
+        {
+            foreach (var candidate in DataValidationService.GetApplicable(sheet, activeCell))
+            {
+                rule = candidate;
+                break;
+            }
+        }
 
         if (rule is null)
         {

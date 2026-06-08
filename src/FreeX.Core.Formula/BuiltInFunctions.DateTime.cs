@@ -36,7 +36,16 @@ public static partial class BuiltInFunctions
         IReadOnlyList<ScalarValue> args,
         Func<ScalarValue, ScalarValue, ScalarValue, ScalarValue> map)
     {
-        RangeValue? range = args.OfType<RangeValue>().FirstOrDefault();
+        RangeValue? range = null;
+        foreach (var arg in args)
+        {
+            if (arg is not RangeValue argRange)
+                continue;
+
+            range = argRange;
+            break;
+        }
+
         if (range is null) return map(args[0], args[1], args[2]);
 
         for (int i = 0; i < 3; i++)

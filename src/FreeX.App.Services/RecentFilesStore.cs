@@ -162,8 +162,16 @@ public sealed class RecentFilesStore
         Save();
     }
 
-    private RecentFileEntry? FindEntryByPath(string path) =>
-        Entries.FirstOrDefault(entry => PathsMatch(entry, path));
+    private RecentFileEntry? FindEntryByPath(string path)
+    {
+        foreach (var entry in Entries)
+        {
+            if (PathsMatch(entry, path))
+                return entry;
+        }
+
+        return null;
+    }
 
     private void RemoveEntriesByPath(string path) =>
         Entries.RemoveAll(entry => PathsMatch(entry, path));

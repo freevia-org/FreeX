@@ -10,10 +10,16 @@ public static class ChartDataSourcePlanner
             return selectedRange;
 
         var activeCell = selectedRange.Start;
-        var table = sheet.StructuredTables
-            .Where(table => table.Range.Contains(activeCell))
-            .OrderBy(table => table.Range.CellCount)
-            .FirstOrDefault();
+        StructuredTableModel? table = null;
+        foreach (var candidate in sheet.StructuredTables)
+        {
+            if (!candidate.Range.Contains(activeCell))
+                continue;
+
+            if (table is null || candidate.Range.CellCount < table.Range.CellCount)
+                table = candidate;
+        }
+
         if (table is not null)
             return table.Range;
 

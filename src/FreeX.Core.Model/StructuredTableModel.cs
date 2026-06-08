@@ -53,7 +53,7 @@ public sealed record StructuredTableFilterColumnModel
     public IReadOnlyDictionary<string, string>? NativeCustomFiltersAttributes { get; init; }
     public IReadOnlyList<string> NativeFilterXmls { get; init; }
     public IReadOnlyDictionary<string, string>? NativeAttributes { get; init; }
-    public string? NativeFilterXml => NativeFilterXmls.FirstOrDefault();
+    public string? NativeFilterXml => NativeFilterXmls.Count == 0 ? null : NativeFilterXmls[0];
 
     public StructuredTableFilterColumnModel(
         int ColumnId,

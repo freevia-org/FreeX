@@ -48,7 +48,16 @@ public sealed class WorkbookSheetSelectionService
             workbook.AddSheet("Sheet1");
 
         var selectableIndexes = GetSelectableIndexes(workbook);
-        var index = selectableIndexes.FirstOrDefault(candidate => workbook.Sheets[candidate].Id == sheetId, -1);
+        var index = -1;
+        foreach (var candidate in selectableIndexes)
+        {
+            if (workbook.Sheets[candidate].Id != sheetId)
+                continue;
+
+            index = candidate;
+            break;
+        }
+
         if (index < 0)
             return EnsureActiveSheet(workbook, groupedSheetIds);
 
