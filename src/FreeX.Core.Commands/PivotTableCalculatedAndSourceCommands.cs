@@ -50,7 +50,7 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
                 .Any(field => field.SourceFieldIndex < 0 || field.SourceFieldIndex >= fieldCount) ||
             _calculatedItems.Any(item => item.SourceFieldIndex < 0 || item.SourceFieldIndex >= fieldCount))
         {
-            return new CommandOutcome(false, "PivotTable field index is outside the source range.");
+            return CommandGuards.RejectPivotTableFieldIndexOutsideSourceRange();
         }
 
         if (_calculatedFields.Any(field => string.IsNullOrWhiteSpace(field.Name) || string.IsNullOrWhiteSpace(field.Formula)) ||
@@ -139,7 +139,7 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (_sourceRange.ColCount == 0 || _sourceRange.RowCount < 2)
-            return new CommandOutcome(false, "PivotTable source range must include headers and data.");
+            return CommandGuards.RejectPivotTableSourceRangeRequiresHeaders();
 
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)

@@ -178,7 +178,7 @@ public sealed class AddPivotChartCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (string.IsNullOrWhiteSpace(_pivotTableName))
-            return new CommandOutcome(false, "PivotTable name is required.");
+            return CommandGuards.RejectPivotTableNameRequired();
         if (ChartAuthoringPlanner.RejectIfUnsupported(_chartType) is { } unsupportedOutcome)
             return unsupportedOutcome;
         if (ChartCommandGuards.RejectInvalidSize(_width, _height) is { } invalidSize)

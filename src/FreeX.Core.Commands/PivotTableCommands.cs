@@ -35,17 +35,17 @@ public sealed class AddPivotTableCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (_targetRange.Start.Sheet != _sheetId || _targetRange.End.Sheet != _sheetId)
-            return new CommandOutcome(false, "PivotTable target range must be on the target sheet.");
+            return CommandGuards.RejectPivotTableTargetRangeOnTargetSheet();
         if (_sourceRange.ColCount == 0 || _sourceRange.RowCount < 2)
-            return new CommandOutcome(false, "PivotTable source range must include headers and data.");
+            return CommandGuards.RejectPivotTableSourceRangeRequiresHeaders();
         if (string.IsNullOrWhiteSpace(_name))
-            return new CommandOutcome(false, "PivotTable name is required.");
+            return CommandGuards.RejectPivotTableNameRequired();
 
         var fieldCount = checked((int)_sourceRange.ColCount);
         if (!_rowFieldIndexes.Concat(_dataFieldIndexes).All(index => index >= 0 && index < fieldCount))
-            return new CommandOutcome(false, "PivotTable field index is outside the source range.");
+            return CommandGuards.RejectPivotTableFieldIndexOutsideSourceRange();
         if (_dataFieldIndexes.Count == 0)
-            return new CommandOutcome(false, "PivotTable requires at least one data field.");
+            return CommandGuards.RejectPivotTableRequiresDataField();
 
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)
