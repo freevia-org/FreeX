@@ -16,7 +16,7 @@ internal static class XlsxDocumentThumbnailPackageGraphNormalizer
     public static void NormalizePackage(ZipArchive archive)
     {
         var thumbnailParts = archive.Entries
-            .Select(entry => entry.FullName.Replace('\\', '/'))
+            .Select(XlsxPackagePath.NormalizeEntryPath)
             .Where(IsThumbnailPart)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(ThumbnailPartRank)

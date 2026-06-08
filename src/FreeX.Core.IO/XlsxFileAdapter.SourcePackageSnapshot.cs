@@ -2504,7 +2504,7 @@ public sealed partial class XlsxFileAdapter
 
             foreach (var entry in archive.Entries)
             {
-                var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+                var path = XlsxPackagePath.NormalizeEntryPath(entry);
                 if (XlsxDigitalSignaturePackagePolicy.IsDigitalSignaturePackagePath(path))
                 {
                     blockReason = "package_guard_digital_signatures";
@@ -3706,7 +3706,7 @@ public sealed partial class XlsxFileAdapter
         {
             blockReason = null;
             var hasRichDataParts = archive.Entries.Any(entry =>
-                XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'))
+                XlsxPackagePath.NormalizeEntryPath(entry)
                     .StartsWith("xl/richData/", StringComparison.OrdinalIgnoreCase));
             if (!hasRichDataParts)
                 return true;
@@ -3768,7 +3768,7 @@ public sealed partial class XlsxFileAdapter
         {
             foreach (var entry in archive.Entries)
             {
-                var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+                var path = XlsxPackagePath.NormalizeEntryPath(entry);
                 if (!TryGetKnownRichDataContentType(path, out var expectedContentType))
                     continue;
 
@@ -4133,7 +4133,7 @@ public sealed partial class XlsxFileAdapter
 
         private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
         {
-            var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+            var path = XlsxPackagePath.NormalizeEntryPath(entry);
             return path.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
                    path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
                    !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
@@ -4141,7 +4141,7 @@ public sealed partial class XlsxFileAdapter
 
         private static bool IsStructuredTableXmlEntry(ZipArchiveEntry entry)
         {
-            var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+            var path = XlsxPackagePath.NormalizeEntryPath(entry);
             return path.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase) &&
                    path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
                    !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase) &&
@@ -4150,7 +4150,7 @@ public sealed partial class XlsxFileAdapter
 
         private static bool IsSingleCellTableXmlEntry(ZipArchiveEntry entry)
         {
-            var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+            var path = XlsxPackagePath.NormalizeEntryPath(entry);
             return path.StartsWith("xl/tables/tableSingleCells", StringComparison.OrdinalIgnoreCase) &&
                    path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
                    !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);

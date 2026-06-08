@@ -345,7 +345,7 @@ internal static class XlsxWorksheetOleControlNormalizer
         }
 
         var oleObjectParts = archive.Entries
-            .Select(entry => XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/')))
+            .Select(XlsxPackagePath.NormalizeEntryPath)
             .Where(IsOleObjectPart)
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -446,7 +446,7 @@ internal static class XlsxWorksheetOleControlNormalizer
             .ToList()
             ?? [];
         var drawingParts = archive.Entries
-            .Select(entry => XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/')))
+            .Select(XlsxPackagePath.NormalizeEntryPath)
             .Where(IsDrawingPart)
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -547,7 +547,7 @@ internal static class XlsxWorksheetOleControlNormalizer
         }
 
         var controlPropertiesParts = archive.Entries
-            .Select(entry => XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/')))
+            .Select(XlsxPackagePath.NormalizeEntryPath)
             .Where(IsControlPropertiesPart)
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToList();
