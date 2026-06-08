@@ -8,11 +8,21 @@ public static class XlsxPackageHealthValidator
 {
     private const string RelationshipPartContentType =
         "application/vnd.openxmlformats-package.relationships+xml";
+    private const string OfficeDocumentRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
 
     private static readonly XNamespace PackageContentTypeNs =
         "http://schemas.openxmlformats.org/package/2006/content-types";
     private static readonly XNamespace PackageRelationshipNs =
         "http://schemas.openxmlformats.org/package/2006/relationships";
+    private static readonly HashSet<string> WorkbookMainContentTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml",
+        "application/vnd.ms-excel.sheet.macroEnabled.main+xml",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.template.main+xml",
+        "application/vnd.ms-excel.template.macroEnabledTemplate.main+xml",
+        "application/vnd.ms-excel.addin.macroEnabled.main+xml"
+    };
 
     public static IReadOnlyList<string> Validate(ZipArchive archive)
     {
@@ -20,6 +30,7 @@ public static class XlsxPackageHealthValidator
         AddPackageEntryIssues(archive, issues);
         AddPackageContentTypeIssues(archive, issues);
         AddPackageRelationshipIssues(archive, issues);
+        AddPackageRootWorkbookIssues(archive, issues);
         return issues;
     }
 
@@ -379,6 +390,107 @@ public static class XlsxPackageHealthValidator
             var ids = new HashSet<string>(StringComparer.Ordinal);
             foreach (var relationship in relationships)
                 ValidatePackageRelationship(relationshipPart, relationship, entryNames, ids, issues);
+        }
+    }
+
+    private static void AddPackageRootWorkbookIssues(ZipArchive archive, List<string> issues)
+    {
+        var entryNames = archive.Entries
+            .Where(entry => !string.IsNullOrEmpty(entry.Name))
+            .Select(entry => NormalizePackagePart(entry.FullName))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var rootRelationshipsEntry = archive.GetEntry("_rels/.rels");
+        if (rootRelationshipsEntry is null)
+        {
+            issues.Add("missing package root relationships part _rels/.rels");
+            return;
+        }
+
+        XDocument relationshipsXml;
+        try
+        {
+            relationshipsXml = LoadPackageXml(rootRelationshipsEntry);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or XmlException)
+        {
+            issues.Add($"_rels/.rels is not parseable relationship XML: {ex.Message}");
+            return;
+        }
+
+        if (relationshipsXml.Root?.Name != PackageRelationshipNs + "Relationships")
+        {
+            issues.Add("_rels/.rels has an invalid Relationships root element");
+            return;
+        }
+
+        var officeDocumentRelationships = relationshipsXml.Root
+            .Elements(PackageRelationshipNs + "Relationship")
+            .Where(relationship => string.Equals(
+                relationship.Attribute("Type")?.Value,
+                OfficeDocumentRelationshipType,
+                StringComparison.Ordinal))
+            .ToArray();
+
+        if (officeDocumentRelationships.Length == 0)
+        {
+            issues.Add($"_rels/.rels has no {OfficeDocumentRelationshipType} relationship");
+            return;
+        }
+
+        if (officeDocumentRelationships.Length > 1)
+            issues.Add($"_rels/.rels has multiple {OfficeDocumentRelationshipType} relationships");
+
+        XDocument? contentTypesXml = null;
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is not null)
+        {
+            try
+            {
+                contentTypesXml = LoadPackageXml(contentTypesEntry);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or XmlException)
+            {
+                issues.Add($"[Content_Types].xml is not parseable XML: {ex.Message}");
+            }
+        }
+
+        foreach (var relationship in officeDocumentRelationships)
+            ValidateRootOfficeDocumentRelationship(relationship, entryNames, contentTypesXml, issues);
+    }
+
+    private static void ValidateRootOfficeDocumentRelationship(
+        XElement relationship,
+        IReadOnlySet<string> entryNames,
+        XDocument? contentTypesXml,
+        List<string> issues)
+    {
+        var id = relationship.Attribute("Id")?.Value;
+        var targetMode = relationship.Attribute("TargetMode")?.Value?.Trim();
+        if (string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"_rels/.rels Relationship {FormatRelationshipIssueId(id)} must target the workbook package part internally");
+            return;
+        }
+
+        var target = relationship.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target))
+            return;
+
+        if (!TryResolvePackageRelationshipTarget("_rels/.rels", target.Trim(), out var resolvedTarget, out _))
+            return;
+
+        if (!entryNames.Contains(resolvedTarget))
+            return;
+
+        if (contentTypesXml?.Root?.Name != PackageContentTypeNs + "Types")
+            return;
+
+        var contentType = GetEffectivePackageContentType(contentTypesXml, resolvedTarget);
+        if (!WorkbookMainContentTypes.Contains(contentType ?? string.Empty))
+        {
+            issues.Add(
+                $"_rels/.rels Relationship {FormatRelationshipIssueId(id)} targets {resolvedTarget} with non-workbook content type {contentType ?? "(none)"}");
         }
     }
 
