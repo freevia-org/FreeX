@@ -24,6 +24,12 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         script.Should().Contain("gatekeeper_assessment_status");
         script.Should().Contain("gatekeeper_assessment_source");
         script.Should().Contain("zip_sha256");
+        script.Should().Contain("Get-ExpectedBundleMetadataEvidence");
+        script.Should().Contain("artifact_bundle_metadata_subject");
+        script.Should().Contain("bundle_identifier");
+        script.Should().Contain("bundle_package_type");
+        script.Should().Contain("bundle_minimum_system_version");
+        script.Should().Contain("bundle_high_resolution_capable");
         script.Should().Contain("RequireAggregateReadinessArtifact");
         script.Should().Contain("RequireReleasePublicationArtifact");
         script.Should().Contain("macos-preview-readiness-manifest.json");
@@ -223,6 +229,30 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
             "-ExpectedRunId 42 -ExpectedRunAttempt 1 -RequireSeparateDiagnosticsArtifact -RequireAggregateReadinessArtifact");
 
         AssertPreflightRejected(result, expectedNeedle);
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenAggregateReadinessBundleMetadataDrifts()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false, includeDiagnosticsArtifact: true);
+        var x64 = CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false, includeDiagnosticsArtifact: true);
+        var aggregateDirectory = CreateSyntheticAggregateReadinessArtifact(temp.Path, arm64, x64);
+        ReplaceInFile(
+            Path.Combine(aggregateDirectory, "macos-preview-readiness-manifest.json"),
+            "\"bundle_identifier\": \"io.github.tony-xmelon.freex\"",
+            "\"bundle_identifier\": \"com.example.stale\"");
+
+        var result = RunPreflight(
+            temp.Path,
+            "-ExpectedRunId 42 -ExpectedRunAttempt 1 -RequireSeparateDiagnosticsArtifact -RequireAggregateReadinessArtifact");
+
+        AssertPreflightRejected(
+            result,
+            "aggregate readiness manifest evidence_markers",
+            "bundle_identifier",
+            "io.github.tony-xmelon.freex",
+            "com.example.stale");
     }
 
     [Fact]
@@ -642,6 +672,26 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
     }
 
     [Fact]
+    public void ReadinessPreflight_FailsWhenBundleMetadataEvidenceIsMissingOrStale()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false);
+        RemoveLinesContaining(arm64.EvidencePath, "bundle_identifier=");
+        ReplaceInFile(arm64.EvidencePath, "bundle_package_type=APPL", "bundle_package_type=BNDL");
+
+        var result = RunPreflight(temp.Path);
+
+        AssertPreflightRejected(
+            result,
+            "osx-arm64 bundle metadata evidence",
+            "bundle_identifier=io.github.tony-xmelon.freex",
+            "bundle_package_type=APPL",
+            "Actual value(s):",
+            "BNDL.");
+    }
+
+    [Fact]
     public void ReadinessPreflight_FailsWithClearMessageWhenEvidenceFileIsMissing()
     {
         using var temp = new TestTemporaryDirectory();
@@ -780,6 +830,22 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
             $"distribution_contract={contract}",
             $"distribution_readiness={readiness}",
             $"zip_name={names.Zip}",
+            "artifact_bundle_metadata_subject=unzipped_app_bundle",
+            "bundle_executable=FreeX",
+            "bundle_icon=FreeX.icns",
+            "bundle_identifier=io.github.tony-xmelon.freex",
+            "bundle_package_type=APPL",
+            "bundle_minimum_system_version=12.0",
+            "bundle_high_resolution_capable=true",
+            "artifact_document_extensions_subject=unzipped_app_bundle",
+            "native_document_type=FreeX Workbook",
+            "native_document_extension=fxl",
+            "native_document_extensions=fxl",
+            "native_document_handler_rank=Owner",
+            "imported_document_type=Spreadsheet Workbooks",
+            "imported_document_extension=xlsx",
+            "imported_document_extensions=xlsx;xlsm;xltx;xltm;xls;xlsb;xlt;csv;tsv;tab",
+            "imported_document_handler_rank=Alternate",
             "codesign_verified=true",
             $"codesign_mode={codesignMode}",
             $"notarization_status={notarizationStatus}",
@@ -1021,6 +1087,22 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
                     ["distribution_candidate"] = "false",
                     ["distribution_readiness"] = "internal_preview_not_for_distribution",
                     ["smoke_status"] = "passed",
+                    ["artifact_bundle_metadata_subject"] = "unzipped_app_bundle",
+                    ["bundle_executable"] = "FreeX",
+                    ["bundle_icon"] = "FreeX.icns",
+                    ["bundle_identifier"] = "io.github.tony-xmelon.freex",
+                    ["bundle_package_type"] = "APPL",
+                    ["bundle_minimum_system_version"] = "12.0",
+                    ["bundle_high_resolution_capable"] = "true",
+                    ["artifact_document_extensions_subject"] = "unzipped_app_bundle",
+                    ["native_document_type"] = "FreeX Workbook",
+                    ["native_document_extension"] = "fxl",
+                    ["native_document_extensions"] = "fxl",
+                    ["native_document_handler_rank"] = "Owner",
+                    ["imported_document_type"] = "Spreadsheet Workbooks",
+                    ["imported_document_extension"] = "xlsx",
+                    ["imported_document_extensions"] = "xlsx;xlsm;xltx;xltm;xls;xlsb;xlt;csv;tsv;tab",
+                    ["imported_document_handler_rank"] = "Alternate",
                     ["codesign_mode"] = "ad-hoc",
                     ["notarization_status"] = "skipped_missing_credentials",
                     ["stapler_validated"] = "false",

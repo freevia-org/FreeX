@@ -173,7 +173,15 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("notarization_status=\"skipped_missing_credentials\"");
         workflow.Should().Contain("echo \"[bundle]\"");
         workflow.Should().Contain("echo \"binary_archs=$binary_archs\"");
-        workflow.Should().Contain("echo \"bundle_icon=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' \"$app/Contents/Info.plist\")\"");
+        workflow.Should().Contain("app_info_plist=\"$unzip_root/FreeX.app/Contents/Info.plist\"");
+        workflow.Should().Contain("echo \"artifact_bundle_metadata_subject=unzipped_app_bundle\"");
+        workflow.Should().Contain("echo \"bundle_executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' \"$app_info_plist\")\"");
+        workflow.Should().Contain("echo \"bundle_icon=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' \"$app_info_plist\")\"");
+        workflow.Should().Contain("echo \"bundle_identifier=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' \"$app_info_plist\")\"");
+        workflow.Should().Contain("echo \"bundle_package_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundlePackageType' \"$app_info_plist\")\"");
+        workflow.Should().Contain("echo \"bundle_minimum_system_version=$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' \"$app_info_plist\")\"");
+        workflow.Should().Contain("echo \"bundle_high_resolution_capable=$(/usr/libexec/PlistBuddy -c 'Print :NSHighResolutionCapable' \"$app_info_plist\")\"");
+        workflow.Should().Contain("echo \"artifact_document_extensions_subject=unzipped_app_bundle\"");
         workflow.Should().Contain("echo \"codesign_verified=true\"");
         workflow.Should().Contain("echo \"codesign_mode=$signing_mode\"");
         workflow.Should().Contain("echo \"notarization_status=$notarization_status\"");

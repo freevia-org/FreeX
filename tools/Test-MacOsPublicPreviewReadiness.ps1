@@ -123,6 +123,27 @@ function Get-ExpectedFileNames {
     }
 }
 
+function Get-ExpectedBundleMetadataEvidence {
+    return [ordered]@{
+        artifact_bundle_metadata_subject = "unzipped_app_bundle"
+        bundle_executable = "FreeX"
+        bundle_icon = "FreeX.icns"
+        bundle_identifier = "io.github.tony-xmelon.freex"
+        bundle_package_type = "APPL"
+        bundle_minimum_system_version = "12.0"
+        bundle_high_resolution_capable = "true"
+        artifact_document_extensions_subject = "unzipped_app_bundle"
+        native_document_type = "FreeX Workbook"
+        native_document_extension = "fxl"
+        native_document_extensions = "fxl"
+        native_document_handler_rank = "Owner"
+        imported_document_type = "Spreadsheet Workbooks"
+        imported_document_extension = "xlsx"
+        imported_document_extensions = "xlsx;xlsm;xltx;xltm;xls;xlsb;xlt;csv;tsv;tab"
+        imported_document_handler_rank = "Alternate"
+    }
+}
+
 function Get-KeyValueMap {
     param([Parameter(Mandatory = $true)][string]$Path)
 
@@ -680,6 +701,17 @@ function Test-ChecksumEvidence {
     Assert-KeyMatches -Map $Evidence -Key "zip_sha256" -Pattern "^[0-9a-fA-F]{64}$" -Label "$Runtime evidence"
 }
 
+function Test-BundleMetadataEvidence {
+    param(
+        [Parameter(Mandatory = $true)][hashtable]$Evidence,
+        [Parameter(Mandatory = $true)][string]$Runtime
+    )
+
+    foreach ($entry in (Get-ExpectedBundleMetadataEvidence).GetEnumerator()) {
+        Assert-KeyEquals -Map $Evidence -Key $entry.Key -ExpectedValue $entry.Value -Label "$Runtime bundle metadata evidence"
+    }
+}
+
 function Test-ChannelEvidence {
     param(
         [Parameter(Mandatory = $true)][hashtable]$Evidence,
@@ -988,6 +1020,7 @@ function Test-ReleasePublicationArtifact {
         if (Test-Path -LiteralPath $releaseEvidencePath -PathType Leaf) {
             $releaseEvidence = Get-KeyValueMap -Path $releaseEvidencePath
             Assert-KeyEquals -Map $releaseEvidence -Key "runtime" -ExpectedValue $runtime -Label "$runtime release publication evidence asset"
+            Test-BundleMetadataEvidence -Evidence $releaseEvidence -Runtime $runtime
             if ($manifestHashLooksValid) {
                 Assert-KeyEquals -Map $releaseEvidence -Key "zip_sha256" -ExpectedValue $manifestHash -Label "$runtime release publication evidence asset"
             }
@@ -1156,6 +1189,10 @@ function Test-AggregateReadinessArtifact {
         Assert-JsonPropertyEquals -Object $evidenceMarkers -PropertyName "github_run_attempt" -ExpectedValue $aggregateIdentity.RunAttempt -Label "$runtime aggregate readiness manifest evidence_markers"
         foreach ($propertyName in @("artifact_channel", "distribution_readiness", "smoke_status", "zip_sha256")) {
             Assert-JsonPropertyPresent -Object $evidenceMarkers -PropertyName $propertyName -Label "$runtime aggregate readiness manifest evidence_markers"
+        }
+
+        foreach ($entry in (Get-ExpectedBundleMetadataEvidence).GetEnumerator()) {
+            Assert-JsonPropertyEquals -Object $evidenceMarkers -PropertyName $entry.Key -ExpectedValue $entry.Value -Label "$runtime aggregate readiness manifest evidence_markers"
         }
     }
 
@@ -1470,6 +1507,7 @@ function Test-RuntimeBundle {
     $isDistributionCandidateArtifact = Test-ChannelEvidence -Evidence $evidence -Runtime $Runtime
 
     Test-ChecksumEvidence -BundleDirectory $BundleDirectory -Runtime $Runtime -Evidence $evidence
+    Test-BundleMetadataEvidence -Evidence $evidence -Runtime $Runtime
     Test-PackagingSmoke -PackagingSmokePath $packagingSmokePath -Evidence $evidence -Runtime $Runtime
     Test-LaunchSmoke -LaunchSmokePath $launchSmokePath -Runtime $Runtime
     Test-OpenWithSmoke -OpenWithSmokePath $openWithSmokePath -Runtime $Runtime
