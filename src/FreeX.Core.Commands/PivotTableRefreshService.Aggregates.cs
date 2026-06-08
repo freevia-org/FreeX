@@ -183,7 +183,7 @@ public static partial class PivotTableRefreshService
             .Distinct(StringComparer.CurrentCultureIgnoreCase)
             .Order(StringComparer.CurrentCultureIgnoreCase)
             .ToList();
-        var currentIndex = orderedItems.FindIndex(item => string.Equals(item, currentItem, StringComparison.CurrentCultureIgnoreCase));
+        var currentIndex = FindCurrentCultureIgnoreCaseIndex(orderedItems, currentItem);
         if (currentIndex < 0)
             return 0;
 
@@ -231,7 +231,7 @@ public static partial class PivotTableRefreshService
         var ordered = dataField.ShowValuesAs == PivotShowValuesAs.RankLargest
             ? valuesByItem.OrderByDescending(item => item.Value).ThenBy(item => item.Item, StringComparer.CurrentCultureIgnoreCase).ToList()
             : valuesByItem.OrderBy(item => item.Value).ThenBy(item => item.Item, StringComparer.CurrentCultureIgnoreCase).ToList();
-        var rank = ordered.FindIndex(item => string.Equals(item.Item, currentItem, StringComparison.CurrentCultureIgnoreCase));
+        var rank = FindRankedItemIndex(ordered, currentItem);
         return rank < 0 ? 0 : rank + 1;
     }
 
@@ -262,9 +262,42 @@ public static partial class PivotTableRefreshService
     {
         return PivotCalculatedExpressionEvaluator.Evaluate(formula, name =>
         {
-            var index = headers.ToList().FindIndex(header => string.Equals(header, name, StringComparison.OrdinalIgnoreCase));
+            var index = FindOrdinalIgnoreCaseIndex(headers, name);
             return index >= 0 && index < row.Count ? Number(row[index]) : 0;
         });
+    }
+
+    private static int FindCurrentCultureIgnoreCaseIndex(IReadOnlyList<string> items, string value)
+    {
+        for (var index = 0; index < items.Count; index++)
+        {
+            if (string.Equals(items[index], value, StringComparison.CurrentCultureIgnoreCase))
+                return index;
+        }
+
+        return -1;
+    }
+
+    private static int FindRankedItemIndex(IReadOnlyList<(string Item, double Value)> items, string value)
+    {
+        for (var index = 0; index < items.Count; index++)
+        {
+            if (string.Equals(items[index].Item, value, StringComparison.CurrentCultureIgnoreCase))
+                return index;
+        }
+
+        return -1;
+    }
+
+    private static int FindOrdinalIgnoreCaseIndex(IReadOnlyList<string> items, string value)
+    {
+        for (var index = 0; index < items.Count; index++)
+        {
+            if (string.Equals(items[index], value, StringComparison.OrdinalIgnoreCase))
+                return index;
+        }
+
+        return -1;
     }
 
     private static double EvaluateCalculatedItem(
