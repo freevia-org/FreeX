@@ -24,8 +24,8 @@ public static class SheetGroupSelectionService
 
     public static IReadOnlyList<SheetId> SelectRange(IReadOnlyList<SheetId> visibleSheets, SheetId anchor, SheetId target)
     {
-        var anchorIndex = FindIndex(visibleSheets, anchor);
-        var targetIndex = FindIndex(visibleSheets, target);
+        var anchorIndex = IndexOfSheet(visibleSheets, anchor);
+        var targetIndex = IndexOfSheet(visibleSheets, target);
         if (anchorIndex < 0 || targetIndex < 0)
             return [target];
 
@@ -36,7 +36,7 @@ public static class SheetGroupSelectionService
 
     public static IReadOnlyList<SheetId> SelectAll(IReadOnlyList<SheetId> visibleSheets) => visibleSheets.ToList();
 
-    private static int FindIndex(IReadOnlyList<SheetId> sheets, SheetId id)
+    private static int IndexOfSheet(IReadOnlyList<SheetId> sheets, SheetId id)
     {
         for (var i = 0; i < sheets.Count; i++)
             if (sheets[i] == id)
