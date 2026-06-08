@@ -214,6 +214,20 @@ public sealed class XlsxPackageHealthValidatorTests
     }
 
     [Fact]
+    public void Validate_FlagsRelationshipWithoutType()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookRelationships:
+            [
+                """<Relationship Id="rId1" Target="worksheets/sheet1.xml" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("Relationship rId1 has no Type", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Validate_FlagsCaseCollidingPackageEntries()
     {
         using var package = CreateMinimalWorkbookPackage(
