@@ -302,6 +302,7 @@ public sealed class MainWindow : Window
     private readonly WorkbookOpenService _openService = new();
     private readonly WorkbookSaveService _saveService = new();
     private readonly IWorkbookShareSheetService _workbookShareSheetService;
+    private readonly IWorkbookFileAccessService _workbookFileAccessService;
     private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
     private readonly ContentControl _sheetGridHost = new();
     private readonly ContentControl _sheetTabsHost = new();
@@ -514,17 +515,23 @@ public sealed class MainWindow : Window
     private Guid? _selectedDrawingObjectId;
 
     public MainWindow(IReadOnlyList<string> startupArguments)
-        : this(startupArguments, WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel))
+        : this(
+            startupArguments,
+            WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel),
+            WorkbookFileAccessServiceFactory.Create())
     {
     }
 
     internal MainWindow(
         IReadOnlyList<string> startupArguments,
-        IWorkbookShareSheetService workbookShareSheetService)
+        IWorkbookShareSheetService workbookShareSheetService,
+        IWorkbookFileAccessService workbookFileAccessService)
     {
         ArgumentNullException.ThrowIfNull(workbookShareSheetService);
+        ArgumentNullException.ThrowIfNull(workbookFileAccessService);
 
         _workbookShareSheetService = workbookShareSheetService;
+        _workbookFileAccessService = workbookFileAccessService;
         var source = new StartupWorkbookLoader().Load(startupArguments);
         _session = _sessionFactory.Create(source, InitialViewportHeight, InitialViewportWidth, includeObjects: true);
 
@@ -11705,25 +11712,27 @@ public sealed class MainWindow : Window
     private async void MainWindow_Drop(object? sender, DragEventArgs e)
     {
         e.Handled = true;
-        if (!TrySelectDroppedWorkbookPath(e, out var path, out var message))
+        if (!TrySelectDroppedWorkbookPath(e, out var path, out var storageItem, out var message))
         {
             ShowOpenIssue(message);
             return;
         }
 
         e.DragEffects = DragDropEffects.Copy;
-        await OpenWorkbookPathAsync(path!);
+        var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(path!, storageItem);
+        await OpenWorkbookPathAsync(path!, fileAccessIdentity);
     }
 
     public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files)
     {
-        if (!TrySelectOpenableLocalWorkbookPath(files, out var path, out var message))
+        if (!TrySelectOpenableLocalWorkbookPath(files, out var path, out var storageItem, out var message))
         {
             ShowOpenIssue(message);
             return;
         }
 
-        await OpenWorkbookPathAsync(path!);
+        var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(path!, storageItem);
+        await OpenWorkbookPathAsync(path!, fileAccessIdentity);
     }
 
     internal async Task<MacOsLaunchSmokeDialogSnapshot> CaptureLaunchSmokeDialogEvidenceAsync()
@@ -12460,8 +12469,18 @@ public sealed class MainWindow : Window
         WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
         if (!_session.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out _) ||
-            target is null ||
-            !File.Exists(target.Path))
+            target is null)
+        {
+            _recentFiles.Remove(path);
+            RefreshNativeOpenRecentMenu(!_isOpening && !_isSaving);
+            ShowOpenIssue($"Recent workbook no longer exists: {path}");
+            return;
+        }
+
+        using var fileAccess = await _workbookFileAccessService.BeginAccessAsync(
+            StorageProvider,
+            target.FileAccessIdentity);
+        if (!File.Exists(target.Path))
         {
             _recentFiles.Remove(path);
             RefreshNativeOpenRecentMenu(!_isOpening && !_isSaving);
@@ -13151,7 +13170,8 @@ public sealed class MainWindow : Window
                 return;
             }
 
-            await OpenWorkbookPathAsync(path);
+            var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(path, storageFile);
+            await OpenWorkbookPathAsync(path, fileAccessIdentity);
         }
     }
 
@@ -13180,22 +13200,38 @@ public sealed class MainWindow : Window
         await OpenWorkbookFromTargetAsync(target!);
     }
 
-    private bool TrySelectDroppedWorkbookPath(DragEventArgs e, out string? path, out string message)
+    private bool TrySelectDroppedWorkbookPath(DragEventArgs e, out string? path, out string message) =>
+        TrySelectDroppedWorkbookPath(e, out path, out _, out message);
+
+    private bool TrySelectDroppedWorkbookPath(
+        DragEventArgs e,
+        out string? path,
+        out IStorageItem? storageItem,
+        out string message)
     {
         var files = e.DataTransfer.TryGetFiles();
         if (files is null)
         {
             path = null;
+            storageItem = null;
             message = "Drop a supported local workbook file.";
             return false;
         }
 
-        return TrySelectOpenableLocalWorkbookPath(files, out path, out message);
+        return TrySelectOpenableLocalWorkbookPath(files, out path, out storageItem, out message);
     }
 
-    private bool TrySelectOpenableLocalWorkbookPath(IEnumerable<IStorageItem> files, out string? path, out string message)
+    private bool TrySelectOpenableLocalWorkbookPath(IEnumerable<IStorageItem> files, out string? path, out string message) =>
+        TrySelectOpenableLocalWorkbookPath(files, out path, out _, out message);
+
+    private bool TrySelectOpenableLocalWorkbookPath(
+        IEnumerable<IStorageItem> files,
+        out string? path,
+        out IStorageItem? storageItem,
+        out string message)
     {
         path = null;
+        storageItem = null;
         if (_isOpening || _isSaving)
         {
             message = "Open is busy.";
@@ -13233,6 +13269,7 @@ public sealed class MainWindow : Window
             if (_session.TryResolveOpenTarget(normalizedCandidate, out var target, out unsupportedMessage))
             {
                 path = target!.Path;
+                storageItem = file;
                 message = "";
                 return true;
             }
@@ -13261,6 +13298,9 @@ public sealed class MainWindow : Window
                     _statusText.Foreground = Brush(67, 113, 83);
                 });
 
+            using var fileAccess = await _workbookFileAccessService.BeginAccessAsync(
+                StorageProvider,
+                target.FileAccessIdentity);
             var result = await _openService.LoadAsync(
                 target.Path,
                 target.Adapter,
@@ -13532,7 +13572,8 @@ public sealed class MainWindow : Window
                 return;
             }
 
-            await SaveWorkbookToTargetAsync(target!);
+            var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(path, storageFile);
+            await SaveWorkbookToTargetAsync(target!, fileAccessIdentity);
         }
     }
 
@@ -13744,7 +13785,9 @@ public sealed class MainWindow : Window
         return workbookName + ".pdf";
     }
 
-    private async Task SaveWorkbookToTargetAsync(FileSaveTarget target)
+    private async Task SaveWorkbookToTargetAsync(
+        FileSaveTarget target,
+        WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
         try
         {
@@ -13759,9 +13802,13 @@ public sealed class MainWindow : Window
                     _statusText.Foreground = Brush(67, 113, 83);
                 });
 
+            fileAccessIdentity ??= await _workbookFileAccessService.CreateIdentityAsync(
+                target.Path,
+                existingIdentity: _session.CurrentFileAccessIdentity);
+            using var fileAccess = await _workbookFileAccessService.BeginAccessAsync(StorageProvider, fileAccessIdentity);
             await _saveService.SaveAsync(target.Path, target.Adapter, _session.Workbook, progress);
-            _session.MarkSaved(target.Path);
-            RecordRecentWorkbook(target.Path, _session.CurrentFileAccessIdentity);
+            _session.MarkSaved(target.Path, fileAccessIdentity);
+            RecordRecentWorkbook(target.Path, fileAccessIdentity);
             RefreshShell($"Saved {Path.GetFileName(target.Path)}");
         }
         catch (Exception ex)

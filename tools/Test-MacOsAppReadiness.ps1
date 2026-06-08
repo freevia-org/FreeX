@@ -1723,7 +1723,7 @@ function Test-SourceWiring {
                 "private void RecordRecentWorkbook(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null)",
                 "_recentFiles.AddOrUpdate(target.Path, fileAccessIdentity ?? target.FileAccessIdentity);",
                 "RecordRecentWorkbook(target.Path, target.FileAccessIdentity);",
-                "RecordRecentWorkbook(target.Path, _session.CurrentFileAccessIdentity);",
+                "RecordRecentWorkbook(target.Path, fileAccessIdentity);",
                 "_closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();",
                 "fileMenu.Items.Add(_newWorkbookMenuItem);",
                 "fileMenu.Items.Add(_closeWorkbookMenuItem);",

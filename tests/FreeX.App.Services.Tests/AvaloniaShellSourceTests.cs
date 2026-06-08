@@ -24,10 +24,10 @@ public sealed class AvaloniaShellSourceTests
 
         windowSource.Should().Contain("public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files)");
         windowSource.Should().Contain("private bool TrySelectOpenableLocalWorkbookPath(IEnumerable<IStorageItem> files, out string? path, out string message)");
-        windowSource.Should().Contain("TrySelectOpenableLocalWorkbookPath(files, out var path, out var message)");
+        windowSource.Should().Contain("TrySelectOpenableLocalWorkbookPath(files, out var path, out var storageItem, out var message)");
         windowSource.Should().Contain("file.TryGetLocalPath()");
         windowSource.Should().Contain("ShowOpenIssue(message);");
-        windowSource.Should().Contain("await OpenWorkbookPathAsync(path!)");
+        windowSource.Should().Contain("await OpenWorkbookPathAsync(path!, fileAccessIdentity)");
     }
 
     [Fact]
@@ -40,7 +40,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("DragDrop.AddDragOverHandler(this, MainWindow_DragOver);");
         source.Should().Contain("DragDrop.AddDropHandler(this, MainWindow_Drop);");
         source.Should().Contain("e.DataTransfer.TryGetFiles()");
-        source.Should().Contain("TrySelectOpenableLocalWorkbookPath(files, out path, out message)");
+        source.Should().Contain("TrySelectOpenableLocalWorkbookPath(files, out path, out storageItem, out message)");
         source.Should().Contain("file.TryGetLocalPath()");
         source.Should().Contain("_isOpening || _isSaving");
         source.Should().Contain("_session.IsDirty");
@@ -49,11 +49,61 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("File.Exists(normalizedCandidate)");
         source.Should().Contain("_session.TryResolveOpenTarget(normalizedCandidate, out var target, out unsupportedMessage)");
         source.Should().Contain("path = target!.Path;");
+        source.Should().Contain("storageItem = file;");
         source.Should().Contain("ShowOpenIssue(message)");
-        source.Should().Contain("await OpenWorkbookPathAsync(path!)");
+        source.Should().Contain("await OpenWorkbookPathAsync(path!, fileAccessIdentity)");
         source.Should().Contain("await OpenWorkbookFromTargetAsync(target!)");
         source.Should().Contain("DragDropEffects.Copy");
         source.Should().Contain("DragDropEffects.None");
+    }
+
+    [Fact]
+    public void MainWindow_WiresWorkbookFileAccessServiceToAvaloniaBookmarks()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var serviceSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "WorkbookFileAccessService.cs"));
+
+        source.Should().Contain("private readonly IWorkbookFileAccessService _workbookFileAccessService;");
+        source.Should().Contain("WorkbookFileAccessServiceFactory.Create()");
+        source.Should().Contain("ArgumentNullException.ThrowIfNull(workbookFileAccessService);");
+        source.Should().Contain("_workbookFileAccessService = workbookFileAccessService;");
+        source.Should().Contain("_workbookFileAccessService.CreateIdentityAsync(path, storageFile)");
+        source.Should().Contain("TrySelectOpenableLocalWorkbookPath(files, out var path, out var storageItem, out var message)");
+        source.Should().Contain("TrySelectDroppedWorkbookPath(e, out var path, out var storageItem, out var message)");
+        source.Should().Contain("storageItem = file;");
+        source.Should().Contain("await _workbookFileAccessService.BeginAccessAsync(");
+        source.Should().Contain("StorageProvider,");
+        source.Should().Contain("target.FileAccessIdentity");
+        source.Should().Contain("fileAccessIdentity ??= await _workbookFileAccessService.CreateIdentityAsync(");
+        source.Should().Contain("_session.MarkSaved(target.Path, fileAccessIdentity);");
+        source.Should().Contain("RecordRecentWorkbook(target.Path, fileAccessIdentity);");
+
+        var recentBlock = ExtractSourceBlock(
+            source,
+            "private async Task OpenRecentWorkbookAsync(",
+            "await OpenWorkbookPathAsync(target.Path, target.FileAccessIdentity);");
+        recentBlock.Should().Contain("await _workbookFileAccessService.BeginAccessAsync(");
+        recentBlock.Should().Contain("!File.Exists(target.Path)");
+
+        serviceSource.Should().Contain("internal interface IWorkbookFileAccessService");
+        serviceSource.Should().Contain("internal static class WorkbookFileAccessServiceFactory");
+        serviceSource.Should().Contain("internal sealed class AvaloniaWorkbookFileAccessService : IWorkbookFileAccessService");
+        serviceSource.Should().Contain("MacOsSecurityScopedBookmarkKind = \"macos-security-scoped-bookmark\"");
+        serviceSource.Should().Contain("IStorageItem? storageItem = null");
+        serviceSource.Should().Contain("OperatingSystem.IsMacOS()");
+        serviceSource.Should().Contain("StorageItemMatchesPath(storageItem, path)");
+        serviceSource.Should().Contain("storageItem.SaveBookmarkAsync()");
+        serviceSource.Should().Contain("storageProvider.OpenFileBookmarkAsync(bookmark)");
+        serviceSource.Should().Contain("WorkbookFileAccessScope.FromDisposable(storageFile)");
+        serviceSource.Should().Contain("PlatformPathIdentityComparer.Current.Equals(identity.LocalPath, resolvedPath)");
+        serviceSource.Should().NotContain("AppKit");
+        serviceSource.Should().NotContain("Foundation");
+        serviceSource.Should().NotContain("ObjCRuntime");
+        serviceSource.Should().NotContain("NSUrl");
+        serviceSource.Should().NotContain("NSData");
+        serviceSource.Should().NotContain("NSError");
+        serviceSource.Should().NotContain("NSOpenPanel");
+        serviceSource.Should().NotContain("NSSavePanel");
     }
 
     [Fact]
@@ -65,7 +115,8 @@ public sealed class AvaloniaShellSourceTests
 
         source.Should().Contain("private const string WorkbookShareSheetLabel = \"macOS Share Sheet\";");
         source.Should().Contain("private readonly IWorkbookShareSheetService _workbookShareSheetService;");
-        source.Should().Contain(": this(startupArguments, WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel))");
+        source.Should().Contain("WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel),");
+        source.Should().Contain("WorkbookFileAccessServiceFactory.Create())");
         source.Should().Contain("ArgumentNullException.ThrowIfNull(workbookShareSheetService);");
         source.Should().Contain("private readonly NativeMenuItem _shareWorkbookMenuItem = new();");
         source.Should().Contain("_shareWorkbookMenuItem.Header = \"Share Workbook...\";");
@@ -640,7 +691,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private void RecordRecentWorkbook(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null)");
         source.Should().Contain("_recentFiles.AddOrUpdate(target.Path, fileAccessIdentity ?? target.FileAccessIdentity);");
         source.Should().Contain("RecordRecentWorkbook(target.Path, target.FileAccessIdentity);");
-        source.Should().Contain("RecordRecentWorkbook(target.Path, _session.CurrentFileAccessIdentity);");
+        source.Should().Contain("RecordRecentWorkbook(target.Path, fileAccessIdentity);");
         normalizedSource.Should().Contain("_session = _sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true);\n            RefreshViewportSizeForZoom();\n            RecordRecentWorkbook(target.Path, target.FileAccessIdentity);");
         source.Should().Contain("Closing += MainWindow_Closing;");
         source.Should().Contain("private async Task CloseWorkbookAsync()");
