@@ -24,7 +24,7 @@ public sealed class SetRowsHiddenCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (_startRow < 1 || _endRow > CellAddress.MaxRow)
-            return new CommandOutcome(false, "Row range is outside the worksheet bounds.");
+            return CommandGuards.RejectRowRangeOutsideWorksheetBounds();
 
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatRows) is { } protectedOutcome)
@@ -73,7 +73,7 @@ public sealed class SetColumnsHiddenCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (_startCol < 1 || _endCol > CellAddress.MaxCol)
-            return new CommandOutcome(false, "Column range is outside the worksheet bounds.");
+            return CommandGuards.RejectColumnRangeOutsideWorksheetBounds();
 
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatColumns) is { } protectedOutcome)
