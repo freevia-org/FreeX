@@ -88,7 +88,16 @@ internal static class XlsxWorksheetViewWriter
             changed = true;
         }
 
-        var sheetView = sheetViews.Elements(worksheetNs + "sheetView").FirstOrDefault(IsPrimarySheetView);
+        XElement? sheetView = null;
+        foreach (var candidateView in sheetViews.Elements(worksheetNs + "sheetView"))
+        {
+            if (IsPrimarySheetView(candidateView))
+            {
+                sheetView = candidateView;
+                break;
+            }
+        }
+
         if (sheetView is null)
         {
             sheetView = new XElement(worksheetNs + "sheetView", new XAttribute("workbookViewId", "0"));

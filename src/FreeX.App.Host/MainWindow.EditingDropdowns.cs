@@ -204,8 +204,26 @@ public partial class MainWindow
         if (vp is null)
             return null;
 
-        var rowMetric = vp.RowMetrics.FirstOrDefault(r => r.Row == addr.Row);
-        var colMetric = vp.ColMetrics.FirstOrDefault(c => c.Col == addr.Col);
+        RowMetric? rowMetric = null;
+        foreach (var metric in vp.RowMetrics)
+        {
+            if (metric.Row == addr.Row)
+            {
+                rowMetric = metric;
+                break;
+            }
+        }
+
+        ColMetric? colMetric = null;
+        foreach (var metric in vp.ColMetrics)
+        {
+            if (metric.Col == addr.Col)
+            {
+                colMetric = metric;
+                break;
+            }
+        }
+
         if (rowMetric is null || colMetric is null)
             return null;
 

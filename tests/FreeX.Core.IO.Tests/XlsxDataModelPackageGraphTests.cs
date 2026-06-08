@@ -67,9 +67,13 @@ public sealed class XlsxDataModelPackageGraphTests
         using var savedPackage = new MemoryStream();
         adapter.Save(loaded, savedPackage);
         savedPackage.Position = 0;
-        using var savedArchive = new ZipArchive(savedPackage, ZipArchiveMode.Read);
+        using (var savedArchive = new ZipArchive(savedPackage, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            AssertDataModelGraph(savedArchive);
+        }
 
-        AssertDataModelGraph(savedArchive);
+        savedPackage.Position = 0;
+        adapter.Load(savedPackage).GetSheetAt(0).GetValue(1, 2).Should().Be(new TextValue("edited"));
     }
 
     private static MemoryStream CreateDataModelSourcePackage()

@@ -403,8 +403,16 @@ internal static class XlsxSlicerTimelineWriter
             root.Add(extensionList);
         }
 
-        var extension = extensionList.Elements(workbookNs + "ext")
-            .FirstOrDefault(element => string.Equals(element.Attribute("uri")?.Value, extensionUri, StringComparison.OrdinalIgnoreCase));
+        XElement? extension = null;
+        foreach (var element in extensionList.Elements(workbookNs + "ext"))
+        {
+            if (string.Equals(element.Attribute("uri")?.Value, extensionUri, StringComparison.OrdinalIgnoreCase))
+            {
+                extension = element;
+                break;
+            }
+        }
+
         if (extension is not null)
         {
             EnsureNamespace(extension, prefix, extensionNs);

@@ -84,17 +84,23 @@ public partial class MainWindow
     private void ToggleWaterfallTotalPoint(Guid chartId, int pointIndex)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault(item => item.Id == chartId);
-        if (chart is null)
+        if (sheet is null)
             return;
 
-        var setAsTotal = !WaterfallChartContextMenuPlanner.IsPointTotal(chart, pointIndex);
-        if (!TryExecuteCommand(
-                new SetWaterfallTotalPointCommand(_currentSheetId, chart.Id, pointIndex, setAsTotal),
-                "Set as Total"))
-            return;
+        foreach (var chart in sheet.Charts)
+        {
+            if (chart.Id != chartId)
+                continue;
 
-        UpdateViewport();
+            var setAsTotal = !WaterfallChartContextMenuPlanner.IsPointTotal(chart, pointIndex);
+            if (!TryExecuteCommand(
+                    new SetWaterfallTotalPointCommand(_currentSheetId, chart.Id, pointIndex, setAsTotal),
+                    "Set as Total"))
+                return;
+
+            UpdateViewport();
+            return;
+        }
     }
 
     private void OnGridHeaderContextMenuRequested(GridHeaderContextMenuTarget target, uint index, System.Windows.Point gridPos)
@@ -143,7 +149,16 @@ public partial class MainWindow
 
     private static void FocusFirstWorksheetContextMenuItem(ContextMenu menu)
     {
-        var firstEnabledItem = menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled);
+        MenuItem? firstEnabledItem = null;
+        foreach (var item in menu.Items)
+        {
+            if (item is not MenuItem menuItem || !menuItem.IsEnabled)
+                continue;
+
+            firstEnabledItem = menuItem;
+            break;
+        }
+
         if (firstEnabledItem is null)
             return;
 

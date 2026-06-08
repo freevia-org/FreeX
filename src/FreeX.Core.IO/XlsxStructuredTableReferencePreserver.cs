@@ -198,7 +198,13 @@ internal static class XlsxStructuredTableReferencePreserver
         XNamespace workbookNs,
         XElement tableParts)
     {
-        var extLst = worksheetRoot.Elements(workbookNs + "extLst").FirstOrDefault();
+        XElement? extLst = null;
+        foreach (var element in worksheetRoot.Elements(workbookNs + "extLst"))
+        {
+            extLst = element;
+            break;
+        }
+
         if (extLst is null)
             worksheetRoot.Add(tableParts);
         else

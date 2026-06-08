@@ -20,6 +20,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         SchemaErrors(saved).Should().BeEmpty();
         AssertDynamicSpillFormula(saved, "A3", "A3:C3", "A1:C1*2");
+
+        saved.Position = 0;
+        var reloadedCell = new XlsxFileAdapter().Load(saved).GetSheetAt(0).GetCell(3, 1)!;
+        reloadedCell.FormulaText.Should().Be("A1:C1*2");
+        reloadedCell.ArrayMode.Should().Be(FormulaArrayMode.Dynamic);
+        reloadedCell.Value.Should().Be(new NumberValue(2));
     }
 
     [Fact]
@@ -83,6 +89,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         formula.Attribute("t")!.Value.Should().Be(expectedFormulaType);
         formula.Attribute("ref")!.Value.Should().Be(expectedFormulaReference);
         formula.Attribute(expectedMetadataAttribute)!.Value.Should().Be(expectedMetadataValue);
+
+        saved.Position = 0;
+        AssertReloadedFormulaCell(adapter.Load(saved).GetSheetAt(0), 1, 1, "1+1", new NumberValue(cachedValue));
     }
 
     [Fact]
@@ -110,6 +119,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         AssertFormulaCachedCell(saved, "B1", "str", "fresh text", "CONCAT(\"o\",\"ld\")");
         AssertFormulaCachedCell(saved, "C1", "b", "0", "1=1");
         AssertFormulaCachedCell(saved, "D1", "e", "#VALUE!", "1/0");
+
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        AssertReloadedFormulaCell(reloadedSheet, 1, 1, "1+1", new NumberValue(3.5));
+        AssertReloadedFormulaCell(reloadedSheet, 1, 2, "CONCAT(\"o\",\"ld\")", new TextValue("fresh text"));
+        AssertReloadedFormulaCell(reloadedSheet, 1, 3, "1=1", new BoolValue(false));
+        AssertReloadedFormulaCell(reloadedSheet, 1, 4, "1/0", ErrorValue.Value);
     }
 
     [Fact]
@@ -134,6 +150,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         AssertFormulaCachedCell(saved, "A1", "str", "fresh formula cache", "1+1");
         AssertCellChildren(saved, "A1", "f", "v", "extLst");
+
+        saved.Position = 0;
+        AssertReloadedFormulaCell(adapter.Load(saved).GetSheetAt(0), 1, 1, "1+1", new TextValue("fresh formula cache"));
     }
 
     private static Workbook CreateDynamicSpillWorkbook(string name)
@@ -463,6 +482,19 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         cell.Element(worksheetNs + "f")!.Value.Should().Be(expectedFormulaText);
         cell.Element(worksheetNs + "v")!.Value.Should().Be(expectedCachedValue);
         cell.Element(worksheetNs + "is").Should().BeNull();
+    }
+
+    private static void AssertReloadedFormulaCell(
+        Sheet sheet,
+        uint row,
+        uint column,
+        string expectedFormulaText,
+        ScalarValue expectedValue)
+    {
+        var cell = sheet.GetCell(row, column);
+        cell.Should().NotBeNull();
+        cell!.FormulaText.Should().Be(expectedFormulaText);
+        cell.Value.Should().Be(expectedValue);
     }
 
     private static void AssertCellChildren(MemoryStream saved, string reference, params string[] expectedChildNames)

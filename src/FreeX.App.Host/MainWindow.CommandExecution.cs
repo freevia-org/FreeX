@@ -235,8 +235,7 @@ public partial class MainWindow
     {
         IWorkbookCommand CreateCommand()
         {
-            var sheet = _workbook.GetSheet(_currentSheetId);
-            var chart = sheet?.Charts.FirstOrDefault();
+            var chart = GetFirstChartOnCurrentSheet();
             if (chart is null)
                 return new FailedWorkbookCommand(missingMessage);
             if (canApply is not null && !canApply(chart))
@@ -257,10 +256,21 @@ public partial class MainWindow
         return false;
     }
 
-    private bool TryGetFirstChartForDialog(string caption, string missingMessage, out ChartModel chart)
+    private ChartModel? GetFirstChartOnCurrentSheet()
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        chart = sheet?.Charts.FirstOrDefault()!;
+        if (sheet is null)
+            return null;
+
+        foreach (var chart in sheet.Charts)
+            return chart;
+
+        return null;
+    }
+
+    private bool TryGetFirstChartForDialog(string caption, string missingMessage, out ChartModel chart)
+    {
+        chart = GetFirstChartOnCurrentSheet()!;
         if (chart is not null)
             return true;
 

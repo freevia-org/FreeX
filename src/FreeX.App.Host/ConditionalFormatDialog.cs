@@ -784,17 +784,26 @@ public partial class ConditionalFormatDialog : Window
     private void CellValueOperatorBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (sender is ComboBox { SelectedItem: string label } &&
-            CellValueOperatorLabels.FirstOrDefault(item => item.Label == label) is var match &&
-            match.RuleType is not null)
-            RefreshRuleDescription(match.RuleType);
+            RuleTypeForOperatorLabel(CellValueOperatorLabels, label) is { } ruleType)
+            RefreshRuleDescription(ruleType);
     }
 
     private void SpecificTextOperatorBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (sender is ComboBox { SelectedItem: string label } &&
-            SpecificTextOperatorLabels.FirstOrDefault(item => item.Label == label) is var match &&
-            match.RuleType is not null)
-            RefreshRuleDescription(match.RuleType);
+            RuleTypeForOperatorLabel(SpecificTextOperatorLabels, label) is { } ruleType)
+            RefreshRuleDescription(ruleType);
+    }
+
+    private static string? RuleTypeForOperatorLabel((string Label, string RuleType)[] labels, string label)
+    {
+        foreach (var item in labels)
+        {
+            if (item.Label == label)
+                return item.RuleType;
+        }
+
+        return null;
     }
 
     private static bool IsContainsShellRuleType(string ruleType) =>
