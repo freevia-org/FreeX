@@ -82,7 +82,7 @@ public static class XlsxFeatureInspector
     private static IEnumerable<XlsxUnsupportedFeature> InspectEntry(ZipArchiveEntry entry)
     {
         var packagePart = entry.FullName;
-        var normalized = packagePart.Replace('\\', '/').TrimStart('/').ToLowerInvariant();
+        var normalized = XlsxPackagePath.NormalizeEntryPath(entry).ToLowerInvariant();
 
         if (normalized is "xl/vbaproject.bin")
         {

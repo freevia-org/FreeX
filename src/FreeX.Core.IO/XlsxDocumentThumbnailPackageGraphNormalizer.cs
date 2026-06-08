@@ -231,7 +231,7 @@ internal static class XlsxDocumentThumbnailPackageGraphNormalizer
 
     private static bool IsThumbnailPart(string path)
     {
-        var normalized = path.TrimStart('/').Replace('\\', '/');
+        var normalized = XlsxPackagePath.NormalizePackagePath(path);
         if (!normalized.StartsWith("docProps/thumbnail.", StringComparison.OrdinalIgnoreCase))
             return false;
 
