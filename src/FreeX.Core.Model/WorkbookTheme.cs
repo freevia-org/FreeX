@@ -263,11 +263,7 @@ public sealed record WorkbookTheme(
             .Element(drawingNs + "camera") is not null;
 
     private static XElement? FindThemeShadow(XElement effectStyle, XNamespace drawingNs) =>
-        FindThemeEffect(effectStyle, drawingNs, effect => IsThemeShadow(effect, drawingNs));
-
-    private static bool IsThemeShadow(XElement effect, XNamespace drawingNs) =>
-        effect.Name == drawingNs + "outerShdw" ||
-        effect.Name == drawingNs + "prstShdw";
+        FindThemeEffect(effectStyle, drawingNs, drawingNs + "outerShdw", drawingNs + "prstShdw");
 
     private static XElement? FindThemeGlow(XElement effectStyle, XNamespace drawingNs) =>
         FindThemeEffectByName(effectStyle, drawingNs, "glow");
@@ -279,20 +275,40 @@ public sealed record WorkbookTheme(
         XElement effectStyle,
         XNamespace drawingNs,
         string localName) =>
-        FindThemeEffect(effectStyle, drawingNs, effect => effect.Name == drawingNs + localName);
+        FindThemeEffect(effectStyle, drawingNs, drawingNs + localName);
 
     private static XElement? FindThemeEffect(
         XElement effectStyle,
         XNamespace drawingNs,
-        Func<XElement, bool> matches) =>
-        effectStyle
-            .Element(drawingNs + "effectLst")?
-            .Elements()
-            .FirstOrDefault(matches)
-        ?? effectStyle
-            .Element(drawingNs + "effectDag")?
-            .Descendants()
-            .FirstOrDefault(matches);
+        XName primaryName,
+        XName? secondaryName = null)
+    {
+        var effectList = effectStyle.Element(drawingNs + "effectLst");
+        if (effectList is not null)
+        {
+            foreach (var effect in effectList.Elements())
+            {
+                if (ThemeEffectNameMatches(effect.Name, primaryName, secondaryName))
+                    return effect;
+            }
+        }
+
+        var effectDag = effectStyle.Element(drawingNs + "effectDag");
+        if (effectDag is not null)
+        {
+            foreach (var effect in effectDag.Descendants())
+            {
+                if (ThemeEffectNameMatches(effect.Name, primaryName, secondaryName))
+                    return effect;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool ThemeEffectNameMatches(XName effectName, XName primaryName, XName? secondaryName) =>
+        effectName == primaryName ||
+        (secondaryName is not null && effectName == secondaryName);
 
     private static (double Opacity, double OffsetX, double OffsetY, double BlurRadius)? ReadThemeInnerShadow(
         XElement effectStyle,
@@ -350,10 +366,16 @@ public sealed record WorkbookTheme(
 
     private static double? ReadEffectOpacityOrNull(XElement effect, XNamespace drawingNs)
     {
-        var alphaText = effect
-            .Elements()
-            .Select(color => color.Element(drawingNs + "alpha")?.Attribute("val")?.Value)
-            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+        string? alphaText = null;
+        foreach (var color in effect.Elements())
+        {
+            var value = color.Element(drawingNs + "alpha")?.Attribute("val")?.Value;
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                alphaText = value;
+                break;
+            }
+        }
 
         return int.TryParse(alphaText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var alpha)
             ? Math.Clamp(alpha / 100000d, 0, 1)
@@ -362,10 +384,17 @@ public sealed record WorkbookTheme(
 
     private static CellColor? ReadEffectSrgbColor(XElement effect, XNamespace drawingNs)
     {
-        var value = effect
-            .Elements(drawingNs + "srgbClr")
-            .Select(color => color.Attribute("val")?.Value)
-            .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text));
+        string? value = null;
+        foreach (var color in effect.Elements(drawingNs + "srgbClr"))
+        {
+            var candidate = color.Attribute("val")?.Value;
+            if (!string.IsNullOrWhiteSpace(candidate))
+            {
+                value = candidate;
+                break;
+            }
+        }
+
         if (value is not { Length: 6 } ||
             !byte.TryParse(value[..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var red) ||
             !byte.TryParse(value[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var green) ||
