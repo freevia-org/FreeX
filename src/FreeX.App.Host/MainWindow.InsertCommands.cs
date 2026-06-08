@@ -210,8 +210,16 @@ public partial class MainWindow
         if (!TryParseWorkbookReference(reference, out var sheetName, out var row, out var col))
             return false;
 
-        var sheet = _workbook.Sheets.FirstOrDefault(candidate =>
-            string.Equals(candidate.Name, sheetName, StringComparison.OrdinalIgnoreCase));
+        Sheet? sheet = null;
+        foreach (var candidate in _workbook.Sheets)
+        {
+            if (!string.Equals(candidate.Name, sheetName, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            sheet = candidate;
+            break;
+        }
+
         if (sheet is null)
             return false;
 

@@ -161,10 +161,18 @@ public partial class MainWindow
     private int? ResolveSelectedPivotSourceField(IReadOnlyList<string> headers, PivotTableModel pivotTable)
     {
         var selected = GetSelectedPivotFieldListItem();
-        return PivotUiPlanner.FindFieldSourceIndex(headers, pivotTable, selected ?? "")
-               ?? pivotTable.RowFields.Concat(pivotTable.ColumnFields).Concat(pivotTable.PageFields)
-                   .FirstOrDefault()
-                   ?.SourceFieldIndex;
+        var sourceIndex = PivotUiPlanner.FindFieldSourceIndex(headers, pivotTable, selected ?? "");
+        if (sourceIndex is not null)
+            return sourceIndex;
+
+        foreach (var field in pivotTable.RowFields)
+            return field.SourceFieldIndex;
+        foreach (var field in pivotTable.ColumnFields)
+            return field.SourceFieldIndex;
+        foreach (var field in pivotTable.PageFields)
+            return field.SourceFieldIndex;
+
+        return null;
     }
 
     private static List<PivotFieldModel> ReplacePivotField(
