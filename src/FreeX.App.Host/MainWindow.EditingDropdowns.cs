@@ -1,9 +1,8 @@
-using System;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using FreeX.Core.Calc;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -29,21 +28,18 @@ public partial class MainWindow
             return;
         }
 
-        var rule = FindValidationDropdownRule(sheet, range.Start);
-        if (rule is null)
-        {
-            HideValidationDropdown();
-            return;
-        }
-
         if (TryGetCellOverlayRect(range.Start) is not { } rect)
         {
             HideValidationDropdown();
             return;
         }
 
-        var items = DataValidationService.GetListItems(rule, sheet, _workbook);
-        if (items.Count == 0)
+        if (!DataValidationDropdownPlanner.TryPlan(
+                _workbook,
+                sheet,
+                range.Start,
+                new DataValidationDropdownCellBounds(rect.Left, rect.Top, rect.Width, rect.Height),
+                out var plan))
         {
             HideValidationDropdown();
             return;
@@ -52,32 +48,16 @@ public partial class MainWindow
         EnsureValidationDropdown();
 
         _suppressValidationDropdownCommit = true;
-        _validationDropdown!.ItemsSource = items;
-        var currentText = SpreadsheetDisplayFormatter.FormatCellValue(sheet.GetCell(range.Start)?.Value);
-        _validationDropdown.SelectedItem = items.FirstOrDefault(item =>
-            string.Equals(item, currentText, StringComparison.OrdinalIgnoreCase));
+        _validationDropdown!.ItemsSource = plan.Items;
+        _validationDropdown.SelectedItem = plan.SelectedItem;
         _suppressValidationDropdownCommit = false;
 
-        var width = Math.Max(18, Math.Min(rect.Width, 160));
-        System.Windows.Controls.Canvas.SetLeft(_validationDropdown, rect.Right - width);
-        System.Windows.Controls.Canvas.SetTop(_validationDropdown, rect.Top);
-        _validationDropdown.Width = width;
-        _validationDropdown.Height = Math.Max(18, rect.Height);
+        System.Windows.Controls.Canvas.SetLeft(_validationDropdown, plan.Bounds.Left);
+        System.Windows.Controls.Canvas.SetTop(_validationDropdown, plan.Bounds.Top);
+        _validationDropdown.Width = plan.Bounds.Width;
+        _validationDropdown.Height = plan.Bounds.Height;
         _validationDropdown.Visibility = Visibility.Visible;
         EditOverlay.IsHitTestVisible = true;
-    }
-
-    private static DataValidation? FindValidationDropdownRule(Sheet sheet, CellAddress address)
-    {
-        foreach (var rule in DataValidationService.GetApplicable(sheet, address))
-        {
-            if (rule.Type == DvType.List && rule.ShowDropdown)
-            {
-                return rule;
-            }
-        }
-
-        return null;
     }
 
     private void EnsureValidationDropdown()

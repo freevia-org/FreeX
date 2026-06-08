@@ -5,6 +5,12 @@ namespace FreeX.Core.Commands;
 
 internal static class FindReplaceSearchPlanner
 {
+    public readonly record struct SearchText(
+        CellAddress Address,
+        string Text,
+        FindResultTarget Target = FindResultTarget.Cell,
+        int? ReplyIndex = null);
+
     public static IEnumerable<Sheet> SheetsForScope(Workbook workbook, FindOptions options)
     {
         if (options.Within == FindWithin.Sheet && options.CurrentSheetId is { } sheetId)
@@ -19,19 +25,28 @@ internal static class FindReplaceSearchPlanner
             yield return sheet;
     }
 
-    public static IEnumerable<(CellAddress Address, string Text)> EnumerateSearchTexts(Sheet sheet, FindLookIn lookIn)
+    public static IEnumerable<SearchText> EnumerateSearchTexts(Sheet sheet, FindLookIn lookIn)
     {
         if (lookIn == FindLookIn.Notes)
         {
             foreach (var (address, text) in sheet.Comments)
-                yield return (address, text);
+                yield return new SearchText(address, text, FindResultTarget.Note);
             yield break;
         }
 
         if (lookIn == FindLookIn.Comments)
         {
             foreach (var (address, comment) in sheet.ThreadedComments)
-                yield return (address, comment.Text);
+            {
+                yield return new SearchText(address, comment.Text, FindResultTarget.ThreadedComment);
+
+                for (var replyIndex = 0; replyIndex < comment.Replies.Count; replyIndex++)
+                    yield return new SearchText(
+                        address,
+                        comment.Replies[replyIndex].Text,
+                        FindResultTarget.ThreadedCommentReply,
+                        replyIndex);
+            }
             yield break;
         }
 
@@ -42,7 +57,7 @@ internal static class FindReplaceSearchPlanner
                 : GetDisplayText(cell.Value);
 
             if (text is not null)
-                yield return (addr, text);
+                yield return new SearchText(addr, text);
         }
     }
 
@@ -50,16 +65,35 @@ internal static class FindReplaceSearchPlanner
     {
         results.Sort((a, b) =>
         {
+            int addressComparison;
             if (searchOrder == FindSearchOrder.ByColumns)
             {
                 var colCmp = a.Address.Col.CompareTo(b.Address.Col);
-                return colCmp != 0 ? colCmp : a.Address.Row.CompareTo(b.Address.Row);
+                addressComparison = colCmp != 0 ? colCmp : a.Address.Row.CompareTo(b.Address.Row);
+            }
+            else
+            {
+                var rowCmp = a.Address.Row.CompareTo(b.Address.Row);
+                addressComparison = rowCmp != 0 ? rowCmp : a.Address.Col.CompareTo(b.Address.Col);
             }
 
-            var rowCmp = a.Address.Row.CompareTo(b.Address.Row);
-            return rowCmp != 0 ? rowCmp : a.Address.Col.CompareTo(b.Address.Col);
+            if (addressComparison != 0)
+                return addressComparison;
+
+            var targetComparison = GetTargetSortIndex(a).CompareTo(GetTargetSortIndex(b));
+            return targetComparison != 0
+                ? targetComparison
+                : Nullable.Compare(a.ReplyIndex, b.ReplyIndex);
         });
     }
+
+    private static int GetTargetSortIndex(FindResult result) =>
+        result.Target switch
+        {
+            FindResultTarget.ThreadedComment => 0,
+            FindResultTarget.ThreadedCommentReply => 1 + Math.Max(0, result.ReplyIndex ?? 0),
+            _ => 0
+        };
 
     public static bool MatchesRequiredFormat(Workbook workbook, Sheet sheet, CellAddress address, StyleDiff? requiredFormat)
     {

@@ -79,12 +79,17 @@ public sealed partial class SelectionPanePlannerTests
     [Fact]
     public void SelectionPaneDialog_PlannerConsolidatesDragReorderIndexLookups()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("SelectionPaneDialog.Planning.cs");
+        var hostSource = DialogSourceTestSupport.ReadHostSources("SelectionPaneDialog.Planning.cs");
+        var serviceSource = WorkspaceFileLocator.ReadAllText(
+            "src",
+            "FreeX.App.Services",
+            "SelectionPanePlanner.cs");
 
-        source.Should().Contain("private static (int DraggedIndex, int TargetIndex) FindDragIndexes");
-        source.Should().Contain("var dragPlan = CreateDragMovePlan(items, draggedId, targetId, placement);");
-        source.Should().NotContain("items.Select(item => (item.Kind, item.Id)).ToList()");
-        source.Should().NotContain("var draggedIndex = FindIndex(items, draggedId);");
-        source.Should().NotContain("var targetIndex = FindIndex(items, targetId);");
+        hostSource.Should().Contain("SharedSelectionPanePlanner.PlanDragReorder(");
+        serviceSource.Should().Contain("private static (int DraggedIndex, int TargetIndex) FindDragIndexes");
+        serviceSource.Should().Contain("var dragPlan = CreateDragMovePlan(items, draggedId, targetId, placement);");
+        serviceSource.Should().NotContain("items.Select(item => (item.Kind, item.Id)).ToList()");
+        serviceSource.Should().NotContain("var draggedIndex = FindIndex(items, draggedId);");
+        serviceSource.Should().NotContain("var targetIndex = FindIndex(items, targetId);");
     }
 }

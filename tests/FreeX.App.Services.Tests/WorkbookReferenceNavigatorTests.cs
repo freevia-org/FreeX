@@ -1,0 +1,127 @@
+using FluentAssertions;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Services.Tests;
+
+public sealed class WorkbookReferenceNavigatorTests
+{
+    [Fact]
+    public void TryParseAddress_AcceptsA1ReferenceOnCurrentSheet()
+    {
+        var sheetId = SheetId.New();
+
+        WorkbookReferenceNavigator.TryParseAddress("B5", sheetId, out var address).Should().BeTrue();
+
+        address.Should().Be(new CellAddress(sheetId, 5, 2));
+    }
+
+    [Fact]
+    public void TryParseAddress_AcceptsExcelAbsoluteA1Reference()
+    {
+        var sheetId = SheetId.New();
+
+        WorkbookReferenceNavigator.TryParseAddress("$B$5", sheetId, out var address).Should().BeTrue();
+
+        address.Should().Be(new CellAddress(sheetId, 5, 2));
+    }
+
+    [Fact]
+    public void TryParseAddress_AcceptsAbsoluteR1C1Reference()
+    {
+        var sheetId = SheetId.New();
+
+        WorkbookReferenceNavigator.TryParseAddress("R5C2", sheetId, out var address).Should().BeTrue();
+
+        address.Should().Be(new CellAddress(sheetId, 5, 2));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("NotACell")]
+    [InlineData("A0")]
+    [InlineData("R0C1")]
+    public void TryParseAddress_RejectsInvalidReference(string input)
+    {
+        WorkbookReferenceNavigator.TryParseAddress(input, SheetId.New(), out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TryParseReference_ResolvesDefinedNameToRangeStart()
+    {
+        var sheetId = SheetId.New();
+        var names = new Dictionary<string, GridRange>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Sales_Total"] = new(
+                new CellAddress(sheetId, 10, 2),
+                new CellAddress(sheetId, 12, 4))
+        };
+
+        WorkbookReferenceNavigator.TryParseReference("sales_total", sheetId, names, out var address).Should().BeTrue();
+
+        address.Should().Be(new CellAddress(sheetId, 10, 2));
+    }
+
+    [Fact]
+    public void TryParseReferenceRange_ResolvesDefinedNameToFullRange()
+    {
+        var sheetId = SheetId.New();
+        var namedRange = new GridRange(
+            new CellAddress(sheetId, 10, 2),
+            new CellAddress(sheetId, 12, 4));
+        var names = new Dictionary<string, GridRange>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Sales_Total"] = namedRange
+        };
+
+        WorkbookReferenceNavigator.TryParseReferenceRange("sales_total", sheetId, names, out var parsed).Should().BeTrue();
+
+        parsed.Should().Be(namedRange);
+    }
+
+    [Fact]
+    public void TryParseReferenceRange_AcceptsTypedCurrentSheetRange()
+    {
+        var sheetId = SheetId.New();
+
+        WorkbookReferenceNavigator.TryParseReferenceRange("A1:C3", sheetId, definedNames: null, out var range).Should().BeTrue();
+
+        range.Should().Be(new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3)));
+    }
+
+    [Fact]
+    public void TryParseReferenceRange_AcceptsExcelAbsoluteA1Range()
+    {
+        var sheetId = SheetId.New();
+
+        WorkbookReferenceNavigator.TryParseReferenceRange("$A$1:$C$3", sheetId, definedNames: null, out var range).Should().BeTrue();
+
+        range.Should().Be(new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3)));
+    }
+
+    [Fact]
+    public void TryParseReferenceRange_AcceptsSheetQualifiedRange()
+    {
+        var currentSheetId = SheetId.New();
+        var dataSheetId = SheetId.New();
+
+        WorkbookReferenceNavigator.TryParseReferenceRange(
+            "'Data Sheet'!B2:C4",
+            currentSheetId,
+            sheetName => string.Equals(sheetName, "Data Sheet", StringComparison.OrdinalIgnoreCase) ? dataSheetId : null,
+            definedNames: null,
+            out var range).Should().BeTrue();
+
+        range.Should().Be(new GridRange(new CellAddress(dataSheetId, 2, 2), new CellAddress(dataSheetId, 4, 3)));
+    }
+
+    [Fact]
+    public void BuildReferenceChoices_PutsDefaultThenRecentThenSortedNamesWithoutDuplicates()
+    {
+        var choices = WorkbookReferenceNavigator.BuildReferenceChoices(
+            "B5",
+            ["B5", "D10"],
+            ["zName", "Alpha"]);
+
+        choices.Should().Equal("B5", "D10", "Alpha", "zName");
+    }
+}

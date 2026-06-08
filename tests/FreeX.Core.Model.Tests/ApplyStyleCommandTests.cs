@@ -202,6 +202,32 @@ public class ApplyStyleCommandTests
     }
 
     [Fact]
+    public void Apply_EmptyCellWithExistingStyleOnly_PreservesUnchangedProperties()
+    {
+        var (wb, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 5, 5);
+        var originalStyleId = wb.RegisterStyle(new CellStyle { Bold = true });
+        sheet.SetStyleOnly(addr.Row, addr.Col, originalStyleId);
+
+        var cmd = new ApplyStyleCommand(
+            sheet.Id,
+            new GridRange(addr, addr),
+            new StyleDiff(FillColor: new CellColor(255, 255, 0)));
+        cmd.Apply(ctx);
+
+        sheet.GetCell(addr).Should().BeNull();
+        var styleOnlyId = sheet.GetStyleOnly(addr.Row, addr.Col);
+        styleOnlyId.Should().NotBeNull();
+        var style = wb.GetStyle(styleOnlyId!.Value);
+        style.Bold.Should().BeTrue();
+        style.FillColor.Should().Be(new CellColor(255, 255, 0));
+
+        cmd.Revert(ctx);
+
+        sheet.GetStyleOnly(addr.Row, addr.Col).Should().Be(originalStyleId);
+    }
+
+    [Fact]
     public void Revert_RemovesStyleOnlyEntryCreatedOnlyForFormatting()
     {
         var (_, sheet, ctx) = Setup();

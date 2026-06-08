@@ -189,7 +189,7 @@ public sealed class SetSheetHiddenCommand : IWorkbookCommand
             return protectedOutcome;
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (_hidden && !ctx.Workbook.Sheets.Any(s => s.Id != _sheetId && !s.IsHidden))
+        if (_hidden && !ctx.Workbook.Sheets.Any(s => s.Id != _sheetId && !s.IsHidden && !s.IsVeryHidden))
             return new CommandOutcome(false, "Cannot hide the only visible sheet.");
 
         _previousHidden = sheet.IsHidden;

@@ -1,4 +1,5 @@
 using System.IO;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -43,8 +44,8 @@ public static class LocalAccountPlanner
         var workbookStatus = FormatWorkbookStatus(workbookDisplayName, currentFilePath, fileExists);
         var sharingStatus = FormatSharingStatus(ShareWorkbookPlanner.CreatePlan(currentFilePath, fileExists));
         var exportStatus = workbook is null
-            ? ExportReadinessPlanner.CreateForAvailableWorkbook(hasSelection).StatusText
-            : ExportReadinessPlanner.Create(workbook, hasSelection).StatusText;
+            ? WorkbookExportReadinessPlanner.CreateForAvailableWorkbook(hasSelection).StatusText
+            : WorkbookExportReadinessPlanner.Create(workbook, hasSelection).StatusText;
 
         var details = new List<LocalAccountDetail>
         {
