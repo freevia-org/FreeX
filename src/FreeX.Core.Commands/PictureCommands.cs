@@ -36,11 +36,11 @@ public sealed class InsertPictureCommand : IWorkbookCommand
             return new CommandOutcome(false, "Picture anchor must be on the target sheet.");
         if (_picture.ImageBytes is not { Length: > 0 })
             return new CommandOutcome(false, "Picture data cannot be empty.");
-        if (!double.IsFinite(_picture.Width) || !double.IsFinite(_picture.Height) || _picture.Width <= 0 || _picture.Height <= 0)
-            return new CommandOutcome(false, "Picture size must be positive.");
+        if (PictureCommandGuards.RejectInvalidSize(_picture.Width, _picture.Height) is { } invalidSize)
+            return invalidSize;
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (PictureCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
         sheet.Pictures.Add(_picture);

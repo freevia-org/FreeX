@@ -35,7 +35,7 @@ public sealed class MoveChartCommand : IWorkbookCommand
 
         var chart = source.Charts.FirstOrDefault(item => item.Id == _chartId);
         if (chart is null)
-            return new CommandOutcome(false, "Chart was not found.");
+            return ChartCommandGuards.ChartNotFound();
         if (chart.IsPivotChart)
             return new CommandOutcome(false, "Selected chart is a PivotChart.");
         if (_sourceSheetId == _targetSheetId)
@@ -99,7 +99,7 @@ public sealed class MoveChartToNewSheetCommand : IWorkbookCommand
 
         var chart = source.Charts.FirstOrDefault(item => item.Id == _chartId);
         if (chart is null)
-            return new CommandOutcome(false, "Chart was not found.");
+            return ChartCommandGuards.ChartNotFound();
         if (chart.IsPivotChart)
             return new CommandOutcome(false, "Selected chart is a PivotChart.");
 

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -15,6 +16,18 @@ internal static class DrawingShapeCommandGuards
             ? null
             : new CommandOutcome(false, InvalidDrawingShapeSizeMessage);
 
+    public static bool TryFindShape(
+        Sheet sheet,
+        Guid shapeId,
+        [NotNullWhen(true)] out DrawingShapeModel? shape)
+    {
+        shape = sheet.DrawingShapes.FirstOrDefault(item => item.Id == shapeId);
+        return shape is not null;
+    }
+
+    public static CommandOutcome DrawingShapeNotFound() =>
+        new(false, DrawingShapeNotFoundMessage);
+
     public static CommandOutcome TryMoveZOrder(
         Sheet sheet,
         Guid shapeId,
@@ -26,12 +39,12 @@ internal static class DrawingShapeCommandGuards
         hadExplicitOrder = false;
         var entry = new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, shapeId);
         if (!DrawingObjectZOrder.ContainsObject(sheet, entry))
-            return new CommandOutcome(false, DrawingShapeNotFoundMessage);
+            return DrawingShapeNotFound();
 
         var normalizedOrder = DrawingObjectZOrder.GetNormalizedOrder(sheet);
         var index = FindIndex(normalizedOrder, entry);
         if (index < 0)
-            return new CommandOutcome(false, DrawingShapeNotFoundMessage);
+            return DrawingShapeNotFound();
 
         var targetIndex = index + direction;
         if (targetIndex < 0 || targetIndex >= normalizedOrder.Count)

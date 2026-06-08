@@ -5,6 +5,7 @@ namespace FreeX.Core.Commands;
 internal static class CommandGuards
 {
     private const string SheetProtectedMessage = "The sheet is protected.";
+    private const string PivotTableNotFoundMessage = "PivotTable was not found.";
 
     public static CommandOutcome? RejectIfProtected(Sheet sheet)
     {
@@ -31,6 +32,9 @@ internal static class CommandGuards
             ? new CommandOutcome(false, "The workbook structure is protected.")
             : null;
     }
+
+    public static CommandOutcome RejectPivotTableNotFound() =>
+        new(false, PivotTableNotFoundMessage);
 
     public static string CannotInsertColumnsPastLastColumn(uint count) =>
         $"Cannot insert {count} column(s): data would be pushed past the last column ({CellAddress.MaxCol}).";

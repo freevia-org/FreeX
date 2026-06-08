@@ -20,12 +20,11 @@ public sealed class SetPictureAltTextCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (PictureCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var picture = sheet.Pictures.FirstOrDefault(item => item.Id == _pictureId);
-        if (picture is null)
-            return new CommandOutcome(false, "Picture was not found.");
+        if (!PictureCommandGuards.TryFindPicture(sheet, _pictureId, out var picture))
+            return PictureCommandGuards.PictureNotFound();
 
         picture.AltText = _change.Apply(picture.AltText);
         return new CommandOutcome(true, AffectedCells: [picture.Anchor]);
@@ -60,12 +59,11 @@ public sealed class SetDrawingShapeAltTextCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var shape = sheet.DrawingShapes.FirstOrDefault(item => item.Id == _shapeId);
-        if (shape is null)
-            return new CommandOutcome(false, "Drawing shape was not found.");
+        if (!DrawingShapeCommandGuards.TryFindShape(sheet, _shapeId, out var shape))
+            return DrawingShapeCommandGuards.DrawingShapeNotFound();
 
         shape.AltText = _change.Apply(shape.AltText);
         return new CommandOutcome(true, AffectedCells: [shape.Anchor]);
@@ -100,12 +98,11 @@ public sealed class SetTextBoxAltTextCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var textBox = sheet.TextBoxes.FirstOrDefault(item => item.Id == _textBoxId);
-        if (textBox is null)
-            return new CommandOutcome(false, "Text box was not found.");
+        if (!TextBoxCommandGuards.TryFindTextBox(sheet, _textBoxId, out var textBox))
+            return TextBoxCommandGuards.TextBoxNotFound();
 
         textBox.AltText = _change.Apply(textBox.AltText);
         return new CommandOutcome(true, AffectedCells: [textBox.Anchor]);
