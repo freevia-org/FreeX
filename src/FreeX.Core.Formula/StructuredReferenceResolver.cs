@@ -299,13 +299,21 @@ public static class StructuredReferenceResolver
     }
 
     private static string FirstColumnNameOrEmpty(StructuredTableModel table) =>
-        table.Columns.FirstOrDefault()?.Name ?? "";
+        table.Columns.Count == 0 ? "" : table.Columns[0].Name;
 
     private static string LastColumnNameOrEmpty(StructuredTableModel table) =>
         table.Columns.LastOrDefault()?.Name ?? "";
 
-    private static int FindColumnIndex(StructuredTableModel table, string columnName) =>
-        table.Columns.FindIndex(column => ColumnNameMatches(column, columnName));
+    private static int FindColumnIndex(StructuredTableModel table, string columnName)
+    {
+        for (var index = 0; index < table.Columns.Count; index++)
+        {
+            if (ColumnNameMatches(table.Columns[index], columnName))
+                return index;
+        }
+
+        return -1;
+    }
 
     private static bool ColumnNameMatches(StructuredTableColumnModel column, string columnName) =>
         string.Equals(column.Name, columnName, StringComparison.OrdinalIgnoreCase);
