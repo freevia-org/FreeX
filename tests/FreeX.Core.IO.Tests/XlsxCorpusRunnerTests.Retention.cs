@@ -1412,14 +1412,7 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        var loadedAutoFilter = workbook.GetSheetAt(0).AutoFilter;
-        loadedAutoFilter.Should().NotBeNull();
-        loadedAutoFilter!.Reference.Should().Be("A1:B3");
-        var loadedFilterColumn = loadedAutoFilter.FilterColumns.Should().ContainSingle().Subject;
-        loadedFilterColumn.ColumnId.Should().Be(0);
-        loadedFilterColumn.Values.Should().Equal("A");
-        loadedFilterColumn.IncludeBlank.Should().BeTrue();
-        workbook.GetSheetAt(0).FilterHiddenRows.Should().Contain(3u);
+        AssertWorksheetAutoFilterModel(workbook.GetSheetAt(0), "generated-worksheet-auto-filter-metadata-001 loaded");
         workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-auto-filter-edit"));
 
         using var saved = new MemoryStream();
@@ -1427,6 +1420,9 @@ public partial class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-auto-filter-metadata-001");
         AssertWorksheetAutoFilterMetadata(saved, "generated-worksheet-auto-filter-metadata-001 saved");
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetAutoFilterModel(reloaded.GetSheetAt(0), "generated-worksheet-auto-filter-metadata-001 reloaded");
     }
 
     [Fact]
@@ -1737,6 +1733,18 @@ public partial class XlsxCorpusRunnerTests
             .Where(filter => string.Equals(filter.Attribute("val")?.Value, "A", StringComparison.Ordinal))
             .Should()
             .ContainSingle(because);
+    }
+
+    private static void AssertWorksheetAutoFilterModel(Sheet sheet, string because)
+    {
+        var autoFilter = sheet.AutoFilter;
+        autoFilter.Should().NotBeNull(because);
+        autoFilter!.Reference.Should().Be("A1:B3", because);
+        var filterColumn = autoFilter.FilterColumns.Should().ContainSingle(because).Subject;
+        filterColumn.ColumnId.Should().Be(0, because);
+        filterColumn.Values.Should().Equal(["A"], because);
+        filterColumn.IncludeBlank.Should().BeTrue(because);
+        sheet.FilterHiddenRows.Should().Contain(3u, because);
     }
 
     private static void AssertWorksheetSortState(Stream package, string because)
