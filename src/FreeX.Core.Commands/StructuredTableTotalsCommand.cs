@@ -24,7 +24,7 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
 
         var table = sheet.StructuredTables.FirstOrDefault(candidate => candidate.Id == _tableId);
         if (table is null)
-            return new CommandOutcome(false, "Table was not found.");
+            return CommandGuards.RejectStructuredTableNotFound();
         if (!table.TotalsRowShown)
             return new CommandOutcome(false, "Table totals row is not shown.");
         if (table.Columns.Count == 0)
@@ -189,7 +189,7 @@ public sealed class SetStructuredTableTotalsRowCommand : IWorkbookCommand
 
         var table = sheet.StructuredTables.FirstOrDefault(candidate => candidate.Id == _tableId);
         if (table is null)
-            return new CommandOutcome(false, "Table was not found.");
+            return CommandGuards.RejectStructuredTableNotFound();
         if (table.TotalsRowShown == _showTotalsRow)
             return new CommandOutcome(true, AffectedCells: [table.Range.End]);
         if (table.Columns.Count == 0)
