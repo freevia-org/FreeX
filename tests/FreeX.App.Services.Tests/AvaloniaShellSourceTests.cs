@@ -1672,6 +1672,64 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_WiresNativeDataValidationDropdownThroughSharedPlannerAndKeyboardRoute()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "DataValidationDropdownPlanner.cs"));
+        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        source.Should().Contain("private ComboBox? _activeDataValidationDropdown;");
+        source.Should().Contain("_activeDataValidationDropdown = null;");
+        source.Should().Contain("AddDataValidationDropdownOverlay(overlay, viewport, showHeadings, zoomFactor);");
+        source.Should().Contain("private void AddDataValidationDropdownOverlay(");
+        source.Should().Contain("DataValidationDropdownPlanner.TryPlan(");
+        source.Should().Contain("new DataValidationDropdownCellBounds(left, top, width, height)");
+        source.Should().Contain("private ComboBox CreateDataValidationDropdown(DataValidationDropdownPlan plan)");
+        source.Should().Contain("ItemsSource = plan.Items");
+        source.Should().Contain("SelectedItem = plan.SelectedItem");
+        source.Should().Contain("MinWidth = DataValidationDropdownPlanner.MinimumWidth");
+        source.Should().Contain("MinHeight = DataValidationDropdownPlanner.MinimumHeight");
+        source.Should().Contain("ToolTip.SetTip(dropdown, \"Pick from list\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(dropdown, \"WorksheetDataValidationDropdown\");");
+        source.Should().Contain("AutomationProperties.SetName(dropdown, \"Data validation list\");");
+        source.Should().Contain("dropdown.SelectionChanged += DataValidationDropdown_SelectionChanged;");
+        source.Should().Contain("private static bool IsOpenActiveDropdownShortcut(KeyEventArgs args)");
+        source.Should().Contain("args.Key == Key.Down && args.KeyModifiers == KeyModifiers.Alt;");
+        source.Should().Contain("e.Handled = OpenActiveDataValidationDropdown();");
+        source.Should().Contain("_activeDataValidationDropdown.IsDropDownOpen = true;");
+        source.Should().Contain("private void DataValidationDropdown_SelectionChanged(object? sender, SelectionChangedEventArgs e)");
+        source.Should().Contain("CommitDataValidationDropdownSelection(selected);");
+        source.Should().Contain("_session.CommitCellText(selected)");
+        source.Should().Contain("_session.CancelFormulaEdit();");
+        source.Should().Contain("_formulaBoxEditOriginalText = null;");
+        source.Should().Contain("RefreshShell($\"Picked {selected} for {FormatCellReference(address)}\");");
+
+        plannerSource.Should().Contain("DataValidationService.GetApplicable(sheet, activeCell)");
+        plannerSource.Should().Contain("DataValidationService.GetListItems(rule, sheet, workbook)");
+        plannerSource.Should().Contain("rule.Type == DvType.List && rule.ShowDropdown");
+
+        var overlayIndex = normalizedSource.IndexOf("private void AddDataValidationDropdownOverlay(", StringComparison.Ordinal);
+        overlayIndex.Should().BeGreaterThanOrEqualTo(0);
+        var nextOverlayMethodIndex = normalizedSource.IndexOf("\n    private Control CreateSelectableDrawingObjectVisual(", overlayIndex, StringComparison.Ordinal);
+        nextOverlayMethodIndex.Should().BeGreaterThan(overlayIndex);
+        var overlaySource = normalizedSource[overlayIndex..nextOverlayMethodIndex];
+
+        var keyboardIndex = normalizedSource.IndexOf("private bool OpenActiveDataValidationDropdown()", StringComparison.Ordinal);
+        keyboardIndex.Should().BeGreaterThanOrEqualTo(0);
+        var nextKeyboardMethodIndex = normalizedSource.IndexOf("\n    private void CycleShellFocus(", keyboardIndex, StringComparison.Ordinal);
+        nextKeyboardMethodIndex.Should().BeGreaterThan(keyboardIndex);
+        var keyboardRouteSource = normalizedSource[keyboardIndex..nextKeyboardMethodIndex];
+
+        overlaySource.Should().NotContain("System.Windows");
+        overlaySource.Should().NotContain("WindowInteropHelper");
+        overlaySource.Should().NotContain("Microsoft.Win32");
+        keyboardRouteSource.Should().NotContain("System.Windows");
+        keyboardRouteSource.Should().NotContain("WindowInteropHelper");
+        keyboardRouteSource.Should().NotContain("Microsoft.Win32");
+        keyboardRouteSource.Should().NotContain("DataTransferManager");
+    }
+
+    [Fact]
     public void MainWindow_WiresNativeGoalSeekThroughSharedParserSessionAndStatusDialog()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
