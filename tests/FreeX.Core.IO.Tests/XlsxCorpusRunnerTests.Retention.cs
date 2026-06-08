@@ -63,20 +63,18 @@ public partial class XlsxCorpusRunnerTests
         var worksheetXml = LoadPackageXml(worksheetEntry!);
         var worksheetRelsXml = LoadPackageXml(worksheetRelsEntry!);
 
-        XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
-        var queryTablePart = worksheetXml.Root!
-            .Element(sheetNs + "queryTableParts")!
-            .Elements(sheetNs + "queryTablePart")
-            .Should().ContainSingle().Subject;
-        var relationshipId = queryTablePart.Attribute(relNs + "id")!.Value;
+        worksheetXml.Root!
+            .Elements()
+            .Select(element => element.Name.LocalName)
+            .Should()
+            .NotContain("queryTableParts");
 
         worksheetRelsXml.Root!
             .Elements(packageRelNs + "Relationship")
             .Where(relationship =>
-                relationship.Attribute("Id")?.Value == relationshipId &&
+                relationship.Attribute("Id")?.Value == "rIdFreeXQueryTable" &&
                 relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/queryTable" &&
                 relationship.Attribute("Target")?.Value == "../queryTables/queryTable1.xml")
             .Should().ContainSingle();

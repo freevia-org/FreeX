@@ -619,7 +619,6 @@ public sealed partial class XlsxFileAdapter
          root.Element(worksheetNs + "protectedRanges") is not null ||
          root.Element(worksheetNs + "rowBreaks") is not null ||
          root.Element(worksheetNs + "colBreaks") is not null ||
-         root.Element(worksheetNs + "queryTableParts") is not null ||
          root.Element(worksheetNs + "webPublishItems") is not null ||
          root.Element(worksheetNs + "oleObjects") is not null ||
          root.Element(worksheetNs + "controls") is not null ||

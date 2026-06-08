@@ -41,8 +41,8 @@ public sealed class AddChartCommand : IWorkbookCommand
             return unsupportedOutcome;
         if (_chart.DataRange.Start.Sheet != _sheetId || _chart.DataRange.End.Sheet != _sheetId)
             return new CommandOutcome(false, "Chart data range must be on the target sheet.");
-        if (!double.IsFinite(_chart.Width) || !double.IsFinite(_chart.Height) || _chart.Width <= 0 || _chart.Height <= 0)
-            return new CommandOutcome(false, "Chart size must be positive.");
+        if (ChartCommandGuards.RejectInvalidSize(_chart.Width, _chart.Height) is { } invalidSize)
+            return invalidSize;
         if (ChartTypeSupport.GetDataSeriesCount(_chart) <= 0)
             return new CommandOutcome(false, "Chart data range must include at least one data series.");
         if (ChartTypeSupport.GetDataPointCount(_chart) <= 0)
@@ -181,8 +181,8 @@ public sealed class AddPivotChartCommand : IWorkbookCommand
             return new CommandOutcome(false, "PivotTable name is required.");
         if (ChartAuthoringPlanner.RejectIfUnsupported(_chartType) is { } unsupportedOutcome)
             return unsupportedOutcome;
-        if (!double.IsFinite(_width) || !double.IsFinite(_height) || _width <= 0 || _height <= 0)
-            return new CommandOutcome(false, "Chart size must be positive.");
+        if (ChartCommandGuards.RejectInvalidSize(_width, _height) is { } invalidSize)
+            return invalidSize;
 
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
@@ -230,4 +230,14 @@ public sealed class AddPivotChartCommand : IWorkbookCommand
         ctx.GetSheet(_sheetId).Charts.Remove(_addedChart);
         _addedChart = null;
     }
+}
+
+internal static class ChartCommandGuards
+{
+    private const string InvalidChartSizeMessage = "Chart size must be positive.";
+
+    public static CommandOutcome? RejectInvalidSize(double width, double height) =>
+        double.IsFinite(width) && double.IsFinite(height) && width > 0 && height > 0
+            ? null
+            : new CommandOutcome(false, InvalidChartSizeMessage);
 }
