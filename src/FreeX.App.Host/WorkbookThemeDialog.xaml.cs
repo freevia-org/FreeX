@@ -164,9 +164,15 @@ public partial class WorkbookThemeDialog : Window
     private void ShowInvalidThemeColor(WorkbookThemeDialogValidationError error)
     {
         DialogMessageHelper.ShowWarning(this, error.Message, UiText.Get("WorkbookTheme_CustomizeThemeTitle"));
-        var field = ThemeColorFields().FirstOrDefault(field => field.Slot == error.Slot);
-        if (field.TextBox is not null)
-            FocusInvalidColorInput(field.TextBox);
+        foreach (var field in ThemeColorFields())
+        {
+            if (field.Slot != error.Slot)
+                continue;
+
+            if (field.TextBox is not null)
+                FocusInvalidColorInput(field.TextBox);
+            break;
+        }
     }
 
     private static void FocusInvalidColorInput(TextBox colorBox)

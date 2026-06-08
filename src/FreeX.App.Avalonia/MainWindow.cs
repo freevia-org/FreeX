@@ -5271,8 +5271,16 @@ public sealed class MainWindow : Window
         HyperlinkDialogPlan? result = null;
         var prefill = _session.GetSelectedRangeHyperlinkDialogPrefill();
         var linkTypeChoices = CreateHyperlinkTypeChoices();
-        var selectedLinkType = linkTypeChoices.FirstOrDefault(choice => choice.Value == prefill.LinkType) ??
-            linkTypeChoices[0];
+        var selectedLinkType = linkTypeChoices[0];
+        foreach (var choice in linkTypeChoices)
+        {
+            if (choice.Value != prefill.LinkType)
+                continue;
+
+            selectedLinkType = choice;
+            break;
+        }
+
         var dialog = new Window
         {
             Title = "Insert Hyperlink",

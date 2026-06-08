@@ -23,10 +23,15 @@ public static class RibbonTopLevelKeyTipRouter
 
         if (string.Equals(normalizedKeyTip, "D", StringComparison.OrdinalIgnoreCase))
         {
-            var dataEntry = candidates.FirstOrDefault(entry =>
-                string.Equals(entry.Header, "Data", StringComparison.OrdinalIgnoreCase));
-            if (!string.IsNullOrWhiteSpace(dataEntry.Header))
-                return RibbonTopLevelKeyTipAction.RibbonTab(dataEntry.Header);
+            foreach (var entry in candidates)
+            {
+                if (!string.Equals(entry.Header, "Data", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (!string.IsNullOrWhiteSpace(entry.Header))
+                    return RibbonTopLevelKeyTipAction.RibbonTab(entry.Header);
+                break;
+            }
         }
 
         return null;

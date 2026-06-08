@@ -21,7 +21,7 @@ internal static class TextToColumnsCommandPlanner
         var plans = BuildSheetPlans(workbook, targetSheetIds, sourceRange, result);
         if (plans.Count <= 1)
         {
-            var plan = plans.FirstOrDefault();
+            var plan = plans.Count == 0 ? null : plans[0];
             return new EditCellsCommand(plan?.SheetId ?? currentSheetId, plan?.Edits ?? []);
         }
 
