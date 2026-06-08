@@ -64,6 +64,19 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceTableStyles.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        reloaded.StructuredTableStyles.Should().ContainSingle(style =>
+            style.Name == "ExcelNativeStructuredStyle" &&
+            style.AppliesToTables &&
+            !style.AppliesToPivotTables &&
+            style.Elements.Count == 2);
+        reloaded.PivotTableStyles.Should().ContainSingle(style =>
+            style.Name == "ExcelNativePivotStyle" &&
+            style.AppliesToPivotTables &&
+            !style.AppliesToTables &&
+            style.Elements.Count == 1);
     }
 
     [Fact]
