@@ -102,7 +102,7 @@ public sealed class ChartStyleDialog : Window
         var itemsPanelFactory = new FrameworkElementFactory(typeof(UniformGrid), "ChartStyleGalleryPanel");
         itemsPanelFactory.SetValue(UniformGrid.ColumnsProperty, 4);
         _styleGallery.ItemsPanel = new ItemsPanelTemplate(itemsPanelFactory);
-        _styleGallery.SelectedItem = options.FirstOrDefault(option => option.StyleId == Result.ChartStyleId) ?? options[0];
+        _styleGallery.SelectedItem = FindStyleOption(options, Result.ChartStyleId) ?? options[0];
         _styleGallery.Margin = new Thickness(0, 0, 0, 16);
         _styleGallery.Height = 230;
         AutomationProperties.SetName(_styleGallery, UiText.Get("ChartStyle_GalleryAutomationName"));
@@ -132,6 +132,18 @@ public sealed class ChartStyleDialog : Window
             ? CreateResult(option.StyleId)
             : CreateResult(null);
         DialogResult = true;
+    }
+
+    private static ChartStyleOption? FindStyleOption(IReadOnlyList<ChartStyleOption> options, int? styleId)
+    {
+        for (var index = 0; index < options.Count; index++)
+        {
+            var option = options[index];
+            if (option.StyleId == styleId)
+                return option;
+        }
+
+        return null;
     }
 
     private void FocusInitialKeyboardTarget()

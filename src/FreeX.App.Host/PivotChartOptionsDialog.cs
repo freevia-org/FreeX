@@ -114,7 +114,7 @@ public sealed class PivotChartOptionsDialog : Window
         var itemsPanelFactory = new FrameworkElementFactory(typeof(UniformGrid), "PivotChartStyleGalleryPanel");
         itemsPanelFactory.SetValue(UniformGrid.ColumnsProperty, 4);
         _styleGallery.ItemsPanel = new ItemsPanelTemplate(itemsPanelFactory);
-        _styleGallery.SelectedItem = styleOptions.FirstOrDefault(option => option.StyleId == Result.ChartStyleId) ?? styleOptions[0];
+        _styleGallery.SelectedItem = FindStyleOption(styleOptions, Result.ChartStyleId) ?? styleOptions[0];
         _styleGallery.Height = 126;
         _styleGallery.Margin = new Thickness(0, 0, 0, 8);
         AutomationProperties.SetName(_styleGallery, UiText.Get("PivotChartOptions_PivotChartStyleGallery"));
@@ -246,6 +246,18 @@ public sealed class PivotChartOptionsDialog : Window
             _showHiddenDataBox.IsChecked == true,
             _blankDisplayBox.SelectedValue is ChartBlankDisplayMode mode ? mode : ChartBlankDisplayMode.Gap);
         DialogResult = true;
+    }
+
+    private static ChartStyleOption? FindStyleOption(IReadOnlyList<ChartStyleOption> options, int? styleId)
+    {
+        for (var index = 0; index < options.Count; index++)
+        {
+            var option = options[index];
+            if (option.StyleId == styleId)
+                return option;
+        }
+
+        return null;
     }
 
     private void FocusInitialKeyboardTarget()
