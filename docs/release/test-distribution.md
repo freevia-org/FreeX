@@ -128,10 +128,10 @@ Without local macOS hardware, Windows agents can run repository preflight and st
 Windows agents can also validate downloaded hosted evidence without a Mac:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-MacOsPublicPreviewReadiness.ps1 -ArtifactRoot artifacts/macos-preview -ExpectedRunId <run-id> -ExpectedRunAttempt <run-attempt>
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-MacOsPublicPreviewReadiness.ps1 -ArtifactRoot artifacts/macos-preview -ExpectedRunId <run-id> -ExpectedRunAttempt <run-attempt> -RequireSeparateDiagnosticsArtifact -RequireAggregateReadinessArtifact
 ```
 
-`-ExpectedRunId` and `-ExpectedRunAttempt` are optional, but pass them when validating downloaded artifacts from a specific GitHub Actions run. For public-preview candidates, run it with the same run identity flags plus `-DistributionCandidate -RequireSeparateDiagnosticsArtifact -RequireAggregateReadinessArtifact -RequireReleasePublicationArtifact` after downloading the matching `freex-<run-id>-<run-attempt>-<runtime>-macos-diagnostics` artifacts, `freex-<run-id>-<run-attempt>-macos-preview-readiness` wrapper, and `freex-<run-id>-<run-attempt>-macos-release-assets` wrapper beside the app artifacts:
+`-ExpectedRunId` and `-ExpectedRunAttempt` are optional, but pass them when validating downloaded artifacts from a specific GitHub Actions run. Keep `-RequireSeparateDiagnosticsArtifact -RequireAggregateReadinessArtifact` on downloaded hosted evidence validation so the Windows preflight validates the diagnostics wrappers and the aggregate readiness wrapper beside the app artifacts. For public-preview candidates, run it with the same run identity and wrapper-validation flags plus `-DistributionCandidate -RequireReleasePublicationArtifact` after downloading the matching `freex-<run-id>-<run-attempt>-<runtime>-macos-diagnostics` artifacts, `freex-<run-id>-<run-attempt>-macos-preview-readiness` wrapper, and `freex-<run-id>-<run-attempt>-macos-release-assets` wrapper beside the app artifacts:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-MacOsPublicPreviewReadiness.ps1 -ArtifactRoot artifacts/macos-preview -ExpectedRunId <run-id> -ExpectedRunAttempt <run-attempt> -DistributionCandidate -RequireSeparateDiagnosticsArtifact -RequireAggregateReadinessArtifact -RequireReleasePublicationArtifact
