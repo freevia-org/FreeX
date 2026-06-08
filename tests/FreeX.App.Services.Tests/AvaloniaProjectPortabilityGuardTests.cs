@@ -25,7 +25,7 @@ public sealed class AvaloniaProjectPortabilityGuardTests
         "FreeX.Core.Model"
     ];
 
-    private static readonly (string Description, Regex Pattern)[] ForbiddenPatterns =
+    private static readonly (string Description, Regex Pattern)[] PortableForbiddenPatterns =
     [
         ("System.Windows namespace", new(@"(?<![\w.])System\.Windows(?:\.[A-Za-z_]\w*)?(?![\w.])", DefaultRegexOptions)),
         ("Microsoft.Win32 namespace", new(@"(?<![\w.])Microsoft\.Win32(?:\.[A-Za-z_]\w*)?(?![\w.])", DefaultRegexOptions)),
@@ -38,7 +38,11 @@ public sealed class AvaloniaProjectPortabilityGuardTests
         ("Windows Forms project marker", new(@"(?<![\w])UseWindowsForms(?![\w])", DefaultRegexOptions | RegexOptions.IgnoreCase)),
         ("WindowsDesktop framework reference", new(@"(?<![\w.])Microsoft\.WindowsDesktop\.App(?:\.(?:WPF|WindowsForms))?(?![\w.])", DefaultRegexOptions)),
         ("WPF assembly reference", new(@"(?<![\w.])(?:PresentationCore|PresentationFramework|System\.Xaml|WindowsBase|WindowsFormsIntegration)(?![\w.])", DefaultRegexOptions)),
-        ("WinForms dependency marker", new(@"(?<![\w.])(?:System\.Windows\.Forms|WinForms|WindowsForms)(?![\w.])", DefaultRegexOptions | RegexOptions.IgnoreCase)),
+        ("WinForms dependency marker", new(@"(?<![\w.])(?:System\.Windows\.Forms|WinForms|WindowsForms)(?![\w.])", DefaultRegexOptions | RegexOptions.IgnoreCase))
+    ];
+
+    private static readonly (string Description, Regex Pattern)[] NativeMacOsForbiddenPatterns =
+    [
         ("AppKit namespace", new(@"(?<![\w.])AppKit(?:\.[A-Za-z_]\w*)?(?![\w.])", DefaultRegexOptions)),
         ("Foundation namespace", new(@"(?<![\w.])Foundation(?:\.[A-Za-z_]\w*)?(?![\w.])", DefaultRegexOptions)),
         ("ObjCRuntime namespace", new(@"(?<![\w.])ObjCRuntime(?:\.[A-Za-z_]\w*)?(?![\w.])", DefaultRegexOptions)),
@@ -61,7 +65,7 @@ public sealed class AvaloniaProjectPortabilityGuardTests
             "the Avalonia app path must stay explicitly bounded to app services and core projects, not the Windows/WPF host projects");
 
         var dependencyViolations = ProjectDependencyMarkers(project)
-            .SelectMany(marker => ForbiddenPatterns
+            .SelectMany(marker => PortableForbiddenPatterns
                 .Where(forbidden => forbidden.Pattern.IsMatch(marker))
                 .Select(forbidden => $"{forbidden.Description}: {marker}"))
             .Order(StringComparer.Ordinal)
@@ -72,7 +76,7 @@ public sealed class AvaloniaProjectPortabilityGuardTests
     }
 
     [Fact]
-    public void AvaloniaProjectSources_DoNotReferenceDesktopOrNativeMacOsDependenciesWithoutCompileStrategy()
+    public void AvaloniaProjectSources_KeepPortableAndNativeMacOsBoundariesExplicit()
     {
         var projectPath = RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "FreeX.App.Avalonia.csproj");
         var avaloniaRoot = Path.GetDirectoryName(projectPath)!;
@@ -87,7 +91,7 @@ public sealed class AvaloniaProjectPortabilityGuardTests
             .ToArray();
 
         violations.Should().BeEmpty(
-            "FreeX.App.Avalonia is currently a plain net10.0 Avalonia host; unconditionally compiled source must not acquire WPF, WindowsDesktop, Windows Forms, Windows-only host/UI, or direct AppKit/Foundation/ObjCRuntime/NSSharingService dependencies until an explicit macOS TFM/conditional compile strategy exists");
+            "FreeX.App.Avalonia source must keep Windows/WPF dependencies out of every path and direct AppKit/Foundation/ObjCRuntime/NSSharingService usage confined to the macOS-only compile folder");
     }
 
     [Fact]
@@ -119,6 +123,23 @@ public sealed class AvaloniaProjectPortabilityGuardTests
             .Subject;
         supportedOsVersion.Attribute("Condition")?.Value.Should().Be("'$(TargetFramework)' == 'net10.0-macos'");
         supportedOsVersion.Value.Trim().Should().Be("12.0");
+
+        var macOsCompileRemove = ProjectItemElements(project, "Compile")
+            .Where(element => element.Attribute("Remove")?.Value == @"MacOs\**\*.cs")
+            .Should()
+            .ContainSingle("native macOS source must be excluded from every non-macOS target framework")
+            .Subject;
+        ProjectCondition(macOsCompileRemove).Should().Be("'$(TargetFramework)' != 'net10.0-macos'");
+
+        var macOsDefineConstants = ProjectPropertyElements(project, "DefineConstants")
+            .Should()
+            .ContainSingle("the native share-sheet implementation must be opt-in behind the macOS TFM")
+            .Subject;
+        ProjectCondition(macOsDefineConstants).Should().Be("'$(TargetFramework)' == 'net10.0-macos'");
+        macOsDefineConstants.Value
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Should()
+            .Contain("FREEX_MACOS_SHARE_SHEET");
     }
 
     [Fact]
@@ -126,7 +147,8 @@ public sealed class AvaloniaProjectPortabilityGuardTests
     {
         const string prose = "This note says Windows-only and macOS-friendly behavior without declaring a desktop dependency or native Cocoa binding.";
 
-        var matches = ForbiddenPatterns
+        var matches = PortableForbiddenPatterns
+            .Concat(NativeMacOsForbiddenPatterns)
             .Where(pattern => pattern.Pattern.IsMatch(prose))
             .Select(pattern => pattern.Description)
             .ToArray();
@@ -180,6 +202,14 @@ public sealed class AvaloniaProjectPortabilityGuardTests
             .Descendants()
             .Where(element => element.Name.LocalName == propertyName);
 
+    private static IEnumerable<XElement> ProjectItemElements(XDocument project, string itemName) =>
+        project
+            .Descendants()
+            .Where(element => element.Name.LocalName == itemName);
+
+    private static string? ProjectCondition(XElement element) =>
+        element.Attribute("Condition")?.Value ?? element.Parent?.Attribute("Condition")?.Value;
+
     private static string ProjectReferenceName(string include)
     {
         var fileName = include.Split('\\', '/').Last();
@@ -188,21 +218,42 @@ public sealed class AvaloniaProjectPortabilityGuardTests
 
     private static IEnumerable<SourceViolation> FindViolations(string path, string repositoryRoot)
     {
+        var relativePath = Path.GetRelativePath(repositoryRoot, path);
+        var allowNativeMacOsTokens = IsMacOsConditionalSourcePath(relativePath);
         var lineNumber = 0;
         foreach (var line in File.ReadLines(path))
         {
             lineNumber++;
 
-            foreach (var (description, pattern) in ForbiddenPatterns)
+            foreach (var (description, pattern) in PortableForbiddenPatterns)
             {
                 if (pattern.IsMatch(line))
                     yield return new SourceViolation(
-                        Path.GetRelativePath(repositoryRoot, path),
+                        relativePath,
+                        lineNumber,
+                        description,
+                        line.Trim());
+            }
+
+            if (allowNativeMacOsTokens)
+                continue;
+
+            foreach (var (description, pattern) in NativeMacOsForbiddenPatterns)
+            {
+                if (pattern.IsMatch(line))
+                    yield return new SourceViolation(
+                        relativePath,
                         lineNumber,
                         description,
                         line.Trim());
             }
         }
+    }
+
+    private static bool IsMacOsConditionalSourcePath(string relativePath)
+    {
+        var normalizedPath = relativePath.Replace('\\', '/');
+        return normalizedPath.StartsWith("src/FreeX.App.Avalonia/MacOs/", StringComparison.OrdinalIgnoreCase);
     }
 
     private readonly record struct SourceViolation(

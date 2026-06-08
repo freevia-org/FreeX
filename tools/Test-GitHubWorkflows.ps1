@@ -464,7 +464,14 @@ foreach ($workflow in $workflows) {
                     'FREEX_MACOS_TFM: net10.0-macos',
                     'FREEX_XCODE_PATH: /Applications/Xcode_26.5.app/Contents/Developer',
                     'sudo xcode-select -s "$FREEX_XCODE_PATH"',
-                    'dotnet workload --info'
+                    'dotnet workload --info',
+                    'dotnet msbuild src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj',
+                    '-getItem:Compile',
+                    'grep -q "MacOsWorkbookShareSheetService.cs" "$compile_items_path"',
+                    'macos_tfm_source_boundary=src/FreeX.App.Avalonia/MacOs',
+                    'macos_tfm_native_share_sheet_source=src/FreeX.App.Avalonia/MacOs/MacOsWorkbookShareSheetService.cs',
+                    'macos_tfm_native_source_compiled=true',
+                    'macos_tfm_compile_items_artifact=freex-${FREEX_MACOS_ARCH}-macos-tfm-compile-items-evidence.txt'
                 )) {
                     if (-not $macOsTfmValidationJobBlock.Contains($requiredMacOsTfmMarker)) {
                         $errors.Add("$($workflow.Name): macOS TFM validation job is missing required hosted workload marker: $requiredMacOsTfmMarker")

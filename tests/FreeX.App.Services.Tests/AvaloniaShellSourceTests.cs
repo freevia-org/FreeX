@@ -61,10 +61,11 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var serviceSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "WorkbookShareSheetService.cs"));
+        var macOsServiceSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOs", "MacOsWorkbookShareSheetService.cs"));
 
         source.Should().Contain("private const string WorkbookShareSheetLabel = \"macOS Share Sheet\";");
         source.Should().Contain("private readonly IWorkbookShareSheetService _workbookShareSheetService;");
-        source.Should().Contain(": this(startupArguments, new UnavailableWorkbookShareSheetService(WorkbookShareSheetLabel))");
+        source.Should().Contain(": this(startupArguments, WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel))");
         source.Should().Contain("ArgumentNullException.ThrowIfNull(workbookShareSheetService);");
         source.Should().Contain("private readonly NativeMenuItem _shareWorkbookMenuItem = new();");
         source.Should().Contain("_shareWorkbookMenuItem.Header = \"Share Workbook...\";");
@@ -96,7 +97,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("await ShowWorkbookShareSheetAsync(plan);");
         source.Should().Contain("private async Task ShowWorkbookShareSheetAsync(WorkbookShareActionPlan plan)");
         source.Should().Contain("if (refreshedPlan.Kind != WorkbookShareActionPlanKind.ShareSheet)");
-        source.Should().Contain("await _workbookShareSheetService.ShowShareSheetAsync(filePath)");
+        source.Should().Contain("await _workbookShareSheetService.ShowShareSheetAsync(this, filePath)");
         source.Should().Contain("await FallbackToOpenContainingFolderAfterShareSheetFailureAsync(refreshedPlan);");
         source.Should().Contain("with { CanShowShareSheet = false }");
         source.Should().Contain("await OpenWorkbookContainingFolderAsync(fallbackPlan);");
@@ -108,10 +109,21 @@ public sealed class AvaloniaShellSourceTests
 
         serviceSource.Should().Contain("internal sealed record WorkbookShareSheetCapability(");
         serviceSource.Should().Contain("internal interface IWorkbookShareSheetService");
-        serviceSource.Should().Contain("Task<WorkbookShareSheetResult> ShowShareSheetAsync(string filePath);");
+        serviceSource.Should().Contain("Task<WorkbookShareSheetResult> ShowShareSheetAsync(Window owner, string filePath);");
+        serviceSource.Should().Contain("internal static class WorkbookShareSheetServiceFactory");
+        serviceSource.Should().Contain("#if FREEX_MACOS_SHARE_SHEET");
+        serviceSource.Should().Contain("return new MacOsWorkbookShareSheetService(shareSheetLabel);");
         serviceSource.Should().Contain("internal sealed class UnavailableWorkbookShareSheetService : IWorkbookShareSheetService");
         serviceSource.Should().Contain("Capability = new WorkbookShareSheetCapability(shareSheetLabel, CanShowShareSheet: false);");
         serviceSource.Should().Contain("WorkbookShareSheetResult.Unavailable(_unavailableMessage)");
+        macOsServiceSource.Should().Contain("internal sealed class MacOsWorkbookShareSheetService : IWorkbookShareSheetService");
+        macOsServiceSource.Should().Contain("Capability = new WorkbookShareSheetCapability(shareSheetLabel, CanShowShareSheet: true);");
+        macOsServiceSource.Should().Contain("NSSharingServicePicker");
+        macOsServiceSource.Should().Contain("NSUrl.FromFilename(filePath)");
+        macOsServiceSource.Should().Contain("owner.TryGetPlatformHandle()");
+        macOsServiceSource.Should().Contain("platformHandle?.HandleDescriptor != \"NSWindow\"");
+        macOsServiceSource.Should().Contain("Runtime.GetNSObject<NSWindow>(platformHandle.Handle)");
+        macOsServiceSource.Should().Contain("ShowRelativeToRect(anchorView.Bounds, anchorView, NSRectEdge.MinYEdge)");
 
         source.Should().NotContain("DataTransferManager");
         source.Should().NotContain("WindowInteropHelper");
@@ -128,6 +140,11 @@ public sealed class AvaloniaShellSourceTests
         serviceSource.Should().NotContain("Microsoft.Win32");
         serviceSource.Should().NotContain("ProcessStartInfo");
         serviceSource.Should().NotContain("System.Windows");
+        macOsServiceSource.Should().NotContain("DataTransferManager");
+        macOsServiceSource.Should().NotContain("WindowInteropHelper");
+        macOsServiceSource.Should().NotContain("Microsoft.Win32");
+        macOsServiceSource.Should().NotContain("ProcessStartInfo");
+        macOsServiceSource.Should().NotContain("System.Windows");
     }
 
     [Fact]

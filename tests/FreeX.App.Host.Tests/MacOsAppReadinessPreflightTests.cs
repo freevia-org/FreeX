@@ -11,6 +11,11 @@ public sealed class MacOsAppReadinessPreflightTests
         var script = File.ReadAllText(WorkspaceFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1"));
 
         script.Should().Contain("Avalonia app TargetFramework must be net10.0");
+        script.Should().Contain("EnableMacOsTargetFramework");
+        script.Should().Contain("net10.0-macos");
+        script.Should().Contain("SupportedOSPlatformVersion");
+        script.Should().Contain("MacOs\\**\\*.cs");
+        script.Should().Contain("FREEX_MACOS_SHARE_SHEET");
         script.Should().Contain("Avalonia app RuntimeIdentifiers");
         script.Should().Contain("ApplicationTitle");
         script.Should().Contain("CFBundleName");
@@ -978,6 +983,84 @@ public sealed class MacOsAppReadinessPreflightTests
     }
 
     [Fact]
+    public void MacOsAppReadinessPreflight_FailsForNativeMacOsTokenOutsideMacOsSourceBoundary()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateMinimalMacOsReadinessRepo(
+            temp.Path,
+            extraAvaloniaSource: """
+            using AppKit;
+
+            namespace FreeX.App.Avalonia;
+
+            internal static class NativeLeak
+            {
+                private static readonly object PickerType = typeof(NSSharingServicePicker);
+            }
+            """);
+
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        var combinedOutput = result.Output + result.Error;
+        combinedOutput.Should().Contain("Portable macOS source contains native macOS token 'AppKit' outside src/FreeX.App.Avalonia/MacOs");
+        combinedOutput.Should().Contain("src/FreeX.App.Avalonia/WindowsOnlyLeak.cs");
+    }
+
+    [Fact]
+    public void MacOsAppReadinessPreflight_FailsForWindowsTokenInsideMacOsSourceBoundary()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateMinimalMacOsReadinessRepo(
+            temp.Path,
+            extraAvaloniaSourcePath: "src/FreeX.App.Avalonia/MacOs/NativeWorkbookShareSheetService.cs",
+            extraAvaloniaSource: """
+            namespace FreeX.App.Avalonia;
+
+            internal static class NativeWorkbookShareSheetService
+            {
+                private const string Token = "System.Windows";
+            }
+            """);
+
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        var combinedOutput = result.Output + result.Error;
+        combinedOutput.Should().Contain("Portable macOS source contains forbidden token 'System.Windows'");
+        combinedOutput.Should().Contain("src/FreeX.App.Avalonia/MacOs/NativeWorkbookShareSheetService.cs");
+    }
+
+    [Fact]
+    public void MacOsAppReadinessPreflight_AllowsNativeMacOsTokensInsideMacOsSourceBoundary()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateMinimalMacOsReadinessRepo(
+            temp.Path,
+            extraAvaloniaSourcePath: "src/FreeX.App.Avalonia/MacOs/NativeWorkbookShareSheetService.cs",
+            extraAvaloniaSource: """
+            using AppKit;
+            using Foundation;
+
+            namespace FreeX.App.Avalonia;
+
+            internal static class NativeWorkbookShareSheetService
+            {
+                private static readonly object PickerType = typeof(NSSharingServicePicker);
+                private static readonly object UrlType = typeof(NSUrl);
+            }
+            """);
+
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
+
+        result.ExitCode.Should().Be(0, result.Output + result.Error);
+        (result.Output + result.Error).Should().Contain("macOS app readiness preflight passed.");
+    }
+
+    [Fact]
     public void MacOsAppReadinessPreflight_FailsForMalformedMacOsIcon()
     {
         using var temp = new TestTemporaryDirectory();
@@ -1005,6 +1088,7 @@ public sealed class MacOsAppReadinessPreflightTests
         string workflowExtraRuntime = "",
         string workflowArm64Runner = "macos-15",
         string workflowX64Runner = "macos-15-intel",
+        string extraAvaloniaSourcePath = "src/FreeX.App.Avalonia/WindowsOnlyLeak.cs",
         string extraAvaloniaSource = "")
     {
         WriteFile(
@@ -1028,12 +1112,20 @@ public sealed class MacOsAppReadinessPreflightTests
               <ItemGroup>
                 <Content Include="Packaging\macos\FreeX.icns" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
               </ItemGroup>
+              <ItemGroup Condition="'$(TargetFramework)' != 'net10.0-macos'">
+                <Compile Remove="MacOs\**\*.cs" />
+              </ItemGroup>
               <PropertyGroup>
                 <AssemblyName>FreeX</AssemblyName>
                 <ApplicationTitle>FreeX</ApplicationTitle>
                 <OutputType>Exe</OutputType>
                 <RuntimeIdentifiers>osx-arm64;osx-x64</RuntimeIdentifiers>
-                <TargetFramework>{{TargetFramework}}</TargetFramework>
+                <SupportedOSPlatformVersion Condition="'$(TargetFramework)' == 'net10.0-macos'">12.0</SupportedOSPlatformVersion>
+                <TargetFramework Condition="'$(EnableMacOsTargetFramework)' != 'true'">{{TargetFramework}}</TargetFramework>
+                <TargetFrameworks Condition="'$(EnableMacOsTargetFramework)' == 'true'">net10.0;net10.0-macos</TargetFrameworks>
+              </PropertyGroup>
+              <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-macos'">
+                <DefineConstants>$(DefineConstants);FREEX_MACOS_SHARE_SHEET</DefineConstants>
               </PropertyGroup>
             </Project>
             """.Replace("{{TargetFramework}}", targetFramework));
@@ -3951,7 +4043,7 @@ public sealed class MacOsAppReadinessPreflightTests
 
         if (!string.IsNullOrWhiteSpace(extraAvaloniaSource))
         {
-            WriteFile(root, "src/FreeX.App.Avalonia/WindowsOnlyLeak.cs", extraAvaloniaSource);
+            WriteFile(root, extraAvaloniaSourcePath, extraAvaloniaSource);
         }
     }
 

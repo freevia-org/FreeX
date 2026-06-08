@@ -514,7 +514,7 @@ public sealed class MainWindow : Window
     private Guid? _selectedDrawingObjectId;
 
     public MainWindow(IReadOnlyList<string> startupArguments)
-        : this(startupArguments, new UnavailableWorkbookShareSheetService(WorkbookShareSheetLabel))
+        : this(startupArguments, WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel))
     {
     }
 
@@ -13402,7 +13402,7 @@ public sealed class MainWindow : Window
         ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(refreshedPlan), isWarning: false);
         try
         {
-            var result = await _workbookShareSheetService.ShowShareSheetAsync(filePath);
+            var result = await _workbookShareSheetService.ShowShareSheetAsync(this, filePath);
             if (result.WasShown)
             {
                 ShowShareStatus(
