@@ -365,6 +365,18 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public WorkbookCellEditResult ExecuteDataTablePlan(DataTablePlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        var result = _cellEditService.ExecuteEditCommand(Workbook, plan.CreateCommand());
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, plan.OutputRange);
+        return result;
+    }
+
     public WorkbookNavigationResult FindNext(
         string? searchText = null,
         FindOptions? options = null,
