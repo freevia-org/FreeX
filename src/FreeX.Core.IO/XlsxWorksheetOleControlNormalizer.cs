@@ -637,12 +637,22 @@ internal static class XlsxWorksheetOleControlNormalizer
         if (string.IsNullOrWhiteSpace(relationshipId))
             return null;
 
-        return relationships.FirstOrDefault(relationship =>
-            PackageRelationshipIdEquals(relationship, relationshipId));
+        foreach (var relationship in relationships)
+        {
+            if (PackageRelationshipIdEquals(relationship, relationshipId))
+                return relationship;
+        }
+
+        return null;
     }
 
     private static XElement? FindFirstPackageRelationship(IReadOnlyList<XElement> relationships)
-        => relationships.FirstOrDefault();
+    {
+        foreach (var relationship in relationships)
+            return relationship;
+
+        return null;
+    }
 
     private static bool PackageRelationshipIdEquals(XElement relationship, string relationshipId)
         => string.Equals(GetPackageRelationshipId(relationship), relationshipId, StringComparison.OrdinalIgnoreCase);
@@ -671,11 +681,16 @@ internal static class XlsxWorksheetOleControlNormalizer
     private static XElement? FindNextUnusedPackageRelationship(
         IReadOnlyList<XElement> relationships,
         ISet<string> usedRelationshipIds)
-        => relationships.FirstOrDefault(relationship =>
+    {
+        foreach (var relationship in relationships)
         {
             var relationshipId = GetPackageRelationshipId(relationship);
-            return !string.IsNullOrWhiteSpace(relationshipId) && !usedRelationshipIds.Contains(relationshipId);
-        });
+            if (!string.IsNullOrWhiteSpace(relationshipId) && !usedRelationshipIds.Contains(relationshipId))
+                return relationship;
+        }
+
+        return null;
+    }
 
     private static XElement AddPackageRelationship(
         XDocument relationshipsXml,
