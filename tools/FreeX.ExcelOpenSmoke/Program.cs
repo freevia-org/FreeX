@@ -17865,7 +17865,6 @@ internal static class ExcelOpenSmoke
         return
             tags.Contains("unsupported-chart-family") ||
             tags.Contains("embedded-objects") ||
-            tags.Contains("threaded-comments") ||
             tags.Contains("track-changes") ||
             tags.Contains("revision-history") ||
             tags.Contains("form-controls") ||

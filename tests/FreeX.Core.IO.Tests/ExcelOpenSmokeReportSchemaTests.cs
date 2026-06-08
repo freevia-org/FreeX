@@ -25,6 +25,17 @@ public sealed class ExcelOpenSmokeReportSchemaTests
         AssertCoreValidationCalls(programSource, "excelSavedPath", "Excel-saved workbook", "stagedPath");
     }
 
+    [Fact]
+    public void PublicCorpusWarningTolerance_DoesNotAllowSupportedThreadedCommentsWarnings()
+    {
+        var programSource = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ExcelOpenSmoke", "Program.cs");
+        var manifest = TestWorkspaceFiles.ReadWorkspaceText("test-corpus", "manifest.csv");
+
+        manifest.Should().Contain("generated-threaded-comments-001,generated/threaded-comments-001.xlsx,generated,local,2026-06-08,FreeX-generated,threaded-comments,,supported-metadata-pass");
+        programSource.Should().NotContain("tags.Contains(\"threaded-comments\")");
+        programSource.Should().Contain("tags.Contains(\"unsupported-sheet-types\")");
+    }
+
     private static void AssertCoreValidationCalls(
         string source,
         string pathExpression,
