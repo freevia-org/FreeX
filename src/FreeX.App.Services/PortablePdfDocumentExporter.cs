@@ -147,8 +147,8 @@ public static class PortablePdfDocumentExporter
 
         foreach (var cell in contentPlan.Cells)
         {
-            var rowIndex = contentPlan.Rows.ToList().FindIndex(row => row.Row == cell.Row);
-            var columnIndex = contentPlan.Columns.ToList().FindIndex(column => column.Column == cell.Column);
+            var rowIndex = FindRowIndex(contentPlan.Rows, cell.Row);
+            var columnIndex = FindColumnIndex(contentPlan.Columns, cell.Column);
             if (rowIndex < 0 || columnIndex < 0)
                 continue;
 
@@ -185,6 +185,28 @@ public static class PortablePdfDocumentExporter
             FooterTextColor,
             $"FreeX portable PDF - {request.SheetName} page {request.SheetPageNumber}");
         return content.ToString();
+    }
+
+    private static int FindRowIndex(IReadOnlyList<PortablePdfPageRow> rows, uint row)
+    {
+        for (var index = 0; index < rows.Count; index++)
+        {
+            if (rows[index].Row == row)
+                return index;
+        }
+
+        return -1;
+    }
+
+    private static int FindColumnIndex(IReadOnlyList<PortablePdfPageColumn> columns, uint column)
+    {
+        for (var index = 0; index < columns.Count; index++)
+        {
+            if (columns[index].Column == column)
+                return index;
+        }
+
+        return -1;
     }
 
     private static double ResolveColumnWidth(
