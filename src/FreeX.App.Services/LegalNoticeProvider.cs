@@ -5,14 +5,16 @@ namespace FreeX.App.Services;
 
 public static class LegalNoticeProvider
 {
-    private static readonly (string Title, string ResourceName)[] Resources =
+    private static readonly LegalNoticeResource[] Resources =
     [
-        ("Project License", "FreeX.Legal.ProjectLicense.txt"),
-        ("Legal Notices", "FreeX.Legal.LegalNotices.md"),
-        ("Privacy Notice", "FreeX.Legal.PrivacyNotice.md"),
-        ("Third-Party Notices", "FreeX.Legal.ThirdPartyNotices.md"),
-        ("Third-Party License Texts", "FreeX.Legal.ThirdPartyLicenses.md")
+        new("Project License", "FreeX.Legal.ProjectLicense.txt"),
+        new("Legal Notices", "FreeX.Legal.LegalNotices.md"),
+        new("Privacy Notice", "FreeX.Legal.PrivacyNotice.md"),
+        new("Third-Party Notices", "FreeX.Legal.ThirdPartyNotices.md"),
+        new("Third-Party License Texts", "FreeX.Legal.ThirdPartyLicenses.md")
     ];
+
+    internal static IReadOnlyList<LegalNoticeResource> ExpectedEmbeddedResources => Resources;
 
     public static IReadOnlyList<LegalNoticeDocument> GetDocuments() =>
         GetDocuments(typeof(LegalNoticeProvider).Assembly);
@@ -37,3 +39,5 @@ public static class LegalNoticeProvider
         return reader.ReadToEnd();
     }
 }
+
+internal sealed record LegalNoticeResource(string Title, string ResourceName);
