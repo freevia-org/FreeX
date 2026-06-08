@@ -80,6 +80,25 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Should()
             .Be(sourceControlProperties.ToString(SaveOptions.DisableFormatting));
         ReadPackageEntryText(saved, "xl/embeddings/oleObject1.bin").Should().Be(sourceOleObjectText);
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        var reloadedSheet = reloaded.GetSheetAt(0);
+        reloadedSheet.GetCell(3, 3)!.Value.Should().Be(new NumberValue(42));
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(reloaded, out var reloadBlockReason)
+            .Should()
+            .BeTrue(reloadBlockReason);
+
+        reloadedSheet.SetCell(new CellAddress(reloadedSheet.Id, 4, 4), new NumberValue(84));
+
+        using var resaved = new MemoryStream();
+        adapter.Save(reloaded, resaved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(resaved).Should().BeEmpty();
+        AssertWorksheetNativeMetadataPackage(resaved);
+        resaved.Position = 0;
+        adapter.Load(resaved).GetSheetAt(0).GetCell(4, 4)!.Value.Should().Be(new NumberValue(84));
     }
 
     [Fact]
