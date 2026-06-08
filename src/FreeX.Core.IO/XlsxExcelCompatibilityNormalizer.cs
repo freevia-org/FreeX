@@ -192,10 +192,10 @@ internal static partial class XlsxExcelCompatibilityNormalizer
             if (relationshipsRoot is null)
                 continue;
 
-            var drawingRelationship = relationshipsRoot.Elements(PackageRelNs + "Relationship")
-                .FirstOrDefault(relationship =>
-                    string.Equals(relationship.Attribute("Id")?.Value, drawingRelId, StringComparison.Ordinal) &&
-                    string.Equals(relationship.Attribute("Type")?.Value, DrawingRelationshipType, StringComparison.OrdinalIgnoreCase));
+            var drawingRelationship = FindRelationshipByIdAndType(
+                relationshipsRoot,
+                drawingRelId,
+                DrawingRelationshipType);
             var target = drawingRelationship?.Attribute("Target")?.Value;
             if (string.IsNullOrWhiteSpace(target))
                 continue;
@@ -523,11 +523,7 @@ internal static partial class XlsxExcelCompatibilityNormalizer
 
     private static string? ResolveWorkbookRelationshipTarget(XElement relationshipsRoot, string relationshipId, string relationshipType)
     {
-        var relationship = relationshipsRoot
-            .Elements(PackageRelNs + "Relationship")
-            .FirstOrDefault(candidate =>
-                string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal) &&
-                string.Equals(candidate.Attribute("Type")?.Value, relationshipType, StringComparison.OrdinalIgnoreCase));
+        var relationship = FindRelationshipByIdAndType(relationshipsRoot, relationshipId, relationshipType);
         var target = relationship?.Attribute("Target")?.Value;
         return string.IsNullOrWhiteSpace(target)
             ? null
@@ -546,10 +542,8 @@ internal static partial class XlsxExcelCompatibilityNormalizer
             var calcRelationships = relationshipRoot
                 .Elements(PackageRelNs + "Relationship")
                 .Where(relationship =>
-                    string.Equals(relationship.Attribute("Type")?.Value, CalcChainRelationshipType, StringComparison.OrdinalIgnoreCase) ||
-                    RelationshipTargetsPart(relationship, "xl/calcChain.xml") ||
-                    string.Equals(relationship.Attribute("Type")?.Value, VolatileDependenciesRelationshipType, StringComparison.OrdinalIgnoreCase) ||
-                    RelationshipTargetsPart(relationship, VolatileDependenciesPath))
+                    RelationshipHasTypeOrTargetsPart(relationship, CalcChainRelationshipType, "xl/calcChain.xml") ||
+                    RelationshipHasTypeOrTargetsPart(relationship, VolatileDependenciesRelationshipType, VolatileDependenciesPath))
                 .ToList();
             foreach (var relationship in calcRelationships)
                 relationship.Remove();
@@ -570,8 +564,7 @@ internal static partial class XlsxExcelCompatibilityNormalizer
             RemoveWorkbookRelationships(
                 archive,
                 relationship =>
-                    string.Equals(relationship.Attribute("Type")?.Value, VolatileDependenciesRelationshipType, StringComparison.OrdinalIgnoreCase) ||
-                    RelationshipTargetsPart(relationship, VolatileDependenciesPath));
+                    RelationshipHasTypeOrTargetsPart(relationship, VolatileDependenciesRelationshipType, VolatileDependenciesPath));
             return;
         }
 
@@ -585,12 +578,11 @@ internal static partial class XlsxExcelCompatibilityNormalizer
         var volatileRelationships = relationshipRoot
             .Elements(PackageRelNs + "Relationship")
             .Where(relationship =>
-                string.Equals(relationship.Attribute("Type")?.Value, VolatileDependenciesRelationshipType, StringComparison.OrdinalIgnoreCase) ||
-                RelationshipTargetsPart(relationship, VolatileDependenciesPath))
+                RelationshipHasTypeOrTargetsPart(relationship, VolatileDependenciesRelationshipType, VolatileDependenciesPath))
             .ToList();
 
         var current = volatileRelationships.FirstOrDefault(relationship =>
-            string.Equals(relationship.Attribute("Type")?.Value, VolatileDependenciesRelationshipType, StringComparison.OrdinalIgnoreCase) &&
+            RelationshipHasType(relationship, VolatileDependenciesRelationshipType) &&
             RelationshipTargetsPart(relationship, VolatileDependenciesPath));
         var changed = false;
         foreach (var relationship in volatileRelationships)
@@ -647,6 +639,25 @@ internal static partial class XlsxExcelCompatibilityNormalizer
         if (removed)
             XlsxPackageXmlEditor.ReplaceXml(archive, "xl/_rels/workbook.xml.rels", workbookRelationships!);
     }
+
+    private static XElement? FindRelationshipByIdAndType(
+        XElement relationshipsRoot,
+        string relationshipId,
+        string relationshipType) =>
+        relationshipsRoot
+            .Elements(PackageRelNs + "Relationship")
+            .FirstOrDefault(relationship =>
+                RelationshipHasId(relationship, relationshipId) &&
+                RelationshipHasType(relationship, relationshipType));
+
+    private static bool RelationshipHasId(XElement relationship, string relationshipId) =>
+        string.Equals(relationship.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal);
+
+    private static bool RelationshipHasType(XElement relationship, string relationshipType) =>
+        string.Equals(relationship.Attribute("Type")?.Value, relationshipType, StringComparison.OrdinalIgnoreCase);
+
+    private static bool RelationshipHasTypeOrTargetsPart(XElement relationship, string relationshipType, string partPath) =>
+        RelationshipHasType(relationship, relationshipType) || RelationshipTargetsPart(relationship, partPath);
 
     private static bool RelationshipTargetsPart(XElement relationship, string partPath)
     {
@@ -708,12 +719,7 @@ internal static partial class XlsxExcelCompatibilityNormalizer
             return;
 
         var normalizedPartName = NormalizePartName(partName);
-        var existing = root.Elements(ContentTypeNs + "Override")
-            .FirstOrDefault(overrideElement =>
-                string.Equals(
-                    NormalizePartName(overrideElement.Attribute("PartName")?.Value),
-                    normalizedPartName,
-                    StringComparison.OrdinalIgnoreCase));
+        var existing = FindContentTypeOverride(root, normalizedPartName);
         if (existing is not null)
         {
             existing.SetAttributeValue("ContentType", contentType);
@@ -738,16 +744,8 @@ internal static partial class XlsxExcelCompatibilityNormalizer
 
         var normalizedPartName = NormalizePartName(partName);
         var removed = false;
-        foreach (var overrideElement in root.Elements(ContentTypeNs + "Override").ToList())
+        foreach (var overrideElement in FindContentTypeOverrides(root, normalizedPartName).ToList())
         {
-            if (!string.Equals(
-                    NormalizePartName(overrideElement.Attribute("PartName")?.Value),
-                    normalizedPartName,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
             overrideElement.Remove();
             removed = true;
         }
@@ -755,6 +753,20 @@ internal static partial class XlsxExcelCompatibilityNormalizer
         if (removed)
             XlsxPackageXmlEditor.ReplaceXml(archive, "[Content_Types].xml", contentTypes!);
     }
+
+    private static XElement? FindContentTypeOverride(XElement contentTypesRoot, string normalizedPartName) =>
+        FindContentTypeOverrides(contentTypesRoot, normalizedPartName).FirstOrDefault();
+
+    private static IEnumerable<XElement> FindContentTypeOverrides(XElement contentTypesRoot, string normalizedPartName) =>
+        contentTypesRoot
+            .Elements(ContentTypeNs + "Override")
+            .Where(overrideElement => ContentTypeOverrideMatchesPartName(overrideElement, normalizedPartName));
+
+    private static bool ContentTypeOverrideMatchesPartName(XElement overrideElement, string normalizedPartName) =>
+        string.Equals(
+            NormalizePartName(overrideElement.Attribute("PartName")?.Value),
+            normalizedPartName,
+            StringComparison.OrdinalIgnoreCase);
 
     private static void PruneMissingContentTypeOverrides(ZipArchive archive)
     {
