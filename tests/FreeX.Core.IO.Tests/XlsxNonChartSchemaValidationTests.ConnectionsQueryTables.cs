@@ -59,6 +59,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
                 relationship.Attribute("Target")?.Value == "../queryTables/queryTable1.xml")
             .Should()
             .ContainSingle();
+
+        archive.Dispose();
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        reloadedSheet.GetValue(new CellAddress(reloadedSheet.Id, 1, 1)).Should().Be(new TextValue("Value"));
+        reloadedSheet.GetValue(new CellAddress(reloadedSheet.Id, 2, 1)).Should().Be(new NumberValue(42));
+        reloadedSheet.GetValue(new CellAddress(reloadedSheet.Id, 3, 1)).Should().Be(new NumberValue(84));
     }
 
     [Fact]
@@ -95,6 +102,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Select(relationship => relationship.Attribute("Type")?.Value)
             .ToArray();
         relationshipTypes.Should().NotContain("http://schemas.openxmlformats.org/officeDocument/2006/relationships/queryTable");
+
+        archive.Dispose();
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        reloadedSheet.GetValue(new CellAddress(reloadedSheet.Id, 1, 1)).Should().Be(new TextValue("Value"));
+        reloadedSheet.GetValue(new CellAddress(reloadedSheet.Id, 2, 1)).Should().Be(new NumberValue(7));
     }
 
     private static void AddInvalidConnectionQueryTablePackage(MemoryStream packageStream)
