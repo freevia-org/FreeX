@@ -1196,14 +1196,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).FullCalculationOnLoad.Should().BeTrue();
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-worksheet-calculation-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetCalculationPropertiesModel(sheet, "generated-worksheet-calculation-properties-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-worksheet-calculation-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-calculation-properties-001");
         AssertWorksheetCalculationProperties(saved, "generated-worksheet-calculation-properties-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetCalculationPropertiesModel(
+            reloaded.GetSheetAt(0),
+            "worksheet calculation property model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -1421,13 +1428,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-phonetic-properties-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetPhoneticPropertiesModel(sheet, "generated-worksheet-phonetic-properties-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-phonetic-properties-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-phonetic-properties-001");
         AssertWorksheetPhoneticProperties(saved, "generated-worksheet-phonetic-properties-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetPhoneticPropertiesModel(
+            reloaded.GetSheetAt(0),
+            "worksheet phonetic property model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -1511,13 +1526,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-worksheet-custom-properties-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetCustomPropertiesModel(sheet, "generated-worksheet-custom-properties-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-worksheet-custom-properties-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-custom-properties-001");
         AssertWorksheetCustomProperties(saved, "generated-worksheet-custom-properties-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetCustomPropertiesModel(
+            reloaded.GetSheetAt(0),
+            "worksheet custom property model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -1751,6 +1774,13 @@ public partial class XlsxCorpusRunnerTests
         customProperty.Attribute("unsupportedAttr").Should().BeNull(because);
     }
 
+    private static void AssertWorksheetCustomPropertiesModel(Sheet sheet, string because)
+    {
+        var property = sheet.CustomProperties.Should().ContainSingle(because).Subject;
+        property.Name.Should().Be("FreeXNativeProperty", because);
+        property.Id.Should().Be(1, because);
+    }
+
     private static void AssertWorksheetCustomPropertyRelationship(
         ZipArchive archive,
         string relationshipId,
@@ -1891,6 +1921,13 @@ public partial class XlsxCorpusRunnerTests
         phoneticProperties.Attribute("nativeOnly").Should().BeNull(because);
     }
 
+    private static void AssertWorksheetPhoneticPropertiesModel(Sheet sheet, string because)
+    {
+        sheet.PhoneticProperties.Should().BeEquivalentTo(
+            new WorksheetPhoneticProperties("1", "fullwidthKatakana", "center"),
+            because);
+    }
+
     private static void AssertWorksheetCellWatches(Stream package, string because)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -1970,6 +2007,9 @@ public partial class XlsxCorpusRunnerTests
         sheetCalcPr!.Attribute("fullCalcOnLoad")!.Value.Should().Be("1", because);
         sheetCalcPr.Attribute("calcId").Should().BeNull(because);
     }
+
+    private static void AssertWorksheetCalculationPropertiesModel(Sheet sheet, string because)
+        => sheet.FullCalculationOnLoad.Should().BeTrue(because);
 
     private static void AssertWorksheetSheetViews(Stream package, string because)
     {

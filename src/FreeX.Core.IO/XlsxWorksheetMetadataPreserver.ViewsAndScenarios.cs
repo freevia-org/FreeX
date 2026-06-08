@@ -93,8 +93,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
             changed |= MergeMissingAttributes(sourcePane, targetPane, ["xSplit", "ySplit", "state"]);
             foreach (var sourceChild in sourcePane.Elements())
             {
-                var targetChild = targetPane.Elements(sourceChild.Name)
-                    .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
+                var targetChild = FindChildByIdentityKey(targetPane, sourceChild);
                 if (targetChild is not null)
                 {
                     if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
@@ -109,8 +108,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
 
         foreach (var sourceChild in sourceView.Elements().Where(child => child.Name != workbookNs + "pane"))
         {
-            var targetChild = targetView.Elements(sourceChild.Name)
-                .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
+            var targetChild = FindChildByIdentityKey(targetView, sourceChild);
             if (targetChild is not null)
             {
                 if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
@@ -158,12 +156,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                     changed = true;
                 }
 
-                var targetScenario = targetScenarios
-                    .Elements(workbookNs + "scenario")
-                    .FirstOrDefault(element => string.Equals(
-                        element.Attribute("name")?.Value,
-                        name,
-                        StringComparison.OrdinalIgnoreCase));
+                var targetScenario = FindScenarioByName(targetScenarios, workbookNs, name);
                 if (targetScenario is not null)
                 {
                     changed |= MergeScenarioMetadata(sourceScenario, targetScenario, workbookNs);
@@ -214,8 +207,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
 
         foreach (var sourceChild in sourceScenario.Elements().Where(child => child.Name != workbookNs + "inputCells"))
         {
-            var targetChild = targetScenario.Elements(sourceChild.Name)
-                .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
+            var targetChild = FindChildByIdentityKey(targetScenario, sourceChild);
             if (targetChild is not null)
             {
                 if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
@@ -245,8 +237,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 changed = true;
             foreach (var sourceChild in sourceInputCell.Elements())
             {
-                var targetChild = targetInputCell.Elements(sourceChild.Name)
-                    .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
+                var targetChild = FindChildByIdentityKey(targetInputCell, sourceChild);
                 if (targetChild is not null)
                 {
                     if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
@@ -260,6 +251,22 @@ internal static partial class XlsxWorksheetMetadataPreserver
         }
 
         return changed;
+    }
+
+    private static XElement? FindChildByIdentityKey(XElement target, XElement sourceChild)
+    {
+        return target.Elements(sourceChild.Name)
+            .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
+    }
+
+    private static XElement? FindScenarioByName(XElement targetScenarios, XNamespace workbookNs, string? name)
+    {
+        return targetScenarios
+            .Elements(workbookNs + "scenario")
+            .FirstOrDefault(element => string.Equals(
+                element.Attribute("name")?.Value,
+                name,
+                StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsScenarioListIndexAttribute(XAttribute attribute)
