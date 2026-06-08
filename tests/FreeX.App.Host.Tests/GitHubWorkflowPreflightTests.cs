@@ -773,7 +773,7 @@ public sealed class GitHubWorkflowPreflightTests
                     "            dotnet publish src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release --framework net10.0-macos\n            gh release create macos-tfm-validation artifacts/macos-release-assets/freex-macos-app.zip\n            echo \"macos_tfm_build=passed\""),
                 "name: freex-${{ github.run_id }}-${{ github.run_attempt }}-macos-tfm-build-${{ matrix.arch }}-evidence",
                 "name: freex-${{ github.run_id }}-${{ github.run_attempt }}-macos-app"),
-            "path: artifacts/freex-${{ matrix.arch }}-macos-tfm-build-evidence.txt",
+            "path: artifacts/freex-${{ matrix.arch }}-macos-tfm-*-evidence.txt",
             "path: artifacts/macos-release-assets/*");
 
         WriteMacOsWorkflow(temp, brokenWorkflow);
