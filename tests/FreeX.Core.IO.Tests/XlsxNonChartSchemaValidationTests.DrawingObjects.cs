@@ -33,6 +33,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .BeTrue(blockReason);
 
         var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetDrawingObjectsModel(sheet);
         sheet.SetCell(new CellAddress(sheet.Id, 5, 5), new NumberValue(42));
 
         using var saved = new MemoryStream();
@@ -53,6 +54,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceDrawing.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        AssertWorksheetDrawingObjectsModel(adapter.Load(saved).GetSheetAt(0));
     }
 
     private static Workbook CreateWorksheetDrawingObjectsSourceWorkbook()
@@ -129,5 +133,35 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Value
             .Should()
             .Be("16200000");
+    }
+
+    private static void AssertWorksheetDrawingObjectsModel(Sheet sheet)
+    {
+        var textBox = sheet.TextBoxes.Should().ContainSingle().Subject;
+        textBox.Name.Should().Be("Review Note");
+        textBox.Anchor.Should().Be(new CellAddress(sheet.Id, 2, 4));
+        textBox.Text.Should().Be("Review total before close");
+        textBox.Title.Should().Be("Review note");
+        textBox.AltText.Should().Be("Text box used for workbook review notes");
+        textBox.Width.Should().Be(210);
+        textBox.Height.Should().Be(70);
+        textBox.RotationDegrees.Should().Be(5);
+        textBox.FillColor.Should().Be(new CellColor(255, 242, 204));
+        textBox.OutlineColor.Should().Be(new CellColor(191, 144, 0));
+
+        var shape = sheet.DrawingShapes.Should().ContainSingle().Subject;
+        shape.Name.Should().Be("Variance Flag");
+        shape.Anchor.Should().Be(new CellAddress(sheet.Id, 4, 4));
+        shape.Kind.Should().Be(DrawingShapeKind.Ellipse);
+        shape.Title.Should().Be("Variance flag");
+        shape.AltText.Should().Be("Ellipse highlighting a variance");
+        shape.Width.Should().Be(120);
+        shape.Height.Should().Be(80);
+        shape.RotationDegrees.Should().Be(15);
+        shape.FillColor.Should().Be(new CellColor(189, 215, 238));
+        shape.GradientFillEndColor.Should().Be(new CellColor(221, 235, 247));
+        shape.GradientFillDirection.Should().Be(DrawingShapeGradientDirection.Vertical);
+        shape.OutlineColor.Should().Be(new CellColor(31, 78, 121));
+        shape.EffectPreset.Should().Be(DrawingShapeEffectPreset.Glow);
     }
 }

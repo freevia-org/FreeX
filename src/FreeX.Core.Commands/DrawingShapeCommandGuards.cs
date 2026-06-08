@@ -21,8 +21,17 @@ internal static class DrawingShapeCommandGuards
         Guid shapeId,
         [NotNullWhen(true)] out DrawingShapeModel? shape)
     {
-        shape = sheet.DrawingShapes.FirstOrDefault(item => item.Id == shapeId);
-        return shape is not null;
+        foreach (var candidate in sheet.DrawingShapes)
+        {
+            if (candidate.Id == shapeId)
+            {
+                shape = candidate;
+                return true;
+            }
+        }
+
+        shape = null;
+        return false;
     }
 
     public static CommandOutcome DrawingShapeNotFound() =>
@@ -42,7 +51,7 @@ internal static class DrawingShapeCommandGuards
             return DrawingShapeNotFound();
 
         var normalizedOrder = DrawingObjectZOrder.GetNormalizedOrder(sheet);
-        var index = FindIndex(normalizedOrder, entry);
+        var index = IndexOfZOrderEntry(normalizedOrder, entry);
         if (index < 0)
             return DrawingShapeNotFound();
 
@@ -75,7 +84,7 @@ internal static class DrawingShapeCommandGuards
             (sheet.DrawingObjectZOrder[toIndex], sheet.DrawingObjectZOrder[fromIndex]);
     }
 
-    private static int FindIndex(
+    private static int IndexOfZOrderEntry(
         IReadOnlyList<DrawingObjectZOrderEntry> order,
         DrawingObjectZOrderEntry entry)
     {

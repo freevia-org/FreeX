@@ -37,6 +37,16 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceSharedString.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        var reloadedSheet = reloaded.GetSheetAt(0);
+        reloadedSheet.GetValue(new CellAddress(reloadedSheet.Id, 1, 1))
+            .Should()
+            .Be(new TextValue("Rich phonetic"));
+        reloadedSheet.GetValue(new CellAddress(reloadedSheet.Id, 2, 2))
+            .Should()
+            .Be(new NumberValue(42));
     }
 
     [Fact]
@@ -66,6 +76,16 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceCell.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        var reloadedSheet = reloaded.GetSheetAt(0);
+        reloadedSheet.GetValue(new CellAddress(reloadedSheet.Id, 1, 1))
+            .Should()
+            .Be(new TextValue("Inline phonetic"));
+        reloadedSheet.GetValue(new CellAddress(reloadedSheet.Id, 2, 2))
+            .Should()
+            .Be(new NumberValue(42));
     }
 
     private static Workbook CreateTextWorkbook(string name, string text)

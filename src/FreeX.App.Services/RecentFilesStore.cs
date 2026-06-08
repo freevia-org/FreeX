@@ -93,9 +93,9 @@ public sealed class RecentFilesStore
         if (string.IsNullOrWhiteSpace(path))
             return;
 
-        var existing = Entries.FirstOrDefault(entry => PathsMatch(entry.Path, path));
+        var existing = FindEntryByPath(path);
         var wasPinned = existing?.IsPinned ?? false;
-        Entries.RemoveAll(entry => PathsMatch(entry.Path, path));
+        RemoveEntriesByPath(path);
         Entries.Insert(0, new RecentFileEntry { Path = path, LastOpened = _clock(), IsPinned = wasPinned });
         if (Entries.Count > MaxEntries)
             Entries.RemoveRange(MaxEntries, Entries.Count - MaxEntries);
@@ -105,7 +105,7 @@ public sealed class RecentFilesStore
 
     public void Pin(string path)
     {
-        var entry = Entries.FirstOrDefault(entry => PathsMatch(entry.Path, path));
+        var entry = FindEntryByPath(path);
         if (entry is null)
             return;
 
@@ -115,7 +115,7 @@ public sealed class RecentFilesStore
 
     public void Unpin(string path)
     {
-        var entry = Entries.FirstOrDefault(entry => PathsMatch(entry.Path, path));
+        var entry = FindEntryByPath(path);
         if (entry is null)
             return;
 
@@ -125,9 +125,18 @@ public sealed class RecentFilesStore
 
     public void Remove(string path)
     {
-        Entries.RemoveAll(entry => PathsMatch(entry.Path, path));
+        RemoveEntriesByPath(path);
         Save();
     }
+
+    private RecentFileEntry? FindEntryByPath(string path) =>
+        Entries.FirstOrDefault(entry => PathsMatch(entry, path));
+
+    private void RemoveEntriesByPath(string path) =>
+        Entries.RemoveAll(entry => PathsMatch(entry, path));
+
+    private bool PathsMatch(RecentFileEntry existingEntry, string candidatePath) =>
+        PathsMatch(existingEntry.Path, candidatePath);
 
     private bool PathsMatch(string existingPath, string candidatePath) =>
         _pathIdentityComparer.Equals(existingPath, candidatePath);

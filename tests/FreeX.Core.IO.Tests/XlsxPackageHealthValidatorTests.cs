@@ -167,6 +167,81 @@ public sealed class XlsxPackageHealthValidatorTests
     }
 
     [Fact]
+    public void Validate_FlagsInvalidRelationshipTargetMode()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookRelationships:
+            [
+                $"""<Relationship Id="rId1" Type="{WorksheetRelationshipType}" Target="worksheets/sheet1.xml" TargetMode="Embed" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("invalid TargetMode Embed", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsUnexpectedRelationshipAttribute()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookRelationships:
+            [
+                $"""<Relationship Id="rId1" Type="{WorksheetRelationshipType}" Target="worksheets/sheet1.xml" Extra="1" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("unexpected attribute 'Extra'", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsRelationshipWithChildElement()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookRelationships:
+            [
+                $"""
+                <Relationship Id="rId1" Type="{WorksheetRelationshipType}" Target="worksheets/sheet1.xml">
+                  <Unexpected />
+                </Relationship>
+                """
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("must not contain child elements", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsDuplicateRelationshipId()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookRelationships:
+            [
+                Relationship("rId1", WorksheetRelationshipType, "worksheets/sheet1.xml"),
+                Relationship("rId1", WorksheetRelationshipType, "worksheets/sheet1.xml")
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("duplicate Relationship Id rId1", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsRelationshipWithoutType()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookRelationships:
+            [
+                """<Relationship Id="rId1" Target="worksheets/sheet1.xml" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("Relationship rId1 has no Type", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Validate_FlagsCaseCollidingPackageEntries()
     {
         using var package = CreateMinimalWorkbookPackage(

@@ -23,8 +23,12 @@ public sealed partial class XlsxBroaderRetentionChecksTests
             workbook.FileSharing!.UserName = "EditedUser";
         });
 
+        AssertPackageHasNoHealthIssues(saved);
+
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
         AssertDocumentPropertiesWereRetained(archive);
+        AssertRootPackageRelationshipsWereRetained(archive);
+        AssertContentTypeOverridesWereRetained(archive);
         AssertWorkbookMetadataWasRetainedWithoutOverridingModeledState(archive);
         AssertStyleAndPackagePartsWereRetained(archive);
     }
@@ -147,6 +151,29 @@ public sealed partial class XlsxBroaderRetentionChecksTests
         archive.Entries.Should().Contain(entry =>
             entry.FullName.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase) &&
             entry.FullName.EndsWith(".vml", StringComparison.OrdinalIgnoreCase));
-        worksheetXml.ToString(SaveOptions.DisableFormatting).Should().Contain("legacyDrawing");
+        var legacyDrawing = worksheetXml.Root!.Element(MainNs + "legacyDrawing");
+        legacyDrawing.Should().NotBeNull();
+
+        var legacyDrawingRelationshipId = legacyDrawing!.Attribute(RelNs + "id")!.Value;
+        var legacyDrawingRelationship = LoadXml(archive, "xl/worksheets/_rels/sheet1.xml.rels")
+            .Root!
+            .Elements(PackageRelNs + "Relationship")
+            .Single(relationship => string.Equals(
+                relationship.Attribute("Id")?.Value,
+                legacyDrawingRelationshipId,
+                StringComparison.Ordinal));
+        legacyDrawingRelationship.Attribute("Type")!.Value.Should().Be(
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing");
+        legacyDrawingRelationship.Attribute("TargetMode")?.Value.Should().NotBe("External");
+
+        var legacyDrawingTarget = legacyDrawingRelationship.Attribute("Target")!.Value;
+        legacyDrawingTarget.Should().EndWith(".vml");
+        var legacyDrawingPart = legacyDrawingTarget.StartsWith("/", StringComparison.Ordinal)
+            ? legacyDrawingTarget.TrimStart('/')
+            : "xl/" + legacyDrawingTarget["../".Length..];
+        legacyDrawingPart.Should().StartWith("xl/drawings/", "worksheet legacy drawing should target a retained drawing part");
+        archive.GetEntry(legacyDrawingPart)
+            .Should()
+            .NotBeNull("worksheet legacy drawing relationship should resolve to the retained VML part");
     }
 }

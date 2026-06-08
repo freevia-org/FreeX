@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -18,6 +19,8 @@ namespace FreeX.App.Host;
 public partial class MainWindow
 {
     private const double ScreenshotTourCaptureHeight = 300;
+    private const string ScreenshotTourTableName = "TourTable";
+    private const string ScreenshotTourPivotTableName = "TourPivotTable";
 
     [DllImport("user32.dll")]
     private static extern bool SetCursorPos(int x, int y);
@@ -156,7 +159,7 @@ public partial class MainWindow
 
     private void EnsureTableDesignScreenshotTourContext()
     {
-        var sheet = _workbook.GetSheet(_currentSheetId) ?? _workbook.Sheets.FirstOrDefault();
+        var sheet = GetCurrentOrFirstScreenshotTourSheet();
         if (sheet is null)
             return;
 
@@ -184,15 +187,14 @@ public partial class MainWindow
         }
 
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 3));
-        var table = sheet.StructuredTables
-            .FirstOrDefault(candidate => string.Equals(candidate.Name, "TourTable", StringComparison.OrdinalIgnoreCase));
+        var table = FindScreenshotTourTable(sheet);
         if (table is null)
         {
             table = new StructuredTableModel
             {
                 Id = sheet.StructuredTables.Count == 0 ? 1 : sheet.StructuredTables.Max(candidate => candidate.Id) + 1,
-                Name = "TourTable",
-                DisplayName = "TourTable",
+                Name = ScreenshotTourTableName,
+                DisplayName = ScreenshotTourTableName,
                 Range = range,
                 HasAutoFilter = true,
                 HeaderRowCount = 1,
@@ -212,7 +214,7 @@ public partial class MainWindow
 
     private void EnsurePivotTableScreenshotTourContext()
     {
-        var sheet = _workbook.GetSheet(_currentSheetId) ?? _workbook.Sheets.FirstOrDefault();
+        var sheet = GetCurrentOrFirstScreenshotTourSheet();
         if (sheet is null)
             return;
 
@@ -242,8 +244,7 @@ public partial class MainWindow
         }
 
         var sourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 3));
-        var pivotTable = sheet.PivotTables
-            .FirstOrDefault(candidate => string.Equals(candidate.Name, "TourPivotTable", StringComparison.OrdinalIgnoreCase));
+        var pivotTable = FindScreenshotTourPivotTable(sheet);
         if (pivotTable is null)
         {
             var targetRange = new GridRange(new CellAddress(sheet.Id, 2, 5), new CellAddress(sheet.Id, 8, 8));
@@ -251,15 +252,14 @@ public partial class MainWindow
                 sheet.Id,
                 sourceRange,
                 targetRange,
-                "TourPivotTable",
+                ScreenshotTourPivotTableName,
                 rowFieldIndexes: [0],
                 dataFieldIndexes: [2]);
 
             if (!TryExecuteCommand(command, "Insert PivotTable", out var outcome))
                 throw new InvalidOperationException(outcome.ErrorMessage ?? "PivotTable screenshot tour setup failed.");
 
-            pivotTable = sheet.PivotTables
-                .FirstOrDefault(candidate => string.Equals(candidate.Name, "TourPivotTable", StringComparison.OrdinalIgnoreCase));
+            pivotTable = FindScreenshotTourPivotTable(sheet);
         }
 
         if (pivotTable is not null && SheetGrid is not null)
@@ -267,6 +267,40 @@ public partial class MainWindow
             SheetGrid.SelectedRange = new GridRange(pivotTable.TargetRange.Start, pivotTable.TargetRange.Start);
             RefreshPivotFieldListPane();
         }
+    }
+
+    private Sheet? GetCurrentOrFirstScreenshotTourSheet()
+    {
+        var currentSheet = _workbook.GetSheet(_currentSheetId);
+        if (currentSheet is not null)
+            return currentSheet;
+
+        foreach (var sheet in _workbook.Sheets)
+            return sheet;
+
+        return null;
+    }
+
+    private static StructuredTableModel? FindScreenshotTourTable(Sheet sheet)
+    {
+        foreach (var table in sheet.StructuredTables)
+        {
+            if (string.Equals(table.Name, ScreenshotTourTableName, StringComparison.OrdinalIgnoreCase))
+                return table;
+        }
+
+        return null;
+    }
+
+    private static PivotTableModel? FindScreenshotTourPivotTable(Sheet sheet)
+    {
+        foreach (var pivotTable in sheet.PivotTables)
+        {
+            if (string.Equals(pivotTable.Name, ScreenshotTourPivotTableName, StringComparison.OrdinalIgnoreCase))
+                return pivotTable;
+        }
+
+        return null;
     }
 
     private async Task CaptureRibbonBurstTourAsync(string outputDir, RibbonScreenshotTourPlan plan)
@@ -304,19 +338,33 @@ public partial class MainWindow
 
     private void SelectRibbonTourTab(RibbonScreenshotTourTab tab)
     {
-        var tabItem = RibbonTabs.Items
-            .OfType<System.Windows.Controls.TabItem>()
-            .FirstOrDefault(item => RibbonMetadata.TryGetCatalogId(item, out var catalogId) &&
-                                    string.Equals(catalogId, tab.CatalogId, StringComparison.Ordinal))
-            ?? RibbonTabs.Items
-                .OfType<System.Windows.Controls.TabItem>()
-                .FirstOrDefault(item => string.Equals(item.Header?.ToString(), tab.Header, StringComparison.Ordinal));
+        var tabItem = FindRibbonTourTab(tab);
 
         if (tabItem is null)
             throw new InvalidOperationException(
                 $"Ribbon screenshot tour expected tab '{tab.Header}' ({tab.CatalogId}) but it was not found in the live ribbon.");
 
         RibbonTabs.SelectedItem = tabItem;
+    }
+
+    private TabItem? FindRibbonTourTab(RibbonScreenshotTourTab tab)
+    {
+        foreach (var item in RibbonTabs.Items)
+        {
+            if (item is TabItem tabItem &&
+                RibbonMetadata.TryGetCatalogId(tabItem, out var catalogId) &&
+                string.Equals(catalogId, tab.CatalogId, StringComparison.Ordinal))
+                return tabItem;
+        }
+
+        foreach (var item in RibbonTabs.Items)
+        {
+            if (item is TabItem tabItem &&
+                string.Equals(tabItem.Header?.ToString(), tab.Header, StringComparison.Ordinal))
+                return tabItem;
+        }
+
+        return null;
     }
 
     private async Task PrepareRibbonBurstCapturePhaseAsync(RibbonScreenshotTourPhase phase)

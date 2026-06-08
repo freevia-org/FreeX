@@ -559,19 +559,36 @@ internal static class XlsxPackageMetadataMerger
         ArchiveEntryIndex targetIndex,
         string itemPart) =>
         relationships.FirstOrDefault(relationship =>
-            !IsExternalRelationship(relationship) &&
-            IsCustomXmlPropertiesPart(ResolveRelationshipTarget(itemPart, relationship)) &&
-            targetIndex.Contains(ResolveRelationshipTarget(itemPart, relationship)));
+            TargetsExistingCustomXmlPropertiesPart(relationship, targetIndex, itemPart));
 
     private static XElement? FindCustomXmlPropertiesRelationshipTargeting(
         IEnumerable<XElement> relationships,
         string itemPart,
         string propertiesPart) =>
         relationships.FirstOrDefault(relationship =>
-            string.Equals(
-                ResolveRelationshipTarget(itemPart, relationship),
-                propertiesPart,
-                StringComparison.OrdinalIgnoreCase));
+            RelationshipTargetsPart(relationship, itemPart, propertiesPart));
+
+    private static bool TargetsExistingCustomXmlPropertiesPart(
+        XElement relationship,
+        ArchiveEntryIndex targetIndex,
+        string itemPart)
+    {
+        if (IsExternalRelationship(relationship))
+            return false;
+
+        var targetPart = ResolveRelationshipTarget(itemPart, relationship);
+        return IsCustomXmlPropertiesPart(targetPart) &&
+               targetIndex.Contains(targetPart);
+    }
+
+    private static bool RelationshipTargetsPart(
+        XElement relationship,
+        string sourcePart,
+        string targetPart) =>
+        string.Equals(
+            ResolveRelationshipTarget(sourcePart, relationship),
+            targetPart,
+            StringComparison.OrdinalIgnoreCase);
 
     private static string ResolveRelationshipTarget(string sourcePart, XElement relationship)
     {
@@ -820,9 +837,11 @@ internal static class XlsxPackageMetadataMerger
         XNamespace contentTypeNs,
         string normalizedPartName) =>
         root.Elements(contentTypeNs + "Override")
-            .FirstOrDefault(element =>
-                TryNormalizeContentTypePartName(element.Attribute("PartName")?.Value, out var targetPartName) &&
-                string.Equals(targetPartName, normalizedPartName, StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(element => IsContentTypeOverrideForPart(element, normalizedPartName));
+
+    private static bool IsContentTypeOverrideForPart(XElement element, string normalizedPartName) =>
+        TryNormalizeContentTypePartName(element.Attribute("PartName")?.Value, out var targetPartName) &&
+        string.Equals(targetPartName, normalizedPartName, StringComparison.OrdinalIgnoreCase);
 
     private static bool ShouldPreserveRelationship(
         string relationshipPartPath,
@@ -1485,7 +1504,7 @@ internal static class XlsxPackageMetadataMerger
         public ZipArchiveEntry? Get(string entryName)
         {
             var normalizedEntryName = NormalizeEntryName(entryName);
-            return _entries.TryGetValue(normalizedEntryName, out var matches) ? matches.FirstOrDefault() : null;
+            return _entries.TryGetValue(normalizedEntryName, out var matches) ? FirstEntryMatch(matches) : null;
         }
 
         public bool Contains(string entryName) => Get(entryName) is not null;
@@ -1521,5 +1540,8 @@ internal static class XlsxPackageMetadataMerger
 
         private static string NormalizeEntryName(string entryName) =>
             XlsxPackagePath.NormalizePackagePath(entryName);
+
+        private static ZipArchiveEntry? FirstEntryMatch(List<ZipArchiveEntry> matches) =>
+            matches.Count == 0 ? null : matches[0];
     }
 }

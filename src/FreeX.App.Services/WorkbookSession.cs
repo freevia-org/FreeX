@@ -677,7 +677,7 @@ public sealed class WorkbookSession
         if (!result.Success)
             return result;
 
-        ApplySuccessfulEditResult(result, plan.AffectedCells.FirstOrDefault(ActiveCell));
+        ApplySuccessfulEditResult(result, FirstAffectedCellOrDefault(plan.AffectedCells, ActiveCell));
         return result;
     }
 
@@ -1080,7 +1080,7 @@ public sealed class WorkbookSession
     public WorkbookCellEditResult DuplicateActiveSheet()
     {
         var sourceSheetId = ActiveSheet.Id;
-        var sourceIndex = Workbook.Sheets.ToList().FindIndex(sheet => sheet.Id == sourceSheetId);
+        var sourceIndex = FindSheetIndex(sourceSheetId, notFoundIndex: -1);
         if (sourceIndex < 0)
         {
             return new WorkbookCellEditResult(
@@ -1227,7 +1227,7 @@ public sealed class WorkbookSession
     public WorkbookCellEditResult HideActiveSheet()
     {
         var sheetId = ActiveSheet.Id;
-        var sheetIndex = Workbook.Sheets.ToList().FindIndex(sheet => sheet.Id == sheetId);
+        var sheetIndex = FindSheetIndex(sheetId, notFoundIndex: -1);
         if (sheetIndex < 0)
         {
             return new WorkbookCellEditResult(
@@ -1291,7 +1291,7 @@ public sealed class WorkbookSession
     public WorkbookCellEditResult DeleteActiveSheet()
     {
         var sheetId = ActiveSheet.Id;
-        var sheetIndex = Workbook.Sheets.ToList().FindIndex(sheet => sheet.Id == sheetId);
+        var sheetIndex = FindSheetIndex(sheetId, notFoundIndex: -1);
         if (sheetIndex < 0)
         {
             return new WorkbookCellEditResult(
@@ -1337,7 +1337,7 @@ public sealed class WorkbookSession
     private WorkbookCellEditResult MoveActiveSheetBy(int offset)
     {
         var sheetId = ActiveSheet.Id;
-        var fromIndex = Workbook.Sheets.ToList().FindIndex(sheet => sheet.Id == sheetId);
+        var fromIndex = FindSheetIndex(sheetId, notFoundIndex: -1);
         if (fromIndex < 0)
         {
             return new WorkbookCellEditResult(
@@ -2870,19 +2870,44 @@ public sealed class WorkbookSession
 
     private static bool WouldSetDataValidationMutate(Sheet sheet, DataValidation rule)
     {
-        var existing = sheet.DataValidations.FirstOrDefault(candidate =>
-            candidate.Id == rule.Id || candidate.AppliesTo == rule.AppliesTo);
+        var existing = FindMatchingDataValidationRule(sheet, rule);
         return existing is null || !DataValidationRulesEqual(existing, rule);
     }
 
-    private static bool HasDataValidationOverlapping(Sheet sheet, GridRange range) =>
-        sheet.DataValidations.Any(rule => DataValidationRanges(rule).Any(ruleRange => ruleRange.Overlaps(range)));
-
-    private static IEnumerable<GridRange> DataValidationRanges(DataValidation rule)
+    private static DataValidation? FindMatchingDataValidationRule(Sheet sheet, DataValidation rule)
     {
-        yield return rule.AppliesTo;
-        foreach (var range in rule.AdditionalRanges)
-            yield return range;
+        foreach (var candidate in sheet.DataValidations)
+        {
+            if (candidate.Id == rule.Id || candidate.AppliesTo == rule.AppliesTo)
+                return candidate;
+        }
+
+        return null;
+    }
+
+    private static bool HasDataValidationOverlapping(Sheet sheet, GridRange range)
+    {
+        foreach (var rule in sheet.DataValidations)
+        {
+            if (DataValidationOverlaps(rule, range))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool DataValidationOverlaps(DataValidation rule, GridRange range)
+    {
+        if (rule.AppliesTo.Overlaps(range))
+            return true;
+
+        foreach (var ruleRange in rule.AdditionalRanges)
+        {
+            if (ruleRange.Overlaps(range))
+                return true;
+        }
+
+        return false;
     }
 
     private static DataValidation CloneDataValidationForRanges(
@@ -3090,9 +3115,14 @@ public sealed class WorkbookSession
         EnsureActiveCellVisible();
     }
 
+    private static CellAddress FirstAffectedCellOrDefault(
+        IReadOnlyList<CellAddress> affectedCells,
+        CellAddress fallbackAddress) =>
+        affectedCells.Count == 0 ? fallbackAddress : affectedCells[0];
+
     private void ApplySuccessfulEditResult(WorkbookCellEditResult result, CellAddress fallbackAddress)
     {
-        var address = result.AffectedCells.FirstOrDefault(fallbackAddress);
+        var address = FirstAffectedCellOrDefault(result.AffectedCells, fallbackAddress);
         if (!ActiveSheet.Id.Equals(address.Sheet))
         {
             var selection = _sheetSelectionService.SelectSheet(Workbook, address.Sheet, _groupedSheetIds);
@@ -3232,13 +3262,25 @@ public sealed class WorkbookSession
 
     private string FindNameForAddress(CellAddress address)
     {
-        var namedRange = Workbook.NamedRanges
-            .Where(pair => pair.Value.Contains(address))
-            .OrderBy(pair => pair.Value.CellCount)
-            .ThenBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
-            .FirstOrDefault();
+        string? bestName = null;
+        var bestCellCount = 0L;
+        foreach (var (name, range) in Workbook.NamedRanges)
+        {
+            if (!range.Contains(address))
+                continue;
 
-        return string.IsNullOrEmpty(namedRange.Key) ? "" : namedRange.Key;
+            var cellCount = range.CellCount;
+            if (bestName is null ||
+                cellCount < bestCellCount ||
+                (cellCount == bestCellCount &&
+                 string.Compare(name, bestName, StringComparison.OrdinalIgnoreCase) < 0))
+            {
+                bestName = name;
+                bestCellCount = cellCount;
+            }
+        }
+
+        return bestName ?? "";
     }
 
     private int FindFirstResultAfterActiveCell(IReadOnlyList<FindResult> results, FindSearchOrder searchOrder)
@@ -3326,7 +3368,7 @@ public sealed class WorkbookSession
         return rowComparison != 0 ? rowComparison : left.Col.CompareTo(right.Col);
     }
 
-    private int FindSheetIndex(SheetId sheetId)
+    private int FindSheetIndex(SheetId sheetId, int notFoundIndex = int.MaxValue)
     {
         for (var index = 0; index < Workbook.Sheets.Count; index++)
         {
@@ -3334,7 +3376,7 @@ public sealed class WorkbookSession
                 return index;
         }
 
-        return int.MaxValue;
+        return notFoundIndex;
     }
 
     private static bool TryCreateReplacementCommand(
@@ -3507,8 +3549,7 @@ public sealed class WorkbookSession
     };
 
     private SheetId? ResolveSheetIdByName(string sheetName) =>
-        Workbook.Sheets.FirstOrDefault(sheet =>
-            string.Equals(sheet.Name, sheetName, StringComparison.OrdinalIgnoreCase))?.Id;
+        Workbook.GetSheet(sheetName)?.Id;
 
     private WorkbookNavigationResult GoToReviewNavigationPlan(ReviewNavigationPlan plan) =>
         plan is { Success: true, Target: { } target }

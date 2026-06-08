@@ -9,6 +9,22 @@ namespace FreeX.Core.IO.Tests;
 
 public sealed partial class XlsxBroaderRetentionChecksTests
 {
+    private static void AssertPackageHasNoHealthIssues(MemoryStream package)
+    {
+        var position = package.Position;
+        package.Position = 0;
+        try
+        {
+            XlsxPackageHealthValidator.Validate(package)
+                .Should()
+                .BeEmpty("FreeX should not introduce package issues that can trigger Excel repair warnings");
+        }
+        finally
+        {
+            package.Position = position;
+        }
+    }
+
     private static void AssertDocumentPropertiesWereRetained(ZipArchive archive)
     {
         var coreXml = LoadXml(archive, "docProps/core.xml");
@@ -28,6 +44,50 @@ public sealed partial class XlsxBroaderRetentionChecksTests
         var customXml = LoadXml(archive, "docProps/custom.xml").ToString(SaveOptions.DisableFormatting);
         customXml.Should().Contain("FreeXCustomProperty");
         customXml.Should().Contain("MSIP_Label_01234567-89ab-cdef-0123-456789abcdef_Enabled");
+    }
+
+    private static void AssertRootPackageRelationshipsWereRetained(ZipArchive archive)
+    {
+        var relationships = LoadXml(archive, "_rels/.rels")
+            .Root!
+            .Elements(PackageRelNs + "Relationship")
+            .Select(relationship => (
+                Type: relationship.Attribute("Type")?.Value,
+                Target: relationship.Attribute("Target")?.Value))
+            .ToList();
+
+        relationships.Should().Contain(("http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties", "docProps/core.xml"));
+        relationships.Should().Contain(("http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties", "docProps/app.xml"));
+        relationships.Should().Contain(("http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties", "docProps/custom.xml"));
+        relationships.Should().Contain(("http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml", "customXml/item1.xml"));
+    }
+
+    private static void AssertContentTypeOverridesWereRetained(ZipArchive archive)
+    {
+        var expectedOverrides = new (string PartName, string ContentType)[]
+        {
+            ("/docProps/core.xml", "application/vnd.openxmlformats-package.core-properties+xml"),
+            ("/docProps/app.xml", "application/vnd.openxmlformats-officedocument.extended-properties+xml"),
+            ("/docProps/custom.xml", "application/vnd.openxmlformats-officedocument.custom-properties+xml"),
+            ("/xl/externalLinks/externalLink1.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml"),
+            ("/customXml/itemProps1.xml", "application/vnd.openxmlformats-officedocument.customXmlProperties+xml")
+        };
+
+        var overrides = LoadXml(archive, "[Content_Types].xml")
+            .Root!
+            .Elements(ContentTypeNs + "Override")
+            .Select(overrideElement => (
+                PartName: overrideElement.Attribute("PartName")!.Value,
+                ContentType: overrideElement.Attribute("ContentType")!.Value))
+            .ToList();
+
+        foreach (var expectedOverride in expectedOverrides)
+        {
+            overrides.Should().Contain(expectedOverride);
+            archive.GetEntry(expectedOverride.PartName.TrimStart('/'))
+                .Should()
+                .NotBeNull($"{expectedOverride.PartName} should remain addressable by its content type override");
+        }
     }
 
     private static void AssertWorkbookMetadataWasRetainedWithoutOverridingModeledState(ZipArchive archive)

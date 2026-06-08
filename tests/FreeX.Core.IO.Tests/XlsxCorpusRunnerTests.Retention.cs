@@ -1222,13 +1222,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-sheet-views-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetSheetViewsModel(sheet, "generated-worksheet-sheet-views-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-sheet-views-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-sheet-views-001");
         AssertWorksheetSheetViews(saved, "generated-worksheet-sheet-views-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetSheetViewsModel(
+            reloaded.GetSheetAt(0),
+            "worksheet sheet view model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -1240,13 +1248,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-sheet-format-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetSheetFormatModel(sheet, "generated-worksheet-sheet-format-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-sheet-format-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-sheet-format-001");
         AssertWorksheetSheetFormat(saved, "generated-worksheet-sheet-format-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetSheetFormatModel(
+            reloaded.GetSheetAt(0),
+            "worksheet sheet format model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -1258,13 +1274,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-page-breaks-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetPageBreaksModel(sheet, "generated-worksheet-page-breaks-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-page-breaks-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-page-breaks-001");
         AssertWorksheetPageBreaks(saved, "generated-worksheet-page-breaks-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetPageBreaksModel(
+            reloaded.GetSheetAt(0),
+            "worksheet page break model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -1276,13 +1300,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-print-options-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetPrintOptionsModel(sheet, "generated-worksheet-print-options-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-print-options-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-print-options-001");
         AssertWorksheetPrintOptions(saved, "generated-worksheet-print-options-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetPrintOptionsModel(
+            reloaded.GetSheetAt(0),
+            "worksheet print options model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -1294,13 +1326,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-page-setup-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetPageSetupNativeModel(sheet, "generated-worksheet-page-setup-native-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-page-setup-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-page-setup-native-001");
         AssertWorksheetPageSetupNative(saved, "generated-worksheet-page-setup-native-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetPageSetupNativeModel(
+            reloaded.GetSheetAt(0),
+            "worksheet page setup model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -1312,13 +1352,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-header-footer-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetHeaderFooterNativeModel(sheet, "generated-worksheet-header-footer-native-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-header-footer-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-header-footer-native-001");
         AssertWorksheetHeaderFooterNative(saved, "generated-worksheet-header-footer-native-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetHeaderFooterNativeModel(
+            reloaded.GetSheetAt(0),
+            "worksheet header/footer model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -1348,13 +1396,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-sheet-properties-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetSheetPropertiesModel(sheet, "generated-worksheet-sheet-properties-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-sheet-properties-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-sheet-properties-001");
         AssertWorksheetSheetProperties(saved, "generated-worksheet-sheet-properties-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetSheetPropertiesModel(
+            reloaded.GetSheetAt(0),
+            "worksheet sheet properties model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -2030,6 +2086,13 @@ public partial class XlsxCorpusRunnerTests
         sheetView.Element(worksheetNs + "pivotSelection").Should().BeNull(because);
     }
 
+    private static void AssertWorksheetSheetViewsModel(Sheet sheet, string because)
+    {
+        sheet.PrimaryViewMetadata.Should().NotBeNull(because);
+        BagAttr(sheet.PrimaryViewMetadata, "sheetView", "showZeros").Should().Be("0", because);
+        BagAttr(sheet.PrimaryViewMetadata, "sheetView", "rightToLeft").Should().Be("1", because);
+    }
+
     private static void AssertWorksheetSheetFormat(Stream package, string because)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -2043,6 +2106,15 @@ public partial class XlsxCorpusRunnerTests
         sheetFormat.Attribute("thickTop")!.Value.Should().Be("1", because);
         sheetFormat.Attribute("outlineLevelRow")!.Value.Should().Be("3", because);
         sheetFormat.HasElements.Should().BeFalse(because);
+    }
+
+    private static void AssertWorksheetSheetFormatModel(Sheet sheet, string because)
+    {
+        sheet.SheetFormatMetadata.Should().NotBeNull(because);
+        BagAttr(sheet.SheetFormatMetadata, "sheetFormatPr", "baseColWidth").Should().Be("12", because);
+        BagAttr(sheet.SheetFormatMetadata, "sheetFormatPr", "zeroHeight").Should().Be("1", because);
+        BagAttr(sheet.SheetFormatMetadata, "sheetFormatPr", "thickTop").Should().Be("1", because);
+        BagAttr(sheet.SheetFormatMetadata, "sheetFormatPr", "outlineLevelRow").Should().Be("3", because);
     }
 
     private static void AssertWorksheetPageBreaks(Stream package, string because)
@@ -2080,6 +2152,26 @@ public partial class XlsxCorpusRunnerTests
         columnBreak.Attribute("customAttr").Should().BeNull(because);
     }
 
+    private static void AssertWorksheetPageBreaksModel(Sheet sheet, string because)
+    {
+        sheet.RowPageBreaks.Should().ContainSingle(because).Which.Should().Be(20u, because);
+        sheet.ColumnPageBreaks.Should().ContainSingle(because).Which.Should().Be(5u, because);
+
+        sheet.RowPageBreaksMetadata.Should().NotBeNull(because);
+        sheet.RowPageBreaksMetadata!.NativeAttributes.Should().Contain("manualBreakCount", "1", because);
+        sheet.RowPageBreaksMetadata.BreakNativeAttributes.Should().ContainKey(20u, because);
+        sheet.RowPageBreaksMetadata.BreakNativeAttributes[20u].Should().Contain("max", "16383", because);
+        sheet.RowPageBreaksMetadata.BreakNativeAttributes[20u].Should().Contain("man", "1", because);
+        sheet.RowPageBreaksMetadata.BreakNativeAttributes[20u].Should().Contain("pt", "1", because);
+
+        sheet.ColumnPageBreaksMetadata.Should().NotBeNull(because);
+        sheet.ColumnPageBreaksMetadata!.NativeAttributes.Should().Contain("manualBreakCount", "1", because);
+        sheet.ColumnPageBreaksMetadata.BreakNativeAttributes.Should().ContainKey(5u, because);
+        sheet.ColumnPageBreaksMetadata.BreakNativeAttributes[5u].Should().Contain("max", "1048575", because);
+        sheet.ColumnPageBreaksMetadata.BreakNativeAttributes[5u].Should().Contain("man", "1", because);
+        sheet.ColumnPageBreaksMetadata.BreakNativeAttributes[5u].Should().Contain("pt", "1", because);
+    }
+
     private static void AssertWorksheetPrintOptions(Stream package, string because)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -2097,6 +2189,12 @@ public partial class XlsxCorpusRunnerTests
         printOptions.HasElements.Should().BeFalse(because);
     }
 
+    private static void AssertWorksheetPrintOptionsModel(Sheet sheet, string because)
+    {
+        sheet.PrintOptionsMetadata.Should().NotBeNull(because);
+        BagAttr(sheet.PrintOptionsMetadata, "printOptions", "gridLinesSet").Should().Be("1", because);
+    }
+
     private static void AssertWorksheetPageSetupNative(Stream package, string because)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -2111,6 +2209,12 @@ public partial class XlsxCorpusRunnerTests
         pageSetup.HasElements.Should().BeFalse(because);
     }
 
+    private static void AssertWorksheetPageSetupNativeModel(Sheet sheet, string because)
+    {
+        sheet.UsePrinterDefaults.Should().BeTrue(because);
+        sheet.PrintCopies.Should().Be(3, because);
+    }
+
     private static void AssertWorksheetHeaderFooterNative(Stream package, string because)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -2122,6 +2226,11 @@ public partial class XlsxCorpusRunnerTests
         headerFooter!.Attribute("nativeHeaderFooterAttr").Should().BeNull(because);
         headerFooter.Element(worksheetNs + "oddHeader")!.Value.Should().Contain("Center", because);
         headerFooter.Element(worksheetNs + "nativeHeaderFooterChild").Should().BeNull(because);
+    }
+
+    private static void AssertWorksheetHeaderFooterNativeModel(Sheet sheet, string because)
+    {
+        sheet.PageHeader.Center.Should().Contain("Center", because);
     }
 
     private static void AssertWorksheetDimensionNative(Stream package, string because, string expectedRef)
@@ -2152,6 +2261,15 @@ public partial class XlsxCorpusRunnerTests
         sheetPr.Elements().Where(element => element.Name.NamespaceName == "urn:freex:test")
             .Should()
             .BeEmpty(because);
+    }
+
+    private static void AssertWorksheetSheetPropertiesModel(Sheet sheet, string because)
+    {
+        sheet.FitToPage.Should().BeTrue(because);
+        sheet.AutoPageBreaks.Should().BeFalse(because);
+        sheet.SheetPropertiesMetadata.Should().NotBeNull(because);
+        BagAttr(sheet.SheetPropertiesMetadata, "sheetPr", "filterMode").Should().Be("1", because);
+        BagChildren(sheet.SheetPropertiesMetadata, "sheetPr").Should().BeEmpty(because);
     }
 
     private static void AssertWorksheetProtectionNative(Stream package, string because)

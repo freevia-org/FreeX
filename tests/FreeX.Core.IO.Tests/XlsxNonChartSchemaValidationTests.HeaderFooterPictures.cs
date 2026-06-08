@@ -22,6 +22,27 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void HeaderFooterPictures_ReloadsSavedWorkbookWithPictureModel()
+    {
+        using var saved = Save(CreateHeaderFooterPictureSourceWorkbook());
+        saved.Position = 0;
+
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        var sheet = reloaded.GetSheetAt(0);
+
+        sheet.PageHeader.Should().Be(new WorksheetHeaderFooter("&[Picture]", "Center", "Right"));
+        sheet.PageHeaderPictures.Left.Should().NotBeNull();
+        var picture = sheet.PageHeaderPictures.Left!;
+        picture.ImageBytes.Should().Equal(MinimalPngBytes());
+        picture.ContentType.Should().Be("image/png");
+        picture.FileName.Should().Be("header-logo.png");
+        picture.Width.Should().Be(96);
+        picture.Height.Should().Be(32);
+        sheet.PageHeaderPictures.Center.Should().BeNull();
+        sheet.PageHeaderPictures.Right.Should().BeNull();
+    }
+
+    [Fact]
     public void HeaderFooterPictures_WithRepeatedFileNames_WritesDistinctMediaRelationshipTargets()
     {
         var workbook = CreateHeaderFooterPictureSourceWorkbook();

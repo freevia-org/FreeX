@@ -15,10 +15,8 @@ public sealed class InsertSlicerDialog : Window
 
     public InsertSlicerDialog(IEnumerable<string> fieldNames, string? selectedField = null)
     {
-        var fields = fieldNames.Where(name => !string.IsNullOrWhiteSpace(name)).ToList();
-        var field = fields.FirstOrDefault(name => string.Equals(name, selectedField, StringComparison.OrdinalIgnoreCase))
-            ?? fields.FirstOrDefault()
-            ?? "";
+        var fields = PivotSlicerTimelineFieldLookup.CreateFieldList(fieldNames);
+        var field = PivotSlicerTimelineFieldLookup.FindFieldByNameOrFirst(fields, selectedField);
         Result = CreateResult(field, UiText.Format("PivotSlicerTimeline_DefaultSlicerName", field));
         Title = UiText.Get("PivotSlicerTimeline_InsertSlicer");
         Width = 410;
@@ -111,10 +109,8 @@ public sealed class InsertTimelineDialog : Window
 
     public InsertTimelineDialog(IEnumerable<string> fieldNames, string? selectedField = null)
     {
-        var fields = fieldNames.Where(name => !string.IsNullOrWhiteSpace(name)).ToList();
-        var field = fields.FirstOrDefault(name => string.Equals(name, selectedField, StringComparison.OrdinalIgnoreCase))
-            ?? fields.FirstOrDefault()
-            ?? "";
+        var fields = PivotSlicerTimelineFieldLookup.CreateFieldList(fieldNames);
+        var field = PivotSlicerTimelineFieldLookup.FindFieldByNameOrFirst(fields, selectedField);
         Result = CreateResult(field, UiText.Format("PivotSlicerTimeline_DefaultTimelineName", field));
         Title = UiText.Get("PivotSlicerTimeline_InsertTimeline");
         Width = 410;
@@ -190,4 +186,15 @@ public sealed class InsertTimelineDialog : Window
             textBox.SelectAll();
         Keyboard.Focus(target);
     }
+}
+
+file static class PivotSlicerTimelineFieldLookup
+{
+    public static IReadOnlyList<string> CreateFieldList(IEnumerable<string> fieldNames) =>
+        fieldNames.Where(name => !string.IsNullOrWhiteSpace(name)).ToList();
+
+    public static string FindFieldByNameOrFirst(IReadOnlyList<string> fields, string? selectedField) =>
+        fields.FirstOrDefault(name => string.Equals(name, selectedField, StringComparison.OrdinalIgnoreCase))
+        ?? fields.FirstOrDefault()
+        ?? "";
 }

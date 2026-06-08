@@ -3767,18 +3767,38 @@ public sealed class MainWindow : Window
             return;
         }
 
-        items
-            .OfType<MenuItem>()
-            .FirstOrDefault(item => item.IsEnabled)?
-            .Focus();
+        FocusFirstEnabledSheetTabMenuItem(items);
     }
 
-    private Button? FindSheetTabButton(SheetId sheetId) =>
-        _sheetTabsHost.Content is StackPanel panel
-            ? panel.Children
-                .OfType<Button>()
-                .FirstOrDefault(button => button.Tag is SheetId tag && tag == sheetId)
-            : null;
+    private static void FocusFirstEnabledSheetTabMenuItem(IEnumerable<Control> items)
+    {
+        foreach (var item in items)
+        {
+            if (item is MenuItem { IsEnabled: true } menuItem)
+            {
+                menuItem.Focus();
+                return;
+            }
+        }
+    }
+
+    private Button? FindSheetTabButton(SheetId sheetId)
+    {
+        if (_sheetTabsHost.Content is not StackPanel panel)
+            return null;
+
+        foreach (var child in panel.Children)
+        {
+            if (child is Button button &&
+                button.Tag is SheetId tag &&
+                tag == sheetId)
+            {
+                return button;
+            }
+        }
+
+        return null;
+    }
 
     private void SelectSheet(SheetId sheetId, bool selectRange, bool toggle)
     {
@@ -5518,8 +5538,8 @@ public sealed class MainWindow : Window
         AutomationProperties.SetAutomationId(dialog, "FormatCellsCompactDialog");
 
         var numberChoices = CreateFormatCellsNumberFormatChoices(currentNumberFormat);
-        var currentNumberChoice = numberChoices.FirstOrDefault(choice =>
-            string.Equals(choice.FormatCode, currentNumberFormat, StringComparison.Ordinal)) ?? numberChoices[0];
+        var currentNumberChoice =
+            FindFormatCellsNumberFormatChoice(numberChoices, currentNumberFormat) ?? numberChoices[0];
         var numberCategoryList = new ListBox
         {
             ItemsSource = numberChoices.Select(choice => choice.Category).Distinct().ToArray(),
@@ -5549,14 +5569,12 @@ public sealed class MainWindow : Window
         void RefreshNumberChoices()
         {
             var category = numberCategoryList.SelectedItem?.ToString() ?? currentNumberChoice.Category;
-            var filteredChoices = numberChoices
-                .Where(choice => string.Equals(choice.Category, category, StringComparison.Ordinal))
-                .ToArray();
+            var filteredChoices = FilterFormatCellsNumberFormatChoices(numberChoices, category);
             numberFormatBox.ItemsSource = filteredChoices;
             if (numberFormatBox.SelectedItem is not FormatCellsNumberFormatChoice selected ||
-                !filteredChoices.Contains(selected))
+                !ContainsFormatCellsNumberFormatChoice(filteredChoices, selected))
             {
-                numberFormatBox.SelectedItem = filteredChoices.FirstOrDefault() ?? currentNumberChoice;
+                numberFormatBox.SelectedItem = filteredChoices.Count > 0 ? filteredChoices[0] : currentNumberChoice;
             }
         }
 
@@ -6064,10 +6082,50 @@ public sealed class MainWindow : Window
             new("Date", "m/d/yyyy", "1/1/2026"),
             new("Time", "h:mm AM/PM", "9:30 AM"),
         };
-        if (!choices.Any(choice => string.Equals(choice.FormatCode, currentNumberFormat, StringComparison.Ordinal)))
+        if (FindFormatCellsNumberFormatChoice(choices, currentNumberFormat) is null)
             choices.Add(new FormatCellsNumberFormatChoice("Custom", currentNumberFormat, "Custom"));
 
         return choices;
+    }
+
+    private static FormatCellsNumberFormatChoice? FindFormatCellsNumberFormatChoice(
+        IEnumerable<FormatCellsNumberFormatChoice> choices,
+        string formatCode)
+    {
+        foreach (var choice in choices)
+        {
+            if (string.Equals(choice.FormatCode, formatCode, StringComparison.Ordinal))
+                return choice;
+        }
+
+        return null;
+    }
+
+    private static IReadOnlyList<FormatCellsNumberFormatChoice> FilterFormatCellsNumberFormatChoices(
+        IEnumerable<FormatCellsNumberFormatChoice> choices,
+        string category)
+    {
+        var matchingChoices = new List<FormatCellsNumberFormatChoice>();
+        foreach (var choice in choices)
+        {
+            if (string.Equals(choice.Category, category, StringComparison.Ordinal))
+                matchingChoices.Add(choice);
+        }
+
+        return matchingChoices;
+    }
+
+    private static bool ContainsFormatCellsNumberFormatChoice(
+        IEnumerable<FormatCellsNumberFormatChoice> choices,
+        FormatCellsNumberFormatChoice selected)
+    {
+        foreach (var choice in choices)
+        {
+            if (EqualityComparer<FormatCellsNumberFormatChoice>.Default.Equals(choice, selected))
+                return true;
+        }
+
+        return false;
     }
 
     private static IReadOnlyList<FormatCellsNullableChoice<CellHAlign>> CreateFormatCellsHorizontalAlignmentChoices() =>
@@ -9109,10 +9167,11 @@ public sealed class MainWindow : Window
         var operatorChoices = CreateDataValidationOperatorChoices();
         var alertStyleChoices = CreateDataValidationAlertStyleChoices();
         var activeRule = summary.ActiveCellRule;
-        var initialType = activeRule is not null && typeChoices.Any(choice => choice.Type == activeRule.Type)
-            ? activeRule.Type
-            : DvType.WholeNumber;
-        var initialRule = activeRule is not null && typeChoices.Any(choice => choice.Type == activeRule.Type)
+        var activeTypeChoice = activeRule is null
+            ? null
+            : FindDataValidationTypeChoice(typeChoices, activeRule.Type);
+        var initialType = activeTypeChoice?.Type ?? DvType.WholeNumber;
+        var initialRule = activeRule is not null && activeTypeChoice is not null
             ? activeRule
             : CreateDefaultDataValidationRule(initialType, _session.SelectedRange);
 
@@ -9273,13 +9332,12 @@ public sealed class MainWindow : Window
 
         void SelectOperator(DvOperator op)
         {
-            operatorBox.SelectedItem = operatorChoices.FirstOrDefault(choice => choice.Operator == op) ??
-                operatorChoices[0];
+            operatorBox.SelectedItem = FindDataValidationOperatorChoice(operatorChoices, op);
         }
 
         void LoadRule(DataValidation rule)
         {
-            typeBox.SelectedItem = typeChoices.FirstOrDefault(choice => choice.Type == rule.Type) ?? typeChoices[0];
+            typeBox.SelectedItem = FindDataValidationTypeChoice(typeChoices, rule.Type) ?? typeChoices[0];
             SelectOperator(rule.Operator);
             formula1Box.Text = rule.Formula1 ?? "";
             formula2Box.Text = rule.Formula2 ?? "";
@@ -9287,8 +9345,7 @@ public sealed class MainWindow : Window
             showDropdownBox.IsChecked = rule.ShowDropdown;
             showInputMessageBox.IsChecked = rule.ShowInputMessage;
             showErrorMessageBox.IsChecked = rule.ShowErrorMessage;
-            alertStyleBox.SelectedItem = alertStyleChoices.FirstOrDefault(choice => choice.AlertStyle == rule.AlertStyle) ??
-                alertStyleChoices[0];
+            alertStyleBox.SelectedItem = FindDataValidationAlertStyleChoice(alertStyleChoices, rule.AlertStyle);
             promptTitleBox.Text = rule.PromptTitle ?? "";
             promptMessageBox.Text = rule.PromptMessage ?? "";
             errorTitleBox.Text = rule.ErrorTitle ?? "";
@@ -9497,6 +9554,21 @@ public sealed class MainWindow : Window
         new(DvAlertStyle.Warning, "Warning"),
         new(DvAlertStyle.Information, "Information"),
     ];
+
+    private static DataValidationTypeChoice? FindDataValidationTypeChoice(
+        IReadOnlyList<DataValidationTypeChoice> choices,
+        DvType type) =>
+        choices.FirstOrDefault(choice => choice.Type == type);
+
+    private static DataValidationOperatorChoice FindDataValidationOperatorChoice(
+        IReadOnlyList<DataValidationOperatorChoice> choices,
+        DvOperator op) =>
+        choices.FirstOrDefault(choice => choice.Operator == op) ?? choices[0];
+
+    private static DataValidationAlertStyleChoice FindDataValidationAlertStyleChoice(
+        IReadOnlyList<DataValidationAlertStyleChoice> choices,
+        DvAlertStyle alertStyle) =>
+        choices.FirstOrDefault(choice => choice.AlertStyle == alertStyle) ?? choices[0];
 
     private static DataValidation CreateDefaultDataValidationRule(DvType type, GridRange selectedRange)
     {

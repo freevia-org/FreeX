@@ -35,25 +35,42 @@ public static partial class XlsxChartPartReader
             .ToList();
         if (chartExSeries.Count > 0)
         {
-            var hasParetoLine = false;
-            XElement? primarySeries = null;
-            foreach (var series in chartExSeries)
-            {
-                if (string.Equals(series.Attribute("layoutId")?.Value, "paretoLine", StringComparison.OrdinalIgnoreCase))
-                {
-                    hasParetoLine = true;
-                    continue;
-                }
-
-                primarySeries ??= series;
-            }
-
+            var primarySeries = FindPrimaryChartExSeries(chartExSeries, out var hasParetoLine);
             if (primarySeries is not null && ToChartExChartType(primarySeries.Attribute("layoutId")?.Value, hasParetoLine) is { } chartType)
                 return (primarySeries.Parent ?? primarySeries, chartType);
         }
 
-        var mapChart = FindFirstMapChartElement(plotArea);
+        var mapChart = FindMapChartElement(plotArea);
         return mapChart is null ? null : (mapChart, ChartType.Map);
+    }
+
+    private static XElement? FindPrimaryChartExSeries(IEnumerable<XElement> chartExSeries, out bool hasParetoLine)
+    {
+        hasParetoLine = false;
+        XElement? primarySeries = null;
+        foreach (var series in chartExSeries)
+        {
+            if (string.Equals(series.Attribute("layoutId")?.Value, "paretoLine", StringComparison.OrdinalIgnoreCase))
+            {
+                hasParetoLine = true;
+                continue;
+            }
+
+            primarySeries ??= series;
+        }
+
+        return primarySeries;
+    }
+
+    private static XElement? FindMapChartElement(XElement plotArea)
+    {
+        foreach (var element in plotArea.Descendants())
+        {
+            if (IsMapChartElement(element))
+                return element;
+        }
+
+        return null;
     }
 
     private static ChartType? ToChartExChartType(string? layoutId, bool hasParetoLine) =>

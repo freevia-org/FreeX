@@ -654,6 +654,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
             .Should()
             .BeTrue(blockReason);
+        AssertWorksheetSortStateAndDataConsolidationModel(workbook.GetSheetAt(0));
 
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(42));
@@ -672,6 +673,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceDataConsolidate.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        AssertWorksheetSortStateAndDataConsolidationModel(reloaded.GetSheetAt(0));
     }
 
     [Fact]
@@ -812,6 +817,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .BeTrue(blockReason);
 
         var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetSingleXmlCellsModel(sheet.SingleXmlCells);
         sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
 
         using var saved = new MemoryStream();
@@ -828,6 +834,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceSingleXmlCells.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        AssertWorksheetSingleXmlCellsModel(reloaded.GetSheetAt(0).SingleXmlCells);
     }
 
 
@@ -957,6 +967,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
             .Should()
             .BeTrue(blockReason);
+        AssertWorksheetDiagnosticsModel(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(42));
@@ -975,6 +986,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceIgnoredErrors.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        AssertWorksheetDiagnosticsModel(reloaded);
     }
 
     [Fact]
@@ -1245,6 +1260,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
             .Should()
             .BeTrue(blockReason);
+        AssertProtectedRangesModel(workbook.GetSheetAt(0));
 
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(42));
@@ -1259,6 +1275,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceProtectedRanges.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        AssertProtectedRangesModel(reloaded.GetSheetAt(0));
     }
 
     [Fact]
@@ -3529,6 +3549,26 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         return workbook;
     }
 
+    private static void AssertWorksheetSortStateAndDataConsolidationModel(Sheet sheet)
+    {
+        sheet.SortState.Should().NotBeNull();
+        sheet.SortState!.Reference.Should().Be("A1:B5");
+        sheet.SortState.CaseSensitive.Should().BeTrue();
+        sheet.SortState.SortMethod.Should().Be("stroke");
+        var sortCondition = sheet.SortState.Conditions.Should().ContainSingle().Subject;
+        sortCondition.Reference.Should().Be("A2:A5");
+        sortCondition.Descending.Should().BeTrue();
+
+        sheet.DataConsolidation.Should().NotBeNull();
+        sheet.DataConsolidation!.Function.Should().Be("sum");
+        sheet.DataConsolidation.LeftLabels.Should().BeTrue();
+        sheet.DataConsolidation.TopLabels.Should().BeTrue();
+        sheet.DataConsolidation.Link.Should().BeTrue();
+        var dataReference = sheet.DataConsolidation.References.Should().ContainSingle().Subject;
+        dataReference.Reference.Should().Be("A1:B5");
+        dataReference.Sheet.Should().Be("Data");
+    }
+
     private static void SetStructuredTableAutoFilterInvalidAttributes(MemoryStream stream)
     {
         stream.Position = 0;
@@ -3792,6 +3832,24 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         return workbook;
     }
 
+    private static void AssertWorksheetSingleXmlCellsModel(WorksheetSingleXmlCellsModel? singleXmlCells)
+    {
+        singleXmlCells.Should().NotBeNull();
+        singleXmlCells!.Cells.Should().SatisfyRespectively(
+            first =>
+            {
+                first.Id.Should().Be(1);
+                first.Reference.Should().Be("A1");
+                first.XmlCellPropertyId.Should().Be(1);
+            },
+            second =>
+            {
+                second.Id.Should().Be(2);
+                second.Reference.Should().Be("B2");
+                second.XmlCellPropertyId.Should().Be(1);
+            });
+    }
+
     private static Workbook CreateWorksheetCustomPropertiesSourceWorkbook()
     {
         var workbook = new Workbook("WorksheetCustomPropertiesPatchSave");
@@ -3867,6 +3925,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(12));
         workbook.WatchedCells.Add(watchedAddress);
         return workbook;
+    }
+
+    private static void AssertWorksheetDiagnosticsModel(Workbook workbook)
+    {
+        var sheet = workbook.GetSheetAt(0);
+        workbook.WatchedCells.Should().ContainSingle().Which.Should().Be(new CellAddress(sheet.Id, 2, 2));
+        sheet.GetCell(1, 1)!.IgnoreFormulaError.Should().BeTrue();
     }
 
     private static void SetWorksheetCellWatchesInvalidAttributes(MemoryStream stream)
@@ -4275,6 +4340,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         protectedRange.Attribute("spinCount").Should().BeNull();
         protectedRange.Attribute("customProtectedRangeFlag").Should().BeNull();
         protectedRange.Elements().Should().BeEmpty();
+    }
+
+    private static void AssertProtectedRangesModel(Sheet sheet)
+    {
+        var allowEditRange = sheet.AllowEditRanges.Should().ContainSingle().Subject;
+        allowEditRange.Start.ToA1().Should().Be("B2");
+        allowEditRange.End.ToA1().Should().Be("C3");
     }
 
     private static Workbook CreateWorksheetCalculationPropertiesSourceWorkbook()

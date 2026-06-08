@@ -400,12 +400,34 @@ internal static class RibbonAdaptiveTabProfiles
         var normalizedTabHeader = NormalizeTabHeader(selectedTabHeader);
         if (normalizedTabHeader is not null)
         {
-            var tabProfile = Profiles.FirstOrDefault(profile => profile.MatchesTabHeader(normalizedTabHeader));
+            var tabProfile = FindProfileByTabHeader(normalizedTabHeader);
             if (tabProfile is not null)
                 return tabProfile;
         }
 
-        return Profiles.FirstOrDefault(profile => profile.MatchesGroups(groupNames));
+        return FindProfileByGroups(groupNames);
+    }
+
+    private static RibbonAdaptiveTabProfile? FindProfileByTabHeader(string normalizedTabHeader)
+    {
+        foreach (var profile in Profiles)
+        {
+            if (profile.MatchesTabHeader(normalizedTabHeader))
+                return profile;
+        }
+
+        return null;
+    }
+
+    private static RibbonAdaptiveTabProfile? FindProfileByGroups(IReadOnlyList<string> groupNames)
+    {
+        foreach (var profile in Profiles)
+        {
+            if (profile.MatchesGroups(groupNames))
+                return profile;
+        }
+
+        return null;
     }
 
     private static string? NormalizeTabHeader(string? selectedTabHeader)
@@ -505,6 +527,9 @@ internal static class RibbonAdaptiveTabProfiles
         for (var i = Math.Clamp(firstCollapsedIndex, 0, states.Length); i < states.Length; i++)
             states[i] = RibbonAdaptiveGroupState.Collapsed;
     }
+
+    private static bool IsWithinMaxWidth(double availableWidth, double maxWidth) =>
+        availableWidth <= maxWidth;
 
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> GroupCatalogIds =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
@@ -617,7 +642,7 @@ internal static class RibbonAdaptiveTabProfiles
             foreach (var assignment in Defaults)
                 ApplyState(groupNames, states, assignment.GroupName, assignment.State);
 
-            var breakpoint = Breakpoints.FirstOrDefault(rule => availableWidth <= rule.MaxWidth);
+            var breakpoint = FindBreakpoint(availableWidth);
             if (breakpoint is not null)
                 ApplyRule(breakpoint, groupNames, states);
         }
@@ -645,9 +670,7 @@ internal static class RibbonAdaptiveTabProfiles
             ApplyRuntimeOverrides(RuntimeVisibility ?? [], availableWidth, groupNames, states);
 
         public IReadOnlyList<string> ProtectedGroupsFor(double availableWidth) =>
-            (ProtectedGroups ?? [])
-                .FirstOrDefault(rule => availableWidth <= rule.MaxWidth)
-                ?.GroupNames ?? [];
+            FindProtectedGroups(availableWidth)?.GroupNames ?? [];
 
         public IEnumerable<double> BreakpointThresholds => Breakpoints.Select(rule => rule.MaxWidth);
 
@@ -656,6 +679,31 @@ internal static class RibbonAdaptiveTabProfiles
 
         public IEnumerable<double> ProtectedThresholds =>
             (ProtectedGroups ?? []).Select(rule => rule.MaxWidth);
+
+        private RibbonAdaptiveBreakpointRule? FindBreakpoint(double availableWidth)
+        {
+            foreach (var rule in Breakpoints)
+            {
+                if (IsWithinMaxWidth(availableWidth, rule.MaxWidth))
+                    return rule;
+            }
+
+            return null;
+        }
+
+        private RibbonAdaptiveProtectedGroupsRule? FindProtectedGroups(double availableWidth)
+        {
+            if (ProtectedGroups is null)
+                return null;
+
+            foreach (var rule in ProtectedGroups)
+            {
+                if (IsWithinMaxWidth(availableWidth, rule.MaxWidth))
+                    return rule;
+            }
+
+            return null;
+        }
     }
 
     private static IReadOnlyList<RibbonAdaptiveRuntimeStateOverride> RuntimeOverridesFor(
