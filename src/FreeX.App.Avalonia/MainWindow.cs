@@ -460,6 +460,9 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _freezeFirstColumnMenuItem = new();
     private readonly NativeMenuItem _unfreezePanesMenuItem = new();
     private readonly NativeMenuItem _showFormulasMenuItem = new();
+    private readonly NativeMenuItem _minimizeWindowMenuItem = new();
+    private readonly NativeMenuItem _zoomWindowMenuItem = new();
+    private readonly NativeMenuItem _bringAllToFrontMenuItem = new();
     private readonly NativeMenuItem _helpOnlineMenuItem = new();
     private readonly NativeMenuItem _sendFeedbackMenuItem = new();
     private readonly NativeMenuItem _checkForUpdatesMenuItem = new();
@@ -1023,6 +1026,23 @@ public sealed class MainWindow : Window
         _quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);
         _quitMenuItem.Click += async (_, _) => await TryQuitApplicationAsync();
 
+        _minimizeWindowMenuItem.Header = "Minimize";
+        _minimizeWindowMenuItem.Gesture = new KeyGesture(Key.M, KeyModifiers.Meta);
+        _minimizeWindowMenuItem.Click += (_, _) => WindowState = WindowState.Minimized;
+
+        _zoomWindowMenuItem.Header = "Zoom";
+        _zoomWindowMenuItem.Click += (_, _) =>
+            WindowState = WindowState == WindowState.Maximized
+                ? WindowState.Normal
+                : WindowState.Maximized;
+
+        _bringAllToFrontMenuItem.Header = "Bring All to Front";
+        _bringAllToFrontMenuItem.Click += (_, _) =>
+        {
+            Show();
+            Activate();
+        };
+
         var fileMenu = new NativeMenu();
         fileMenu.Items.Add(_newWorkbookMenuItem);
         fileMenu.Items.Add(_openMenuItem);
@@ -1155,6 +1175,12 @@ public sealed class MainWindow : Window
         sheetMenu.Items.Add(new NativeMenuItemSeparator());
         sheetMenu.Items.Add(_deleteSheetMenuItem);
 
+        var windowMenu = new NativeMenu();
+        windowMenu.Items.Add(_minimizeWindowMenuItem);
+        windowMenu.Items.Add(_zoomWindowMenuItem);
+        windowMenu.Items.Add(new NativeMenuItemSeparator());
+        windowMenu.Items.Add(_bringAllToFrontMenuItem);
+
         var helpMenu = new NativeMenu();
         helpMenu.Items.Add(_helpOnlineMenuItem);
         helpMenu.Items.Add(_sendFeedbackMenuItem);
@@ -1198,6 +1224,11 @@ public sealed class MainWindow : Window
         {
             Header = "Sheet",
             Menu = sheetMenu,
+        });
+        _nativeMenu.Items.Add(new NativeMenuItem
+        {
+            Header = "Window",
+            Menu = windowMenu,
         });
         _nativeMenu.Items.Add(new NativeMenuItem
         {
@@ -11086,6 +11117,9 @@ public sealed class MainWindow : Window
         var hasNativeSheetMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
             string.Equals(item.Header?.ToString(), "Sheet", StringComparison.Ordinal) &&
             item.Menu is not null) == true;
+        var hasNativeWindowMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
+            string.Equals(item.Header?.ToString(), "Window", StringComparison.Ordinal) &&
+            item.Menu is not null) == true;
         var hasNativeHelpMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
             string.Equals(item.Header?.ToString(), "Help", StringComparison.Ordinal) &&
             item.Menu is not null) == true;
@@ -11182,6 +11216,7 @@ public sealed class MainWindow : Window
             HasNativeFormatMenu: hasNativeFormatMenu,
             HasNativeViewMenu: hasNativeViewMenu,
             HasNativeSheetMenu: hasNativeSheetMenu,
+            HasNativeWindowMenu: hasNativeWindowMenu,
             HasNativeHelpMenu: hasNativeHelpMenu,
             HasNativeNewWorkbookMenuItem: HasNativeMenuItem(_newWorkbookMenuItem, "New Workbook"),
             HasNativeOpenMenuItem: HasNativeMenuItem(_openMenuItem, "Open..."),
@@ -11319,6 +11354,9 @@ public sealed class MainWindow : Window
             HasNativeAlignCenterMenuItem: HasNativeMenuItem(_alignCenterMenuItem, "Align Center", requireGesture: false),
             HasNativeAlignRightMenuItem: HasNativeMenuItem(_alignRightMenuItem, "Align Right", requireGesture: false),
             HasNativeShowFormulasMenuItem: HasNativeMenuItem(_showFormulasMenuItem, "Show Formulas"),
+            HasNativeMinimizeWindowMenuItem: HasNativeMenuItem(_minimizeWindowMenuItem, "Minimize"),
+            HasNativeZoomWindowMenuItem: HasNativeMenuItem(_zoomWindowMenuItem, "Zoom", requireGesture: false),
+            HasNativeBringAllToFrontMenuItem: HasNativeMenuItem(_bringAllToFrontMenuItem, "Bring All to Front", requireGesture: false),
             HasNativeHelpOnlineMenuItem: HasNativeMenuItem(_helpOnlineMenuItem, "Help Online"),
             HasNativeSendFeedbackMenuItem: HasNativeMenuItem(_sendFeedbackMenuItem, "Send Feedback", requireGesture: false),
             HasNativeCheckForUpdatesMenuItem: HasNativeMenuItem(_checkForUpdatesMenuItem, "Check for Updates", requireGesture: false),

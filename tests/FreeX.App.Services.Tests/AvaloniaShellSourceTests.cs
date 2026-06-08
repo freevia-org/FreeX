@@ -3819,6 +3819,46 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("e.Key == Key.W && HasOnlyCommandModifier(e.KeyModifiers)");
     }
 
+    [Fact]
+    public void MainWindow_WiresNativeWindowMenuToMacOsWindowActionsAndLaunchSmoke()
+    {
+        var windowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+
+        windowSource.Should().Contain("private readonly NativeMenuItem _minimizeWindowMenuItem = new();");
+        windowSource.Should().Contain("private readonly NativeMenuItem _zoomWindowMenuItem = new();");
+        windowSource.Should().Contain("private readonly NativeMenuItem _bringAllToFrontMenuItem = new();");
+        windowSource.Should().Contain("_minimizeWindowMenuItem.Header = \"Minimize\";");
+        windowSource.Should().Contain("_minimizeWindowMenuItem.Gesture = new KeyGesture(Key.M, KeyModifiers.Meta);");
+        windowSource.Should().Contain("_minimizeWindowMenuItem.Click += (_, _) => WindowState = WindowState.Minimized;");
+        windowSource.Should().Contain("_zoomWindowMenuItem.Header = \"Zoom\";");
+        windowSource.Should().Contain("WindowState = WindowState == WindowState.Maximized");
+        windowSource.Should().Contain("_bringAllToFrontMenuItem.Header = \"Bring All to Front\";");
+        windowSource.Should().Contain("var windowMenu = new NativeMenu();");
+        windowSource.Should().Contain("windowMenu.Items.Add(_minimizeWindowMenuItem);");
+        windowSource.Should().Contain("windowMenu.Items.Add(_zoomWindowMenuItem);");
+        windowSource.Should().Contain("windowMenu.Items.Add(_bringAllToFrontMenuItem);");
+        windowSource.Should().Contain("Header = \"Window\",");
+        windowSource.Should().Contain("Menu = windowMenu,");
+        windowSource.Should().Contain("HasNativeWindowMenu: hasNativeWindowMenu");
+        windowSource.Should().Contain("HasNativeMinimizeWindowMenuItem: HasNativeMenuItem(_minimizeWindowMenuItem, \"Minimize\")");
+        windowSource.Should().Contain("HasNativeZoomWindowMenuItem: HasNativeMenuItem(_zoomWindowMenuItem, \"Zoom\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeBringAllToFrontMenuItem: HasNativeMenuItem(_bringAllToFrontMenuItem, \"Bring All to Front\", requireGesture: false)");
+
+        smokeSource.Should().Contain("bool HasNativeWindowMenu,");
+        smokeSource.Should().Contain("bool HasNativeMinimizeWindowMenuItem,");
+        smokeSource.Should().Contain("bool HasNativeZoomWindowMenuItem,");
+        smokeSource.Should().Contain("bool HasNativeBringAllToFrontMenuItem,");
+        smokeSource.Should().Contain("HasNativeWindowMenu &&");
+        smokeSource.Should().Contain("HasNativeMinimizeWindowMenuItem &&");
+        smokeSource.Should().Contain("HasNativeZoomWindowMenuItem &&");
+        smokeSource.Should().Contain("HasNativeBringAllToFrontMenuItem &&");
+        smokeSource.Should().Contain("native_window_menu={FormatBool(snapshot.HasNativeWindowMenu)}");
+        smokeSource.Should().Contain("native_minimize_window_menu_item={FormatBool(snapshot.HasNativeMinimizeWindowMenuItem)}");
+        smokeSource.Should().Contain("native_zoom_window_menu_item={FormatBool(snapshot.HasNativeZoomWindowMenuItem)}");
+        smokeSource.Should().Contain("native_bring_all_to_front_menu_item={FormatBool(snapshot.HasNativeBringAllToFrontMenuItem)}");
+    }
+
     private static string ExtractSourceBlock(string source, string startMarker, string endMarker)
     {
         var start = source.IndexOf(startMarker, StringComparison.Ordinal);

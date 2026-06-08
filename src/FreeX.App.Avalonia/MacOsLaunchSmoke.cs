@@ -343,6 +343,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeFormatMenu,
     bool HasNativeViewMenu,
     bool HasNativeSheetMenu,
+    bool HasNativeWindowMenu,
     bool HasNativeHelpMenu,
     bool HasNativeNewWorkbookMenuItem,
     bool HasNativeOpenMenuItem,
@@ -479,6 +480,9 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeAlignCenterMenuItem,
     bool HasNativeAlignRightMenuItem,
     bool HasNativeShowFormulasMenuItem,
+    bool HasNativeMinimizeWindowMenuItem,
+    bool HasNativeZoomWindowMenuItem,
+    bool HasNativeBringAllToFrontMenuItem,
     bool HasNativeHelpOnlineMenuItem,
     bool HasNativeSendFeedbackMenuItem,
     bool HasNativeCheckForUpdatesMenuItem,
@@ -533,6 +537,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeFormatMenu &&
         HasNativeViewMenu &&
         HasNativeSheetMenu &&
+        HasNativeWindowMenu &&
         HasNativeHelpMenu &&
         HasNativeNewWorkbookMenuItem &&
         HasNativeOpenMenuItem &&
@@ -670,6 +675,9 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeAlignCenterMenuItem &&
         HasNativeAlignRightMenuItem &&
         HasNativeShowFormulasMenuItem &&
+        HasNativeMinimizeWindowMenuItem &&
+        HasNativeZoomWindowMenuItem &&
+        HasNativeBringAllToFrontMenuItem &&
         HasNativeHelpOnlineMenuItem &&
         HasNativeSendFeedbackMenuItem &&
         HasNativeCheckForUpdatesMenuItem &&
@@ -1000,6 +1008,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_format_menu={FormatBool(snapshot.HasNativeFormatMenu)}",
                 $"native_view_menu={FormatBool(snapshot.HasNativeViewMenu)}",
                 $"native_sheet_menu={FormatBool(snapshot.HasNativeSheetMenu)}",
+                $"native_window_menu={FormatBool(snapshot.HasNativeWindowMenu)}",
                 $"native_help_menu={FormatBool(snapshot.HasNativeHelpMenu)}",
                 $"native_new_workbook_menu_item={FormatBool(snapshot.HasNativeNewWorkbookMenuItem)}",
                 $"native_open_menu_item={FormatBool(snapshot.HasNativeOpenMenuItem)}",
@@ -1137,6 +1146,9 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_align_center_menu_item={FormatBool(snapshot.HasNativeAlignCenterMenuItem)}",
                 $"native_align_right_menu_item={FormatBool(snapshot.HasNativeAlignRightMenuItem)}",
                 $"native_show_formulas_menu_item={FormatBool(snapshot.HasNativeShowFormulasMenuItem)}",
+                $"native_minimize_window_menu_item={FormatBool(snapshot.HasNativeMinimizeWindowMenuItem)}",
+                $"native_zoom_window_menu_item={FormatBool(snapshot.HasNativeZoomWindowMenuItem)}",
+                $"native_bring_all_to_front_menu_item={FormatBool(snapshot.HasNativeBringAllToFrontMenuItem)}",
                 $"native_help_online_menu_item={FormatBool(snapshot.HasNativeHelpOnlineMenuItem)}",
                 $"native_send_feedback_menu_item={FormatBool(snapshot.HasNativeSendFeedbackMenuItem)}",
                 $"native_check_for_updates_menu_item={FormatBool(snapshot.HasNativeCheckForUpdatesMenuItem)}",
