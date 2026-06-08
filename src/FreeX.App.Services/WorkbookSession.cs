@@ -14,6 +14,113 @@ public sealed class WorkbookSession
         string Text,
         bool IsCut);
 
+    private sealed class ReplaceSubtotalRowsCommand : IWorkbookCommand
+    {
+        private const string SubtotalFormulaPrefix = "SUBTOTAL(";
+
+        private readonly SheetId _sheetId;
+        private readonly GridRange _range;
+        private readonly uint _groupColumnOffset;
+        private readonly IReadOnlyList<uint> _subtotalColumnOffsets;
+        private readonly int _functionNumber;
+        private readonly bool _pageBreakBetweenGroups;
+        private readonly bool _summaryBelowData;
+        private CompositeWorkbookCommand? _appliedCommand;
+
+        public string Label => "Subtotal";
+
+        public ReplaceSubtotalRowsCommand(
+            SheetId sheetId,
+            GridRange range,
+            uint groupColumnOffset,
+            IReadOnlyList<uint> subtotalColumnOffsets,
+            int functionNumber,
+            bool pageBreakBetweenGroups,
+            bool summaryBelowData)
+        {
+            _sheetId = sheetId;
+            _range = range;
+            _groupColumnOffset = groupColumnOffset;
+            _subtotalColumnOffsets = subtotalColumnOffsets;
+            _functionNumber = functionNumber;
+            _pageBreakBetweenGroups = pageBreakBetweenGroups;
+            _summaryBelowData = summaryBelowData;
+        }
+
+        public CommandOutcome Apply(ICommandContext ctx)
+        {
+            var sheet = ctx.GetSheet(_sheetId);
+            var sheetRange = _range;
+            var compactedRange = CompactRangeAfterExistingSubtotalRemoval(
+                sheet,
+                sheetRange);
+
+            _appliedCommand = new CompositeWorkbookCommand(
+                "Subtotal",
+                [
+                    new RemoveSubtotalRowsCommand(_sheetId, sheetRange),
+                    new SubtotalCommand(
+                        _sheetId,
+                        compactedRange,
+                        _groupColumnOffset,
+                        _subtotalColumnOffsets,
+                        _functionNumber,
+                        _pageBreakBetweenGroups,
+                        _summaryBelowData)
+                ]);
+            return _appliedCommand.Apply(ctx);
+        }
+
+        public void Revert(ICommandContext ctx)
+        {
+            _appliedCommand?.Revert(ctx);
+            _appliedCommand = null;
+        }
+
+        private static GridRange CompactRangeAfterExistingSubtotalRemoval(Sheet sheet, GridRange sheetRange)
+        {
+            var subtotalRowCount = CountSubtotalRows(sheet, sheetRange);
+            var compactedRowCount = sheetRange.RowCount > subtotalRowCount
+                ? sheetRange.RowCount - (uint)subtotalRowCount
+                : 1;
+            return new GridRange(
+                sheetRange.Start,
+                new CellAddress(
+                    sheetRange.End.Sheet,
+                    sheetRange.Start.Row + compactedRowCount - 1,
+                    sheetRange.End.Col));
+        }
+
+        private static int CountSubtotalRows(Sheet sheet, GridRange range)
+        {
+            if (!sheet.HasFormulas)
+                return 0;
+
+            var rows = new HashSet<uint>();
+            foreach (var address in sheet.EnumerateFormulaCells())
+            {
+                if (address.Row < range.Start.Row ||
+                    address.Row > range.End.Row ||
+                    address.Col < range.Start.Col ||
+                    address.Col > range.End.Col)
+                {
+                    continue;
+                }
+
+                if (IsSubtotalFormula(sheet.GetCell(address)?.FormulaText))
+                    rows.Add(address.Row);
+            }
+
+            return rows.Count;
+        }
+
+        private static bool IsSubtotalFormula(string? formula) =>
+            formula is not null &&
+            formula.AsSpan().TrimStart().StartsWith(
+                SubtotalFormulaPrefix,
+                StringComparison.OrdinalIgnoreCase);
+    }
+
     private const double MaximumRowHeight = 409.5;
     private const string MultiRangeClipboardErrorSuffix =
         " does not support multiple selected ranges yet.";
@@ -430,6 +537,63 @@ public sealed class WorkbookSession
             null,
             activeSheetCommand?.RemovedRowCount ?? 0,
             result);
+    }
+
+    public WorkbookCellEditResult ExecuteSubtotalOptions(SubtotalInputOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        var range = SelectedRange;
+        var command = CreateGroupedSheetCommand(
+            options.ReplaceExisting ? "Replace Subtotals" : "Subtotal",
+            sheetId =>
+            {
+                var sheetRange = RemapRangeToSheet(range, sheetId);
+                var subtotalCommand = new SubtotalCommand(
+                    sheetId,
+                    sheetRange,
+                    options.GroupColumnOffset,
+                    options.SubtotalColumnOffsets,
+                    options.FunctionNumber,
+                    options.PageBreakBetweenGroups,
+                    options.SummaryBelowData);
+                return options.ReplaceExisting
+                    ? new ReplaceSubtotalRowsCommand(
+                        sheetId,
+                        sheetRange,
+                        options.GroupColumnOffset,
+                        options.SubtotalColumnOffsets,
+                        options.FunctionNumber,
+                        options.PageBreakBetweenGroups,
+                        options.SummaryBelowData)
+                    : subtotalCommand;
+            });
+
+        var result = _cellEditService.ExecuteEditCommand(Workbook, command);
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
+    public WorkbookCellEditResult RemoveSelectedRangeSubtotals()
+    {
+        var range = SelectedRange;
+        var command = CreateGroupedSheetCommand(
+            "Remove Subtotals",
+            sheetId =>
+            {
+                var sheetRange = RemapRangeToSheet(range, sheetId);
+                return new RemoveSubtotalRowsCommand(sheetId, sheetRange);
+            });
+
+        var result = _cellEditService.ExecuteEditCommand(Workbook, command);
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
     }
 
     public WorkbookCellEditResult ExecuteForecastSheetPlan(ForecastSheetPlan plan)

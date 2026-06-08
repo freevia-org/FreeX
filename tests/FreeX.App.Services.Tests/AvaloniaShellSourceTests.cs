@@ -2004,6 +2004,75 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_WiresNativeSubtotalThroughSharedWorkbookSessionAndCompactDialog()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        source.Should().Contain("private readonly NativeMenuItem _subtotalMenuItem = new();");
+        source.Should().Contain("_subtotalMenuItem.Header = \"Subtotal...\";");
+        source.Should().Contain("_subtotalMenuItem.Click += async (_, _) => await ShowSubtotalDialogAsync();");
+        source.Should().Contain("dataMenu.Items.Add(_subtotalMenuItem);");
+        source.Should().Contain("_subtotalMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1 && _session.SelectedRange.ColCount > 1;");
+        source.Should().Contain("HasNativeSubtotalMenuItem: HasNativeMenuItem(_subtotalMenuItem, \"Subtotal...\", requireGesture: false)");
+
+        var removeDuplicatesMenuIndex = normalizedSource.IndexOf("dataMenu.Items.Add(_removeDuplicatesMenuItem);", StringComparison.Ordinal);
+        var subtotalMenuIndex = normalizedSource.IndexOf("dataMenu.Items.Add(_subtotalMenuItem);", StringComparison.Ordinal);
+        var dataValidationMenuIndex = normalizedSource.IndexOf("dataMenu.Items.Add(_dataValidationMenuItem);", StringComparison.Ordinal);
+        removeDuplicatesMenuIndex.Should().BeGreaterThanOrEqualTo(0);
+        subtotalMenuIndex.Should().BeGreaterThan(removeDuplicatesMenuIndex);
+        dataValidationMenuIndex.Should().BeGreaterThan(subtotalMenuIndex);
+
+        source.Should().Contain("private async Task ShowSubtotalDialogAsync()");
+        source.Should().Contain("var selection = await ShowSubtotalInputDialogAsync();");
+        source.Should().Contain("_session.RemoveSelectedRangeSubtotals()");
+        source.Should().Contain("_session.ExecuteSubtotalOptions(selection.Options!)");
+        source.Should().Contain("private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync()");
+        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"SubtotalCompactDialog\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(rangeText, \"SubtotalRangeSummaryText\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(groupColumnBox, \"SubtotalGroupColumnBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(functionBox, \"SubtotalFunctionBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(columnsPanel, \"SubtotalColumnsPanel\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(box, $\"SubtotalColumn{column.Offset}Box\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(replaceBox, \"SubtotalReplaceCurrentBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(pageBreakBox, \"SubtotalPageBreakBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(summaryBelowBox, \"SubtotalSummaryBelowBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(errorText, \"SubtotalErrorText\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"SubtotalOkButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(removeAllButton, \"SubtotalRemoveAllButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"SubtotalCancelButton\");");
+        source.Should().Contain("BuildSubtotalColumnChoices(_session.ActiveSheet, range)");
+        source.Should().Contain("CreateSubtotalFunctionChoices()");
+        source.Should().Contain("new SubtotalInputOptions(");
+
+        sessionSource.Should().Contain("public WorkbookCellEditResult ExecuteSubtotalOptions(SubtotalInputOptions options)");
+        sessionSource.Should().Contain("public WorkbookCellEditResult RemoveSelectedRangeSubtotals()");
+        sessionSource.Should().Contain("new SubtotalCommand(");
+        sessionSource.Should().Contain("new RemoveSubtotalRowsCommand(sheetId, sheetRange)");
+
+        smokeSource.Should().Contain("bool HasNativeSubtotalMenuItem,");
+        smokeSource.Should().Contain("HasNativeSubtotalMenuItem &&");
+        smokeSource.Should().Contain("native_subtotal_menu_item={FormatBool(snapshot.HasNativeSubtotalMenuItem)}");
+
+        var handlerIndex = normalizedSource.IndexOf("private async Task ShowSubtotalDialogAsync()", StringComparison.Ordinal);
+        handlerIndex.Should().BeGreaterThanOrEqualTo(0);
+        var nextMethodIndex = normalizedSource.IndexOf("\n    private async Task ShowRemoveDuplicatesDialogAsync()", handlerIndex, StringComparison.Ordinal);
+        nextMethodIndex.Should().BeGreaterThan(handlerIndex);
+        var routeSource = normalizedSource[handlerIndex..nextMethodIndex];
+
+        routeSource.Should().NotContain("new SubtotalCommand");
+        routeSource.Should().NotContain("new RemoveSubtotalRowsCommand");
+        routeSource.Should().NotContain("new SubtotalDialog(");
+        routeSource.Should().NotContain("FreeX.App.Host");
+        routeSource.Should().NotContain("DataTransferManager");
+        routeSource.Should().NotContain("WindowInteropHelper");
+        routeSource.Should().NotContain("Microsoft.Win32");
+        routeSource.Should().NotContain("System.Windows");
+    }
+
+    [Fact]
     public void MainWindow_WiresNativeReviewMenuThroughSharedWorkflowPlanAndNavigation()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));

@@ -78,6 +78,12 @@ public sealed class MainWindow : Window
         Clear
     }
 
+    private enum SubtotalDialogAction
+    {
+        Apply,
+        RemoveAll
+    }
+
     private enum GoalSeekStatusDialogChoice
     {
         KeepResult,
@@ -160,6 +166,17 @@ public sealed class MainWindow : Window
     private sealed record DataValidationDialogResult(
         DataValidationDialogAction Action,
         DataValidation? Rule);
+    private sealed record SubtotalDialogResult(
+        SubtotalDialogAction Action,
+        SubtotalInputOptions? Options);
+    private sealed record SubtotalColumnChoice(uint Offset, string Header, bool IsSelected)
+    {
+        public override string ToString() => Header;
+    }
+    private sealed record SubtotalFunctionChoice(string Label, string FunctionText)
+    {
+        public override string ToString() => Label;
+    }
     private sealed record SortDialogResult(
         IReadOnlyList<SortDialogLevel> Levels,
         bool HasHeaders);
@@ -361,6 +378,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _flashFillMenuItem = new();
     private readonly NativeMenuItem _advancedFilterMenuItem = new();
     private readonly NativeMenuItem _removeDuplicatesMenuItem = new();
+    private readonly NativeMenuItem _subtotalMenuItem = new();
     private readonly NativeMenuItem _dataValidationPreviewMenuItem = new();
     private readonly NativeMenuItem _dataValidationMenuItem = new();
     private readonly NativeMenuItem _whatIfAnalysisMenuItem = new();
@@ -723,6 +741,9 @@ public sealed class MainWindow : Window
         _removeDuplicatesMenuItem.Header = "Remove Duplicates...";
         _removeDuplicatesMenuItem.Click += async (_, _) => await ShowRemoveDuplicatesDialogAsync();
 
+        _subtotalMenuItem.Header = "Subtotal...";
+        _subtotalMenuItem.Click += async (_, _) => await ShowSubtotalDialogAsync();
+
         _dataValidationPreviewMenuItem.Header = "Data Validation Preview...";
         _dataValidationPreviewMenuItem.Click += async (_, _) => await ShowDataValidationPreviewDialogAsync();
 
@@ -1038,6 +1059,7 @@ public sealed class MainWindow : Window
         dataMenu.Items.Add(_flashFillMenuItem);
         dataMenu.Items.Add(_advancedFilterMenuItem);
         dataMenu.Items.Add(_removeDuplicatesMenuItem);
+        dataMenu.Items.Add(_subtotalMenuItem);
         dataMenu.Items.Add(new NativeMenuItemSeparator());
         dataMenu.Items.Add(_dataValidationPreviewMenuItem);
         dataMenu.Items.Add(_dataValidationMenuItem);
@@ -1786,6 +1808,7 @@ public sealed class MainWindow : Window
         _flashFillMenuItem.IsEnabled = isIdle;
         _advancedFilterMenuItem.IsEnabled = isIdle;
         _removeDuplicatesMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1;
+        _subtotalMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1 && _session.SelectedRange.ColCount > 1;
         _dataValidationPreviewMenuItem.IsEnabled = isIdle;
         _dataValidationMenuItem.IsEnabled = isIdle;
         _whatIfAnalysisMenuItem.IsEnabled = isIdle;
@@ -7617,6 +7640,299 @@ public sealed class MainWindow : Window
             },
         };
 
+    private async Task ShowSubtotalDialogAsync()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var selection = await ShowSubtotalInputDialogAsync();
+        if (selection is null)
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = selection.Action == SubtotalDialogAction.RemoveAll
+            ? _session.RemoveSelectedRangeSubtotals()
+            : _session.ExecuteSubtotalOptions(selection.Options!);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Subtotal failed.");
+            return;
+        }
+
+        RefreshShell(selection.Action == SubtotalDialogAction.RemoveAll
+            ? $"Removed subtotals from {rangeReference}"
+            : $"Added subtotals to {rangeReference}");
+    }
+
+    private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync()
+    {
+        SubtotalDialogResult? result = null;
+        var range = _session.SelectedRange;
+        var columns = BuildSubtotalColumnChoices(_session.ActiveSheet, range);
+
+        var dialog = new Window
+        {
+            Title = "Subtotal",
+            Width = 460,
+            Height = 480,
+            MinWidth = 400,
+            MinHeight = 380,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "SubtotalCompactDialog");
+
+        var rangeText = new TextBlock
+        {
+            Text = $"Range: {FormatRangeReference(range)}",
+            Foreground = HeaderForeground,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        AutomationProperties.SetAutomationId(rangeText, "SubtotalRangeSummaryText");
+
+        var groupColumnBox = new ComboBox
+        {
+            ItemsSource = columns,
+            SelectedIndex = 0,
+            MinWidth = 240,
+        };
+        AutomationProperties.SetAutomationId(groupColumnBox, "SubtotalGroupColumnBox");
+
+        var functionBox = new ComboBox
+        {
+            ItemsSource = CreateSubtotalFunctionChoices(),
+            SelectedIndex = 0,
+            MinWidth = 240,
+        };
+        AutomationProperties.SetAutomationId(functionBox, "SubtotalFunctionBox");
+
+        var columnsPanel = new StackPanel
+        {
+            Spacing = 4,
+        };
+        AutomationProperties.SetAutomationId(columnsPanel, "SubtotalColumnsPanel");
+
+        var columnBoxes = new List<CheckBox>();
+        foreach (var column in columns)
+        {
+            var box = new CheckBox
+            {
+                Content = column.Header,
+                IsChecked = column.IsSelected,
+            };
+            AutomationProperties.SetName(box, $"{column.Header} subtotal column");
+            AutomationProperties.SetAutomationId(box, $"SubtotalColumn{column.Offset}Box");
+            AutomationProperties.SetHelpText(box, "Select to add a subtotal calculation to this column.");
+            columnBoxes.Add(box);
+            columnsPanel.Children.Add(box);
+        }
+
+        var replaceBox = new CheckBox
+        {
+            Content = "Replace current subtotals",
+            IsChecked = true,
+        };
+        AutomationProperties.SetAutomationId(replaceBox, "SubtotalReplaceCurrentBox");
+
+        var pageBreakBox = new CheckBox
+        {
+            Content = "Page break between groups",
+            IsChecked = false,
+        };
+        AutomationProperties.SetAutomationId(pageBreakBox, "SubtotalPageBreakBox");
+
+        var summaryBelowBox = new CheckBox
+        {
+            Content = "Summary below data",
+            IsChecked = true,
+        };
+        AutomationProperties.SetAutomationId(summaryBelowBox, "SubtotalSummaryBelowBox");
+
+        var errorText = new TextBlock
+        {
+            Foreground = Brush(143, 74, 18),
+            TextWrapping = TextWrapping.Wrap,
+        };
+        AutomationProperties.SetAutomationId(errorText, "SubtotalErrorText");
+
+        var okButton = new Button
+        {
+            Content = "OK",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(okButton, "SubtotalOkButton");
+
+        var removeAllButton = new Button
+        {
+            Content = "Remove All",
+            MinWidth = 96,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(removeAllButton, "SubtotalRemoveAllButton");
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(cancelButton, "SubtotalCancelButton");
+
+        void Accept()
+        {
+            if (groupColumnBox.SelectedItem is not SubtotalColumnChoice groupColumn ||
+                functionBox.SelectedItem is not SubtotalFunctionChoice functionChoice ||
+                !SubtotalFunctionService.TryParse(functionChoice.FunctionText, out var functionNumber))
+            {
+                errorText.Text = "Choose a group column and subtotal function.";
+                groupColumnBox.Focus();
+                return;
+            }
+
+            var selectedOffsets = columns
+                .Where((_, index) => columnBoxes.ElementAtOrDefault(index)?.IsChecked == true)
+                .Select(static column => column.Offset)
+                .ToArray();
+            if (selectedOffsets.Length == 0)
+            {
+                errorText.Text = "Select at least one subtotal column.";
+                (columnBoxes.FirstOrDefault() as Control ?? okButton).Focus();
+                return;
+            }
+
+            result = new SubtotalDialogResult(
+                SubtotalDialogAction.Apply,
+                new SubtotalInputOptions(
+                    groupColumn.Offset,
+                    selectedOffsets,
+                    functionNumber,
+                    replaceBox.IsChecked == true,
+                    pageBreakBox.IsChecked == true,
+                    summaryBelowBox.IsChecked != false));
+            dialog.Close();
+        }
+
+        okButton.Click += (_, _) => Accept();
+        removeAllButton.Click += (_, _) =>
+        {
+            result = new SubtotalDialogResult(SubtotalDialogAction.RemoveAll, Options: null);
+            dialog.Close();
+        };
+        cancelButton.Click += (_, _) => dialog.Close();
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                Accept();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                dialog.Close();
+                e.Handled = true;
+            }
+        };
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Children =
+            {
+                removeAllButton,
+                cancelButton,
+                okButton,
+            },
+        };
+
+        dialog.Content = new DockPanel
+        {
+            Margin = new Thickness(16),
+            Children =
+            {
+                buttonRow,
+                new ScrollViewer
+                {
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                    Content = new StackPanel
+                    {
+                        Spacing = 10,
+                        Children =
+                        {
+                            rangeText,
+                            CreateSubtotalField("At each change in", groupColumnBox),
+                            CreateSubtotalField("Use function", functionBox),
+                            new GroupBox
+                            {
+                                Header = "Add subtotal to",
+                                Content = columnsPanel,
+                            },
+                            replaceBox,
+                            pageBreakBox,
+                            summaryBelowBox,
+                            errorText,
+                        },
+                    },
+                },
+            },
+        };
+        DockPanel.SetDock(buttonRow, Dock.Bottom);
+        dialog.Opened += (_, _) => groupColumnBox.Focus();
+
+        await dialog.ShowDialog(this);
+        return result;
+    }
+
+    private static IReadOnlyList<SubtotalColumnChoice> BuildSubtotalColumnChoices(Sheet sheet, GridRange range)
+    {
+        var choices = new List<SubtotalColumnChoice>();
+        for (uint offset = 0; offset < range.ColCount; offset++)
+        {
+            var absoluteColumn = range.Start.Col + offset;
+            var header = FormatScalarValue(sheet.GetValue(range.Start.Row, absoluteColumn));
+            if (string.IsNullOrWhiteSpace(header))
+                header = $"Column {CellAddress.NumberToColumnName(absoluteColumn)}";
+
+            choices.Add(new SubtotalColumnChoice(offset, header, IsSelected: offset != 0));
+        }
+
+        return choices.Count == 0
+            ? [new SubtotalColumnChoice(0, "Column A", IsSelected: false)]
+            : choices;
+    }
+
+    private static IReadOnlyList<SubtotalFunctionChoice> CreateSubtotalFunctionChoices() =>
+    [
+        new("Sum", "Sum"),
+        new("Count", "Count"),
+        new("Average", "Average"),
+        new("Max", "Max"),
+        new("Min", "Min"),
+        new("Product", "Product"),
+        new("Count Numbers", "CountA"),
+        new("StdDev", "StdDev"),
+        new("StdDevp", "StdDevp"),
+        new("Var", "Var"),
+        new("Varp", "Varp"),
+    ];
+
+    private static StackPanel CreateSubtotalField(string label, Control control) =>
+        new()
+        {
+            Spacing = 4,
+            Children =
+            {
+                new TextBlock { Text = label },
+                control,
+            },
+        };
+
     private async Task ShowRemoveDuplicatesDialogAsync()
     {
         if (_isOpening || _isSaving)
@@ -10912,6 +11228,7 @@ public sealed class MainWindow : Window
             HasNativeFlashFillMenuItem: HasNativeMenuItem(_flashFillMenuItem, "Flash Fill"),
             HasNativeAdvancedFilterMenuItem: HasNativeMenuItem(_advancedFilterMenuItem, "Advanced Filter...", requireGesture: false),
             HasNativeRemoveDuplicatesMenuItem: HasNativeMenuItem(_removeDuplicatesMenuItem, "Remove Duplicates...", requireGesture: false),
+            HasNativeSubtotalMenuItem: HasNativeMenuItem(_subtotalMenuItem, "Subtotal...", requireGesture: false),
             HasNativeDataValidationPreviewMenuItem: HasNativeMenuItem(_dataValidationPreviewMenuItem, "Data Validation Preview...", requireGesture: false),
             HasNativeDataValidationMenuItem: HasNativeMenuItem(_dataValidationMenuItem, "Data Validation...", requireGesture: false),
             HasNativeWhatIfAnalysisMenuItem: HasNativeMenuItem(_whatIfAnalysisMenuItem, "What-If Analysis", requireGesture: false),
