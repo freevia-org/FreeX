@@ -23,7 +23,7 @@ public static class PortablePdfDocumentExporter
     private static readonly Encoding PdfEncoding = Encoding.ASCII;
     // Keep the non-WinAnsi guard until Unicode PDF output is backed by real font data and external PDF validation.
     private const string DeferredUnicodePdfPathRequirements =
-        "Unicode PDF export requires a real licensed TrueType/OpenType font subset, Type0/Identity-H text, ToUnicode mappings, and parser, render, and text extraction validation.";
+        PortablePdfWinAnsiTextCapability.DeferredUnicodePdfPathRequirements;
     private static readonly CellColor GridStrokeColor = new(196, 202, 210);
     private static readonly CellColor TitleFillColor = new(238, 242, 247);
     private static readonly CellColor HeaderTextColor = new(31, 41, 55);
@@ -90,6 +90,10 @@ public static class PortablePdfDocumentExporter
             throw new InvalidOperationException(exportPlan.StatusText);
 
         options ??= new PortablePdfDocumentOptions();
+        var textCapabilityPlan = PortablePdfTextCapabilityPlanner.CreatePlan(workbook, exportPlan, options);
+        if (!textCapabilityPlan.IsReady)
+            throw new InvalidOperationException(textCapabilityPlan.StatusText);
+
         var pageStreams = exportPlan.PageRequests
             .Select(request => RenderPage(workbook, exportPlan, request, options))
             .ToArray();
@@ -305,16 +309,8 @@ public static class PortablePdfDocumentExporter
         return $"<{EncodeWinAnsiHexText(normalized)}>";
     }
 
-    private static string NormalizePdfText(string text)
-    {
-        var normalized = new StringBuilder(text.Length);
-        foreach (var ch in text)
-        {
-            normalized.Append(ch is '\r' or '\n' or '\t' ? ' ' : ch);
-        }
-
-        return normalized.ToString();
-    }
+    private static string NormalizePdfText(string text) =>
+        PortablePdfWinAnsiTextCapability.NormalizePdfText(text);
 
     private static bool RequiresWinAnsiHexText(string text) => text.Any(ch => ch is < ' ' or > '~');
 
@@ -356,58 +352,16 @@ public static class PortablePdfDocumentExporter
 
     private static byte EncodeWinAnsiByte(char ch)
     {
-        if (ch is >= ' ' and <= '~')
-            return (byte)ch;
+        if (PortablePdfWinAnsiTextCapability.TryEncodeWinAnsiByte(ch, out var value))
+            return value;
 
-        if (ch is >= '\u00a0' and <= '\u00ff')
-            return (byte)ch;
-
-        return ch switch
-        {
-            '\u20ac' => 0x80,
-            '\u201a' => 0x82,
-            '\u0192' => 0x83,
-            '\u201e' => 0x84,
-            '\u2026' => 0x85,
-            '\u2020' => 0x86,
-            '\u2021' => 0x87,
-            '\u02c6' => 0x88,
-            '\u2030' => 0x89,
-            '\u0160' => 0x8A,
-            '\u2039' => 0x8B,
-            '\u0152' => 0x8C,
-            '\u017D' => 0x8E,
-            '\u2018' => 0x91,
-            '\u2019' => 0x92,
-            '\u201C' => 0x93,
-            '\u201D' => 0x94,
-            '\u2022' => 0x95,
-            '\u2013' => 0x96,
-            '\u2014' => 0x97,
-            '\u02dc' => 0x98,
-            '\u2122' => 0x99,
-            '\u0161' => 0x9A,
-            '\u203A' => 0x9B,
-            '\u0153' => 0x9C,
-            '\u017E' => 0x9E,
-            '\u0178' => 0x9F,
-            _ => throw new InvalidOperationException(
-                "Portable PDF export currently supports ASCII and WinAnsi text only; " +
-                $"characters outside the built-in Helvetica/WinAnsi set require the deferred embedded-font Unicode PDF path. {DeferredUnicodePdfPathRequirements}")
-        };
+        throw new InvalidOperationException(
+            "Portable PDF export currently supports ASCII and WinAnsi text only; " +
+            $"characters outside the built-in Helvetica/WinAnsi set require the deferred embedded-font Unicode PDF path. {DeferredUnicodePdfPathRequirements}");
     }
 
-    private static string Truncate(string text, int maximumLength)
-    {
-        if (maximumLength <= 3 || text.Length <= maximumLength)
-            return text;
-
-        var truncatedLength = maximumLength - 3;
-        if (char.IsHighSurrogate(text[truncatedLength - 1]))
-            truncatedLength--;
-
-        return text[..truncatedLength] + "...";
-    }
+    private static string Truncate(string text, int maximumLength) =>
+        PortablePdfWinAnsiTextCapability.Truncate(text, maximumLength);
 
     private static string FormatNumber(double value) =>
         value.ToString("0.###", CultureInfo.InvariantCulture);

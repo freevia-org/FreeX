@@ -250,6 +250,8 @@ public sealed class PortablePdfDocumentExporterTests
         exception.Message.Should().Contain("Type0/Identity-H text");
         exception.Message.Should().Contain("ToUnicode mappings");
         exception.Message.Should().Contain("parser, render, and text extraction validation");
+        exception.Message.Should().Contain("workbook name on export page 1 contains U+041A");
+        exception.Message.Should().Contain("cell A1 on export page 1 contains U+1F4C8");
         stream.ToArray().Should().BeEmpty();
     }
 
@@ -267,9 +269,11 @@ public sealed class PortablePdfDocumentExporterTests
         {
             var act = () => PortablePdfDocumentExporter.Save(workbook, exportPlan, path);
 
-            act.Should()
+            var exception = act.Should()
                 .Throw<InvalidOperationException>()
-                .WithMessage("Portable PDF export currently supports ASCII and WinAnsi text only;*");
+                .WithMessage("Portable PDF export currently supports ASCII and WinAnsi text only;*")
+                .Which;
+            exception.Message.Should().Contain("workbook name on export page 1 contains U+041A");
             File.ReadAllText(path, Encoding.ASCII).Should().Be("keep me");
         }
         finally
