@@ -40,16 +40,24 @@ public static class PivotValueFieldSettingsDialogPlanner
 
     public static int FindSummaryFunctionIndex(string? summaryFunction)
     {
-        var index = Array.FindIndex(
-            SummaryFunctions,
-            item => string.Equals(item.Value, summaryFunction, StringComparison.OrdinalIgnoreCase));
-        return Math.Max(0, index);
+        for (var index = 0; index < SummaryFunctions.Length; index++)
+        {
+            if (string.Equals(SummaryFunctions[index].Value, summaryFunction, StringComparison.OrdinalIgnoreCase))
+                return index;
+        }
+
+        return 0;
     }
 
     public static int FindShowValuesAsIndex(PivotShowValuesAs showValuesAs)
     {
-        var index = Array.FindIndex(ShowValuesAsOptions, item => item.Value == showValuesAs);
-        return Math.Max(0, index);
+        for (var index = 0; index < ShowValuesAsOptions.Length; index++)
+        {
+            if (ShowValuesAsOptions[index].Value == showValuesAs)
+                return index;
+        }
+
+        return 0;
     }
 
     public static int FindBaseFieldIndex(int? baseFieldIndex, int sourceHeaderCount) =>
