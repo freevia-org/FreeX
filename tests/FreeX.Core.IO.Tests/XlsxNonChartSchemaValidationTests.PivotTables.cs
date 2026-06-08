@@ -129,6 +129,22 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Name
             .Should()
             .Be(workbookNs + "pivotTableDefinition");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        var reloadedSheet = reloaded.GetSheetAt(0);
+        reloadedSheet.GetCell(10, 4)!.Value.Should().Be(new NumberValue(42));
+        var reloadedCache = reloaded.PivotCaches.Should().ContainSingle().Subject;
+        reloadedCache.CacheId.Should().Be(1);
+        reloadedCache.SourceType.Should().Be(PivotCacheSourceType.WorksheetRange);
+        reloadedCache.SourceSheetName.Should().Be("PivotData");
+        reloadedCache.SourceReference.Should().Be("A1:B3");
+        reloadedCache.Fields.Select(field => field.Name).Should().Equal("Category", "Amount");
+        var reloadedPivot = reloadedSheet.PivotTables.Should().ContainSingle().Subject;
+        reloadedPivot.Name.Should().Be("PivotTable1");
+        reloadedPivot.CacheId.Should().Be(1);
+        reloadedPivot.RowFields.Should().ContainSingle();
+        reloadedPivot.DataFields.Should().ContainSingle();
     }
 
     [Fact]
@@ -162,6 +178,19 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         pivotTable.Attribute("blankLineAfterItems").Should().BeNull();
         pivotTable.Attribute("rowGrandTotals")!.Value.Should().Be("0");
         pivotTable.Attribute("colGrandTotals")!.Value.Should().Be("1");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        var reloadedSheet = reloaded.GetSheetAt(0);
+        reloadedSheet.GetCell(10, 4)!.Value.Should().Be(new NumberValue(42));
+        reloaded.PivotCaches.Should().ContainSingle().Which.CacheId.Should().Be(1);
+        var reloadedPivot = reloadedSheet.PivotTables.Should().ContainSingle().Subject;
+        reloadedPivot.Name.Should().Be("PivotTable1");
+        reloadedPivot.CacheId.Should().Be(1);
+        reloadedPivot.ShowRowGrandTotals.Should().BeFalse();
+        reloadedPivot.ShowColumnGrandTotals.Should().BeTrue();
+        reloadedPivot.RowFields.Should().ContainSingle();
+        reloadedPivot.DataFields.Should().ContainSingle();
     }
 
     private static Workbook CreatePivotTableSourceWorkbook()
