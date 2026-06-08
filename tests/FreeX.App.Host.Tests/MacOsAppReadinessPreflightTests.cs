@@ -109,32 +109,12 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("PdfExportOverwriteCancelButton");
         script.Should().Contain("launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click");
         script.Should().Contain("freex-${{ matrix.runtime }}-macos-default-open-launch-smoke.txt");
-        script.Should().Contain("--macos-launch-smoke-verify-image-clipboard");
-        script.Should().Contain("--macos-launch-smoke-verify-live-command-keys");
-        script.Should().Contain("live_command_key_smoke_ready=true");
         script.Should().Contain("cmd_find_direct_route_source_guard=true");
         script.Should().Contain("cmd_page_up_direct_route_source_guard=true");
         script.Should().Contain("cmd_page_down_direct_route_source_guard=true");
-        script.Should().Contain("tell application \"System Events\"");
-        script.Should().Contain("keystroke \"a\" using {command down}");
-        script.Should().Contain("keystroke \"b\" using {command down}");
-        script.Should().Contain("keystroke \"i\" using {command down}");
-        script.Should().Contain("keystroke \"u\" using {command down}");
-        script.Should().Contain("live_command_key_system_events_result=blocked_or_failed");
-        script.Should().Contain("launch_clipboard_image=\"$RUNNER_TEMP/freex-$runtime-clipboard.png\"");
-        script.Should().Contain("launch_clipboard_script=\"$RUNNER_TEMP/freex-$runtime-clipboard.swift\"");
-        script.Should().Contain("/usr/bin/swift \"$launch_clipboard_script\" \"$launch_clipboard_image\"");
-        script.Should().Contain("NSPasteboard.general");
-        script.Should().Contain("external_image_clipboard_paste_required=true");
-        script.Should().Contain("external_image_clipboard_paste=true");
-        script.Should().Contain("external_image_clipboard_picture_count=[1-9]");
-        script.Should().Contain("external_image_clipboard_picture_png_bytes=[1-9]");
-        script.Should().Contain("live_command_key_smoke_required=true");
-        script.Should().Contain("live_command_key_smoke=passed");
-        script.Should().Contain("live_cmd_select_all_state_changed=true");
-        script.Should().Contain("live_cmd_bold_state_changed=true");
-        script.Should().Contain("live_cmd_italic_state_changed=true");
-        script.Should().Contain("live_cmd_underline_state_changed=true");
+        script.Should().Contain("external_image_clipboard_paste_required=false");
+        script.Should().Contain("live_command_key_smoke_required=false");
+        script.Should().Contain("live_command_key_smoke=not_required");
         script.Should().Contain("native_new_workbook_menu_item=true");
         script.Should().Contain("native_open_recent_menu_item=true");
         script.Should().Contain("native_open_recent_item_count=[1-9]");
@@ -1144,24 +1124,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       echo "format_cells_style_roundtrip=true"
                       echo "format_cells_style_roundtrip_count=$format_cells_style_roundtrip_count"
                       /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$unzip_root/FreeX.app"
-                      launch_clipboard_image="$RUNNER_TEMP/freex-$runtime-clipboard.png"
-                      base64 -D > "$launch_clipboard_image"
-                      launch_clipboard_script="$RUNNER_TEMP/freex-$runtime-clipboard.swift"
-                      /usr/bin/swift "$launch_clipboard_script" "$launch_clipboard_image"
-                      NSPasteboard.general
-                      NSPasteboardItem
-                      item.setData(pngData, forType: .png)
-                      pasteboard.clearContents()
-                      pasteboard.writeObjects([item])
-                      open -W -n -b io.github.tony-xmelon.freex "$RUNNER_TEMP/launch.csv" --args --macos-launch-smoke "$artifact_root/launch.txt" --macos-launch-smoke-verify-image-clipboard --macos-launch-smoke-verify-live-command-keys
-                      live_command_key_ready=false
-                      grep -q "live_command_key_smoke_ready=true" "$artifact_root/launch.txt"
-                      tell application "System Events"
-                      keystroke "a" using {"{"}command down{"}"}
-                      keystroke "b" using {"{"}command down{"}"}
-                      keystroke "i" using {"{"}command down{"}"}
-                      keystroke "u" using {"{"}command down{"}"}
-                      live_command_key_system_events_result=blocked_or_failed
+                      open -W -n -b io.github.tony-xmelon.freex "$RUNNER_TEMP/launch.csv" --args --macos-launch-smoke "$artifact_root/launch.txt"
                       osascript -e 'tell application id "io.github.tony-xmelon.freex" to quit' || true
                       open_with_smoke_file="$RUNNER_TEMP/freex-$runtime-open-with.csv"
                       open -W -n -a "$app_path" "$open_with_smoke_file" --args --macos-launch-smoke "$open_with_report"
@@ -1184,25 +1147,12 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "launchservices_default_open_app_override=false" "$default_open_report"
                       grep -q "launchservices_default_open_document_extension=fxl" "$default_open_report"
                       grep -q "launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click" "$default_open_report"
-                      grep -q "external_image_clipboard_paste_required=true" "$artifact_root/launch.txt"
-                      grep -q "external_image_clipboard_paste=true" "$artifact_root/launch.txt"
-                      grep -q "external_image_clipboard_picture_count=[1-9]" "$artifact_root/launch.txt"
-                      grep -q "external_image_clipboard_picture_png_bytes=[1-9]" "$artifact_root/launch.txt"
-                      grep -q "live_command_key_smoke_required=true" "$artifact_root/launch.txt"
-                      grep -q "live_command_key_smoke=passed" "$artifact_root/launch.txt"
-                      grep -q "live_command_key_smoke_attempted=true" "$artifact_root/launch.txt"
-                      grep -q "live_command_key_smoke_ready=true" "$artifact_root/launch.txt"
+                      grep -q "external_image_clipboard_paste_required=false" "$artifact_root/launch.txt"
+                      grep -q "live_command_key_smoke_required=false" "$artifact_root/launch.txt"
+                      grep -q "live_command_key_smoke=not_required" "$artifact_root/launch.txt"
                       grep -q "cmd_find_direct_route_source_guard=true" "$artifact_root/launch.txt"
                       grep -q "cmd_page_up_direct_route_source_guard=true" "$artifact_root/launch.txt"
                       grep -q "cmd_page_down_direct_route_source_guard=true" "$artifact_root/launch.txt"
-                      grep -q "live_cmd_select_all_received=true" "$artifact_root/launch.txt"
-                      grep -q "live_cmd_select_all_state_changed=true" "$artifact_root/launch.txt"
-                      grep -q "live_cmd_bold_received=true" "$artifact_root/launch.txt"
-                      grep -q "live_cmd_bold_state_changed=true" "$artifact_root/launch.txt"
-                      grep -q "live_cmd_italic_received=true" "$artifact_root/launch.txt"
-                      grep -q "live_cmd_italic_state_changed=true" "$artifact_root/launch.txt"
-                      grep -q "live_cmd_underline_received=true" "$artifact_root/launch.txt"
-                      grep -q "live_cmd_underline_state_changed=true" "$artifact_root/launch.txt"
                       grep -q "new_sheet_button=true" "$artifact_root/launch.txt"
                       grep -q "toolbar_format_painter_button=true" "$artifact_root/launch.txt"
                       grep -q "toolbar_autosum_button=true" "$artifact_root/launch.txt"

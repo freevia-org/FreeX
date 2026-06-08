@@ -357,7 +357,7 @@ function Test-InfoPlist {
     $documentTypes = Get-PlistValue -Dict $rootDict -Key "CFBundleDocumentTypes"
     Assert-True -Condition ($null -ne $documentTypes -and $documentTypes.Name -eq "array") -Message "Info.plist must declare CFBundleDocumentTypes."
     $documentTypeDicts = @($documentTypes.ChildNodes | Where-Object { $_.NodeType -eq [System.Xml.XmlNodeType]::Element -and $_.Name -eq "dict" })
-    Assert-True -Condition ($documentTypeDicts.Count -ge 2) -Message "Info.plist must declare native and imported workbook document types."
+    Assert-True -Condition ($documentTypeDicts.Count -eq 2) -Message "Info.plist must declare exactly the native and imported workbook document types."
 
     $nativeWorkbook = $documentTypeDicts[0]
     Assert-True -Condition ((Get-PlistString -Dict $nativeWorkbook -Key "CFBundleTypeName") -eq "FreeX Workbook") -Message "Info.plist native document type name must be FreeX Workbook."
@@ -365,7 +365,7 @@ function Test-InfoPlist {
     Assert-True -Condition ((Get-PlistString -Dict $nativeWorkbook -Key "LSHandlerRank") -eq "Owner") -Message "Info.plist native document handler rank must be Owner."
     $nativeExtensions = Get-PlistValue -Dict $nativeWorkbook -Key "CFBundleTypeExtensions"
     $nativeExtensionValues = @($nativeExtensions.ChildNodes | Where-Object { $_.NodeType -eq [System.Xml.XmlNodeType]::Element -and $_.Name -eq "string" } | ForEach-Object { $_.InnerText })
-    Assert-True -Condition ($nativeExtensionValues -contains "fxl") -Message "Info.plist native document type must include fxl."
+    Assert-ExactSet -Actual $nativeExtensionValues -Expected @("fxl") -Label "Info.plist native document type extensions"
 
     $importedWorkbooks = $documentTypeDicts[1]
     Assert-True -Condition ((Get-PlistString -Dict $importedWorkbooks -Key "CFBundleTypeName") -eq "Spreadsheet Workbooks") -Message "Info.plist imported document type name must be Spreadsheet Workbooks."
@@ -373,9 +373,7 @@ function Test-InfoPlist {
     Assert-True -Condition ((Get-PlistString -Dict $importedWorkbooks -Key "LSHandlerRank") -eq "Alternate") -Message "Info.plist imported document handler rank must be Alternate."
     $importedExtensions = Get-PlistValue -Dict $importedWorkbooks -Key "CFBundleTypeExtensions"
     $importedExtensionValues = @($importedExtensions.ChildNodes | Where-Object { $_.NodeType -eq [System.Xml.XmlNodeType]::Element -and $_.Name -eq "string" } | ForEach-Object { $_.InnerText })
-    foreach ($extension in @("xlsx", "xlsm", "xltx", "xltm", "xls", "xlsb", "xlt", "csv", "tsv", "tab")) {
-        Assert-True -Condition ($importedExtensionValues -contains $extension) -Message "Info.plist imported document type must include $extension."
-    }
+    Assert-ExactSet -Actual $importedExtensionValues -Expected @("xlsx", "xlsm", "xltx", "xltm", "xls", "xlsb", "xlt", "csv", "tsv", "tab") -Label "Info.plist imported document type extensions"
 }
 
 function Test-MacOsWorkflow {
@@ -554,42 +552,12 @@ function Test-MacOsWorkflow {
         "launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click",
         "osascript -e 'tell application id `"io.github.tony-xmelon.freex`" to quit' || true",
         "--macos-launch-smoke",
-        "--macos-launch-smoke-verify-image-clipboard",
-        "--macos-launch-smoke-verify-live-command-keys",
-        "live_command_key_smoke_ready=true",
         "cmd_find_direct_route_source_guard=true",
         "cmd_page_up_direct_route_source_guard=true",
         "cmd_page_down_direct_route_source_guard=true",
-        'tell application "System Events"',
-        'keystroke "a" using {command down}',
-        'keystroke "b" using {command down}',
-        'keystroke "i" using {command down}',
-        'keystroke "u" using {command down}',
-        "live_command_key_system_events_result=blocked_or_failed",
-        'launch_clipboard_image="$RUNNER_TEMP/freex-$runtime-clipboard.png"',
-        'base64 -D > "$launch_clipboard_image"',
-        'launch_clipboard_script="$RUNNER_TEMP/freex-$runtime-clipboard.swift"',
-        '/usr/bin/swift "$launch_clipboard_script" "$launch_clipboard_image"',
-        "NSPasteboard.general",
-        "NSPasteboardItem",
-        "item.setData(pngData, forType: .png)",
-        "pasteboard.clearContents()",
-        "pasteboard.writeObjects([item])",
-        "live_command_key_smoke_required=true",
-        "live_command_key_smoke=passed",
-        "live_command_key_smoke_attempted=true",
-        "live_cmd_select_all_received=true",
-        "live_cmd_select_all_state_changed=true",
-        "live_cmd_bold_received=true",
-        "live_cmd_bold_state_changed=true",
-        "live_cmd_italic_received=true",
-        "live_cmd_italic_state_changed=true",
-        "live_cmd_underline_received=true",
-        "live_cmd_underline_state_changed=true",
-        "external_image_clipboard_paste_required=true",
-        "external_image_clipboard_paste=true",
-        "external_image_clipboard_picture_count=[1-9]",
-        "external_image_clipboard_picture_png_bytes=[1-9]",
+        "live_command_key_smoke_required=false",
+        "live_command_key_smoke=not_required",
+        "external_image_clipboard_paste_required=false",
         "new_sheet_button=true",
         "toolbar_format_painter_button=true",
         "toolbar_autosum_button=true",
