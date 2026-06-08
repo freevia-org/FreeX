@@ -232,24 +232,33 @@ public sealed class PortablePdfDocumentExporterTests
     }
 
     [Fact]
-    public void Save_RejectsTextOutsideWinAnsiWithoutWritingPdfBytes()
+    public void Save_WritesEmbeddedUnicodeWorkbookSheetAndCellText()
     {
         var workbook = new Workbook("Budget \u041a\u0438\u0457\u0432");
-        var sheet = workbook.AddSheet("Summary");
-        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region \uD83D\uDCC8"));
+        var sheet = workbook.AddSheet("\u0417\u0432\u0456\u0442");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("\u041f\u0440\u0438\u0432\u0456\u0442 \uD83D\uDCC8"));
         var exportPlan = CreateExportPlan(workbook, sheet, GridRange.Parse("A1:A1", sheet.Id));
         using var stream = new MemoryStream();
 
-        var act = () => PortablePdfDocumentExporter.Save(workbook, exportPlan, stream);
+        var result = PortablePdfDocumentExporter.Save(workbook, exportPlan, stream);
 
-        act.Should()
-            .Throw<InvalidOperationException>()
-            .WithMessage("Portable PDF export currently supports ASCII and WinAnsi text only;*");
-        stream.ToArray().Should().BeEmpty();
+        result.PageCount.Should().Be(1);
+        var pdf = Encoding.ASCII.GetString(stream.ToArray());
+        pdf.Should().Contain("/Subtype /Type0");
+        pdf.Should().Contain("/Encoding /Identity-H");
+        pdf.Should().Contain("/CIDToGIDMap /Identity");
+        pdf.Should().Contain("/FontFile2");
+        pdf.Should().Contain("/ToUnicode");
+        pdf.Should().Contain("beginbfchar");
+        pdf.Should().Contain("<041A>");
+        pdf.Should().Contain("<0438>");
+        pdf.Should().Contain("<0457>");
+        pdf.Should().Contain("<0432>");
+        pdf.Should().Contain("<D83DDCC8>");
     }
 
     [Fact]
-    public void Save_PathOverloadDoesNotOverwriteExistingFileWhenTextIsOutsideWinAnsi()
+    public void Save_PathOverloadWritesEmbeddedUnicodePdf()
     {
         var workbook = new Workbook("Budget \u041a\u0438\u0457\u0432");
         var sheet = workbook.AddSheet("Summary");
@@ -260,12 +269,14 @@ public sealed class PortablePdfDocumentExporterTests
 
         try
         {
-            var act = () => PortablePdfDocumentExporter.Save(workbook, exportPlan, path);
+            var result = PortablePdfDocumentExporter.Save(workbook, exportPlan, path);
 
-            act.Should()
-                .Throw<InvalidOperationException>()
-                .WithMessage("Portable PDF export currently supports ASCII and WinAnsi text only;*");
-            File.ReadAllText(path, Encoding.ASCII).Should().Be("keep me");
+            result.PageCount.Should().Be(1);
+            var pdf = Encoding.ASCII.GetString(File.ReadAllBytes(path));
+            pdf.Should().StartWith("%PDF-1.7");
+            pdf.Should().Contain("/Subtype /Type0");
+            pdf.Should().Contain("/Encoding /Identity-H");
+            pdf.Should().NotContain("keep me");
         }
         finally
         {
