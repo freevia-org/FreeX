@@ -253,8 +253,17 @@ internal static class ChartCommandGuards
         Guid chartId,
         [NotNullWhen(true)] out ChartModel? chart)
     {
-        chart = sheet.Charts.FirstOrDefault(item => item.Id == chartId);
-        return chart is not null;
+        foreach (var item in sheet.Charts)
+        {
+            if (item.Id != chartId)
+                continue;
+
+            chart = item;
+            return true;
+        }
+
+        chart = null;
+        return false;
     }
 
     public static CommandOutcome SelectedChartIsPivotChart() =>

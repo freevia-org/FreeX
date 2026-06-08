@@ -62,8 +62,16 @@ public sealed class ApplyConditionalFormatCommand : IWorkbookCommand
         }
     }
 
-    private static int FindConditionalFormatIndex(Sheet sheet, Guid formatId) =>
-        sheet.ConditionalFormats.FindIndex(format => format.Id == formatId);
+    private static int FindConditionalFormatIndex(Sheet sheet, Guid formatId)
+    {
+        for (var index = 0; index < sheet.ConditionalFormats.Count; index++)
+        {
+            if (sheet.ConditionalFormats[index].Id == formatId)
+                return index;
+        }
+
+        return -1;
+    }
 }
 
 public sealed class ClearConditionalFormatsCommand : IWorkbookCommand

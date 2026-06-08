@@ -181,13 +181,31 @@ public sealed record StructuredTableStyleBanding(
             fills[fill] = fills.TryGetValue(fill, out var count) ? count + 1 : 1;
         }
 
-        return fills
-            .OrderByDescending(pair => pair.Value)
-            .ThenBy(pair => pair.Key.R)
-            .ThenBy(pair => pair.Key.G)
-            .ThenBy(pair => pair.Key.B)
-            .FirstOrDefault()
-            .Key;
+        var hasBest = false;
+        var bestColor = default(CellColor);
+        var bestCount = 0;
+        foreach (var (color, count) in fills)
+        {
+            if (hasBest && !IsBetterSampledFill(color, count, bestColor, bestCount))
+                continue;
+
+            bestColor = color;
+            bestCount = count;
+            hasBest = true;
+        }
+
+        return bestColor;
+    }
+
+    private static bool IsBetterSampledFill(CellColor color, int count, CellColor bestColor, int bestCount)
+    {
+        if (count != bestCount)
+            return count > bestCount;
+        if (color.R != bestColor.R)
+            return color.R < bestColor.R;
+        if (color.G != bestColor.G)
+            return color.G < bestColor.G;
+        return color.B < bestColor.B;
     }
 }
 

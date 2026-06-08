@@ -269,8 +269,17 @@ internal static class TextBoxCommandGuards
         Guid textBoxId,
         [NotNullWhen(true)] out TextBoxModel? textBox)
     {
-        textBox = sheet.TextBoxes.FirstOrDefault(item => item.Id == textBoxId);
-        return textBox is not null;
+        foreach (var item in sheet.TextBoxes)
+        {
+            if (item.Id != textBoxId)
+                continue;
+
+            textBox = item;
+            return true;
+        }
+
+        textBox = null;
+        return false;
     }
 
     public static CommandOutcome TextBoxNotFound() =>

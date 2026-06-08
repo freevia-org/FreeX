@@ -56,10 +56,20 @@ internal static class XlsxExternalLinkMetadataReader
                 if (externalLinkRelsEntry is not null)
                 {
                     var externalLinkRelsXml = LoadXml(externalLinkRelsEntry);
-                    var pathRelationship = externalLinkRelsXml.Root?
-                        .Elements(packageRelNs + "Relationship")
-                        .FirstOrDefault(relationship =>
-                            (relationship.Attribute("Type")?.Value ?? "").EndsWith("/externalLinkPath", StringComparison.OrdinalIgnoreCase));
+                    XElement? pathRelationship = null;
+                    foreach (var relationship in externalLinkRelsXml.Root?.Elements(packageRelNs + "Relationship") ?? [])
+                    {
+                        if (!(relationship.Attribute("Type")?.Value ?? "").EndsWith(
+                                "/externalLinkPath",
+                                StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
+
+                        pathRelationship = relationship;
+                        break;
+                    }
+
                     model.TargetUri = pathRelationship?.Attribute("Target")?.Value;
                     model.TargetMode = pathRelationship?.Attribute("TargetMode")?.Value;
                 }

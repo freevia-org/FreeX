@@ -105,6 +105,17 @@ public static partial class XlsxChartPartReader
     private static XElement? FirstChartElement(IReadOnlyList<XElement> elements) =>
         elements.Count == 0 ? null : elements[0];
 
-    private static XElement? FindDescendantByLocalName(XElement? element, string localName) =>
-        element?.Descendants().FirstOrDefault(candidate => candidate.Name.LocalName == localName);
+    private static XElement? FindDescendantByLocalName(XElement? element, string localName)
+    {
+        if (element is null)
+            return null;
+
+        foreach (var candidate in element.Descendants())
+        {
+            if (candidate.Name.LocalName == localName)
+                return candidate;
+        }
+
+        return null;
+    }
 }

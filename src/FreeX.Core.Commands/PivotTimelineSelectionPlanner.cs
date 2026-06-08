@@ -23,11 +23,7 @@ internal static class PivotTimelineSelectionPlanner
     {
         var selectedItems = new List<string>();
         var sourceColumn = pivotTable.SourceRange.Start.Col + (uint)sourceFieldIndex;
-        var field = pivotTable.RowFields
-            .Concat(pivotTable.ColumnFields)
-            .Concat(pivotTable.PageFields)
-            .FirstOrDefault(item => item.SourceFieldIndex == sourceFieldIndex)
-            ?? new PivotFieldModel(sourceFieldIndex);
+        var field = FindPivotField(pivotTable, sourceFieldIndex) ?? new PivotFieldModel(sourceFieldIndex);
 
         for (var row = pivotTable.SourceRange.Start.Row + 1; row <= pivotTable.SourceRange.End.Row; row++)
         {
@@ -75,6 +71,29 @@ internal static class PivotTimelineSelectionPlanner
             PivotFieldGrouping.Day => date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
             _ => date.ToShortDateString()
         };
+    }
+
+    private static PivotFieldModel? FindPivotField(PivotTableModel pivotTable, int sourceFieldIndex)
+    {
+        foreach (var item in pivotTable.RowFields)
+        {
+            if (item.SourceFieldIndex == sourceFieldIndex)
+                return item;
+        }
+
+        foreach (var item in pivotTable.ColumnFields)
+        {
+            if (item.SourceFieldIndex == sourceFieldIndex)
+                return item;
+        }
+
+        foreach (var item in pivotTable.PageFields)
+        {
+            if (item.SourceFieldIndex == sourceFieldIndex)
+                return item;
+        }
+
+        return null;
     }
 
 }
