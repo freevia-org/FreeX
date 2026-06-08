@@ -50,6 +50,20 @@ public sealed class ExcelOpenSmokeReportSchemaTests
         expectationBlock.Should().Contain("MinExcelReopenedHeaderFooterSheets = reopen");
     }
 
+    [Fact]
+    public void MetadataPassExpectations_CoverThreadedCommentSummaryCounters()
+    {
+        var programSource = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ExcelOpenSmoke", "Program.cs");
+        var manifest = TestWorkspaceFiles.ReadWorkspaceText("test-corpus", "manifest.csv");
+        var expectationBlock = ExtractExpectationBlock(programSource, "generated-threaded-comments-001");
+
+        manifest.Should().Contain("generated-threaded-comments-001,generated/threaded-comments-001.xlsx,generated,local,2026-06-08,FreeX-generated,threaded-comments,,supported-metadata-pass");
+        expectationBlock.Should().Contain("MinFreeXPreSaveComments = 1");
+        expectationBlock.Should().Contain("MinExcelOpenedComments = 1");
+        expectationBlock.Should().Contain("MinExcelReopenedComments = reopen");
+        expectationBlock.Should().Contain("MinFreeXReopenedComments = reopen");
+    }
+
     private static void AssertCoreValidationCalls(
         string source,
         string pathExpression,
