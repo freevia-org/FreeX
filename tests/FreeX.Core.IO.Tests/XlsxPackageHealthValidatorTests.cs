@@ -181,6 +181,24 @@ public sealed class XlsxPackageHealthValidatorTests
     }
 
     [Fact]
+    public void Validate_FlagsRelationshipWithChildElement()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookRelationships:
+            [
+                $"""
+                <Relationship Id="rId1" Type="{WorksheetRelationshipType}" Target="worksheets/sheet1.xml">
+                  <Unexpected />
+                </Relationship>
+                """
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("must not contain child elements", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Validate_FlagsCaseCollidingPackageEntries()
     {
         using var package = CreateMinimalWorkbookPackage(
