@@ -83,7 +83,7 @@ public sealed class SetChartStyleCommand : IWorkbookCommand
 
         var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
         if (chart is null)
-            return new CommandOutcome(false, "Chart was not found.");
+            return ChartCommandGuards.ChartNotFound();
 
         _previousChartStyleId = chart.ChartStyleId;
         chart.ChartStyleId = _chartStyleId;
@@ -139,7 +139,7 @@ public sealed class ChangeChartTypeCommand : IWorkbookCommand
 
         var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
         if (chart is null)
-            return new CommandOutcome(false, "Chart was not found.");
+            return ChartCommandGuards.ChartNotFound();
         if (chart.IsPivotChart)
             return new CommandOutcome(false, "Selected chart is a PivotChart.");
         if (ChartAuthoringPlanner.RejectIfUnsupported(_chartType) is { } unsupportedOutcome)
@@ -225,7 +225,7 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
 
         var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
         if (chart is null)
-            return new CommandOutcome(false, "Chart was not found.");
+            return ChartCommandGuards.ChartNotFound();
         if (chart.IsPivotChart)
             return new CommandOutcome(false, "Selected chart is a PivotChart.");
         if (_dataRange.Start.Sheet != _sheetId || _dataRange.End.Sheet != _sheetId)

@@ -180,7 +180,7 @@ public sealed partial class SetChartLayoutCommand : IWorkbookCommand
 
         var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
         if (chart is null)
-            return new CommandOutcome(false, "Chart was not found.");
+            return ChartCommandGuards.ChartNotFound();
 
         _previous = Capture(chart);
         ApplyOptions(chart, _options);

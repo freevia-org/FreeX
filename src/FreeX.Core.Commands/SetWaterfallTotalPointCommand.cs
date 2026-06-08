@@ -33,7 +33,7 @@ public sealed class SetWaterfallTotalPointCommand : IWorkbookCommand
 
         var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
         if (chart is null)
-            return new CommandOutcome(false, "Chart was not found.");
+            return ChartCommandGuards.ChartNotFound();
 
         if (chart.Type != ChartType.Waterfall)
             return new CommandOutcome(false, "Set as Total is only available for waterfall charts.");

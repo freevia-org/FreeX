@@ -234,7 +234,11 @@ public sealed class AddPivotChartCommand : IWorkbookCommand
 
 internal static class ChartCommandGuards
 {
+    private const string ChartNotFoundMessage = "Chart was not found.";
     private const string InvalidChartSizeMessage = "Chart size must be positive.";
+
+    public static CommandOutcome ChartNotFound() =>
+        new(false, ChartNotFoundMessage);
 
     public static CommandOutcome? RejectInvalidSize(double width, double height) =>
         double.IsFinite(width) && double.IsFinite(height) && width > 0 && height > 0
