@@ -90,6 +90,50 @@ public sealed partial class XlsxBroaderRetentionChecksTests
         }
     }
 
+    private static void AssertInternalRelationshipTargetWasRetained(
+        ZipArchive archive,
+        string relationshipsPart,
+        string relationshipType,
+        string expectedTarget)
+    {
+        var relationship = LoadXml(archive, relationshipsPart)
+            .Root!
+            .Elements(PackageRelNs + "Relationship")
+            .SingleOrDefault(element =>
+                string.Equals(element.Attribute("Type")?.Value, relationshipType, StringComparison.Ordinal) &&
+                string.Equals(element.Attribute("Target")?.Value, expectedTarget, StringComparison.Ordinal));
+
+        relationship.Should().NotBeNull($"{relationshipsPart} should retain its {relationshipType} relationship");
+        relationship!.Attribute("TargetMode")?.Value.Should().NotBe("External");
+
+        var resolvedTarget = ResolveInternalRelationshipTarget(relationshipsPart, expectedTarget);
+        archive.GetEntry(resolvedTarget)
+            .Should()
+            .NotBeNull($"{relationshipsPart} target {expectedTarget} should resolve to retained package part {resolvedTarget}");
+    }
+
+    private static string ResolveInternalRelationshipTarget(string relationshipsPart, string target)
+    {
+        var sourceDirectory = relationshipsPart.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)
+            ? relationshipsPart[..relationshipsPart.LastIndexOf("/_rels/", StringComparison.Ordinal)]
+            : string.Empty;
+        var segments = sourceDirectory.Length == 0
+            ? new List<string>()
+            : sourceDirectory.Split('/').ToList();
+
+        foreach (var segment in target.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (segment == ".")
+                continue;
+            if (segment == "..")
+                segments.RemoveAt(segments.Count - 1);
+            else
+                segments.Add(segment);
+        }
+
+        return string.Join('/', segments);
+    }
+
     private static void AssertWorkbookMetadataWasRetainedWithoutOverridingModeledState(ZipArchive archive)
     {
         var workbookXml = LoadXml(archive, "xl/workbook.xml");
@@ -120,6 +164,11 @@ public sealed partial class XlsxBroaderRetentionChecksTests
         var workbookRels = LoadXml(archive, "xl/_rels/workbook.xml.rels").ToString(SaveOptions.DisableFormatting);
         workbookRels.Should().Contain("externalLinks/externalLink1.xml");
         workbookRels.Should().Contain("/externalLink");
+        AssertInternalRelationshipTargetWasRetained(
+            archive,
+            "xl/_rels/workbook.xml.rels",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink",
+            "externalLinks/externalLink1.xml");
         LoadXml(archive, "xl/externalLinks/externalLink1.xml")
             .ToString(SaveOptions.DisableFormatting)
             .Should()
@@ -149,5 +198,10 @@ public sealed partial class XlsxBroaderRetentionChecksTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Contain("customXmlProps");
+        AssertInternalRelationshipTargetWasRetained(
+            archive,
+            "customXml/_rels/item1.xml.rels",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps",
+            "itemProps1.xml");
     }
 }
