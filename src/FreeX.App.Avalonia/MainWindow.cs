@@ -358,6 +358,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _sortAscendingMenuItem = new();
     private readonly NativeMenuItem _sortDescendingMenuItem = new();
     private readonly NativeMenuItem _customSortMenuItem = new();
+    private readonly NativeMenuItem _flashFillMenuItem = new();
     private readonly NativeMenuItem _advancedFilterMenuItem = new();
     private readonly NativeMenuItem _removeDuplicatesMenuItem = new();
     private readonly NativeMenuItem _dataValidationPreviewMenuItem = new();
@@ -712,6 +713,10 @@ public sealed class MainWindow : Window
         _customSortMenuItem.Header = "Sort...";
         _customSortMenuItem.Click += async (_, _) => await ShowSortDialogAsync();
 
+        _flashFillMenuItem.Header = "Flash Fill";
+        _flashFillMenuItem.Gesture = new KeyGesture(Key.E, KeyModifiers.Control);
+        _flashFillMenuItem.Click += (_, _) => FlashFillSelectedRange();
+
         _advancedFilterMenuItem.Header = "Advanced Filter...";
         _advancedFilterMenuItem.Click += async (_, _) => await ShowAdvancedFilterDialogAsync();
 
@@ -1030,6 +1035,7 @@ public sealed class MainWindow : Window
         dataMenu.Items.Add(_sortAscendingMenuItem);
         dataMenu.Items.Add(_sortDescendingMenuItem);
         dataMenu.Items.Add(_customSortMenuItem);
+        dataMenu.Items.Add(_flashFillMenuItem);
         dataMenu.Items.Add(_advancedFilterMenuItem);
         dataMenu.Items.Add(_removeDuplicatesMenuItem);
         dataMenu.Items.Add(new NativeMenuItemSeparator());
@@ -1777,6 +1783,7 @@ public sealed class MainWindow : Window
         _sortAscendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _customSortMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
+        _flashFillMenuItem.IsEnabled = isIdle;
         _advancedFilterMenuItem.IsEnabled = isIdle;
         _removeDuplicatesMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1;
         _dataValidationPreviewMenuItem.IsEnabled = isIdle;
@@ -6633,6 +6640,25 @@ public sealed class MainWindow : Window
         RefreshShell($"{FormatFillCellsAction(direction)} in {rangeReference}");
     }
 
+    private void FlashFillSelectedRange()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.FlashFillSelectedRange();
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Flash Fill failed.");
+            return;
+        }
+
+        RefreshShell($"Flash filled {rangeReference}");
+    }
+
     private void SortSelectedRange(bool ascending)
     {
         if (_isOpening || _isSaving)
@@ -10883,6 +10909,7 @@ public sealed class MainWindow : Window
             HasNativeGoToSpecialMenuItem: HasNativeMenuItem(_goToSpecialMenuItem, "Go To Special...", requireGesture: false),
             HasNativeSortAscendingMenuItem: HasNativeMenuItem(_sortAscendingMenuItem, "Sort A to Z", requireGesture: false),
             HasNativeSortDescendingMenuItem: HasNativeMenuItem(_sortDescendingMenuItem, "Sort Z to A", requireGesture: false),
+            HasNativeFlashFillMenuItem: HasNativeMenuItem(_flashFillMenuItem, "Flash Fill"),
             HasNativeAdvancedFilterMenuItem: HasNativeMenuItem(_advancedFilterMenuItem, "Advanced Filter...", requireGesture: false),
             HasNativeRemoveDuplicatesMenuItem: HasNativeMenuItem(_removeDuplicatesMenuItem, "Remove Duplicates...", requireGesture: false),
             HasNativeDataValidationPreviewMenuItem: HasNativeMenuItem(_dataValidationPreviewMenuItem, "Data Validation Preview...", requireGesture: false),
@@ -11221,7 +11248,7 @@ public sealed class MainWindow : Window
         }
 
         if (_formulaBox.IsFocused &&
-            e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.D or Key.I or Key.R or Key.U or Key.D4 or Key.NumPad4 or Key.D5 or Key.NumPad5)
+            e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.D or Key.E or Key.I or Key.R or Key.U or Key.D4 or Key.NumPad4 or Key.D5 or Key.NumPad5)
         {
             return;
         }
@@ -11333,6 +11360,11 @@ public sealed class MainWindow : Window
         {
             e.Handled = true;
             FillSelectedRange(FillCellsDirection.Right);
+        }
+        else if (e.Key == Key.E && HasOnlyControlModifier(e.KeyModifiers))
+        {
+            e.Handled = true;
+            FlashFillSelectedRange();
         }
         else if (e.Key is Key.D4 or Key.NumPad4 && HasOnlyControlModifier(e.KeyModifiers))
         {

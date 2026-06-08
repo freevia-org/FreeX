@@ -157,7 +157,7 @@ public partial class MainWindow
     private FlashFillCommand CreateFlashFillCommand(Sheet sheet, GridRange range)
     {
         var plan = FlashFillRangePlanner.Plan(sheet, range);
-        return new FlashFillCommand(_currentSheetId, plan.FillColumn, plan.SourceColumn, plan.StartRow, plan.EndRow);
+        return plan.CreateCommand(_currentSheetId);
     }
 
     private void SortFilterPickerBtn_Click(object sender, RoutedEventArgs e)

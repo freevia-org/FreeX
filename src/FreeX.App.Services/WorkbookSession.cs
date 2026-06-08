@@ -1786,6 +1786,45 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public WorkbookCellEditResult FlashFillSelectedRange()
+    {
+        var range = SelectedRange;
+        var commands = new List<IWorkbookCommand>();
+        var hasExamples = false;
+        foreach (var sheetId in CurrentGroupedEditSheetIds())
+        {
+            var sheet = Workbook.GetSheet(sheetId)!;
+            var sheetRange = RemapRangeToSheet(range, sheetId);
+            var plan = FlashFillRangePlanner.Plan(sheet, sheetRange);
+            hasExamples |= FlashFillRangePlanner.HasExamples(sheet, plan);
+            if (FlashFillRangePlanner.HasFillTargets(sheet, plan))
+                commands.Add(plan.CreateCommand(sheetId));
+        }
+
+        if (commands.Count == 0)
+        {
+            if (!hasExamples)
+            {
+                return new WorkbookCellEditResult(
+                    false,
+                    "No examples found. Type at least one value in the fill column.",
+                    [],
+                    RecalcReport: null);
+            }
+
+            return new WorkbookCellEditResult(true, null, [], RecalcReport: null);
+        }
+
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            ToCommand("Flash Fill", commands));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
     public bool CaptureFormatPainterSource(bool persistent = false)
     {
         _formatPainterSourceSheetId = ActiveSheet.Id;

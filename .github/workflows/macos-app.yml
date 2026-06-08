@@ -594,6 +594,7 @@ jobs:
             grep -q "native_go_to_special_menu_item=true" "$launch_smoke_report"
             grep -q "native_sort_ascending_menu_item=true" "$launch_smoke_report"
             grep -q "native_sort_descending_menu_item=true" "$launch_smoke_report"
+            grep -q "native_flash_fill_menu_item=true" "$launch_smoke_report"
             grep -q "native_advanced_filter_menu_item=true" "$launch_smoke_report"
             grep -q "native_remove_duplicates_menu_item=true" "$launch_smoke_report"
             grep -q "native_data_validation_preview_menu_item=true" "$launch_smoke_report"

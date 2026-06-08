@@ -394,6 +394,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeGoToSpecialMenuItem,
     bool HasNativeSortAscendingMenuItem,
     bool HasNativeSortDescendingMenuItem,
+    bool HasNativeFlashFillMenuItem,
     bool HasNativeAdvancedFilterMenuItem,
     bool HasNativeRemoveDuplicatesMenuItem,
     bool HasNativeDataValidationPreviewMenuItem,
@@ -581,6 +582,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeGoToSpecialMenuItem &&
         HasNativeSortAscendingMenuItem &&
         HasNativeSortDescendingMenuItem &&
+        HasNativeFlashFillMenuItem &&
         HasNativeAdvancedFilterMenuItem &&
         HasNativeRemoveDuplicatesMenuItem &&
         HasNativeDataValidationPreviewMenuItem &&
@@ -1045,6 +1047,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_go_to_special_menu_item={FormatBool(snapshot.HasNativeGoToSpecialMenuItem)}",
                 $"native_sort_ascending_menu_item={FormatBool(snapshot.HasNativeSortAscendingMenuItem)}",
                 $"native_sort_descending_menu_item={FormatBool(snapshot.HasNativeSortDescendingMenuItem)}",
+                $"native_flash_fill_menu_item={FormatBool(snapshot.HasNativeFlashFillMenuItem)}",
                 $"native_advanced_filter_menu_item={FormatBool(snapshot.HasNativeAdvancedFilterMenuItem)}",
                 $"native_remove_duplicates_menu_item={FormatBool(snapshot.HasNativeRemoveDuplicatesMenuItem)}",
                 $"native_data_validation_preview_menu_item={FormatBool(snapshot.HasNativeDataValidationPreviewMenuItem)}",

@@ -1195,7 +1195,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private void SelectCurrentRegionOrAll()");
         source.Should().Contain("var range = _session.SelectCurrentRegionOrAll();");
         source.Should().Contain("if (_formulaBox.IsFocused &&");
-        source.Should().Contain("e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.D or Key.I or Key.R or Key.U or Key.D4 or Key.NumPad4 or Key.D5 or Key.NumPad5)");
+        source.Should().Contain("e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.D or Key.E or Key.I or Key.R or Key.U or Key.D4 or Key.NumPad4 or Key.D5 or Key.NumPad5)");
         source.Should().Contain("else if (e.Key == Key.X)");
         source.Should().Contain("await CutSelectedRangeToClipboardAsync();");
         source.Should().Contain("else if (e.Key == Key.C)");
@@ -1421,6 +1421,38 @@ public sealed class AvaloniaShellSourceTests
         formatMenuIndex.Should().BeGreaterThanOrEqualTo(0);
         editMenuIndex.Should().BeLessThan(dataMenuIndex);
         dataMenuIndex.Should().BeLessThan(formatMenuIndex);
+    }
+
+    [Fact]
+    public void MainWindow_WiresNativeFlashFillDataMenuThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "FlashFillRangePlanner.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+
+        sessionSource.Should().Contain("public WorkbookCellEditResult FlashFillSelectedRange()");
+        sessionSource.Should().Contain("var plan = FlashFillRangePlanner.Plan(sheet, sheetRange);");
+        sessionSource.Should().Contain("FlashFillRangePlanner.HasFillTargets(sheet, plan)");
+        sessionSource.Should().Contain("commands.Add(plan.CreateCommand(sheetId));");
+        plannerSource.Should().Contain("public FlashFillCommand CreateCommand(SheetId sheetId)");
+        plannerSource.Should().Contain("new FlashFillCommand(sheetId, FillColumn, SourceColumn, StartRow, EndRow)");
+
+        source.Should().Contain("private readonly NativeMenuItem _flashFillMenuItem = new();");
+        source.Should().Contain("_flashFillMenuItem.Header = \"Flash Fill\";");
+        source.Should().Contain("_flashFillMenuItem.Gesture = new KeyGesture(Key.E, KeyModifiers.Control);");
+        source.Should().Contain("_flashFillMenuItem.Click += (_, _) => FlashFillSelectedRange();");
+        source.Should().Contain("dataMenu.Items.Add(_flashFillMenuItem);");
+        source.Should().Contain("_flashFillMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("e.Key == Key.E && HasOnlyControlModifier(e.KeyModifiers)");
+        source.Should().Contain("private void FlashFillSelectedRange()");
+        source.Should().Contain("var result = _session.FlashFillSelectedRange();");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Flash Fill failed.\");");
+        source.Should().Contain("HasNativeFlashFillMenuItem: HasNativeMenuItem(_flashFillMenuItem, \"Flash Fill\")");
+
+        smokeSource.Should().Contain("bool HasNativeFlashFillMenuItem,");
+        smokeSource.Should().Contain("HasNativeFlashFillMenuItem &&");
+        smokeSource.Should().Contain("native_flash_fill_menu_item={FormatBool(snapshot.HasNativeFlashFillMenuItem)}");
     }
 
     [Fact]
@@ -2145,7 +2177,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? $\"{FormatFillCellsAction(direction)} failed.\");");
         source.Should().Contain("RefreshShell($\"{FormatFillCellsAction(direction)} in {rangeReference}\");");
         source.Should().Contain("private static string FormatFillCellsAction(FillCellsDirection direction)");
-        source.Should().Contain("e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.D or Key.I or Key.R or Key.U");
+        source.Should().Contain("e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.D or Key.E or Key.I or Key.R or Key.U");
         source.Should().Contain("else if (e.Key == Key.D && HasOnlyControlModifier(e.KeyModifiers))");
         source.Should().Contain("FillSelectedRange(FillCellsDirection.Down);");
         source.Should().Contain("else if (e.Key == Key.R && HasOnlyControlModifier(e.KeyModifiers))");
