@@ -99,7 +99,16 @@ public sealed partial class NativeJsonAdapter
             return null;
         }
 
-        var cache = workbook.PivotCaches.FirstOrDefault(cache => cache.CacheId == dto.CacheId);
+        PivotCacheModel? cache = null;
+        foreach (var candidate in workbook.PivotCaches)
+        {
+            if (candidate.CacheId != dto.CacheId)
+                continue;
+
+            cache = candidate;
+            break;
+        }
+
         var sourceSheetName = TrimToNull(dto.SourceSheetName) ?? cache?.SourceSheetName ?? targetSheet.Name;
         var sourceSheet = ResolveLoadedSheet(workbook, loadedSheetsBySourceName, sourceSheetName);
         var sourceReference = TrimToNull(dto.SourceRange) ?? cache?.SourceReference;

@@ -166,11 +166,21 @@ public static class FileDialogFilterBuilder
         if (normalizedExtension.Length == 0)
             return;
 
-        var index = formats.FindIndex(format =>
-            string.Equals(
-                FileFormatResolver.NormalizeExtension(format.Extension),
-                normalizedExtension,
-                StringComparison.OrdinalIgnoreCase));
+        var index = -1;
+        for (var i = 0; i < formats.Count; i++)
+        {
+            if (!string.Equals(
+                    FileFormatResolver.NormalizeExtension(formats[i].Extension),
+                    normalizedExtension,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            index = i;
+            break;
+        }
+
         if (index <= 0)
             return;
 

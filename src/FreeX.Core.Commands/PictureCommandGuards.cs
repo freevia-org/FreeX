@@ -25,8 +25,17 @@ internal static class PictureCommandGuards
         Guid pictureId,
         [NotNullWhen(true)] out PictureModel? picture)
     {
-        picture = sheet.Pictures.FirstOrDefault(item => item.Id == pictureId);
-        return picture is not null;
+        foreach (var item in sheet.Pictures)
+        {
+            if (item.Id != pictureId)
+                continue;
+
+            picture = item;
+            return true;
+        }
+
+        picture = null;
+        return false;
     }
 
     public static CommandOutcome PictureNotFound() =>

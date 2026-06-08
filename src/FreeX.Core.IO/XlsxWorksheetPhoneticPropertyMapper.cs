@@ -110,10 +110,19 @@ internal static class XlsxWorksheetPhoneticPropertyMapper
             "extLst"
         ];
 
-        var insertionPoint = worksheetRoot.Elements()
-            .FirstOrDefault(element =>
-                element.Name.Namespace == workbookNs &&
-                laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
+        XElement? insertionPoint = null;
+        foreach (var element in worksheetRoot.Elements())
+        {
+            if (element.Name.Namespace != workbookNs ||
+                !laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal))
+            {
+                continue;
+            }
+
+            insertionPoint = element;
+            break;
+        }
+
         if (insertionPoint is null)
             worksheetRoot.Add(phoneticPr);
         else

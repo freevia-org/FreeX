@@ -61,7 +61,13 @@ internal static class XlsxAdvancedConditionalFormatMetadata
             if (element is null || element.Name.LocalName != "extLst")
                 continue;
 
-            var id = element.Descendants(X14Ns + "id").FirstOrDefault()?.Value?.Trim();
+            string? id = null;
+            foreach (var idElement in element.Descendants(X14Ns + "id"))
+            {
+                id = idElement.Value?.Trim();
+                break;
+            }
+
             if (!string.IsNullOrWhiteSpace(id))
                 return id;
         }

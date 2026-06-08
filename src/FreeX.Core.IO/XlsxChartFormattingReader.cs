@@ -9,9 +9,13 @@ internal static class XlsxChartFormattingReader
 
     public static void ApplyChartTitleFormatting(XElement? titleElement, ChartModel chart)
     {
-        var runProperties = titleElement?
-            .Descendants(DrawingNs + "rPr")
-            .FirstOrDefault();
+        XElement? runProperties = null;
+        foreach (var candidate in titleElement?.Descendants(DrawingNs + "rPr") ?? [])
+        {
+            runProperties = candidate;
+            break;
+        }
+
         if (runProperties is null)
             return;
 

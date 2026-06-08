@@ -7,7 +7,13 @@ internal static class XlsxWorksheetPageSetupMapper
 {
     public static void LoadPrintArea(IXLWorksheet xlSheet, Sheet sheet)
     {
-        var xlRange = xlSheet.PageSetup.PrintAreas.FirstOrDefault();
+        IXLRange? xlRange = null;
+        foreach (var printArea in xlSheet.PageSetup.PrintAreas)
+        {
+            xlRange = printArea;
+            break;
+        }
+
         if (xlRange is null)
             return;
 

@@ -4,9 +4,16 @@ namespace FreeX.Core.Commands;
 
 file static class PivotTableSlicerCommandLookups
 {
-    public static SlicerModel? FindSlicer(Workbook workbook, string? slicerName) =>
-        workbook.Slicers.FirstOrDefault(slicer =>
-            string.Equals(slicer.Name, slicerName, StringComparison.OrdinalIgnoreCase));
+    public static SlicerModel? FindSlicer(Workbook workbook, string? slicerName)
+    {
+        foreach (var slicer in workbook.Slicers)
+        {
+            if (string.Equals(slicer.Name, slicerName, StringComparison.OrdinalIgnoreCase))
+                return slicer;
+        }
+
+        return null;
+    }
 
     public static int FindSourceFieldIndex(IReadOnlyList<string> headers, string? sourceFieldName, StringComparison comparison)
     {

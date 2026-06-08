@@ -12,7 +12,7 @@ internal static class XlsxDataValidationClosedXmlMapper
             try
             {
                 var ranges = xlDv.Ranges.Select(range => range.RangeAddress).ToArray();
-                var rangeAddr = ranges.FirstOrDefault();
+                var rangeAddr = ranges.Length == 0 ? null : ranges[0];
                 if (rangeAddr == null) continue;
 
                 var sheetId = sheet.Id;

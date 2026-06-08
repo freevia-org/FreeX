@@ -107,14 +107,24 @@ internal static partial class XlsxWorksheetMetadataPreserver
         foreach (var sourceView in sourceViews)
         {
             var viewId = sourceView.Attribute("workbookViewId")?.Value;
-            var targetView = !string.IsNullOrWhiteSpace(viewId)
-                ? targetSheetViews
-                    .Elements(workbookNs + "sheetView")
-                    .FirstOrDefault(element => string.Equals(
-                        element.Attribute("workbookViewId")?.Value,
-                        viewId,
-                        StringComparison.OrdinalIgnoreCase))
-                : null;
+            XElement? targetView = null;
+            if (!string.IsNullOrWhiteSpace(viewId))
+            {
+                foreach (var element in targetSheetViews.Elements(workbookNs + "sheetView"))
+                {
+                    if (!string.Equals(
+                            element.Attribute("workbookViewId")?.Value,
+                            viewId,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    targetView = element;
+                    break;
+                }
+            }
+
             if (targetView is not null)
             {
                 if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceView, targetView))

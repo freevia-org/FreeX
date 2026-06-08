@@ -4,9 +4,16 @@ namespace FreeX.Core.Commands;
 
 file static class PivotTableTimelineCommandLookups
 {
-    public static TimelineModel? FindTimeline(Workbook workbook, string? timelineName) =>
-        workbook.Timelines.FirstOrDefault(timeline =>
-            string.Equals(timeline.Name, timelineName, StringComparison.OrdinalIgnoreCase));
+    public static TimelineModel? FindTimeline(Workbook workbook, string? timelineName)
+    {
+        foreach (var timeline in workbook.Timelines)
+        {
+            if (string.Equals(timeline.Name, timelineName, StringComparison.OrdinalIgnoreCase))
+                return timeline;
+        }
+
+        return null;
+    }
 
     public static int FindSourceFieldIndex(IReadOnlyList<string> headers, string? sourceFieldName, StringComparison comparison)
     {

@@ -168,7 +168,7 @@ internal static class XlsxWorksheetSingleXmlCellMapper
         var partXml = ToPartXml(singleXmlCells);
         if (partXml is not null)
         {
-            var partPath = existingPartPaths.FirstOrDefault() ?? NextSingleCellTablePartPath(archive);
+            var partPath = existingPartPaths.Count == 0 ? NextSingleCellTablePartPath(archive) : existingPartPaths[0];
             XlsxPackageXmlEditor.ReplaceXml(archive, partPath, partXml);
             XlsxPackageXmlEditor.EnsureSpecificContentType(archive, partPath, SingleCellTableContentType);
             XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
