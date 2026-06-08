@@ -304,5 +304,5 @@ internal static class XlsxDocumentThumbnailPackageGraphNormalizer
     }
 
     private static string NormalizePartName(string partName) =>
-        partName.Trim().TrimStart('/').Replace('\\', '/');
+        XlsxPackagePath.NormalizePackagePath(partName.Trim());
 }
