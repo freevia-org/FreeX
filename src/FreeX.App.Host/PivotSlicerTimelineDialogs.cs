@@ -193,8 +193,14 @@ file static class PivotSlicerTimelineFieldLookup
     public static IReadOnlyList<string> CreateFieldList(IEnumerable<string> fieldNames) =>
         fieldNames.Where(name => !string.IsNullOrWhiteSpace(name)).ToList();
 
-    public static string FindFieldByNameOrFirst(IReadOnlyList<string> fields, string? selectedField) =>
-        fields.FirstOrDefault(name => string.Equals(name, selectedField, StringComparison.OrdinalIgnoreCase))
-        ?? fields.FirstOrDefault()
-        ?? "";
+    public static string FindFieldByNameOrFirst(IReadOnlyList<string> fields, string? selectedField)
+    {
+        foreach (var field in fields)
+        {
+            if (string.Equals(field, selectedField, StringComparison.OrdinalIgnoreCase))
+                return field;
+        }
+
+        return fields.Count > 0 ? fields[0] : "";
+    }
 }
