@@ -31,7 +31,7 @@ public sealed class ChangePivotChartTypeCommand : IWorkbookCommand
         if (chart is null)
             return ChartCommandGuards.PivotChartNotFound();
         if (!chart.IsPivotChart || string.IsNullOrWhiteSpace(chart.PivotTableName))
-            return new CommandOutcome(false, "Selected chart is not a PivotChart.");
+            return ChartCommandGuards.SelectedChartIsNotPivotChart();
         if (ChartAuthoringPlanner.RejectIfUnsupported(_chartType) is { } unsupportedOutcome)
             return unsupportedOutcome;
 
@@ -141,7 +141,7 @@ public sealed class ChangeChartTypeCommand : IWorkbookCommand
         if (chart is null)
             return ChartCommandGuards.ChartNotFound();
         if (chart.IsPivotChart)
-            return new CommandOutcome(false, "Selected chart is a PivotChart.");
+            return ChartCommandGuards.SelectedChartIsPivotChart();
         if (ChartAuthoringPlanner.RejectIfUnsupported(_chartType) is { } unsupportedOutcome)
             return unsupportedOutcome;
 
@@ -227,7 +227,7 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
         if (chart is null)
             return ChartCommandGuards.ChartNotFound();
         if (chart.IsPivotChart)
-            return new CommandOutcome(false, "Selected chart is a PivotChart.");
+            return ChartCommandGuards.SelectedChartIsPivotChart();
         if (_dataRange.Start.Sheet != _sheetId || _dataRange.End.Sheet != _sheetId)
             return new CommandOutcome(false, "Chart data range must be on the target sheet.");
 

@@ -37,7 +37,7 @@ public sealed class MoveChartCommand : IWorkbookCommand
         if (chart is null)
             return ChartCommandGuards.ChartNotFound();
         if (chart.IsPivotChart)
-            return new CommandOutcome(false, "Selected chart is a PivotChart.");
+            return ChartCommandGuards.SelectedChartIsPivotChart();
         if (_sourceSheetId == _targetSheetId)
             return new CommandOutcome(true, AffectedCells: [chart.DataRange.Start]);
 
@@ -101,7 +101,7 @@ public sealed class MoveChartToNewSheetCommand : IWorkbookCommand
         if (chart is null)
             return ChartCommandGuards.ChartNotFound();
         if (chart.IsPivotChart)
-            return new CommandOutcome(false, "Selected chart is a PivotChart.");
+            return ChartCommandGuards.SelectedChartIsPivotChart();
 
         var target = ctx.Workbook.AddSheet(_sheetName);
         source.Charts.Remove(chart);
