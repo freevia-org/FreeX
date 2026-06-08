@@ -25,7 +25,7 @@ public static class PivotUiPlanner
 
         for (var index = 0; index < headers.Count; index++)
         {
-            if (string.Equals(headers[index], caption, StringComparison.CurrentCultureIgnoreCase))
+            if (CaptionEquals(headers[index], caption))
                 return index;
         }
 
@@ -37,13 +37,7 @@ public static class PivotUiPlanner
         if (string.IsNullOrWhiteSpace(caption))
             return null;
 
-        for (var index = 0; index < pivotTable.DataFields.Count; index++)
-        {
-            if (string.Equals(pivotTable.DataFields[index].Name, caption, StringComparison.CurrentCultureIgnoreCase))
-                return index;
-        }
-
-        return null;
+        return FindDataFieldIndexBy(pivotTable, field => DataFieldCaptionEquals(field, caption));
     }
 
     public static int? FindFieldSourceIndex(IReadOnlyList<string> headers, PivotTableModel pivotTable, string caption)
@@ -52,9 +46,7 @@ public static class PivotUiPlanner
         if (sourceIndex is not null)
             return sourceIndex;
 
-        return pivotTable.DataFields
-            .FirstOrDefault(field => string.Equals(field.Name, caption, StringComparison.CurrentCultureIgnoreCase))
-            ?.SourceFieldIndex;
+        return FindDataFieldByCaptionCore(pivotTable, caption)?.SourceFieldIndex;
     }
 
     public static PivotTableModel? FindPivotTableForSelection(Sheet sheet, GridRange? selectedRange)
@@ -63,7 +55,7 @@ public static class PivotUiPlanner
         if (pivotTable is not null)
             return pivotTable;
 
-        return sheet.PivotTables.FirstOrDefault();
+        return FindFirstPivotTable(sheet);
     }
 
     public static PivotTableModel? FindPivotTableContainingSelection(Sheet sheet, GridRange? selectedRange)
@@ -71,7 +63,7 @@ public static class PivotUiPlanner
         if (selectedRange is not { } range)
             return null;
 
-        return sheet.PivotTables.FirstOrDefault(pivot =>
+        return FindFirstPivotTable(sheet, pivot =>
             pivot.TargetRange.Contains(range.Start) || pivot.TargetRange.Overlaps(range));
     }
 
@@ -80,7 +72,7 @@ public static class PivotUiPlanner
         if (sheet is null || selectedRange is not { } range)
             return null;
 
-        var pivotTable = sheet.PivotTables.FirstOrDefault(pivot => pivot.TargetRange.Contains(range.Start));
+        var pivotTable = FindFirstPivotTable(sheet, pivot => pivot.TargetRange.Contains(range.Start));
         return pivotTable is null
             ? null
             : new PivotShowDetailsTarget(pivotTable.Name, range.Start);
@@ -121,7 +113,7 @@ public static class PivotUiPlanner
         for (var index = sheet.PivotTables.Count + 1; index <= 10000; index++)
         {
             var name = $"PivotTable{index}";
-            if (sheet.PivotTables.All(pivot => !string.Equals(pivot.Name, name, StringComparison.OrdinalIgnoreCase)))
+            if (sheet.PivotTables.All(pivot => !PivotTableNameEquals(pivot, name)))
                 return name;
         }
 
@@ -139,7 +131,7 @@ public static class PivotUiPlanner
         return workbook.Sheets
             .SelectMany(sheet => sheet.PivotTables)
             .All(pivot => ReferenceEquals(pivot, targetPivotTable) ||
-                          !string.Equals(pivot.Name, normalized, StringComparison.OrdinalIgnoreCase));
+                          !PivotTableNameEquals(pivot, normalized));
     }
 
     public static GridRange ResolvePivotTableSelectionRange(PivotTableModel pivotTable) => pivotTable.TargetRange;
@@ -301,29 +293,25 @@ public static class PivotUiPlanner
         IReadOnlyList<string> headers,
         string fieldButton)
     {
-        if (string.Equals(fieldButton, "Values", StringComparison.OrdinalIgnoreCase))
-            return pivotTable.DataFields.FirstOrDefault()?.Name;
+        if (FieldButtonEquals(fieldButton, "Values"))
+            return FindFirstDataField(pivotTable)?.Name;
 
-        if (string.Equals(fieldButton, "Axis Fields", StringComparison.OrdinalIgnoreCase))
+        if (FieldButtonEquals(fieldButton, "Axis Fields"))
         {
-            var field = pivotTable.RowFields.Concat(pivotTable.ColumnFields).FirstOrDefault();
-            return field is null ? null : FieldCaption(headers, field.SourceFieldIndex);
+            var field = FindFirstAxisField(pivotTable);
+            return field is null ? null : FieldCaption(headers, field);
         }
 
-        var pageField = pivotTable.PageFields.FirstOrDefault();
+        var pageField = FindFirstPageField(pivotTable);
         if (pageField is not null)
-            return FieldCaption(headers, pageField.SourceFieldIndex);
+            return FieldCaption(headers, pageField);
 
-        var axisField = pivotTable.RowFields.Concat(pivotTable.ColumnFields).FirstOrDefault();
-        return axisField is null ? pivotTable.DataFields.FirstOrDefault()?.Name : FieldCaption(headers, axisField.SourceFieldIndex);
+        var axisField = FindFirstAxisField(pivotTable);
+        return axisField is null ? FindFirstDataField(pivotTable)?.Name : FieldCaption(headers, axisField);
     }
 
     public static PivotFieldModel FindExistingPivotField(PivotTableModel pivotTable, int sourceFieldIndex) =>
-        pivotTable.RowFields
-            .Concat(pivotTable.ColumnFields)
-            .Concat(pivotTable.PageFields)
-            .FirstOrDefault(field => field.SourceFieldIndex == sourceFieldIndex)
-        ?? new PivotFieldModel(sourceFieldIndex);
+        FindFirstLayoutField(pivotTable, sourceFieldIndex) ?? new PivotFieldModel(sourceFieldIndex);
 
     public static List<PivotFieldModel> SetFieldSelectedItems(
         IReadOnlyList<PivotFieldModel> fields,
@@ -367,4 +355,58 @@ public static class PivotUiPlanner
         else
             items.Insert(index, item);
     }
+
+    private static bool CaptionEquals(string value, string caption) =>
+        string.Equals(value, caption, StringComparison.CurrentCultureIgnoreCase);
+
+    private static bool DataFieldCaptionEquals(PivotDataFieldModel field, string caption) =>
+        CaptionEquals(field.Name, caption);
+
+    private static int? FindDataFieldIndexBy(
+        PivotTableModel pivotTable,
+        Func<PivotDataFieldModel, bool> predicate)
+    {
+        for (var index = 0; index < pivotTable.DataFields.Count; index++)
+        {
+            if (predicate(pivotTable.DataFields[index]))
+                return index;
+        }
+
+        return null;
+    }
+
+    private static PivotDataFieldModel? FindDataFieldByCaptionCore(PivotTableModel pivotTable, string caption) =>
+        pivotTable.DataFields.FirstOrDefault(field => DataFieldCaptionEquals(field, caption));
+
+    private static PivotTableModel? FindFirstPivotTable(Sheet sheet) =>
+        sheet.PivotTables.FirstOrDefault();
+
+    private static PivotTableModel? FindFirstPivotTable(
+        Sheet sheet,
+        Func<PivotTableModel, bool> predicate) =>
+        sheet.PivotTables.FirstOrDefault(predicate);
+
+    private static bool PivotTableNameEquals(PivotTableModel pivotTable, string name) =>
+        string.Equals(pivotTable.Name, name, StringComparison.OrdinalIgnoreCase);
+
+    private static bool FieldButtonEquals(string fieldButton, string caption) =>
+        string.Equals(fieldButton, caption, StringComparison.OrdinalIgnoreCase);
+
+    private static PivotDataFieldModel? FindFirstDataField(PivotTableModel pivotTable) =>
+        pivotTable.DataFields.FirstOrDefault();
+
+    private static PivotFieldModel? FindFirstPageField(PivotTableModel pivotTable) =>
+        pivotTable.PageFields.FirstOrDefault();
+
+    private static PivotFieldModel? FindFirstAxisField(PivotTableModel pivotTable) =>
+        pivotTable.RowFields.Concat(pivotTable.ColumnFields).FirstOrDefault();
+
+    private static string FieldCaption(IReadOnlyList<string> headers, PivotFieldModel field) =>
+        FieldCaption(headers, field.SourceFieldIndex);
+
+    private static PivotFieldModel? FindFirstLayoutField(PivotTableModel pivotTable, int sourceFieldIndex) =>
+        LayoutFields(pivotTable).FirstOrDefault(field => field.SourceFieldIndex == sourceFieldIndex);
+
+    private static IEnumerable<PivotFieldModel> LayoutFields(PivotTableModel pivotTable) =>
+        pivotTable.RowFields.Concat(pivotTable.ColumnFields).Concat(pivotTable.PageFields);
 }

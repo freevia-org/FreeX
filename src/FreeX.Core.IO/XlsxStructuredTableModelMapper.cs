@@ -63,9 +63,7 @@ internal static class XlsxStructuredTableModelMapper
         if (string.IsNullOrWhiteSpace(table.StyleName) || workbook.StructuredTableStyles.Count == 0)
             return;
 
-        var style = workbook.StructuredTableStyles.FirstOrDefault(candidate =>
-            candidate.AppliesToTables &&
-            string.Equals(candidate.Name, table.StyleName, StringComparison.OrdinalIgnoreCase));
+        var style = FindTableStyle(workbook, table.StyleName);
         if (style is null)
             return;
 
@@ -245,6 +243,11 @@ internal static class XlsxStructuredTableModelMapper
 
     private static uint GetStripeSize(StructuredTableStyleElementModel? element) =>
         element?.Size is > 0 ? checked((uint)element.Size.Value) : 1;
+
+    private static StructuredTableStyleModel? FindTableStyle(Workbook workbook, string styleName) =>
+        workbook.StructuredTableStyles.FirstOrDefault(candidate =>
+            candidate.AppliesToTables &&
+            string.Equals(candidate.Name, styleName, StringComparison.OrdinalIgnoreCase));
 
     private static StructuredTableStyleElementModel? FindElement(StructuredTableStyleModel style, string type) =>
         style.Elements

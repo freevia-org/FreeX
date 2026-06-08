@@ -512,19 +512,18 @@ internal static class XlsxPackageMetadataMerger
 
             var pairedPropertiesPart = GetPairedCustomXmlPropertiesPart(itemPart);
             var selectedPropertiesPart = "";
-            var selectedRelationship = customXmlPropertiesRelationships.FirstOrDefault(relationship =>
-                !IsExternalRelationship(relationship) &&
-                IsCustomXmlPropertiesPart(ResolveRelationshipTarget(itemPart, relationship)) &&
-                targetIndex.Contains(ResolveRelationshipTarget(itemPart, relationship)));
+            var selectedRelationship = FindExistingCustomXmlPropertiesRelationship(
+                customXmlPropertiesRelationships,
+                targetIndex,
+                itemPart);
 
             if (!string.IsNullOrWhiteSpace(pairedPropertiesPart) && targetIndex.Contains(pairedPropertiesPart))
             {
                 selectedPropertiesPart = pairedPropertiesPart;
-                selectedRelationship = customXmlPropertiesRelationships.FirstOrDefault(relationship =>
-                    string.Equals(
-                        ResolveRelationshipTarget(itemPart, relationship),
-                        pairedPropertiesPart,
-                        StringComparison.OrdinalIgnoreCase)) ?? selectedRelationship;
+                selectedRelationship = FindCustomXmlPropertiesRelationshipTargeting(
+                    customXmlPropertiesRelationships,
+                    itemPart,
+                    pairedPropertiesPart) ?? selectedRelationship;
             }
             else if (selectedRelationship is not null)
             {
@@ -554,6 +553,25 @@ internal static class XlsxPackageMetadataMerger
 
         return referencedPropertiesParts;
     }
+
+    private static XElement? FindExistingCustomXmlPropertiesRelationship(
+        IEnumerable<XElement> relationships,
+        ArchiveEntryIndex targetIndex,
+        string itemPart) =>
+        relationships.FirstOrDefault(relationship =>
+            !IsExternalRelationship(relationship) &&
+            IsCustomXmlPropertiesPart(ResolveRelationshipTarget(itemPart, relationship)) &&
+            targetIndex.Contains(ResolveRelationshipTarget(itemPart, relationship)));
+
+    private static XElement? FindCustomXmlPropertiesRelationshipTargeting(
+        IEnumerable<XElement> relationships,
+        string itemPart,
+        string propertiesPart) =>
+        relationships.FirstOrDefault(relationship =>
+            string.Equals(
+                ResolveRelationshipTarget(itemPart, relationship),
+                propertiesPart,
+                StringComparison.OrdinalIgnoreCase));
 
     private static string ResolveRelationshipTarget(string sourcePart, XElement relationship)
     {
@@ -786,11 +804,7 @@ internal static class XlsxPackageMetadataMerger
             return false;
         }
 
-        var targetOverride = targetRoot
-            .Elements(contentTypeNs + "Override")
-            .FirstOrDefault(element =>
-                TryNormalizeContentTypePartName(element.Attribute("PartName")?.Value, out var targetPartName) &&
-                string.Equals(targetPartName, normalizedPartName, StringComparison.OrdinalIgnoreCase));
+        var targetOverride = FindContentTypeOverride(targetRoot, contentTypeNs, normalizedPartName);
         if (targetOverride is null ||
             string.Equals(targetOverride.Attribute("ContentType")?.Value, sourceContentType, StringComparison.OrdinalIgnoreCase))
         {
@@ -800,6 +814,15 @@ internal static class XlsxPackageMetadataMerger
         targetOverride.SetAttributeValue("ContentType", sourceContentType);
         return true;
     }
+
+    private static XElement? FindContentTypeOverride(
+        XElement root,
+        XNamespace contentTypeNs,
+        string normalizedPartName) =>
+        root.Elements(contentTypeNs + "Override")
+            .FirstOrDefault(element =>
+                TryNormalizeContentTypePartName(element.Attribute("PartName")?.Value, out var targetPartName) &&
+                string.Equals(targetPartName, normalizedPartName, StringComparison.OrdinalIgnoreCase));
 
     private static bool ShouldPreserveRelationship(
         string relationshipPartPath,
