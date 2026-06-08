@@ -78,7 +78,9 @@ public sealed partial class MainWindowXamlKeyTipTests
         handlerSource.Should().Contain("new DrillDownPivotTableCommand(_currentSheetId, target.PivotTableName, target.PivotCell)");
         handlerSource.Should().Contain("\"Show PivotTable Details\"");
         handlerSource.Should().Contain("out var outcome");
-        handlerSource.Should().Contain("outcome.AffectedCells?.FirstOrDefault()");
+        handlerSource.Should().Contain("FindAffectedCellAnchor(outcome)");
+        source.Should().Contain("private static CellAddress? FindAffectedCellAnchor(CommandOutcome outcome)");
+        source.Should().Contain("outcome.AffectedCells?.FirstOrDefault()");
         handlerSource.Should().Contain("_currentSheetId = detailAnchor.Sheet;");
         handlerSource.Should().Contain("RefreshSheetTabs();");
         handlerSource.Should().Contain("UpdateViewport();");
