@@ -59,12 +59,11 @@ public sealed class SetDrawingShapeAltTextCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var shape = sheet.DrawingShapes.FirstOrDefault(item => item.Id == _shapeId);
-        if (shape is null)
-            return new CommandOutcome(false, "Drawing shape was not found.");
+        if (!DrawingShapeCommandGuards.TryFindShape(sheet, _shapeId, out var shape))
+            return DrawingShapeCommandGuards.DrawingShapeNotFound();
 
         shape.AltText = _change.Apply(shape.AltText);
         return new CommandOutcome(true, AffectedCells: [shape.Anchor]);
