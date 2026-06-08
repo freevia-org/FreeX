@@ -138,6 +138,8 @@ public static class WorkbookShareActionPlanner
         {
             WorkbookShareReadinessSaveAsReason.MissingFile when !string.IsNullOrWhiteSpace(plan.CandidatePath) =>
                 $"Save As is required before {actionLabel} can use the workbook because the saved path is missing: {plan.CandidatePath}.",
+            WorkbookShareReadinessSaveAsReason.InvalidPath when WorkbookShareReadinessPlanner.IsUnsupportedLinkCandidate(plan.CandidatePath) =>
+                $"Save As is required before {actionLabel} can use the workbook because cloud or web links are not supported; save the workbook to a local file first.",
             WorkbookShareReadinessSaveAsReason.InvalidPath =>
                 $"Save As is required before {actionLabel} can use the workbook because the saved path is not a valid local file path.",
             _ =>
