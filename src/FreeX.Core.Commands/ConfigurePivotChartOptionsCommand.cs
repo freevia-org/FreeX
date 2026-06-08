@@ -67,7 +67,7 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
 
         var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
         if (chart is null)
-            return new CommandOutcome(false, "PivotChart was not found.");
+            return ChartCommandGuards.PivotChartNotFound();
         if (!chart.IsPivotChart || string.IsNullOrWhiteSpace(chart.PivotTableName))
             return new CommandOutcome(false, "Selected chart is not a PivotChart.");
 
