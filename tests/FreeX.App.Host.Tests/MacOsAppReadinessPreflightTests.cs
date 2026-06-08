@@ -33,6 +33,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("gatekeeper_assessment_status=accepted");
         script.Should().Contain("gatekeeper_assessment_source=Notarized Developer ID");
         script.Should().Contain("Distribution-candidate run requires accepted Gatekeeper assessment from Notarized Developer ID.");
+        script.Should().Contain("artifact_bundle_metadata_subject=unzipped_app_bundle");
+        script.Should().Contain("bundle_identifier=$(/usr/libexec/PlistBuddy -c ''Print :CFBundleIdentifier'' \"$app_info_plist\")");
+        script.Should().Contain("bundle_package_type=$(/usr/libexec/PlistBuddy -c ''Print :CFBundlePackageType'' \"$app_info_plist\")");
+        script.Should().Contain("bundle_minimum_system_version=$(/usr/libexec/PlistBuddy -c ''Print :LSMinimumSystemVersion'' \"$app_info_plist\")");
+        script.Should().Contain("bundle_high_resolution_capable=$(/usr/libexec/PlistBuddy -c ''Print :NSHighResolutionCapable'' \"$app_info_plist\")");
         script.Should().Contain("publish-distribution-candidate:");
         script.Should().Contain("actions/download-artifact@v7");
         script.Should().Contain("Test portable PDF macOS route");
@@ -1207,6 +1212,10 @@ public sealed class MacOsAppReadinessPreflightTests
                       test -f "$app/Contents/Resources/FreeX.icns"
                       /usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist"
                       /usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app/Contents/Info.plist"
+                      /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist"
+                      /usr/libexec/PlistBuddy -c 'Print :CFBundlePackageType' "$app/Contents/Info.plist"
+                      /usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app/Contents/Info.plist"
+                      /usr/libexec/PlistBuddy -c 'Print :NSHighResolutionCapable' "$app/Contents/Info.plist"
                       /usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeExtensions:0' "$app/Contents/Info.plist"
                       /usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeExtensions:0' "$app/Contents/Info.plist"
                       lipo -archs "$app/Contents/MacOS/FreeX"
@@ -1214,6 +1223,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       ditto -c -k --sequesterRsrc --keepParent "$app" "$zip_path"
                       ditto -x -k "$zip_path" "$unzip_root"
                       (cd "$artifact_root" && shasum -a 256 "$zip_name" > "$zip_name.sha256")
+                      app_info_plist="$unzip_root/FreeX.app/Contents/Info.plist"
                       test -x "$unzip_root/FreeX.app/Contents/MacOS/FreeX"
                       test -f "$unzip_root/FreeX.app/Contents/MacOS/FreeX.dll"
                       xcrun notarytool submit "$zip_path"
@@ -1222,6 +1232,16 @@ public sealed class MacOsAppReadinessPreflightTests
                       shasum -a 256 -c "$zip_name.sha256"
                       zip_sha256="$(cut -d ' ' -f 1 "$artifact_root/$zip_name.sha256")"
                       echo "zip_sha256=$zip_sha256"
+                      echo "artifact_bundle_metadata_subject=unzipped_app_bundle"
+                      echo "bundle_executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app_info_plist")"
+                      echo "bundle_icon=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app_info_plist")"
+                      echo "bundle_identifier=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_info_plist")"
+                      echo "bundle_package_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundlePackageType' "$app_info_plist")"
+                      echo "bundle_minimum_system_version=$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app_info_plist")"
+                      echo "bundle_high_resolution_capable=$(/usr/libexec/PlistBuddy -c 'Print :NSHighResolutionCapable' "$app_info_plist")"
+                      echo "artifact_document_extensions_subject=unzipped_app_bundle"
+                      echo "native_document_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeName' "$app_info_plist")"
+                      echo "imported_document_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeName' "$app_info_plist")"
                       cat > "$tester_instructions_path" <<EOF
                       This artifact is a macOS port validation build. Internal-preview artifacts are not a public release channel; distribution-candidate artifacts must show Developer ID signing, accepted notarization, stapler validation, and accepted Gatekeeper assessment in evidence.
                       Use osx-arm64 for Apple Silicon Macs and osx-x64 for Intel Macs.

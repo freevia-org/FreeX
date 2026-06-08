@@ -1,8 +1,8 @@
 # macOS Public Preview Human Validation Checklist
 
-Use this checklist for each `macOS App Preview` public-preview candidate after hosted evidence has been downloaded and the Windows-runnable public-preview preflight has passed. It complements [test-distribution.md](test-distribution.md), [macos-signing-notarization.md](macos-signing-notarization.md), and [../planning/macos-accessibility-evidence.md](../planning/macos-accessibility-evidence.md).
+Use this checklist for each `macOS App Preview` public-preview candidate after hosted evidence has been downloaded and the Windows-runnable public-preview preflight has passed. It complements [test-distribution.md](test-distribution.md), [macos-hosted-app-production.md](macos-hosted-app-production.md), [macos-signing-notarization.md](macos-signing-notarization.md), and [../planning/macos-accessibility-evidence.md](../planning/macos-accessibility-evidence.md).
 
-Before handing work to Mac testers, generate the run-specific handoff from Windows. This validates hosted evidence and prints the exact runtime checklist paths, expected artifact wrapper names, checklist validation commands, and final promotion command without requiring completed checklist files yet:
+Before handing work to Mac testers, use the hosted production runbook to download the app, diagnostics, aggregate readiness, and release-assets wrappers under one artifact root. Then generate the run-specific handoff from Windows. This validates hosted evidence and prints the exact runtime checklist paths, expected artifact wrapper names, checklist validation commands, and final promotion command without requiring completed checklist files yet:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-MacOsPublicPreviewPromotion.ps1 -ArtifactRoot artifacts/macos-preview -ChecklistRoot artifacts/macos-preview -ExpectedRunId <run-id> -ExpectedRunAttempt <run-attempt> -PrepareHumanValidationHandoff

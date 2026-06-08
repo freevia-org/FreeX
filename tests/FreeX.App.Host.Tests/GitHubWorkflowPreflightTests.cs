@@ -300,6 +300,16 @@ public sealed class GitHubWorkflowPreflightTests
         manifestStep.Should().Contain("\"artifact_channel\"");
         manifestStep.Should().Contain("\"distribution_readiness\"");
         manifestStep.Should().Contain("\"smoke_status\"");
+        manifestStep.Should().Contain("\"artifact_bundle_metadata_subject\"");
+        manifestStep.Should().Contain("\"bundle_identifier\"");
+        manifestStep.Should().Contain("\"bundle_package_type\"");
+        manifestStep.Should().Contain("\"bundle_minimum_system_version\"");
+        manifestStep.Should().Contain("\"bundle_high_resolution_capable\"");
+        manifestStep.Should().Contain("\"artifact_document_extensions_subject\"");
+        manifestStep.Should().Contain("\"native_document_extensions\"");
+        manifestStep.Should().Contain("\"imported_document_extensions\"");
+        manifestStep.Should().Contain("\"bundle_identifier=$($entry.evidence_markers.bundle_identifier)\"");
+        manifestStep.Should().Contain("\"bundle_package_type=$($entry.evidence_markers.bundle_package_type)\"");
 
         var uploadStep = ExtractRequiredYamlBlock(aggregateJob, "- name: Upload aggregate readiness");
         uploadStep.Should().Contain("uses: actions/upload-artifact@v7");
