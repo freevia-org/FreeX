@@ -986,8 +986,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         AssertWorkbookViewInvalidAttributesRemoved(primaryView);
 
         var reloaded = ReloadWorkbook(saved);
+        reloaded.GetSheetAt(0).GetValue(3, 3).Should().Be(new NumberValue(42));
         reloaded.AdditionalViews!.NativeAttributes.Should().BeEmpty();
-        reloaded.AdditionalViews.Views.Should().ContainSingle();
+        var reloadedAdditionalView = reloaded.AdditionalViews.Views.Should().ContainSingle().Subject;
+        reloadedAdditionalView.NativeXml.Should().NotContain("customWorkbookViewFlag");
+        reloadedAdditionalView.NativeXml.Should().NotContain("nativeWorkbookViewChild");
     }
 
     [Fact]
@@ -1032,8 +1035,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             "nativeAdditionalWorkbookViewExtLstChild");
 
         var reloaded = ReloadWorkbook(saved);
+        reloaded.GetSheetAt(0).GetValue(3, 3).Should().Be(new NumberValue(42));
         reloaded.AdditionalViews!.Views.Should().ContainSingle()
-            .Which.NativeXml.Should().Contain("FreeXAdditionalWorkbookViewExtension");
+            .Which.NativeXml.Should().Contain("FreeXAdditionalWorkbookViewExtension")
+            .And.NotContain("customAdditionalWorkbookViewExtFlag")
+            .And.NotContain("FREEX-DUPLICATE");
     }
 
     private static void AssertWorkbookFileVersionModel(Workbook workbook)
