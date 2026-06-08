@@ -90,7 +90,7 @@ public static class SelectionPanePlanner
         Guid selectedId,
         bool forward)
     {
-        var currentIndex = FindIndex(items, selectedId);
+        var currentIndex = IndexOfItem(items, selectedId);
         var targetIndex = FindMoveTargetIndex(items, currentIndex, forward);
         if (targetIndex < 0)
             return null;
@@ -366,7 +366,7 @@ public static class SelectionPanePlanner
         return new SelectionPaneDragMovePlan(draggedIndex, insertIndex, moves);
     }
 
-    private static int FindIndex(IReadOnlyList<SelectionPaneItemState> items, Guid id)
+    private static int IndexOfItem(IReadOnlyList<SelectionPaneItemState> items, Guid id)
     {
         for (var index = 0; index < items.Count; index++)
         {
