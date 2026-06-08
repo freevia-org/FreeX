@@ -64,7 +64,7 @@ public sealed class AvaloniaShellSourceTests
         var serviceSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "WorkbookFileAccessService.cs"));
 
         source.Should().Contain("private readonly IWorkbookFileAccessService _workbookFileAccessService;");
-        source.Should().Contain("WorkbookFileAccessServiceFactory.Create()");
+        source.Should().Contain("WorkbookFileAccessServiceFactory.Create(App.Diagnostics)");
         source.Should().Contain("ArgumentNullException.ThrowIfNull(workbookFileAccessService);");
         source.Should().Contain("_workbookFileAccessService = workbookFileAccessService;");
         source.Should().Contain("_workbookFileAccessService.CreateIdentityAsync(path, storageFile)");
@@ -94,8 +94,32 @@ public sealed class AvaloniaShellSourceTests
         serviceSource.Should().Contain("StorageItemMatchesPath(storageItem, path)");
         serviceSource.Should().Contain("storageItem.SaveBookmarkAsync()");
         serviceSource.Should().Contain("storageProvider.OpenFileBookmarkAsync(bookmark)");
-        serviceSource.Should().Contain("WorkbookFileAccessScope.FromDisposable(storageFile)");
+        serviceSource.Should().Contain("WorkbookFileAccessScope.FromDisposable(");
         serviceSource.Should().Contain("PlatformPathIdentityComparer.Current.Equals(identity.LocalPath, resolvedPath)");
+        serviceSource.Should().Contain("Create(AvaloniaAppDiagnostics? diagnostics = null)");
+        serviceSource.Should().Contain("new AvaloniaWorkbookFileAccessService(diagnostics)");
+        serviceSource.Should().Contain("AvaloniaWorkbookFileAccessService(AvaloniaAppDiagnostics? diagnostics = null)");
+        serviceSource.Should().Contain("_diagnostics?.RecordEvent(eventName");
+        serviceSource.Should().Contain("RecordIdentityEvent(\"bookmark_created\", grantKind: MacOsSecurityScopedBookmarkKind);");
+        serviceSource.Should().Contain("RecordScopeEvent(\"scope_started\", grantKind: MacOsSecurityScopedBookmarkKind);");
+        serviceSource.Should().Contain("RecordScopeEvent(\"scope_ended\", grantKind: MacOsSecurityScopedBookmarkKind)");
+        serviceSource.Should().Contain("workbook_file_access_identity");
+        serviceSource.Should().Contain("workbook_file_access_scope");
+        serviceSource.Should().Contain("[\"grantKind\"]");
+        serviceSource.Should().Contain("[\"payloadRedacted\"] = string.IsNullOrWhiteSpace(grantKind) ? null : \"true\"");
+        var diagnosticEventBlock = ExtractSourceBlock(
+            serviceSource,
+            "private void RecordFileAccessEvent(string eventName, string status, string? grantKind)",
+            "});");
+        diagnosticEventBlock.Should().NotContain("[\"path\"]");
+        diagnosticEventBlock.Should().NotContain("[\"fileName\"]");
+        diagnosticEventBlock.Should().NotContain("[\"filename\"]");
+        diagnosticEventBlock.Should().NotContain("[\"localPath\"]");
+        diagnosticEventBlock.Should().NotContain("[\"workbookPath\"]");
+        diagnosticEventBlock.Should().NotContain("[\"formula\"]");
+        diagnosticEventBlock.Should().NotContain("[\"bookmarkPayload\"]");
+        diagnosticEventBlock.Should().NotContain("[\"storageIdentifier\"]");
+        diagnosticEventBlock.Should().NotContain("[\"rawStorageIdentifier\"]");
         serviceSource.Should().NotContain("AppKit");
         serviceSource.Should().NotContain("Foundation");
         serviceSource.Should().NotContain("ObjCRuntime");
@@ -116,7 +140,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private const string WorkbookShareSheetLabel = \"macOS Share Sheet\";");
         source.Should().Contain("private readonly IWorkbookShareSheetService _workbookShareSheetService;");
         source.Should().Contain("WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel),");
-        source.Should().Contain("WorkbookFileAccessServiceFactory.Create())");
+        source.Should().Contain("WorkbookFileAccessServiceFactory.Create(App.Diagnostics))");
         source.Should().Contain("ArgumentNullException.ThrowIfNull(workbookShareSheetService);");
         source.Should().Contain("private readonly NativeMenuItem _shareWorkbookMenuItem = new();");
         source.Should().Contain("_shareWorkbookMenuItem.Header = \"Share Workbook...\";");

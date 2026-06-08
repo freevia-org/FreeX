@@ -24,6 +24,7 @@ public sealed class AppServicesPortabilityGuardTests
         ("Windows desktop SDK", new(@"\bMicrosoft\.NET\.Sdk\.WindowsDesktop\b", RegexOptions.Compiled)),
         ("Windows-targeted framework", new(@"\bnet\d+(?:\.\d+)?-windows\b", RegexOptions.Compiled | RegexOptions.IgnoreCase)),
         ("Windows Forms project marker", new(@"\bUseWindowsForms\b", RegexOptions.Compiled)),
+        ("Avalonia framework dependency", new(@"\bAvalonia\.", RegexOptions.Compiled)),
         ("AppKit namespace", new(@"\bAppKit\b", RegexOptions.Compiled)),
         ("Foundation namespace", new(@"\bFoundation\b", RegexOptions.Compiled)),
         ("ObjCRuntime namespace", new(@"\bObjCRuntime\b", RegexOptions.Compiled)),
