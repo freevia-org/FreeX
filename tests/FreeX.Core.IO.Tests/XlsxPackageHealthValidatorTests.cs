@@ -14,10 +14,16 @@ public sealed class XlsxPackageHealthValidatorTests
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
     private const string StylesRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
+    private const string ExternalLinkRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink";
+    private const string ExternalLinkPathRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath";
     private const string SharedStringsContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
     private const string StylesContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
+    private const string ExternalLinkContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml";
 
     [Fact]
     public void Validate_AcceptsMinimalWorkbookPackage()
@@ -201,6 +207,89 @@ public sealed class XlsxPackageHealthValidatorTests
         XlsxPackageHealthValidator.Validate(package)
             .Should()
             .Contain(issue => issue.Contains("xl/styles.xml cellXfs count is 3, but contains 2 child entries", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_AcceptsWorkbookWithExternalLinkPackage()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookXml: WorkbookWithExternalReferenceXml("rIdExternalLink1"),
+            workbookRelationships:
+            [
+                Relationship("rId1", WorksheetRelationshipType, "worksheets/sheet1.xml"),
+                Relationship("rIdExternalLink1", ExternalLinkRelationshipType, "externalLinks/externalLink1.xml")
+            ],
+            extraEntries:
+            [
+                ("xl/externalLinks/externalLink1.xml", ExternalLinkXml("rIdExternalBook1")),
+                ("xl/externalLinks/_rels/externalLink1.xml.rels", RelationshipsXml(
+                    Relationship("rIdExternalBook1", ExternalLinkPathRelationshipType, "ExternalWorkbook.xlsx", "External")))
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/externalLinks/externalLink1.xml" ContentType="{ExternalLinkContentType}" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Validate_FlagsWorkbookExternalReferenceMissingRelationship()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookXml: WorkbookWithExternalReferenceXml("rIdMissing"));
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("workbook externalReference #1 targets missing relationship rIdMissing", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsExternalLinkPartWithWrongContentType()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookXml: WorkbookWithExternalReferenceXml("rIdExternalLink1"),
+            workbookRelationships:
+            [
+                Relationship("rId1", WorksheetRelationshipType, "worksheets/sheet1.xml"),
+                Relationship("rIdExternalLink1", ExternalLinkRelationshipType, "externalLinks/externalLink1.xml")
+            ],
+            extraEntries:
+            [
+                ("xl/externalLinks/externalLink1.xml", ExternalLinkXml("rIdExternalBook1")),
+                ("xl/externalLinks/_rels/externalLink1.xml.rels", RelationshipsXml(
+                    Relationship("rIdExternalBook1", ExternalLinkPathRelationshipType, "ExternalWorkbook.xlsx", "External")))
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains($"xl/externalLinks/externalLink1.xml has content type application/xml; expected {ExternalLinkContentType}", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsExternalBookRelationshipThatIsNotExternal()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookXml: WorkbookWithExternalReferenceXml("rIdExternalLink1"),
+            workbookRelationships:
+            [
+                Relationship("rId1", WorksheetRelationshipType, "worksheets/sheet1.xml"),
+                Relationship("rIdExternalLink1", ExternalLinkRelationshipType, "externalLinks/externalLink1.xml")
+            ],
+            extraEntries:
+            [
+                ("xl/externalLinks/externalLink1.xml", ExternalLinkXml("rIdExternalBook1")),
+                ("xl/externalLinks/_rels/externalLink1.xml.rels", RelationshipsXml(
+                    Relationship("rIdExternalBook1", ExternalLinkPathRelationshipType, "ExternalWorkbook.xlsx")))
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/externalLinks/externalLink1.xml" ContentType="{ExternalLinkContentType}" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("xl/externalLinks/externalLink1.xml externalBook #1 relationship rIdExternalBook1 is not external", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -786,6 +875,30 @@ public sealed class XlsxPackageHealthValidatorTests
 
     private static string Relationship(string id, string type, string target) =>
         $"""<Relationship Id="{id}" Type="{type}" Target="{target}" />""";
+
+    private static string Relationship(string id, string type, string target, string targetMode) =>
+        $"""<Relationship Id="{id}" Type="{type}" Target="{target}" TargetMode="{targetMode}" />""";
+
+    private static string WorkbookWithExternalReferenceXml(string relationshipId) =>
+        $"""
+        <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <sheets>
+            <sheet name="Sheet1" sheetId="1" r:id="rId1" />
+          </sheets>
+          <externalReferences>
+            <externalReference r:id="{relationshipId}" />
+          </externalReferences>
+        </workbook>
+        """;
+
+    private static string ExternalLinkXml(string relationshipId) =>
+        $"""
+        <externalLink xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                      xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <externalBook r:id="{relationshipId}" />
+        </externalLink>
+        """;
 
     private static string SharedStringWorksheetXml(string sharedStringIndex) =>
         $"""

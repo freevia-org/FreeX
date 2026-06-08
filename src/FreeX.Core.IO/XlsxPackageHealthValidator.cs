@@ -19,6 +19,10 @@ public static class XlsxPackageHealthValidator
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
     private const string StylesRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
+    private const string ExternalLinkRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink";
+    private const string ExternalLinkPathRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath";
     private const string WorksheetContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
     private const string ChartsheetContentType =
@@ -27,6 +31,8 @@ public static class XlsxPackageHealthValidator
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
     private const string StylesContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
+    private const string ExternalLinkContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml";
 
     private static readonly XNamespace PackageContentTypeNs =
         "http://schemas.openxmlformats.org/package/2006/content-types";
@@ -55,6 +61,7 @@ public static class XlsxPackageHealthValidator
         AddWorkbookSheetMapIssues(archive, issues);
         AddSharedStringTableIssues(archive, issues);
         AddStylesPackageIssues(archive, issues);
+        AddExternalLinkPackageIssues(archive, issues);
         return issues;
     }
 
@@ -869,6 +876,199 @@ public static class XlsxPackageHealthValidator
             issues.Add($"xl/styles.xml {elementName} count is {declaredCount}, but contains {actualCount} child entries");
     }
 
+    private static void AddExternalLinkPackageIssues(ZipArchive archive, List<string> issues)
+    {
+        if (!TryLoadPackageXml(archive, "[Content_Types].xml", issues, out var contentTypesXml) ||
+            contentTypesXml.Root?.Name != PackageContentTypeNs + "Types")
+        {
+            return;
+        }
+
+        var entryNames = archive.Entries
+            .Where(entry => !string.IsNullOrEmpty(entry.Name))
+            .Select(entry => NormalizePackagePart(entry.FullName))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (!TryFindWorkbookPart(archive, entryNames, out var workbookPart))
+            return;
+
+        if (!TryLoadPackageXml(archive, workbookPart, issues, out var workbookXml) ||
+            workbookXml.Root?.Name != WorkbookNs + "workbook")
+        {
+            return;
+        }
+
+        var externalReferences = workbookXml.Root
+            .Elements(WorkbookNs + "externalReferences")
+            .SelectMany(externalReferences => externalReferences.Elements(WorkbookNs + "externalReference"))
+            .Select((externalReference, index) => new WorkbookExternalReference(
+                index + 1,
+                externalReference.Attribute(OfficeRelationshipNs + "id")?.Value))
+            .ToArray();
+        if (externalReferences.Length == 0)
+            return;
+
+        var workbookRelsPart = GetRelationshipPartPath(workbookPart);
+        if (!TryLoadPackageXml(archive, workbookRelsPart, issues, out var workbookRelsXml) ||
+            workbookRelsXml.Root?.Name != PackageRelationshipNs + "Relationships")
+        {
+            return;
+        }
+
+        var workbookRelationships = workbookRelsXml.Root
+            .Elements(PackageRelationshipNs + "Relationship")
+            .Where(relationship => !string.IsNullOrWhiteSpace(relationship.Attribute("Id")?.Value))
+            .GroupBy(relationship => relationship.Attribute("Id")!.Value, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+
+        var validatedExternalLinkParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var externalReference in externalReferences)
+        {
+            if (string.IsNullOrWhiteSpace(externalReference.RelationshipId))
+            {
+                issues.Add($"workbook externalReference #{externalReference.Ordinal} has no relationship id");
+                continue;
+            }
+
+            if (!workbookRelationships.TryGetValue(externalReference.RelationshipId, out var relationship))
+            {
+                issues.Add($"workbook externalReference #{externalReference.Ordinal} targets missing relationship {externalReference.RelationshipId} in {workbookRelsPart}");
+                continue;
+            }
+
+            AddWorkbookExternalReferencePackageIssues(
+                archive,
+                contentTypesXml,
+                entryNames,
+                workbookRelsPart,
+                externalReference,
+                relationship,
+                validatedExternalLinkParts,
+                issues);
+        }
+    }
+
+    private static void AddWorkbookExternalReferencePackageIssues(
+        ZipArchive archive,
+        XDocument contentTypesXml,
+        IReadOnlySet<string> entryNames,
+        string workbookRelsPart,
+        WorkbookExternalReference externalReference,
+        XElement relationship,
+        HashSet<string> validatedExternalLinkParts,
+        List<string> issues)
+    {
+        var relationshipType = relationship.Attribute("Type")?.Value;
+        if (!string.Equals(relationshipType, ExternalLinkRelationshipType, StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"workbook externalReference #{externalReference.Ordinal} relationship {externalReference.RelationshipId} has Type={relationshipType ?? "(none)"}; expected {ExternalLinkRelationshipType}");
+            return;
+        }
+
+        var targetMode = relationship.Attribute("TargetMode")?.Value?.Trim();
+        if (string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"workbook externalReference #{externalReference.Ordinal} relationship {externalReference.RelationshipId} must target an externalLink package part internally");
+            return;
+        }
+
+        var target = relationship.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            issues.Add($"workbook externalReference #{externalReference.Ordinal} relationship {externalReference.RelationshipId} has no Target");
+            return;
+        }
+
+        if (!TryResolvePackageRelationshipTarget(workbookRelsPart, target.Trim(), out var externalLinkPart, out var targetIssue))
+        {
+            issues.Add($"workbook externalReference #{externalReference.Ordinal} relationship {externalReference.RelationshipId} has invalid Target {target}: {targetIssue}");
+            return;
+        }
+
+        if (!entryNames.Contains(externalLinkPart))
+        {
+            issues.Add($"workbook externalReference #{externalReference.Ordinal} relationship {externalReference.RelationshipId} targets missing package part {externalLinkPart}");
+            return;
+        }
+
+        var contentType = GetEffectivePackageContentType(contentTypesXml, externalLinkPart);
+        if (!string.Equals(contentType, ExternalLinkContentType, StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{externalLinkPart} has content type {contentType ?? "(none)"}; expected {ExternalLinkContentType}");
+        }
+
+        if (!validatedExternalLinkParts.Add(externalLinkPart))
+            return;
+
+        if (!TryLoadPackageXml(archive, externalLinkPart, issues, out var externalLinkXml))
+            return;
+
+        if (externalLinkXml.Root?.Name != WorkbookNs + "externalLink")
+        {
+            issues.Add($"{externalLinkPart} has an invalid external link root element");
+            return;
+        }
+
+        AddExternalBookPackageIssues(archive, externalLinkPart, externalLinkXml, issues);
+    }
+
+    private static void AddExternalBookPackageIssues(
+        ZipArchive archive,
+        string externalLinkPart,
+        XDocument externalLinkXml,
+        List<string> issues)
+    {
+        var externalBooks = externalLinkXml.Root!
+            .Elements(WorkbookNs + "externalBook")
+            .Select((externalBook, index) => new ExternalBookReference(
+                index + 1,
+                externalBook.Attribute(OfficeRelationshipNs + "id")?.Value))
+            .ToArray();
+        if (externalBooks.Length == 0)
+            return;
+
+        var relationshipPart = GetRelationshipPartPath(externalLinkPart);
+        if (!TryLoadPackageXml(archive, relationshipPart, issues, out var relationshipsXml) ||
+            relationshipsXml.Root?.Name != PackageRelationshipNs + "Relationships")
+        {
+            issues.Add($"{externalLinkPart} has no relationship part for externalBook references");
+            return;
+        }
+
+        var relationships = relationshipsXml.Root
+            .Elements(PackageRelationshipNs + "Relationship")
+            .Where(relationship => !string.IsNullOrWhiteSpace(relationship.Attribute("Id")?.Value))
+            .GroupBy(relationship => relationship.Attribute("Id")!.Value, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+
+        foreach (var externalBook in externalBooks)
+        {
+            if (string.IsNullOrWhiteSpace(externalBook.RelationshipId))
+            {
+                issues.Add($"{externalLinkPart} externalBook #{externalBook.Ordinal} has no relationship id");
+                continue;
+            }
+
+            if (!relationships.TryGetValue(externalBook.RelationshipId, out var relationship))
+            {
+                issues.Add($"{externalLinkPart} externalBook #{externalBook.Ordinal} targets missing relationship {externalBook.RelationshipId} in {relationshipPart}");
+                continue;
+            }
+
+            var relationshipType = relationship.Attribute("Type")?.Value;
+            if (!string.Equals(relationshipType, ExternalLinkPathRelationshipType, StringComparison.OrdinalIgnoreCase))
+            {
+                issues.Add($"{externalLinkPart} externalBook #{externalBook.Ordinal} relationship {externalBook.RelationshipId} has Type={relationshipType ?? "(none)"}; expected {ExternalLinkPathRelationshipType}");
+            }
+
+            if (string.IsNullOrWhiteSpace(relationship.Attribute("Target")?.Value))
+                issues.Add($"{externalLinkPart} externalBook #{externalBook.Ordinal} relationship {externalBook.RelationshipId} has no Target");
+
+            if (!string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+                issues.Add($"{externalLinkPart} externalBook #{externalBook.Ordinal} relationship {externalBook.RelationshipId} is not external");
+        }
+    }
+
     private static bool TryFindWorkbookPart(
         ZipArchive archive,
         IReadOnlySet<string> entryNames,
@@ -1244,4 +1444,12 @@ public static class XlsxPackageHealthValidator
         string WorksheetPart,
         string Description,
         string? ValueText);
+
+    private sealed record WorkbookExternalReference(
+        int Ordinal,
+        string? RelationshipId);
+
+    private sealed record ExternalBookReference(
+        int Ordinal,
+        string? RelationshipId);
 }
