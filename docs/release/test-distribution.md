@@ -83,8 +83,9 @@ GitHub-hosted macOS runners can produce downloadable macOS app artifacts without
 
 - `freex-<run-id>-<run-attempt>-osx-arm64-macos-app`
 - `freex-<run-id>-<run-attempt>-osx-x64-macos-app`
+- `freex-<run-id>-<run-attempt>-macos-release-assets` for distribution-candidate dispatches
 
-Each download is a GitHub Actions artifact wrapper. Preserve the `freex-<run-id>-<run-attempt>-<runtime>-macos-app` wrapper directory names under the artifact root, then use the inner app ZIP, checksum, tester instructions, evidence file, and smoke logs. Do not flatten wrapper contents directly into the artifact root; the Windows evidence validator uses wrapper names to detect duplicate stale downloads, mixed runtime runs, and expected run identity mismatches. Internal-preview workflow outputs remain Actions artifacts only; distribution-candidate dispatches also run a guarded publication job that prepares stable GitHub Release assets and uploads the macOS release-assets artifact.
+Each download is a GitHub Actions artifact wrapper. Preserve the `freex-<run-id>-<run-attempt>-<runtime>-macos-app` and `freex-<run-id>-<run-attempt>-macos-release-assets` wrapper directory names under the artifact root, then use the inner app ZIP, checksum, tester instructions, evidence file, smoke logs, release manifest, and release instructions. Do not flatten wrapper contents directly into the artifact root; the Windows evidence validator uses wrapper names to detect duplicate stale downloads, split or stale release-assets manifests/instructions, mixed runtime runs, and expected run identity mismatches. Internal-preview workflow outputs remain Actions artifacts only; distribution-candidate dispatches also run a guarded publication job that prepares stable GitHub Release assets and uploads the macOS release-assets artifact.
 
 Signed and internal ad-hoc outputs use the same artifact names. Treat `codesign_mode=ad-hoc` or a skipped notarization status as internal preview evidence only. External distribution requires `codesign_mode=developer-id`, `notarization_status=accepted`, `stapler_validated=true`, and a release-asset publication path.
 
@@ -96,7 +97,7 @@ Windows agents can also validate downloaded hosted evidence without a Mac:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-MacOsPublicPreviewReadiness.ps1 -ArtifactRoot artifacts/macos-preview -ExpectedRunId <run-id> -ExpectedRunAttempt <run-attempt>
 ```
 
-`-ExpectedRunId` and `-ExpectedRunAttempt` are optional, but pass them when validating downloaded artifacts from a specific GitHub Actions run. For public-preview candidates, run it with the same run identity flags plus `-DistributionCandidate -RequireSeparateDiagnosticsArtifact -RequireReleasePublicationArtifact` after downloading the matching `freex-<run-id>-<run-attempt>-<runtime>-macos-diagnostics` artifacts and the macOS release-assets artifact beside the app artifacts:
+`-ExpectedRunId` and `-ExpectedRunAttempt` are optional, but pass them when validating downloaded artifacts from a specific GitHub Actions run. For public-preview candidates, run it with the same run identity flags plus `-DistributionCandidate -RequireSeparateDiagnosticsArtifact -RequireReleasePublicationArtifact` after downloading the matching `freex-<run-id>-<run-attempt>-<runtime>-macos-diagnostics` artifacts and the `freex-<run-id>-<run-attempt>-macos-release-assets` wrapper beside the app artifacts:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-MacOsPublicPreviewReadiness.ps1 -ArtifactRoot artifacts/macos-preview -ExpectedRunId <run-id> -ExpectedRunAttempt <run-attempt> -DistributionCandidate -RequireSeparateDiagnosticsArtifact -RequireReleasePublicationArtifact

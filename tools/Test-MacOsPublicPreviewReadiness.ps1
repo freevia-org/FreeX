@@ -281,6 +281,19 @@ function Get-ExpectedArtifactWrapperName {
     return "freex-<run-id>-<run-attempt>-$Runtime-macos-$Kind"
 }
 
+function Get-ExpectedReleaseArtifactWrapperName {
+    param(
+        [string]$RunId = "<run-id>",
+        [string]$RunAttempt = "<run-attempt>"
+    )
+
+    if ($RunId -eq "<run-id>" -and $RunAttempt -eq "<run-attempt>") {
+        return "freex-<run-id>-<run-attempt>-macos-release-assets"
+    }
+
+    return "freex-$RunId-$RunAttempt-macos-release-assets"
+}
+
 function Get-ArtifactDownloadIdentity {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
@@ -296,6 +309,35 @@ function Get-ArtifactDownloadIdentity {
                 RunAttempt = $Matches["RunAttempt"]
                 Runtime = $Matches["Runtime"]
                 Kind = $Matches["Kind"]
+                WrapperDirectory = $current.FullName
+            }
+        }
+
+        if ([System.StringComparer]::OrdinalIgnoreCase.Equals($current.FullName, $rootInfo.FullName)) {
+            break
+        }
+
+        $current = $current.Parent
+    }
+
+    return $null
+}
+
+function Get-ReleaseArtifactDownloadIdentity {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string]$Directory
+    )
+
+    $rootInfo = Get-Item -LiteralPath $Root
+    $current = Get-Item -LiteralPath $Directory
+    while ($null -ne $current) {
+        if ($current.Name -match "^freex-(?<RunId>[0-9]+)-(?<RunAttempt>[0-9]+)-macos-release-assets$") {
+            return [pscustomobject]@{
+                RunId = $Matches["RunId"]
+                RunAttempt = $Matches["RunAttempt"]
+                Runtime = $null
+                Kind = "release-assets"
                 WrapperDirectory = $current.FullName
             }
         }
@@ -331,6 +373,31 @@ function Test-ArtifactDownloadIdentity {
 
     Assert-True -Condition ($identity.Runtime -eq $Runtime) -Message "$Label wrapper directory '$($identity.WrapperDirectory)' is for runtime '$($identity.Runtime)', expected '$Runtime'."
     Assert-True -Condition ($identity.Kind -eq $Kind) -Message "$Label wrapper directory '$($identity.WrapperDirectory)' is a macOS '$($identity.Kind)' artifact, expected '$Kind'."
+
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedRunId)) {
+        Assert-True -Condition ($identity.RunId -eq $ExpectedRunId) -Message "$Label is from GitHub Actions run '$($identity.RunId)', expected run '$ExpectedRunId'."
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedRunAttempt)) {
+        Assert-True -Condition ($identity.RunAttempt -eq $ExpectedRunAttempt) -Message "$Label is from GitHub Actions run attempt '$($identity.RunAttempt)', expected attempt '$ExpectedRunAttempt'."
+    }
+
+    return $identity
+}
+
+function Test-ReleaseArtifactDownloadIdentity {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string]$Directory,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    $identity = Get-ReleaseArtifactDownloadIdentity -Root $Root -Directory $Directory
+    if ($null -eq $identity) {
+        $expectedWrapper = Get-ExpectedReleaseArtifactWrapperName
+        Add-ValidationError "$Label does not preserve a GitHub Actions artifact wrapper directory named '$expectedWrapper'. Do not flatten release assets into the artifact root; re-download the artifact or keep the unzipped files under that wrapper directory."
+        return $null
+    }
 
     if (-not [string]::IsNullOrWhiteSpace($ExpectedRunId)) {
         Assert-True -Condition ($identity.RunId -eq $ExpectedRunId) -Message "$Label is from GitHub Actions run '$($identity.RunId)', expected run '$ExpectedRunId'."
@@ -605,7 +672,8 @@ function Assert-JsonPropertyEquals {
 function Test-ReleasePublicationArtifact {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
-        [Parameter(Mandatory = $true)][string[]]$ExpectedRuntimes
+        [Parameter(Mandatory = $true)][string[]]$ExpectedRuntimes,
+        [object[]]$ExpectedArtifactIdentities = @()
     )
 
     $manifestName = "FreeX-latest-macos-distribution-candidate-manifest.json"
@@ -637,7 +705,19 @@ function Test-ReleasePublicationArtifact {
     }
 
     $manifestPath = $manifestFiles[0].FullName
-    $releaseDirectory = $manifestFiles[0].Directory.FullName
+    $manifestDirectory = $manifestFiles[0].Directory.FullName
+    $instructionsDirectory = $instructionsFiles[0].Directory.FullName
+    if (-not [System.StringComparer]::OrdinalIgnoreCase.Equals($manifestDirectory, $instructionsDirectory)) {
+        Add-ValidationError "macOS release publication manifest and instructions must be in the same downloaded release-assets wrapper directory. Manifest: '$manifestDirectory'. Instructions: '$instructionsDirectory'. Remove split or stale release-assets artifact folders under $Root."
+        return
+    }
+
+    $releaseIdentity = Test-ReleaseArtifactDownloadIdentity -Root $Root -Directory $manifestDirectory -Label "macOS release publication artifact"
+    if ($null -eq $releaseIdentity) {
+        return
+    }
+
+    $releaseDirectory = $releaseIdentity.WrapperDirectory
     try {
         $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
     }
@@ -647,8 +727,17 @@ function Test-ReleasePublicationArtifact {
     }
 
     Assert-JsonPropertyEquals -Object $manifest -PropertyName "schema" -ExpectedValue "io.github.tony-xmelon.freex.macos-distribution-candidate.v1" -Label "macOS release publication manifest"
-    foreach ($propertyName in @("release_id", "tag", "repository", "workflow", "run_id", "run_attempt", "commit", "generated_at_utc", "source_artifact_pattern")) {
+    foreach ($propertyName in @("release_id", "tag", "repository", "workflow", "run_id", "run_attempt", "release_assets_artifact", "commit", "generated_at_utc", "source_artifact_pattern")) {
         Assert-JsonPropertyPresent -Object $manifest -PropertyName $propertyName -Label "macOS release publication manifest"
+    }
+
+    Assert-JsonPropertyEquals -Object $manifest -PropertyName "run_id" -ExpectedValue $releaseIdentity.RunId -Label "macOS release publication manifest"
+    Assert-JsonPropertyEquals -Object $manifest -PropertyName "run_attempt" -ExpectedValue $releaseIdentity.RunAttempt -Label "macOS release publication manifest"
+    Assert-JsonPropertyEquals -Object $manifest -PropertyName "release_assets_artifact" -ExpectedValue (Get-ExpectedReleaseArtifactWrapperName -RunId $releaseIdentity.RunId -RunAttempt $releaseIdentity.RunAttempt) -Label "macOS release publication manifest"
+
+    $knownArtifactIdentities = @($ExpectedArtifactIdentities | Where-Object { $null -ne $_ })
+    if ($knownArtifactIdentities.Count -gt 0) {
+        Test-ArtifactIdentityMatches -Identity $releaseIdentity -ExpectedIdentity $knownArtifactIdentities[0] -Label "macOS release publication artifact" -ExpectedLabel "downloaded macOS app artifacts"
     }
 
     if (-not [string]::IsNullOrWhiteSpace($ExpectedRunId)) {
@@ -814,7 +903,8 @@ function Test-ReleasePublicationArtifact {
             "stapler",
             "Gatekeeper",
             "gatekeeper_assessment_status=accepted",
-            "Reject")) {
+            "Reject",
+            (Get-ExpectedReleaseArtifactWrapperName -RunId $releaseIdentity.RunId -RunAttempt $releaseIdentity.RunAttempt))) {
         Assert-ContainsText -Text $releaseInstructions -Needle $needle -Message "macOS release publication instructions must mention '$needle'."
     }
 }
@@ -1095,7 +1185,7 @@ foreach ($runtime in $Runtimes) {
 }
 
 Test-ArtifactIdentityConsistency -Identities $artifactIdentities.ToArray() -Root $resolvedArtifactRoot
-Test-ReleasePublicationArtifact -Root $resolvedArtifactRoot -ExpectedRuntimes $Runtimes
+Test-ReleasePublicationArtifact -Root $resolvedArtifactRoot -ExpectedRuntimes $Runtimes -ExpectedArtifactIdentities $artifactIdentities.ToArray()
 
 if ($validationErrors.Count -gt 0) {
     throw "macOS public-preview evidence preflight failed with $($validationErrors.Count) issue(s)."

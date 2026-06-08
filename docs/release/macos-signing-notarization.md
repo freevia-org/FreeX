@@ -36,7 +36,7 @@ Quick retrieval checklist:
 
 1. Pick `osx-arm64` for Apple Silicon Macs or `osx-x64` for Intel Macs.
 2. Download the matching Actions artifact wrapper from the completed workflow run.
-3. Preserve each `freex-<run-id>-<run-attempt>-<runtime>-macos-app` wrapper directory under the artifact root, then unzip the wrapper contents there so stale or mixed-run downloads can be detected.
+3. Preserve each `freex-<run-id>-<run-attempt>-<runtime>-macos-app` wrapper directory under the artifact root. For distribution candidates, also preserve `freex-<run-id>-<run-attempt>-macos-release-assets`, then unzip the wrapper contents there so stale or mixed-run downloads can be detected.
 4. Keep `freex-<runtime>-macos-evidence.txt` and the smoke/notarization logs with any tester report.
 
 With the GitHub CLI, the same artifacts can be retrieved with:
@@ -44,13 +44,14 @@ With the GitHub CLI, the same artifacts can be retrieved with:
 ```bash
 gh run download <run-id> -n freex-<run-id>-<run-attempt>-osx-arm64-macos-app -D artifacts/macos-preview/freex-<run-id>-<run-attempt>-osx-arm64-macos-app
 gh run download <run-id> -n freex-<run-id>-<run-attempt>-osx-x64-macos-app -D artifacts/macos-preview/freex-<run-id>-<run-attempt>-osx-x64-macos-app
+gh run download <run-id> -n freex-<run-id>-<run-attempt>-macos-release-assets -D artifacts/macos-preview/freex-<run-id>-<run-attempt>-macos-release-assets
 ```
 
-Keep those wrapper directory names intact under `artifacts/macos-preview`. The Windows evidence validator uses them to detect duplicate stale downloads, mixed `osx-arm64`/`osx-x64` runs, and optional expected run identity checks.
+Keep those wrapper directory names intact under `artifacts/macos-preview`. The Windows evidence validator uses them to detect duplicate stale downloads, split or stale release-assets manifest/instructions, mixed `osx-arm64`/`osx-x64` runs, and optional expected run identity checks.
 
 Signed, notarized, and internal ad-hoc outputs use the same artifact names. Unzip the GitHub artifact wrapper first, then verify the inner `freex-<runtime>-macos-app.zip` with the matching `.zip.sha256`. For an internal preview, expect `artifact_channel=internal-preview`, `distribution_readiness=internal_preview_not_for_distribution`, and `codesign_mode=ad-hoc` or notarization evidence such as `notarization_status=skipped_missing_credentials` or `skipped_not_developer_id_signed`. For a distribution candidate, require `artifact_channel=distribution-candidate`, `distribution_readiness=distribution_candidate_ready`, `codesign_mode=developer-id`, `notarization_status=accepted`, and `stapler_validated=true`.
 
-For `distribution_candidate=true`, the post-matrix publication job downloads both runtime artifacts, revalidates the evidence markers above, prepares stable asset names such as `FreeX-latest-macos-arm64.zip`, `FreeX-latest-macos-x64.zip`, `FreeX-latest-macos-distribution-candidate-manifest.json`, and matching evidence/log/instruction assets, then creates a prerelease GitHub Release for that run.
+For `distribution_candidate=true`, the post-matrix publication job downloads both runtime artifacts, revalidates the evidence markers above, prepares stable asset names such as `FreeX-latest-macos-arm64.zip`, `FreeX-latest-macos-x64.zip`, `FreeX-latest-macos-distribution-candidate-manifest.json`, and matching evidence/log/instruction assets, uploads them in the `freex-<run-id>-<run-attempt>-macos-release-assets` wrapper, then creates a prerelease GitHub Release for that run.
 
 No local Mac is needed to produce the downloadable artifacts: hosted macOS runners build the bundle, run native-architecture package/launch smoke, exercise LaunchServices, verify checksums, and collect evidence. A human tester on macOS is still required for Finder open, Gatekeeper behavior, basic workbook workflows, and any candidate accessibility checks.
 
@@ -74,7 +75,7 @@ After the human macOS pass is recorded for both runtimes, place the completed ch
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-MacOsPublicPreviewPromotion.ps1 -ArtifactRoot artifacts/macos-preview -ChecklistRoot artifacts/macos-preview -ExpectedRunId <run-id> -ExpectedRunAttempt <run-attempt>
 ```
 
-`-ExpectedRunId` and `-ExpectedRunAttempt` are optional, but use them when validating artifacts from a specific GitHub Actions run. `tools/Test-MacOsPublicPreviewReadiness.ps1` validates both `osx-arm64` and `osx-x64` bundles without macOS by checking the downloaded evidence files, smoke logs, tester instructions, app ZIP, and `.zip.sha256` checksum. It requires artifact channel/readiness keys, `zip_sha256`, signing and notarization status, stapler status for distribution candidates, startup smoke, LaunchServices launch smoke, Open-With smoke, `format_cells_style_roundtrip=true` with a count of at least two, command key smoke, checksum files, diagnostics artifact file sets, release publication manifest/instructions when `-RequireReleasePublicationArtifact` is passed, and tester instructions.
+`-ExpectedRunId` and `-ExpectedRunAttempt` are optional, but use them when validating artifacts from a specific GitHub Actions run. `tools/Test-MacOsPublicPreviewReadiness.ps1` validates both `osx-arm64` and `osx-x64` bundles without macOS by checking the downloaded evidence files, smoke logs, tester instructions, app ZIP, and `.zip.sha256` checksum. It requires artifact channel/readiness keys, `zip_sha256`, signing and notarization status, stapler status for distribution candidates, startup smoke, LaunchServices launch smoke, Open-With smoke, `format_cells_style_roundtrip=true` with a count of at least two, command key smoke, checksum files, diagnostics artifact file sets, release publication manifest/instructions from the same `freex-<run-id>-<run-attempt>-macos-release-assets` wrapper when `-RequireReleasePublicationArtifact` is passed, and tester instructions.
 
 ## Required Apple Inputs
 
@@ -116,7 +117,7 @@ Paste the base64 output into `MACOS_CODESIGN_CERTIFICATE_P12` exactly as generat
 1. Configure all six secrets above in the GitHub repository.
 2. Run `macOS App Preview` from `main` with `workflow_dispatch` and set `distribution_candidate=true`; default dispatch, push, and pull request runs remain internal previews.
 3. Confirm both matrix jobs complete, or inspect the diagnostics artifact for the failed runtime.
-4. Download each `freex-<run-id>-<run-attempt>-<runtime>-macos-app` artifact from the run summary or with `gh run download`, preserving the wrapper directory names under the artifact root.
+4. Download each `freex-<run-id>-<run-attempt>-<runtime>-macos-app` artifact and the `freex-<run-id>-<run-attempt>-macos-release-assets` artifact from the run summary or with `gh run download`, preserving the wrapper directory names under the artifact root.
 5. Verify `freex-<runtime>-macos-evidence.txt` contains:
    - `artifact_channel=distribution-candidate`
    - `distribution_candidate=true`
