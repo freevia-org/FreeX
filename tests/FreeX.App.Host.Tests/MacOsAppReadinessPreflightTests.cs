@@ -1149,8 +1149,10 @@ public sealed class MacOsAppReadinessPreflightTests
                       launch_clipboard_script="$RUNNER_TEMP/freex-$runtime-clipboard.swift"
                       /usr/bin/swift "$launch_clipboard_script" "$launch_clipboard_image"
                       NSPasteboard.general
+                      NSPasteboardItem
+                      item.setData(pngData, forType: .png)
                       pasteboard.clearContents()
-                      pasteboard.writeObjects([image])
+                      pasteboard.writeObjects([item])
                       open -W -n -b io.github.tony-xmelon.freex "$RUNNER_TEMP/launch.csv" --args --macos-launch-smoke "$artifact_root/launch.txt" --macos-launch-smoke-verify-image-clipboard --macos-launch-smoke-verify-live-command-keys
                       live_command_key_ready=false
                       grep -q "live_command_key_smoke_ready=true" "$artifact_root/launch.txt"

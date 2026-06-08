@@ -20,18 +20,33 @@ public sealed class StartupWorkbookLoader
 
     public StartupWorkbookLoadResult Load(IReadOnlyList<string> startupArguments)
     {
-        var filePath = startupArguments.FirstOrDefault(argument =>
-            !string.IsNullOrWhiteSpace(argument) &&
-            File.Exists(argument));
+        string? firstUnsupportedExtension = null;
+        foreach (var filePath in startupArguments.Where(argument =>
+                     !string.IsNullOrWhiteSpace(argument) &&
+                     File.Exists(argument)))
+        {
+            var extension = Path.GetExtension(filePath);
+            var adapter = FileFormatResolver.FindOpenAdapter(_adapters, extension, out var format);
+            if (adapter is null || format is null)
+            {
+                firstUnsupportedExtension ??= extension;
+                continue;
+            }
 
-        if (filePath is null)
-            return _fallbackFactory("Showing sample workbook.", false);
+            return Load(filePath, extension, adapter, format);
+        }
 
-        var extension = Path.GetExtension(filePath);
-        var adapter = FileFormatResolver.FindOpenAdapter(_adapters, extension, out var format);
-        if (adapter is null || format is null)
-            return _fallbackFactory($"Unsupported file type: {extension}.", true);
+        return firstUnsupportedExtension is null
+            ? _fallbackFactory("Showing sample workbook.", false)
+            : _fallbackFactory($"Unsupported file type: {firstUnsupportedExtension}.", true);
+    }
 
+    private StartupWorkbookLoadResult Load(
+        string filePath,
+        string extension,
+        IFileAdapter adapter,
+        FileFormatDescriptor format)
+    {
         try
         {
             var result = _openService

@@ -357,7 +357,7 @@ function Test-InfoPlist {
     $documentTypes = Get-PlistValue -Dict $rootDict -Key "CFBundleDocumentTypes"
     Assert-True -Condition ($null -ne $documentTypes -and $documentTypes.Name -eq "array") -Message "Info.plist must declare CFBundleDocumentTypes."
     $documentTypeDicts = @($documentTypes.ChildNodes | Where-Object { $_.NodeType -eq [System.Xml.XmlNodeType]::Element -and $_.Name -eq "dict" })
-    Assert-True -Condition ($documentTypeDicts.Count -ge 2) -Message "Info.plist must declare native and imported workbook document types."
+    Assert-True -Condition ($documentTypeDicts.Count -eq 2) -Message "Info.plist must declare exactly the native and imported workbook document types."
 
     $nativeWorkbook = $documentTypeDicts[0]
     Assert-True -Condition ((Get-PlistString -Dict $nativeWorkbook -Key "CFBundleTypeName") -eq "FreeX Workbook") -Message "Info.plist native document type name must be FreeX Workbook."
@@ -365,7 +365,7 @@ function Test-InfoPlist {
     Assert-True -Condition ((Get-PlistString -Dict $nativeWorkbook -Key "LSHandlerRank") -eq "Owner") -Message "Info.plist native document handler rank must be Owner."
     $nativeExtensions = Get-PlistValue -Dict $nativeWorkbook -Key "CFBundleTypeExtensions"
     $nativeExtensionValues = @($nativeExtensions.ChildNodes | Where-Object { $_.NodeType -eq [System.Xml.XmlNodeType]::Element -and $_.Name -eq "string" } | ForEach-Object { $_.InnerText })
-    Assert-True -Condition ($nativeExtensionValues -contains "fxl") -Message "Info.plist native document type must include fxl."
+    Assert-ExactSet -Actual $nativeExtensionValues -Expected @("fxl") -Label "Info.plist native document type extensions"
 
     $importedWorkbooks = $documentTypeDicts[1]
     Assert-True -Condition ((Get-PlistString -Dict $importedWorkbooks -Key "CFBundleTypeName") -eq "Spreadsheet Workbooks") -Message "Info.plist imported document type name must be Spreadsheet Workbooks."
@@ -373,9 +373,7 @@ function Test-InfoPlist {
     Assert-True -Condition ((Get-PlistString -Dict $importedWorkbooks -Key "LSHandlerRank") -eq "Alternate") -Message "Info.plist imported document handler rank must be Alternate."
     $importedExtensions = Get-PlistValue -Dict $importedWorkbooks -Key "CFBundleTypeExtensions"
     $importedExtensionValues = @($importedExtensions.ChildNodes | Where-Object { $_.NodeType -eq [System.Xml.XmlNodeType]::Element -and $_.Name -eq "string" } | ForEach-Object { $_.InnerText })
-    foreach ($extension in @("xlsx", "xlsm", "xltx", "xltm", "xls", "xlsb", "xlt", "csv", "tsv", "tab")) {
-        Assert-True -Condition ($importedExtensionValues -contains $extension) -Message "Info.plist imported document type must include $extension."
-    }
+    Assert-ExactSet -Actual $importedExtensionValues -Expected @("xlsx", "xlsm", "xltx", "xltm", "xls", "xlsb", "xlt", "csv", "tsv", "tab") -Label "Info.plist imported document type extensions"
 }
 
 function Test-MacOsWorkflow {
@@ -571,8 +569,10 @@ function Test-MacOsWorkflow {
         'launch_clipboard_script="$RUNNER_TEMP/freex-$runtime-clipboard.swift"',
         '/usr/bin/swift "$launch_clipboard_script" "$launch_clipboard_image"',
         "NSPasteboard.general",
+        "NSPasteboardItem",
+        "item.setData(pngData, forType: .png)",
         "pasteboard.clearContents()",
-        "pasteboard.writeObjects([image])",
+        "pasteboard.writeObjects([item])",
         "live_command_key_smoke_required=true",
         "live_command_key_smoke=passed",
         "live_command_key_smoke_attempted=true",

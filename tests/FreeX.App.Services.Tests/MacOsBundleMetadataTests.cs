@@ -191,8 +191,10 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("launch_clipboard_script=\"$RUNNER_TEMP/freex-$runtime-clipboard.swift\"");
         workflow.Should().Contain("/usr/bin/swift \"$launch_clipboard_script\" \"$launch_clipboard_image\"");
         workflow.Should().Contain("NSPasteboard.general");
+        workflow.Should().Contain("NSPasteboardItem");
+        workflow.Should().Contain("item.setData(pngData, forType: .png)");
         workflow.Should().Contain("pasteboard.clearContents()");
-        workflow.Should().Contain("pasteboard.writeObjects([image])");
+        workflow.Should().Contain("pasteboard.writeObjects([item])");
         workflow.Should().Contain("open -W -n -b io.github.tony-xmelon.freex \"$launch_smoke_file\" --args --macos-launch-smoke \"$launch_smoke_report\"");
         workflow.Should().Contain("--macos-launch-smoke-verify-image-clipboard");
         workflow.Should().Contain("--macos-launch-smoke-verify-live-command-keys");

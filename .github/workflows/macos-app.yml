@@ -221,6 +221,18 @@ jobs:
           test -x "$app/Contents/MacOS/FreeX"
           test -f "$app/Contents/MacOS/FreeX.dll"
           test -f "$app/Contents/Resources/FreeX.icns"
+          native_document_extensions=(fxl)
+          imported_document_extensions=(xlsx xlsm xltx xltm xls xlsb xlt csv tsv tab)
+          assert_bundle_document_extensions() {
+            local plist_path="$1"
+            local document_type_index="$2"
+            shift 2
+            local expected_extensions=("$@")
+            local extension_index
+            for extension_index in "${!expected_extensions[@]}"; do
+              test "$(/usr/libexec/PlistBuddy -c "Print :CFBundleDocumentTypes:$document_type_index:CFBundleTypeExtensions:$extension_index" "$plist_path")" = "${expected_extensions[$extension_index]}"
+            done
+          }
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")" = "FreeX"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app/Contents/Info.plist")" = "FreeX.icns"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeName' "$app/Contents/Info.plist")" = "FreeX Workbook"
@@ -229,6 +241,8 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeName' "$app/Contents/Info.plist")" = "Spreadsheet Workbooks"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeExtensions:0' "$app/Contents/Info.plist")" = "xlsx"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:LSHandlerRank' "$app/Contents/Info.plist")" = "Alternate"
+          assert_bundle_document_extensions "$app/Contents/Info.plist" 0 "${native_document_extensions[@]}"
+          assert_bundle_document_extensions "$app/Contents/Info.plist" 1 "${imported_document_extensions[@]}"
           binary_archs="$(lipo -archs "$app/Contents/MacOS/FreeX")"
           if [[ "$runtime" == "osx-arm64" ]]; then
             echo "$binary_archs" | grep -qw arm64
@@ -317,8 +331,12 @@ jobs:
           rm -rf "$unzip_root"
           mkdir -p "$unzip_root"
           ditto -x -k "$zip_path" "$unzip_root"
+          app_info_plist="$unzip_root/FreeX.app/Contents/Info.plist"
+          test -f "$app_info_plist"
           test -x "$unzip_root/FreeX.app/Contents/MacOS/FreeX"
           test -f "$unzip_root/FreeX.app/Contents/MacOS/FreeX.dll"
+          assert_bundle_document_extensions "$app_info_plist" 0 "${native_document_extensions[@]}"
+          assert_bundle_document_extensions "$app_info_plist" 1 "${imported_document_extensions[@]}"
           codesign --verify --deep --strict "$unzip_root/FreeX.app"
           gatekeeper_assessment_required="$distribution_candidate"
           set +e
@@ -378,9 +396,12 @@ jobs:
             echo "bundle_icon=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app/Contents/Info.plist")"
             echo "native_document_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeName' "$app/Contents/Info.plist")"
             echo "native_document_extension=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeExtensions:0' "$app/Contents/Info.plist")"
+            echo "artifact_document_extensions_subject=unzipped_app_bundle"
+            echo "native_document_extensions=$(IFS=';'; echo "${native_document_extensions[*]}")"
             echo "native_document_handler_rank=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:LSHandlerRank' "$app/Contents/Info.plist")"
             echo "imported_document_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeName' "$app/Contents/Info.plist")"
             echo "imported_document_extension=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeExtensions:0' "$app/Contents/Info.plist")"
+            echo "imported_document_extensions=$(IFS=';'; echo "${imported_document_extensions[*]}")"
             echo "imported_document_handler_rank=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:LSHandlerRank' "$app/Contents/Info.plist")"
             echo "codesign_verified=true"
             echo "codesign_mode=$signing_mode"
@@ -424,15 +445,19 @@ jobs:
             launch_clipboard_script="$RUNNER_TEMP/freex-$runtime-clipboard.swift"
             printf '%s\n' \
               'import AppKit' \
+              'import Foundation' \
               '' \
               'let imagePath = CommandLine.arguments[1]' \
-              'guard let image = NSImage(contentsOfFile: imagePath) else {' \
-              '    fatalError("Could not load launch smoke clipboard image.")' \
+              'let imageUrl = URL(fileURLWithPath: imagePath)' \
+              'guard let pngData = try? Data(contentsOf: imageUrl) else {' \
+              '    fatalError("Could not load launch smoke clipboard PNG data.")' \
               '}' \
+              'let item = NSPasteboardItem()' \
+              'item.setData(pngData, forType: .png)' \
               '' \
               'let pasteboard = NSPasteboard.general' \
               'pasteboard.clearContents()' \
-              'guard pasteboard.writeObjects([image]) else {' \
+              'guard pasteboard.writeObjects([item]) else {' \
               '    fatalError("Could not write launch smoke image to pasteboard.")' \
               '}' > "$launch_clipboard_script"
             /usr/bin/swift "$launch_clipboard_script" "$launch_clipboard_image"
