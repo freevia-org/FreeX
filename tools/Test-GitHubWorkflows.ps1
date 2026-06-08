@@ -262,6 +262,7 @@ foreach ($workflow in $workflows) {
                     "FreeX.App.Services.Tests.PortablePdfDocumentExporterTests",
                     "FreeX.App.Services.Tests.PortablePdfExportPlannerTests",
                     "FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests",
+                    "FreeX.App.Services.Tests.PortablePdfTextCapabilityPlannerTests",
                     "FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests",
                     "FreeX.App.Services.Tests.WorkbookShareActionPlannerTests",
                     "FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests",
@@ -269,6 +270,9 @@ foreach ($workflow in $workflows) {
                     "FreeX.App.Services.Tests.AppServicesPortabilityGuardTests",
                     "FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests",
                     "FreeX.App.Services.Tests.ApplicationDataPathGuardTests",
+                    "FreeX.App.Services.Tests.AppStoragePathPlannerTests",
+                    "FreeX.App.Services.Tests.AppOptionsStoreTests",
+                    "FreeX.App.Services.Tests.AtomicFileWriterTests",
                     "FreeX.App.Services.Tests.AvaloniaShellSourceTests",
                     "FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests"
                 )
