@@ -98,6 +98,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("--macos-launch-smoke-diagnostics-dir \"$app_diagnostics_dir\"");
         script.Should().Contain("app_diagnostics_directory_configured=true");
         script.Should().Contain("app_diagnostics_events_path=\"$app_diagnostics_dir/events.jsonl\"");
+        script.Should().Contain("app_diagnostics_crash_reports_dir=\"$app_diagnostics_dir/CrashReports\"");
+        script.Should().Contain("app_diagnostics_crash_count=0");
         script.Should().Contain("app_diagnostics_artifact=freex-`$runtime-macos-app-diagnostics");
         script.Should().Contain("app_diagnostics_events_jsonl=true");
         script.Should().Contain("opened_source_path=.*freex-$runtime-open-with.csv");
@@ -1180,7 +1182,12 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "launchservices_default_open_document_extension=fxl" "$default_open_report"
                       grep -q "launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click" "$default_open_report"
                       app_diagnostics_events_path="$app_diagnostics_dir/events.jsonl"
-                      app_diagnostics_crash_count="$(find "$app_diagnostics_dir/CrashReports" -type f -name '*.json' 2>/dev/null | wc -l | tr -d ' ')"
+                      app_diagnostics_crash_reports_dir="$app_diagnostics_dir/CrashReports"
+                      if [[ -d "$app_diagnostics_crash_reports_dir" ]]; then
+                        app_diagnostics_crash_count="$(find "$app_diagnostics_crash_reports_dir" -type f -name '*.json' | wc -l | tr -d ' ')"
+                      else
+                        app_diagnostics_crash_count=0
+                      fi
                       echo "app_diagnostics_artifact=freex-$runtime-macos-app-diagnostics"
                       echo "app_diagnostics_events_jsonl=true"
                       echo "app_diagnostics_crash_report_count=$app_diagnostics_crash_count"
