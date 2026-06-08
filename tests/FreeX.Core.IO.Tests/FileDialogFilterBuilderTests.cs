@@ -79,6 +79,65 @@ public sealed class FileDialogFilterBuilderTests
     }
 
     [Fact]
+    public void BuildOpenPickerTypes_IncludesAllSupportedDescriptorAndFormatDescriptors()
+    {
+        var adapters = new IFileAdapter[]
+        {
+            new TestFileAdapter([
+                new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
+                new FileFormatDescriptor(".XLSX", "XLSX Alias", CanOpen: true, CanSave: false),
+                new FileFormatDescriptor(".xlsm", "XLSM Macro-Enabled Workbook", CanOpen: true, CanSave: false)
+            ]),
+            new TestFileAdapter([
+                new FileFormatDescriptor(".csv", "CSV (Comma-separated values)", CanOpen: true, CanSave: true)
+            ])
+        };
+
+        var descriptors = FileDialogFilterBuilder.BuildOpenPickerTypes(
+            adapters,
+            allSupportedName: "All supported workbooks");
+
+        descriptors.Select(descriptor => descriptor.DisplayName)
+            .Should()
+            .Equal(
+                "All supported workbooks",
+                "XLSX Workbook",
+                "XLSX Alias",
+                "XLSM Macro-Enabled Workbook",
+                "CSV (Comma-separated values)");
+        descriptors[0].Patterns.Should().Equal("*.xlsx", "*.xlsm", "*.csv");
+        descriptors[1].Patterns.Should().Equal("*.xlsx");
+    }
+
+    [Fact]
+    public void BuildSavePickerTypes_PromotesPreferredExtensionForNativeSaveChoice()
+    {
+        var adapters = new IFileAdapter[]
+        {
+            new TestFileAdapter([
+                new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
+                new FileFormatDescriptor(".xlsm", "XLSM Macro-Enabled Workbook", CanOpen: true, CanSave: false)
+            ]),
+            new TestFileAdapter([
+                new FileFormatDescriptor(".csv", "CSV (Comma-separated values)", CanOpen: true, CanSave: true),
+                new FileFormatDescriptor(".fxl", "FreeX Workbook", CanOpen: true, CanSave: true)
+            ])
+        };
+
+        var descriptors = FileDialogFilterBuilder.BuildSavePickerTypes(
+            adapters,
+            preferredFirstExtension: ".fxl");
+
+        descriptors.Select(descriptor => descriptor.DisplayName)
+            .Should()
+            .Equal("FreeX Workbook", "XLSX Workbook", "CSV (Comma-separated values)");
+        descriptors[0].Patterns.Should().Equal("*.fxl");
+        descriptors.SelectMany(descriptor => descriptor.Patterns)
+            .Should()
+            .NotContain("*.xlsm");
+    }
+
+    [Fact]
     public void BuildSaveFilter_IncludesOnlySaveCapableFormats()
     {
         var adapters = new IFileAdapter[]

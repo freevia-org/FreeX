@@ -70,9 +70,11 @@ choices to those planners and batches perimeter presets into one undoable comman
 use the same remembered line color/style and grouped-sheet command path for clicked or dragged grid ranges. Draw Border
 uses the outline/perimeter planner for clicked or dragged rectangular ranges, including all four edges for a single
 cell; exact Excel freehand stroke fidelity remains a partial UI-fidelity gap.
-Cell Style gallery commands use `App.Host` preset planners that return deterministic `StyleDiff` values for supported
-font, fill, border, number-format, and alignment fields. They intentionally do not create workbook named styles or bind
-to the workbook theme model, so theme-aware named-style semantics remain a parity gap.
+Cell Style gallery commands use the shared `App.Services` preset planner to return deterministic `StyleDiff` values
+for supported font, fill, border, number-format, alignment, and protection fields. The WPF host and Avalonia preview
+shell both route selected-range preset application through the command bus, including workbook-theme-resolved accent
+depth presets. The planner intentionally does not create workbook named styles, so full theme-bound named-style
+semantics remain a parity gap.
 
 Custom number formatting remains centralized in `Core.Calc.NumberFormatter`. It treats the `General` format token
 case-insensitively and parses semicolon-delimited sections
