@@ -16,12 +16,8 @@ public static class AtomicFileWriter
         var tempPath = "";
         try
         {
-            using (var tempFile = CreateUniqueTempFile(path, directory, out tempPath))
-            using (var writer = new StreamWriter(tempFile))
-            {
-                writer.Write(content);
-            }
-
+            tempPath = CreateUniqueTempPath(path, directory);
+            File.WriteAllText(tempPath, content);
             File.Move(tempPath, path, overwrite: true);
         }
         finally
@@ -31,10 +27,9 @@ public static class AtomicFileWriter
         }
     }
 
-    private static FileStream CreateUniqueTempFile(
+    private static string CreateUniqueTempPath(
         string targetPath,
-        string? targetDirectory,
-        out string tempPath)
+        string? targetDirectory)
     {
         var tempDirectory = string.IsNullOrEmpty(targetDirectory) ? "." : targetDirectory;
         var targetFileName = Path.GetFileName(targetPath);
@@ -45,21 +40,8 @@ public static class AtomicFileWriter
                 tempDirectory,
                 $".{targetFileName}.{Guid.NewGuid():N}.tmp");
 
-            try
-            {
-                var stream = new FileStream(
-                    candidatePath,
-                    FileMode.CreateNew,
-                    FileAccess.Write,
-                    FileShare.None);
-                tempPath = candidatePath;
-                return stream;
-            }
-            catch (Exception ex) when (
-                (ex is IOException || ex is UnauthorizedAccessException)
-                && TempArtifactExists(candidatePath))
-            {
-            }
+            if (!TempArtifactExists(candidatePath))
+                return candidatePath;
         }
 
         throw new IOException($"Could not create a unique temporary file for '{targetPath}'.");
