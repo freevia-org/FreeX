@@ -245,14 +245,29 @@ internal static class XlsxChartLevelReader
         }
     }
 
-    private static string? FirstNonBlankText(XElement? element) =>
-        element?
-            .Descendants(DrawingNs + "t")
-            .Select(text => text.Value)
-            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+    private static string? FirstNonBlankText(XElement? element)
+    {
+        if (element is null)
+            return null;
 
-    private static XElement? FirstDefaultRunProperties(XElement? element) =>
-        element?
-            .Descendants(DrawingNs + "defRPr")
-            .FirstOrDefault();
+        foreach (var text in element.Descendants(DrawingNs + "t"))
+        {
+            var value = text.Value;
+            if (!string.IsNullOrWhiteSpace(value))
+                return value;
+        }
+
+        return null;
+    }
+
+    private static XElement? FirstDefaultRunProperties(XElement? element)
+    {
+        if (element is null)
+            return null;
+
+        foreach (var defaultRunProperties in element.Descendants(DrawingNs + "defRPr"))
+            return defaultRunProperties;
+
+        return null;
+    }
 }
