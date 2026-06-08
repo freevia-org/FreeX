@@ -61,6 +61,20 @@ public sealed class XlsxPackageHealthValidatorTests
             .Contain(issue => issue.Contains("duplicate Override PartName '/xl/workbook.xml'", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public void Validate_FlagsPackagePartWithoutEffectiveContentType()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            extraEntries:
+            [
+                ("xl/customPayload/item1.bin", "")
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("xl/customPayload/item1.bin has no effective package content type", StringComparison.OrdinalIgnoreCase));
+    }
+
     [Theory]
     [InlineData("/xl\\workbook.xml", "must use forward slashes")]
     [InlineData("/xl/workbook.xml?part=1", "must not include query or fragment text")]
@@ -139,6 +153,20 @@ public sealed class XlsxPackageHealthValidatorTests
     }
 
     [Fact]
+    public void Validate_FlagsRelationshipTargetWithBackslashes()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookRelationships:
+            [
+                Relationship("rId1", WorksheetRelationshipType, @"worksheets\sheet1.xml")
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("Target uses backslashes instead of package URI separators", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Validate_FlagsInternalRelationshipToMissingPackagePart()
     {
         using var package = CreateMinimalWorkbookPackage(
@@ -164,6 +192,24 @@ public sealed class XlsxPackageHealthValidatorTests
         XlsxPackageHealthValidator.Validate(package)
             .Should()
             .Contain(issue => issue.Contains("external URI without TargetMode=External", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [InlineData(@"xl\workbook.xml", "uses a backslash in the package part name")]
+    [InlineData("/xl/workbook.xml", "starts with '/'")]
+    [InlineData("xl//workbook.xml", "has an empty path segment")]
+    [InlineData("xl/../workbook.xml", "has a relative path segment")]
+    public void Validate_FlagsInvalidPackageEntryNames(string entryName, string expectedWarning)
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            extraEntries:
+            [
+                (entryName, "")
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains(expectedWarning, StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
