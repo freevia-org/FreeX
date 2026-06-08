@@ -64,6 +64,7 @@ public sealed class GitHubWorkflowPreflightTests
         script.Should().Contain("workflow must declare top-level permissions explicitly");
         script.Should().Contain("workflow must not request write-all permissions");
         script.Should().Contain("must be pinned to an explicit major version");
+        script.Should().Contain("\"actions/download-artifact\" = \"v7\"");
         script.Should().Contain("must declare an explicit shell");
         script.Should().Contain("must stay within the workflow workspace");
         script.Should().Contain("workflow YAML must use spaces for indentation");

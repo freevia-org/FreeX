@@ -146,7 +146,7 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("freex-<runtime>-macos-notarization.log");
         source.Should().Contain("freex-<runtime>-macos-launch-smoke.txt");
         source.Should().Contain("The workflow submits the zipped `FreeX.app`, waits for an accepted notarization result, staples the ticket to the app bundle, validates stapling, then recreates the zip.");
-        source.Should().Contain("the current workflow uploads Actions artifacts only and has `contents: read`");
+        source.Should().Contain("The guarded release publication job has created the GitHub Release assets for both runtimes.");
         source.Should().Contain("https://developer.apple.com/support/developer-id/");
         source.Should().Contain("https://developer.apple.com/documentation/security/notarizing_macos_software_before_distribution");
         source.Should().Contain("https://developer.apple.com/documentation/security/notarizing_macos_software_before_distribution/customizing_the_notarization_workflow");

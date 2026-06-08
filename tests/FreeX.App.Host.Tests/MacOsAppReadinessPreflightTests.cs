@@ -25,6 +25,14 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("Distribution-candidate macOS app runs require notarization secrets");
         script.Should().Contain("distribution_readiness=internal_preview_not_for_distribution");
         script.Should().Contain("distribution_readiness=distribution_candidate_ready");
+        script.Should().Contain("publish-distribution-candidate:");
+        script.Should().Contain("actions/download-artifact@v7");
+        script.Should().Contain("FreeX-latest-macos-arm64.zip");
+        script.Should().Contain("FreeX-latest-macos-x64.zip");
+        script.Should().Contain("FreeX-latest-macos-distribution-candidate-manifest.json");
+        script.Should().Contain("distribution_candidate_required_markers");
+        script.Should().Contain("gh release create");
+        script.Should().Contain("gh release upload");
         script.Should().Contain("--framework net10.0");
         script.Should().Contain("--output \"$app/Contents/MacOS\"");
         script.Should().Contain("native_fill_color_swatch_count=69");
@@ -1128,6 +1136,43 @@ public sealed class MacOsAppReadinessPreflightTests
                       path: |
                         artifacts/freex-osx-arm64-macos-evidence.txt
                         artifacts/freex-${"{{"} matrix.runtime {"}}"}-macos-open-with-launch-smoke.txt
+              publish-distribution-candidate:
+                name: Publish macOS distribution candidate
+                needs: macos-app
+                if: ${"{{"} github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true {"}}"}
+                runs-on: ubuntu-latest
+                timeout-minutes: 30
+                permissions:
+                  actions: read
+                  contents: write
+                concurrency:
+                  group: macos-distribution-candidate-release
+                  cancel-in-progress: false
+                steps:
+                  - uses: actions/download-artifact@v7
+                    with:
+                      pattern: freex-${"{{"} github.run_id {"}}"}-${"{{"} github.run_attempt {"}}"}-*-macos-app
+                      merge-multiple: true
+                  - name: Prepare release-channel assets
+                    shell: pwsh
+                    run: |
+                      FreeX-latest-macos-arm64.zip
+                      FreeX-latest-macos-x64.zip
+                      FreeX-latest-macos-distribution-candidate-manifest.json
+                      FreeX-latest-macos-distribution-candidate-instructions.md
+                      source_artifact_pattern
+                      distribution_candidate_required_markers
+                  - name: Upload release-channel prepared assets
+                    uses: actions/upload-artifact@v7
+                    with:
+                      if-no-files-found: error
+                  - name: Create or update GitHub release
+                    shell: pwsh
+                    run: |
+                      gh release create
+                      gh release upload
+                      --draft=false
+                      --prerelease
             """);
 
         WriteMinimalIcns(root, "src/FreeX.App.Avalonia/Packaging/macos/FreeX.icns");
