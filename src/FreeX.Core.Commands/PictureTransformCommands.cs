@@ -28,12 +28,11 @@ public sealed class ResizePictureCommand : IWorkbookCommand
             return invalidSize;
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (PictureCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var picture = sheet.Pictures.FirstOrDefault(p => p.Id == _pictureId);
-        if (picture is null)
-            return new CommandOutcome(false, "Picture was not found.");
+        if (!PictureCommandGuards.TryFindPicture(sheet, _pictureId, out var picture))
+            return PictureCommandGuards.PictureNotFound();
 
         _previousWidth = picture.Width;
         _previousHeight = picture.Height;
@@ -74,10 +73,10 @@ public sealed class RepositionPictureCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (PictureCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
-        var picture = sheet.Pictures.FirstOrDefault(p => p.Id == _pictureId);
-        if (picture is null) return new CommandOutcome(false, "Picture was not found.");
+        if (!PictureCommandGuards.TryFindPicture(sheet, _pictureId, out var picture))
+            return PictureCommandGuards.PictureNotFound();
         _previousAnchor = picture.Anchor;
         picture.Anchor = _anchor;
         _applied = true;
@@ -117,12 +116,11 @@ public sealed class RotatePictureCommand : IWorkbookCommand
             return new CommandOutcome(false, "Picture rotation must be a finite number.");
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (PictureCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var picture = sheet.Pictures.FirstOrDefault(p => p.Id == _pictureId);
-        if (picture is null)
-            return new CommandOutcome(false, "Picture was not found.");
+        if (!PictureCommandGuards.TryFindPicture(sheet, _pictureId, out var picture))
+            return PictureCommandGuards.PictureNotFound();
 
         _previousRotationDegrees = picture.RotationDegrees;
         picture.RotationDegrees = ObjectRotationNormalizer.NormalizeDegrees(_rotationDegrees);
@@ -161,12 +159,11 @@ public sealed class SetPictureLockAspectRatioCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (PictureCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var picture = sheet.Pictures.FirstOrDefault(p => p.Id == _pictureId);
-        if (picture is null)
-            return new CommandOutcome(false, "Picture was not found.");
+        if (!PictureCommandGuards.TryFindPicture(sheet, _pictureId, out var picture))
+            return PictureCommandGuards.PictureNotFound();
 
         _previousLockAspectRatio = picture.LockAspectRatio;
         picture.LockAspectRatio = _lockAspectRatio;
@@ -213,12 +210,11 @@ public sealed class SetPictureCropCommand : IWorkbookCommand
             return new CommandOutcome(false, "Picture crop values must be finite percentages between 0 and 100%, with visible width and height remaining.");
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (PictureCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var picture = sheet.Pictures.FirstOrDefault(p => p.Id == _pictureId);
-        if (picture is null)
-            return new CommandOutcome(false, "Picture was not found.");
+        if (!PictureCommandGuards.TryFindPicture(sheet, _pictureId, out var picture))
+            return PictureCommandGuards.PictureNotFound();
         if (picture.Kind != PictureKind.Image)
             return new CommandOutcome(false, "Only inserted image pictures can be cropped.");
 
