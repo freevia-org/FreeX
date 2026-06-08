@@ -11,6 +11,8 @@ public sealed class App : Application
 
     internal static MacOsLaunchSmokeOptions? LaunchSmokeOptions { get; set; }
 
+    internal static AvaloniaAppDiagnostics? Diagnostics { get; set; }
+
     public override void OnFrameworkInitializationCompleted()
     {
         RequestedThemeVariant = ThemeVariant.Light;
@@ -20,12 +22,18 @@ public sealed class App : Application
         {
             var mainWindow = new MainWindow(StartupArguments);
             desktop.MainWindow = mainWindow;
+            Diagnostics?.RecordEvent("app_ready", new Dictionary<string, string?>
+            {
+                ["source"] = "avalonia",
+                ["scope"] = "app",
+                ["status"] = "ready"
+            });
 
             if (this.TryGetFeature<IActivatableLifetime>() is { } activatableLifetime)
                 activatableLifetime.Activated += async (_, args) => await MainWindow_ActivatedAsync(mainWindow, args);
 
             if (LaunchSmokeOptions is { } launchSmokeOptions)
-                MacOsLaunchSmokeCoordinator.Start(mainWindow, launchSmokeOptions);
+                MacOsLaunchSmokeCoordinator.Start(mainWindow, launchSmokeOptions, Diagnostics);
         }
 
         base.OnFrameworkInitializationCompleted();

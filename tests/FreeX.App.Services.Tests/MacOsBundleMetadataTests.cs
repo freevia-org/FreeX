@@ -187,6 +187,12 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("echo \"format_cells_style_roundtrip_count=$format_cells_style_roundtrip_count\"");
         workflow.Should().Contain("lsregister -f \"$unzip_root/FreeX.app\"");
         workflow.Should().Contain("open -W -n -b io.github.tony-xmelon.freex \"$launch_smoke_file\" --args --macos-launch-smoke \"$launch_smoke_report\"");
+        workflow.Should().Contain("--macos-launch-smoke-diagnostics-dir \"$app_diagnostics_dir\"");
+        workflow.Should().Contain("grep -q \"app_diagnostics_directory_configured=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("app_diagnostics_events_path=\"$app_diagnostics_dir/events.jsonl\"");
+        workflow.Should().Contain("grep -q '\"eventName\":\"app_start\"' \"$app_diagnostics_events_path\"");
+        workflow.Should().Contain("grep -q '\"eventName\":\"app_ready\"' \"$app_diagnostics_events_path\"");
+        workflow.Should().Contain("grep -q '\"eventName\":\"macos_launch_smoke\"' \"$app_diagnostics_events_path\"");
         workflow.Should().NotContain("--macos-launch-smoke-verify-image-clipboard");
         workflow.Should().NotContain("--macos-launch-smoke-verify-live-command-keys");
         workflow.Should().NotContain("<<'APPLESCRIPT'");
@@ -382,6 +388,7 @@ public sealed class MacOsBundleMetadataTests
         appArtifactUpload.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-tester-instructions.md");
         appArtifactUpload.Should().NotContain("portable-pdf-exporter-tests.trx");
         appArtifactUpload.Should().NotContain("export-path-tests.trx");
+        appArtifactUpload.Should().NotContain("macos-app-diagnostics");
         appArtifactUpload.Should().Contain("if-no-files-found: error");
 
         var diagnosticsUpload = ExtractWorkflowStepBlock(workflow, "Upload app diagnostics");
@@ -389,6 +396,7 @@ public sealed class MacOsBundleMetadataTests
         diagnosticsUpload.Should().Contain("name: freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-macos-diagnostics");
         diagnosticsUpload.Should().Contain("artifacts/freex-${{ matrix.runtime }}-portable-pdf-exporter-tests.trx");
         diagnosticsUpload.Should().Contain("artifacts/freex-${{ matrix.runtime }}-export-path-tests.trx");
+        diagnosticsUpload.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-app-diagnostics/**");
         diagnosticsUpload.Should().Contain("if-no-files-found: warn");
     }
 
