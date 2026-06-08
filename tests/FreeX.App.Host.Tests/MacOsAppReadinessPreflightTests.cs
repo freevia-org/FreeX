@@ -19,6 +19,9 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("Test-MacOsIcon");
         script.Should().Contain("NSHighResolutionCapable");
         script.Should().Contain("dotnet-version: 10.0.x");
+        script.Should().Contain("osx-arm64=macos-15");
+        script.Should().Contain("osx-x64=macos-15-intel");
+        script.Should().NotContain("runner: macos-latest");
         script.Should().Contain("distribution_candidate:");
         script.Should().Contain("artifact_channel=\"distribution-candidate\"");
         script.Should().Contain("Distribution-candidate macOS app runs require Developer ID signing secrets");
@@ -834,6 +837,19 @@ public sealed class MacOsAppReadinessPreflightTests
     }
 
     [Fact]
+    public void MacOsAppReadinessPreflight_FailsForMovingHostedRunnerLabel()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateMinimalMacOsReadinessRepo(temp.Path, workflowArm64Runner: "macos-latest");
+
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("macOS workflow runtime runner matrix must include 'osx-arm64=macos-15'");
+    }
+
+    [Fact]
     public void MacOsAppReadinessPreflight_FailsForForbiddenPortableSourceToken()
     {
         using var temp = new TestTemporaryDirectory();
@@ -883,6 +899,8 @@ public sealed class MacOsAppReadinessPreflightTests
         string root,
         string targetFramework = "net10.0",
         string workflowExtraRuntime = "",
+        string workflowArm64Runner = "macos-15",
+        string workflowX64Runner = "macos-15-intel",
         string extraAvaloniaSource = "")
     {
         WriteFile(
@@ -998,9 +1016,9 @@ public sealed class MacOsAppReadinessPreflightTests
                   matrix:
                     include:
                       - runtime: osx-arm64
-                        runner: macos-latest
+                        runner: {workflowArm64Runner}
                       - runtime: osx-x64
-                        runner: macos-15-intel
+                        runner: {workflowX64Runner}
                       {FormatWorkflowRuntimeEntry(workflowExtraRuntime)}
                 steps:
                   - uses: actions/setup-dotnet@v5
@@ -3382,7 +3400,7 @@ public sealed class MacOsAppReadinessPreflightTests
     {
         return string.IsNullOrWhiteSpace(runtime)
             ? ""
-            : $"- runtime: {runtime}{Environment.NewLine}                        runner: macos-latest";
+            : $"- runtime: {runtime}{Environment.NewLine}                        runner: macos-15";
     }
 
     private static void WriteFile(string root, string relativePath, string content)

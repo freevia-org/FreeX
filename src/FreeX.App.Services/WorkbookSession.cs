@@ -1500,9 +1500,6 @@ public sealed class WorkbookSession
                 RecalcReport: null);
         }
 
-        if (TryCreateMultiRangeClipboardEditResult("Paste Special", out var multiRangeResult))
-            return multiRangeResult;
-
         if (_internalClipboard is not { } internalClipboard ||
             (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
         {
@@ -1513,6 +1510,13 @@ public sealed class WorkbookSession
                 [],
                 RecalcReport: null);
         }
+
+        if (SelectedRanges.Count > 1)
+            return PasteInternalClipboardToSelectedRanges(
+                internalClipboard,
+                mode,
+                options,
+                keepSourceColumnWidths);
 
         return PasteInternalClipboardAtActiveCell(internalClipboard, mode, options, keepSourceColumnWidths);
     }
@@ -2699,6 +2703,27 @@ public sealed class WorkbookSession
         return ToCommand(label, commands);
     }
 
+    private IWorkbookCommand CreateInternalPasteCommand(
+        InternalClipboard clipboard,
+        IReadOnlyList<CellAddress> destinations,
+        PasteCellsMode mode,
+        PasteSpecialOptions options,
+        bool keepSourceColumnWidths)
+    {
+        var commands = destinations
+            .Select(destination => CreateInternalPasteCommand(
+                clipboard,
+                destination,
+                mode,
+                options,
+                keepSourceColumnWidths))
+            .ToList();
+        var label = mode == PasteCellsMode.All && options == default && !keepSourceColumnWidths
+            ? "Paste"
+            : "Paste Special";
+        return ToCommand(label, commands);
+    }
+
     private IWorkbookCommand CreatePasteLinkCommand(
         InternalClipboard clipboard,
         string sourceSheetName,
@@ -3568,6 +3593,38 @@ public sealed class WorkbookSession
         return result;
     }
 
+    private WorkbookCellEditResult PasteInternalClipboardToSelectedRanges(
+        InternalClipboard clipboard,
+        PasteCellsMode mode,
+        PasteSpecialOptions options,
+        bool keepSourceColumnWidths)
+    {
+        var selectedRanges = GetCurrentSelectedRanges();
+        var pasteSize = GetPasteDimensions(clipboard.SourceRange, options.Transpose);
+        if (clipboard.IsCut ||
+            !SelectedRangesMatchPasteSize(selectedRanges, pasteSize.RowCount, pasteSize.ColCount))
+        {
+            return new WorkbookCellEditResult(
+                false,
+                CreateMultiRangeClipboardError("Paste Special"),
+                [],
+                RecalcReport: null);
+        }
+
+        var command = CreateInternalPasteCommand(
+            clipboard,
+            selectedRanges.Select(range => range.Start).ToArray(),
+            mode,
+            options,
+            keepSourceColumnWidths);
+        var result = _cellEditService.ExecuteEditCommand(Workbook, command);
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
+        return result;
+    }
+
     private InternalClipboard CaptureInternalClipboard(GridRange range, string text, bool isCut)
     {
         var sheet = Workbook.GetSheet(range.Start.Sheet);
@@ -3645,6 +3702,12 @@ public sealed class WorkbookSession
         transpose
             ? (sourceRange.ColCount, sourceRange.RowCount)
             : (sourceRange.RowCount, sourceRange.ColCount);
+
+    private static bool SelectedRangesMatchPasteSize(
+        IReadOnlyList<GridRange> selectedRanges,
+        ulong rowCount,
+        ulong colCount) =>
+        selectedRanges.All(range => range.RowCount == rowCount && range.ColCount == colCount);
 
     private void SelectPastedRange(CellAddress start, ulong rowCount, ulong colCount)
     {

@@ -57,8 +57,10 @@ public sealed class MacOsBundleMetadataTests
         var runtimes = ProjectProperty(project, "RuntimeIdentifiers")!.Split(';', StringSplitOptions.RemoveEmptyEntries);
 
         workflow.Should().Contain("runs-on: ${{ matrix.runner }}");
-        workflow.Should().Contain("runner: macos-latest");
+        workflow.Should().Contain("runner: macos-15");
         workflow.Should().Contain("runner: macos-15-intel");
+        workflow.Should().NotContain("runner: macos-latest");
+        WorkflowRuntimeRunnerPairs(workflow).Should().Equal("osx-arm64=macos-15", "osx-x64=macos-15-intel");
         workflow.Should().Contain("runtime:");
         foreach (var runtime in runtimes)
             workflow.Should().Contain(runtime);
@@ -516,6 +518,13 @@ public sealed class MacOsBundleMetadataTests
 
         return workflow[start..next];
     }
+
+    private static IReadOnlyList<string> WorkflowRuntimeRunnerPairs(string workflow) =>
+        Regex.Matches(
+                workflow,
+                @"(?m)^\s*-\s*runtime:\s*(?<runtime>osx-[A-Za-z0-9]+)\s*\r?\n\s*runner:\s*(?<runner>[A-Za-z0-9._-]+)\s*$")
+            .Select(match => $"{match.Groups["runtime"].Value}={match.Groups["runner"].Value}")
+            .ToList();
 
     private static void AssertIcnsFile(string path)
     {
