@@ -6,4 +6,5 @@ public sealed record WorkbookOpenTarget(
     string Path,
     IFileAdapter Adapter,
     string Extension,
-    FileFormatDescriptor Format);
+    FileFormatDescriptor Format,
+    WorkbookFileAccessIdentity? FileAccessIdentity = null);

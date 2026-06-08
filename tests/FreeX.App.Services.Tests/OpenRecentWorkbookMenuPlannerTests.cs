@@ -76,11 +76,19 @@ public sealed class OpenRecentWorkbookMenuPlannerTests
     {
         var now = new DateTimeOffset(2026, 6, 8, 10, 30, 0, TimeSpan.Zero);
         var normalizedPath = "/Users/quinn/Work/Budget 2026.fxl";
+        var newerIdentity = new WorkbookFileAccessIdentity(
+            normalizedPath,
+            "macos-security-scoped-bookmark",
+            "newer-token");
+        var olderIdentity = new WorkbookFileAccessIdentity(
+            normalizedPath,
+            "macos-security-scoped-bookmark",
+            "older-token");
 
         var plan = OpenRecentWorkbookMenuPlanner.Create(
             [
-                Entry("file:///Users/quinn/Work/Budget%202026.fxl", now.AddMinutes(1)),
-                Entry(normalizedPath, now)
+                Entry("file:///Users/quinn/Work/Budget%202026.fxl", now.AddMinutes(1), newerIdentity),
+                Entry(normalizedPath, now, olderIdentity)
             ],
             fileExists: path => path == normalizedPath,
             resolveOpenWorkbookPath: path => LocalFilePath.TryNormalize(path, out var normalized) ? normalized : null);
@@ -89,6 +97,10 @@ public sealed class OpenRecentWorkbookMenuPlannerTests
         plan.Items[0].Path.Should().Be(normalizedPath);
         plan.Items[0].Header.Should().Be($"Budget 2026.fxl - {Path.GetDirectoryName(normalizedPath)}");
         plan.Items[0].LastOpened.Should().Be(now.AddMinutes(1));
+        var plannedIdentity = plan.Items[0].FileAccessIdentity;
+        plannedIdentity.Should().NotBeNull();
+        plannedIdentity!.LocalPath.Should().Be(normalizedPath);
+        plannedIdentity.BookmarkPayload.Should().Be("newer-token");
     }
 
     [Fact]
@@ -99,10 +111,14 @@ public sealed class OpenRecentWorkbookMenuPlannerTests
             .Be("");
     }
 
-    private static RecentFileEntry Entry(string path, DateTimeOffset lastOpened) =>
+    private static RecentFileEntry Entry(
+        string path,
+        DateTimeOffset lastOpened,
+        WorkbookFileAccessIdentity? fileAccessIdentity = null) =>
         new()
         {
             Path = path,
             LastOpened = lastOpened,
+            FileAccessIdentity = fileAccessIdentity,
         };
 }

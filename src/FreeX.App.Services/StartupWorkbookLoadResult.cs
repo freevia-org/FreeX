@@ -11,4 +11,5 @@ public sealed record StartupWorkbookLoadResult(
     string? SourcePath = null,
     bool OpenedAsTemplate = false,
     XlsxFeatureReport? FeatureReport = null,
-    IReadOnlyList<string>? LoadWarnings = null);
+    IReadOnlyList<string>? LoadWarnings = null,
+    WorkbookFileAccessIdentity? SourceFileAccessIdentity = null);
