@@ -557,16 +557,30 @@ internal static class XlsxPackageMetadataMerger
     private static XElement? FindExistingCustomXmlPropertiesRelationship(
         IEnumerable<XElement> relationships,
         ArchiveEntryIndex targetIndex,
-        string itemPart) =>
-        relationships.FirstOrDefault(relationship =>
-            TargetsExistingCustomXmlPropertiesPart(relationship, targetIndex, itemPart));
+        string itemPart)
+    {
+        foreach (var relationship in relationships)
+        {
+            if (TargetsExistingCustomXmlPropertiesPart(relationship, targetIndex, itemPart))
+                return relationship;
+        }
+
+        return null;
+    }
 
     private static XElement? FindCustomXmlPropertiesRelationshipTargeting(
         IEnumerable<XElement> relationships,
         string itemPart,
-        string propertiesPart) =>
-        relationships.FirstOrDefault(relationship =>
-            RelationshipTargetsPart(relationship, itemPart, propertiesPart));
+        string propertiesPart)
+    {
+        foreach (var relationship in relationships)
+        {
+            if (RelationshipTargetsPart(relationship, itemPart, propertiesPart))
+                return relationship;
+        }
+
+        return null;
+    }
 
     private static bool TargetsExistingCustomXmlPropertiesPart(
         XElement relationship,
@@ -835,9 +849,16 @@ internal static class XlsxPackageMetadataMerger
     private static XElement? FindContentTypeOverride(
         XElement root,
         XNamespace contentTypeNs,
-        string normalizedPartName) =>
-        root.Elements(contentTypeNs + "Override")
-            .FirstOrDefault(element => IsContentTypeOverrideForPart(element, normalizedPartName));
+        string normalizedPartName)
+    {
+        foreach (var element in root.Elements(contentTypeNs + "Override"))
+        {
+            if (IsContentTypeOverrideForPart(element, normalizedPartName))
+                return element;
+        }
+
+        return null;
+    }
 
     private static bool IsContentTypeOverrideForPart(XElement element, string normalizedPartName) =>
         TryNormalizeContentTypePartName(element.Attribute("PartName")?.Value, out var targetPartName) &&
