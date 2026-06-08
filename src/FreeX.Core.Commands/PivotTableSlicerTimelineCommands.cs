@@ -38,7 +38,7 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
 
         var target = PivotTableSlicerTimelineCommandHelpers.FindConnectedPivotTable(ctx.Workbook, timeline.SourcePivotTableName);
         if (target is null)
-            return new CommandOutcome(false, "Connected PivotTable was not found.");
+            return PivotTableSlicerTimelineCommandGuards.ConnectedPivotTableNotFound();
 
         var (sheet, pivotTable) = target.Value;
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)
@@ -49,7 +49,7 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
         var sourceFieldIndex = headers.FindIndex(header =>
             string.Equals(header, timeline.SourceFieldName, StringComparison.OrdinalIgnoreCase));
         if (sourceFieldIndex < 0)
-            return new CommandOutcome(false, "Connected PivotTable field was not found.");
+            return PivotTableSlicerTimelineCommandGuards.ConnectedPivotTableFieldNotFound();
 
         _snapshot = TimelineRangeSnapshot.Capture(timeline, pivotTable);
         _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
@@ -136,7 +136,7 @@ public sealed class AddTimelineCommand : IWorkbookCommand
 
         var target = PivotTableSlicerTimelineCommandHelpers.FindConnectedPivotTable(ctx.Workbook, _pivotTableName);
         if (target is null)
-            return new CommandOutcome(false, "Connected PivotTable was not found.");
+            return PivotTableSlicerTimelineCommandGuards.ConnectedPivotTableNotFound();
         if (CommandGuards.RejectIfProtectedWithoutPermission(target.Value.Sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)
             return protectedOutcome;
         if (CommandGuards.RejectIfProtectedWithoutPermission(target.Value.Sheet, SheetProtectionPermission.EditObjects) is { } objectProtectedOutcome)
@@ -146,7 +146,7 @@ public sealed class AddTimelineCommand : IWorkbookCommand
         var headers = PivotTableSlicerTimelineCommandHelpers.ReadPivotHeaders(sourceSheet, target.Value.PivotTable);
         var sourceFieldIndex = headers.FindIndex(header => string.Equals(header, _sourceFieldName, StringComparison.CurrentCultureIgnoreCase));
         if (sourceFieldIndex < 0)
-            return new CommandOutcome(false, "Connected PivotTable field was not found.");
+            return PivotTableSlicerTimelineCommandGuards.ConnectedPivotTableFieldNotFound();
 
         var dateBounds = PivotTimelineSelectionPlanner.ReadDateBounds(sourceSheet, target.Value.PivotTable, sourceFieldIndex);
         if (dateBounds.Start is null && dateBounds.End is null)
