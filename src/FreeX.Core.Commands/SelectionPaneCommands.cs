@@ -130,7 +130,7 @@ public sealed class MoveSelectionPaneObjectCommand : IWorkbookCommand
 
     private CommandOutcome Move<T>(List<T> list, Func<T, Guid> getId, Func<T, CellAddress> getAnchor)
     {
-        var index = list.FindIndex(item => getId(item) == _objectId);
+        var index = FindObjectIndex(list, getId, _objectId);
         if (index < 0)
             return SelectionPaneObjectAccess.ObjectNotFound();
 
@@ -188,6 +188,17 @@ public sealed class MoveSelectionPaneObjectCommand : IWorkbookCommand
 
     private void Swap<T>(List<T> list) =>
         (list[_fromIndex], list[_toIndex]) = (list[_toIndex], list[_fromIndex]);
+
+    private static int FindObjectIndex<T>(IReadOnlyList<T> list, Func<T, Guid> getId, Guid objectId)
+    {
+        for (var index = 0; index < list.Count; index++)
+        {
+            if (getId(list[index]) == objectId)
+                return index;
+        }
+
+        return -1;
+    }
 }
 
 public sealed class RenameSelectionPaneObjectCommand : IWorkbookCommand
@@ -299,8 +310,16 @@ internal static class SelectionPaneObjectAccess
             _ => []
         };
 
-    public static SelectionPaneObjectRef? Find(Sheet sheet, SelectionPaneObjectKind kind, Guid objectId) =>
-        GetList(sheet, kind).FirstOrDefault(item => item.Id == objectId);
+    public static SelectionPaneObjectRef? Find(Sheet sheet, SelectionPaneObjectKind kind, Guid objectId)
+    {
+        foreach (var item in GetList(sheet, kind))
+        {
+            if (item.Id == objectId)
+                return item;
+        }
+
+        return null;
+    }
 }
 
 internal sealed record SelectionPaneObjectRef(
