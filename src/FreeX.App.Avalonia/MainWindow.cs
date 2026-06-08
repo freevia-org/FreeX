@@ -163,9 +163,37 @@ public sealed class MainWindow : Window
     {
         public override string ToString() => Label;
     }
+    private sealed record SortDialogSmokeProbe(
+        Window Dialog,
+        CheckBox HeadersCheckBox,
+        StackPanel LevelsPanel,
+        ComboBox SortOnBox,
+        ComboBox ColorBox,
+        Button AddLevelButton,
+        Button OkButton,
+        Button CancelButton);
     private sealed record DataValidationDialogResult(
         DataValidationDialogAction Action,
         DataValidation? Rule);
+    private sealed record DataValidationDialogSmokeProbe(
+        Window Dialog,
+        TextBlock SummaryText,
+        ComboBox TypeBox,
+        ComboBox OperatorBox,
+        TextBox Formula1Box,
+        TextBox Formula2Box,
+        CheckBox AllowBlankBox,
+        CheckBox ShowDropdownBox,
+        CheckBox ShowInputMessageBox,
+        TextBox PromptTitleBox,
+        TextBox PromptMessageBox,
+        CheckBox ShowErrorMessageBox,
+        ComboBox AlertStyleBox,
+        TextBox ErrorTitleBox,
+        TextBox ErrorMessageBox,
+        Button ApplyButton,
+        Button ClearButton,
+        Button CancelButton);
     private sealed record SubtotalDialogResult(
         SubtotalDialogAction Action,
         SubtotalInputOptions? Options);
@@ -7189,6 +7217,11 @@ public sealed class MainWindow : Window
 
     private async Task<SortDialogResult?> ShowSortInputDialogAsync()
     {
+        return await ShowSortInputDialogAsync(null);
+    }
+
+    private async Task<SortDialogResult?> ShowSortInputDialogAsync(Action<SortDialogSmokeProbe>? launchSmokeProbe)
+    {
         SortDialogResult? result = null;
         var range = _session.SelectedRange;
         var levels = SortDialogPlanner.NormalizeLevels(null).ToList();
@@ -7251,6 +7284,9 @@ public sealed class MainWindow : Window
             Padding = new Thickness(10, 4),
         };
         AutomationProperties.SetAutomationId(cancelButton, "SortCancelButton");
+
+        ComboBox? firstSortOnBox = null;
+        ComboBox? firstColorBox = null;
 
         IReadOnlyList<SortColumnChoice> CurrentColumnChoices()
         {
@@ -7367,6 +7403,8 @@ public sealed class MainWindow : Window
         {
             levels = SortDialogPlanner.NormalizeLevels(levels).ToList();
             levelsPanel.Children.Clear();
+            firstSortOnBox = null;
+            firstColorBox = null;
             var columnChoices = CreateColumnItems();
             var sortOnItems = CreateSortOnItems();
             for (var index = 0; index < levels.Count; index++)
@@ -7417,6 +7455,12 @@ public sealed class MainWindow : Window
                 AutomationProperties.SetName(colorBox, "Color");
                 AutomationProperties.SetAutomationId(colorBox, $"SortLevel{levelIndex + 1}ColorBox");
                 SelectColor(colorBox, colorChoices, level);
+
+                if (levelIndex == 0)
+                {
+                    firstSortOnBox = sortOnBox;
+                    firstColorBox = colorBox;
+                }
 
                 void RefreshSortOnDependentControls()
                 {
@@ -7557,6 +7601,23 @@ public sealed class MainWindow : Window
                 },
             },
         };
+        if (launchSmokeProbe is not null)
+        {
+            dialog.Opened += (_, _) =>
+            {
+                RunLaunchSmokeDialogProbe(
+                    dialog,
+                    () => launchSmokeProbe(new SortDialogSmokeProbe(
+                        dialog,
+                        headersCheck,
+                        levelsPanel,
+                        firstSortOnBox!,
+                        firstColorBox!,
+                        addLevelButton,
+                        okButton,
+                        cancelButton)));
+            };
+        }
 
         await dialog.ShowDialog(this);
         return result;
@@ -9653,6 +9714,11 @@ public sealed class MainWindow : Window
 
     private async Task<DataValidationDialogResult?> ShowDataValidationInputDialogAsync()
     {
+        return await ShowDataValidationInputDialogAsync(null);
+    }
+
+    private async Task<DataValidationDialogResult?> ShowDataValidationInputDialogAsync(Action<DataValidationDialogSmokeProbe>? launchSmokeProbe)
+    {
         DataValidationDialogResult? result = null;
         var summary = DataValidationPresetPlanner.CreateSelectionSummary(
             _session.Workbook,
@@ -10033,6 +10099,33 @@ public sealed class MainWindow : Window
             },
         };
         dialog.Opened += (_, _) => typeBox.Focus();
+        if (launchSmokeProbe is not null)
+        {
+            dialog.Opened += (_, _) =>
+            {
+                RunLaunchSmokeDialogProbe(
+                    dialog,
+                    () => launchSmokeProbe(new DataValidationDialogSmokeProbe(
+                        dialog,
+                        summaryText,
+                        typeBox,
+                        operatorBox,
+                        formula1Box,
+                        formula2Box,
+                        allowBlankBox,
+                        showDropdownBox,
+                        showInputMessageBox,
+                        promptTitleBox,
+                        promptMessageBox,
+                        showErrorMessageBox,
+                        alertStyleBox,
+                        errorTitleBox,
+                        errorMessageBox,
+                        applyButton,
+                        clearButton,
+                        cancelButton)));
+            };
+        }
 
         await dialog.ShowDialog(this);
         return result;
@@ -11568,6 +11661,87 @@ public sealed class MainWindow : Window
             hasFormatCellsDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 560, height: 560, minWidth: 480, minHeight: 500);
         });
 
+        var hasSortDialog = false;
+        var hasSortDialogSortOnControls = false;
+        var hasSortDialogColorControls = false;
+        var hasSortDialogActionButtons = false;
+        var hasSortDialogCompactLayout = false;
+        var sortDialogResult = await ShowSortInputDialogAsync(probe =>
+        {
+            hasSortDialog = HasLaunchSmokeDialog(probe.Dialog, "Sort");
+            hasSortDialogSortOnControls =
+                HasLaunchSmokeComboBox(probe.SortOnBox, "SortLevel1SortOnBox", "Sort On") &&
+                probe.SortOnBox.MinWidth >= 120 &&
+                string.Equals(probe.SortOnBox.SelectedItem?.ToString(), SortDialogPlannerText.Default.SortOnCellValues, StringComparison.Ordinal);
+            hasSortDialogColorControls =
+                HasLaunchSmokeComboBox(probe.ColorBox, "SortLevel1ColorBox", "Color") &&
+                probe.ColorBox.MinWidth >= 105 &&
+                !probe.ColorBox.IsEnabled &&
+                string.Equals(probe.ColorBox.SelectedItem?.ToString(), "None", StringComparison.Ordinal);
+            hasSortDialogActionButtons =
+                HasLaunchSmokeCheckBox(probe.HeadersCheckBox, "SortHeadersCheckBox", "My data has headers") &&
+                HasLaunchSmokeAutomationId(probe.LevelsPanel, "SortLevelsPanel") &&
+                HasLaunchSmokeButton(probe.AddLevelButton, "SortAddLevelButton", "Add Level") &&
+                HasLaunchSmokeButton(probe.OkButton, "SortOkButton", "OK") &&
+                HasLaunchSmokeButton(probe.CancelButton, "SortCancelButton", "Cancel");
+            hasSortDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 760, height: 430, minWidth: 700, minHeight: 360);
+        });
+
+        var dropdown = CreateDataValidationDropdown(new DataValidationDropdownPlan(
+            ["Yes", "No"],
+            "Yes",
+            new DataValidationDropdownBounds(12, 16, 48, 18)));
+        var hasDataValidationDropdownControl =
+            HasLaunchSmokeComboBox(dropdown, "WorksheetDataValidationDropdown", "Data validation list") &&
+            string.Equals(
+                AutomationProperties.GetHelpText(dropdown),
+                "Pick a permitted value for the active cell.",
+                StringComparison.Ordinal) &&
+            dropdown.Width == 48 &&
+            dropdown.Height == 18 &&
+            dropdown.MinWidth == DataValidationDropdownPlanner.MinimumWidth &&
+            dropdown.MinHeight == DataValidationDropdownPlanner.MinimumHeight;
+        var hasDataValidationDropdownItems =
+            dropdown.ItemsSource is IEnumerable<string> dropdownItems &&
+            dropdownItems.SequenceEqual(["Yes", "No"], StringComparer.Ordinal) &&
+            string.Equals(dropdown.SelectedItem?.ToString(), "Yes", StringComparison.Ordinal);
+
+        var hasDataValidationDialog = false;
+        var hasDataValidationDialogCriteriaControls = false;
+        var hasDataValidationDialogMessageControls = false;
+        var hasDataValidationDialogActionButtons = false;
+        var hasDataValidationDialogCompactLayout = false;
+        var dataValidationDialogResult = await ShowDataValidationInputDialogAsync(probe =>
+        {
+            hasDataValidationDialog = HasLaunchSmokeDialog(probe.Dialog, "Data Validation");
+            hasDataValidationDialogCriteriaControls =
+                HasLaunchSmokeAutomationId(probe.SummaryText, "DataValidationSelectionSummaryText") &&
+                HasLaunchSmokeComboBox(probe.TypeBox, "DataValidationTypeBox", "Allow") &&
+                HasLaunchSmokeComboBox(probe.OperatorBox, "DataValidationOperatorBox", "Data") &&
+                HasLaunchSmokeAutomationId(probe.Formula1Box, "DataValidationFormula1Box") &&
+                HasLaunchSmokeAutomationId(probe.Formula2Box, "DataValidationFormula2Box") &&
+                HasLaunchSmokeCheckBox(probe.AllowBlankBox, "DataValidationAllowBlankBox", "Allow blank") &&
+                HasLaunchSmokeCheckBox(probe.ShowDropdownBox, "DataValidationShowDropdownBox", "In-cell dropdown") &&
+                !probe.ShowDropdownBox.IsVisible &&
+                string.Equals(probe.TypeBox.SelectedItem?.ToString(), "Whole number", StringComparison.Ordinal) &&
+                string.Equals(probe.Formula1Box.Text, "1", StringComparison.Ordinal) &&
+                string.Equals(probe.Formula2Box.Text, "100", StringComparison.Ordinal);
+            hasDataValidationDialogMessageControls =
+                HasLaunchSmokeCheckBox(probe.ShowInputMessageBox, "DataValidationShowInputMessageBox", "Show input message") &&
+                HasLaunchSmokeAutomationId(probe.PromptTitleBox, "DataValidationPromptTitleBox") &&
+                HasLaunchSmokeAutomationId(probe.PromptMessageBox, "DataValidationPromptMessageBox") &&
+                HasLaunchSmokeCheckBox(probe.ShowErrorMessageBox, "DataValidationShowErrorMessageBox", "Show error alert") &&
+                HasLaunchSmokeComboBox(probe.AlertStyleBox, "DataValidationAlertStyleBox", "Style") &&
+                HasLaunchSmokeAutomationId(probe.ErrorTitleBox, "DataValidationErrorTitleBox") &&
+                HasLaunchSmokeAutomationId(probe.ErrorMessageBox, "DataValidationErrorMessageBox") &&
+                string.Equals(probe.AlertStyleBox.SelectedItem?.ToString(), "Stop", StringComparison.Ordinal);
+            hasDataValidationDialogActionButtons =
+                HasLaunchSmokeButton(probe.ApplyButton, "DataValidationApplyButton", "Apply") &&
+                HasLaunchSmokeButton(probe.ClearButton, "DataValidationClearButton", "Clear Validation") &&
+                HasLaunchSmokeButton(probe.CancelButton, "DataValidationCancelButton", "Cancel");
+            hasDataValidationDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 540, height: 560, minWidth: 460, minHeight: 440);
+        });
+
         _launchSmokeDialogEvidence = new MacOsLaunchSmokeDialogSnapshot(
             hasFindDialog,
             hasFindDialogTextBox,
@@ -11598,7 +11772,21 @@ public sealed class MainWindow : Window
             hasFormatCellsDialogNumberControls,
             hasFormatCellsDialogActionButtons,
             hasFormatCellsDialogCompactLayout,
-            formatCellsDialogResult is null);
+            formatCellsDialogResult is null,
+            hasSortDialog,
+            hasSortDialogSortOnControls,
+            hasSortDialogColorControls,
+            hasSortDialogActionButtons,
+            hasSortDialogCompactLayout,
+            sortDialogResult is null,
+            hasDataValidationDropdownControl,
+            hasDataValidationDropdownItems,
+            hasDataValidationDialog,
+            hasDataValidationDialogCriteriaControls,
+            hasDataValidationDialogMessageControls,
+            hasDataValidationDialogActionButtons,
+            hasDataValidationDialogCompactLayout,
+            dataValidationDialogResult is null);
         return _launchSmokeDialogEvidence;
     }
 
@@ -11636,6 +11824,10 @@ public sealed class MainWindow : Window
     private static bool HasLaunchSmokeCheckBox(CheckBox checkBox, string automationId, string content) =>
         HasLaunchSmokeAutomationId(checkBox, automationId) &&
         string.Equals(checkBox.Content?.ToString(), content, StringComparison.Ordinal);
+
+    private static bool HasLaunchSmokeComboBox(ComboBox comboBox, string automationId, string name) =>
+        HasLaunchSmokeAutomationId(comboBox, automationId) &&
+        string.Equals(AutomationProperties.GetName(comboBox), name, StringComparison.Ordinal);
 
     private static bool HasLaunchSmokeAutomationId(Control control, string automationId) =>
         string.Equals(AutomationProperties.GetAutomationId(control), automationId, StringComparison.Ordinal);

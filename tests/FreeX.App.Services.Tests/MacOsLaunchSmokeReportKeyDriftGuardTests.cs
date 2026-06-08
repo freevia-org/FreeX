@@ -25,6 +25,18 @@ public sealed class MacOsLaunchSmokeReportKeyDriftGuardTests
         "grep -q \"(?<key>(?:command_key|cmd|live_command_key|live_cmd)_[a-z0-9_]+)=",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
+    private static readonly Regex DialogSourceReportKeyPattern = new(
+        "\\$\"(?<key>(?:macos_dialog|find_dialog|replace_dialog|go_to_dialog|go_to_special_dialog|format_cells_dialog|sort_dialog|data_validation_dropdown|data_validation_dialog)[a-z0-9_]*)=",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly Regex DialogWorkflowGrepReportKeyPattern = new(
+        "grep -q \"(?<key>(?:macos_dialog|find_dialog|replace_dialog|go_to_dialog|go_to_special_dialog|format_cells_dialog|sort_dialog|data_validation_dropdown|data_validation_dialog)[a-z0-9_]*)=",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly Regex DialogReadinessReportKeyMarkerPattern = new(
+        "\"(?<key>(?:macos_dialog|find_dialog|replace_dialog|go_to_dialog|go_to_special_dialog|format_cells_dialog|sort_dialog|data_validation_dropdown|data_validation_dialog)[a-z0-9_]*)=",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     private static readonly string[] ExpectedCommandKeyReportKeys =
     [
         "cmd_bold_menu_gesture",
@@ -103,6 +115,32 @@ public sealed class MacOsLaunchSmokeReportKeyDriftGuardTests
         FindMissingKeys(readinessMarkerKeys, sourceReportKeys, "readiness report marker", "MacOsLaunchSmoke report")
             .Should()
             .BeEmpty("readiness report markers should stay backed by MacOsLaunchSmoke native_ and toolbar_ report keys");
+    }
+
+    [Fact]
+    public void MacOsLaunchSmoke_DialogReportKeysMatchWorkflowGrepsAndReadinessMarkers()
+    {
+        var sourceReportKeys = ExtractDistinctKeys(
+            File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs")),
+            DialogSourceReportKeyPattern);
+        var workflowGrepKeys = ExtractDistinctKeys(
+            File.ReadAllText(RepositoryFileLocator.Find(".github", "workflows", "macos-app.yml")),
+            DialogWorkflowGrepReportKeyPattern);
+        var readinessMarkerKeys = ExtractDistinctKeys(
+            File.ReadAllText(RepositoryFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1")),
+            DialogReadinessReportKeyMarkerPattern);
+
+        sourceReportKeys.Should().NotBeEmpty("MacOsLaunchSmoke should emit dialog report keys");
+        workflowGrepKeys.Should().NotBeEmpty("the macOS workflow should grep dialog report keys");
+        readinessMarkerKeys.Should().NotBeEmpty("the readiness preflight should track dialog report keys");
+
+        FindSetDrift(sourceReportKeys, workflowGrepKeys, "MacOsLaunchSmoke dialog report", "macOS workflow grep")
+            .Should()
+            .BeEmpty("the macOS workflow grep contract should match the dialog report keys emitted by MacOsLaunchSmoke");
+
+        FindSetDrift(sourceReportKeys, readinessMarkerKeys, "MacOsLaunchSmoke dialog report", "readiness report marker")
+            .Should()
+            .BeEmpty("the readiness dialog marker contract should match the dialog report keys emitted by MacOsLaunchSmoke");
     }
 
     [Fact]
