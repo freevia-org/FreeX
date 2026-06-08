@@ -91,6 +91,37 @@ public sealed class AvaloniaProjectPortabilityGuardTests
     }
 
     [Fact]
+    public void MacOsTargetFramework_StaysOptInUntilNativeHostBoundaryIsReady()
+    {
+        var projectPath = RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "FreeX.App.Avalonia.csproj");
+        var project = XDocument.Load(projectPath);
+
+        var targetFramework = ProjectPropertyElements(project, "TargetFramework")
+            .Should()
+            .ContainSingle("default builds and the current hosted bundle lane must stay on plain net10.0")
+            .Subject;
+        targetFramework.Value.Trim().Should().Be("net10.0");
+        targetFramework.Attribute("Condition")?.Value.Should().Be("'$(EnableMacOsTargetFramework)' != 'true'");
+
+        var macOsTargetFrameworks = ProjectPropertyElements(project, "TargetFrameworks")
+            .Should()
+            .ContainSingle("the macOS TFM must be reachable only through an explicit opt-in property")
+            .Subject;
+        macOsTargetFrameworks.Attribute("Condition")?.Value.Should().Be("'$(EnableMacOsTargetFramework)' == 'true'");
+        macOsTargetFrameworks.Value
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Should()
+            .Equal("net10.0", "net10.0-macos");
+
+        var supportedOsVersion = ProjectPropertyElements(project, "SupportedOSPlatformVersion")
+            .Should()
+            .ContainSingle("the macOS TFM should match the bundle minimum system version")
+            .Subject;
+        supportedOsVersion.Attribute("Condition")?.Value.Should().Be("'$(TargetFramework)' == 'net10.0-macos'");
+        supportedOsVersion.Value.Trim().Should().Be("12.0");
+    }
+
+    [Fact]
     public void ForbiddenPatterns_DoNotMatchPlainPlatformProse()
     {
         const string prose = "This note says Windows-only and macOS-friendly behavior without declaring a desktop dependency or native Cocoa binding.";
@@ -140,11 +171,14 @@ public sealed class AvaloniaProjectPortabilityGuardTests
             .Select(include => include!);
 
     private static IEnumerable<string> ProjectPropertyValues(XDocument project, string propertyName) =>
-        project
-            .Descendants()
-            .Where(element => element.Name.LocalName == propertyName)
+        ProjectPropertyElements(project, propertyName)
             .Select(element => element.Value)
             .Where(value => !string.IsNullOrWhiteSpace(value));
+
+    private static IEnumerable<XElement> ProjectPropertyElements(XDocument project, string propertyName) =>
+        project
+            .Descendants()
+            .Where(element => element.Name.LocalName == propertyName);
 
     private static string ProjectReferenceName(string include)
     {

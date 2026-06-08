@@ -63,6 +63,35 @@ A production candidate run must complete these jobs successfully:
 
 If either runtime fails, inspect the runtime diagnostics artifact from that same run attempt. A failed or partial run is not production-ready.
 
+## Optional macOS TFM Compile Validation
+
+When `validate_macos_tfm=true` is enabled in `.github/workflows/macos-app.yml`, a maintainer may run it manually as a companion check for the future `net10.0-macos` compile path.
+
+This validation is not the app artifact lane. It is useful for answering whether hosted macOS 26 arm64 and Intel runners can install the pinned macOS workload set and compile the macOS-specific target, but it does not replace the current `net10.0` publish that produces the `osx-arm64` and `osx-x64` bundles.
+
+From the GitHub UI:
+
+1. Open GitHub > FreeX > Actions > `macOS App Preview`.
+2. Select `Run workflow`.
+3. Choose the ref to validate.
+4. Enable `validate_macos_tfm`.
+5. Start the workflow and record the run id, run attempt, run number, ref, and commit SHA.
+
+From GitHub CLI:
+
+```powershell
+gh workflow run macos-app.yml --ref main -f validate_macos_tfm=true
+gh run list --workflow macos-app.yml --branch main --limit 5
+```
+
+Interpret the result separately from production artifact readiness:
+
+- Passing workload install/restore and `net10.0-macos` compile evidence means the hosted runner can compile the future macOS TFM path.
+- A workload install/restore failure is an opt-in lane readiness issue, not a regression in the current hosted `net10.0` app bundle.
+- A `net10.0-macos` compile failure belongs to the macOS TFM lane or host-only source boundary; do not block the current app artifact lane unless its normal `osx-arm64` or `osx-x64` jobs also fail.
+- Uploaded TFM validation logs are evidence only. They are not app zips, release assets, signing evidence, notarization evidence, or human validation evidence.
+- Hosted compile evidence cannot prove native AppKit share-sheet runtime behavior. Real macOS human validation is still required before any release note claims native share-sheet support.
+
 ## Artifact And Evidence Map
 
 Download artifacts from the completed run summary under `Artifacts`, or use `gh run download`. Keep each downloaded artifact inside its wrapper directory; do not flatten files directly into `artifacts/macos-preview`.
@@ -73,6 +102,8 @@ Download artifacts from the completed run summary under `Artifacts`, or use `gh 
 | `freex-<run-id>-<run-attempt>-osx-arm64-macos-diagnostics` | Always uploaded when available | Runtime diagnostics files, including evidence collected before failures |
 | `freex-<run-id>-<run-attempt>-osx-x64-macos-app` | Every completed `osx-x64` runtime job | `freex-osx-x64-macos-app.zip`, `.zip.sha256`, evidence, packaging smoke, LaunchServices smoke, Open-With smoke, default-open smoke, notarization log, tester instructions |
 | `freex-<run-id>-<run-attempt>-osx-x64-macos-diagnostics` | Always uploaded when available | Runtime diagnostics files, including evidence collected before failures |
+| `freex-<run-id>-<run-attempt>-macos-tfm-build-arm64-evidence` | Manual dispatch with `validate_macos_tfm=true` | Evidence-only `freex-arm64-macos-tfm-build-evidence.txt` with runner, workload, Xcode, and `net10.0-macos` compile markers |
+| `freex-<run-id>-<run-attempt>-macos-tfm-build-x64-evidence` | Manual dispatch with `validate_macos_tfm=true` | Evidence-only `freex-x64-macos-tfm-build-evidence.txt` with runner, workload, Xcode, and `net10.0-macos` compile markers |
 | `freex-<run-id>-<run-attempt>-macos-preview-readiness` | After both runtime jobs | `macos-preview-readiness-manifest.json` and `macos-preview-readiness-summary.txt`, tying both runtime artifacts, diagnostics artifacts, digests, hashes, and evidence markers to one run |
 | `freex-<run-id>-<run-attempt>-macos-release-assets` | `distribution_candidate=true` only | Stable production-candidate assets such as `FreeX-latest-macos-arm64.zip`, `FreeX-latest-macos-x64.zip`, checksums, evidence/log/instruction files, `FreeX-latest-macos-distribution-candidate-manifest.json`, and candidate instructions |
 
