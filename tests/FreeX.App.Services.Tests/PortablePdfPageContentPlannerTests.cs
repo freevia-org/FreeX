@@ -23,18 +23,18 @@ public sealed class PortablePdfPageContentPlannerTests
             GridRange.Parse("A1:E6", sheet.Id),
             new WorkbookExportPrintPageCapacity(RowsPerPage: 3, ColumnsPerPage: 3));
 
-        var plan = PortablePdfPageContentPlanner.CreatePlan(workbook, exportPlan, exportPageNumber: 4);
+        var plan = PortablePdfPageContentPlanner.CreatePlan(workbook, exportPlan, exportPageNumber: 5);
 
         plan.IsReady.Should().BeTrue();
         plan.Status.Should().Be(PortablePdfPageContentPlanStatus.Ready);
-        plan.PageRequest.Should().BeSameAs(exportPlan.PageRequests[3]);
+        plan.PageRequest.Should().BeSameAs(exportPlan.PageRequests[4]);
         plan.RowCount.Should().Be(3);
         plan.ColumnCount.Should().Be(3);
-        plan.StatusText.Should().Be("Ready to render portable PDF page 4: 3 rows, 3 columns, 9 cells.");
+        plan.StatusText.Should().Be("Ready to render portable PDF page 5: 3 rows, 3 columns, 9 cells.");
         plan.Rows.Should().Equal(
             new PortablePdfPageRow(1, PortablePdfPageAxisRole.Title),
-            new PortablePdfPageRow(2, PortablePdfPageAxisRole.Body),
-            new PortablePdfPageRow(3, PortablePdfPageAxisRole.Body));
+            new PortablePdfPageRow(4, PortablePdfPageAxisRole.Body),
+            new PortablePdfPageRow(5, PortablePdfPageAxisRole.Body));
         plan.Columns.Should().Equal(
             new PortablePdfPageColumn(1, PortablePdfPageAxisRole.Title),
             new PortablePdfPageColumn(4, PortablePdfPageAxisRole.Body),
@@ -46,8 +46,14 @@ public sealed class PortablePdfPageContentPlannerTests
         plan.Cells.Single(cell => cell.Row == 1 && cell.Column == 4)
             .Should()
             .BeEquivalentTo(new PortablePdfPageCell(1, 4, "Q3", StyleId.Default, true, false));
-        plan.Cells.Single(cell => cell.Row == 2 && cell.Column == 4)
+        plan.Cells.Single(cell => cell.Row == 4 && cell.Column == 1)
+            .Should()
+            .BeEquivalentTo(new PortablePdfPageCell(4, 1, "North", StyleId.Default, false, true));
+        plan.Cells.Single(cell => cell.Row == 4 && cell.Column == 4)
+            .DisplayText.Should().Be("42");
+        plan.Cells.Single(cell => cell.Row == 5 && cell.Column == 5)
             .DisplayText.Should().Be("");
+        plan.Cells.Should().NotContain(cell => cell.Row == 2 || cell.Row == 3 || cell.Column == 2 || cell.Column == 3);
     }
 
     [Fact]
