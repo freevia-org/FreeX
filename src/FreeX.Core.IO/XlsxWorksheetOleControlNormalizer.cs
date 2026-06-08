@@ -394,7 +394,7 @@ internal static class XlsxWorksheetOleControlNormalizer
                 continue;
             }
 
-            var reboundId = relationship.Attribute("Id")?.Value;
+            var reboundId = GetPackageRelationshipId(relationship);
             if (string.IsNullOrWhiteSpace(reboundId))
             {
                 oleObject.Remove();
@@ -456,10 +456,7 @@ internal static class XlsxWorksheetOleControlNormalizer
         foreach (var objectProperties in objectPropertiesElements)
         {
             var relationshipId = objectProperties.Attribute(RelNs + "id")?.Value;
-            var relationship = string.IsNullOrWhiteSpace(relationshipId)
-                ? null
-                : drawingRelationships.FirstOrDefault(candidate =>
-                    string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.OrdinalIgnoreCase));
+            var relationship = FindPackageRelationshipById(drawingRelationships, relationshipId);
 
             if (relationship is null)
             {
@@ -468,7 +465,7 @@ internal static class XlsxWorksheetOleControlNormalizer
                     worksheetPath,
                     archive,
                     relationshipId);
-                relationship = drawingRelationships.FirstOrDefault();
+                relationship = FindFirstPackageRelationship(drawingRelationships);
             }
 
             if (relationship is null)
@@ -496,7 +493,7 @@ internal static class XlsxWorksheetOleControlNormalizer
                 }
             }
 
-            var reboundId = relationship?.Attribute("Id")?.Value;
+            var reboundId = relationship is null ? null : GetPackageRelationshipId(relationship);
             if (string.IsNullOrWhiteSpace(reboundId))
             {
                 objectProperties.SetAttributeValue(RelNs + "id", null);
@@ -598,7 +595,7 @@ internal static class XlsxWorksheetOleControlNormalizer
                 continue;
             }
 
-            var reboundId = relationship.Attribute("Id")?.Value;
+            var reboundId = GetPackageRelationshipId(relationship);
             if (string.IsNullOrWhiteSpace(reboundId))
             {
                 control.Remove();
@@ -633,6 +630,26 @@ internal static class XlsxWorksheetOleControlNormalizer
             yield return nestedElement.Attribute(RelNs + "id")?.Value;
     }
 
+    private static XElement? FindPackageRelationshipById(
+        IEnumerable<XElement> relationships,
+        string? relationshipId)
+    {
+        if (string.IsNullOrWhiteSpace(relationshipId))
+            return null;
+
+        return relationships.FirstOrDefault(relationship =>
+            PackageRelationshipIdEquals(relationship, relationshipId));
+    }
+
+    private static XElement? FindFirstPackageRelationship(IReadOnlyList<XElement> relationships)
+        => relationships.FirstOrDefault();
+
+    private static bool PackageRelationshipIdEquals(XElement relationship, string relationshipId)
+        => string.Equals(GetPackageRelationshipId(relationship), relationshipId, StringComparison.OrdinalIgnoreCase);
+
+    private static string? GetPackageRelationshipId(XElement relationship)
+        => relationship.Attribute("Id")?.Value;
+
     private static XElement? FindUnusedValidPackageRelationship(
         IReadOnlyList<XElement> relationships,
         IEnumerable<string?> relationshipIds,
@@ -643,8 +660,7 @@ internal static class XlsxWorksheetOleControlNormalizer
             if (string.IsNullOrWhiteSpace(relationshipId) || usedRelationshipIds.Contains(relationshipId))
                 continue;
 
-            var relationship = relationships.FirstOrDefault(candidate =>
-                string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.OrdinalIgnoreCase));
+            var relationship = FindPackageRelationshipById(relationships, relationshipId);
             if (relationship is not null)
                 return relationship;
         }
@@ -657,7 +673,7 @@ internal static class XlsxWorksheetOleControlNormalizer
         ISet<string> usedRelationshipIds)
         => relationships.FirstOrDefault(relationship =>
         {
-            var relationshipId = relationship.Attribute("Id")?.Value;
+            var relationshipId = GetPackageRelationshipId(relationship);
             return !string.IsNullOrWhiteSpace(relationshipId) && !usedRelationshipIds.Contains(relationshipId);
         });
 
@@ -806,10 +822,9 @@ internal static class XlsxWorksheetOleControlNormalizer
         if (string.IsNullOrWhiteSpace(relationshipId))
             return false;
 
-        var relationship = relationshipsXml.Root?
-            .Elements(PackageRelNs + "Relationship")
-            .FirstOrDefault(candidate =>
-                string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.OrdinalIgnoreCase));
+        var relationship = FindPackageRelationshipById(
+            relationshipsXml.Root?.Elements(PackageRelNs + "Relationship") ?? [],
+            relationshipId);
         if (relationship is null ||
             !IsDrawingRelationshipType(relationship) ||
             IsValidDrawingRelationship(worksheetPath, relationship, archive))
