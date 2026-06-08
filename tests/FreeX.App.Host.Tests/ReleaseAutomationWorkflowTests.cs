@@ -74,6 +74,11 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("include_macos_preview=true requires a successful macOS App Preview run");
         workflow.Should().Contain("gh api \"repos/$env:GITHUB_REPOSITORY/actions/workflows/macos-app.yml/runs?branch=main&status=success&per_page=50\"");
         workflow.Should().Contain("gh run download $($macOsRun.id) --name $artifactName --dir $runtimeRoot");
+        workflow.Should().Contain("attempt ${macOsRunAttempt}: $macOsRunUrl");
+        workflow.Should().NotContain("attempt $macOsRunAttempt: $macOsRunUrl");
+        workflow.Should().Contain("function Find-DownloadedArtifactFile");
+        workflow.Should().Contain("Get-ChildItem -LiteralPath $Root -Recurse -File -Filter $FileName");
+        workflow.Should().Contain("Find-DownloadedArtifactFile -Root $runtimeRoot -FileName \"freex-$runtime-macos-app.zip\" -ArtifactName $artifactName");
         workflow.Should().Contain("FreeX-latest-macos-$assetLabel.zip");
         workflow.Should().Contain("FreeX-latest-macos-$assetLabel-instructions.md");
         workflow.Should().Contain("FreeX-latest-macos-$assetLabel-evidence.txt");

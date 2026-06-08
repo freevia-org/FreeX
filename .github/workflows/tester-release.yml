@@ -362,6 +362,25 @@ jobs:
             Set-Content -LiteralPath "$AssetPath.sha256" -Value "$($hash.Hash.ToLowerInvariant())  $assetName" -Encoding ASCII
           }
 
+          function Find-DownloadedArtifactFile {
+            param(
+              [Parameter(Mandatory = $true)][string]$Root,
+              [Parameter(Mandatory = $true)][string]$FileName,
+              [Parameter(Mandatory = $true)][string]$ArtifactName
+            )
+
+            $matches = @(Get-ChildItem -LiteralPath $Root -Recurse -File -Filter $FileName)
+            if ($matches.Count -eq 0) {
+              throw "macOS artifact '$ArtifactName' is missing required file '$FileName' under '$Root'."
+            }
+            if ($matches.Count -gt 1) {
+              $matchList = ($matches | ForEach-Object { $_.FullName }) -join ', '
+              throw "macOS artifact '$ArtifactName' contains multiple '$FileName' files: $matchList."
+            }
+
+            return $matches[0].FullName
+          }
+
           $macOsNotes = @("macOS preview assets: not attached for this release.")
           if ($includeMacOsPreview) {
             $macOsRunInput = "${{ inputs.macos_preview_run_id }}".Trim()
@@ -392,7 +411,7 @@ jobs:
             New-Item -ItemType Directory -Force -Path $macOsDownloadRoot | Out-Null
 
             $macOsNotes = @(
-              "macOS internal-preview assets are attached from macOS App Preview run $($macOsRun.id) attempt $macOsRunAttempt: $macOsRunUrl",
+              "macOS internal-preview assets are attached from macOS App Preview run $($macOsRun.id) attempt ${macOsRunAttempt}: $macOsRunUrl",
               "These macOS builds are unsigned/ad-hoc internal previews until Developer ID signing and notarization are configured."
             )
 
@@ -406,14 +425,9 @@ jobs:
                 throw "Failed to download macOS artifact '$artifactName'."
               }
 
-              $innerZip = Join-Path $runtimeRoot "freex-$runtime-macos-app.zip"
-              $instructions = Join-Path $runtimeRoot "freex-$runtime-macos-tester-instructions.md"
-              $evidence = Join-Path $runtimeRoot "freex-$runtime-macos-evidence.txt"
-              foreach ($requiredPath in @($innerZip, $instructions, $evidence)) {
-                if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
-                  throw "macOS artifact '$artifactName' is missing required file '$requiredPath'."
-                }
-              }
+              $innerZip = Find-DownloadedArtifactFile -Root $runtimeRoot -FileName "freex-$runtime-macos-app.zip" -ArtifactName $artifactName
+              $instructions = Find-DownloadedArtifactFile -Root $runtimeRoot -FileName "freex-$runtime-macos-tester-instructions.md" -ArtifactName $artifactName
+              $evidence = Find-DownloadedArtifactFile -Root $runtimeRoot -FileName "freex-$runtime-macos-evidence.txt" -ArtifactName $artifactName
 
               $versionedZip = Copy-ReleaseAsset -SourcePath $innerZip -DestinationName "freex-$releaseId-$shortSha-macos-$assetLabel.zip"
               $latestZip = Copy-ReleaseAsset -SourcePath $innerZip -DestinationName "FreeX-latest-macos-$assetLabel.zip"
