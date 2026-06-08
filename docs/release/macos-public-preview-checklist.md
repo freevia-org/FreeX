@@ -99,7 +99,9 @@ Use a representative `.fxl` workbook with recognizable cell contents or sheet na
 | Double-click `.fxl` in Finder | FreeX launches or activates and opens the selected workbook, not a blank replacement workbook |  | Pass / Fail |  |
 | Confirm workbook identity | Window title, visible sheet, cell value, or recent-file entry matches the double-clicked `.fxl` file |  | Pass / Fail |  |
 | Right-click `.fxl` > Open With > FreeX | FreeX opens the file when it is not already running |  | Pass / Fail |  |
+| Drag supported `.fxl`/`.xlsx` workbook onto `FreeX.app` or Dock icon | FreeX launches or activates and opens the dropped workbook, not a blank replacement workbook |  | Pass / Fail |  |
 | Repeat while FreeX is already running | The selected file opens in the existing app session without losing unsaved work |  | Pass / Fail |  |
+| Drag supported workbook from Finder onto already-running FreeX window | The already-running FreeX window accepts the Finder drop and opens the workbook without losing unsaved work |  | Pass / Fail |  |
 | Optional spreadsheet file Open With | Representative `.xlsx` or `.csv` opens through Open With when included in the candidate scope |  | Pass / Fail / N/A |  |
 
 ## Workbook Smoke
