@@ -2592,6 +2592,39 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_WiresOpenHyperlinkRouteThroughWorkbookSessionWithoutExternalLaunch()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "HyperlinkNavigationPlanner.cs"));
+
+        plannerSource.Should().Contain("public enum HyperlinkNavigationKind");
+        plannerSource.Should().Contain("HyperlinkTargetKind.PlaceInThisDocument");
+        plannerSource.Should().Contain("HyperlinkNavigationKind.External");
+
+        sessionSource.Should().Contain("public bool CanOpenSelectedHyperlink");
+        sessionSource.Should().Contain("public WorkbookNavigationResult OpenSelectedHyperlink()");
+        sessionSource.Should().Contain("return GoToReference(plan.Target);");
+        sessionSource.Should().Contain("External hyperlinks are not supported on this platform.");
+
+        source.Should().Contain("private readonly NativeMenuItem _openHyperlinkMenuItem = new();");
+        source.Should().Contain("_openHyperlinkMenuItem.Header = \"Open Hyperlink\";");
+        source.Should().Contain("_openHyperlinkMenuItem.Click += (_, _) => OpenSelectedHyperlink();");
+        source.Should().Contain("editMenu.Items.Add(_openHyperlinkMenuItem);");
+        source.Should().Contain("_openHyperlinkMenuItem.IsEnabled = isIdle && _session.CanOpenSelectedHyperlink;");
+        source.Should().Contain("private void OpenSelectedHyperlink()");
+        source.Should().Contain("var result = _session.OpenSelectedHyperlink();");
+
+        var openHyperlinkSource = ExtractSourceBlock(
+            source,
+            "private void OpenSelectedHyperlink()",
+            "private async Task ShowGoToSpecialDialogAsync()");
+        openHyperlinkSource.Should().NotContain("LaunchUriAsync");
+        openHyperlinkSource.Should().NotContain("Launcher");
+        openHyperlinkSource.Should().NotContain("Process.Start");
+    }
+
+    [Fact]
     public void MainWindow_WiresBoldThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
