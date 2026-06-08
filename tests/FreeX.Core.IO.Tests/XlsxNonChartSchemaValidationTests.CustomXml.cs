@@ -60,6 +60,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceItemRelationships.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        adapter.Load(saved)
+            .GetSheetAt(0)
+            .GetValue(3, 3)
+            .Should()
+            .Be(new NumberValue(42));
     }
 
     [Fact]
