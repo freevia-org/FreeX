@@ -1,5 +1,7 @@
-using System.Xml.Linq;
+using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using FluentAssertions;
 
 namespace FreeX.App.Services.Tests;
@@ -12,7 +14,10 @@ public sealed class MacOsBundleMetadataTests
         var plistPath = RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Packaging", "macos", "Info.plist");
         var plist = XDocument.Load(plistPath);
         var project = XDocument.Load(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "FreeX.App.Avalonia.csproj"));
+        var expectedLocalizations = HostResourceLocalizations();
 
+        PlistString(plist, "CFBundleDevelopmentRegion").Should().Be(HostNeutralResourcesLanguage());
+        PlistStringArray(plist, "CFBundleLocalizations").Should().Equal(expectedLocalizations);
         PlistString(plist, "CFBundleDisplayName").Should().Be("FreeX");
         PlistString(plist, "CFBundleExecutable").Should().Be("FreeX");
         PlistString(plist, "CFBundleExecutable").Should().Be(ProjectProperty(project, "AssemblyName"));
@@ -427,10 +432,15 @@ public sealed class MacOsBundleMetadataTests
             : null;
 
     private static IReadOnlyList<string> PlistStringArray(XElement dict, string key) =>
-        PlistValue(dict, key)?
-            .Elements("string")
-            .Select(element => element.Value)
-            .ToList() ?? [];
+        PlistStringArray(PlistValue(dict, key));
+
+    private static IReadOnlyList<string> PlistStringArray(XDocument plist, string key) =>
+        PlistStringArray(PlistValue(plist, key));
+
+    private static IReadOnlyList<string> PlistStringArray(XElement? value) =>
+        value?.Name.LocalName == "array"
+            ? value.Elements("string").Select(element => element.Value).ToList()
+            : [];
 
     private static XElement? PlistArray(XDocument plist, string key) =>
         PlistValue(plist, key)?.Name.LocalName == "array"
@@ -464,6 +474,36 @@ public sealed class MacOsBundleMetadataTests
             .Elements(name)
             .Select(element => element.Value)
             .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+    private static IReadOnlyList<string> HostResourceLocalizations()
+    {
+        var neutralCulture = HostNeutralResourcesLanguage();
+        var neutralResourcePath = RepositoryFileLocator.Find("src", "FreeX.App.Host", "Resources", "Strings.resx");
+        var resourcesDirectory = Path.GetDirectoryName(neutralResourcePath)!;
+        var satelliteCultures = Directory
+            .EnumerateFiles(resourcesDirectory, "Strings.*.resx")
+            .Select(Path.GetFileNameWithoutExtension)
+            .Select(fileName => fileName!["Strings.".Length..])
+            .Order(StringComparer.Ordinal)
+            .ToList();
+        var localizations = satelliteCultures
+            .Prepend(neutralCulture)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var localization in localizations)
+            CultureInfo.GetCultureInfo(localization);
+
+        return localizations;
+    }
+
+    private static string HostNeutralResourcesLanguage()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Host", "AssemblyInfo.cs"));
+        var match = Regex.Match(source, @"NeutralResourcesLanguage\(""(?<culture>[^""]+)""\)");
+        match.Success.Should().BeTrue("the host should declare its neutral resource culture");
+        return match.Groups["culture"].Value;
+    }
 
     private static string ExtractWorkflowStepBlock(string workflow, string stepName)
     {
