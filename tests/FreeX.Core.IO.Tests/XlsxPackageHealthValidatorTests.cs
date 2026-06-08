@@ -527,7 +527,9 @@ public sealed class XlsxPackageHealthValidatorTests
                 ("xl/pivotCache/pivotCacheDefinition1.xml", PivotCacheDefinitionXml()),
                 ("xl/worksheets/_rels/sheet1.xml.rels", RelationshipsXml(
                     Relationship("rIdPivotTable1", PivotTableRelationshipType, "../pivotTables/pivotTable1.xml"))),
-                ("xl/pivotTables/pivotTable1.xml", PivotTableXml("0"))
+                ("xl/pivotTables/pivotTable1.xml", PivotTableXml("0")),
+                ("xl/pivotTables/_rels/pivotTable1.xml.rels", RelationshipsXml(
+                    Relationship("rIdPivotCacheDefinition1", PivotCacheDefinitionRelationshipType, "../pivotCache/pivotCacheDefinition1.xml")))
             ],
             contentTypeOverrides:
             [
@@ -536,6 +538,68 @@ public sealed class XlsxPackageHealthValidatorTests
             ]);
 
         XlsxPackageHealthValidator.Validate(package).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Validate_FlagsPivotTableWithoutCacheDefinitionRelationshipPart()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookXml: WorkbookWithPivotCachesXml("""<pivotCache cacheId="0" r:id="rIdPivotCache1" />"""),
+            worksheetXml: WorksheetWithPivotTableXml("rIdPivotTable1"),
+            workbookRelationships:
+            [
+                Relationship("rId1", WorksheetRelationshipType, "worksheets/sheet1.xml"),
+                Relationship("rIdPivotCache1", PivotCacheDefinitionRelationshipType, "pivotCache/pivotCacheDefinition1.xml")
+            ],
+            extraEntries:
+            [
+                ("xl/pivotCache/pivotCacheDefinition1.xml", PivotCacheDefinitionXml()),
+                ("xl/worksheets/_rels/sheet1.xml.rels", RelationshipsXml(
+                    Relationship("rIdPivotTable1", PivotTableRelationshipType, "../pivotTables/pivotTable1.xml"))),
+                ("xl/pivotTables/pivotTable1.xml", PivotTableXml("0"))
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/pivotCache/pivotCacheDefinition1.xml" ContentType="{PivotCacheDefinitionContentType}" />""",
+                $"""<Override PartName="/xl/pivotTables/pivotTable1.xml" ContentType="{PivotTableContentType}" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("xl/pivotTables/pivotTable1.xml has no relationship part for pivot cache definition", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsPivotTableCacheDefinitionRelationshipMismatch()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookXml: WorkbookWithPivotCachesXml("""<pivotCache cacheId="0" r:id="rIdPivotCache1" />"""),
+            worksheetXml: WorksheetWithPivotTableXml("rIdPivotTable1"),
+            workbookRelationships:
+            [
+                Relationship("rId1", WorksheetRelationshipType, "worksheets/sheet1.xml"),
+                Relationship("rIdPivotCache1", PivotCacheDefinitionRelationshipType, "pivotCache/pivotCacheDefinition1.xml")
+            ],
+            extraEntries:
+            [
+                ("xl/pivotCache/pivotCacheDefinition1.xml", PivotCacheDefinitionXml()),
+                ("xl/pivotCache/pivotCacheDefinition2.xml", PivotCacheDefinitionXml()),
+                ("xl/worksheets/_rels/sheet1.xml.rels", RelationshipsXml(
+                    Relationship("rIdPivotTable1", PivotTableRelationshipType, "../pivotTables/pivotTable1.xml"))),
+                ("xl/pivotTables/pivotTable1.xml", PivotTableXml("0")),
+                ("xl/pivotTables/_rels/pivotTable1.xml.rels", RelationshipsXml(
+                    Relationship("rIdPivotCacheDefinition2", PivotCacheDefinitionRelationshipType, "../pivotCache/pivotCacheDefinition2.xml")))
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/pivotCache/pivotCacheDefinition1.xml" ContentType="{PivotCacheDefinitionContentType}" />""",
+                $"""<Override PartName="/xl/pivotCache/pivotCacheDefinition2.xml" ContentType="{PivotCacheDefinitionContentType}" />""",
+                $"""<Override PartName="/xl/pivotTables/pivotTable1.xml" ContentType="{PivotTableContentType}" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("xl/pivotTables/pivotTable1.xml pivot cache definition relationship rIdPivotCacheDefinition2 targets xl/pivotCache/pivotCacheDefinition2.xml, but workbook cacheId 0 targets xl/pivotCache/pivotCacheDefinition1.xml", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

@@ -1368,7 +1368,8 @@ public static class XlsxPackageHealthValidator
             .Where(entry => !string.IsNullOrEmpty(entry.Name))
             .Select(entry => NormalizePackagePart(entry.FullName))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var workbookPivotCacheIds = FindWorkbookPivotCacheIds(archive, entryNames);
+        var workbookPivotCacheDefinitions = FindWorkbookPivotCacheDefinitionParts(archive, entryNames);
+        var workbookPivotCacheIds = workbookPivotCacheDefinitions.Keys.ToHashSet();
         var worksheetParts = entryNames
             .Where(part => part.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase))
             .Where(part => part.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
@@ -1376,32 +1377,59 @@ public static class XlsxPackageHealthValidator
             .OrderBy(part => part, StringComparer.OrdinalIgnoreCase);
 
         foreach (var worksheetPart in worksheetParts)
-            AddWorksheetPivotTablePackageIssues(archive, contentTypesXml, entryNames, workbookPivotCacheIds, worksheetPart, issues);
+            AddWorksheetPivotTablePackageIssues(archive, contentTypesXml, entryNames, workbookPivotCacheIds, workbookPivotCacheDefinitions, worksheetPart, issues);
     }
 
-    private static HashSet<int> FindWorkbookPivotCacheIds(ZipArchive archive, IReadOnlySet<string> entryNames)
+    private static Dictionary<int, string> FindWorkbookPivotCacheDefinitionParts(ZipArchive archive, IReadOnlySet<string> entryNames)
     {
-        var cacheIds = new HashSet<int>();
+        var cacheDefinitions = new Dictionary<int, string>();
         if (!TryFindWorkbookPart(archive, entryNames, out var workbookPart) ||
             !TryLoadPackageXml(archive, workbookPart, [], out var workbookXml) ||
             workbookXml.Root?.Name != WorkbookNs + "workbook")
         {
-            return cacheIds;
+            return cacheDefinitions;
         }
+
+        var workbookRelsPart = GetRelationshipPartPath(workbookPart);
+        if (!TryLoadPackageXml(archive, workbookRelsPart, [], out var workbookRelsXml) ||
+            workbookRelsXml.Root?.Name != PackageRelationshipNs + "Relationships")
+        {
+            return cacheDefinitions;
+        }
+
+        var workbookRelationships = workbookRelsXml.Root
+            .Elements(PackageRelationshipNs + "Relationship")
+            .Where(relationship => !string.IsNullOrWhiteSpace(relationship.Attribute("Id")?.Value))
+            .GroupBy(relationship => relationship.Attribute("Id")!.Value, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
 
         foreach (var pivotCache in workbookXml.Root
                      .Elements(WorkbookNs + "pivotCaches")
                      .SelectMany(pivotCaches => pivotCaches.Elements(WorkbookNs + "pivotCache")))
         {
             var cacheIdText = pivotCache.Attribute("cacheId")?.Value;
-            if (int.TryParse(cacheIdText, NumberStyles.None, CultureInfo.InvariantCulture, out var cacheId) &&
-                cacheId >= 0)
+            var relationshipId = pivotCache.Attribute(OfficeRelationshipNs + "id")?.Value;
+            if (!int.TryParse(cacheIdText, NumberStyles.None, CultureInfo.InvariantCulture, out var cacheId) ||
+                cacheId < 0 ||
+                string.IsNullOrWhiteSpace(relationshipId) ||
+                !workbookRelationships.TryGetValue(relationshipId, out var relationship) ||
+                !string.Equals(relationship.Attribute("Type")?.Value, PivotCacheDefinitionRelationshipType, StringComparison.OrdinalIgnoreCase))
             {
-                cacheIds.Add(cacheId);
+                continue;
             }
+
+            var target = relationship.Attribute("Target")?.Value;
+            if (string.IsNullOrWhiteSpace(target) ||
+                !TryResolvePackageRelationshipTarget(workbookRelsPart, target.Trim(), out var cacheDefinitionPart, out _) ||
+                !entryNames.Contains(cacheDefinitionPart))
+            {
+                continue;
+            }
+
+            cacheDefinitions.TryAdd(cacheId, cacheDefinitionPart);
         }
 
-        return cacheIds;
+        return cacheDefinitions;
     }
 
     private static void AddWorksheetPivotTablePackageIssues(
@@ -1409,6 +1437,7 @@ public static class XlsxPackageHealthValidator
         XDocument contentTypesXml,
         IReadOnlySet<string> entryNames,
         IReadOnlySet<int> workbookPivotCacheIds,
+        IReadOnlyDictionary<int, string> workbookPivotCacheDefinitions,
         string worksheetPart,
         List<string> issues)
     {
@@ -1444,7 +1473,7 @@ public static class XlsxPackageHealthValidator
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
 
         foreach (var reference in pivotTableReferences)
-            ValidateWorksheetPivotTableReference(archive, contentTypesXml, entryNames, workbookPivotCacheIds, worksheetRelsPart, reference, worksheetRelationships, issues);
+            ValidateWorksheetPivotTableReference(archive, contentTypesXml, entryNames, workbookPivotCacheIds, workbookPivotCacheDefinitions, worksheetRelsPart, reference, worksheetRelationships, issues);
     }
 
     private static void ValidateWorksheetPivotTableReference(
@@ -1452,6 +1481,7 @@ public static class XlsxPackageHealthValidator
         XDocument contentTypesXml,
         IReadOnlySet<string> entryNames,
         IReadOnlySet<int> workbookPivotCacheIds,
+        IReadOnlyDictionary<int, string> workbookPivotCacheDefinitions,
         string worksheetRelsPart,
         WorksheetPivotTableReference reference,
         IReadOnlyDictionary<string, XElement> worksheetRelationships,
@@ -1525,7 +1555,95 @@ public static class XlsxPackageHealthValidator
         }
 
         if (!workbookPivotCacheIds.Contains(cacheId))
+        {
             issues.Add($"{pivotTablePart} references cacheId {cacheId}, but workbook has no matching pivotCache");
+            return;
+        }
+
+        ValidatePivotTableCacheDefinitionRelationship(
+            archive,
+            contentTypesXml,
+            entryNames,
+            workbookPivotCacheDefinitions,
+            pivotTablePart,
+            cacheId,
+            issues);
+    }
+
+    private static void ValidatePivotTableCacheDefinitionRelationship(
+        ZipArchive archive,
+        XDocument contentTypesXml,
+        IReadOnlySet<string> entryNames,
+        IReadOnlyDictionary<int, string> workbookPivotCacheDefinitions,
+        string pivotTablePart,
+        int cacheId,
+        List<string> issues)
+    {
+        var pivotTableRelsPart = GetRelationshipPartPath(pivotTablePart);
+        if (!TryLoadPackageXml(archive, pivotTableRelsPart, issues, out var pivotTableRelsXml) ||
+            pivotTableRelsXml.Root?.Name != PackageRelationshipNs + "Relationships")
+        {
+            issues.Add($"{pivotTablePart} has no relationship part for pivot cache definition");
+            return;
+        }
+
+        var cacheDefinitionRelationships = pivotTableRelsXml.Root
+            .Elements(PackageRelationshipNs + "Relationship")
+            .Where(relationship => string.Equals(relationship.Attribute("Type")?.Value, PivotCacheDefinitionRelationshipType, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (cacheDefinitionRelationships.Length == 0)
+        {
+            issues.Add($"{pivotTablePart} has no pivot cache definition relationship");
+            return;
+        }
+
+        if (cacheDefinitionRelationships.Length > 1)
+            issues.Add($"{pivotTablePart} has {cacheDefinitionRelationships.Length} pivot cache definition relationships; expected 1");
+
+        var relationship = cacheDefinitionRelationships[0];
+        var relationshipId = relationship.Attribute("Id")?.Value ?? "(none)";
+        if (string.Equals(relationship.Attribute("TargetMode")?.Value?.Trim(), "External", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{pivotTablePart} pivot cache definition relationship {relationshipId} must target a package part internally");
+            return;
+        }
+
+        var target = relationship.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            issues.Add($"{pivotTablePart} pivot cache definition relationship {relationshipId} has no Target");
+            return;
+        }
+
+        if (!TryResolvePackageRelationshipTarget(pivotTableRelsPart, target.Trim(), out var cacheDefinitionPart, out var targetIssue))
+        {
+            issues.Add($"{pivotTablePart} pivot cache definition relationship {relationshipId} has invalid Target {target}: {targetIssue}");
+            return;
+        }
+
+        if (!entryNames.Contains(cacheDefinitionPart))
+        {
+            issues.Add($"{pivotTablePart} pivot cache definition relationship {relationshipId} targets missing package part {cacheDefinitionPart}");
+            return;
+        }
+
+        if (workbookPivotCacheDefinitions.TryGetValue(cacheId, out var expectedCacheDefinitionPart) &&
+            !string.Equals(cacheDefinitionPart, expectedCacheDefinitionPart, StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{pivotTablePart} pivot cache definition relationship {relationshipId} targets {cacheDefinitionPart}, but workbook cacheId {cacheId} targets {expectedCacheDefinitionPart}");
+        }
+
+        var contentType = GetEffectivePackageContentType(contentTypesXml, cacheDefinitionPart);
+        if (!string.Equals(contentType, PivotCacheDefinitionContentType, StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{cacheDefinitionPart} has content type {contentType ?? "(none)"}; expected {PivotCacheDefinitionContentType}");
+        }
+
+        if (!TryLoadPackageXml(archive, cacheDefinitionPart, issues, out var cacheDefinitionXml))
+            return;
+
+        if (cacheDefinitionXml.Root?.Name != WorkbookNs + "pivotCacheDefinition")
+            issues.Add($"{cacheDefinitionPart} has an invalid pivot cache definition root element");
     }
 
     private static void AddWorksheetDrawingPackageIssues(ZipArchive archive, List<string> issues)
