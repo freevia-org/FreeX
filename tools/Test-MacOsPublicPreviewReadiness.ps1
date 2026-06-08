@@ -492,7 +492,7 @@ function Test-ArtifactIdentityConsistency {
     $first = $knownIdentities[0]
     foreach ($identity in $knownIdentities) {
         if ($identity.RunId -ne $first.RunId -or $identity.RunAttempt -ne $first.RunAttempt) {
-            Add-ValidationError "Downloaded macOS app artifacts are from mixed GitHub Actions runs: $($first.Runtime) uses run $($first.RunId) attempt $($first.RunAttempt) from '$($first.WrapperDirectory)', but $($identity.Runtime) uses run $($identity.RunId) attempt $($identity.RunAttempt) from '$($identity.WrapperDirectory)'. Remove stale artifact folders under $Root or pass -ArtifactRoot to a single downloaded run."
+            Add-ValidationError "Downloaded macOS app artifacts are from mixed GitHub Actions runs: $($first.Runtime) uses run $($first.RunId) attempt $($first.RunAttempt) from '$($first.WrapperDirectory)', but $($identity.Runtime) uses run $($identity.RunId) attempt $($identity.RunAttempt) from '$($identity.WrapperDirectory)'. cleanup_action=remove_stale_artifact_folders. Remove stale artifact folders under $Root or pass -ArtifactRoot to a single downloaded run."
         }
     }
 }
@@ -609,21 +609,22 @@ function Get-FirstSha256HashFromText {
 function Get-Sha256FileHash {
     param([Parameter(Mandatory = $true)][string]$Path)
 
-    if ($null -ne (Get-Command Get-FileHash -ErrorAction SilentlyContinue)) {
-        return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
-    }
-
-    $stream = [System.IO.File]::OpenRead($Path)
+    $resolvedPath = (Resolve-Path -LiteralPath $Path).ProviderPath
+    $stream = [System.IO.File]::OpenRead($resolvedPath)
     try {
         $sha256 = [System.Security.Cryptography.SHA256]::Create()
         try {
-            return (($sha256.ComputeHash($stream) | ForEach-Object { $_.ToString("x2") }) -join "")
-        } finally {
+            $hashBytes = $sha256.ComputeHash($stream)
+        }
+        finally {
             $sha256.Dispose()
         }
-    } finally {
+    }
+    finally {
         $stream.Dispose()
     }
+
+    return [System.BitConverter]::ToString($hashBytes).Replace("-", "").ToLowerInvariant()
 }
 
 function Test-ChecksumEvidence {
@@ -796,7 +797,7 @@ function Test-ReleasePublicationArtifact {
     $manifestDirectory = $manifestFiles[0].Directory.FullName
     $instructionsDirectory = $instructionsFiles[0].Directory.FullName
     if (-not [System.StringComparer]::OrdinalIgnoreCase.Equals($manifestDirectory, $instructionsDirectory)) {
-        Add-ValidationError "macOS release publication manifest and instructions must be in the same downloaded release-assets wrapper directory. Manifest: '$manifestDirectory'. Instructions: '$instructionsDirectory'. Remove split or stale release-assets artifact folders under $Root."
+        Add-ValidationError "macOS release publication manifest and instructions must be in the same downloaded release-assets wrapper directory. Manifest: '$manifestDirectory'. Instructions: '$instructionsDirectory'. cleanup_action=remove_split_or_stale_release_assets. Remove split or stale release-assets artifact folders under $Root."
         return
     }
 
