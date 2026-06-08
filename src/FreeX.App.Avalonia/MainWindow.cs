@@ -13764,6 +13764,12 @@ public sealed class MainWindow : Window
 
     private async Task OpenExternalHelpLinkAsync(string url, string title)
     {
+        if (!IsHttpOrHttpsHelpUrl(url))
+        {
+            ShowHelpIssue($"{title} link is blocked.");
+            return;
+        }
+
         var result = await OpenExternalUriAsync(url);
         switch (result)
         {
@@ -13780,6 +13786,18 @@ public sealed class MainWindow : Window
                 ShowHelpIssue($"{title} link could not be opened.");
                 return;
         }
+    }
+
+    private static bool IsHttpOrHttpsHelpUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url) ||
+            !Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+
+        return string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<ExternalUriLaunchResult> OpenExternalUriAsync(string target)

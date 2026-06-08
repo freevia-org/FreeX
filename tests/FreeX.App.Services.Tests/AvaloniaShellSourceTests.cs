@@ -657,6 +657,33 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_KeepsHelpLinksHttpOnlyBeforeSharedExternalLauncher()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        var helpLinkSource = ExtractSourceBlock(
+            source,
+            "private async Task OpenExternalHelpLinkAsync(string url, string title)",
+            "private async Task<ExternalUriLaunchResult> OpenExternalUriAsync(string target)");
+        var workbookHyperlinkSource = ExtractSourceBlock(
+            source,
+            "private async Task OpenExternalHyperlinkAsync(string target)",
+            "private async Task ShowGoToSpecialDialogAsync()");
+
+        helpLinkSource.Should().Contain("if (!IsHttpOrHttpsHelpUrl(url))");
+        helpLinkSource.Should().Contain("ShowHelpIssue($\"{title} link is blocked.\");");
+        helpLinkSource.Should().Contain("private static bool IsHttpOrHttpsHelpUrl(string url)");
+        helpLinkSource.Should().Contain("Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri)");
+        helpLinkSource.Should().Contain("string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)");
+        helpLinkSource.Should().Contain("string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)");
+        helpLinkSource.IndexOf("if (!IsHttpOrHttpsHelpUrl(url))", StringComparison.Ordinal)
+            .Should().BeLessThan(helpLinkSource.IndexOf("var result = await OpenExternalUriAsync(url);", StringComparison.Ordinal));
+
+        workbookHyperlinkSource.Should().Contain("var result = await OpenExternalUriAsync(target);");
+        workbookHyperlinkSource.Should().NotContain("IsHttpOrHttpsHelpUrl");
+    }
+
+    [Fact]
     public void MainWindow_BuildsAvaloniaFilePickerTypesFromCoreIoDescriptors()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
@@ -2691,8 +2718,10 @@ public sealed class AvaloniaShellSourceTests
         plannerSource.Should().Contain("public enum HyperlinkNavigationKind");
         plannerSource.Should().Contain("HyperlinkTargetKind.PlaceInThisDocument");
         plannerSource.Should().Contain("HyperlinkNavigationKind.External");
+        plannerSource.Should().Contain("\"http\", \"https\", \"mailto\", \"ftp\"");
         launcherSource.Should().Contain("public static class ExternalUriLauncher");
         launcherSource.Should().Contain("Func<Uri, Task<bool>>? launchAsync");
+        launcherSource.Should().Contain("HyperlinkNavigationPlanner.IsAllowedScheme(normalizedTarget)");
 
         sessionSource.Should().Contain("public bool CanOpenSelectedHyperlink");
         sessionSource.Should().Contain("public bool TryGetSelectedHyperlinkPlan(out HyperlinkNavigationPlan? plan)");
