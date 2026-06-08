@@ -316,7 +316,7 @@ jobs:
           app_path="$unzip_root/FreeX.app"
           rm -rf "$unzip_root"
           mkdir -p "$unzip_root"
-          unzip -q "$zip_path" -d "$unzip_root"
+          ditto -x -k "$zip_path" "$unzip_root"
           test -x "$unzip_root/FreeX.app/Contents/MacOS/FreeX"
           test -f "$unzip_root/FreeX.app/Contents/MacOS/FreeX.dll"
           codesign --verify --deep --strict "$unzip_root/FreeX.app"
@@ -891,7 +891,7 @@ jobs:
 
           ## Open
 
-          Unzip $zip_name, then open FreeX.app. If macOS Gatekeeper blocks the preview, check freex-$runtime-macos-evidence.txt first:
+          Extract $zip_name with Finder/Archive Utility, or run ditto -x -k $zip_name . from Terminal, then open FreeX.app. If macOS Gatekeeper blocks the preview, check freex-$runtime-macos-evidence.txt first:
 
           - artifact_channel=$artifact_channel
           - distribution_candidate=$distribution_candidate
