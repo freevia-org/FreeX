@@ -14,6 +14,27 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $validationErrors = New-Object System.Collections.Generic.List[string]
 
+function ConvertTo-GitHubWorkflowCommandValue {
+    param([string]$Value)
+
+    if ($null -eq $Value) {
+        return ""
+    }
+
+    return $Value.Replace("%", "%25").Replace("`r", "%0D").Replace("`n", "%0A")
+}
+
+function Write-GitHubErrorAnnotation {
+    param([Parameter(Mandatory = $true)][string]$Message)
+
+    if ($env:GITHUB_ACTIONS -ne "true") {
+        return
+    }
+
+    $escapedMessage = ConvertTo-GitHubWorkflowCommandValue -Value $Message
+    Write-Host "::error title=macOS public-preview readiness::$escapedMessage"
+}
+
 function Resolve-InputPath {
     param([Parameter(Mandatory = $true)][string]$Path)
 
@@ -33,6 +54,7 @@ function Add-ValidationError {
     param([Parameter(Mandatory = $true)][string]$Message)
 
     $validationErrors.Add($Message)
+    Write-GitHubErrorAnnotation -Message $Message
     Write-Error $Message -ErrorAction Continue
 }
 
