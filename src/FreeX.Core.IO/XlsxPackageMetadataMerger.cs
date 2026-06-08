@@ -1415,7 +1415,7 @@ internal static class XlsxPackageMetadataMerger
 
     private static string RelationshipPartToSourcePart(string relationshipPartPath)
     {
-        var normalized = XlsxPackagePath.NormalizeZipPath(relationshipPartPath.Replace('\\', '/'));
+        var normalized = XlsxPackagePath.NormalizePackagePath(relationshipPartPath);
         if (string.Equals(normalized, "_rels/.rels", StringComparison.OrdinalIgnoreCase))
             return "";
 
