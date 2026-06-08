@@ -1248,13 +1248,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-sheet-format-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetSheetFormatModel(sheet, "generated-worksheet-sheet-format-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-sheet-format-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-sheet-format-001");
         AssertWorksheetSheetFormat(saved, "generated-worksheet-sheet-format-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetSheetFormatModel(
+            reloaded.GetSheetAt(0),
+            "worksheet sheet format model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -2058,6 +2066,15 @@ public partial class XlsxCorpusRunnerTests
         sheetFormat.Attribute("thickTop")!.Value.Should().Be("1", because);
         sheetFormat.Attribute("outlineLevelRow")!.Value.Should().Be("3", because);
         sheetFormat.HasElements.Should().BeFalse(because);
+    }
+
+    private static void AssertWorksheetSheetFormatModel(Sheet sheet, string because)
+    {
+        sheet.SheetFormatMetadata.Should().NotBeNull(because);
+        BagAttr(sheet.SheetFormatMetadata, "sheetFormatPr", "baseColWidth").Should().Be("12", because);
+        BagAttr(sheet.SheetFormatMetadata, "sheetFormatPr", "zeroHeight").Should().Be("1", because);
+        BagAttr(sheet.SheetFormatMetadata, "sheetFormatPr", "thickTop").Should().Be("1", because);
+        BagAttr(sheet.SheetFormatMetadata, "sheetFormatPr", "outlineLevelRow").Should().Be("3", because);
     }
 
     private static void AssertWorksheetPageBreaks(Stream package, string because)
