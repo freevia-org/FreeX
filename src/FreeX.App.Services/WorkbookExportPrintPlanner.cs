@@ -92,6 +92,8 @@ public sealed record WorkbookSheetExportPrintPlanSummary(
     int RowPageCount,
     int ColumnPageCount,
     int PageCount,
+    IReadOnlyList<PrintPageRowPlan> RowPagePlans,
+    IReadOnlyList<PrintPageColumnPlan> ColumnPagePlans,
     WorksheetPageOrder PageOrder)
 {
     public uint RowCount => PrintRange.RowCount;
@@ -388,6 +390,8 @@ public static class WorkbookExportPrintPlanner
                 rowPlans.Count,
                 columnPlans.Count,
                 rowPlans.Count * columnPlans.Count,
+                rowPlans,
+                columnPlans,
                 request.Sheet.PageOrder));
         }
 

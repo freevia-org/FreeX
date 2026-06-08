@@ -54,6 +54,52 @@ public sealed class PortablePdfExportPlannerTests
     }
 
     [Fact]
+    public void CreatePlan_IncludesExactTitleAndBodySpansForMultiPageSheet()
+    {
+        var workbook = new Workbook("Budget");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.PrintTitleRows = new WorksheetRepeatRange(1, 1);
+        sheet.PrintTitleColumns = new WorksheetRepeatRange(1, 1);
+        var selectedRange = GridRange.Parse("A1:E6", sheet.Id);
+        var exportPrintPlan = WorkbookExportPrintPlanner.CreatePlan(
+            workbook,
+            new WorkbookExportPrintIntent(
+                WorkbookExportPrintScope.SelectedRange,
+                WorkbookExportPrintOutputKind.Pdf,
+                SelectedRange: selectedRange),
+            new WorkbookExportPrintPageCapacity(RowsPerPage: 3, ColumnsPerPage: 3),
+            WorkbookExportPrintSurface.MacOs);
+
+        var plan = PortablePdfExportPlanner.CreatePlan(exportPrintPlan);
+
+        plan.IsReady.Should().BeTrue();
+        plan.PageRequests.Should().HaveCount(6);
+        AssertPageSpans(plan.PageRequests[0], new[] { 1u }, new[] { 2u, 3u }, new[] { 1u }, new[] { 2u, 3u });
+        AssertPageSpans(plan.PageRequests[1], new[] { 1u }, new[] { 4u, 5u }, new[] { 1u }, new[] { 2u, 3u });
+        AssertPageSpans(plan.PageRequests[2], new[] { 1u }, new[] { 6u }, new[] { 1u }, new[] { 2u, 3u });
+        AssertPageSpans(plan.PageRequests[3], new[] { 1u }, new[] { 2u, 3u }, new[] { 1u }, new[] { 4u, 5u });
+        AssertPageSpans(plan.PageRequests[4], new[] { 1u }, new[] { 4u, 5u }, new[] { 1u }, new[] { 4u, 5u });
+        AssertPageSpans(plan.PageRequests[5], new[] { 1u }, new[] { 6u }, new[] { 1u }, new[] { 4u, 5u });
+
+        static void AssertPageSpans(
+            PortablePdfExportPageRequest request,
+            uint[] titleRows,
+            uint[] bodyRows,
+            uint[] titleColumns,
+            uint[] bodyColumns)
+        {
+            request.PageSpans.TitleRows.Should().Equal(titleRows);
+            request.PageSpans.BodyRows.Should().Equal(bodyRows);
+            request.PageSpans.TitleColumns.Should().Equal(titleColumns);
+            request.PageSpans.BodyColumns.Should().Equal(bodyColumns);
+            request.TitleRows.Should().Equal(titleRows);
+            request.BodyRows.Should().Equal(bodyRows);
+            request.TitleColumns.Should().Equal(titleColumns);
+            request.BodyColumns.Should().Equal(bodyColumns);
+        }
+    }
+
+    [Fact]
     public void CreatePlan_HonorsOverThenDownSheetPageOrder()
     {
         var workbook = new Workbook("Budget");

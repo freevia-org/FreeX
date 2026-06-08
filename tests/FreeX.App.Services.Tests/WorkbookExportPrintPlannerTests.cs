@@ -61,6 +61,18 @@ public sealed class WorkbookExportPrintPlannerTests
         sheetPlan.PageCount.Should().Be(6);
         sheetPlan.RowCount.Should().Be(6);
         sheetPlan.ColumnCount.Should().Be(5);
+        sheetPlan.RowPagePlans.Should().HaveCount(3);
+        sheetPlan.RowPagePlans[0].TitleRows.Should().Equal(1u);
+        sheetPlan.RowPagePlans[0].BodyRows.Should().Equal(2u, 3u);
+        sheetPlan.RowPagePlans[1].TitleRows.Should().Equal(1u);
+        sheetPlan.RowPagePlans[1].BodyRows.Should().Equal(4u, 5u);
+        sheetPlan.RowPagePlans[2].TitleRows.Should().Equal(1u);
+        sheetPlan.RowPagePlans[2].BodyRows.Should().Equal(6u);
+        sheetPlan.ColumnPagePlans.Should().HaveCount(2);
+        sheetPlan.ColumnPagePlans[0].TitleColumns.Should().Equal(1u);
+        sheetPlan.ColumnPagePlans[0].BodyColumns.Should().Equal(2u, 3u);
+        sheetPlan.ColumnPagePlans[1].TitleColumns.Should().Equal(1u);
+        sheetPlan.ColumnPagePlans[1].BodyColumns.Should().Equal(4u, 5u);
         sheetPlan.PageOrder.Should().Be(WorksheetPageOrder.DownThenOver);
     }
 

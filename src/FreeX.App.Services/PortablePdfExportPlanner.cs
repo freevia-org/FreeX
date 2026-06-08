@@ -10,6 +10,12 @@ public enum PortablePdfExportPlanStatus
     InvalidPageGrid
 }
 
+public sealed record PortablePdfExportPageSpans(
+    IReadOnlyList<uint> TitleRows,
+    IReadOnlyList<uint> BodyRows,
+    IReadOnlyList<uint> TitleColumns,
+    IReadOnlyList<uint> BodyColumns);
+
 public sealed record PortablePdfExportPageRequest(
     int ExportPageNumber,
     int SheetIndex,
@@ -21,11 +27,20 @@ public sealed record PortablePdfExportPageRequest(
     int ColumnPageIndex,
     int RowPageCount,
     int ColumnPageCount,
+    PortablePdfExportPageSpans PageSpans,
     WorksheetPageOrder PageOrder)
 {
     public int RowPageNumber => RowPageIndex + 1;
 
     public int ColumnPageNumber => ColumnPageIndex + 1;
+
+    public IReadOnlyList<uint> TitleRows => PageSpans.TitleRows;
+
+    public IReadOnlyList<uint> BodyRows => PageSpans.BodyRows;
+
+    public IReadOnlyList<uint> TitleColumns => PageSpans.TitleColumns;
+
+    public IReadOnlyList<uint> BodyColumns => PageSpans.BodyColumns;
 }
 
 public sealed record PortablePdfExportPlan(
@@ -89,6 +104,8 @@ public static class PortablePdfExportPlanner
         {
             if (sheetPlan.RowPageCount <= 0 ||
                 sheetPlan.ColumnPageCount <= 0 ||
+                sheetPlan.RowPagePlans.Count != sheetPlan.RowPageCount ||
+                sheetPlan.ColumnPagePlans.Count != sheetPlan.ColumnPageCount ||
                 sheetPlan.PageCount != (long)sheetPlan.RowPageCount * sheetPlan.ColumnPageCount)
             {
                 return false;
@@ -140,6 +157,8 @@ public static class PortablePdfExportPlanner
         int sheetPageNumber,
         List<PortablePdfExportPageRequest> pageRequests)
     {
+        var rowPlan = sheetPlan.RowPagePlans[rowPageIndex];
+        var columnPlan = sheetPlan.ColumnPagePlans[columnPageIndex];
         pageRequests.Add(new PortablePdfExportPageRequest(
             pageRequests.Count + 1,
             sheetIndex,
@@ -151,6 +170,11 @@ public static class PortablePdfExportPlanner
             columnPageIndex,
             sheetPlan.RowPageCount,
             sheetPlan.ColumnPageCount,
+            new PortablePdfExportPageSpans(
+                rowPlan.TitleRows.ToArray(),
+                rowPlan.BodyRows.ToArray(),
+                columnPlan.TitleColumns.ToArray(),
+                columnPlan.BodyColumns.ToArray()),
             sheetPlan.PageOrder));
     }
 
