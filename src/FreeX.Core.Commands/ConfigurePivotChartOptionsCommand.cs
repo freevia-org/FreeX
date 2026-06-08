@@ -65,11 +65,10 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } pivotProtectedOutcome)
             return pivotProtectedOutcome;
 
-        var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is null)
-            return new CommandOutcome(false, "PivotChart was not found.");
+        if (!ChartCommandGuards.TryFindChart(sheet, _chartId, out var chart))
+            return ChartCommandGuards.PivotChartNotFound();
         if (!chart.IsPivotChart || string.IsNullOrWhiteSpace(chart.PivotTableName))
-            return new CommandOutcome(false, "Selected chart is not a PivotChart.");
+            return ChartCommandGuards.SelectedChartIsNotPivotChart();
 
         _previousChartStyleId = chart.ChartStyleId;
         _previousShowFieldButtons = chart.ShowPivotChartFieldButtons;
@@ -122,8 +121,7 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
         if (_previousShowFieldButtons is null)
             return;
 
-        var chart = ctx.GetSheet(_sheetId).Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is null)
+        if (!ChartCommandGuards.TryFindChart(ctx.GetSheet(_sheetId), _chartId, out var chart))
             return;
 
         chart.ChartStyleId = _previousChartStyleId;

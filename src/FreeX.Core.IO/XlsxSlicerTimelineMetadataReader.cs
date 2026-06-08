@@ -27,22 +27,21 @@ internal static class XlsxSlicerTimelineMetadataReader
         try
         {
             var slicerCaches = archive.Entries
-                .Where(entry => entry.FullName.Replace('\\', '/').StartsWith("xl/slicerCaches/", StringComparison.OrdinalIgnoreCase))
-                .Select(entry => (Path: entry.FullName.Replace('\\', '/'), Xml: LoadXml(entry)))
+                .Where(entry => XlsxPackagePath.IsXmlEntryInDirectory(entry, "xl/slicerCaches/"))
+                .Select(entry => (Path: XlsxPackagePath.NormalizeEntryPath(entry), Xml: LoadXml(entry)))
                 .Select(item => (item.Path, Cache: ReadSlicerCache(item.Xml)))
                 .Where(item => !string.IsNullOrWhiteSpace(item.Cache.Name))
                 .ToDictionary(item => item.Cache.Name, item => item.Cache, StringComparer.OrdinalIgnoreCase);
             var drawingMetadataByPart = ReadDrawingMetadata(archive);
 
             foreach (var slicerEntry in archive.Entries.Where(entry =>
-                         entry.FullName.Replace('\\', '/').StartsWith("xl/slicers/", StringComparison.OrdinalIgnoreCase) &&
-                         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+                         XlsxPackagePath.IsXmlEntryInDirectory(entry, "xl/slicers/")))
             {
                 var slicerXml = LoadXml(slicerEntry);
                 var slicerElement = RootOrFirstChild(slicerXml.Root, "slicer");
                 var cacheName = slicerElement?.Attribute("cache")?.Value ?? "";
                 slicerCaches.TryGetValue(cacheName, out var cache);
-                var packagePart = slicerEntry.FullName.Replace('\\', '/');
+                var packagePart = XlsxPackagePath.NormalizeEntryPath(slicerEntry);
                 drawingMetadataByPart.TryGetValue(packagePart, out var drawingMetadata);
                 slicers.Add(new SlicerModel
                 {
@@ -60,21 +59,20 @@ internal static class XlsxSlicerTimelineMetadataReader
             }
 
             var timelineCaches = archive.Entries
-                .Where(entry => entry.FullName.Replace('\\', '/').StartsWith("xl/timelineCaches/", StringComparison.OrdinalIgnoreCase))
-                .Select(entry => (Path: entry.FullName.Replace('\\', '/'), Xml: LoadXml(entry)))
+                .Where(entry => XlsxPackagePath.IsXmlEntryInDirectory(entry, "xl/timelineCaches/"))
+                .Select(entry => (Path: XlsxPackagePath.NormalizeEntryPath(entry), Xml: LoadXml(entry)))
                 .Select(item => (item.Path, Cache: ReadTimelineCache(item.Xml)))
                 .Where(item => !string.IsNullOrWhiteSpace(item.Cache.Name))
                 .ToDictionary(item => item.Cache.Name, item => item.Cache, StringComparer.OrdinalIgnoreCase);
 
             foreach (var timelineEntry in archive.Entries.Where(entry =>
-                         entry.FullName.Replace('\\', '/').StartsWith("xl/timelines/", StringComparison.OrdinalIgnoreCase) &&
-                         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+                         XlsxPackagePath.IsXmlEntryInDirectory(entry, "xl/timelines/")))
             {
                 var timelineXml = LoadXml(timelineEntry);
                 var timelineElement = RootOrFirstChild(timelineXml.Root, "timeline");
                 var cacheName = timelineElement?.Attribute("cache")?.Value ?? "";
                 timelineCaches.TryGetValue(cacheName, out var cache);
-                var packagePart = timelineEntry.FullName.Replace('\\', '/');
+                var packagePart = XlsxPackagePath.NormalizeEntryPath(timelineEntry);
                 drawingMetadataByPart.TryGetValue(packagePart, out var drawingMetadata);
                 timelines.Add(new TimelineModel
                 {
@@ -154,10 +152,9 @@ internal static class XlsxSlicerTimelineMetadataReader
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
 
         foreach (var drawingEntry in archive.Entries.Where(entry =>
-                     entry.FullName.Replace('\\', '/').StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase) &&
-                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+                     XlsxPackagePath.IsXmlEntryInDirectory(entry, "xl/drawings/")))
         {
-            var drawingPath = drawingEntry.FullName.Replace('\\', '/');
+            var drawingPath = XlsxPackagePath.NormalizeEntryPath(drawingEntry);
             var relsPath = XlsxPackagePath.GetRelationshipPartPath(drawingPath);
             var relsEntry = archive.GetEntry(relsPath);
             if (relsEntry is null)

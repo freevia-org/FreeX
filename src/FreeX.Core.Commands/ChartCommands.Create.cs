@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -40,13 +41,13 @@ public sealed class AddChartCommand : IWorkbookCommand
         if (ChartAuthoringPlanner.RejectIfUnsupported(_chart.Type) is { } unsupportedOutcome)
             return unsupportedOutcome;
         if (_chart.DataRange.Start.Sheet != _sheetId || _chart.DataRange.End.Sheet != _sheetId)
-            return new CommandOutcome(false, "Chart data range must be on the target sheet.");
+            return ChartCommandGuards.ChartDataRangeOnTargetSheet();
         if (ChartCommandGuards.RejectInvalidSize(_chart.Width, _chart.Height) is { } invalidSize)
             return invalidSize;
         if (ChartTypeSupport.GetDataSeriesCount(_chart) <= 0)
-            return new CommandOutcome(false, "Chart data range must include at least one data series.");
+            return ChartCommandGuards.ChartDataRangeRequiresDataSeries();
         if (ChartTypeSupport.GetDataPointCount(_chart) <= 0)
-            return new CommandOutcome(false, "Chart data range must include at least one data point.");
+            return ChartCommandGuards.ChartDataRangeRequiresDataPoint();
 
         var sheet = ctx.GetSheet(_sheetId);
         if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
@@ -111,9 +112,9 @@ public sealed class AddChartSheetCommand : IWorkbookCommand
             Title = _title
         };
         if (ChartTypeSupport.GetDataSeriesCount(candidate) <= 0)
-            return new CommandOutcome(false, "Chart data range must include at least one data series.");
+            return ChartCommandGuards.ChartDataRangeRequiresDataSeries();
         if (ChartTypeSupport.GetDataPointCount(candidate) <= 0)
-            return new CommandOutcome(false, "Chart data range must include at least one data point.");
+            return ChartCommandGuards.ChartDataRangeRequiresDataPoint();
 
         var target = ctx.Workbook.AddSheet(GetUniqueChartSheetName(ctx.Workbook));
         target.Charts.Add(candidate);
@@ -178,7 +179,7 @@ public sealed class AddPivotChartCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (string.IsNullOrWhiteSpace(_pivotTableName))
-            return new CommandOutcome(false, "PivotTable name is required.");
+            return CommandGuards.RejectPivotTableNameRequired();
         if (ChartAuthoringPlanner.RejectIfUnsupported(_chartType) is { } unsupportedOutcome)
             return unsupportedOutcome;
         if (ChartCommandGuards.RejectInvalidSize(_width, _height) is { } invalidSize)
@@ -190,10 +191,8 @@ public sealed class AddPivotChartCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } pivotProtectedOutcome)
             return pivotProtectedOutcome;
 
-        var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
-            string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
-        if (pivotTable is null)
-            return new CommandOutcome(false, "PivotTable was not found.");
+        if (!CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
+            return CommandGuards.RejectPivotTableNotFound();
 
         PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
         var dataRange = PivotTableRefreshService.GetMaterializedOutputRange(sheet, pivotTable);
@@ -235,10 +234,43 @@ public sealed class AddPivotChartCommand : IWorkbookCommand
 internal static class ChartCommandGuards
 {
     private const string ChartNotFoundMessage = "Chart was not found.";
+    private const string PivotChartNotFoundMessage = "PivotChart was not found.";
     private const string InvalidChartSizeMessage = "Chart size must be positive.";
+    private const string SelectedChartIsPivotChartMessage = "Selected chart is a PivotChart.";
+    private const string SelectedChartIsNotPivotChartMessage = "Selected chart is not a PivotChart.";
+    private const string ChartDataRangeOnTargetSheetMessage = "Chart data range must be on the target sheet.";
+    private const string ChartDataRangeRequiresDataSeriesMessage = "Chart data range must include at least one data series.";
+    private const string ChartDataRangeRequiresDataPointMessage = "Chart data range must include at least one data point.";
 
     public static CommandOutcome ChartNotFound() =>
         new(false, ChartNotFoundMessage);
+
+    public static CommandOutcome PivotChartNotFound() =>
+        new(false, PivotChartNotFoundMessage);
+
+    public static bool TryFindChart(
+        Sheet sheet,
+        Guid chartId,
+        [NotNullWhen(true)] out ChartModel? chart)
+    {
+        chart = sheet.Charts.FirstOrDefault(item => item.Id == chartId);
+        return chart is not null;
+    }
+
+    public static CommandOutcome SelectedChartIsPivotChart() =>
+        new(false, SelectedChartIsPivotChartMessage);
+
+    public static CommandOutcome SelectedChartIsNotPivotChart() =>
+        new(false, SelectedChartIsNotPivotChartMessage);
+
+    public static CommandOutcome ChartDataRangeOnTargetSheet() =>
+        new(false, ChartDataRangeOnTargetSheetMessage);
+
+    public static CommandOutcome ChartDataRangeRequiresDataSeries() =>
+        new(false, ChartDataRangeRequiresDataSeriesMessage);
+
+    public static CommandOutcome ChartDataRangeRequiresDataPoint() =>
+        new(false, ChartDataRangeRequiresDataPointMessage);
 
     public static CommandOutcome? RejectIfEditObjectsBlocked(Sheet sheet) =>
         CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects);

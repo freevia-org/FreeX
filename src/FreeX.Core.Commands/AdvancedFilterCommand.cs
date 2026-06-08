@@ -171,7 +171,7 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
             {
                 var target = new CellAddress(sheet.Id, _copyTo!.Value.Row + r, _copyTo.Value.Col + c);
                 if (!CommandGuards.CanEditCell(workbook, sheet, target))
-                    return new CommandOutcome(false, "The sheet is protected.");
+                    return CommandGuards.RejectSheetProtected();
             }
         }
 

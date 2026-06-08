@@ -380,6 +380,25 @@ public partial class XlsxCorpusRunnerTests
                 relationship.Attribute("Target")?.Value == "ExternalWorkbook.xlsx" &&
                 relationship.Attribute("TargetMode")?.Value == "External")
             .Should().ContainSingle();
+
+        var adapter = new XlsxFileAdapter();
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-external-links-001");
+        var workbook = adapter.Load(source);
+        var beforeMetadata = CaptureWorkbookMetadataSummary(workbook);
+        beforeMetadata.ExternalLinks.Should().NotBeEmpty("the generated external-links corpus row must expose model metadata");
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 11, 1), new TextValue("freex-external-link-retention-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+
+        CaptureWorkbookMetadataSummary(reloaded).ExternalLinks.Should().BeEquivalentTo(
+            beforeMetadata.ExternalLinks,
+            options => options.WithStrictOrdering(),
+            "external link model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -498,7 +517,7 @@ public partial class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(54, "the generated metadata-pass manifest currently declares fifty-four deterministic package-retention rows");
+        rows.Should().HaveCount(55, "the generated metadata-pass manifest currently declares fifty-five deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -629,6 +648,8 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
+        var beforeMetadata = CaptureWorkbookMetadataSummary(workbook);
+        AssertSlicerTimelineMetadataLoaded(id, beforeMetadata);
         workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-floating-anchor-edit"));
 
         using var saved = new MemoryStream();
@@ -640,6 +661,32 @@ public partial class XlsxCorpusRunnerTests
         after.CriticalParts.Should().Contain(drawingPart, id);
         after.CriticalRelationshipTargets.Should().Contain(target =>
             target.EndsWith($"=>{drawingRelationshipTarget}", StringComparison.OrdinalIgnoreCase), id);
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        CaptureWorkbookMetadataSummary(reloaded).Should().BeEquivalentTo(
+            beforeMetadata,
+            options => options.WithStrictOrdering(),
+            $"{id} slicer/timeline model metadata should survive save and reload");
+    }
+
+    private static void AssertSlicerTimelineMetadataLoaded(string id, WorkbookMetadataSummary metadata)
+    {
+        if (id.Contains("slicers", StringComparison.OrdinalIgnoreCase))
+        {
+            metadata.Slicers.Should().NotBeEmpty(id);
+            metadata.Timelines.Should().BeEmpty(id);
+            return;
+        }
+
+        if (id.Contains("timelines", StringComparison.OrdinalIgnoreCase))
+        {
+            metadata.Timelines.Should().NotBeEmpty(id);
+            metadata.Slicers.Should().BeEmpty(id);
+            return;
+        }
+
+        throw new InvalidOperationException($"Unsupported slicer/timeline corpus id '{id}'.");
     }
 
     [Fact]
@@ -1096,6 +1143,8 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
+        var beforeMetadata = CaptureWorkbookMetadataSummary(workbook);
+        beforeMetadata.WatchedCells.Should().NotBeEmpty("the generated cell-watches corpus row must expose model metadata");
         workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-cell-watches-edit"));
 
         using var saved = new MemoryStream();
@@ -1103,6 +1152,13 @@ public partial class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-cell-watches-001");
         AssertWorksheetCellWatches(saved, "generated-worksheet-cell-watches-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        CaptureWorkbookMetadataSummary(reloaded).WatchedCells.Should().BeEquivalentTo(
+            beforeMetadata.WatchedCells,
+            options => options.WithStrictOrdering(),
+            "watched-cell model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -1114,13 +1170,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-single-xml-cells-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetSingleXmlCellsModel(sheet, "generated-worksheet-single-xml-cells-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-single-xml-cells-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-single-xml-cells-001");
         AssertWorksheetSingleXmlCells(saved, "generated-worksheet-single-xml-cells-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetSingleXmlCellsModel(
+            reloaded.GetSheetAt(0),
+            "single XML cell model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -1313,16 +1377,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        var allowEditRange = workbook.GetSheetAt(0).AllowEditRanges.Should().ContainSingle().Subject;
-        allowEditRange.Start.ToA1().Should().Be("B2");
-        allowEditRange.End.ToA1().Should().Be("C3");
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-protected-ranges-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetProtectedRangesModel(sheet, "generated-worksheet-protected-ranges-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-protected-ranges-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-protected-ranges-001");
         AssertWorksheetProtectedRanges(saved, "generated-worksheet-protected-ranges-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetProtectedRangesModel(
+            reloaded.GetSheetAt(0),
+            "protected range model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -1394,13 +1463,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-data-consolidation-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetDataConsolidationModel(sheet, "generated-worksheet-data-consolidation-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-data-consolidation-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-data-consolidation-001");
         AssertWorksheetDataConsolidation(saved, "generated-worksheet-data-consolidation-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetDataConsolidationModel(
+            reloaded.GetSheetAt(0),
+            "data consolidation model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -1412,14 +1489,7 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        var loadedAutoFilter = workbook.GetSheetAt(0).AutoFilter;
-        loadedAutoFilter.Should().NotBeNull();
-        loadedAutoFilter!.Reference.Should().Be("A1:B3");
-        var loadedFilterColumn = loadedAutoFilter.FilterColumns.Should().ContainSingle().Subject;
-        loadedFilterColumn.ColumnId.Should().Be(0);
-        loadedFilterColumn.Values.Should().Equal("A");
-        loadedFilterColumn.IncludeBlank.Should().BeTrue();
-        workbook.GetSheetAt(0).FilterHiddenRows.Should().Contain(3u);
+        AssertWorksheetAutoFilterModel(workbook.GetSheetAt(0), "generated-worksheet-auto-filter-metadata-001 loaded");
         workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-auto-filter-edit"));
 
         using var saved = new MemoryStream();
@@ -1427,6 +1497,9 @@ public partial class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-auto-filter-metadata-001");
         AssertWorksheetAutoFilterMetadata(saved, "generated-worksheet-auto-filter-metadata-001 saved");
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetAutoFilterModel(reloaded.GetSheetAt(0), "generated-worksheet-auto-filter-metadata-001 reloaded");
     }
 
     [Fact]
@@ -1474,6 +1547,8 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
+        var beforeMetadata = CaptureWorkbookMetadataSummary(workbook);
+        beforeMetadata.Scenarios.Should().NotBeEmpty("generated-worksheet-scenarios-001 should load scenario metadata into the model");
         workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-worksheet-scenarios-edit"));
 
         using var saved = new MemoryStream();
@@ -1481,6 +1556,12 @@ public partial class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-scenarios-001");
         AssertWorksheetScenarios(saved, "generated-worksheet-scenarios-001 saved");
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        CaptureWorkbookMetadataSummary(reloaded).Scenarios.Should().BeEquivalentTo(
+            beforeMetadata.Scenarios,
+            options => options.WithStrictOrdering(),
+            "scenario model metadata should survive save and reload");
     }
 
     [Fact]
@@ -1716,6 +1797,20 @@ public partial class XlsxCorpusRunnerTests
         dataRef.Attribute("customDataRefFlag").Should().BeNull(because);
     }
 
+    private static void AssertWorksheetDataConsolidationModel(Sheet sheet, string because)
+    {
+        var dataConsolidation = sheet.DataConsolidation;
+        dataConsolidation.Should().NotBeNull(because);
+        dataConsolidation!.Function.Should().Be("sum", because);
+        dataConsolidation.LeftLabels.Should().BeTrue(because);
+        dataConsolidation.TopLabels.Should().BeTrue(because);
+        dataConsolidation.Link.Should().BeTrue(because);
+
+        var reference = dataConsolidation.References.Should().ContainSingle(because).Subject;
+        reference.Reference.Should().Be("A1:B2", because);
+        reference.Sheet.Should().Be("Data", because);
+    }
+
     private static void AssertWorksheetAutoFilterMetadata(Stream package, string because)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -1737,6 +1832,18 @@ public partial class XlsxCorpusRunnerTests
             .Where(filter => string.Equals(filter.Attribute("val")?.Value, "A", StringComparison.Ordinal))
             .Should()
             .ContainSingle(because);
+    }
+
+    private static void AssertWorksheetAutoFilterModel(Sheet sheet, string because)
+    {
+        var autoFilter = sheet.AutoFilter;
+        autoFilter.Should().NotBeNull(because);
+        autoFilter!.Reference.Should().Be("A1:B3", because);
+        var filterColumn = autoFilter.FilterColumns.Should().ContainSingle(because).Subject;
+        filterColumn.ColumnId.Should().Be(0, because);
+        filterColumn.Values.Should().Equal(["A"], because);
+        filterColumn.IncludeBlank.Should().BeTrue(because);
+        sheet.FilterHiddenRows.Should().Contain(3u, because);
     }
 
     private static void AssertWorksheetSortState(Stream package, string because)
@@ -1839,6 +1946,17 @@ public partial class XlsxCorpusRunnerTests
         xmlCellPr.Should().NotBeNull(because);
         xmlCellPr!.Attribute("id")!.Value.Should().Be("1", because);
         xmlCellPr.Element(worksheetNs + "xmlPr")!.Attribute("mapId")!.Value.Should().Be("1", because);
+    }
+
+    private static void AssertWorksheetSingleXmlCellsModel(Sheet sheet, string because)
+    {
+        var singleXmlCells = sheet.SingleXmlCells;
+        singleXmlCells.Should().NotBeNull(because);
+
+        var cell = singleXmlCells!.Cells.Should().ContainSingle(because).Subject;
+        cell.Id.Should().Be(1, because);
+        cell.Reference.Should().Be("A1", because);
+        cell.XmlCellPropertyId.Should().Be(1, because);
     }
 
     private static void AssertWorksheetCalculationProperties(Stream package, string because)
@@ -2038,6 +2156,13 @@ public partial class XlsxCorpusRunnerTests
             .Subject;
         nativeOnlyRange.Attribute("sqref")!.Value.Should().Be("B2 C3", because);
         nativeOnlyRange.Attribute("password")!.Value.Should().Be("1234", because);
+    }
+
+    private static void AssertWorksheetProtectedRangesModel(Sheet sheet, string because)
+    {
+        var allowEditRange = sheet.AllowEditRanges.Should().ContainSingle(because).Subject;
+        allowEditRange.Start.ToA1().Should().Be("B2", because);
+        allowEditRange.End.ToA1().Should().Be("C3", because);
     }
 
     private static void AssertWorksheetCellStructureNative(Stream package, string because)

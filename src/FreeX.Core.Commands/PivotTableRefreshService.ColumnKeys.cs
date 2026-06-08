@@ -223,7 +223,7 @@ public static partial class PivotTableRefreshService
         PivotFieldModel field)
     {
         var items = new List<string>();
-        var cache = workbook.PivotCaches.FirstOrDefault(cache => cache.CacheId == pivotTable.CacheId);
+        var cache = CommandGuards.FindPivotCache(workbook, pivotTable);
         if (cache is not null &&
             field.SourceFieldIndex >= 0 &&
             field.SourceFieldIndex < cache.Fields.Count &&

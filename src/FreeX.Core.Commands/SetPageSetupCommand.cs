@@ -95,9 +95,9 @@ public sealed class SetPageSetupCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (!Enum.IsDefined(_orientation))
-            return new CommandOutcome(false, "Page orientation is not supported.");
+            return PageSetupCommandGuards.PageOrientationNotSupported();
         if (!Enum.IsDefined(_paperSize))
-            return new CommandOutcome(false, "Paper size is not supported.");
+            return PageSetupCommandGuards.PaperSizeNotSupported();
         if (!Enum.IsDefined(_pageOrder))
             return new CommandOutcome(false, "Page order is not supported.");
         if (!Enum.IsDefined(_printErrorValue))
@@ -105,15 +105,15 @@ public sealed class SetPageSetupCommand : IWorkbookCommand
         if (!Enum.IsDefined(_printComments))
             return new CommandOutcome(false, "Printed comments option is not supported.");
         if (_margins.Left < 0 || _margins.Right < 0 || _margins.Top < 0 || _margins.Bottom < 0)
-            return new CommandOutcome(false, "Page margins cannot be negative.");
+            return PageSetupCommandGuards.PageMarginsCannotBeNegative();
         if (_headerMargin < 0 || _footerMargin < 0)
             return new CommandOutcome(false, "Header and footer margins cannot be negative.");
         if (_scaleToFit.ScalePercent is < 10 or > 400)
-            return new CommandOutcome(false, "Scale percent must be between 10 and 400.");
+            return PageSetupCommandGuards.ScalePercentOutOfRange();
         if (_scaleToFit.FitToPagesWide is < 1 || _scaleToFit.FitToPagesTall is < 1)
-            return new CommandOutcome(false, "Fit-to-page dimensions must be at least 1.");
+            return PageSetupCommandGuards.FitToPageDimensionsTooSmall();
         if (_printTitleRows is { Start: 0 } or { End: 0 } || _printTitleColumns is { Start: 0 } or { End: 0 })
-            return new CommandOutcome(false, "Print title rows and columns must be 1-based.");
+            return PageSetupCommandGuards.PrintTitlesMustBeOneBased();
         if (_firstPageNumber is 0)
             return new CommandOutcome(false, "First page number cannot be zero.");
         if (_printQualityDpi is <= 0)

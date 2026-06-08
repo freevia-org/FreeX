@@ -8,9 +8,7 @@ internal static class PivotTableSlicerTimelineCommandHelpers
     {
         foreach (var sheet in workbook.Sheets)
         {
-            var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
-                string.Equals(pivot.Name, pivotTableName, StringComparison.OrdinalIgnoreCase));
-            if (pivotTable is not null)
+            if (CommandGuards.TryFindPivotTable(sheet, pivotTableName, out var pivotTable))
                 return (sheet, pivotTable);
         }
 

@@ -1389,7 +1389,7 @@ internal static class XlsxPackageMetadataMerger
         if (excludedSourceParts is null || excludedSourceParts.Count == 0 || string.IsNullOrWhiteSpace(path))
             return false;
 
-        return excludedSourceParts.Contains(XlsxPackagePath.NormalizeZipPath(path.Trim().Replace('\\', '/').TrimStart('/')));
+        return excludedSourceParts.Contains(XlsxPackagePath.NormalizePackagePath(path.Trim()));
     }
 
     private static bool IsExternalRelationship(XElement relationship) =>
@@ -1415,7 +1415,7 @@ internal static class XlsxPackageMetadataMerger
 
     private static string RelationshipPartToSourcePart(string relationshipPartPath)
     {
-        var normalized = XlsxPackagePath.NormalizeZipPath(relationshipPartPath.Replace('\\', '/'));
+        var normalized = XlsxPackagePath.NormalizePackagePath(relationshipPartPath);
         if (string.Equals(normalized, "_rels/.rels", StringComparison.OrdinalIgnoreCase))
             return "";
 
@@ -1497,6 +1497,6 @@ internal static class XlsxPackageMetadataMerger
         }
 
         private static string NormalizeEntryName(string entryName) =>
-            XlsxPackagePath.NormalizeZipPath(entryName.Replace('\\', '/'));
+            XlsxPackagePath.NormalizePackagePath(entryName);
     }
 }

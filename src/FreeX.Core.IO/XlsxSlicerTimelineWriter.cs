@@ -129,7 +129,7 @@ internal static class XlsxSlicerTimelineWriter
         {
             var slicerPath = string.IsNullOrWhiteSpace(slicer.PackagePart)
                 ? $"xl/slicers/slicer{slicerIndex}.xml"
-                : slicer.PackagePart.TrimStart('/').Replace('\\', '/');
+                : XlsxPackagePath.NormalizePackagePath(slicer.PackagePart);
             var cachePath = $"xl/slicerCaches/slicerCache{slicerIndex}.xml";
             var cacheName = string.IsNullOrWhiteSpace(slicer.CacheName) ? $"Slicer_{slicerIndex}" : slicer.CacheName;
 
@@ -205,7 +205,7 @@ internal static class XlsxSlicerTimelineWriter
         {
             var timelinePath = string.IsNullOrWhiteSpace(timeline.PackagePart)
                 ? $"xl/timelines/timeline{timelineIndex}.xml"
-                : timeline.PackagePart.TrimStart('/').Replace('\\', '/');
+                : XlsxPackagePath.NormalizePackagePath(timeline.PackagePart);
             var cachePath = $"xl/timelineCaches/timelineCache{timelineIndex}.xml";
             var cacheName = string.IsNullOrWhiteSpace(timeline.CacheName) ? $"Timeline_{timelineIndex}" : timeline.CacheName;
 

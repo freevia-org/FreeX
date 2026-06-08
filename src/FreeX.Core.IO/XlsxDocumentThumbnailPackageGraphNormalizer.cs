@@ -16,7 +16,7 @@ internal static class XlsxDocumentThumbnailPackageGraphNormalizer
     public static void NormalizePackage(ZipArchive archive)
     {
         var thumbnailParts = archive.Entries
-            .Select(entry => entry.FullName.Replace('\\', '/'))
+            .Select(XlsxPackagePath.NormalizeEntryPath)
             .Where(IsThumbnailPart)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(ThumbnailPartRank)
@@ -231,7 +231,7 @@ internal static class XlsxDocumentThumbnailPackageGraphNormalizer
 
     private static bool IsThumbnailPart(string path)
     {
-        var normalized = path.TrimStart('/').Replace('\\', '/');
+        var normalized = XlsxPackagePath.NormalizePackagePath(path);
         if (!normalized.StartsWith("docProps/thumbnail.", StringComparison.OrdinalIgnoreCase))
             return false;
 
@@ -304,5 +304,5 @@ internal static class XlsxDocumentThumbnailPackageGraphNormalizer
     }
 
     private static string NormalizePartName(string partName) =>
-        partName.Trim().TrimStart('/').Replace('\\', '/');
+        XlsxPackagePath.NormalizePackagePath(partName.Trim());
 }

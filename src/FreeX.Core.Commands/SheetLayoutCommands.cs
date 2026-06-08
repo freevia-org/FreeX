@@ -25,7 +25,7 @@ public sealed class SetRowHeightCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (!IsValidRowRange(_startRow, _endRow))
-            return new CommandOutcome(false, "Row range is outside the worksheet bounds.");
+            return CommandGuards.RejectRowRangeOutsideWorksheetBounds();
         if (_height is { } height && (!double.IsFinite(height) || height is < 0 or > 409.5))
             return new CommandOutcome(false, "Row height must be from 0 to 409.5.");
 
@@ -93,7 +93,7 @@ public sealed class SetColumnWidthCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (!IsValidColumnRange(_startCol, _endCol))
-            return new CommandOutcome(false, "Column range is outside the worksheet bounds.");
+            return CommandGuards.RejectColumnRangeOutsideWorksheetBounds();
         if (_width is { } width && (!double.IsFinite(width) || width is < 0 or > 255))
             return new CommandOutcome(false, "Column width must be from 0 to 255.");
 

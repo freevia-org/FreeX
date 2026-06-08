@@ -784,7 +784,7 @@ internal static partial class XlsxExcelCompatibilityNormalizer
         if (string.IsNullOrWhiteSpace(partName))
             return "";
 
-        return "/" + XlsxPackagePath.NormalizeZipPath(partName.Trim().Replace('\\', '/').TrimStart('/'));
+        return "/" + XlsxPackagePath.NormalizePackagePath(partName.Trim());
     }
 
     private sealed record PivotTablePartInfo(string Path, XDocument Xml);

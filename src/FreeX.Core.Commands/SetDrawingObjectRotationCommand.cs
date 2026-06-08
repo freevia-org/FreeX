@@ -35,7 +35,7 @@ public sealed class SetDrawingObjectRotationCommand : IWorkbookCommand
             return new CommandOutcome(false, "Object rotation must be a finite number.");
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (SelectionPaneObjectAccess.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
         var target = FindRotatable(sheet, _kind, _objectId);
@@ -66,18 +66,15 @@ public sealed class SetDrawingObjectRotationCommand : IWorkbookCommand
         switch (kind)
         {
             case SelectionPaneObjectKind.Picture:
-                var picture = sheet.Pictures.FirstOrDefault(item => item.Id == objectId);
-                return picture is null
+                return !PictureCommandGuards.TryFindPicture(sheet, objectId, out var picture)
                     ? null
                     : new RotatableObjectRef(picture.Anchor, () => picture.RotationDegrees, value => picture.RotationDegrees = value);
             case SelectionPaneObjectKind.Shape:
-                var shape = sheet.DrawingShapes.FirstOrDefault(item => item.Id == objectId);
-                return shape is null
+                return !DrawingShapeCommandGuards.TryFindShape(sheet, objectId, out var shape)
                     ? null
                     : new RotatableObjectRef(shape.Anchor, () => shape.RotationDegrees, value => shape.RotationDegrees = value);
             case SelectionPaneObjectKind.TextBox:
-                var textBox = sheet.TextBoxes.FirstOrDefault(item => item.Id == objectId);
-                return textBox is null
+                return !TextBoxCommandGuards.TryFindTextBox(sheet, objectId, out var textBox)
                     ? null
                     : new RotatableObjectRef(textBox.Anchor, () => textBox.RotationDegrees, value => textBox.RotationDegrees = value);
             default:

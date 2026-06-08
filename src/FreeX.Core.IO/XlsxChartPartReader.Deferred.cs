@@ -45,7 +45,7 @@ public static partial class XlsxChartPartReader
 
         var mapChart = plotArea
             .Descendants()
-            .FirstOrDefault(element => element.Name.LocalName is "geoChart" or "mapChart" or "regionMapChart");
+            .FirstOrDefault(IsMapChartElement);
         return mapChart is null ? null : (mapChart, ChartType.Map);
     }
 
@@ -181,15 +181,15 @@ public static partial class XlsxChartPartReader
     /// </summary>
     private static void ReadChartExSeriesLayout(XElement series, ChartModel chart)
     {
-        var layoutPr = series.Elements().FirstOrDefault(element => element.Name.LocalName == "layoutPr");
+        var layoutPr = FirstChildElementByLocalName(series, "layoutPr");
         if (layoutPr is null)
             return;
 
-        var binning = layoutPr.Elements().FirstOrDefault(element => element.Name.LocalName == "binning");
+        var binning = FirstChildElementByLocalName(layoutPr, "binning");
         if (binning is not null && ParseChartExBinning(binning) is { } binningModel)
             chart.HistogramBinning = binningModel;
 
-        var subtotals = layoutPr.Elements().FirstOrDefault(element => element.Name.LocalName == "subtotals");
+        var subtotals = FirstChildElementByLocalName(layoutPr, "subtotals");
         if (subtotals is not null)
         {
             var indices = subtotals.Elements()
@@ -205,8 +205,8 @@ public static partial class XlsxChartPartReader
 
     private static HistogramBinningModel? ParseChartExBinning(XElement binning)
     {
-        var binSize = binning.Elements().FirstOrDefault(element => element.Name.LocalName == "binSize")?.Value;
-        var binCount = binning.Elements().FirstOrDefault(element => element.Name.LocalName == "binCount")?.Value;
+        var binSize = FirstChildElementByLocalName(binning, "binSize")?.Value;
+        var binCount = FirstChildElementByLocalName(binning, "binCount")?.Value;
         var underflow = ParseChartExThreshold(binning.Attribute("underflow")?.Value);
         var overflow = ParseChartExThreshold(binning.Attribute("overflow")?.Value);
 
@@ -235,11 +235,7 @@ public static partial class XlsxChartPartReader
         if (series.Name.LocalName != "series")
             return XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series);
 
-        var dataId = series
-            .Elements()
-            .FirstOrDefault(element => element.Name.LocalName == "dataId")?
-            .Attribute("val")?
-            .Value;
+        var dataId = ReadChartExSeriesDataId(series);
         if (string.IsNullOrWhiteSpace(dataId))
             return [];
 
@@ -254,20 +250,29 @@ public static partial class XlsxChartPartReader
 
     private static XElement? FindChartExData(XDocument chartXml, XElement series)
     {
-        var dataId = series
-            .Elements()
-            .FirstOrDefault(element => element.Name.LocalName == "dataId")?
-            .Attribute("val")?
-            .Value;
+        var dataId = ReadChartExSeriesDataId(series);
         return string.IsNullOrWhiteSpace(dataId) ? null : FindChartExData(chartXml, dataId);
     }
 
     private static XElement? FindChartExData(XDocument chartXml, string dataId) =>
         chartXml.Root?
             .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "data" &&
-                string.Equals(element.Attribute("id")?.Value, dataId, StringComparison.Ordinal));
+            .FirstOrDefault(element => IsChartExDataElement(element, dataId));
+
+    private static XElement? FirstChildElementByLocalName(XElement element, string localName) =>
+        element.Elements().FirstOrDefault(child => child.Name.LocalName == localName);
+
+    private static string? ReadChartExSeriesDataId(XElement series) =>
+        FirstChildElementByLocalName(series, "dataId")?
+            .Attribute("val")?
+            .Value;
+
+    private static bool IsChartExDataElement(XElement element, string dataId) =>
+        element.Name.LocalName == "data" &&
+        string.Equals(element.Attribute("id")?.Value, dataId, StringComparison.Ordinal);
+
+    private static bool IsMapChartElement(XElement element) =>
+        element.Name.LocalName is "geoChart" or "mapChart" or "regionMapChart";
 
     private static bool TryReadThreeDBarChart(
         XDocument chartXml,
@@ -275,9 +280,7 @@ public static partial class XlsxChartPartReader
         SheetId sheetId,
         out ChartModel chart)
     {
-        var barDirection = plotChart
-            .Elements()
-            .FirstOrDefault(element => element.Name.LocalName == "barDir")?
+        var barDirection = FirstChildElementByLocalName(plotChart, "barDir")?
             .Attribute("val")?
             .Value;
         var chartType = string.Equals(barDirection, "bar", StringComparison.OrdinalIgnoreCase)

@@ -23,21 +23,20 @@ public sealed class MoveChartCommand : IWorkbookCommand
     {
         var source = ctx.Workbook.GetSheet(_sourceSheetId);
         if (source is null)
-            return new CommandOutcome(false, "Source sheet was not found.");
-        if (CommandGuards.RejectIfProtectedWithoutPermission(source, SheetProtectionPermission.EditObjects) is { } sourceProtectedOutcome)
+            return CommandGuards.RejectSourceSheetNotFound();
+        if (ChartCommandGuards.RejectIfEditObjectsBlocked(source) is { } sourceProtectedOutcome)
             return sourceProtectedOutcome;
 
         var target = ctx.Workbook.GetSheet(_targetSheetId);
         if (target is null)
-            return new CommandOutcome(false, "Target sheet was not found.");
-        if (CommandGuards.RejectIfProtectedWithoutPermission(target, SheetProtectionPermission.EditObjects) is { } targetProtectedOutcome)
+            return CommandGuards.RejectTargetSheetNotFound();
+        if (ChartCommandGuards.RejectIfEditObjectsBlocked(target) is { } targetProtectedOutcome)
             return targetProtectedOutcome;
 
-        var chart = source.Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is null)
+        if (!ChartCommandGuards.TryFindChart(source, _chartId, out var chart))
             return ChartCommandGuards.ChartNotFound();
         if (chart.IsPivotChart)
-            return new CommandOutcome(false, "Selected chart is a PivotChart.");
+            return ChartCommandGuards.SelectedChartIsPivotChart();
         if (_sourceSheetId == _targetSheetId)
             return new CommandOutcome(true, AffectedCells: [chart.DataRange.Start]);
 
@@ -93,15 +92,14 @@ public sealed class MoveChartToNewSheetCommand : IWorkbookCommand
 
         var source = ctx.Workbook.GetSheet(_sourceSheetId);
         if (source is null)
-            return new CommandOutcome(false, "Source sheet was not found.");
-        if (CommandGuards.RejectIfProtectedWithoutPermission(source, SheetProtectionPermission.EditObjects) is { } sourceProtectedOutcome)
+            return CommandGuards.RejectSourceSheetNotFound();
+        if (ChartCommandGuards.RejectIfEditObjectsBlocked(source) is { } sourceProtectedOutcome)
             return sourceProtectedOutcome;
 
-        var chart = source.Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is null)
+        if (!ChartCommandGuards.TryFindChart(source, _chartId, out var chart))
             return ChartCommandGuards.ChartNotFound();
         if (chart.IsPivotChart)
-            return new CommandOutcome(false, "Selected chart is a PivotChart.");
+            return ChartCommandGuards.SelectedChartIsPivotChart();
 
         var target = ctx.Workbook.AddSheet(_sheetName);
         source.Charts.Remove(chart);

@@ -73,13 +73,13 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
             foreach (var address in affected)
             {
                 if (!CommandGuards.CanEditCell(ctx.Workbook, sheet, address))
-                    return new CommandOutcome(false, "The sheet is protected.");
+                    return CommandGuards.RejectSheetProtected();
             }
 
             if (HasComments(sheet, affected) &&
                 !sheet.ProtectionPermissions.Contains(SheetProtectionPermission.EditObjects))
             {
-                return new CommandOutcome(false, "The sheet is protected.");
+                return CommandGuards.RejectSheetProtected();
             }
         }
 

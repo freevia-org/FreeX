@@ -450,7 +450,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 if (string.IsNullOrWhiteSpace(partName))
                     continue;
 
-                var normalizedPartName = XlsxPackagePath.NormalizeZipPath(partName.Trim().TrimStart('/').Replace('\\', '/'));
+                var normalizedPartName = XlsxPackagePath.NormalizePackagePath(partName.Trim());
                 if (IsCustomRibbonPart(normalizedPartName) && archive.GetEntry(normalizedPartName) is null)
                     return true;
             }
@@ -1424,10 +1424,10 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
     }
 
     private static string NormalizePartName(string partName) =>
-        XlsxPackagePath.NormalizeZipPath(partName.Trim().Replace('\\', '/').TrimStart('/'));
+        XlsxPackagePath.NormalizePackagePath(partName.Trim());
 
     private static string NormalizeEntryPath(string path) =>
-        XlsxPackagePath.NormalizeZipPath(path.Replace('\\', '/').TrimStart('/'));
+        XlsxPackagePath.NormalizePackagePath(path);
 
     private static bool HasUnsupportedConditionalFormattingBlocks(ZipArchive archive) =>
         XlsxConditionalFormatRuleSupport.HasUnsupportedRuleInWorksheets(archive, allowBlankType: false);

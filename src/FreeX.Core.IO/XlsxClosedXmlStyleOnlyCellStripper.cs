@@ -79,7 +79,7 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
             return false;
 
         if (worksheetPathsToStrip is not null)
-            return worksheetPathsToStrip.Contains(NormalizeEntryPath(sourceEntry.FullName));
+            return worksheetPathsToStrip.Contains(XlsxPackagePath.NormalizePackagePath(sourceEntry.FullName));
 
         using (var scanStream = sourceEntry.Open())
         {
@@ -173,9 +173,6 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
     private static bool IsWorksheetXml(ZipArchiveEntry entry) =>
         entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
-
-    private static string NormalizeEntryPath(string path) =>
-        path.IndexOf('\\') < 0 ? path : path.Replace('\\', '/');
 
     internal static void StripRedundantStyleOnlyCells(Stream worksheetStream, Stream outputStream)
     {

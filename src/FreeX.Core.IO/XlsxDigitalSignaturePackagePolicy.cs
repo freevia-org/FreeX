@@ -13,7 +13,7 @@ internal static class XlsxDigitalSignaturePackagePolicy
         var exclusions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var entry in sourceArchive.Entries)
         {
-            var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+            var path = XlsxPackagePath.NormalizeEntryPath(entry);
             if (IsDigitalSignaturePackagePath(path) ||
                 IsVbaProjectSignaturePackagePath(path))
             {

@@ -33,8 +33,7 @@ public sealed class SetPictureAltTextCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         if (!_change.Applied) return;
-        var picture = ctx.GetSheet(_sheetId).Pictures.FirstOrDefault(item => item.Id == _pictureId);
-        if (picture is null) return;
+        if (!PictureCommandGuards.TryFindPicture(ctx.GetSheet(_sheetId), _pictureId, out var picture)) return;
         picture.AltText = _change.PreviousAltText;
         _change.MarkReverted();
     }
@@ -72,8 +71,7 @@ public sealed class SetDrawingShapeAltTextCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         if (!_change.Applied) return;
-        var shape = ctx.GetSheet(_sheetId).DrawingShapes.FirstOrDefault(item => item.Id == _shapeId);
-        if (shape is null) return;
+        if (!DrawingShapeCommandGuards.TryFindShape(ctx.GetSheet(_sheetId), _shapeId, out var shape)) return;
         shape.AltText = _change.PreviousAltText;
         _change.MarkReverted();
     }
@@ -111,8 +109,7 @@ public sealed class SetTextBoxAltTextCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         if (!_change.Applied) return;
-        var textBox = ctx.GetSheet(_sheetId).TextBoxes.FirstOrDefault(item => item.Id == _textBoxId);
-        if (textBox is null) return;
+        if (!TextBoxCommandGuards.TryFindTextBox(ctx.GetSheet(_sheetId), _textBoxId, out var textBox)) return;
         textBox.AltText = _change.PreviousAltText;
         _change.MarkReverted();
     }

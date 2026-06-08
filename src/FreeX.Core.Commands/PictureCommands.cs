@@ -33,7 +33,7 @@ public sealed class InsertPictureCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (_picture.Anchor.Sheet != _sheetId)
-            return new CommandOutcome(false, "Picture anchor must be on the target sheet.");
+            return PictureCommandGuards.PictureAnchorOnTargetSheet();
         if (_picture.ImageBytes is not { Length: > 0 })
             return new CommandOutcome(false, "Picture data cannot be empty.");
         if (PictureCommandGuards.RejectInvalidSize(_picture.Width, _picture.Height) is { } invalidSize)

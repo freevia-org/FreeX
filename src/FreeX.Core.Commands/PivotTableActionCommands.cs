@@ -24,14 +24,13 @@ public sealed class RenamePivotTableCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (string.IsNullOrWhiteSpace(_newName))
-            return new CommandOutcome(false, "PivotTable name is required.");
+            return CommandGuards.RejectPivotTableNameRequired();
 
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)
             return protectedOutcome;
 
-        var pivotTable = FindPivotTable(sheet, _pivotTableName);
-        if (pivotTable is null)
+        if (!CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
             return CommandGuards.RejectPivotTableNotFound();
         if (PivotTableNameExists(ctx.Workbook, pivotTable, _newName))
             return new CommandOutcome(false, "PivotTable name is already in use.");
@@ -61,8 +60,7 @@ public sealed class RenamePivotTableCommand : IWorkbookCommand
         pivotTable.Name = _newName;
         foreach (var (chartSheetId, chartId) in _updatedCharts)
         {
-            var chart = ctx.GetSheet(chartSheetId).Charts.FirstOrDefault(item => item.Id == chartId);
-            if (chart is not null)
+            if (ChartCommandGuards.TryFindChart(ctx.GetSheet(chartSheetId), chartId, out var chart))
                 chart.PivotTableName = _newName;
         }
 
@@ -80,14 +78,12 @@ public sealed class RenamePivotTableCommand : IWorkbookCommand
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        var pivotTable = FindPivotTable(sheet, _newName);
-        if (pivotTable is not null)
+        if (CommandGuards.TryFindPivotTable(sheet, _newName, out var pivotTable))
             pivotTable.Name = _oldName;
 
         foreach (var (chartSheetId, chartId) in _updatedCharts)
         {
-            var chart = ctx.GetSheet(chartSheetId).Charts.FirstOrDefault(item => item.Id == chartId);
-            if (chart is not null)
+            if (ChartCommandGuards.TryFindChart(ctx.GetSheet(chartSheetId), chartId, out var chart))
                 chart.PivotTableName = _oldName;
         }
 
@@ -101,10 +97,6 @@ public sealed class RenamePivotTableCommand : IWorkbookCommand
         _updatedTimelines.Clear();
         _oldName = null;
     }
-
-    private static PivotTableModel? FindPivotTable(Sheet sheet, string name) =>
-        sheet.PivotTables.FirstOrDefault(pivot =>
-            string.Equals(pivot.Name, name, StringComparison.OrdinalIgnoreCase));
 
     private static bool PivotTableNameExists(Workbook workbook, PivotTableModel target, string name) =>
         workbook.Sheets
@@ -134,9 +126,7 @@ public sealed class ClearPivotTableViewCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)
             return protectedOutcome;
 
-        var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
-            string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
-        if (pivotTable is null)
+        if (!CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
             return CommandGuards.RejectPivotTableNotFound();
 
         _snapshot = PivotViewClearSnapshot.Capture(pivotTable);
@@ -156,9 +146,7 @@ public sealed class ClearPivotTableViewCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
-            string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
-        if (pivotTable is not null && _snapshot is not null)
+        if (CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable) && _snapshot is not null)
         {
             _snapshot.Restore(pivotTable);
         }
@@ -243,15 +231,13 @@ public sealed class MovePivotTableCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (_targetStart.Sheet != _sheetId)
-            return new CommandOutcome(false, "PivotTable target range must be on the target sheet.");
+            return CommandGuards.RejectPivotTableTargetRangeOnTargetSheet();
 
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)
             return protectedOutcome;
 
-        var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
-            string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
-        if (pivotTable is null)
+        if (!CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
             return CommandGuards.RejectPivotTableNotFound();
         if (!TryCreateMovedTargetRange(pivotTable.TargetRange, _targetStart, out var movedRange))
             return new CommandOutcome(false, "PivotTable target range is outside the worksheet bounds.");
@@ -276,9 +262,7 @@ public sealed class MovePivotTableCommand : IWorkbookCommand
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
-            string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
-        if (pivotTable is not null)
+        if (CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
             pivotTable.TargetRange = _oldTargetRange.Value;
 
         AddPivotTableCommand.Restore(sheet, _rangeSnapshot);

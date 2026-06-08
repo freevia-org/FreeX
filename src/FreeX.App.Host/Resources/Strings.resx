@@ -5731,7 +5731,7 @@
     <value>Highlight with translucent ink. Ink authoring is deferred in FreeX.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ImportDataFromALocalCSVFileDatabaseWebAndPowerQueryConnectorsAreExcluded" xml:space="preserve">
-    <value>Import data from a local CSV file. Database, web, and Power Query connectors are excluded.</value>
+    <value>Import data from a local CSV file, text/TSV/TAB file, or SpreadsheetML XML file. Database, web, and Power Query connectors are excluded.</value>
   </data>
   <data name="MainWindow_TooltipDescription_IncreaseTheIndentLevelOfTheCellContents" xml:space="preserve">
     <value>Increase the indent level of the cell contents.</value>

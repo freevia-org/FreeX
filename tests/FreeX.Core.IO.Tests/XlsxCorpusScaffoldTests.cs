@@ -29,6 +29,34 @@ public class XlsxCorpusScaffoldTests
         "notes"
     ];
 
+    private static readonly string[] BidirectionalCoverageTags =
+    [
+        "basic-grid",
+        "cached-results",
+        "charts",
+        "comments",
+        "conditional-formatting",
+        "data-validation",
+        "external-links",
+        "formatting",
+        "formulas",
+        "hyperlinks",
+        "images",
+        "merged-cells",
+        "named-ranges",
+        "page-setup",
+        "pivot-caches",
+        "pivottables",
+        "protection",
+        "shapes",
+        "slicers",
+        "sparklines",
+        "styles",
+        "tables",
+        "threaded-comments",
+        "timelines"
+    ];
+
     [Fact]
     public void CorpusManifest_UsesDocumentedSchemaAndHasStarterGeneratedRows()
     {
@@ -190,6 +218,27 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusManifest_PreservesBidirectionalCoverageForSupportedFeatureTags()
+    {
+        var supportedRows = ReadManifestRows()
+            .Where(row =>
+                row.ExpectedStatus is "supported-pass" or "supported-metadata-pass" or "supported-pivot-metadata-pass" or "public-pass")
+            .ToArray();
+
+        foreach (var tag in BidirectionalCoverageTags)
+        {
+            supportedRows
+                .Where(row => row.SourceType == "generated")
+                .Should()
+                .Contain(row => HasFeatureTag(row, tag), $"{tag} should retain FreeX-generated coverage");
+            supportedRows
+                .Where(row => row.SourceType != "generated")
+                .Should()
+                .Contain(row => HasFeatureTag(row, tag), $"{tag} should retain independent Excel-authored, public, regression, or local-private coverage");
+        }
+    }
+
+    [Fact]
     public void CorpusManifest_KnownGapRowsDeclareWarningsAndNotes()
     {
         var manifestRows = ReadManifestRows();
@@ -337,7 +386,7 @@ public class XlsxCorpusScaffoldTests
         manifestRows.Should().Contain(row =>
             row.Path == "generated/threaded-comments-001.xlsx" &&
             row.FeatureTags.Contains("threaded-comments", StringComparison.Ordinal));
-        const string reportLine = "| Threaded comment package references | Worksheet threaded-comment relationships and workbook persons relationships are exercised by generated known-gap retention coverage |";
+        const string reportLine = "| Threaded comment package references | Worksheet threaded-comment relationships and workbook persons relationships are exercised by generated metadata-pass retention coverage without unsupported-feature warnings |";
         report.Should().Contain(reportLine);
         report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
     }
@@ -625,8 +674,6 @@ public class XlsxCorpusScaffoldTests
             warnings.Add("unsupported chart package disclosed");
         if (tags.Contains("embedded-objects"))
             warnings.Add("unsupported embedded object disclosed");
-        if (tags.Contains("threaded-comments"))
-            warnings.Add("unsupported threaded comment disclosed");
         if (tags.Contains("track-changes") || tags.Contains("revision-history"))
             warnings.Add("unsupported track changes disclosed");
         if (tags.Contains("form-controls") || tags.Contains("activex"))
@@ -656,6 +703,11 @@ public class XlsxCorpusScaffoldTests
 
         return warnings;
     }
+
+    private static bool HasFeatureTag(ManifestRow row, string tag) =>
+        row.FeatureTags
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Contains(tag, StringComparer.Ordinal);
 
     private sealed record ManifestRow(
         string Path,

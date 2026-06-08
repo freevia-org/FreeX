@@ -27,11 +27,10 @@ public sealed class ChangePivotChartTypeCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } pivotProtectedOutcome)
             return pivotProtectedOutcome;
 
-        var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is null)
-            return new CommandOutcome(false, "PivotChart was not found.");
+        if (!ChartCommandGuards.TryFindChart(sheet, _chartId, out var chart))
+            return ChartCommandGuards.PivotChartNotFound();
         if (!chart.IsPivotChart || string.IsNullOrWhiteSpace(chart.PivotTableName))
-            return new CommandOutcome(false, "Selected chart is not a PivotChart.");
+            return ChartCommandGuards.SelectedChartIsNotPivotChart();
         if (ChartAuthoringPlanner.RejectIfUnsupported(_chartType) is { } unsupportedOutcome)
             return unsupportedOutcome;
 
@@ -47,8 +46,7 @@ public sealed class ChangePivotChartTypeCommand : IWorkbookCommand
         if (_previousType is null || _previousFirstColIsCategories is null)
             return;
 
-        var chart = ctx.GetSheet(_sheetId).Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is null)
+        if (!ChartCommandGuards.TryFindChart(ctx.GetSheet(_sheetId), _chartId, out var chart))
             return;
 
         chart.Type = _previousType.Value;
@@ -81,8 +79,7 @@ public sealed class SetChartStyleCommand : IWorkbookCommand
         if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is null)
+        if (!ChartCommandGuards.TryFindChart(sheet, _chartId, out var chart))
             return ChartCommandGuards.ChartNotFound();
 
         _previousChartStyleId = chart.ChartStyleId;
@@ -96,8 +93,7 @@ public sealed class SetChartStyleCommand : IWorkbookCommand
         if (!_applied)
             return;
 
-        var chart = ctx.GetSheet(_sheetId).Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is null)
+        if (!ChartCommandGuards.TryFindChart(ctx.GetSheet(_sheetId), _chartId, out var chart))
             return;
 
         chart.ChartStyleId = _previousChartStyleId;
@@ -137,11 +133,10 @@ public sealed class ChangeChartTypeCommand : IWorkbookCommand
         if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is null)
+        if (!ChartCommandGuards.TryFindChart(sheet, _chartId, out var chart))
             return ChartCommandGuards.ChartNotFound();
         if (chart.IsPivotChart)
-            return new CommandOutcome(false, "Selected chart is a PivotChart.");
+            return ChartCommandGuards.SelectedChartIsPivotChart();
         if (ChartAuthoringPlanner.RejectIfUnsupported(_chartType) is { } unsupportedOutcome)
             return unsupportedOutcome;
 
@@ -161,8 +156,7 @@ public sealed class ChangeChartTypeCommand : IWorkbookCommand
         if (_previousType is null || _previousFirstColIsCategories is null)
             return;
 
-        var chart = ctx.GetSheet(_sheetId).Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is null)
+        if (!ChartCommandGuards.TryFindChart(ctx.GetSheet(_sheetId), _chartId, out var chart))
             return;
 
         chart.Type = _previousType.Value;
@@ -223,13 +217,12 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
         if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is null)
+        if (!ChartCommandGuards.TryFindChart(sheet, _chartId, out var chart))
             return ChartCommandGuards.ChartNotFound();
         if (chart.IsPivotChart)
-            return new CommandOutcome(false, "Selected chart is a PivotChart.");
+            return ChartCommandGuards.SelectedChartIsPivotChart();
         if (_dataRange.Start.Sheet != _sheetId || _dataRange.End.Sheet != _sheetId)
-            return new CommandOutcome(false, "Chart data range must be on the target sheet.");
+            return ChartCommandGuards.ChartDataRangeOnTargetSheet();
 
         var nextFirstRowIsHeader = _firstRowIsHeader ?? chart.FirstRowIsHeader;
         var nextFirstColIsCategories = _firstColIsCategories ?? chart.FirstColIsCategories;
@@ -254,8 +247,7 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
         if (_previousDataRange is null || _previousFirstRowIsHeader is null || _previousFirstColIsCategories is null)
             return;
 
-        var chart = ctx.GetSheet(_sheetId).Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is null)
+        if (!ChartCommandGuards.TryFindChart(ctx.GetSheet(_sheetId), _chartId, out var chart))
             return;
 
         chart.DataRange = _previousDataRange.Value;

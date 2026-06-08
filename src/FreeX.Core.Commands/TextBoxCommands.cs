@@ -97,8 +97,8 @@ public sealed class ResizeTextBoxCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         if (!_applied) return;
-        var textBox = ctx.GetSheet(_sheetId).TextBoxes.FirstOrDefault(item => item.Id == _textBoxId);
-        if (textBox is null) return;
+        var sheet = ctx.GetSheet(_sheetId);
+        if (!TextBoxCommandGuards.TryFindTextBox(sheet, _textBoxId, out var textBox)) return;
         textBox.Width = _previousWidth;
         textBox.Height = _previousHeight;
         _applied = false;
@@ -143,8 +143,8 @@ public sealed class RotateTextBoxCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         if (!_applied) return;
-        var textBox = ctx.GetSheet(_sheetId).TextBoxes.FirstOrDefault(item => item.Id == _textBoxId);
-        if (textBox is null) return;
+        var sheet = ctx.GetSheet(_sheetId);
+        if (!TextBoxCommandGuards.TryFindTextBox(sheet, _textBoxId, out var textBox)) return;
         textBox.RotationDegrees = _previousRotationDegrees;
         _applied = false;
     }
@@ -201,8 +201,8 @@ public sealed class SetTextBoxColorsCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         if (!_applied) return;
-        var textBox = ctx.GetSheet(_sheetId).TextBoxes.FirstOrDefault(item => item.Id == _textBoxId);
-        if (textBox is null) return;
+        var sheet = ctx.GetSheet(_sheetId);
+        if (!TextBoxCommandGuards.TryFindTextBox(sheet, _textBoxId, out var textBox)) return;
         textBox.FillColor = _previousFillColor;
         textBox.OutlineColor = _previousOutlineColor;
         textBox.FillThemeColor = _previousFillThemeColor;
@@ -244,8 +244,8 @@ public sealed class RepositionTextBoxCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         if (!_applied) return;
-        var textBox = ctx.GetSheet(_sheetId).TextBoxes.FirstOrDefault(t => t.Id == _textBoxId);
-        if (textBox is null) return;
+        var sheet = ctx.GetSheet(_sheetId);
+        if (!TextBoxCommandGuards.TryFindTextBox(sheet, _textBoxId, out var textBox)) return;
         textBox.Anchor = _previousAnchor;
         _applied = false;
     }

@@ -244,9 +244,8 @@ public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var table = sheet.StructuredTables.FirstOrDefault(candidate => candidate.Id == _tableId);
-        if (table is null)
-            return new CommandOutcome(false, "Table was not found.");
+        if (!CommandGuards.TryFindStructuredTable(sheet, _tableId, out var table))
+            return CommandGuards.RejectStructuredTableNotFound();
 
         var showFirstColumn = _showFirstColumn ?? table.ShowFirstColumn;
         var showLastColumn = _showLastColumn ?? table.ShowLastColumn;
@@ -268,7 +267,7 @@ public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand
         if (!configureOutcome.Success)
             return configureOutcome;
 
-        table = sheet.StructuredTables.First(candidate => candidate.Id == _tableId);
+        table = FindRequiredStructuredTable(sheet, _tableId);
         foreach (var styleCommand in BuildStyleCommands(table))
         {
             var styleOutcome = styleCommand.Apply(ctx);
@@ -285,6 +284,9 @@ public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand
     }
 
     public void Revert(ICommandContext ctx) => RevertAppliedCommands(ctx);
+
+    private static StructuredTableModel FindRequiredStructuredTable(Sheet sheet, int tableId) =>
+        sheet.StructuredTables.First(table => table.Id == tableId);
 
     private IEnumerable<IWorkbookCommand> BuildStyleCommands(StructuredTableModel table)
     {
@@ -427,9 +429,8 @@ public sealed class ReapplyStructuredTableStyleCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var table = sheet.StructuredTables.FirstOrDefault(candidate => candidate.Id == _tableId);
-        if (table is null)
-            return new CommandOutcome(false, "Table was not found.");
+        if (!CommandGuards.TryFindStructuredTable(sheet, _tableId, out var table))
+            return CommandGuards.RejectStructuredTableNotFound();
 
         _applyStyleCommand = new ApplyStructuredTableStyleCommand(
             _sheetId,
@@ -500,9 +501,8 @@ public sealed class ConfigureStructuredTableStyleOptionsCommand : IWorkbookComma
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var tableIndex = sheet.StructuredTables.FindIndex(table => table.Id == _tableId);
-        if (tableIndex < 0)
-            return new CommandOutcome(false, "Table was not found.");
+        if (!CommandGuards.TryFindStructuredTableIndex(sheet, _tableId, out var tableIndex))
+            return CommandGuards.RejectStructuredTableNotFound();
 
         _previousTable = sheet.StructuredTables[tableIndex];
         sheet.StructuredTables[tableIndex] = CopyWithStyleOptions(
@@ -525,8 +525,7 @@ public sealed class ConfigureStructuredTableStyleOptionsCommand : IWorkbookComma
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        var tableIndex = sheet.StructuredTables.FindIndex(table => table.Id == _tableId);
-        if (tableIndex >= 0)
+        if (CommandGuards.TryFindStructuredTableIndex(sheet, _tableId, out var tableIndex))
             sheet.StructuredTables[tableIndex] = _previousTable;
     }
 

@@ -150,6 +150,6 @@ internal static class XlsxCustomRibbonPackageGraphNormalizer
         if (string.IsNullOrWhiteSpace(value))
             return "";
 
-        return XlsxPackagePath.NormalizeZipPath(value.Trim().TrimStart('/').Replace('\\', '/'));
+        return XlsxPackagePath.NormalizePackagePath(value.Trim());
     }
 }

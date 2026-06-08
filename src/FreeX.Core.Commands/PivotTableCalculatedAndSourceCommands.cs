@@ -40,9 +40,7 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)
             return protectedOutcome;
 
-        var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
-            string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
-        if (pivotTable is null)
+        if (!CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
             return CommandGuards.RejectPivotTableNotFound();
 
         var fieldCount = checked((int)pivotTable.SourceRange.ColCount);
@@ -50,7 +48,7 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
                 .Any(field => field.SourceFieldIndex < 0 || field.SourceFieldIndex >= fieldCount) ||
             _calculatedItems.Any(item => item.SourceFieldIndex < 0 || item.SourceFieldIndex >= fieldCount))
         {
-            return new CommandOutcome(false, "PivotTable field index is outside the source range.");
+            return CommandGuards.RejectPivotTableFieldIndexOutsideSourceRange();
         }
 
         if (_calculatedFields.Any(field => string.IsNullOrWhiteSpace(field.Name) || string.IsNullOrWhiteSpace(field.Formula)) ||
@@ -84,9 +82,7 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
-            string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
-        if (pivotTable is not null && _snapshot is not null)
+        if (CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable) && _snapshot is not null)
             _snapshot.Restore(pivotTable);
         AddPivotTableCommand.Restore(sheet, _targetSnapshot);
         _snapshot = null;
@@ -139,16 +135,14 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (_sourceRange.ColCount == 0 || _sourceRange.RowCount < 2)
-            return new CommandOutcome(false, "PivotTable source range must include headers and data.");
+            return CommandGuards.RejectPivotTableSourceRangeRequiresHeaders();
 
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)
             return protectedOutcome;
 
         var sourceSheet = ctx.GetSheet(_sourceRange.Start.Sheet);
-        var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
-            string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
-        if (pivotTable is null)
+        if (!CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
             return CommandGuards.RejectPivotTableNotFound();
 
         var fieldCount = checked((int)_sourceRange.ColCount);
@@ -159,7 +153,7 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
             return new CommandOutcome(false, "Existing PivotTable fields are outside the new source range.");
         }
 
-        var cache = ctx.Workbook.PivotCaches.FirstOrDefault(item => item.CacheId == pivotTable.CacheId);
+        var cache = CommandGuards.FindPivotCache(ctx.Workbook, pivotTable);
         _snapshot = PivotSourceSnapshot.Capture(pivotTable, cache);
         _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
 
@@ -180,13 +174,12 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
-            string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
-        var cache = pivotTable is null
-            ? null
-            : ctx.Workbook.PivotCaches.FirstOrDefault(item => item.CacheId == pivotTable.CacheId);
-        if (pivotTable is not null && _snapshot is not null)
-            _snapshot.Restore(pivotTable, cache);
+        if (CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
+        {
+            var cache = CommandGuards.FindPivotCache(ctx.Workbook, pivotTable);
+            if (_snapshot is not null)
+                _snapshot.Restore(pivotTable, cache);
+        }
         AddPivotTableCommand.Restore(sheet, _targetSnapshot);
         _snapshot = null;
         _targetSnapshot = null;

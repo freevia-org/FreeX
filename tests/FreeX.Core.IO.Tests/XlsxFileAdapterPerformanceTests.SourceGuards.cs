@@ -246,7 +246,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         stripperSource.Should().Contain("IReadOnlySet<string>? worksheetPathsToStrip");
         stripperSource.Should().Contain("internal static bool ShouldStripWorksheet");
         stripperSource.Should().Contain("internal static void StripRedundantStyleOnlyCells");
-        stripperSource.Should().Contain("worksheetPathsToStrip.Contains(NormalizeEntryPath(sourceEntry.FullName))");
+        stripperSource.Should().Contain("worksheetPathsToStrip.Contains(XlsxPackagePath.NormalizePackagePath(sourceEntry.FullName))");
         stripperSource.Should().Contain("ContainsDuplicateStyleOnlyCells(scanStream)");
     }
 

@@ -2,6 +2,24 @@ using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
 
+file static class PivotTableSlicerCommandLookups
+{
+    public static SlicerModel? FindSlicer(Workbook workbook, string? slicerName) =>
+        workbook.Slicers.FirstOrDefault(slicer =>
+            string.Equals(slicer.Name, slicerName, StringComparison.OrdinalIgnoreCase));
+
+    public static int FindSourceFieldIndex(IReadOnlyList<string> headers, string? sourceFieldName, StringComparison comparison)
+    {
+        for (var index = 0; index < headers.Count; index++)
+        {
+            if (string.Equals(headers[index], sourceFieldName, comparison))
+                return index;
+        }
+
+        return -1;
+    }
+}
+
 public sealed class SetSlicerSelectionCommand : IWorkbookCommand
 {
     private readonly string _slicerName;
@@ -19,8 +37,7 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
-        var slicer = ctx.Workbook.Slicers.FirstOrDefault(item =>
-            string.Equals(item.Name, _slicerName, StringComparison.OrdinalIgnoreCase));
+        var slicer = PivotTableSlicerCommandLookups.FindSlicer(ctx.Workbook, _slicerName);
         if (slicer is null)
             return new CommandOutcome(false, "Slicer was not found.");
         if (string.IsNullOrWhiteSpace(slicer.SourcePivotTableName) ||
@@ -31,7 +48,7 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
 
         var target = PivotTableSlicerTimelineCommandHelpers.FindConnectedPivotTable(ctx.Workbook, slicer.SourcePivotTableName);
         if (target is null)
-            return new CommandOutcome(false, "Connected PivotTable was not found.");
+            return PivotTableSlicerTimelineCommandGuards.ConnectedPivotTableNotFound();
 
         var (sheet, pivotTable) = target.Value;
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)
@@ -39,10 +56,12 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
 
         var sourceSheet = ctx.Workbook.GetSheet(pivotTable.SourceRange.Start.Sheet) ?? sheet;
         var headers = PivotTableSlicerTimelineCommandHelpers.ReadPivotHeaders(sourceSheet, pivotTable);
-        var sourceFieldIndex = headers.FindIndex(header =>
-            string.Equals(header, slicer.SourceFieldName, StringComparison.OrdinalIgnoreCase));
+        var sourceFieldIndex = PivotTableSlicerCommandLookups.FindSourceFieldIndex(
+            headers,
+            slicer.SourceFieldName,
+            StringComparison.OrdinalIgnoreCase);
         if (sourceFieldIndex < 0)
-            return new CommandOutcome(false, "Connected PivotTable field was not found.");
+            return PivotTableSlicerTimelineCommandGuards.ConnectedPivotTableFieldNotFound();
 
         _snapshot = SlicerSelectionSnapshot.Capture(slicer, pivotTable);
         _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
@@ -59,8 +78,7 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
 
     public void Revert(ICommandContext ctx)
     {
-        var slicer = ctx.Workbook.Slicers.FirstOrDefault(item =>
-            string.Equals(item.Name, _slicerName, StringComparison.OrdinalIgnoreCase));
+        var slicer = PivotTableSlicerCommandLookups.FindSlicer(ctx.Workbook, _slicerName);
         var target = slicer?.SourcePivotTableName is null ? null : PivotTableSlicerTimelineCommandHelpers.FindConnectedPivotTable(ctx.Workbook, slicer.SourcePivotTableName);
         if (slicer is not null && target is { } connected && _snapshot is not null)
         {
@@ -121,28 +139,32 @@ public sealed class AddSlicerCommand : IWorkbookCommand
             return new CommandOutcome(false, "Slicer name, PivotTable, and field are required.");
         }
 
-        if (ctx.Workbook.Slicers.Any(slicer => string.Equals(slicer.Name, _slicerName, StringComparison.OrdinalIgnoreCase)))
+        if (PivotTableSlicerCommandLookups.FindSlicer(ctx.Workbook, _slicerName) is not null)
             return new CommandOutcome(false, "A slicer with that name already exists.");
 
         var target = PivotTableSlicerTimelineCommandHelpers.FindConnectedPivotTable(ctx.Workbook, _pivotTableName);
         if (target is null)
-            return new CommandOutcome(false, "Connected PivotTable was not found.");
+            return PivotTableSlicerTimelineCommandGuards.ConnectedPivotTableNotFound();
         if (CommandGuards.RejectIfProtectedWithoutPermission(target.Value.Sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)
             return protectedOutcome;
-        if (CommandGuards.RejectIfProtectedWithoutPermission(target.Value.Sheet, SheetProtectionPermission.EditObjects) is { } objectProtectedOutcome)
+        if (PivotTableSlicerTimelineCommandGuards.RejectIfEditObjectsBlocked(target.Value.Sheet) is { } objectProtectedOutcome)
             return objectProtectedOutcome;
 
         var sourceSheet = ctx.Workbook.GetSheet(target.Value.PivotTable.SourceRange.Start.Sheet) ?? target.Value.Sheet;
         var headers = PivotTableSlicerTimelineCommandHelpers.ReadPivotHeaders(sourceSheet, target.Value.PivotTable);
-        if (!headers.Contains(_sourceFieldName, StringComparer.CurrentCultureIgnoreCase))
-            return new CommandOutcome(false, "Connected PivotTable field was not found.");
+        var sourceFieldIndex = PivotTableSlicerCommandLookups.FindSourceFieldIndex(
+            headers,
+            _sourceFieldName,
+            StringComparison.CurrentCultureIgnoreCase);
+        if (sourceFieldIndex < 0)
+            return PivotTableSlicerTimelineCommandGuards.ConnectedPivotTableFieldNotFound();
 
         var slicer = new SlicerModel
         {
             Name = _slicerName.Trim(),
             CacheName = $"Slicer_{PivotTableSlicerTimelineCommandHelpers.SanitizeCacheName(_slicerName, "Slicer")}",
             SourcePivotTableName = target.Value.PivotTable.Name,
-            SourceFieldName = headers.First(header => string.Equals(header, _sourceFieldName, StringComparison.CurrentCultureIgnoreCase)),
+            SourceFieldName = headers[sourceFieldIndex],
             DrawingAnchor = PivotTableFloatingControlAnchor.CreateDefault(target.Value.PivotTable)
         };
         ctx.Workbook.Slicers.Add(slicer);

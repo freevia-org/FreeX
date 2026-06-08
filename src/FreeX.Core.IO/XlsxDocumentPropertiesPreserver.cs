@@ -368,7 +368,7 @@ internal static class XlsxDocumentPropertiesPreserver
             .Elements(contentTypeNs + "Override")
             .Where(element =>
             {
-                var partName = element.Attribute("PartName")?.Value?.Trim().TrimStart('/');
+                var partName = NormalizeContentTypePartName(element.Attribute("PartName")?.Value);
                 return !string.IsNullOrWhiteSpace(partName) &&
                     partName.StartsWith(CorePropertiesServicePartPrefix, StringComparison.OrdinalIgnoreCase);
             })
@@ -413,7 +413,7 @@ internal static class XlsxDocumentPropertiesPreserver
             .Elements(contentTypeNs + "Override")
             .Any(element =>
             {
-                var partName = element.Attribute("PartName")?.Value?.Trim().TrimStart('/');
+                var partName = NormalizeContentTypePartName(element.Attribute("PartName")?.Value);
                 return !string.IsNullOrWhiteSpace(partName) &&
                     partName.StartsWith(CorePropertiesServicePartPrefix, StringComparison.OrdinalIgnoreCase);
             }) ||
@@ -423,6 +423,9 @@ internal static class XlsxDocumentPropertiesPreserver
                     string.Equals(element.Attribute("Extension")?.Value?.Trim(), "psmdcp", StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(element.Attribute("ContentType")?.Value?.Trim(), CorePropertiesContentType, StringComparison.OrdinalIgnoreCase));
     }
+
+    private static string? NormalizeContentTypePartName(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : XlsxPackagePath.NormalizePackagePath(value.Trim());
 
     private static void PreserveDocumentPropertyPart(ZipArchive sourceArchive, ZipArchive targetArchive, string partName)
     {

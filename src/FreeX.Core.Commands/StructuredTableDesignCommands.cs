@@ -26,9 +26,8 @@ public sealed class RenameStructuredTableCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var tableIndex = sheet.StructuredTables.FindIndex(table => table.Id == _tableId);
-        if (tableIndex < 0)
-            return new CommandOutcome(false, "Table was not found.");
+        if (!CommandGuards.TryFindStructuredTableIndex(sheet, _tableId, out var tableIndex))
+            return CommandGuards.RejectStructuredTableNotFound();
 
         if (StructuredTableDesignCommandHelpers.ValidateTableName(ctx.Workbook, _newName, _sheetId, _tableId) is { } error)
             return new CommandOutcome(false, error);
@@ -49,8 +48,7 @@ public sealed class RenameStructuredTableCommand : IWorkbookCommand
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        var tableIndex = sheet.StructuredTables.FindIndex(table => table.Id == _tableId);
-        if (tableIndex >= 0)
+        if (CommandGuards.TryFindStructuredTableIndex(sheet, _tableId, out var tableIndex))
             sheet.StructuredTables[tableIndex] = _previousTable;
         _previousTable = null;
     }
@@ -79,9 +77,8 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var tableIndex = sheet.StructuredTables.FindIndex(table => table.Id == _tableId);
-        if (tableIndex < 0)
-            return new CommandOutcome(false, "Table was not found.");
+        if (!CommandGuards.TryFindStructuredTableIndex(sheet, _tableId, out var tableIndex))
+            return CommandGuards.RejectStructuredTableNotFound();
 
         var table = sheet.StructuredTables[tableIndex];
         if (ValidateResizeRange(table, _newRange) is { } error)
@@ -108,8 +105,7 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        var tableIndex = sheet.StructuredTables.FindIndex(table => table.Id == _tableId);
-        if (tableIndex >= 0)
+        if (CommandGuards.TryFindStructuredTableIndex(sheet, _tableId, out var tableIndex))
             sheet.StructuredTables[tableIndex] = _previousTable;
         _previousTable = null;
     }
@@ -213,9 +209,8 @@ public sealed class ConvertStructuredTableToRangeCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var tableIndex = sheet.StructuredTables.FindIndex(table => table.Id == _tableId);
-        if (tableIndex < 0)
-            return new CommandOutcome(false, "Table was not found.");
+        if (!CommandGuards.TryFindStructuredTableIndex(sheet, _tableId, out var tableIndex))
+            return CommandGuards.RejectStructuredTableNotFound();
 
         _removedIndex = tableIndex;
         _removedTable = sheet.StructuredTables[tableIndex];

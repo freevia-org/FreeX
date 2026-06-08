@@ -412,7 +412,7 @@ public sealed partial class XlsxFileAdapter
                 var worksheetRels = XlsxRelationshipReader.LoadTargets(
                     sourceArchive, XlsxPackagePath.GetRelationshipPartPath(worksheetPath), worksheetPath, packageRelNs);
                 if (worksheetRels.TryGetValue(drawingRelId, out var drawingPath))
-                    result[sheetName] = XlsxPackagePath.NormalizeZipPath(drawingPath);
+                    result[sheetName] = XlsxPackagePath.NormalizePackagePath(drawingPath);
             }
 
             return result;

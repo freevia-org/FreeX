@@ -50,7 +50,6 @@ public partial class XlsxCorpusRunnerTests
             [XlsxUnsupportedFeatureKind.PowerQuery] = "excluded Power Query disclosed",
             [XlsxUnsupportedFeatureKind.DataModel] = "excluded Data Model disclosed",
             [XlsxUnsupportedFeatureKind.LinkedDataTypes] = "excluded linked data type disclosed",
-            [XlsxUnsupportedFeatureKind.ThreadedComments] = "unsupported threaded comment disclosed",
             [XlsxUnsupportedFeatureKind.TrackChanges] = "unsupported track changes disclosed",
             [XlsxUnsupportedFeatureKind.FormControls] = "unsupported form control disclosed",
             [XlsxUnsupportedFeatureKind.DigitalSignatures] = "unsupported digital signature disclosed",
@@ -81,9 +80,6 @@ public partial class XlsxCorpusRunnerTests
 
         if (tags.Contains("linked-data-types") || tags.Contains("rich-data"))
             expected.Add(XlsxUnsupportedFeatureKind.LinkedDataTypes);
-
-        if (tags.Contains("threaded-comments"))
-            expected.Add(XlsxUnsupportedFeatureKind.ThreadedComments);
 
         if (tags.Contains("track-changes") || tags.Contains("revision-history"))
             expected.Add(XlsxUnsupportedFeatureKind.TrackChanges);

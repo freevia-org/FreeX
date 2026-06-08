@@ -188,7 +188,9 @@ internal sealed record WorkbookSmokeResult(
     IReadOnlyList<string> FreeXPreSaveWarnings,
     FreeXWorkbookSummary? FreeXReopenedExcelSave,
     IReadOnlyList<string> FreeXReopenedExcelSaveWarnings,
-    string? Error)
+    string? Error,
+    string? ExpectationFailureCounter,
+    string? ExpectationFailureKind)
 {
     public static WorkbookSmokeResult Pass(
         WorkbookSmokeInput input,
@@ -213,10 +215,17 @@ internal sealed record WorkbookSmokeResult(
             freeXPreSaveWarnings,
             FreeXReopenedExcelSave,
             freeXReopenedExcelSaveWarnings,
+            null,
+            null,
             null);
 
-    public static WorkbookSmokeResult Fail(WorkbookSmokeInput input, string? freeXSavedPath, string error) =>
-        new(false, input, null, freeXSavedPath, null, null, null, null, Array.Empty<string>(), null, Array.Empty<string>(), error);
+    public static WorkbookSmokeResult Fail(
+        WorkbookSmokeInput input,
+        string? freeXSavedPath,
+        string error,
+        string? expectationFailureCounter,
+        string? expectationFailureKind) =>
+        new(false, input, null, freeXSavedPath, null, null, null, null, Array.Empty<string>(), null, Array.Empty<string>(), error, expectationFailureCounter, expectationFailureKind);
 }
 
 internal sealed record ExcelWorkbookSummary(

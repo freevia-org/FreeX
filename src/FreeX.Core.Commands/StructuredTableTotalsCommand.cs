@@ -22,13 +22,12 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var table = sheet.StructuredTables.FirstOrDefault(candidate => candidate.Id == _tableId);
-        if (table is null)
-            return new CommandOutcome(false, "Table was not found.");
+        if (!CommandGuards.TryFindStructuredTable(sheet, _tableId, out var table))
+            return CommandGuards.RejectStructuredTableNotFound();
         if (!table.TotalsRowShown)
             return new CommandOutcome(false, "Table totals row is not shown.");
         if (table.Columns.Count == 0)
-            return new CommandOutcome(false, "Table has no columns.");
+            return CommandGuards.RejectStructuredTableHasNoColumns();
 
         _previousCells.Clear();
         var totalsRow = table.Range.End.Row;
@@ -187,13 +186,12 @@ public sealed class SetStructuredTableTotalsRowCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var table = sheet.StructuredTables.FirstOrDefault(candidate => candidate.Id == _tableId);
-        if (table is null)
-            return new CommandOutcome(false, "Table was not found.");
+        if (!CommandGuards.TryFindStructuredTable(sheet, _tableId, out var table))
+            return CommandGuards.RejectStructuredTableNotFound();
         if (table.TotalsRowShown == _showTotalsRow)
             return new CommandOutcome(true, AffectedCells: [table.Range.End]);
         if (table.Columns.Count == 0)
-            return new CommandOutcome(false, "Table has no columns.");
+            return CommandGuards.RejectStructuredTableHasNoColumns();
 
         return _showTotalsRow
             ? ShowTotalsRow(ctx, sheet, table)

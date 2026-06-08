@@ -24,8 +24,8 @@ public sealed class RepositionShapeCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
-        var shape = sheet.DrawingShapes.FirstOrDefault(s => s.Id == _shapeId);
-        if (shape is null) return new CommandOutcome(false, "Shape was not found.");
+        if (!DrawingShapeCommandGuards.TryFindShape(sheet, _shapeId, out var shape))
+            return new CommandOutcome(false, "Shape was not found.");
         _previousAnchor = shape.Anchor;
         shape.Anchor = _anchor;
         _applied = true;
@@ -35,8 +35,7 @@ public sealed class RepositionShapeCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         if (!_applied) return;
-        var shape = ctx.GetSheet(_sheetId).DrawingShapes.FirstOrDefault(s => s.Id == _shapeId);
-        if (shape is null) return;
+        if (!DrawingShapeCommandGuards.TryFindShape(ctx.GetSheet(_sheetId), _shapeId, out var shape)) return;
         shape.Anchor = _previousAnchor;
         _applied = false;
     }

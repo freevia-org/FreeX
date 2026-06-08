@@ -267,10 +267,10 @@ internal static class XlsxWorksheetDrawingReferencePreserver
             if (!drawingPaths.TargetDrawingPaths.TryGetValue(sheetName, out var targetDrawingPath))
                 continue;
 
-            var normalizedSourceDrawingPath = XlsxPackagePath.NormalizeZipPath(sourceDrawingPath.Replace('\\', '/'));
+            var normalizedSourceDrawingPath = XlsxPackagePath.NormalizePackagePath(sourceDrawingPath);
             if (string.Equals(
                     normalizedSourceDrawingPath,
-                    XlsxPackagePath.NormalizeZipPath(targetDrawingPath.Replace('\\', '/')),
+                    XlsxPackagePath.NormalizePackagePath(targetDrawingPath),
                     StringComparison.OrdinalIgnoreCase) ||
                 activeDrawingPaths.Contains(normalizedSourceDrawingPath))
             {

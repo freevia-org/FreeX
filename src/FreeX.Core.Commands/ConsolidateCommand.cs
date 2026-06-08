@@ -76,7 +76,7 @@ public sealed class ConsolidateCommand : IWorkbookCommand
                 {
                     var address = new CellAddress(_destination.Sheet, _destination.Row + rowOffset, _destination.Col + colOffset);
                     if (!CommandGuards.CanEditCell(ctx.Workbook, destinationSheet, address))
-                        return new CommandOutcome(false, "The sheet is protected.");
+                        return CommandGuards.RejectSheetProtected();
                 }
             }
         }
@@ -154,7 +154,7 @@ public sealed class ConsolidateCommand : IWorkbookCommand
             foreach (var (address, _, _) in writes)
             {
                 if (!CommandGuards.CanEditCell(ctx.Workbook, destinationSheet, address))
-                    return new CommandOutcome(false, "The sheet is protected.");
+                    return CommandGuards.RejectSheetProtected();
             }
         }
 

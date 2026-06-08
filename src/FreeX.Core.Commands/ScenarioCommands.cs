@@ -40,22 +40,20 @@ public sealed class SaveScenarioCommand : IWorkbookCommand
         {
             var sheet = ctx.Workbook.GetSheet(cell.Address.Sheet);
             if (sheet is null)
-                return new CommandOutcome(false, "Scenario changing cells must belong to this workbook.");
+                return ScenarioCommandHelpers.ChangingCellsOutsideWorkbook();
         }
 
         if (ScenarioProtectionGuards.RejectIfChangingCellsProtected(ctx.Workbook, _scenario.ChangingCells) is { } protectedOutcome)
             return protectedOutcome;
 
-        var targetNameIndex = ctx.Workbook.Scenarios.FindIndex(s =>
-            string.Equals(s.Name, _scenario.Name, StringComparison.OrdinalIgnoreCase));
+        var targetNameIndex = ScenarioCommandHelpers.FindScenarioIndex(ctx.Workbook.Scenarios, _scenario.Name);
         if (_replaceScenarioName is not null &&
             targetNameIndex >= 0 &&
-            !string.Equals(ctx.Workbook.Scenarios[targetNameIndex].Name, _replaceScenarioName, StringComparison.OrdinalIgnoreCase))
+            !ScenarioCommandHelpers.IsScenarioNamed(ctx.Workbook.Scenarios[targetNameIndex], _replaceScenarioName))
             return new CommandOutcome(false, "Scenario name already exists.");
 
         var nameToReplace = _replaceScenarioName ?? _scenario.Name;
-        _previousIndex = ctx.Workbook.Scenarios.FindIndex(s =>
-            string.Equals(s.Name, nameToReplace, StringComparison.OrdinalIgnoreCase));
+        _previousIndex = ScenarioCommandHelpers.FindScenarioIndex(ctx.Workbook.Scenarios, nameToReplace);
         if (_previousIndex >= 0)
         {
             _previousScenario = ctx.Workbook.Scenarios[_previousIndex];
@@ -81,8 +79,7 @@ public sealed class SaveScenarioCommand : IWorkbookCommand
         }
         else
         {
-            ctx.Workbook.Scenarios.RemoveAll(s =>
-                string.Equals(s.Name, _scenario.Name, StringComparison.OrdinalIgnoreCase));
+            ctx.Workbook.Scenarios.RemoveAll(s => ScenarioCommandHelpers.IsScenarioNamed(s, _scenario.Name));
         }
 
         _applied = false;
@@ -104,10 +101,9 @@ public sealed class ApplyScenarioCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
-        var scenario = ctx.Workbook.Scenarios.FirstOrDefault(s =>
-            string.Equals(s.Name, _name, StringComparison.OrdinalIgnoreCase));
+        var scenario = ScenarioCommandHelpers.FindScenario(ctx.Workbook.Scenarios, _name);
         if (scenario is null)
-            return new CommandOutcome(false, "Scenario was not found.");
+            return ScenarioCommandHelpers.ScenarioNotFound();
         if (ScenarioProtectionGuards.RejectIfChangingCellsProtected(ctx.Workbook, scenario.ChangingCells) is { } protectedOutcome)
             return protectedOutcome;
 
@@ -116,7 +112,7 @@ public sealed class ApplyScenarioCommand : IWorkbookCommand
         {
             var sheet = ctx.Workbook.GetSheet(change.Address.Sheet);
             if (sheet is null)
-                return new CommandOutcome(false, "Scenario changing cells must belong to this workbook.");
+                return ScenarioCommandHelpers.ChangingCellsOutsideWorkbook();
 
             _snapshot.Add((change.Address, sheet.GetCell(change.Address)?.Clone()));
             sheet.SetCell(change.Address, Cell.FromValue(change.Value));
@@ -163,10 +159,9 @@ public sealed class DeleteScenarioCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
-        _removedIndex = ctx.Workbook.Scenarios.FindIndex(s =>
-            string.Equals(s.Name, _name, StringComparison.OrdinalIgnoreCase));
+        _removedIndex = ScenarioCommandHelpers.FindScenarioIndex(ctx.Workbook.Scenarios, _name);
         if (_removedIndex < 0)
-            return new CommandOutcome(false, "Scenario was not found.");
+            return ScenarioCommandHelpers.ScenarioNotFound();
 
         _removedScenario = ctx.Workbook.Scenarios[_removedIndex];
         if (ScenarioProtectionGuards.RejectIfChangingCellsProtected(ctx.Workbook, _removedScenario.ChangingCells) is { } protectedOutcome)
@@ -203,7 +198,7 @@ internal static class ScenarioProtectionGuards
 
             var sheet = workbook.GetSheet(sheetId);
             if (sheet is null)
-                return new CommandOutcome(false, "Scenario changing cells must belong to this workbook.");
+                return ScenarioCommandHelpers.ChangingCellsOutsideWorkbook();
             if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditScenarios) is { } protectedOutcome)
                 return protectedOutcome;
         }
@@ -214,6 +209,35 @@ internal static class ScenarioProtectionGuards
 
 file static class ScenarioCommandHelpers
 {
+    private const string ScenarioNotFoundMessage = "Scenario was not found.";
+    private const string ChangingCellsOutsideWorkbookMessage = "Scenario changing cells must belong to this workbook.";
+
+    public static CommandOutcome ScenarioNotFound() =>
+        new(false, ScenarioNotFoundMessage);
+
+    public static CommandOutcome ChangingCellsOutsideWorkbook() =>
+        new(false, ChangingCellsOutsideWorkbookMessage);
+
+    public static bool IsScenarioNamed(WorkbookScenario scenario, string name) =>
+        string.Equals(scenario.Name, name, StringComparison.OrdinalIgnoreCase);
+
+    public static int FindScenarioIndex(IReadOnlyList<WorkbookScenario> scenarios, string name)
+    {
+        for (var index = 0; index < scenarios.Count; index++)
+        {
+            if (IsScenarioNamed(scenarios[index], name))
+                return index;
+        }
+
+        return -1;
+    }
+
+    public static WorkbookScenario? FindScenario(IReadOnlyList<WorkbookScenario> scenarios, string name)
+    {
+        var index = FindScenarioIndex(scenarios, name);
+        return index >= 0 ? scenarios[index] : null;
+    }
+
     public static List<CellAddress> BuildAffectedCells(IReadOnlyList<ScenarioCellValue> changingCells)
     {
         var affectedCells = new List<CellAddress>(changingCells.Count);

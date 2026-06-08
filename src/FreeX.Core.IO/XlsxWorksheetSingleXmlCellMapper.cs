@@ -343,7 +343,7 @@ internal static class XlsxWorksheetSingleXmlCellMapper
 
     private static bool IsSingleCellTablePartEntry(ZipArchiveEntry entry)
     {
-        var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+        var path = XlsxPackagePath.NormalizeEntryPath(entry);
         return path.StartsWith("xl/tables/tableSingleCells", StringComparison.OrdinalIgnoreCase) &&
                path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
                !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);

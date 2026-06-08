@@ -449,11 +449,9 @@ internal static class ExcelOpenSmoke
             {
                 var freeXSave = SaveThroughFreeX(input.SourcePath, freeXSavedDirectory);
                 AssertFreeXLoadWarnings(input, "FreeX source load", freeXSave.LoadWarnings);
-                AssertPackageEntriesCanonical(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertPackageHealth(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertNoExcelRecoveryLog(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertOpenXmlValid(freeXSave.SavedPath, "FreeX-saved workbook");
-                AssertPackageContentTypesComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
-                AssertPackageRelationshipsComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookPackageRoot(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertDocumentPropertiesPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookSheetRelationshipsComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -570,7 +568,9 @@ internal static class ExcelOpenSmoke
             return WorkbookSmokeResult.Fail(
                 input,
                 freeXSavedPath,
-                FormatFailure(ex));
+                FormatFailure(ex),
+                ex.Data["ExpectationFailureCounter"] as string,
+                ex.Data["ExpectationFailureKind"] as string);
         }
     }
 
@@ -693,10 +693,8 @@ internal static class ExcelOpenSmoke
             ReleaseComObject(workbook);
             workbook = null;
             CollectComReferences();
-            AssertPackageEntriesCanonical(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertPackageHealth(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertOpenXmlValid(excelSavedPath, "Excel-saved workbook");
-            AssertPackageContentTypesComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
-            AssertPackageRelationshipsComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookPackageRoot(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertDocumentPropertiesPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookSheetRelationshipsComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -863,6 +861,22 @@ internal static class ExcelOpenSmoke
         }
     }
 
+    private static void AssertPackageHealth(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = XlsxPackageHealthValidator.Validate(archive);
+        if (issues.Count == 0)
+            return;
+
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid package health: {sample}{suffix}");
+    }
+
     private static void AssertPublicPackageTagExpectations(
         string xlsxPath,
         CorpusManifestRow? row,
@@ -913,13 +927,13 @@ internal static class ExcelOpenSmoke
                 issues.Add(stylesContentTypeIssue);
         }
 
-        if (tags.Contains("shared-strings") &&
+        if (HasSharedStringPackageTag(tags) &&
             !PackageEntryExists(archive, "xl/sharedStrings.xml"))
         {
             issues.Add("missing xl/sharedStrings.xml for public shared-strings tag");
         }
 
-        if (tags.Contains("shared-strings") &&
+        if (HasSharedStringPackageTag(tags) &&
             !PackageRelationshipExists(
                 archive,
                 new PackageRelationshipExpectation(
@@ -930,7 +944,7 @@ internal static class ExcelOpenSmoke
             issues.Add("missing workbook relationship to xl/sharedStrings.xml for public shared-strings tag");
         }
 
-        if (tags.Contains("shared-strings"))
+        if (HasSharedStringPackageTag(tags))
         {
             var sharedStringsContentTypeIssue = FindPackageContentTypeIssue(
                 archive,
@@ -1003,7 +1017,7 @@ internal static class ExcelOpenSmoke
     private static bool HasExpectedPublicPackageTags(IReadOnlySet<string> tags) =>
         tags.Contains("styles") ||
         tags.Contains("formatting") ||
-        tags.Contains("shared-strings") ||
+        HasSharedStringPackageTag(tags) ||
         tags.Contains("hyperlinks") ||
         tags.Contains("merged-cells") ||
         tags.Contains("inline-strings") ||
@@ -1014,12 +1028,16 @@ internal static class ExcelOpenSmoke
     private static bool HasExpectedPublicWorksheetPackageTags(IReadOnlySet<string> tags) =>
         tags.Contains("styles") ||
         tags.Contains("formatting") ||
-        tags.Contains("shared-strings") ||
+        HasSharedStringPackageTag(tags) ||
         tags.Contains("hyperlinks") ||
         tags.Contains("merged-cells") ||
         tags.Contains("inline-strings") ||
         tags.Contains("cell-types") ||
         (tags.Contains("sheet-names") && tags.Contains("boundary"));
+
+    private static bool HasSharedStringPackageTag(IReadOnlySet<string> tags) =>
+        tags.Contains("shared-strings") ||
+        tags.Contains("shared-string-package");
 
     private static IReadOnlyList<XDocument> LoadPublicWorkbookWorksheetXmlDocuments(
         ZipArchive archive,
@@ -17376,7 +17394,8 @@ internal static class ExcelOpenSmoke
                 RequiredFreeXSavedPackageParts =
                 [
                     "docProps/core.xml",
-                    "docProps/app.xml"
+                    "docProps/app.xml",
+                    "docProps/custom.xml"
                 ],
                 RequiredFreeXSavedPackageContentTypes =
                 [
@@ -17385,7 +17404,10 @@ internal static class ExcelOpenSmoke
                         "application/vnd.openxmlformats-package.core-properties+xml"),
                     new(
                         "docProps/app.xml",
-                        "application/vnd.openxmlformats-officedocument.extended-properties+xml")
+                        "application/vnd.openxmlformats-officedocument.extended-properties+xml"),
+                    new(
+                        "docProps/custom.xml",
+                        "application/vnd.openxmlformats-officedocument.custom-properties+xml")
                 ],
                 RequiredFreeXSavedPackageRelationships =
                 [
@@ -17396,7 +17418,11 @@ internal static class ExcelOpenSmoke
                     new(
                         "_rels/.rels",
                         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties",
-                        "docProps/app.xml")
+                        "docProps/app.xml"),
+                    new(
+                        "_rels/.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties",
+                        "docProps/custom.xml")
                 ],
                 RequiredExcelSavedPackageContentTypes =
                 [
@@ -17405,7 +17431,10 @@ internal static class ExcelOpenSmoke
                         "application/vnd.openxmlformats-package.core-properties+xml"),
                     new(
                         "docProps/app.xml",
-                        "application/vnd.openxmlformats-officedocument.extended-properties+xml")
+                        "application/vnd.openxmlformats-officedocument.extended-properties+xml"),
+                    new(
+                        "docProps/custom.xml",
+                        "application/vnd.openxmlformats-officedocument.custom-properties+xml")
                 ],
                 RequiredExcelSavedPackageRelationships =
                 [
@@ -17416,7 +17445,11 @@ internal static class ExcelOpenSmoke
                     new(
                         "_rels/.rels",
                         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties",
-                        "docProps/app.xml")
+                        "docProps/app.xml"),
+                    new(
+                        "_rels/.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties",
+                        "docProps/custom.xml")
                 ]
             };
         }
@@ -19009,14 +19042,20 @@ internal static class ExcelOpenSmoke
 
         if (actual is null)
         {
-            throw new InvalidDataException(
+            var exception = new InvalidDataException(
                 $"{label} expectation for {input.Description} was not measured; expected at least {minimum}.");
+            exception.Data["ExpectationFailureCounter"] = label;
+            exception.Data["ExpectationFailureKind"] = "not-measured";
+            throw exception;
         }
 
         if (actual < minimum)
         {
-            throw new InvalidDataException(
+            var exception = new InvalidDataException(
                 $"{label} expectation failed for {input.Description}: expected at least {minimum}, observed {actual}.");
+            exception.Data["ExpectationFailureCounter"] = label;
+            exception.Data["ExpectationFailureKind"] = "below-minimum";
+            throw exception;
         }
     }
 
@@ -19154,6 +19193,21 @@ internal static class ExcelOpenSmoke
             total = summary.Total,
             passed = summary.Passed,
             failed = summary.Failed,
+            aggregates = new
+            {
+                openedTotals = BuildSummaryTotals(summary.Results.Select(result => result.Opened)),
+                reopenedTotals = BuildSummaryTotals(summary.Results.Select(result => result.Reopened)),
+                freeXPreSaveTotals = BuildSummaryTotals(summary.Results.Select(result => result.FreeXPreSave)),
+                freeXReopenedExcelSaveTotals = BuildSummaryTotals(summary.Results.Select(result => result.FreeXReopenedExcelSave)),
+                freeXWarningCounts = new
+                {
+                    preSaveWorkbookCount = summary.Results.Count(result => result.FreeXPreSaveWarnings.Count > 0),
+                    preSaveTotal = summary.Results.Sum(result => result.FreeXPreSaveWarnings.Count),
+                    reopenedWorkbookCount = summary.Results.Count(result => result.FreeXReopenedExcelSaveWarnings.Count > 0),
+                    reopenedTotal = summary.Results.Sum(result => result.FreeXReopenedExcelSaveWarnings.Count)
+                },
+                expectationFailuresByCounter = CountExpectationFailuresByCounter(summary.Results)
+            },
             corpus = corpusSelection is null
                 ? null
                 : new
@@ -19177,6 +19231,8 @@ internal static class ExcelOpenSmoke
                 sourcePath = result.Input.SourcePath,
                 description = result.Input.Description,
                 workflow = FormatWorkflow(result.Input.Workflow),
+                generatedWithExcel = result.Input.GenerateWithExcel,
+                sourceAuthorship = result.Input.GenerateWithExcel ? "excel-authored" : "external-or-freex-authored",
                 expectations = result.Input.Expectations,
                 corpus = result.Input.CorpusRow is null
                     ? null
@@ -19197,7 +19253,9 @@ internal static class ExcelOpenSmoke
                 freeXPreSaveWarnings = result.FreeXPreSaveWarnings,
                 freeXReopenedExcelSave = result.FreeXReopenedExcelSave,
                 freeXReopenedExcelSaveWarnings = result.FreeXReopenedExcelSaveWarnings,
-                error = result.Error
+                error = result.Error,
+                expectationFailureCounter = result.ExpectationFailureCounter,
+                expectationFailureKind = result.ExpectationFailureKind
             })
         };
 
@@ -19208,6 +19266,39 @@ internal static class ExcelOpenSmoke
         File.WriteAllText(reportPath, json);
         Console.WriteLine($"Report: {reportPath}");
     }
+
+    private static IReadOnlyDictionary<string, int> BuildSummaryTotals<TSummary>(IEnumerable<TSummary?> summaries)
+        where TSummary : class
+    {
+        var properties = typeof(TSummary)
+            .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+            .Where(property => property.PropertyType == typeof(int))
+            .ToArray();
+        var totals = properties.ToDictionary(
+            property => property.Name,
+            _ => 0,
+            StringComparer.Ordinal);
+
+        foreach (var summary in summaries)
+        {
+            if (summary is null)
+                continue;
+
+            foreach (var property in properties)
+            {
+                totals[property.Name] += (int)property.GetValue(summary)!;
+            }
+        }
+
+        return totals;
+    }
+
+    private static IReadOnlyDictionary<string, int> CountExpectationFailuresByCounter(IEnumerable<WorkbookSmokeResult> results) =>
+        results
+            .Select(result => result.ExpectationFailureCounter)
+            .Where(counter => !string.IsNullOrWhiteSpace(counter))
+            .GroupBy(counter => counter!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
 
     private static string GetUserProfile()
     {

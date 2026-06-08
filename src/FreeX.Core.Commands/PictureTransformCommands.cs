@@ -45,8 +45,8 @@ public sealed class ResizePictureCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         if (!_applied) return;
-        var picture = ctx.GetSheet(_sheetId).Pictures.FirstOrDefault(p => p.Id == _pictureId);
-        if (picture is null) return;
+        var sheet = ctx.GetSheet(_sheetId);
+        if (!PictureCommandGuards.TryFindPicture(sheet, _pictureId, out var picture)) return;
         picture.Width = _previousWidth;
         picture.Height = _previousHeight;
         _applied = false;
@@ -86,8 +86,8 @@ public sealed class RepositionPictureCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         if (!_applied) return;
-        var picture = ctx.GetSheet(_sheetId).Pictures.FirstOrDefault(p => p.Id == _pictureId);
-        if (picture is null) return;
+        var sheet = ctx.GetSheet(_sheetId);
+        if (!PictureCommandGuards.TryFindPicture(sheet, _pictureId, out var picture)) return;
         picture.Anchor = _previousAnchor;
         _applied = false;
     }
@@ -131,8 +131,8 @@ public sealed class RotatePictureCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         if (!_applied) return;
-        var picture = ctx.GetSheet(_sheetId).Pictures.FirstOrDefault(p => p.Id == _pictureId);
-        if (picture is null) return;
+        var sheet = ctx.GetSheet(_sheetId);
+        if (!PictureCommandGuards.TryFindPicture(sheet, _pictureId, out var picture)) return;
         picture.RotationDegrees = _previousRotationDegrees;
         _applied = false;
     }
@@ -174,8 +174,8 @@ public sealed class SetPictureLockAspectRatioCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         if (!_applied) return;
-        var picture = ctx.GetSheet(_sheetId).Pictures.FirstOrDefault(p => p.Id == _pictureId);
-        if (picture is null) return;
+        var sheet = ctx.GetSheet(_sheetId);
+        if (!PictureCommandGuards.TryFindPicture(sheet, _pictureId, out var picture)) return;
         picture.LockAspectRatio = _previousLockAspectRatio;
         _applied = false;
     }
@@ -230,8 +230,8 @@ public sealed class SetPictureCropCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         if (!_applied) return;
-        var picture = ctx.GetSheet(_sheetId).Pictures.FirstOrDefault(p => p.Id == _pictureId);
-        if (picture is null) return;
+        var sheet = ctx.GetSheet(_sheetId);
+        if (!PictureCommandGuards.TryFindPicture(sheet, _pictureId, out var picture)) return;
         picture.CropLeft = _previous.Left;
         picture.CropTop = _previous.Top;
         picture.CropRight = _previous.Right;

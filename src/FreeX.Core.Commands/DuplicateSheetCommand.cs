@@ -24,9 +24,9 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             return protectedOutcome;
 
         var source = ctx.GetSheet(_sourceSheetId);
-        var sourceIndex = ctx.Workbook.Sheets.ToList().FindIndex(s => s.Id == _sourceSheetId);
+        var sourceIndex = FindSheetIndex(ctx.Workbook, _sourceSheetId);
         if (sourceIndex < 0)
-            return new CommandOutcome(false, "Source sheet was not found.");
+            return CommandGuards.RejectSourceSheetNotFound();
 
         var name = _requestedName ?? DuplicateSheetNameGenerator.GenerateCopyName(ctx.Workbook, source.Name);
         var validationError = ctx.Workbook.ValidateSheetName(name);
@@ -48,5 +48,16 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
     {
         if (_copySheetId.HasValue)
             ctx.Workbook.RemoveSheet(_copySheetId.Value);
+    }
+
+    private static int FindSheetIndex(Workbook workbook, SheetId sheetId)
+    {
+        for (var index = 0; index < workbook.Sheets.Count; index++)
+        {
+            if (workbook.Sheets[index].Id == sheetId)
+                return index;
+        }
+
+        return -1;
     }
 }
