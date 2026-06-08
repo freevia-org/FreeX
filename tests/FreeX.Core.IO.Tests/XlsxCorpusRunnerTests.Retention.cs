@@ -189,6 +189,40 @@ public partial class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedDigitalSignaturesKnownGapRow_RemovesInvalidatedSignatureGraphAfterModelEdit()
+    {
+        var row = ReadManifestRows().Single(row => row.Id == "generated-digital-signatures-001");
+        row.ExpectedStatus.Should().Be("supported-known-gap");
+        row.ExpectedWarnings.Should().Contain("unsupported digital signature disclosed");
+
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage(row.Id);
+        AssertDigitalSignaturePackageGraph(source, "generated-digital-signatures-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 11, 1), new TextValue("freex-digital-signature-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("package_guard_digital_signatures");
+
+        saved.Position = 0;
+        AssertPackageHealth(saved, row.Id);
+        AssertDigitalSignaturePackageGraphRemoved(saved, "generated-digital-signatures-001 saved");
+
+        saved.Position = 0;
+        adapter.Load(saved)
+            .GetSheetAt(0)
+            .GetCell(11, 1)!
+            .Value
+            .Should()
+            .Be(new TextValue("freex-digital-signature-edit"));
+    }
+
+    [Fact]
     public void GeneratedThreadedCommentsRetentionPackage_LinksWorksheetAndPersonsParts()
     {
         using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-threaded-comments-001");
@@ -3043,6 +3077,32 @@ public partial class XlsxCorpusRunnerTests
                 string.Equals(rel.Attribute("Target")?.Value, "vbaProjectSignature.bin", StringComparison.OrdinalIgnoreCase))
             .Should()
             .ContainSingle(because);
+    }
+
+    private static void AssertDigitalSignaturePackageGraph(Stream package, string because)
+    {
+        var summary = CapturePackageSummary(package);
+        summary.CriticalParts.Should().Contain("_xmlsignatures/origin.sigs", because);
+        summary.CriticalParts.Should().Contain("_xmlsignatures/sig1.xml", because);
+        summary.CriticalContentTypeOverrides.Should().Contain(
+            "/_xmlsignatures/origin.sigs=>application/vnd.openxmlformats-package.digital-signature-origin",
+            because);
+        summary.CriticalContentTypeOverrides.Should().Contain(
+            "/_xmlsignatures/sig1.xml=>application/vnd.openxmlformats-package.digital-signature-xmlsignature+xml",
+            because);
+    }
+
+    private static void AssertDigitalSignaturePackageGraphRemoved(Stream package, string because)
+    {
+        var summary = CapturePackageSummary(package);
+        summary.CriticalParts.Should().NotContain("_xmlsignatures/origin.sigs", because);
+        summary.CriticalParts.Should().NotContain("_xmlsignatures/sig1.xml", because);
+        summary.CriticalContentTypeOverrides.Should().NotContain(
+            "/_xmlsignatures/origin.sigs=>application/vnd.openxmlformats-package.digital-signature-origin",
+            because);
+        summary.CriticalContentTypeOverrides.Should().NotContain(
+            "/_xmlsignatures/sig1.xml=>application/vnd.openxmlformats-package.digital-signature-xmlsignature+xml",
+            because);
     }
 
     private static void AssertCustomDocumentProperties(Stream package, string because)
