@@ -56,6 +56,12 @@ public sealed partial class LegalNoticesDialog : Window
             buttonWidth: 84,
             rowMargin: new Thickness(0, 12, 0, 0),
             acceptContent: UiText.Get("LegalNotices_CloseButton"));
+        if (buttonRow.Children[0] is Button closeButton)
+        {
+            AutomationProperties.SetAutomationId(closeButton, "LegalNoticesCloseButton");
+            AutomationProperties.SetHelpText(closeButton, UiText.Get("LegalNotices_ShowsTheLegalPrivacyAndThirdPartyNoticesPackagedWithThisFreeXExecutable"));
+        }
+
         DockPanel.SetDock(buttonRow, Dock.Bottom);
         root.Children.Add(buttonRow);
 
@@ -71,6 +77,7 @@ public sealed partial class LegalNoticesDialog : Window
 
     private static TabItem CreateTabItem(LegalNoticeDocument document)
     {
+        var automationIdSegment = CreateAutomationIdSegment(document.Title);
         var textBox = new TextBox
         {
             Text = document.Text,
@@ -87,14 +94,19 @@ public sealed partial class LegalNoticesDialog : Window
             MinHeight = 280
         };
         AutomationProperties.SetName(textBox, document.Title);
-        AutomationProperties.SetAutomationId(textBox, $"LegalNotices{CreateAutomationIdSegment(document.Title)}Text");
+        AutomationProperties.SetAutomationId(textBox, $"LegalNotices{automationIdSegment}Text");
         AutomationProperties.SetHelpText(textBox, UiText.Get("LegalNotices_ReadOnlyLegalNoticeTextUseCtrlCToCopySelectedText"));
 
-        return new TabItem
+        var tabItem = new TabItem
         {
             Header = document.Title,
             Content = textBox
         };
+        AutomationProperties.SetName(tabItem, document.Title);
+        AutomationProperties.SetAutomationId(tabItem, $"LegalNotices{automationIdSegment}Tab");
+        AutomationProperties.SetHelpText(tabItem, UiText.Get("LegalNotices_ChooseALegalNoticeSectionToReadAndCopy"));
+
+        return tabItem;
     }
 
     private static string CreateAutomationIdSegment(string text)

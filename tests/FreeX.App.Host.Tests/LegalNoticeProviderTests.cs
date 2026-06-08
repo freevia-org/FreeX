@@ -1,3 +1,5 @@
+using System.Windows.Automation;
+using System.Windows.Controls;
 using FluentAssertions;
 using FreeX.App.Host;
 
@@ -48,6 +50,28 @@ public sealed class LegalNoticeProviderTests
             dialog.Width.Should().BeGreaterThanOrEqualTo(800);
             dialog.ShowInTaskbar.Should().BeFalse();
             dialog.Content.Should().NotBeNull();
+
+            var tabControl = WpfTestTree.FindLogicalDescendants<TabControl>(dialog).Single();
+            AutomationProperties.GetName(tabControl).Should().Be("Legal notice sections");
+            AutomationProperties.GetAutomationId(tabControl).Should().Be("LegalNoticesSectionTabs");
+
+            var tab = tabControl.Items.Cast<object>().Single().Should().BeOfType<TabItem>().Subject;
+            tab.Header.Should().Be("Legal Notices");
+            AutomationProperties.GetName(tab).Should().Be("Legal Notices");
+            AutomationProperties.GetAutomationId(tab).Should().Be("LegalNoticesLegalNoticesTab");
+
+            var noticeText = tab.Content.Should().BeOfType<TextBox>().Subject;
+            noticeText.Text.Should().Be("Offline legal text");
+            noticeText.IsReadOnly.Should().BeTrue();
+            noticeText.AcceptsReturn.Should().BeTrue();
+            AutomationProperties.GetName(noticeText).Should().Be("Legal Notices");
+            AutomationProperties.GetAutomationId(noticeText).Should().Be("LegalNoticesLegalNoticesText");
+
+            var close = WpfTestTree.FindLogicalDescendants<Button>(dialog).Single();
+            close.Content.Should().Be(UiText.Get("LegalNotices_CloseButton"));
+            close.IsDefault.Should().BeTrue();
+            close.IsCancel.Should().BeTrue();
+            AutomationProperties.GetAutomationId(close).Should().Be("LegalNoticesCloseButton");
         });
     }
 }
