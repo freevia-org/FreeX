@@ -49,7 +49,7 @@ public sealed class PivotFieldGroupingDialog : Window
     {
         var fields = fieldNames.ToList();
         var sourceFieldIndex = Math.Max(0, currentField?.SourceFieldIndex ?? 0);
-        var sourceFieldName = sourceFieldIndex < fields.Count ? fields[sourceFieldIndex] : fields.FirstOrDefault() ?? "";
+        var sourceFieldName = FindFieldNameBySourceIndexOrFirst(fields, sourceFieldIndex);
 
         return CreateResult(
             sourceFieldName,
@@ -134,8 +134,7 @@ public sealed class PivotFieldGroupingDialog : Window
 
     private void Load(PivotFieldGroupingDialogResult result)
     {
-        _fieldBox.SelectedItem = _fields.FirstOrDefault(field => field.Index == result.SourceFieldIndex)
-            ?? _fields.FirstOrDefault();
+        _fieldBox.SelectedItem = FindFieldBySourceIndexOrFirst(_fields, result.SourceFieldIndex);
         _groupingBox.SelectedItem = result.Grouping;
         _startBox.Text = FormatDouble(result.GroupStart);
         _endBox.Text = FormatDouble(result.GroupEnd);
@@ -169,8 +168,7 @@ public sealed class PivotFieldGroupingDialog : Window
             return;
         }
 
-        var selectedField = _fieldBox.SelectedItem as PivotSourceFieldOption
-            ?? _fields.FirstOrDefault(field => string.Equals(field.Name, _fieldBox.Text, StringComparison.OrdinalIgnoreCase));
+        var selectedField = GetSelectedField();
         Result = CreateResult(
             selectedField?.Name ?? _fieldBox.Text,
             selectedField?.Index ?? 0,
@@ -202,6 +200,32 @@ public sealed class PivotFieldGroupingDialog : Window
             .Select((name, index) => new PivotSourceFieldOption(index, name.Trim()))
             .Where(field => !string.IsNullOrWhiteSpace(field.Name))
             .ToList();
+
+    private PivotSourceFieldOption? GetSelectedField() =>
+        _fieldBox.SelectedItem as PivotSourceFieldOption
+        ?? FindFieldByName(_fields, _fieldBox.Text);
+
+    private static string FindFieldNameBySourceIndexOrFirst(IReadOnlyList<string> fields, int sourceFieldIndex)
+    {
+        var normalizedIndex = Math.Max(0, sourceFieldIndex);
+        return normalizedIndex < fields.Count
+            ? fields[normalizedIndex]
+            : fields.FirstOrDefault() ?? "";
+    }
+
+    private static PivotSourceFieldOption? FindFieldBySourceIndexOrFirst(
+        IReadOnlyList<PivotSourceFieldOption> fields,
+        int sourceFieldIndex)
+    {
+        var normalizedIndex = Math.Max(0, sourceFieldIndex);
+        return fields.FirstOrDefault(field => field.Index == normalizedIndex)
+            ?? fields.FirstOrDefault();
+    }
+
+    private static PivotSourceFieldOption? FindFieldByName(
+        IReadOnlyList<PivotSourceFieldOption> fields,
+        string fieldName) =>
+        fields.FirstOrDefault(field => string.Equals(field.Name, fieldName, StringComparison.OrdinalIgnoreCase));
 
     private static double? ParseOptionalDouble(string? value) =>
         double.TryParse(value?.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)

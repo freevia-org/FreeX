@@ -186,8 +186,7 @@ public sealed class PivotCalculatedItemDialog : Window
     {
         _fields = CreateFieldOptions(fieldNames);
         _itemsBySourceFieldIndex = CreateItemOptions(itemNamesBySourceFieldIndex);
-        var selectedField = _fields.FirstOrDefault(field => field.Index == Math.Max(0, selectedSourceFieldIndex))
-            ?? _fields.FirstOrDefault();
+        var selectedField = FindFieldBySourceIndexOrFirst(_fields, selectedSourceFieldIndex);
         Result = CreateResult(selectedField?.Name ?? "", selectedField?.Index ?? 0, name, formula);
 
         Title = UiText.Get("PivotCalculated_CalculatedItem");
@@ -242,8 +241,7 @@ public sealed class PivotCalculatedItemDialog : Window
 
     private void Load(PivotCalculatedItemDialogResult result)
     {
-        _fieldBox.SelectedItem = _fields.FirstOrDefault(field => field.Index == result.SourceFieldIndex)
-            ?? _fields.FirstOrDefault();
+        _fieldBox.SelectedItem = FindFieldBySourceIndexOrFirst(_fields, result.SourceFieldIndex);
         _nameBox.Text = result.Name;
         _formulaBox.Text = result.Formula;
         _fieldList.SelectedItem = _fieldBox.SelectedItem;
@@ -361,6 +359,15 @@ public sealed class PivotCalculatedItemDialog : Window
             .Select((name, index) => new PivotCalculatedItemSourceFieldOption(index, name.Trim()))
             .Where(field => !string.IsNullOrWhiteSpace(field.Name))
             .ToList();
+
+    private static PivotCalculatedItemSourceFieldOption? FindFieldBySourceIndexOrFirst(
+        IReadOnlyList<PivotCalculatedItemSourceFieldOption> fields,
+        int sourceFieldIndex)
+    {
+        var normalizedIndex = Math.Max(0, sourceFieldIndex);
+        return fields.FirstOrDefault(field => field.Index == normalizedIndex)
+            ?? fields.FirstOrDefault();
+    }
 
     private static IReadOnlyDictionary<int, IReadOnlyList<string>> CreateItemOptions(
         IReadOnlyDictionary<int, IEnumerable<string>>? itemNamesBySourceFieldIndex) =>
