@@ -44,6 +44,16 @@ public sealed class WorkbookCellEditService
         return ApplyHistoryOutcome(workbook, _commandBus.Execute(workbook.Id, command));
     }
 
+    public RecalcReport? RecalculateIfAutomatic(Workbook workbook, IReadOnlyList<CellAddress> affectedCells)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(affectedCells);
+
+        return workbook.CalculationMode == WorkbookCalculationMode.Automatic
+            ? _recalcEngine.Recalculate(workbook, affectedCells)
+            : null;
+    }
+
     public WorkbookGoalSeekResult ExecuteGoalSeek(Workbook workbook, GoalSeekRequest request)
     {
         ArgumentNullException.ThrowIfNull(workbook);
@@ -101,9 +111,7 @@ public sealed class WorkbookCellEditService
 
         var affectedCells = outcome.AffectedCells ?? [];
         UpdateFormulaDependencies(workbook, affectedCells);
-        var recalcReport = workbook.CalculationMode == WorkbookCalculationMode.Automatic
-            ? _recalcEngine.Recalculate(workbook, affectedCells)
-            : null;
+        var recalcReport = RecalculateIfAutomatic(workbook, affectedCells);
 
         return new WorkbookCellEditResult(true, null, affectedCells, recalcReport);
     }

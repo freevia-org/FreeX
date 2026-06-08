@@ -411,6 +411,108 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public WorkbookCellEditResult SaveScenario(ScenarioManagerSaveRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return ExecuteScenarioManagerSavePlan(
+            ScenarioManagerPlanner.CreateSavePlan(Workbook, request),
+            request);
+    }
+
+    public WorkbookCellEditResult ShowScenario(string? scenarioName) =>
+        ExecuteScenarioManagerShowPlan(ScenarioManagerPlanner.CreateShowPlan(Workbook, scenarioName));
+
+    public WorkbookCellEditResult DeleteScenario(string? scenarioName) =>
+        ExecuteScenarioManagerDeletePlan(ScenarioManagerPlanner.CreateDeletePlan(Workbook, scenarioName));
+
+    public WorkbookCellEditResult CreateScenarioSummaryReport(IReadOnlyList<CellAddress>? resultCells = null) =>
+        ExecuteScenarioManagerSummaryReportPlan(ScenarioManagerPlanner.CreateSummaryReportPlan(Workbook, resultCells));
+
+    public WorkbookCellEditResult ExecuteScenarioManagerSavePlan(
+        ScenarioManagerPlan plan,
+        ScenarioManagerSaveRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (ValidateScenarioManagerPlan(plan, ScenarioManagerOperation.Save) is { } validationResult)
+            return validationResult;
+
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new SaveScenarioCommand(
+                request.Name,
+                request.ChangingCells,
+                request.Comment,
+                request.Hidden,
+                request.Locked,
+                request.ReplaceScenarioName));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
+        return result;
+    }
+
+    public WorkbookCellEditResult ExecuteScenarioManagerShowPlan(ScenarioManagerPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        if (ValidateScenarioManagerPlan(plan, ScenarioManagerOperation.Show) is { } validationResult)
+            return validationResult;
+        if (plan.SelectedScenario is null)
+            return FailedScenarioManagerResult("Select a scenario before continuing.");
+
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new ApplyScenarioCommand(plan.SelectedScenario.Name));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulEditResult(result, plan.AffectedCells.FirstOrDefault(ActiveCell));
+        return result;
+    }
+
+    public WorkbookCellEditResult ExecuteScenarioManagerDeletePlan(ScenarioManagerPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        if (ValidateScenarioManagerPlan(plan, ScenarioManagerOperation.Delete) is { } validationResult)
+            return validationResult;
+        if (plan.SelectedScenario is null)
+            return FailedScenarioManagerResult("Select a scenario before continuing.");
+
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new DeleteScenarioCommand(plan.SelectedScenario.Name));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
+        return result;
+    }
+
+    public WorkbookCellEditResult ExecuteScenarioManagerSummaryReportPlan(ScenarioManagerPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        if (ValidateScenarioManagerPlan(plan, ScenarioManagerOperation.SummaryReport) is { } validationResult)
+            return validationResult;
+
+        var sheetIdsBefore = CaptureSheetIds();
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new ScenarioSummaryReportCommand(
+                plan.ResultCells,
+                (workbook, changedCells) => _cellEditService.RecalculateIfAutomatic(workbook, changedCells)));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulHistoryResult(result, sheetIdsBefore);
+        return result;
+    }
+
     public WorkbookNavigationResult FindNext(
         string? searchText = null,
         FindOptions? options = null,
@@ -2471,6 +2573,21 @@ public sealed class WorkbookSession
         commands.Count == 1
             ? commands[0]
             : new CompositeWorkbookCommand(title, commands);
+
+    private static WorkbookCellEditResult? ValidateScenarioManagerPlan(
+        ScenarioManagerPlan plan,
+        ScenarioManagerOperation expectedOperation)
+    {
+        if (plan.Operation != expectedOperation)
+            return FailedScenarioManagerResult("Scenario Manager plan operation does not match the requested action.");
+
+        return plan.IsReady
+            ? null
+            : FailedScenarioManagerResult(plan.StatusText);
+    }
+
+    private static WorkbookCellEditResult FailedScenarioManagerResult(string errorMessage) =>
+        new(false, errorMessage, [], RecalcReport: null);
 
     private static bool HasStyleDiffChanges(StyleDiff diff) =>
         diff != EmptyStyleDiff;
