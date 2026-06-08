@@ -58,8 +58,7 @@ public sealed class SetDrawingShapeColorsCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         if (!_applied) return;
-        var shape = ctx.GetSheet(_sheetId).DrawingShapes.FirstOrDefault(item => item.Id == _shapeId);
-        if (shape is null) return;
+        if (!DrawingShapeCommandGuards.TryFindShape(ctx.GetSheet(_sheetId), _shapeId, out var shape)) return;
         shape.FillColor = _previousFillColor;
         shape.OutlineColor = _previousOutlineColor;
         shape.GradientFillEndColor = _previousGradientFillEndColor;
@@ -127,8 +126,7 @@ public sealed class SetDrawingShapeGradientCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         if (!_applied) return;
-        var shape = ctx.GetSheet(_sheetId).DrawingShapes.FirstOrDefault(item => item.Id == _shapeId);
-        if (shape is null) return;
+        if (!DrawingShapeCommandGuards.TryFindShape(ctx.GetSheet(_sheetId), _shapeId, out var shape)) return;
         shape.FillColor = _previous.FillColor;
         shape.GradientFillEndColor = _previous.GradientEndColor;
         shape.GradientFillDirection = _previous.Direction;
@@ -189,8 +187,7 @@ public sealed class SetDrawingShapeEffectCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         if (!_applied) return;
-        var shape = ctx.GetSheet(_sheetId).DrawingShapes.FirstOrDefault(item => item.Id == _shapeId);
-        if (shape is null) return;
+        if (!DrawingShapeCommandGuards.TryFindShape(ctx.GetSheet(_sheetId), _shapeId, out var shape)) return;
         shape.HasShadowEffect = _previousHasShadowEffect;
         shape.EffectPreset = _previousEffectPreset;
         _applied = false;
