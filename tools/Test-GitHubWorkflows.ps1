@@ -106,6 +106,94 @@ function Get-DotNetTestCommandBlocks {
     return @($commands)
 }
 
+function Get-DotNetBuildCommandBlocks {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string[]]$Lines
+    )
+
+    $commands = [System.Collections.Generic.List[string]]::new()
+    for ($lineIndex = 0; $lineIndex -lt $Lines.Count; $lineIndex++) {
+        if ($Lines[$lineIndex] -notmatch "\bdotnet\s+build\b") {
+            continue
+        }
+
+        $commandLines = [System.Collections.Generic.List[string]]::new()
+        $commandLines.Add($Lines[$lineIndex].Trim())
+        $commandEndIndex = $lineIndex
+        while ($commandLines[$commandLines.Count - 1].TrimEnd().EndsWith('\') -and
+            $commandEndIndex + 1 -lt $Lines.Count) {
+            $commandEndIndex++
+            $commandLines.Add($Lines[$commandEndIndex].Trim())
+        }
+
+        $commands.Add($commandLines -join "`n")
+        $lineIndex = $commandEndIndex
+    }
+
+    return @($commands)
+}
+
+function Get-WorkflowJobBlocks {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string[]]$Lines
+    )
+
+    $jobsBlock = Get-IndentedYamlBlock `
+        -Lines $Lines `
+        -Pattern "^(?<indent>\s*)jobs\s*:\s*(?:#.*)?$"
+    if ([string]::IsNullOrWhiteSpace($jobsBlock)) {
+        return @()
+    }
+
+    $jobBlocks = [System.Collections.Generic.List[string]]::new()
+    $jobLines = $jobsBlock -split "\r?\n"
+    for ($lineIndex = 0; $lineIndex -lt $jobLines.Count; $lineIndex++) {
+        $jobMatch = [regex]::Match($jobLines[$lineIndex], "^(?<indent>  )(?<job>[A-Za-z0-9_-]+)\s*:\s*(?:#.*)?$")
+        if (-not $jobMatch.Success) {
+            continue
+        }
+
+        $jobBlocks.Add((Get-IndentedYamlBlock `
+            -Lines $jobLines `
+            -Pattern "^(?<indent>\s*)$([regex]::Escape($jobMatch.Groups["job"].Value))\s*:\s*(?:#.*)?$"))
+    }
+
+    return @($jobBlocks)
+}
+
+function Get-WorkflowUploadArtifactStepBlocks {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$WorkflowBlock
+    )
+
+    $uploadBlocks = [System.Collections.Generic.List[string]]::new()
+    $blockLines = $WorkflowBlock -split "\r?\n"
+    for ($lineIndex = 0; $lineIndex -lt $blockLines.Count; $lineIndex++) {
+        if ($blockLines[$lineIndex] -notmatch "^(\s*)-\s+(?:name|uses):") {
+            continue
+        }
+
+        $stepIndent = $Matches[1]
+        $escapedStepIndent = [regex]::Escape($stepIndent)
+        $stepLines = [System.Collections.Generic.List[string]]::new()
+        $stepLines.Add($blockLines[$lineIndex])
+        for ($nextLineIndex = $lineIndex + 1; $nextLineIndex -lt $blockLines.Count; $nextLineIndex++) {
+            if ($blockLines[$nextLineIndex] -match "^$escapedStepIndent-\s+") {
+                break
+            }
+
+            $stepLines.Add($blockLines[$nextLineIndex])
+        }
+
+        $stepBlock = $stepLines -join "`n"
+        if ($stepBlock -match "(?m)^\s*uses:\s+actions/upload-artifact@v\d+\s*(?:#.*)?$") {
+            $uploadBlocks.Add($stepBlock)
+        }
+    }
+
+    return @($uploadBlocks)
+}
+
 function Get-FullyQualifiedNameFilterEntries {
     param(
         [Parameter(Mandatory = $true)][string]$CommandBlock
@@ -328,6 +416,90 @@ foreach ($workflow in $workflows) {
             $distributionCandidateInputBlock -notmatch "(?m)^\s*type:\s*boolean\s*(?:#.*)?$" -or
             $distributionCandidateInputBlock -notmatch "(?m)^\s*default:\s*false\s*(?:#.*)?$") {
             $errors.Add("$($workflow.Name): macOS app workflow must declare a workflow_dispatch distribution_candidate boolean input defaulting to false.")
+        }
+
+        $macOsTfmValidationMarkersPresent = $content.Contains("validate_macos_tfm") -or
+            $content.Contains("net10.0-macos") -or
+            $content.Contains("EnableMacOsTargetFramework") -or
+            $content.Contains("dotnet workload install macos")
+
+        if ($macOsTfmValidationMarkersPresent) {
+            $validateMacOsTfmInputBlock = $null
+            if (-not [string]::IsNullOrWhiteSpace($workflowDispatchBlock)) {
+                $validateMacOsTfmInputBlock = Get-IndentedYamlBlock `
+                    -Lines ($workflowDispatchBlock -split "\r?\n") `
+                    -Pattern "^(?<indent>\s*)validate_macos_tfm\s*:\s*(?:#.*)?$"
+            }
+
+            if ([string]::IsNullOrWhiteSpace($validateMacOsTfmInputBlock) -or
+                $validateMacOsTfmInputBlock -notmatch "(?m)^\s*type:\s*boolean\s*(?:#.*)?$" -or
+                $validateMacOsTfmInputBlock -notmatch "(?m)^\s*default:\s*false\s*(?:#.*)?$") {
+                $errors.Add("$($workflow.Name): macOS TFM validation must declare a workflow_dispatch validate_macos_tfm boolean input defaulting to false.")
+            }
+
+            $macOsTfmValidationJobBlocks = @(
+                Get-WorkflowJobBlocks -Lines $lines |
+                    Where-Object {
+                        $_.Contains("validate_macos_tfm") -or
+                            $_.Contains("net10.0-macos") -or
+                            $_.Contains("EnableMacOsTargetFramework") -or
+                            $_.Contains("dotnet workload install macos")
+                    }
+            )
+
+            if ($macOsTfmValidationJobBlocks.Count -ne 1) {
+                $errors.Add("$($workflow.Name): macOS TFM validation must use exactly one job gated by workflow_dispatch validate_macos_tfm.")
+            } else {
+                $macOsTfmValidationJobBlock = $macOsTfmValidationJobBlocks[0]
+
+                if ($macOsTfmValidationJobBlock -notmatch '(?m)^\s*if:\s*\$\{\{\s*github\.event_name\s*==\s*''workflow_dispatch''\s*&&\s*inputs\.validate_macos_tfm\s*==\s*true\s*\}\}\s*(?:#.*)?$') {
+                    $errors.Add("$($workflow.Name): macOS TFM validation job must be gated to workflow_dispatch validate_macos_tfm runs.")
+                }
+
+                if ($macOsTfmValidationJobBlock -notmatch "\bdotnet\s+workload\s+install\s+macos\s+(?:\\\s*)?--skip-manifest-update\b") {
+                    $errors.Add("$($workflow.Name): macOS TFM validation job must install the macOS workload with 'dotnet workload install macos --skip-manifest-update'.")
+                }
+
+                $macOsTfmBuildCommands = @(
+                    Get-DotNetBuildCommandBlocks -Lines ($macOsTfmValidationJobBlock -split "\r?\n") |
+                        Where-Object {
+                            $_.Contains("src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj") -and
+                                $_ -match "(?m)(?:^|\s)-p:EnableMacOsTargetFramework=true(?:\s|$)" -and
+                                $_ -match "(?m)(?:^|\s)--framework\s+net10\.0-macos(?:\s|$)"
+                        }
+                )
+                if ($macOsTfmBuildCommands.Count -ne 1) {
+                    $errors.Add("$($workflow.Name): macOS TFM validation job must build FreeX.App.Avalonia with -p:EnableMacOsTargetFramework=true and --framework net10.0-macos.")
+                }
+
+                if ($macOsTfmValidationJobBlock -match "\bdotnet\s+publish\b") {
+                    $errors.Add("$($workflow.Name): macOS TFM validation job must not run dotnet publish.")
+                }
+
+                if ($macOsTfmValidationJobBlock -match "\bgh\s+release\b") {
+                    $errors.Add("$($workflow.Name): macOS TFM validation job must not invoke GitHub release publication.")
+                }
+
+                if ($macOsTfmValidationJobBlock -match "(?m)^\s*contents:\s*write\s*(?:#.*)?$") {
+                    $errors.Add("$($workflow.Name): macOS TFM validation job must not request contents: write.")
+                }
+
+                $macOsTfmUploadArtifactBlocks = @(Get-WorkflowUploadArtifactStepBlocks -WorkflowBlock $macOsTfmValidationJobBlock)
+                if ($macOsTfmUploadArtifactBlocks.Count -eq 0) {
+                    $errors.Add("$($workflow.Name): macOS TFM validation job must upload an evidence-only artifact.")
+                }
+
+                foreach ($uploadArtifactBlock in $macOsTfmUploadArtifactBlocks) {
+                    if ($uploadArtifactBlock -notmatch "(?mi)^\s*name:\s*[^\r\n#]*evidence[^\r\n#]*(?:#.*)?$" -or
+                        $uploadArtifactBlock -notmatch "(?mi)^\s*path:\s*[^\r\n#]*evidence[^\r\n#]*(?:#.*)?$") {
+                        $errors.Add("$($workflow.Name): macOS TFM validation artifact upload must be evidence-only.")
+                    }
+
+                    if ($uploadArtifactBlock -match "(?mi)^\s*(?:name|path):\s*[^\r\n#]*(?:macos-app|release|distribution|candidate|\.app|\.zip|\.dmg|\.pkg)[^\r\n#]*(?:#.*)?$") {
+                        $errors.Add("$($workflow.Name): macOS TFM validation job must not upload app or release artifacts.")
+                    }
+                }
+            }
         }
 
         $releasePublicationJobBlock = Get-IndentedYamlBlock `
