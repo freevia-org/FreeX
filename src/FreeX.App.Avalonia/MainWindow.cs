@@ -473,6 +473,7 @@ public sealed class MainWindow : Window
     private NativeMenu? _nativeMenu;
     private WorkbookSession _session;
     private MacOsLaunchSmokeDialogSnapshot _launchSmokeDialogEvidence = MacOsLaunchSmokeDialogSnapshot.Empty;
+    private ComboBox? _activeDataValidationDropdown;
     private string? _formulaBoxEditOriginalText;
     private bool _isOpening;
     private bool _isSaving;
@@ -2131,6 +2132,7 @@ public sealed class MainWindow : Window
 
     private Control BuildSheetGrid()
     {
+        _activeDataValidationDropdown = null;
         var viewport = _session.Viewport;
         var showHeadings = _session.ActiveSheet.ShowHeadings;
         var zoomFactor = GetActiveZoomFactor();
@@ -2184,6 +2186,7 @@ public sealed class MainWindow : Window
         }
 
         var overlay = BuildDrawingObjectOverlay(viewport);
+        AddDataValidationDropdownOverlay(overlay, viewport, showHeadings, zoomFactor);
         if (overlay.Children.Count == 0)
             return grid;
 
@@ -2236,6 +2239,69 @@ public sealed class MainWindow : Window
         }
 
         return overlay;
+    }
+
+    private void AddDataValidationDropdownOverlay(
+        Canvas overlay,
+        ViewportModel viewport,
+        bool showHeadings,
+        double zoomFactor)
+    {
+        if (_session.FormulaEditAddress is not null)
+            return;
+
+        if (!TryGetDisplayedCellBounds(
+                viewport,
+                _session.ActiveCell,
+                showHeadings,
+                zoomFactor,
+                out var left,
+                out var top,
+                out var width,
+                out var height))
+        {
+            return;
+        }
+
+        if (!DataValidationDropdownPlanner.TryPlan(
+                _session.Workbook,
+                _session.ActiveSheet,
+                _session.ActiveCell,
+                new DataValidationDropdownCellBounds(left, top, width, height),
+                out var plan))
+        {
+            return;
+        }
+
+        var dropdown = CreateDataValidationDropdown(plan);
+        Canvas.SetLeft(dropdown, plan.Bounds.Left);
+        Canvas.SetTop(dropdown, plan.Bounds.Top);
+        overlay.Children.Add(dropdown);
+        _activeDataValidationDropdown = dropdown;
+    }
+
+    private ComboBox CreateDataValidationDropdown(DataValidationDropdownPlan plan)
+    {
+        var dropdown = new ComboBox
+        {
+            ItemsSource = plan.Items,
+            SelectedItem = plan.SelectedItem,
+            Width = plan.Bounds.Width,
+            Height = plan.Bounds.Height,
+            MinWidth = DataValidationDropdownPlanner.MinimumWidth,
+            MinHeight = DataValidationDropdownPlanner.MinimumHeight,
+            MaxDropDownHeight = 220,
+            Padding = new Thickness(0),
+            FontSize = 12,
+            Cursor = new Cursor(StandardCursorType.Hand)
+        };
+
+        ToolTip.SetTip(dropdown, "Pick from list");
+        AutomationProperties.SetAutomationId(dropdown, "WorksheetDataValidationDropdown");
+        AutomationProperties.SetName(dropdown, "Data validation list");
+        AutomationProperties.SetHelpText(dropdown, "Pick a permitted value for the active cell.");
+        dropdown.SelectionChanged += DataValidationDropdown_SelectionChanged;
+        return dropdown;
     }
 
     private Control CreateSelectableDrawingObjectVisual(
@@ -2641,6 +2707,36 @@ public sealed class MainWindow : Window
         top = (showHeadings ? HeaderRowHeight * zoomFactor : 0) + rowTop;
         width = Math.Max(1, drawingObject.Width * zoomFactor);
         height = Math.Max(1, drawingObject.Height * zoomFactor);
+        return true;
+    }
+
+    private static bool TryGetDisplayedCellBounds(
+        ViewportModel viewport,
+        CellAddress address,
+        bool showHeadings,
+        double zoomFactor,
+        out double left,
+        out double top,
+        out double width,
+        out double height)
+    {
+        left = 0;
+        top = 0;
+        width = 0;
+        height = 0;
+
+        if (!TryGetDisplayedColumnLeft(viewport.ColMetrics, address.Col, zoomFactor, out var columnLeft) ||
+            !TryGetDisplayedRowTop(viewport.RowMetrics, address.Row, zoomFactor, out var rowTop))
+        {
+            return false;
+        }
+
+        var columnMetric = viewport.ColMetrics.First(metric => metric.Col == address.Col);
+        var rowMetric = viewport.RowMetrics.First(metric => metric.Row == address.Row);
+        left = (showHeadings ? HeaderColumnWidth * zoomFactor : 0) + columnLeft;
+        top = (showHeadings ? HeaderRowHeight * zoomFactor : 0) + rowTop;
+        width = GetDisplayedColumnWidth(columnMetric, zoomFactor);
+        height = GetDisplayedRowHeight(rowMetric, zoomFactor);
         return true;
     }
 
@@ -11527,12 +11623,25 @@ public sealed class MainWindow : Window
     private static bool IsSelectVisibleCellsOnlyShortcut(KeyEventArgs args) =>
         args.Key == Key.Oem1 && args.KeyModifiers == KeyModifiers.Alt;
 
+    private static bool IsOpenActiveDropdownShortcut(KeyEventArgs args) =>
+        args.Key == Key.Down && args.KeyModifiers == KeyModifiers.Alt;
+
     private async void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {
         if (IsShellFocusCycleKey(e))
         {
             e.Handled = true;
             CycleShellFocus(reverse: e.KeyModifiers == KeyModifiers.Shift);
+            return;
+        }
+
+        if (IsOpenActiveDropdownShortcut(e))
+        {
+            if (!_formulaBox.IsFocused)
+            {
+                e.Handled = OpenActiveDataValidationDropdown();
+            }
+
             return;
         }
 
@@ -11749,6 +11858,53 @@ public sealed class MainWindow : Window
             e.Handled = true;
             await OpenWorkbookAsync();
         }
+    }
+
+    private bool OpenActiveDataValidationDropdown()
+    {
+        if (_isOpening || _isSaving)
+            return true;
+
+        if (!TryCommitPendingFormulaEdit())
+            return true;
+
+        RefreshShell("Ready");
+        if (_activeDataValidationDropdown is null)
+            return false;
+
+        _activeDataValidationDropdown.Focus();
+        _activeDataValidationDropdown.IsDropDownOpen = true;
+        return true;
+    }
+
+    private void DataValidationDropdown_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not ComboBox { SelectedItem: string selected })
+            return;
+
+        CommitDataValidationDropdownSelection(selected);
+    }
+
+    private void CommitDataValidationDropdownSelection(string selected)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var address = _session.ActiveCell;
+        _session.BeginFormulaEdit(address);
+        var result = _session.CommitCellText(selected);
+        if (!result.Success)
+        {
+            _session.CancelFormulaEdit();
+            _formulaBoxEditOriginalText = null;
+            ShowEditIssue(result.ErrorMessage ?? "Data validation dropdown failed.");
+            return;
+        }
+
+        RefreshShell($"Picked {selected} for {FormatCellReference(address)}");
     }
 
     private void CycleShellFocus(bool reverse)
