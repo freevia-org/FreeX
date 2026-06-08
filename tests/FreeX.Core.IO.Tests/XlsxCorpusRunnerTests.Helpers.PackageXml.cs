@@ -30,7 +30,7 @@ public partial class XlsxCorpusRunnerTests
                 archive.GetEntry("xl/styles.xml").Should().NotBeNull(row.Id);
 
             if (tags.Contains("hyperlinks"))
-                PublicWorksheetElements(archive, "hyperlink").Should().NotBeEmpty(row.Id);
+                AssertPublicHyperlinkPackageGraph(archive, row.Id);
 
             if (tags.Contains("merged-cells"))
                 PublicWorksheetElements(archive, "mergeCell").Should().NotBeEmpty(row.Id);
@@ -107,6 +107,55 @@ public partial class XlsxCorpusRunnerTests
 
         indexes.Should().NotBeEmpty(because);
         indexes.Should().OnlyContain(index => index >= 0 && index < sharedStringItems.Length, because);
+    }
+
+    private static void AssertPublicHyperlinkPackageGraph(ZipArchive archive, string because)
+    {
+        const string hyperlinkRelationshipType =
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
+
+        var inspectedExternalHyperlinks = 0;
+        foreach (var worksheetEntry in archive.Entries
+                     .Where(entry => entry.FullName.StartsWith("xl/worksheets/", StringComparison.Ordinal) &&
+                                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+                     .OrderBy(entry => entry.FullName, StringComparer.OrdinalIgnoreCase))
+        {
+            var worksheetXml = LoadPackageXml(worksheetEntry);
+            var relationshipIds = worksheetXml
+                .Descendants(WorksheetNs + "hyperlink")
+                .Select(hyperlink => hyperlink.Attribute(OfficeRelationshipNs + "id")?.Value)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .ToArray();
+
+            if (relationshipIds.Length == 0)
+                continue;
+
+            var worksheetPath = worksheetEntry.FullName.Replace('\\', '/');
+            var slashIndex = worksheetPath.LastIndexOf('/');
+            var relationshipPart = slashIndex < 0
+                ? $"_rels/{worksheetPath}.rels"
+                : $"{worksheetPath[..slashIndex]}/_rels/{worksheetPath[(slashIndex + 1)..]}.rels";
+
+            var relationshipsEntry = archive.GetEntry(relationshipPart);
+            relationshipsEntry.Should().NotBeNull(because);
+            var relationships = LoadPackageXml(relationshipsEntry!)
+                .Root!
+                .Elements(PackageRelationshipNs + "Relationship")
+                .ToArray();
+
+            foreach (var relationshipId in relationshipIds)
+            {
+                var relationship = relationships.SingleOrDefault(rel =>
+                    string.Equals(AttributeValue(rel, "Id"), relationshipId, StringComparison.Ordinal));
+                relationship.Should().NotBeNull(because);
+                relationship!.Attribute("Target")?.Value.Should().NotBeNullOrWhiteSpace(because);
+                relationship.Attribute("TargetMode")?.Value.Should().Be("External", because);
+                relationship.Attribute("Type")?.Value.Should().Be(hyperlinkRelationshipType, because);
+                inspectedExternalHyperlinks++;
+            }
+        }
+
+        inspectedExternalHyperlinks.Should().BeGreaterThan(0, because);
     }
 
     private static void AssertPublicChartsheetPackageGraph(ZipArchive archive, string because)
@@ -394,6 +443,8 @@ public partial class XlsxCorpusRunnerTests
         "http://schemas.openxmlformats.org/package/2006/content-types";
     private static readonly XNamespace PackageRelationshipNs =
         "http://schemas.openxmlformats.org/package/2006/relationships";
+    private static readonly XNamespace OfficeRelationshipNs =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly string[] ModeledIgnoredErrorFlags =
     [
         "numberStoredAsText",
