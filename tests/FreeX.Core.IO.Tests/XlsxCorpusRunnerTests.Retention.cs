@@ -1326,13 +1326,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-page-setup-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetPageSetupNativeModel(sheet, "generated-worksheet-page-setup-native-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-page-setup-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-page-setup-native-001");
         AssertWorksheetPageSetupNative(saved, "generated-worksheet-page-setup-native-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetPageSetupNativeModel(
+            reloaded.GetSheetAt(0),
+            "worksheet page setup model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -2183,6 +2191,12 @@ public partial class XlsxCorpusRunnerTests
         pageSetup.Attribute("copies")!.Value.Should().Be("3", because);
         pageSetup.Attribute("customAttr").Should().BeNull(because);
         pageSetup.HasElements.Should().BeFalse(because);
+    }
+
+    private static void AssertWorksheetPageSetupNativeModel(Sheet sheet, string because)
+    {
+        sheet.UsePrinterDefaults.Should().BeTrue(because);
+        sheet.PrintCopies.Should().Be(3, because);
     }
 
     private static void AssertWorksheetHeaderFooterNative(Stream package, string because)
