@@ -392,7 +392,7 @@ jobs:
             New-Item -ItemType Directory -Force -Path $macOsDownloadRoot | Out-Null
 
             $macOsNotes = @(
-              "macOS internal-preview assets are attached from macOS App Preview run $($macOsRun.id) attempt $macOsRunAttempt: $macOsRunUrl",
+              "macOS internal-preview assets are attached from macOS App Preview run $($macOsRun.id) attempt ${macOsRunAttempt}: $macOsRunUrl",
               "These macOS builds are unsigned/ad-hoc internal previews until Developer ID signing and notarization are configured."
             )
 
