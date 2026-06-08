@@ -22,7 +22,7 @@ public sealed class MoveOrCopySheetDialog : Window
     public MoveOrCopySheetDialog(Workbook workbook, SheetId sourceSheetId)
     {
         _sheetCount = workbook.Sheets.Count;
-        var sourceIndex = Math.Max(0, workbook.Sheets.ToList().FindIndex(sheet => sheet.Id == sourceSheetId));
+        var sourceIndex = FindSheetIndexOrZero(workbook, sourceSheetId);
         var targets = BuildTargets(workbook).ToList();
         Result = CreateResult(sourceIndex, createCopy: false, _sheetCount);
 
@@ -41,7 +41,7 @@ public sealed class MoveOrCopySheetDialog : Window
         AutomationProperties.SetHelpText(_bookBox, UiText.Get("MoveOrCopySheet_ToBookHelpText"));
 
         _beforeSheetBox.ItemsSource = targets;
-        _beforeSheetBox.SelectedItem = targets.FirstOrDefault(target => target.InsertBeforeIndex == sourceIndex) ?? targets.LastOrDefault();
+        _beforeSheetBox.SelectedItem = FindTargetOrLast(targets, sourceIndex);
         _beforeSheetBox.SelectionMode = SelectionMode.Single;
         _beforeSheetBox.MinHeight = 112;
         AutomationProperties.SetName(_beforeSheetBox, UiText.Get("MoveOrCopySheet_BeforeSheetAutomationName"));
@@ -73,6 +73,32 @@ public sealed class MoveOrCopySheetDialog : Window
         bool createCopy,
         int sheetCount) =>
         new(Math.Clamp(insertBeforeIndex, 0, Math.Max(0, sheetCount)), createCopy);
+
+    private static int FindSheetIndexOrZero(Workbook workbook, SheetId sourceSheetId)
+    {
+        for (var index = 0; index < workbook.Sheets.Count; index++)
+        {
+            if (workbook.Sheets[index].Id == sourceSheetId)
+                return index;
+        }
+
+        return 0;
+    }
+
+    private static MoveOrCopySheetTarget? FindTargetOrLast(IReadOnlyList<MoveOrCopySheetTarget> targets, int sourceIndex)
+    {
+        MoveOrCopySheetTarget? fallback = null;
+        for (var index = 0; index < targets.Count; index++)
+        {
+            var target = targets[index];
+            if (target.InsertBeforeIndex == sourceIndex)
+                return target;
+
+            fallback = target;
+        }
+
+        return fallback;
+    }
 
     private static IEnumerable<MoveOrCopySheetTarget> BuildTargets(Workbook workbook)
     {
