@@ -59,7 +59,7 @@ public sealed class WorkbookStartupSmokeService
     {
         try
         {
-            var expectedPath = startupArguments.FirstOrDefault(argument => !string.IsNullOrWhiteSpace(argument));
+            var expectedPath = FindFirstStartupPath(startupArguments);
             if (expectedPath is not null && !File.Exists(expectedPath))
                 return new WorkbookStartupSmokeResult(false, $"Packaging smoke failed: file not found: {expectedPath}");
 
@@ -184,7 +184,7 @@ public sealed class WorkbookStartupSmokeService
             if (previewObjectResult is not null)
                 return previewObjectResult;
 
-            var reopenedSheet = reopenedSession.Workbook.Sheets.FirstOrDefault();
+            var reopenedSheet = GetFirstSheet(reopenedSession.Workbook.Sheets);
             if (reopenedSheet is null)
                 return new WorkbookStartupSmokeResult(false, "Packaging smoke failed: reopened roundtrip has no sheets.");
 
@@ -278,6 +278,27 @@ public sealed class WorkbookStartupSmokeService
             sheet.GetStyleOnly(address.Row, address.Col) ??
             StyleId.Default;
         return workbook.GetStyle(styleId);
+    }
+
+    private static string? FindFirstStartupPath(IReadOnlyList<string> startupArguments)
+    {
+        foreach (var argument in startupArguments)
+        {
+            if (!string.IsNullOrWhiteSpace(argument))
+                return argument;
+        }
+
+        return null;
+    }
+
+    private static Sheet? GetFirstSheet(IReadOnlyList<Sheet> sheets)
+    {
+        foreach (var sheet in sheets)
+        {
+            return sheet;
+        }
+
+        return null;
     }
 
     private static WorkbookStartupSmokeResult? VerifyDrawingObjectPreviews(
