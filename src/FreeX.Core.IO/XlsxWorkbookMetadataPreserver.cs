@@ -536,12 +536,9 @@ internal static class XlsxWorkbookMetadataPreserver
                 continue;
 
             var sourceViewKey = WorkbookViewIdentityKey(sourceView);
-            var targetView = IsPrimaryWorkbookView(sourceView) && !mergedTargetViewKeys.Contains(sourceViewKey)
-                ? targetViews.FirstOrDefault(view => string.Equals(
-                    WorkbookViewIdentityKey(view),
-                    sourceViewKey,
-                    StringComparison.OrdinalIgnoreCase))
-                : null;
+            XElement? targetView = null;
+            if (IsPrimaryWorkbookView(sourceView) && !mergedTargetViewKeys.Contains(sourceViewKey))
+                targetView = FindWorkbookViewByIdentityKey(targetViews, sourceViewKey);
             if (targetView is not null)
             {
                 XName[] modeledPrimaryViewAttributes =
@@ -579,6 +576,17 @@ internal static class XlsxWorkbookMetadataPreserver
             var visibility = view.Attribute("visibility")?.Value;
             return string.IsNullOrWhiteSpace(visibility) ||
                    string.Equals(visibility, "visible", StringComparison.OrdinalIgnoreCase);
+        }
+
+        static XElement? FindWorkbookViewByIdentityKey(IEnumerable<XElement> views, string sourceViewKey)
+        {
+            foreach (var view in views)
+            {
+                if (string.Equals(WorkbookViewIdentityKey(view), sourceViewKey, StringComparison.OrdinalIgnoreCase))
+                    return view;
+            }
+
+            return null;
         }
     }
 
@@ -690,10 +698,18 @@ internal static class XlsxWorkbookMetadataPreserver
             "extLst"
         ];
 
-        var insertionPoint = workbookRoot.Elements()
-            .FirstOrDefault(element =>
-                element.Name.Namespace == workbookNs &&
-                laterWorkbookElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
+        XElement? insertionPoint = null;
+        foreach (var element in workbookRoot.Elements())
+        {
+            if (element.Name.Namespace != workbookNs ||
+                !laterWorkbookElements.Contains(element.Name.LocalName, StringComparer.Ordinal))
+            {
+                continue;
+            }
+
+            insertionPoint = element;
+            break;
+        }
         if (insertionPoint is null)
             workbookRoot.Add(customWorkbookViews);
         else
