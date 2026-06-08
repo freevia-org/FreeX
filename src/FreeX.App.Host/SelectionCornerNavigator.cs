@@ -7,7 +7,16 @@ public static class SelectionCornerNavigator
     public static CellAddress GetNextCorner(GridRange range, CellAddress current)
     {
         var corners = GetUniqueCorners(range);
-        var index = corners.FindIndex(corner => corner == current);
+        var index = -1;
+        for (var i = 0; i < corners.Count; i++)
+        {
+            if (corners[i] != current)
+                continue;
+
+            index = i;
+            break;
+        }
+
         return index < 0 ? range.Start : corners[(index + 1) % corners.Count];
     }
 

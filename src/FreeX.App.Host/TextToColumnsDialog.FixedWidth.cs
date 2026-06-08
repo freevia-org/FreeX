@@ -113,7 +113,13 @@ public sealed partial class TextToColumnsDialog
     private void RefreshFixedWidthRuler()
     {
         _fixedWidthRuler.Children.Clear();
-        var sample = _previewRows.OrderByDescending(row => row.Length).FirstOrDefault() ?? string.Empty;
+        var sample = string.Empty;
+        foreach (var row in _previewRows)
+        {
+            if (row.Length > sample.Length)
+                sample = row;
+        }
+
         var text = new TextBlock
         {
             Text = sample,

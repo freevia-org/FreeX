@@ -18,7 +18,7 @@ public sealed class UnhideWindowDialog : Window
     public UnhideWindowDialog(IEnumerable<WorkbookWindowSelectionTarget> targets)
     {
         var targetList = targets.ToList();
-        var selected = targetList.FirstOrDefault();
+        var selected = targetList.Count == 0 ? null : targetList[0];
         Result = selected is null ? null : CreateResult(selected);
 
         Title = UiText.Get("UnhideWindow_Title");

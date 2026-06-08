@@ -219,8 +219,9 @@ public sealed class SubtotalDialog : Window
 
     private void FocusSubtotalColumnChoices()
     {
-        if (_subtotalColumnBoxes.FirstOrDefault() is { } firstColumnBox)
+        if (_subtotalColumnBoxes.Count > 0)
         {
+            var firstColumnBox = _subtotalColumnBoxes[0];
             firstColumnBox.Focus();
             Keyboard.Focus(firstColumnBox);
         }

@@ -51,7 +51,9 @@ public static class SymbolPickerSelectionPlanner
 
     private static string GetFirstRuneCodeText(string value)
     {
-        var rune = value.EnumerateRunes().FirstOrDefault();
-        return rune == default ? "" : rune.Value.ToString("X4");
+        foreach (var rune in value.EnumerateRunes())
+            return rune.Value.ToString("X4");
+
+        return "";
     }
 }

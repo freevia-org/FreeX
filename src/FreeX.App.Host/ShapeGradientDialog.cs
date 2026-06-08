@@ -161,8 +161,16 @@ public sealed class ShapeGradientDialog : Window
         return stack;
     }
 
-    private ShapeGradientDirectionOption FindDirectionOption(DrawingShapeGradientDirection direction) =>
-        _directionOptions.FirstOrDefault(option => option.Direction == direction) ?? _directionOptions[0];
+    private ShapeGradientDirectionOption FindDirectionOption(DrawingShapeGradientDirection direction)
+    {
+        foreach (var option in _directionOptions)
+        {
+            if (option.Direction == direction)
+                return option;
+        }
+
+        return _directionOptions[0];
+    }
 
     private DrawingShapeGradientDirection SelectedDirection =>
         _directionBox.SelectedItem is ShapeGradientDirectionOption option

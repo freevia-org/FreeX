@@ -124,7 +124,7 @@ public sealed partial class RemoveDuplicatesDialog : Window
     }
 
     private CheckBox? FindFirstColumnBox() =>
-        _boxes.FirstOrDefault();
+        _boxes.Count == 0 ? null : _boxes[0];
 
     private void RefreshColumnLabels()
     {

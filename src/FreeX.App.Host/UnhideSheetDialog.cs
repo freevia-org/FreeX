@@ -18,7 +18,7 @@ public sealed class UnhideSheetDialog : Window
     public UnhideSheetDialog(IEnumerable<string> hiddenSheetNames)
     {
         var names = hiddenSheetNames.ToList();
-        var selected = names.FirstOrDefault() ?? "";
+        var selected = names.Count == 0 ? "" : names[0];
         Result = CreateResult(selected);
         Title = UiText.Get("UnhideSheet_UnhideSheet");
         Width = 340;

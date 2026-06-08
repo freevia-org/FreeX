@@ -38,7 +38,16 @@ public sealed class ZoomDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        var checkedPreset = _presetButtons.FirstOrDefault(button => button.IsChecked == true);
+        RadioButton? checkedPreset = null;
+        foreach (var button in _presetButtons)
+        {
+            if (button.IsChecked != true)
+                continue;
+
+            checkedPreset = button;
+            break;
+        }
+
         if (checkedPreset is not null)
         {
             checkedPreset.Focus();

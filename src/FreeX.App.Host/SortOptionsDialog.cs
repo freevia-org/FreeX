@@ -99,12 +99,19 @@ public sealed class SortOptionsDialog : Window
             new(UiText.Get("SortOptions_FirstKeyJanuaryToDecember"), "January, February, March, April, May, June, July, August, September, October, November, December")
         ];
 
-    private static string NormalizeFirstKeySortOrder(string? value) =>
-        CreateFirstKeySortOrders()
-            .FirstOrDefault(order =>
-                string.Equals(order.Value, value, StringComparison.Ordinal) ||
+    private static string NormalizeFirstKeySortOrder(string? value)
+    {
+        foreach (var order in CreateFirstKeySortOrders())
+        {
+            if (string.Equals(order.Value, value, StringComparison.Ordinal) ||
                 string.Equals(order.Label, value, StringComparison.Ordinal))
-            ?.Value ?? NormalFirstKeySortOrder;
+            {
+                return order.Value;
+            }
+        }
+
+        return NormalFirstKeySortOrder;
+    }
 
     private void FocusInitialKeyboardTarget()
     {

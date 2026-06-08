@@ -190,7 +190,17 @@ public sealed partial class SelectionPaneDialog
 
         _list.ItemsSource = filtered;
         if (preferredSelection is { } id)
-            _list.SelectedItem = filtered.FirstOrDefault(item => item.Source.Id == id);
+        {
+            foreach (var item in filtered)
+            {
+                if (item.Source.Id != id)
+                    continue;
+
+                _list.SelectedItem = item;
+                break;
+            }
+        }
+
         if (_list.SelectedIndex < 0 && _list.Items.Count > 0)
             _list.SelectedIndex = 0;
         UpdateMoveButtons();
