@@ -94,6 +94,42 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_WiresPortablePdfExportToNativeFileMenu()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var exporterSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "PortablePdfDocumentExporter.cs"));
+
+        source.Should().Contain("private readonly NativeMenuItem _exportPdfMenuItem = new();");
+        source.Should().Contain("_exportPdfMenuItem.Header = \"Export to PDF...\";");
+        source.Should().Contain("_exportPdfMenuItem.Click += async (_, _) => await ExportActiveSheetPdfAsync();");
+        source.Should().Contain("fileMenu.Items.Add(_exportPdfMenuItem);");
+        source.Should().Contain("_exportPdfMenuItem.IsEnabled = isIdle && StorageProvider.CanSave;");
+        source.Should().Contain("private async Task ExportActiveSheetPdfAsync()");
+        source.Should().Contain("new FilePickerFileType(\"PDF Document\")");
+        source.Should().Contain("Patterns = [\"*.pdf\"]");
+        source.Should().Contain("Title = \"Export to PDF\"");
+        source.Should().Contain("DefaultExtension = \"pdf\"");
+        source.Should().Contain("ShowOverwritePrompt = true");
+        source.Should().Contain("storageFile.TryGetLocalPath()");
+        source.Should().Contain("ExportPathPlanner.Plan(path, ExportFileFormat.Pdf).Path");
+        source.Should().Contain("WorkbookExportPrintPlanner.CreatePlan(");
+        source.Should().Contain("WorkbookExportPrintSurface.MacOs");
+        source.Should().Contain("PortablePdfExportPlanner.CreatePlan(exportPrintPlan)");
+        source.Should().Contain("PortablePdfDocumentExporter.Save(_session.Workbook, exportPlan, path)");
+        source.Should().Contain("HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, \"Export to PDF...\", requireGesture: false)");
+
+        smokeSource.Should().Contain("bool HasNativeExportPdfMenuItem,");
+        smokeSource.Should().Contain("HasNativeExportPdfMenuItem &&");
+        smokeSource.Should().Contain("native_export_pdf_menu_item={FormatBool(snapshot.HasNativeExportPdfMenuItem)}");
+
+        exporterSource.Should().Contain("public static class PortablePdfDocumentExporter");
+        exporterSource.Should().Contain("PortablePdfPageContentPlanner.CreatePlan(workbook, request)");
+        exporterSource.Should().NotContain("System.Windows");
+        exporterSource.Should().NotContain("Microsoft.Win32");
+    }
+
+    [Fact]
     public void MainWindow_WiresNativeFileMenuToSharedOpenSavePipeline()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));

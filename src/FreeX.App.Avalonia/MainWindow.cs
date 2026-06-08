@@ -241,6 +241,8 @@ public sealed class MainWindow : Window
     private const double InitialViewportWidth = 1440;
     private const double MinimumDisplayedColumnWidth = 54;
     private const double MinimumDisplayedRowHeight = 22;
+    private const uint PortablePdfColumnsPerPage = 8;
+    private const uint PortablePdfRowsPerPage = 28;
     private const double ZoomToSelectionDefaultColumnWidth = 80;
     private const double ZoomToSelectionDefaultRowHeight = 20;
     private const int ZoomStepPercent = 10;
@@ -345,6 +347,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _openRecentMenuItem = new();
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
+    private readonly NativeMenuItem _exportPdfMenuItem = new();
     private readonly NativeMenuItem _shareWorkbookMenuItem = new();
     private readonly NativeMenuItem _workbookStatisticsMenuItem = new();
     private readonly NativeMenuItem _closeWorkbookMenuItem = new();
@@ -626,6 +629,9 @@ public sealed class MainWindow : Window
         _saveAsMenuItem.Header = "Save As...";
         _saveAsMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Shift);
         _saveAsMenuItem.Click += async (_, _) => await SaveWorkbookAsAsync();
+
+        _exportPdfMenuItem.Header = "Export to PDF...";
+        _exportPdfMenuItem.Click += async (_, _) => await ExportActiveSheetPdfAsync();
 
         _shareWorkbookMenuItem.Header = "Share Workbook...";
         _shareWorkbookMenuItem.Click += async (_, _) => await ShareWorkbookAsync();
@@ -1023,6 +1029,7 @@ public sealed class MainWindow : Window
         fileMenu.Items.Add(_openRecentMenuItem);
         fileMenu.Items.Add(_saveMenuItem);
         fileMenu.Items.Add(_saveAsMenuItem);
+        fileMenu.Items.Add(_exportPdfMenuItem);
         fileMenu.Items.Add(_shareWorkbookMenuItem);
         fileMenu.Items.Add(_workbookStatisticsMenuItem);
         fileMenu.Items.Add(new NativeMenuItemSeparator());
@@ -1771,6 +1778,7 @@ public sealed class MainWindow : Window
         RefreshNativeOpenRecentMenu(isIdle);
         _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
         _saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;
+        _exportPdfMenuItem.IsEnabled = isIdle && StorageProvider.CanSave;
         _shareWorkbookMenuItem.IsEnabled = isIdle;
         _workbookStatisticsMenuItem.IsEnabled = isIdle;
         _closeWorkbookMenuItem.IsEnabled = isIdle;
@@ -11181,6 +11189,7 @@ public sealed class MainWindow : Window
             NativeOpenRecentItemCount: nativeOpenRecentItemCount,
             HasNativeSaveMenuItem: HasNativeMenuItem(_saveMenuItem, "Save"),
             HasNativeSaveAsMenuItem: HasNativeMenuItem(_saveAsMenuItem, "Save As..."),
+            HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, "Export to PDF...", requireGesture: false),
             HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, "Workbook Statistics..."),
             HasNativeCloseWorkbookMenuItem: HasNativeMenuItem(_closeWorkbookMenuItem, "Close Workbook"),
             HasNativeNewSheetMenuItem: HasNativeMenuItem(_newSheetMenuItem, "New Sheet"),
@@ -12385,6 +12394,107 @@ public sealed class MainWindow : Window
         }
     }
 
+    private async Task ExportActiveSheetPdfAsync()
+    {
+        if (_isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        if (!StorageProvider.CanSave)
+        {
+            ShowExportIssue("PDF export unavailable on this platform.");
+            return;
+        }
+
+        var pdfFileType = new FilePickerFileType("PDF Document")
+        {
+            Patterns = ["*.pdf"],
+        };
+        var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Export to PDF",
+            SuggestedFileName = BuildSuggestedPdfExportFileName(),
+            DefaultExtension = "pdf",
+            FileTypeChoices = [pdfFileType],
+            SuggestedFileType = pdfFileType,
+            ShowOverwritePrompt = true,
+        });
+
+        if (storageFile is null)
+            return;
+
+        using (storageFile)
+        {
+            var path = storageFile.TryGetLocalPath();
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                ShowExportIssue("PDF export requires a local file path.");
+                return;
+            }
+
+            path = ExportPathPlanner.Plan(path, ExportFileFormat.Pdf).Path;
+            try
+            {
+                _isSaving = true;
+                UpdateSaveButton();
+                _statusText.Text = "Exporting PDF...";
+                _statusText.Foreground = Brush(67, 113, 83);
+
+                var exportPrintPlan = CreateActiveSheetPortablePdfPrintPlan();
+                var exportPlan = PortablePdfExportPlanner.CreatePlan(exportPrintPlan);
+                if (!exportPlan.IsReady)
+                {
+                    ShowExportIssue(exportPlan.StatusText);
+                    return;
+                }
+
+                var result = PortablePdfDocumentExporter.Save(_session.Workbook, exportPlan, path);
+                RefreshShell($"{result.StatusText} {Path.GetFileName(path)}");
+            }
+            catch (Exception ex)
+            {
+                ShowExportIssue($"PDF export failed: {ex.Message}");
+            }
+            finally
+            {
+                _isSaving = false;
+                UpdateSaveButton();
+            }
+        }
+    }
+
+    private WorkbookExportPrintPlan CreateActiveSheetPortablePdfPrintPlan() =>
+        WorkbookExportPrintPlanner.CreatePlan(
+            _session.Workbook,
+            new WorkbookExportPrintIntent(
+                WorkbookExportPrintScope.ActiveSheet,
+                WorkbookExportPrintOutputKind.Pdf,
+                ActiveSheetIndex: ResolveActiveSheetIndex()),
+            new WorkbookExportPrintPageCapacity(PortablePdfRowsPerPage, PortablePdfColumnsPerPage),
+            WorkbookExportPrintSurface.MacOs);
+
+    private int ResolveActiveSheetIndex()
+    {
+        for (var index = 0; index < _session.Workbook.Sheets.Count; index++)
+        {
+            if (_session.Workbook.Sheets[index].Id == _session.ActiveSheet.Id)
+                return index;
+        }
+
+        return _session.Workbook.ActiveSheetIndex ?? 0;
+    }
+
+    private string BuildSuggestedPdfExportFileName()
+    {
+        var workbookName = Path.GetFileNameWithoutExtension(_session.DisplayName);
+        if (string.IsNullOrWhiteSpace(workbookName))
+            workbookName = "FreeX";
+
+        return workbookName + ".pdf";
+    }
+
     private async Task SaveWorkbookToTargetAsync(FileSaveTarget target)
     {
         try
@@ -12442,6 +12552,13 @@ public sealed class MainWindow : Window
     {
         _statusText.Text = message;
         _statusText.Foreground = Brush(143, 74, 18);
+    }
+
+    private void ShowExportIssue(string message)
+    {
+        _statusText.Text = message;
+        _statusText.Foreground = Brush(143, 74, 18);
+        UpdateSaveButton();
     }
 
     private void ShowShareStatus(string message, bool isWarning)

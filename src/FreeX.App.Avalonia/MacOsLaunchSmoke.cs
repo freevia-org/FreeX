@@ -350,6 +350,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     int NativeOpenRecentItemCount,
     bool HasNativeSaveMenuItem,
     bool HasNativeSaveAsMenuItem,
+    bool HasNativeExportPdfMenuItem,
     bool HasNativeWorkbookStatisticsMenuItem,
     bool HasNativeCloseWorkbookMenuItem,
     bool HasNativeNewSheetMenuItem,
@@ -539,6 +540,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         NativeOpenRecentItemCount > 0 &&
         HasNativeSaveMenuItem &&
         HasNativeSaveAsMenuItem &&
+        HasNativeExportPdfMenuItem &&
         HasNativeWorkbookStatisticsMenuItem &&
         HasNativeCloseWorkbookMenuItem &&
         HasNativeNewSheetMenuItem &&
@@ -1005,6 +1007,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_open_recent_item_count={snapshot.NativeOpenRecentItemCount}",
                 $"native_save_menu_item={FormatBool(snapshot.HasNativeSaveMenuItem)}",
                 $"native_save_as_menu_item={FormatBool(snapshot.HasNativeSaveAsMenuItem)}",
+                $"native_export_pdf_menu_item={FormatBool(snapshot.HasNativeExportPdfMenuItem)}",
                 $"native_workbook_statistics_menu_item={FormatBool(snapshot.HasNativeWorkbookStatisticsMenuItem)}",
                 $"native_close_workbook_menu_item={FormatBool(snapshot.HasNativeCloseWorkbookMenuItem)}",
                 $"native_new_sheet_menu_item={FormatBool(snapshot.HasNativeNewSheetMenuItem)}",
