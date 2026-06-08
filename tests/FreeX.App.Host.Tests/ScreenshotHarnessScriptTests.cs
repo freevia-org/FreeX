@@ -289,6 +289,32 @@ public sealed class ScreenshotHarnessScriptTests
     }
 
     [Fact]
+    public void FreeXScreenshotScript_ProvidesOptInSaveAsWorkbookDialogTour()
+    {
+        var script = ReadScript("screenshot_ribbon.ps1");
+
+        script.Should().Contain("[string]$SaveAsWorkbookDialogTour = $env:FREEX_SAVE_AS_WORKBOOK_DIALOG_TOUR");
+        script.Should().Contain("if ($SaveAsWorkbookDialogTour -eq \"1\")");
+        script.Should().Contain("function Invoke-FreeXSaveAsWorkbookDialogTour");
+        script.Should().Contain("function Find-FreeXSaveAsWorkbookDialogWindow");
+        script.Should().Contain("Join-Path $outDir \"save-as-workbook-dialog-tour\"");
+        script.Should().Contain("freex_save_as_workbook_dialog_tour_manifest.json");
+        script.Should().Contain("freex_save_as_workbook_dialog_opened.png");
+        script.Should().Contain("Tool = \"FREEX_SAVE_AS_WORKBOOK_DIALOG_TOUR\"");
+        script.Should().Contain("EvidenceFamily = \"native-dialog\"");
+        script.Should().Contain("ScenarioId = \"native-dialog:save-as-workbook\"");
+        script.Should().Contain("DialogClassName = \"#32770\"");
+        script.Should().Contain("EntryPath = \"F12\"");
+        script.Should().Contain("[System.Windows.Forms.SendKeys]::SendWait(\"{F12}\")");
+        script.Should().Contain("Find-FreeXSaveAsWorkbookDialogWindow $expectedPid $ownerWindowHandle");
+        script.Should().Contain("PairKey = \"interactive:save-as-workbook-dialog:opened\"");
+        script.Should().Contain("CounterpartTool = \"FREEX_EXCEL_SAVE_AS_WORKBOOK_DIALOG_TOUR\"");
+        script.Should().Contain("CounterpartFileName = \"interactive_save_as_workbook_dialog_opened.png\"");
+        script.Should().Contain("Assert-ForegroundWindowOwnership $expectedPid $expectedTitle \"FreeX native Save As dialog keyboard input\"");
+        script.Should().Contain("Assert-ForegroundProcessOwnership $expectedPid \"FreeX native Save As dialog screen capture\"");
+    }
+
+    [Fact]
     public void ExcelScreenshotScript_FailsFastWhenExcelIsMissing()
     {
         var script = ReadScript("screenshot_excel.ps1");
@@ -432,6 +458,35 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain("CounterpartFileName = \"freex_open_workbook_dialog_opened.png\"");
         script.Should().Contain("Assert-ForegroundWindowOwnership $excelPid $excelTitle \"Excel native Open dialog setup\"");
         script.Should().Contain("Assert-ForegroundProcessOwnership $excelPid \"Excel native Open dialog screen capture\"");
+    }
+
+    [Fact]
+    public void ExcelScreenshotScript_ProvidesOptInSaveAsWorkbookDialogTour()
+    {
+        var script = ReadScript("screenshot_excel.ps1");
+
+        script.Should().Contain("[string]$SaveAsWorkbookDialogTour = $env:FREEX_EXCEL_SAVE_AS_WORKBOOK_DIALOG_TOUR");
+        script.Should().Contain("if ($SaveAsWorkbookDialogTour -eq \"1\")");
+        script.Should().Contain("function Invoke-ExcelSaveAsWorkbookDialogTour");
+        script.Should().Contain("function Find-ExcelSaveAsWorkbookDialogWindow");
+        script.Should().Contain("function Open-ExcelNativeSaveAsDialog");
+        script.Should().Contain("Join-Path $outDir \"save-as-workbook-dialog-tour\"");
+        script.Should().Contain("excel_save_as_workbook_dialog_tour_manifest.json");
+        script.Should().Contain("interactive_save_as_workbook_dialog_opened.png");
+        script.Should().Contain("Tool = \"FREEX_EXCEL_SAVE_AS_WORKBOOK_DIALOG_TOUR\"");
+        script.Should().Contain("EvidenceFamily = \"native-dialog\"");
+        script.Should().Contain("ScenarioId = \"native-dialog:save-as-workbook\"");
+        script.Should().Contain("($_.ClassName -eq \"NUIDialog\" -or ($_.ClassName -eq \"#32770\" -and $_.Title -eq \"Save As\"))");
+        script.Should().Contain("DialogTitle = $dialog.Title");
+        script.Should().Contain("DialogClassName = $dialog.ClassName");
+        script.Should().Contain("EntryPath = \"F12\"");
+        script.Should().Contain("[System.Windows.Forms.SendKeys]::SendWait(\"{F12}\")");
+        script.Should().Contain("Find-ExcelSaveAsWorkbookDialogWindow $excelPid $excelHwnd");
+        script.Should().Contain("PairKey = \"interactive:save-as-workbook-dialog:opened\"");
+        script.Should().Contain("CounterpartTool = \"FREEX_SAVE_AS_WORKBOOK_DIALOG_TOUR\"");
+        script.Should().Contain("CounterpartFileName = \"freex_save_as_workbook_dialog_opened.png\"");
+        script.Should().Contain("Assert-ForegroundWindowOwnership $excelPid $excelTitle \"Excel native Save As dialog setup\"");
+        script.Should().Contain("Assert-ForegroundProcessOwnership $excelPid \"Excel native Save As dialog screen capture\"");
     }
 
     private static string ReadScript(string scriptName) =>

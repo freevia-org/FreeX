@@ -3,7 +3,8 @@ param(
     [string]$AutoFilterFlyoutTour = $env:FREEX_EXCEL_AUTOFILTER_FLYOUT_TOUR,
     [string]$NumberFormatDropdownTour = $env:FREEX_EXCEL_NUMBER_FORMAT_DROPDOWN_TOUR,
     [string]$WorksheetContextMenuTour = $env:FREEX_EXCEL_WORKSHEET_CONTEXT_MENU_TOUR,
-    [string]$OpenWorkbookDialogTour = $env:FREEX_EXCEL_OPEN_WORKBOOK_DIALOG_TOUR
+    [string]$OpenWorkbookDialogTour = $env:FREEX_EXCEL_OPEN_WORKBOOK_DIALOG_TOUR,
+    [string]$SaveAsWorkbookDialogTour = $env:FREEX_EXCEL_SAVE_AS_WORKBOOK_DIALOG_TOUR
 )
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -112,6 +113,7 @@ $autoFilterFlyoutOutDir = Join-Path $outDir "autofilter-flyout-tour"
 $numberFormatDropdownOutDir = Join-Path $outDir "home-number-format-dropdown-tour"
 $worksheetContextMenuOutDir = Join-Path $outDir "worksheet-context-menu-tour"
 $openWorkbookDialogOutDir = Join-Path $outDir "open-workbook-dialog-tour"
+$saveAsWorkbookDialogOutDir = Join-Path $outDir "save-as-workbook-dialog-tour"
 function Clear-ScreenshotEvidenceArtifacts {
     Get-ChildItem $outDir -Filter "*.png" -ErrorAction SilentlyContinue |
         Remove-Item -Force -ErrorAction SilentlyContinue
@@ -147,6 +149,14 @@ function Clear-OpenWorkbookDialogEvidenceArtifacts {
         Get-ChildItem $openWorkbookDialogOutDir -Filter "*.png" -ErrorAction SilentlyContinue |
             Remove-Item -Force -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath (Join-Path $openWorkbookDialogOutDir "excel_open_workbook_dialog_tour_manifest.json") -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Clear-SaveAsWorkbookDialogEvidenceArtifacts {
+    if (Test-Path -LiteralPath $saveAsWorkbookDialogOutDir -PathType Container) {
+        Get-ChildItem $saveAsWorkbookDialogOutDir -Filter "*.png" -ErrorAction SilentlyContinue |
+            Remove-Item -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath (Join-Path $saveAsWorkbookDialogOutDir "excel_save_as_workbook_dialog_tour_manifest.json") -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -210,6 +220,20 @@ $interactiveCapturePlan = @(
         CaptureOutputNaming = "interactive_<ScenarioFileName>_<State>.png"
         PairKeyPattern = "interactive:open-workbook-dialog:<State>"
         Trigger = "Open File > Open > Browse or the equivalent guarded keyboard path that reaches Excel's native Open dialog."
+        CaptureRequirement = "Capture the active popup/dialog/menu bounds, not the owner-window ribbon band."
+        ForegroundGuard = "Treat the native dialog as the expected foreground target after the final launch input; abort if another process or unrelated dialog owns foreground focus."
+        CounterpartSubject = "freex"
+    },
+    [pscustomobject]@{
+        ScenarioId = "native-dialog:save-as-workbook"
+        ScenarioFileName = "save_as_workbook_dialog"
+        Priority = 5
+        EvidenceFamily = "native-dialog"
+        EvidenceSubject = "excel"
+        CaptureStatus = "planned-separate-foreground-guarded-capture"
+        CaptureOutputNaming = "interactive_<ScenarioFileName>_<State>.png"
+        PairKeyPattern = "interactive:save-as-workbook-dialog:<State>"
+        Trigger = "Open File > Save As > Browse or the equivalent guarded keyboard path that reaches Excel's native Save As dialog."
         CaptureRequirement = "Capture the active popup/dialog/menu bounds, not the owner-window ribbon band."
         ForegroundGuard = "Treat the native dialog as the expected foreground target after the final launch input; abort if another process or unrelated dialog owns foreground focus."
         CounterpartSubject = "freex"
@@ -409,6 +433,19 @@ function Find-ExcelOpenWorkbookDialogWindow($expectedPid, $ownerWindowHandle) {
     return $windows | Select-Object -First 1
 }
 
+function Find-ExcelSaveAsWorkbookDialogWindow($expectedPid, $ownerWindowHandle) {
+    $windows = [Win32e]::GetVisibleWindowsByProcess($expectedPid) |
+        Where-Object {
+            $_.Handle -ne $ownerWindowHandle -and
+            ($_.ClassName -eq "NUIDialog" -or ($_.ClassName -eq "#32770" -and $_.Title -eq "Save As")) -and
+            ($_.Right - $_.Left) -gt 400 -and
+            ($_.Bottom - $_.Top) -gt 250
+        } |
+        Sort-Object @{ Expression = { ($_.Right - $_.Left) * ($_.Bottom - $_.Top) }; Descending = $true }
+
+    return $windows | Select-Object -First 1
+}
+
 function New-ExcelAutoFilterSampleWorkbook($excelApp) {
     $workbook = $excelApp.Workbooks.Add()
     $worksheet = $workbook.Worksheets.Item(1)
@@ -531,6 +568,11 @@ function Open-ExcelWorksheetContextMenu($expectedPid, $expectedTitle) {
 function Open-ExcelNativeOpenDialog($expectedPid, $expectedTitle) {
     Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel native Open dialog keyboard input"
     [System.Windows.Forms.SendKeys]::SendWait("^{F12}")
+}
+
+function Open-ExcelNativeSaveAsDialog($expectedPid, $expectedTitle) {
+    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel native Save As dialog keyboard input"
+    [System.Windows.Forms.SendKeys]::SendWait("{F12}")
 }
 
 function Invoke-ExcelAutoFilterFlyoutTour {
@@ -1081,6 +1123,139 @@ function Invoke-ExcelOpenWorkbookDialogTour {
     }
 }
 
+function Invoke-ExcelSaveAsWorkbookDialogTour {
+    New-Item -ItemType Directory -Force -Path $saveAsWorkbookDialogOutDir | Out-Null
+    Clear-SaveAsWorkbookDialogEvidenceArtifacts
+
+    $excelApp = $null
+    $workbook = $null
+    $excelPid = 0
+    try {
+        $excelApp = New-Object -ComObject Excel.Application
+        $excelApp.Visible = $true
+        $excelApp.DisplayAlerts = $false
+        $excelApp.WindowState = -4143
+        $excelApp.Top = 0
+        $excelApp.Left = 0
+        $excelApp.Width = 900
+        $excelApp.Height = 720
+        $workbook = $excelApp.Workbooks.Add()
+        Start-Sleep -Milliseconds 700
+
+        $excelHwnd = [IntPtr]$excelApp.Hwnd
+        if ($excelHwnd -eq [IntPtr]::Zero) {
+            Clear-SaveAsWorkbookDialogEvidenceArtifacts
+            throw "Excel native Save As dialog tour could not resolve the Excel window handle."
+        }
+
+        [Win32e]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
+        $excelTitle = Get-WindowTitle $excelHwnd
+        Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle "Excel native Save As dialog setup"
+        Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel native Save As dialog setup"
+
+        Open-ExcelNativeSaveAsDialog $excelPid $excelTitle
+        Start-Sleep -Milliseconds 1200
+        Assert-ForegroundProcessOwnership $excelPid "Excel native Save As dialog capture"
+
+        $dialog = Find-ExcelSaveAsWorkbookDialogWindow $excelPid $excelHwnd
+        if ($null -eq $dialog) {
+            Clear-SaveAsWorkbookDialogEvidenceArtifacts
+            throw "Excel Save As dialog tour did not detect an Excel-owned NUIDialog or '#32770' Save As dialog after F12."
+        }
+
+        $captureSource = "native-dialog-window-rectangle"
+        $captureBounds = [pscustomobject]@{
+            Left = $dialog.Left
+            Top = $dialog.Top
+            Right = $dialog.Right
+            Bottom = $dialog.Bottom
+            Width = $dialog.Right - $dialog.Left
+            Height = $dialog.Bottom - $dialog.Top
+        }
+        $dialogBounds = [pscustomobject]@{
+            Handle = $dialog.Handle.ToString()
+            ClassName = $dialog.ClassName
+            Title = $dialog.Title
+            Left = $dialog.Left
+            Top = $dialog.Top
+            Right = $dialog.Right
+            Bottom = $dialog.Bottom
+            Width = $dialog.Right - $dialog.Left
+            Height = $dialog.Bottom - $dialog.Top
+        }
+
+        $fileName = "interactive_save_as_workbook_dialog_opened.png"
+        $path = Join-Path $saveAsWorkbookDialogOutDir $fileName
+        Assert-ForegroundProcessOwnership $excelPid "Excel native Save As dialog screen capture"
+        Capture-ScreenRectangle $captureBounds.Left $captureBounds.Top $captureBounds.Width $captureBounds.Height $path
+
+        $manifestPath = Join-Path $saveAsWorkbookDialogOutDir "excel_save_as_workbook_dialog_tour_manifest.json"
+        [pscustomobject]@{
+            Tool = "FREEX_EXCEL_SAVE_AS_WORKBOOK_DIALOG_TOUR"
+            EvidenceFamily = "native-dialog"
+            EvidenceSubject = "excel"
+            EvidenceApp = "Microsoft Excel"
+            OutputDirectory = $saveAsWorkbookDialogOutDir
+            OutputNaming = "interactive_save_as_workbook_dialog_opened.png"
+            CatalogEvidenceTarget = "docs/testing/ui-test-catalog.md"
+            DialogTitle = $dialog.Title
+            DialogClassName = $dialog.ClassName
+            EntryPath = "F12"
+            CaptureStatus = "complete"
+            CaptureMethod = $captureSource
+            ForegroundGuard = [pscustomobject]@{
+                Required = $true
+                ExpectedProcessId = $excelPid
+                ExpectedWindowTitle = $excelTitle
+                Policy = "Seed a blank Excel workbook, then abort and clear Save As dialog evidence unless Excel owns foreground immediately before F12 and before screen capture."
+            }
+            Pairing = [pscustomobject]@{
+                PairKeyPattern = "interactive:save-as-workbook-dialog:<State>"
+                PairKey = "interactive:save-as-workbook-dialog:opened"
+                CounterpartSubject = "freex"
+                CounterpartTool = "FREEX_SAVE_AS_WORKBOOK_DIALOG_TOUR"
+                CounterpartFileName = "freex_save_as_workbook_dialog_opened.png"
+            }
+            Scenario = [pscustomobject]@{
+                ScenarioId = "native-dialog:save-as-workbook"
+                ScenarioFileName = "save_as_workbook_dialog"
+                State = "opened"
+                Trigger = "Excel COM starts a blank workbook and a foreground-guarded F12 opens the native Save As dialog."
+            }
+            WindowBounds = $captureBounds
+            DialogBounds = $dialogBounds
+            Captures = @(
+                [pscustomobject]@{
+                    CaptureSequence = 1
+                    CaptureKey = "interactive:save-as-workbook-dialog:opened"
+                    PairKey = "interactive:save-as-workbook-dialog:opened"
+                    EvidenceSubject = "excel"
+                    CounterpartSubject = "freex"
+                    CounterpartFileName = "freex_save_as_workbook_dialog_opened.png"
+                    FileName = $fileName
+                    Path = $path
+                    Width = $captureBounds.Width
+                    Height = $captureBounds.Height
+                    CaptureMethod = $captureSource
+                    CaptureStatus = "complete"
+                }
+            )
+        } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+
+        Write-Host "Saved $path"
+        Write-Host "Saved $manifestPath"
+    }
+    finally {
+        if ($excelPid -gt 0) {
+            Get-Process -Id $excelPid -ErrorAction SilentlyContinue |
+                Stop-Process -Force -ErrorAction SilentlyContinue
+        }
+        elseif ($null -ne $excelApp) {
+            $excelApp.Quit() | Out-Null
+        }
+    }
+}
+
 if ($AutoFilterFlyoutTour -eq "1") {
     Invoke-ExcelAutoFilterFlyoutTour
     Write-Host "Done."
@@ -1101,6 +1276,12 @@ if ($WorksheetContextMenuTour -eq "1") {
 
 if ($OpenWorkbookDialogTour -eq "1") {
     Invoke-ExcelOpenWorkbookDialogTour
+    Write-Host "Done."
+    exit 0
+}
+
+if ($SaveAsWorkbookDialogTour -eq "1") {
+    Invoke-ExcelSaveAsWorkbookDialogTour
     Write-Host "Done."
     exit 0
 }

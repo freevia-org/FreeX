@@ -1,7 +1,8 @@
 param(
     [string]$Widths = $env:FREEX_SS_TOUR_WIDTHS,
     [string]$ExePath = $env:FREEX_RIBBON_EXE_PATH,
-    [string]$OpenWorkbookDialogTour = $env:FREEX_OPEN_WORKBOOK_DIALOG_TOUR
+    [string]$OpenWorkbookDialogTour = $env:FREEX_OPEN_WORKBOOK_DIALOG_TOUR,
+    [string]$SaveAsWorkbookDialogTour = $env:FREEX_SAVE_AS_WORKBOOK_DIALOG_TOUR
 )
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -102,6 +103,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $outDir = Join-Path $PSScriptRoot "screenshots"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 $openWorkbookDialogOutDir = Join-Path $outDir "open-workbook-dialog-tour"
+$saveAsWorkbookDialogOutDir = Join-Path $outDir "save-as-workbook-dialog-tour"
 function Clear-ScreenshotEvidenceArtifacts {
     Get-ChildItem $outDir -Filter "*.png" -ErrorAction SilentlyContinue |
         Remove-Item -Force -ErrorAction SilentlyContinue
@@ -116,7 +118,15 @@ function Clear-OpenWorkbookDialogEvidenceArtifacts {
     }
 }
 
-if ($OpenWorkbookDialogTour -ne "1") {
+function Clear-SaveAsWorkbookDialogEvidenceArtifacts {
+    if (Test-Path -LiteralPath $saveAsWorkbookDialogOutDir -PathType Container) {
+        Get-ChildItem $saveAsWorkbookDialogOutDir -Filter "*.png" -ErrorAction SilentlyContinue |
+            Remove-Item -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath (Join-Path $saveAsWorkbookDialogOutDir "freex_save_as_workbook_dialog_tour_manifest.json") -Force -ErrorAction SilentlyContinue
+    }
+}
+
+if ($OpenWorkbookDialogTour -ne "1" -and $SaveAsWorkbookDialogTour -ne "1") {
     Clear-ScreenshotEvidenceArtifacts
 }
 $tabNames = @("Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Help")
@@ -179,6 +189,20 @@ $interactiveCapturePlan = @(
         CaptureOutputNaming = "interactive_<ScenarioFileName>_<State>.png"
         PairKeyPattern = "interactive:open-workbook-dialog:<State>"
         Trigger = "Open File > Open or Ctrl+O to reach FreeX's native Open dialog."
+        CaptureRequirement = "Capture the active popup/dialog/menu bounds, not the owner-window ribbon band."
+        ForegroundGuard = "Treat the native dialog as the expected foreground target after the final launch input; abort if another process or unrelated dialog owns foreground focus."
+        CounterpartSubject = "excel"
+    },
+    [pscustomobject]@{
+        ScenarioId = "native-dialog:save-as-workbook"
+        ScenarioFileName = "save_as_workbook_dialog"
+        Priority = 5
+        EvidenceFamily = "native-dialog"
+        EvidenceSubject = "freex"
+        CaptureStatus = "planned-separate-foreground-guarded-capture"
+        CaptureOutputNaming = "interactive_<ScenarioFileName>_<State>.png"
+        PairKeyPattern = "interactive:save-as-workbook-dialog:<State>"
+        Trigger = "Open File > Save As or F12 to reach FreeX's native Save As dialog."
         CaptureRequirement = "Capture the active popup/dialog/menu bounds, not the owner-window ribbon band."
         ForegroundGuard = "Treat the native dialog as the expected foreground target after the final launch input; abort if another process or unrelated dialog owns foreground focus."
         CounterpartSubject = "excel"
@@ -371,6 +395,20 @@ function Find-FreeXOpenWorkbookDialogWindow($expectedPid, $ownerWindowHandle) {
     return $windows | Select-Object -First 1
 }
 
+function Find-FreeXSaveAsWorkbookDialogWindow($expectedPid, $ownerWindowHandle) {
+    $windows = [Win32c]::GetVisibleWindowsByProcess($expectedPid) |
+        Where-Object {
+            $_.Handle -ne $ownerWindowHandle -and
+            $_.ClassName -eq "#32770" -and
+            $_.Title -eq "Save As" -and
+            ($_.Right - $_.Left) -gt 400 -and
+            ($_.Bottom - $_.Top) -gt 300
+        } |
+        Sort-Object @{ Expression = { ($_.Right - $_.Left) * ($_.Bottom - $_.Top) }; Descending = $true }
+
+    return $windows | Select-Object -First 1
+}
+
 function Capture-ScreenRectangle($left, $top, $width, $height, $path) {
     $bmp = New-Object System.Drawing.Bitmap($width, $height)
     $g = [System.Drawing.Graphics]::FromImage($bmp)
@@ -482,6 +520,108 @@ function Invoke-FreeXOpenWorkbookDialogTour($expectedPid, $ownerWindowHandle, $e
     Write-Host "Saved $manifestPath"
 }
 
+function Invoke-FreeXSaveAsWorkbookDialogTour($expectedPid, $ownerWindowHandle, $expectedTitle) {
+    New-Item -ItemType Directory -Force -Path $saveAsWorkbookDialogOutDir | Out-Null
+    Clear-SaveAsWorkbookDialogEvidenceArtifacts
+
+    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "FreeX native Save As dialog keyboard input"
+    [System.Windows.Forms.SendKeys]::SendWait("{F12}")
+    Start-Sleep -Milliseconds 1200
+    Assert-ForegroundProcessOwnership $expectedPid "FreeX native Save As dialog capture"
+
+    $dialog = Find-FreeXSaveAsWorkbookDialogWindow $expectedPid $ownerWindowHandle
+    if ($null -eq $dialog) {
+        Clear-SaveAsWorkbookDialogEvidenceArtifacts
+        throw "FreeX native Save As dialog tour did not detect a FreeX-owned '#32770' Save As dialog after F12."
+    }
+
+    $dialogDpi = [Win32c]::GetDpiForWindow($dialog.Handle)
+    $dialogScale = if ($dialogDpi -gt 0) { [double]$dialogDpi / 96.0 } else { 1.0 }
+    $captureSource = "native-dialog-window-rectangle"
+    $captureBounds = [pscustomobject]@{
+        Left = [int][Math]::Round($dialog.Left * $dialogScale)
+        Top = [int][Math]::Round($dialog.Top * $dialogScale)
+        Right = [int][Math]::Round($dialog.Right * $dialogScale)
+        Bottom = [int][Math]::Round($dialog.Bottom * $dialogScale)
+        Width = [int][Math]::Round(($dialog.Right - $dialog.Left) * $dialogScale)
+        Height = [int][Math]::Round(($dialog.Bottom - $dialog.Top) * $dialogScale)
+    }
+    $dialogBounds = [pscustomobject]@{
+        Handle = $dialog.Handle.ToString()
+        ClassName = $dialog.ClassName
+        Title = $dialog.Title
+        Dpi = $dialogDpi
+        CaptureScale = $dialogScale
+        Left = $dialog.Left
+        Top = $dialog.Top
+        Right = $dialog.Right
+        Bottom = $dialog.Bottom
+        Width = $dialog.Right - $dialog.Left
+        Height = $dialog.Bottom - $dialog.Top
+    }
+
+    $fileName = "freex_save_as_workbook_dialog_opened.png"
+    $path = Join-Path $saveAsWorkbookDialogOutDir $fileName
+    Assert-ForegroundProcessOwnership $expectedPid "FreeX native Save As dialog screen capture"
+    Capture-ScreenRectangle $captureBounds.Left $captureBounds.Top $captureBounds.Width $captureBounds.Height $path
+
+    $manifestPath = Join-Path $saveAsWorkbookDialogOutDir "freex_save_as_workbook_dialog_tour_manifest.json"
+    [pscustomobject]@{
+        Tool = "FREEX_SAVE_AS_WORKBOOK_DIALOG_TOUR"
+        EvidenceFamily = "native-dialog"
+        EvidenceSubject = "freex"
+        EvidenceApp = "FreeX"
+        OutputDirectory = $saveAsWorkbookDialogOutDir
+        OutputNaming = "freex_save_as_workbook_dialog_opened.png"
+        CatalogEvidenceTarget = "docs/testing/ui-test-catalog.md"
+        ScenarioId = "native-dialog:save-as-workbook"
+        DialogClassName = "#32770"
+        EntryPath = "F12"
+        CaptureStatus = "complete"
+        CaptureMethod = $captureSource
+        ForegroundGuard = [pscustomobject]@{
+            Required = $true
+            ExpectedProcessId = $expectedPid
+            ExpectedWindowTitle = $expectedTitle
+            Policy = "Abort and clear native Save As dialog evidence unless FreeX owns foreground immediately before F12 and before screen capture."
+        }
+        Pairing = [pscustomobject]@{
+            PairKeyPattern = "interactive:save-as-workbook-dialog:<State>"
+            PairKey = "interactive:save-as-workbook-dialog:opened"
+            CounterpartSubject = "excel"
+            CounterpartTool = "FREEX_EXCEL_SAVE_AS_WORKBOOK_DIALOG_TOUR"
+            CounterpartFileName = "interactive_save_as_workbook_dialog_opened.png"
+        }
+        Scenario = [pscustomobject]@{
+            ScenarioId = "native-dialog:save-as-workbook"
+            ScenarioFileName = "save_as_workbook_dialog"
+            State = "opened"
+            Trigger = "A foreground-guarded F12 opens the FreeX native Save As dialog."
+        }
+        WindowBounds = $captureBounds
+        DialogBounds = $dialogBounds
+        Captures = @(
+            [pscustomobject]@{
+                CaptureSequence = 1
+                CaptureKey = "interactive:save-as-workbook-dialog:opened"
+                PairKey = "interactive:save-as-workbook-dialog:opened"
+                EvidenceSubject = "freex"
+                CounterpartSubject = "excel"
+                CounterpartFileName = "interactive_save_as_workbook_dialog_opened.png"
+                FileName = $fileName
+                Path = $path
+                Width = $captureBounds.Width
+                Height = $captureBounds.Height
+                CaptureMethod = $captureSource
+                CaptureStatus = "complete"
+            }
+        )
+    } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+
+    Write-Host "Saved $path"
+    Write-Host "Saved $manifestPath"
+}
+
 Write-Host "HWND: $hwnd"
 $expectedTitle = Get-WindowTitle $hwnd
 [Win32c]::ShowWindow($hwnd, 1) | Out-Null
@@ -492,6 +632,13 @@ Assert-ForegroundWindowOwnership $proc.Id $expectedTitle "initial capture setup"
 
 if ($OpenWorkbookDialogTour -eq "1") {
     Invoke-FreeXOpenWorkbookDialogTour $proc.Id $hwnd $expectedTitle
+    $proc.Kill()
+    Write-Host "Done."
+    exit 0
+}
+
+if ($SaveAsWorkbookDialogTour -eq "1") {
+    Invoke-FreeXSaveAsWorkbookDialogTour $proc.Id $hwnd $expectedTitle
     $proc.Kill()
     Write-Host "Done."
     exit 0
