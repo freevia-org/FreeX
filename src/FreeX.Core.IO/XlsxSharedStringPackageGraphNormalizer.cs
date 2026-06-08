@@ -46,10 +46,7 @@ internal static class XlsxSharedStringPackageGraphNormalizer
                 "/xl/sharedStrings.xml",
                 StringComparison.OrdinalIgnoreCase))
             .ToList();
-        var validOverride = overrides.FirstOrDefault(element => string.Equals(
-            element.Attribute("ContentType")?.Value,
-            SharedStringsContentType,
-            StringComparison.OrdinalIgnoreCase));
+        var validOverride = FindValidContentTypeOverride(overrides);
         var changed = false;
 
         if (validOverride is null)
@@ -95,7 +92,7 @@ internal static class XlsxSharedStringPackageGraphNormalizer
         }
 
         var relationships = root.Elements(PackageRelationshipNs + "Relationship").ToList();
-        var validRelationship = relationships.FirstOrDefault(IsSharedStringsRelationshipToCurrentPart);
+        var validRelationship = FindSharedStringsRelationshipToCurrentPart(relationships);
         var changed = false;
         foreach (var relationship in relationships.Where(IsSharedStringsRelationship).ToList())
         {
@@ -168,6 +165,33 @@ internal static class XlsxSharedStringPackageGraphNormalizer
         foreach (var relationship in sharedStringRelationships)
             relationship.Remove();
         XlsxPackageXmlEditor.ReplaceXml(archive, WorkbookRelationshipsPath, relationshipsXml);
+    }
+
+    private static XElement? FindValidContentTypeOverride(List<XElement> overrides)
+    {
+        foreach (var element in overrides)
+        {
+            if (string.Equals(
+                element.Attribute("ContentType")?.Value,
+                SharedStringsContentType,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                return element;
+            }
+        }
+
+        return null;
+    }
+
+    private static XElement? FindSharedStringsRelationshipToCurrentPart(List<XElement> relationships)
+    {
+        foreach (var relationship in relationships)
+        {
+            if (IsSharedStringsRelationshipToCurrentPart(relationship))
+                return relationship;
+        }
+
+        return null;
     }
 
     private static bool IsSharedStringsRelationshipToCurrentPart(XElement relationship)
