@@ -391,9 +391,17 @@ function Test-MacOsWorkflow {
     $workflowRuntimeSet = @([System.Text.RegularExpressions.Regex]::Matches($workflow, "\bosx-[A-Za-z0-9]+\b") | ForEach-Object { $_.Value })
     Assert-ExactSet -Actual $workflowRuntimeSet -Expected $RuntimeIdentifiers -Label "macOS workflow runtime markers"
 
+    $workflowRunnerPairs = @(
+        [System.Text.RegularExpressions.Regex]::Matches(
+            $workflow,
+            "(?m)^\s*-\s*runtime:\s*(?<runtime>osx-[A-Za-z0-9]+)\s*\r?\n\s*runner:\s*(?<runner>[A-Za-z0-9._-]+)\s*$") |
+            ForEach-Object { "$($_.Groups['runtime'].Value)=$($_.Groups['runner'].Value)" }
+    )
+    Assert-ExactSet -Actual $workflowRunnerPairs -Expected @("osx-arm64=macos-15", "osx-x64=macos-15-intel") -Label "macOS workflow runtime runner matrix"
+
     $requiredWorkflowMarkers = @(
         'runs-on: ${{ matrix.runner }}',
-        "runner: macos-latest",
+        "runner: macos-15",
         "runner: macos-15-intel",
         "distribution_candidate:",
         "Require Developer ID signing, accepted notarization, stapled ticket, and Gatekeeper assessment evidence.",
