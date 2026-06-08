@@ -1567,6 +1567,112 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_WiresNativeReviewMenuThroughSharedWorkflowPlanAndNavigation()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "ReviewWorkflowPlanner.cs"));
+        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        source.Should().Contain("private readonly NativeMenuItem _reviewSummaryMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _checkAccessibilityMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _nextNoteMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _previousNoteMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _nextCommentMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _previousCommentMenuItem = new();");
+
+        source.Should().Contain("_reviewSummaryMenuItem.Header = \"Review Summary...\";");
+        source.Should().Contain("_checkAccessibilityMenuItem.Header = \"Check Accessibility...\";");
+        source.Should().Contain("_nextNoteMenuItem.Header = \"Next Note\";");
+        source.Should().Contain("_previousNoteMenuItem.Header = \"Previous Note\";");
+        source.Should().Contain("_nextCommentMenuItem.Header = \"Next Comment\";");
+        source.Should().Contain("_previousCommentMenuItem.Header = \"Previous Comment\";");
+        source.Should().Contain("_reviewSummaryMenuItem.Click += async (_, _) => await ShowReviewSummaryDialogAsync();");
+        source.Should().Contain("_checkAccessibilityMenuItem.Click += async (_, _) => await ShowReviewSummaryDialogAsync(focusAccessibility: true);");
+        source.Should().Contain("_nextNoteMenuItem.Click += (_, _) => NavigateReviewNote(previous: false);");
+        source.Should().Contain("_previousNoteMenuItem.Click += (_, _) => NavigateReviewNote(previous: true);");
+        source.Should().Contain("_nextCommentMenuItem.Click += (_, _) => NavigateReviewThreadedComment(previous: false);");
+        source.Should().Contain("_previousCommentMenuItem.Click += (_, _) => NavigateReviewThreadedComment(previous: true);");
+
+        source.Should().Contain("var reviewMenu = new NativeMenu();");
+        source.Should().Contain("reviewMenu.Items.Add(_reviewSummaryMenuItem);");
+        source.Should().Contain("reviewMenu.Items.Add(_checkAccessibilityMenuItem);");
+        source.Should().Contain("reviewMenu.Items.Add(_nextNoteMenuItem);");
+        source.Should().Contain("reviewMenu.Items.Add(_previousNoteMenuItem);");
+        source.Should().Contain("reviewMenu.Items.Add(_nextCommentMenuItem);");
+        source.Should().Contain("reviewMenu.Items.Add(_previousCommentMenuItem);");
+
+        var nativeMenuIndex = normalizedSource.IndexOf("_nativeMenu = new NativeMenu();", StringComparison.Ordinal);
+        nativeMenuIndex.Should().BeGreaterThanOrEqualTo(0);
+        var nativeMenuSource = normalizedSource[nativeMenuIndex..];
+        var dataIndex = nativeMenuSource.IndexOf("Header = \"Data\"", StringComparison.Ordinal);
+        var reviewIndex = nativeMenuSource.IndexOf("Header = \"Review\"", StringComparison.Ordinal);
+        var formatIndex = nativeMenuSource.IndexOf("Header = \"Format\"", StringComparison.Ordinal);
+        dataIndex.Should().BeGreaterThanOrEqualTo(0);
+        reviewIndex.Should().BeGreaterThan(dataIndex);
+        formatIndex.Should().BeGreaterThan(reviewIndex);
+
+        source.Should().Contain("_reviewSummaryMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("_checkAccessibilityMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("_nextNoteMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("_previousNoteMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("_nextCommentMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("_previousCommentMenuItem.IsEnabled = isIdle;");
+
+        source.Should().Contain("private async Task ShowReviewSummaryDialogAsync(bool focusAccessibility = false)");
+        source.Should().Contain("var plan = _session.GetReviewWorkflowPlan();");
+        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"ReviewSummaryDialog\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(summaryBlock, \"ReviewSummaryText\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(list, automationId);");
+        source.Should().Contain("ReviewSpellingIssuesList");
+        source.Should().Contain("ReviewAccessibilityIssuesList");
+        source.Should().Contain("ReviewNotesList");
+        source.Should().Contain("ReviewCommentsList");
+        source.Should().Contain("AutomationProperties.SetAutomationId(closeButton, \"ReviewCloseButton\");");
+        source.Should().Contain("private static string FormatReviewWorkflowSummary(ReviewWorkflowPlan plan)");
+        source.Should().Contain("plan.Statistics");
+        source.Should().Contain("plan.SpellingIssues.Count");
+        source.Should().Contain("plan.AccessibilityIssues.Count");
+        source.Should().Contain("plan.Notes.Count");
+        source.Should().Contain("plan.ThreadedComments.Count");
+        source.Should().Contain("private static IReadOnlyList<string> FormatReviewSpellingIssues(IReadOnlyList<SpellingIssue> issues)");
+        source.Should().Contain("private static IReadOnlyList<string> FormatReviewAccessibilityIssues(IReadOnlyList<AccessibilityIssue> issues)");
+        source.Should().Contain("private static IReadOnlyList<string> FormatReviewCommentItems(");
+
+        source.Should().Contain("private void NavigateReviewNote(bool previous)");
+        source.Should().Contain("() => _session.GoToNextNote(previous: previous)");
+        source.Should().Contain("private void NavigateReviewThreadedComment(bool previous)");
+        source.Should().Contain("() => _session.GoToNextThreadedComment(previous: previous)");
+        source.Should().Contain("private void NavigateReviewTarget(");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? fallbackMessage);");
+        source.Should().Contain("RefreshShell($\"Selected {FormatRangeReference(selectedRange)} ({statusLabel})\");");
+
+        sessionSource.Should().Contain("public ReviewWorkflowPlan GetReviewWorkflowPlan(");
+        sessionSource.Should().Contain("ReviewWorkflowPlanner.CreatePlan(");
+        sessionSource.Should().Contain("public WorkbookNavigationResult GoToNextNote(bool previous = false)");
+        sessionSource.Should().Contain("public WorkbookNavigationResult GoToNextThreadedComment(bool previous = false)");
+        plannerSource.Should().Contain("public sealed record ReviewWorkflowPlan(");
+        plannerSource.Should().Contain("WorkbookStatisticsService.GetStatistics(workbook)");
+        plannerSource.Should().Contain("AccessibilityCheckerService.FindIssues(workbook)");
+        plannerSource.Should().Contain("SpellCheckService.FindIssues(workbook, activeSheetId, customDictionary)");
+        plannerSource.Should().Contain("public static ReviewNavigationPlan FindNextNote(");
+        plannerSource.Should().Contain("public static ReviewNavigationPlan FindNextThreadedComment(");
+
+        var handlerIndex = normalizedSource.IndexOf("private async Task ShowReviewSummaryDialogAsync(bool focusAccessibility = false)", StringComparison.Ordinal);
+        handlerIndex.Should().BeGreaterThanOrEqualTo(0);
+        var nextMethodIndex = normalizedSource.IndexOf("\n    private async Task ShowFormatCellsDialogAsync()", handlerIndex, StringComparison.Ordinal);
+        nextMethodIndex.Should().BeGreaterThan(handlerIndex);
+        var routeSource = normalizedSource[handlerIndex..nextMethodIndex];
+
+        routeSource.Should().NotContain("new AccessibilityCheckerDialog");
+        routeSource.Should().NotContain("FreeX.App.Host");
+        routeSource.Should().NotContain("DataTransferManager");
+        routeSource.Should().NotContain("WindowInteropHelper");
+        routeSource.Should().NotContain("Microsoft.Win32");
+        routeSource.Should().NotContain("System.Windows");
+    }
+
+    [Fact]
     public void MainWindow_WiresFillMenuThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
