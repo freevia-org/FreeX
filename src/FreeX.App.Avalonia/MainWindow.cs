@@ -5041,6 +5041,12 @@ public sealed class MainWindow : Window
             return;
         }
 
+        if (plan.Kind == HyperlinkNavigationKind.LocalFile)
+        {
+            await OpenLocalFileHyperlinkAsync(plan);
+            return;
+        }
+
         var result = _session.OpenSelectedHyperlink();
         if (!result.Success)
         {
@@ -5049,6 +5055,26 @@ public sealed class MainWindow : Window
         }
 
         RefreshShell($"Selected {FormatRangeReference(result.SelectedRange!.Value)}");
+    }
+
+    private async Task OpenLocalFileHyperlinkAsync(HyperlinkNavigationPlan plan)
+    {
+        if (string.IsNullOrWhiteSpace(plan.LocalPath))
+        {
+            ShowEditIssue("Open Hyperlink requires a local file path.");
+            return;
+        }
+
+        if (!_session.TryResolveOpenTarget(plan.LocalPath, out var target, out var message) ||
+            target is null)
+        {
+            ShowEditIssue(string.IsNullOrWhiteSpace(message)
+                ? "Open Hyperlink requires a supported workbook file."
+                : message);
+            return;
+        }
+
+        await OpenWorkbookPathAsync(target.Path);
     }
 
     private async Task OpenExternalHyperlinkAsync(string target)
