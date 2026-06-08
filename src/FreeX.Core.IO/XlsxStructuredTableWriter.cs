@@ -66,7 +66,7 @@ internal static class XlsxStructuredTableWriter
             {
                 var tablePath = string.IsNullOrWhiteSpace(table.PackagePart)
                     ? $"xl/tables/table{tablePartIndex}.xml"
-                    : table.PackagePart.TrimStart('/').Replace('\\', '/');
+                    : XlsxPackagePath.NormalizePackagePath(table.PackagePart);
                 if (!tablePath.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase))
                     tablePath = $"xl/tables/table{tablePartIndex}.xml";
 
