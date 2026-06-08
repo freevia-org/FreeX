@@ -352,6 +352,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _dataValidationMenuItem = new();
     private readonly NativeMenuItem _whatIfAnalysisMenuItem = new();
     private readonly NativeMenuItem _goalSeekMenuItem = new();
+    private readonly NativeMenuItem _dataTableMenuItem = new();
     private readonly NativeMenuItem _autoSumMenuItem = new();
     private readonly NativeMenuItem _autoSumSumMenuItem = new();
     private readonly NativeMenuItem _autoSumAverageMenuItem = new();
@@ -696,6 +697,9 @@ public sealed class MainWindow : Window
 
         _goalSeekMenuItem.Header = "Goal Seek...";
         _goalSeekMenuItem.Click += async (_, _) => await ShowGoalSeekDialogAsync();
+
+        _dataTableMenuItem.Header = "Data Table...";
+        _dataTableMenuItem.Click += async (_, _) => await ShowDataTableDialogAsync();
 
         _whatIfAnalysisMenuItem.Header = "What-If Analysis";
         _whatIfAnalysisMenuItem.Menu = CreateNativeWhatIfAnalysisMenu();
@@ -1704,6 +1708,7 @@ public sealed class MainWindow : Window
         _dataValidationMenuItem.IsEnabled = isIdle;
         _whatIfAnalysisMenuItem.IsEnabled = isIdle;
         _goalSeekMenuItem.IsEnabled = isIdle;
+        _dataTableMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1 && _session.SelectedRange.ColCount > 1;
         _autoSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
         _autoSumSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
         _autoSumAverageMenuItem.IsEnabled = _autoSumButton.IsEnabled;
@@ -2953,6 +2958,7 @@ public sealed class MainWindow : Window
     {
         var menu = new NativeMenu();
         menu.Items.Add(_goalSeekMenuItem);
+        menu.Items.Add(_dataTableMenuItem);
         return menu;
     }
 
@@ -6912,6 +6918,225 @@ public sealed class MainWindow : Window
     }
 
     private static StackPanel CreateGoalSeekField(string label, Control control) =>
+        new()
+        {
+            Spacing = 4,
+            Children =
+            {
+                new TextBlock { Text = label },
+                control,
+            },
+        };
+
+    private async Task ShowDataTableDialogAsync()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var plan = await ShowDataTableInputDialogAsync();
+        if (plan is null)
+            return;
+
+        var tableRange = FormatRangeReference(plan.TableRange);
+        var result = _session.ExecuteDataTablePlan(plan);
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "Data Table failed.");
+            return;
+        }
+
+        RefreshShell($"Created {FormatDataTableMode(plan)} Data Table for {tableRange}");
+    }
+
+    private async Task<DataTablePlan?> ShowDataTableInputDialogAsync()
+    {
+        DataTablePlan? result = null;
+        var dialog = new Window
+        {
+            Title = "Data Table",
+            Width = 460,
+            Height = 290,
+            MinWidth = 380,
+            MinHeight = 260,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "DataTableCompactDialog");
+
+        var rangeText = new TextBlock
+        {
+            Text = $"Table range: {FormatRangeReference(_session.SelectedRange)}",
+            Foreground = HeaderForeground,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        AutomationProperties.SetAutomationId(rangeText, "DataTableRangeSummaryText");
+
+        var rowInputBox = new TextBox
+        {
+            MinWidth = 240,
+        };
+        AutomationProperties.SetName(rowInputBox, "Row input cell");
+        AutomationProperties.SetAutomationId(rowInputBox, "DataTableRowInputCellBox");
+        AutomationProperties.SetHelpText(rowInputBox, "Cell whose value is substituted from the top row.");
+
+        var columnInputBox = new TextBox
+        {
+            MinWidth = 240,
+        };
+        AutomationProperties.SetName(columnInputBox, "Column input cell");
+        AutomationProperties.SetAutomationId(columnInputBox, "DataTableColumnInputCellBox");
+        AutomationProperties.SetHelpText(columnInputBox, "Cell whose value is substituted from the first column.");
+
+        var errorText = new TextBlock
+        {
+            Foreground = Brush(143, 74, 18),
+            TextWrapping = TextWrapping.Wrap,
+        };
+        AutomationProperties.SetAutomationId(errorText, "DataTableErrorText");
+
+        var okButton = new Button
+        {
+            Content = "OK",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(okButton, "DataTableOkButton");
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(cancelButton, "DataTableCancelButton");
+
+        DataTablePlanResult CreatePlan() =>
+            DataTablePlanner.CreatePlan(
+                _session.ActiveSheet,
+                _session.SelectedRange,
+                rowInputBox.Text,
+                columnInputBox.Text,
+                sheetName => _session.Workbook.GetSheet(sheetName)?.Id);
+
+        void RefreshPlanStatus()
+        {
+            var planResult = CreatePlan();
+            errorText.Text = planResult.IsReady
+                ? planResult.StatusText
+                : FormatDataTablePlanError(planResult);
+        }
+
+        void Accept()
+        {
+            var planResult = CreatePlan();
+            if (!planResult.IsReady || planResult.Plan is null)
+            {
+                errorText.Text = FormatDataTablePlanError(planResult);
+                FocusDataTableErrorField(planResult.Status, rowInputBox, columnInputBox);
+                return;
+            }
+
+            result = planResult.Plan;
+            dialog.Close();
+        }
+
+        okButton.Click += (_, _) => Accept();
+        cancelButton.Click += (_, _) => dialog.Close();
+        rowInputBox.TextChanged += (_, _) => RefreshPlanStatus();
+        columnInputBox.TextChanged += (_, _) => RefreshPlanStatus();
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                e.Handled = true;
+                Accept();
+            }
+            else if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                dialog.Close();
+            }
+        };
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 10, 0, 0),
+            Children =
+            {
+                cancelButton,
+                okButton,
+            },
+        };
+        DockPanel.SetDock(buttonRow, Dock.Bottom);
+
+        RefreshPlanStatus();
+        dialog.Content = new DockPanel
+        {
+            Margin = new Thickness(16),
+            Children =
+            {
+                buttonRow,
+                new StackPanel
+                {
+                    Spacing = 10,
+                    Children =
+                    {
+                        rangeText,
+                        CreateDataTableField("Row input cell", rowInputBox),
+                        CreateDataTableField("Column input cell", columnInputBox),
+                        errorText,
+                    },
+                },
+            },
+        };
+        dialog.Opened += (_, _) =>
+        {
+            rowInputBox.Focus();
+            rowInputBox.SelectAll();
+        };
+
+        await dialog.ShowDialog(this);
+        return result;
+    }
+
+    private static string FormatDataTableMode(DataTablePlan plan) =>
+        plan.Mode == DataTablePlanMode.TwoVariable
+            ? "two-variable"
+            : plan.Orientation == DataTableInputOrientation.Row
+                ? "one-variable row-input"
+                : "one-variable column-input";
+
+    private static string FormatDataTablePlanError(DataTablePlanResult result) =>
+        string.IsNullOrWhiteSpace(result.InvalidText)
+            ? result.StatusText
+            : $"{result.StatusText} ({result.InvalidText})";
+
+    private static void FocusDataTableErrorField(
+        DataTablePlanStatus status,
+        TextBox rowInputBox,
+        TextBox columnInputBox)
+    {
+        var target = status switch
+        {
+            DataTablePlanStatus.InvalidRowInputCell or
+            DataTablePlanStatus.RowInputCellInsideTableRange => rowInputBox,
+            DataTablePlanStatus.InvalidColumnInputCell or
+            DataTablePlanStatus.ColumnInputCellInsideTableRange or
+            DataTablePlanStatus.InputCellsMustBeDifferent => columnInputBox,
+            _ => rowInputBox
+        };
+        target.Focus();
+        target.SelectAll();
+    }
+
+    private static StackPanel CreateDataTableField(string label, Control control) =>
         new()
         {
             Spacing = 4,
