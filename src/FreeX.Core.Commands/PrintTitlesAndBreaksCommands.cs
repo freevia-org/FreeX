@@ -23,7 +23,7 @@ public sealed class SetPrintTitlesCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (_rows is { Start: 0 } or { End: 0 } || _columns is { Start: 0 } or { End: 0 })
-            return new CommandOutcome(false, "Print title rows and columns must be 1-based.");
+            return PageSetupCommandGuards.PrintTitlesMustBeOneBased();
 
         var sheet = ctx.GetSheet(_sheetId);
         _previousRows = sheet.PrintTitleRows;

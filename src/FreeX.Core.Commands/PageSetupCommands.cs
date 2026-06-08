@@ -20,7 +20,7 @@ public sealed class SetPageOrientationCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (!Enum.IsDefined(_orientation))
-            return new CommandOutcome(false, "Page orientation is not supported.");
+            return PageSetupCommandGuards.PageOrientationNotSupported();
 
         var sheet = ctx.GetSheet(_sheetId);
         _previousOrientation = sheet.PageOrientation;
@@ -52,7 +52,7 @@ public sealed class SetPaperSizeCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (!Enum.IsDefined(_paperSize))
-            return new CommandOutcome(false, "Paper size is not supported.");
+            return PageSetupCommandGuards.PaperSizeNotSupported();
 
         var sheet = ctx.GetSheet(_sheetId);
         _previousPaperSize = sheet.PaperSize;
@@ -84,7 +84,7 @@ public sealed class SetPageMarginsCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (_margins.Left < 0 || _margins.Right < 0 || _margins.Top < 0 || _margins.Bottom < 0)
-            return new CommandOutcome(false, "Page margins cannot be negative.");
+            return PageSetupCommandGuards.PageMarginsCannotBeNegative();
 
         var sheet = ctx.GetSheet(_sheetId);
         _previousMargins = sheet.PageMargins;
@@ -152,10 +152,10 @@ public sealed class SetScaleToFitCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (_scaleToFit.ScalePercent is < 10 or > 400)
-            return new CommandOutcome(false, "Scale percent must be between 10 and 400.");
+            return PageSetupCommandGuards.ScalePercentOutOfRange();
 
         if (_scaleToFit.FitToPagesWide is < 1 || _scaleToFit.FitToPagesTall is < 1)
-            return new CommandOutcome(false, "Fit-to-page dimensions must be at least 1.");
+            return PageSetupCommandGuards.FitToPageDimensionsTooSmall();
 
         var sheet = ctx.GetSheet(_sheetId);
         _previousScaleToFit = sheet.ScaleToFit;
@@ -167,4 +167,32 @@ public sealed class SetScaleToFitCommand : IWorkbookCommand
     {
         ctx.GetSheet(_sheetId).ScaleToFit = _previousScaleToFit;
     }
+}
+
+internal static class PageSetupCommandGuards
+{
+    private const string PageOrientationNotSupportedMessage = "Page orientation is not supported.";
+    private const string PaperSizeNotSupportedMessage = "Paper size is not supported.";
+    private const string PageMarginsCannotBeNegativeMessage = "Page margins cannot be negative.";
+    private const string ScalePercentOutOfRangeMessage = "Scale percent must be between 10 and 400.";
+    private const string FitToPageDimensionsTooSmallMessage = "Fit-to-page dimensions must be at least 1.";
+    private const string PrintTitlesMustBeOneBasedMessage = "Print title rows and columns must be 1-based.";
+
+    public static CommandOutcome PageOrientationNotSupported() =>
+        new(false, PageOrientationNotSupportedMessage);
+
+    public static CommandOutcome PaperSizeNotSupported() =>
+        new(false, PaperSizeNotSupportedMessage);
+
+    public static CommandOutcome PageMarginsCannotBeNegative() =>
+        new(false, PageMarginsCannotBeNegativeMessage);
+
+    public static CommandOutcome ScalePercentOutOfRange() =>
+        new(false, ScalePercentOutOfRangeMessage);
+
+    public static CommandOutcome FitToPageDimensionsTooSmall() =>
+        new(false, FitToPageDimensionsTooSmallMessage);
+
+    public static CommandOutcome PrintTitlesMustBeOneBased() =>
+        new(false, PrintTitlesMustBeOneBasedMessage);
 }
