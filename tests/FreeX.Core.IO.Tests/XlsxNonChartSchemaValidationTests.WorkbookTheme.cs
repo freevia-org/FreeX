@@ -101,6 +101,14 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceContentTypes.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloadedTheme = adapter.Load(saved).Theme;
+        reloadedTheme.Name.Should().Be("FreeX Schema Theme");
+        reloadedTheme.MajorFontName.Should().Be("FreeX Major");
+        reloadedTheme.MinorFontName.Should().Be("FreeX Minor");
+        reloadedTheme.EffectsName.Should().Be("FreeX Effects");
+        reloadedTheme.GetColor(WorkbookThemeColorSlot.Accent1).Should().Be(new CellColor(12, 34, 56));
     }
 
     [Fact]
