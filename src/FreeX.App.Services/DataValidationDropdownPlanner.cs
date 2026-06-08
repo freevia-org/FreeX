@@ -41,8 +41,7 @@ public static class DataValidationDropdownPlanner
         if (activeCell.Sheet != sheet.Id || !HasUsableBounds(cellBounds))
             return false;
 
-        var rule = DataValidationService.GetApplicable(sheet, activeCell)
-            .FirstOrDefault(static rule => rule.Type == DvType.List && rule.ShowDropdown);
+        var rule = FindDropdownRule(sheet, activeCell);
         if (rule is null)
             return false;
 
@@ -51,8 +50,7 @@ public static class DataValidationDropdownPlanner
             return false;
 
         var currentText = FormatCellValue(sheet.GetCell(activeCell)?.Value);
-        var selectedItem = items.FirstOrDefault(item =>
-            string.Equals(item, currentText, StringComparison.OrdinalIgnoreCase));
+        var selectedItem = FindSelectedItem(items, currentText);
 
         var width = Math.Max(MinimumWidth, Math.Min(cellBounds.Width, MaximumWidth));
         var height = Math.Max(MinimumHeight, cellBounds.Height);
@@ -77,6 +75,29 @@ public static class DataValidationDropdownPlanner
 
     private static bool IsFinite(double value) =>
         !double.IsNaN(value) && !double.IsInfinity(value);
+
+    private static DataValidation? FindDropdownRule(Sheet sheet, CellAddress address)
+    {
+        foreach (var rule in DataValidationService.GetApplicable(sheet, address))
+        {
+            if (rule.Type == DvType.List && rule.ShowDropdown)
+                return rule;
+        }
+
+        return null;
+    }
+
+    private static string? FindSelectedItem(IReadOnlyList<string> items, string currentText)
+    {
+        for (var i = 0; i < items.Count; i++)
+        {
+            var item = items[i];
+            if (string.Equals(item, currentText, StringComparison.OrdinalIgnoreCase))
+                return item;
+        }
+
+        return null;
+    }
 
     private static string FormatCellValue(ScalarValue? value) => value switch
     {
