@@ -297,6 +297,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
                 "live_command_key_smoke=passed",
                 "live_command_key_smoke_attempted=true",
                 "live_command_key_smoke_ready=true",
+                "live_cmd_select_all_state_changed=true",
                 "live_cmd_bold_state_changed=true",
                 "live_cmd_italic_state_changed=true",
                 "live_cmd_underline_state_changed=true"));

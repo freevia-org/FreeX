@@ -10372,6 +10372,7 @@ public sealed class MainWindow : Window
 
     internal MacOsLaunchSmokeLiveCommandKeySnapshot BeginLaunchSmokeLiveCommandKeyProbe()
     {
+        FocusShellRegion(ShellFocusRegion.Worksheet);
         _launchSmokeLiveCommandKeySnapshot = MacOsLaunchSmokeLiveCommandKeySnapshot.Ready(
             _session.IsSelectedRangeStartBold,
             _session.IsSelectedRangeStartItalic,
@@ -10409,6 +10410,18 @@ public sealed class MainWindow : Window
                 CurrentUnderlineState = after
             },
             _ => _launchSmokeLiveCommandKeySnapshot
+        };
+    }
+
+    private void RecordLaunchSmokeLiveSelectAllCommandKey(GridRange before, GridRange after)
+    {
+        if (!_launchSmokeLiveCommandKeySnapshot.IsReady)
+            return;
+
+        _launchSmokeLiveCommandKeySnapshot = _launchSmokeLiveCommandKeySnapshot with
+        {
+            HasSelectAllCommandKey = true,
+            HasSelectAllStateChange = _launchSmokeLiveCommandKeySnapshot.HasSelectAllStateChange || before != after
         };
     }
 
@@ -11002,7 +11015,9 @@ public sealed class MainWindow : Window
         else if (e.Key == Key.A && HasOnlyCommandModifier(e.KeyModifiers))
         {
             e.Handled = true;
+            var before = _session.SelectedRange;
             SelectCurrentRegionOrAll();
+            RecordLaunchSmokeLiveSelectAllCommandKey(before, _session.SelectedRange);
         }
         else if (e.Key == Key.B && HasOnlyCommandModifier(e.KeyModifiers))
         {

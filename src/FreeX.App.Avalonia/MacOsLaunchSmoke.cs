@@ -220,6 +220,8 @@ internal sealed record MacOsLaunchSmokeCommandKeySnapshot(
 
 internal sealed record MacOsLaunchSmokeLiveCommandKeySnapshot(
     bool IsReady,
+    bool HasSelectAllCommandKey,
+    bool HasSelectAllStateChange,
     bool HasBoldCommandKey,
     bool HasBoldStateChange,
     bool InitialBoldState,
@@ -235,6 +237,8 @@ internal sealed record MacOsLaunchSmokeLiveCommandKeySnapshot(
 {
     public static MacOsLaunchSmokeLiveCommandKeySnapshot Empty { get; } = new(
         IsReady: false,
+        HasSelectAllCommandKey: false,
+        HasSelectAllStateChange: false,
         HasBoldCommandKey: false,
         HasBoldStateChange: false,
         InitialBoldState: false,
@@ -254,6 +258,8 @@ internal sealed record MacOsLaunchSmokeLiveCommandKeySnapshot(
         bool underlineState) =>
         new(
             IsReady: true,
+            HasSelectAllCommandKey: false,
+            HasSelectAllStateChange: false,
             HasBoldCommandKey: false,
             HasBoldStateChange: false,
             InitialBoldState: boldState,
@@ -268,12 +274,15 @@ internal sealed record MacOsLaunchSmokeLiveCommandKeySnapshot(
             CurrentUnderlineState: underlineState);
 
     public bool HasAnyCommandKey =>
+        HasSelectAllCommandKey ||
         HasBoldCommandKey ||
         HasItalicCommandKey ||
         HasUnderlineCommandKey;
 
     public bool IsPassed =>
         IsReady &&
+        HasSelectAllCommandKey &&
+        HasSelectAllStateChange &&
         HasBoldCommandKey &&
         HasBoldStateChange &&
         HasItalicCommandKey &&
@@ -894,6 +903,8 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"live_command_key_smoke={liveCommandKeySmokeStatus}",
                 $"live_command_key_smoke_attempted={FormatBool(liveCommandKeyEvidence.IsReady)}",
                 $"live_command_key_smoke_ready={FormatBool(liveCommandKeyEvidence.IsReady)}",
+                $"live_cmd_select_all_received={FormatBool(liveCommandKeyEvidence.HasSelectAllCommandKey)}",
+                $"live_cmd_select_all_state_changed={FormatBool(liveCommandKeyEvidence.HasSelectAllStateChange)}",
                 $"live_cmd_bold_received={FormatBool(liveCommandKeyEvidence.HasBoldCommandKey)}",
                 $"live_cmd_bold_state_changed={FormatBool(liveCommandKeyEvidence.HasBoldStateChange)}",
                 $"live_cmd_italic_received={FormatBool(liveCommandKeyEvidence.HasItalicCommandKey)}",

@@ -453,6 +453,8 @@ jobs:
               tell process "FreeX"
                 set frontmost to true
               end tell
+              keystroke "a" using {command down}
+              delay 0.2
               keystroke "b" using {command down}
               delay 0.2
               keystroke "i" using {command down}
@@ -491,6 +493,8 @@ jobs:
             grep -q "live_command_key_smoke=passed" "$launch_smoke_report"
             grep -q "live_command_key_smoke_attempted=true" "$launch_smoke_report"
             grep -q "live_command_key_smoke_ready=true" "$launch_smoke_report"
+            grep -q "live_cmd_select_all_received=true" "$launch_smoke_report"
+            grep -q "live_cmd_select_all_state_changed=true" "$launch_smoke_report"
             grep -q "live_cmd_bold_received=true" "$launch_smoke_report"
             grep -q "live_cmd_bold_state_changed=true" "$launch_smoke_report"
             grep -q "live_cmd_italic_received=true" "$launch_smoke_report"

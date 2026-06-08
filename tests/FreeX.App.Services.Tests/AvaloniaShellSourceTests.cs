@@ -610,6 +610,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("live_command_key_smoke_required={FormatBool(options.VerifyLiveCommandKeys)}");
         smokeSource.Should().Contain("live_command_key_smoke={liveCommandKeySmokeStatus}");
         smokeSource.Should().Contain("live_command_key_smoke_ready={FormatBool(liveCommandKeyEvidence.IsReady)}");
+        smokeSource.Should().Contain("live_cmd_select_all_state_changed={FormatBool(liveCommandKeyEvidence.HasSelectAllStateChange)}");
         smokeSource.Should().Contain("live_cmd_bold_state_changed={FormatBool(liveCommandKeyEvidence.HasBoldStateChange)}");
         smokeSource.Should().Contain("live_cmd_italic_state_changed={FormatBool(liveCommandKeyEvidence.HasItalicStateChange)}");
         smokeSource.Should().Contain("live_cmd_underline_state_changed={FormatBool(liveCommandKeyEvidence.HasUnderlineStateChange)}");
@@ -807,7 +808,10 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("NativeMenu.SetMenu(this, _nativeMenu);");
         windowSource.Should().Contain("internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot()");
         windowSource.Should().Contain("internal MacOsLaunchSmokeLiveCommandKeySnapshot BeginLaunchSmokeLiveCommandKeyProbe()");
+        windowSource.Should().Contain("FocusShellRegion(ShellFocusRegion.Worksheet);");
         windowSource.Should().Contain("private void RecordLaunchSmokeLiveCommandKey(Key key, bool before, bool after)");
+        windowSource.Should().Contain("private void RecordLaunchSmokeLiveSelectAllCommandKey(GridRange before, GridRange after)");
+        windowSource.Should().Contain("RecordLaunchSmokeLiveSelectAllCommandKey(before, _session.SelectedRange);");
         windowSource.Should().Contain("internal async Task<bool> TryPasteLaunchSmokeClipboardImageAsync()");
         windowSource.Should().Contain("return await TryPasteClipboardImageAsync(clipboard, _session.ActiveCell);");
         windowSource.Should().Contain("var externalImageClipboardPictures = _session.ActiveSheet.Pictures");

@@ -44,6 +44,8 @@ public sealed class MacOsLaunchSmokeReportKeyDriftGuardTests
         "live_cmd_bold_state_changed",
         "live_cmd_italic_received",
         "live_cmd_italic_state_changed",
+        "live_cmd_select_all_received",
+        "live_cmd_select_all_state_changed",
         "live_cmd_underline_received",
         "live_cmd_underline_state_changed",
         "live_command_key_smoke",

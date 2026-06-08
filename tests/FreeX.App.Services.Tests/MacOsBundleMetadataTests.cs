@@ -164,6 +164,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("live_command_key_ready=false");
         workflow.Should().Contain("live_command_key_smoke_ready=true");
         workflow.Should().Contain("tell application \"System Events\"");
+        workflow.Should().Contain("keystroke \"a\" using {command down}");
         workflow.Should().Contain("keystroke \"b\" using {command down}");
         workflow.Should().Contain("keystroke \"i\" using {command down}");
         workflow.Should().Contain("keystroke \"u\" using {command down}");
@@ -175,6 +176,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"external_image_clipboard_paste_required=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"live_command_key_smoke_required=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"live_command_key_smoke=passed\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"live_cmd_select_all_state_changed=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"live_cmd_bold_state_changed=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"live_cmd_italic_state_changed=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"live_cmd_underline_state_changed=true\" \"$launch_smoke_report\"");
