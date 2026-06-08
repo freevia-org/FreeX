@@ -90,6 +90,8 @@ public sealed class GitHubWorkflowPreflightTests
         script.Should().Contain("github_run_attempt=${GITHUB_RUN_ATTEMPT}");
         script.Should().Contain("macOS app artifact upload name must include github.run_id");
         script.Should().Contain("macOS diagnostics artifact upload name must include github.run_id");
+        script.Should().Contain("macOS app artifact upload must set retention-days: 14");
+        script.Should().Contain("macOS diagnostics artifact upload must set retention-days: 14");
         script.Should().Contain("macOS release publication must download app artifacts using the current run id and run attempt");
         script.Should().Contain("macOS release publication must validate downloaded evidence run identity against the current run");
         script.Should().Contain("macOS app workflow must run focused hosted tests before package/upload step");
@@ -168,9 +170,11 @@ public sealed class GitHubWorkflowPreflightTests
 
         var appArtifactUpload = ExtractRequiredYamlBlock(appJob, "- name: Upload app artifact");
         appArtifactUpload.Should().Contain("name: freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-macos-app");
+        appArtifactUpload.Should().Contain("retention-days: 14");
 
         var diagnosticsUpload = ExtractRequiredYamlBlock(appJob, "- name: Upload app diagnostics");
         diagnosticsUpload.Should().Contain("name: freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-macos-diagnostics");
+        diagnosticsUpload.Should().Contain("retention-days: 14");
 
         var releaseJob = ExtractRequiredYamlBlock(workflow, "publish-distribution-candidate:");
         var artifactDownload = ExtractRequiredYamlBlock(releaseJob, "- name: Download macOS app artifacts");
@@ -735,6 +739,27 @@ public sealed class GitHubWorkflowPreflightTests
         result.CombinedOutput.Should().Contain("macOS app artifact upload name must include github.run_id, github.run_attempt");
         result.CombinedOutput.Should().Contain("macOS diagnostics artifact upload name must include github.run_id, github.run_attempt");
         result.CombinedOutput.Should().Contain("macOS release publication must download app artifacts using the current run id and run attempt");
+        result.CombinedOutput.Should().Contain("macos-app.yml");
+    }
+
+    [Fact]
+    public void GitHubWorkflowPreflight_FailsWhenMacOsArtifactRetentionDrifts()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var brokenWorkflow = ReplaceRequiredText(
+            ReadMacOsAppWorkflow(),
+            "          retention-days: 14",
+            "          retention-days: 7");
+
+        WriteMacOsWorkflow(temp, brokenWorkflow);
+
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("macOS app artifact upload must set retention-days: 14");
+        result.CombinedOutput.Should().Contain("macOS diagnostics artifact upload must set retention-days: 14");
         result.CombinedOutput.Should().Contain("macos-app.yml");
     }
 
