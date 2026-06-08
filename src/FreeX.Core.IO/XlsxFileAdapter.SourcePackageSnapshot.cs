@@ -2410,7 +2410,7 @@ public sealed partial class XlsxFileAdapter
 
             foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry))
             {
-                var worksheetPath = XlsxPackagePath.NormalizeZipPath(worksheetEntry.FullName.Replace('\\', '/'));
+                var worksheetPath = XlsxPackagePath.NormalizeEntryPath(worksheetEntry);
                 if (!sheetsByWorksheetPath.TryGetValue(worksheetPath, out var sheet))
                 {
                     blockReason = "package_guard_unmatched_worksheet_part";
@@ -2983,7 +2983,7 @@ public sealed partial class XlsxFileAdapter
             if (string.IsNullOrWhiteSpace(value))
                 return null;
 
-            return XlsxPackagePath.NormalizeZipPath(value.Trim().Replace('\\', '/').TrimStart('/'));
+            return XlsxPackagePath.NormalizePackagePath(value.Trim());
         }
 
         private static bool DiagramPartHasExpectedContentType(
@@ -3292,7 +3292,7 @@ public sealed partial class XlsxFileAdapter
         }
 
         private static string NormalizePivotPackagePart(string packagePart) =>
-            XlsxPackagePath.NormalizeZipPath(packagePart.TrimStart('/').Replace('\\', '/'));
+            XlsxPackagePath.NormalizePackagePath(packagePart);
 
         private static bool IsPatchSafeSourcePicture(PictureModel picture) =>
             picture.IsSourceLoaded &&
@@ -3749,7 +3749,7 @@ public sealed partial class XlsxFileAdapter
                     if (string.IsNullOrWhiteSpace(partName) || string.IsNullOrWhiteSpace(contentType))
                         continue;
 
-                    var normalized = XlsxPackagePath.NormalizeZipPath(partName.Trim().TrimStart('/').Replace('\\', '/'));
+                    var normalized = XlsxPackagePath.NormalizePackagePath(partName.Trim());
                     if (!string.IsNullOrWhiteSpace(normalized))
                         result[normalized] = contentType.Trim();
                 }
@@ -3787,7 +3787,7 @@ public sealed partial class XlsxFileAdapter
             ZipArchiveEntry relationshipEntry,
             XNamespace packageRelNs)
         {
-            var relationshipPartPath = XlsxPackagePath.NormalizeZipPath(relationshipEntry.FullName.Replace('\\', '/'));
+            var relationshipPartPath = XlsxPackagePath.NormalizeEntryPath(relationshipEntry);
             var sourcePartPath = RelationshipPartToSourcePart(relationshipPartPath);
             var sourceIsRichData = sourcePartPath.StartsWith("xl/richData/", StringComparison.OrdinalIgnoreCase);
 
@@ -3935,13 +3935,13 @@ public sealed partial class XlsxFileAdapter
 
         private static bool PathMatchesKnownRichDataPart(string path, string fileName) =>
             string.Equals(
-                XlsxPackagePath.NormalizeZipPath(path.Replace('\\', '/')),
+                XlsxPackagePath.NormalizePackagePath(path),
                 $"xl/richData/{fileName}",
                 StringComparison.OrdinalIgnoreCase);
 
         private static string RelationshipPartToSourcePart(string relationshipPartPath)
         {
-            var normalized = XlsxPackagePath.NormalizeZipPath(relationshipPartPath.Replace('\\', '/'));
+            var normalized = XlsxPackagePath.NormalizePackagePath(relationshipPartPath);
             if (string.Equals(normalized, "_rels/.rels", StringComparison.OrdinalIgnoreCase))
                 return "";
 
@@ -4196,7 +4196,7 @@ public sealed partial class XlsxFileAdapter
             var tableModelsByPath = sheet.StructuredTables
                 .Where(table => !string.IsNullOrWhiteSpace(table.PackagePart))
                 .ToDictionary(
-                    table => XlsxPackagePath.NormalizeZipPath(table.PackagePart.TrimStart('/').Replace('\\', '/')),
+                    table => XlsxPackagePath.NormalizePackagePath(table.PackagePart),
                     table => table,
                     StringComparer.OrdinalIgnoreCase);
             if (tableModelsByPath.Count != sheet.StructuredTables.Count)
@@ -4277,7 +4277,7 @@ public sealed partial class XlsxFileAdapter
             var tableModelsByPath = sheet.StructuredTables
                 .Where(table => !string.IsNullOrWhiteSpace(table.PackagePart))
                 .ToDictionary(
-                    table => XlsxPackagePath.NormalizeZipPath(table.PackagePart.TrimStart('/').Replace('\\', '/')),
+                    table => XlsxPackagePath.NormalizePackagePath(table.PackagePart),
                     table => table,
                     StringComparer.OrdinalIgnoreCase);
             if (tableModelsByPath.Count != sheet.StructuredTables.Count)
@@ -7931,7 +7931,7 @@ public sealed partial class XlsxFileAdapter
         }
 
         private static string NormalizePackagePart(string packagePart) =>
-            XlsxPackagePath.NormalizeZipPath(packagePart.TrimStart('/').Replace('\\', '/'));
+            XlsxPackagePath.NormalizePackagePath(packagePart);
 
         private static void Append(StringBuilder builder, object? value)
         {
