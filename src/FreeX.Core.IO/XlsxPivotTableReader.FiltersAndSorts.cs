@@ -127,10 +127,17 @@ internal static partial class XlsxPivotTableReader
             _ => null
         };
 
-    private static string? ReadNativePivotFilterTextValue(XElement filter, params string[] attributeNames) =>
-        attributeNames
-            .Select(name => filter.Attribute(name)?.Value)
-            .FirstOrDefault(value => !string.IsNullOrEmpty(value));
+    private static string? ReadNativePivotFilterTextValue(XElement filter, params string[] attributeNames)
+    {
+        foreach (var attributeName in attributeNames)
+        {
+            var value = filter.Attribute(attributeName)?.Value;
+            if (!string.IsNullOrEmpty(value))
+                return value;
+        }
+
+        return null;
+    }
 
     private static double? ReadNativePivotFilterDoubleValue(XElement filter, params string[] attributeNames)
     {

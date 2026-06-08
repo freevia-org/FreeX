@@ -153,8 +153,16 @@ internal static partial class XlsxPivotTableWriter
 
     internal static void InsertWorkbookPivotCaches(XElement workbookRoot, XNamespace workbookNs, XElement pivotCaches)
     {
-        var anchor = workbookRoot.Elements()
-            .FirstOrDefault(element => WorkbookElementsAfterPivotCaches.Contains(element.Name.LocalName));
+        XElement? anchor = null;
+        foreach (var element in workbookRoot.Elements())
+        {
+            if (WorkbookElementsAfterPivotCaches.Contains(element.Name.LocalName))
+            {
+                anchor = element;
+                break;
+            }
+        }
+
         if (anchor is not null)
         {
             anchor.AddBeforeSelf(pivotCaches);
