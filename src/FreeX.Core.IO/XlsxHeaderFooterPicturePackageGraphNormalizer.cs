@@ -176,12 +176,7 @@ internal static class XlsxHeaderFooterPicturePackageGraphNormalizer
             return;
 
         var normalizedPartName = $"/{partPath.TrimStart('/')}";
-        var overrideElement = root
-            .Elements(ContentTypeNs + "Override")
-            .FirstOrDefault(element => string.Equals(
-                element.Attribute("PartName")?.Value,
-                normalizedPartName,
-                StringComparison.OrdinalIgnoreCase));
+        var overrideElement = FindOverrideElement(root, normalizedPartName);
         if (overrideElement is not null)
         {
             if (string.Equals(overrideElement.Attribute("ContentType")?.Value, contentType, StringComparison.OrdinalIgnoreCase))
@@ -212,12 +207,7 @@ internal static class XlsxHeaderFooterPicturePackageGraphNormalizer
             return false;
 
         var normalizedPartName = $"/{partPath.TrimStart('/')}";
-        var overrideElement = root
-            .Elements(ContentTypeNs + "Override")
-            .FirstOrDefault(element => string.Equals(
-                element.Attribute("PartName")?.Value,
-                normalizedPartName,
-                StringComparison.OrdinalIgnoreCase));
+        var overrideElement = FindOverrideElement(root, normalizedPartName);
         if (overrideElement is not null)
             return string.Equals(overrideElement.Attribute("ContentType")?.Value, contentType, StringComparison.OrdinalIgnoreCase);
 
@@ -233,6 +223,17 @@ internal static class XlsxHeaderFooterPicturePackageGraphNormalizer
                    .Any(element =>
                        string.Equals(element.Attribute("Extension")?.Value, extension, StringComparison.OrdinalIgnoreCase) &&
                        string.Equals(element.Attribute("ContentType")?.Value, contentType, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static XElement? FindOverrideElement(XElement contentTypesRoot, string normalizedPartName)
+    {
+        foreach (var element in contentTypesRoot.Elements(ContentTypeNs + "Override"))
+        {
+            if (string.Equals(element.Attribute("PartName")?.Value, normalizedPartName, StringComparison.OrdinalIgnoreCase))
+                return element;
+        }
+
+        return null;
     }
 
     private sealed record LiveImageRelationship(string TargetPath);
