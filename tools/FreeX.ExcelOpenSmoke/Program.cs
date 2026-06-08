@@ -19231,6 +19231,8 @@ internal static class ExcelOpenSmoke
                 sourcePath = result.Input.SourcePath,
                 description = result.Input.Description,
                 workflow = FormatWorkflow(result.Input.Workflow),
+                generatedWithExcel = result.Input.GenerateWithExcel,
+                sourceAuthorship = result.Input.GenerateWithExcel ? "excel-authored" : "external-or-freex-authored",
                 expectations = result.Input.Expectations,
                 corpus = result.Input.CorpusRow is null
                     ? null
