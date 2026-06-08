@@ -53,6 +53,16 @@ internal static class CommandGuards
     public static CommandOutcome RejectPivotTableNotFound() =>
         new(false, PivotTableNotFoundMessage);
 
+    public static bool TryFindPivotTable(
+        Sheet sheet,
+        string pivotTableName,
+        [NotNullWhen(true)] out PivotTableModel? pivotTable)
+    {
+        pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
+            string.Equals(pivot.Name, pivotTableName, StringComparison.OrdinalIgnoreCase));
+        return pivotTable is not null;
+    }
+
     public static CommandOutcome RejectPivotTableNameRequired() =>
         new(false, PivotTableNameRequiredMessage);
 
