@@ -962,6 +962,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
             .Should()
             .BeTrue(blockReason);
+        AssertWorksheetDiagnosticsModel(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(42));
@@ -980,6 +981,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceIgnoredErrors.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        AssertWorksheetDiagnosticsModel(reloaded);
     }
 
     [Fact]
@@ -3890,6 +3895,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(12));
         workbook.WatchedCells.Add(watchedAddress);
         return workbook;
+    }
+
+    private static void AssertWorksheetDiagnosticsModel(Workbook workbook)
+    {
+        var sheet = workbook.GetSheetAt(0);
+        workbook.WatchedCells.Should().ContainSingle().Which.Should().Be(new CellAddress(sheet.Id, 2, 2));
+        sheet.GetCell(1, 1)!.IgnoreFormulaError.Should().BeTrue();
     }
 
     private static void SetWorksheetCellWatchesInvalidAttributes(MemoryStream stream)
