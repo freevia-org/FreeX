@@ -28,12 +28,12 @@ public sealed class SetSelectionPaneObjectVisibilityCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (SelectionPaneObjectAccess.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
         var target = SelectionPaneObjectAccess.Find(sheet, _kind, _objectId);
         if (target is null)
-            return new CommandOutcome(false, "Selection pane object was not found.");
+            return SelectionPaneObjectAccess.ObjectNotFound();
 
         _previous = target.IsVisible;
         target.IsVisible = _isVisible;
@@ -79,7 +79,7 @@ public sealed class MoveSelectionPaneObjectCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (SelectionPaneObjectAccess.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
         return _kind switch
@@ -132,7 +132,7 @@ public sealed class MoveSelectionPaneObjectCommand : IWorkbookCommand
     {
         var index = list.FindIndex(item => getId(item) == _objectId);
         if (index < 0)
-            return new CommandOutcome(false, "Selection pane object was not found.");
+            return SelectionPaneObjectAccess.ObjectNotFound();
 
         var toIndex = _forward ? index + 1 : index - 1;
         if (toIndex < 0 || toIndex >= list.Count)
@@ -148,12 +148,12 @@ public sealed class MoveSelectionPaneObjectCommand : IWorkbookCommand
     {
         var entry = new DrawingObjectZOrderEntry(_kind, _objectId);
         if (!DrawingObjectZOrder.ContainsObject(sheet, entry))
-            return new CommandOutcome(false, "Selection pane object was not found.");
+            return SelectionPaneObjectAccess.ObjectNotFound();
 
         var normalizedOrder = DrawingObjectZOrder.GetNormalizedOrder(sheet);
         var index = FindDrawingOrderIndex(normalizedOrder, entry);
         if (index < 0)
-            return new CommandOutcome(false, "Selection pane object was not found.");
+            return SelectionPaneObjectAccess.ObjectNotFound();
 
         var toIndex = _forward ? index + 1 : index - 1;
         if (toIndex < 0 || toIndex >= normalizedOrder.Count)
@@ -219,12 +219,12 @@ public sealed class RenameSelectionPaneObjectCommand : IWorkbookCommand
             return new CommandOutcome(false, "Object name cannot be blank.");
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (SelectionPaneObjectAccess.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
         var target = SelectionPaneObjectAccess.Find(sheet, _kind, _objectId);
         if (target is null)
-            return new CommandOutcome(false, "Selection pane object was not found.");
+            return SelectionPaneObjectAccess.ObjectNotFound();
 
         _previousName = target.Name;
         target.Name = _newName;
@@ -249,6 +249,14 @@ public sealed class RenameSelectionPaneObjectCommand : IWorkbookCommand
 
 internal static class SelectionPaneObjectAccess
 {
+    private const string ObjectNotFoundMessage = "Selection pane object was not found.";
+
+    public static CommandOutcome? RejectIfEditObjectsBlocked(Sheet sheet) =>
+        CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects);
+
+    public static CommandOutcome ObjectNotFound() =>
+        new(false, ObjectNotFoundMessage);
+
     public static List<SelectionPaneObjectRef> GetList(Sheet sheet, SelectionPaneObjectKind kind) =>
         kind switch
         {
