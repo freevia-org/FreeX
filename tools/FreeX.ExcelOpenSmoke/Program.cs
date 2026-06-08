@@ -17453,6 +17453,16 @@ internal static class ExcelOpenSmoke
                 ]
             };
         }
+        else if (string.Equals(row.Id, "generated-threaded-comments-001", StringComparison.OrdinalIgnoreCase))
+        {
+            expectations = EnsureExpectations() with
+            {
+                MinFreeXPreSaveComments = 1,
+                MinExcelOpenedComments = 1,
+                MinExcelReopenedComments = reopen,
+                MinFreeXReopenedComments = reopen
+            };
+        }
         else if (string.Equals(row.Id, "generated-header-footer-legacy-drawing-001", StringComparison.OrdinalIgnoreCase))
         {
             expectations = EnsureExpectations() with

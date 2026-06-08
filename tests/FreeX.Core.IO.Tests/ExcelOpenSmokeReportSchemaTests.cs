@@ -36,6 +36,20 @@ public sealed class ExcelOpenSmokeReportSchemaTests
         programSource.Should().Contain("tags.Contains(\"unsupported-sheet-types\")");
     }
 
+    [Fact]
+    public void MetadataPassExpectations_CoverThreadedCommentSummaryCounters()
+    {
+        var programSource = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ExcelOpenSmoke", "Program.cs");
+        var manifest = TestWorkspaceFiles.ReadWorkspaceText("test-corpus", "manifest.csv");
+
+        manifest.Should().Contain("generated-threaded-comments-001,generated/threaded-comments-001.xlsx,generated,local,2026-06-08,FreeX-generated,threaded-comments,,supported-metadata-pass");
+        programSource.Should().Contain("string.Equals(row.Id, \"generated-threaded-comments-001\", StringComparison.OrdinalIgnoreCase)");
+        programSource.Should().Contain("MinFreeXPreSaveComments = 1");
+        programSource.Should().Contain("MinExcelOpenedComments = 1");
+        programSource.Should().Contain("MinExcelReopenedComments = reopen");
+        programSource.Should().Contain("MinFreeXReopenedComments = reopen");
+    }
+
     private static void AssertCoreValidationCalls(
         string source,
         string pathExpression,
