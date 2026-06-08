@@ -2770,7 +2770,12 @@ function Test-PortableSourceHygiene {
         "SharpVectors.Wpf",
         "UseWPF",
         "FreeX.App.Host",
-        "FreeX.App.UI"
+        "FreeX.App.UI",
+        "AppKit",
+        "Foundation",
+        "ObjCRuntime",
+        "NSSharingServicePicker",
+        "NSSharingService"
     )
     $extensions = @(".cs", ".csproj", ".axaml", ".xaml")
     $sourceFiles = New-Object System.Collections.Generic.List[System.IO.FileInfo]
