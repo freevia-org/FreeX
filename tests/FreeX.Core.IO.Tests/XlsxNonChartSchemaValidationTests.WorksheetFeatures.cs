@@ -812,6 +812,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .BeTrue(blockReason);
 
         var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetSingleXmlCellsModel(sheet.SingleXmlCells);
         sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
 
         using var saved = new MemoryStream();
@@ -828,6 +829,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceSingleXmlCells.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        AssertWorksheetSingleXmlCellsModel(reloaded.GetSheetAt(0).SingleXmlCells);
     }
 
 
@@ -3790,6 +3795,24 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             ]
         };
         return workbook;
+    }
+
+    private static void AssertWorksheetSingleXmlCellsModel(WorksheetSingleXmlCellsModel? singleXmlCells)
+    {
+        singleXmlCells.Should().NotBeNull();
+        singleXmlCells!.Cells.Should().SatisfyRespectively(
+            first =>
+            {
+                first.Id.Should().Be(1);
+                first.Reference.Should().Be("A1");
+                first.XmlCellPropertyId.Should().Be(1);
+            },
+            second =>
+            {
+                second.Id.Should().Be(2);
+                second.Reference.Should().Be("B2");
+                second.XmlCellPropertyId.Should().Be(1);
+            });
     }
 
     private static Workbook CreateWorksheetCustomPropertiesSourceWorkbook()
