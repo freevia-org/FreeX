@@ -375,6 +375,22 @@ function Test-ArtifactIdentityMatches {
     }
 }
 
+function Test-EvidenceRunIdentity {
+    param(
+        [Parameter(Mandatory = $true)][hashtable]$Evidence,
+        [object]$ArtifactIdentity,
+        [Parameter(Mandatory = $true)][string]$Runtime
+    )
+
+    if ($null -eq $ArtifactIdentity) {
+        return
+    }
+
+    $label = "$Runtime evidence GitHub Actions identity"
+    Assert-KeyEquals -Map $Evidence -Key "github_run_id" -ExpectedValue $ArtifactIdentity.RunId -Label $label
+    Assert-KeyEquals -Map $Evidence -Key "github_run_attempt" -ExpectedValue $ArtifactIdentity.RunAttempt -Label $label
+}
+
 function Find-RuntimeBundleDirectories {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
@@ -1032,6 +1048,7 @@ function Test-RuntimeBundle {
     $testerInstructionsPath = Join-Path $BundleDirectory $names.TesterInstructions
 
     $evidence = Get-KeyValueMap -Path $evidencePath
+    Test-EvidenceRunIdentity -Evidence $evidence -ArtifactIdentity $ArtifactIdentity -Runtime $Runtime
     $isDistributionCandidateArtifact = Test-ChannelEvidence -Evidence $evidence -Runtime $Runtime
 
     Test-ChecksumEvidence -BundleDirectory $BundleDirectory -Runtime $Runtime -Evidence $evidence
