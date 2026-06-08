@@ -1450,13 +1450,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-data-consolidation-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetDataConsolidationModel(sheet, "generated-worksheet-data-consolidation-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-data-consolidation-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-data-consolidation-001");
         AssertWorksheetDataConsolidation(saved, "generated-worksheet-data-consolidation-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetDataConsolidationModel(
+            reloaded.GetSheetAt(0),
+            "data consolidation model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -1774,6 +1782,20 @@ public partial class XlsxCorpusRunnerTests
         dataRef.Attribute("ref")!.Value.Should().Be("A1:B2", because);
         dataRef.Attribute("sheet")!.Value.Should().Be("Data", because);
         dataRef.Attribute("customDataRefFlag").Should().BeNull(because);
+    }
+
+    private static void AssertWorksheetDataConsolidationModel(Sheet sheet, string because)
+    {
+        var dataConsolidation = sheet.DataConsolidation;
+        dataConsolidation.Should().NotBeNull(because);
+        dataConsolidation!.Function.Should().Be("sum", because);
+        dataConsolidation.LeftLabels.Should().BeTrue(because);
+        dataConsolidation.TopLabels.Should().BeTrue(because);
+        dataConsolidation.Link.Should().BeTrue(because);
+
+        var reference = dataConsolidation.References.Should().ContainSingle(because).Subject;
+        reference.Reference.Should().Be("A1:B2", because);
+        reference.Sheet.Should().Be("Data", because);
     }
 
     private static void AssertWorksheetAutoFilterMetadata(Stream package, string because)
