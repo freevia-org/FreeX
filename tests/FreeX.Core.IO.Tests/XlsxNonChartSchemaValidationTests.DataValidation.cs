@@ -142,6 +142,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
         adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
         SchemaErrors(saved).Should().BeEmpty();
+        AssertAdditionalDataValidationTypesAuthored(saved);
         ReadDataValidationsElement(saved)
             .ToString(SaveOptions.DisableFormatting)
             .Should()
@@ -314,6 +315,36 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Contain("C2:C5")
             .And
             .Contain("H2:H5");
+        validations
+            .Single(element => element.Attribute("type")?.Value == "decimal")
+            .Attribute("operator")!
+            .Value
+            .Should()
+            .Be("between");
+        validations
+            .Single(element => element.Attribute("type")?.Value == "date")
+            .Element(worksheetNs + "formula1")!
+            .Value
+            .Should()
+            .Be("DATE(2026,1,1)");
+        validations
+            .Single(element => element.Attribute("type")?.Value == "time")
+            .Element(worksheetNs + "formula2")!
+            .Value
+            .Should()
+            .Be("TIME(18,0,0)");
+        validations
+            .Single(element => element.Attribute("type")?.Value == "textLength")
+            .Attribute("operator")!
+            .Value
+            .Should()
+            .Be("lessThanOrEqual");
+        validations
+            .Single(element => element.Attribute("type")?.Value == "custom")
+            .Element(worksheetNs + "formula1")!
+            .Value
+            .Should()
+            .Be("LEN(G2)>0");
     }
 
     private static void AssertDataValidationModel(Sheet sheet)
