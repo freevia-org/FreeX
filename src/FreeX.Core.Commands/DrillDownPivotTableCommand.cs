@@ -27,7 +27,7 @@ public sealed class DrillDownPivotTableCommand : IWorkbookCommand
         var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
             string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
         if (pivotTable is null)
-            return new CommandOutcome(false, "PivotTable was not found.");
+            return CommandGuards.RejectPivotTableNotFound();
         if (!pivotTable.EnableDrill)
             return new CommandOutcome(false, "Show Details is disabled for this PivotTable.");
         if (CommandGuards.RejectIfWorkbookStructureProtected(ctx.Workbook) is { } structureProtectedOutcome)

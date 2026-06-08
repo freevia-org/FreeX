@@ -75,6 +75,13 @@ internal static partial class XlsxCorpusFixtureFactory
                   <c r="A1" i="1"/>
                 </calcChain>
                 """)),
+        "generated-volatile-dependencies-001" => CreatePackage(("xl/volatileDependencies.xml", """
+            <volTypes xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <volType type="realTimeData">
+                <main first="1"/>
+              </volType>
+            </volTypes>
+            """)),
         "generated-document-properties-001" => CreatePackage(
             ("docProps/core.xml", """
                 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
@@ -95,6 +102,7 @@ internal static partial class XlsxCorpusFixtureFactory
                   <Manager>Workbook Fidelity</Manager>
                 </Properties>
                 """)),
+        "generated-document-thumbnail-001" => CreatePackage(("docProps/thumbnail.png", "FreeX generated thumbnail placeholder")),
         "generated-header-footer-legacy-drawing-001" => CreatePackage(
             ("xl/drawings/vmlDrawing1.vml", """
                 <xml xmlns:v="urn:schemas-microsoft-com:vml"
@@ -569,6 +577,16 @@ internal static partial class XlsxCorpusFixtureFactory
             </c:chartSpace>
             """)),
         "generated-vba-macros-001" => CreatePackage(("xl/vbaProject.bin", "FreeX generated macro placeholder")),
+        "generated-vba-signature-001" => CreatePackage(
+            ("xl/vbaProject.bin", "FreeX generated signed macro placeholder"),
+            ("xl/vbaProjectSignature.bin", "FreeX generated VBA signature placeholder"),
+            ("xl/_rels/vbaProject.bin.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdFreeXVbaSignature"
+                                Type="http://schemas.microsoft.com/office/2006/relationships/vbaProjectSignature"
+                                Target="vbaProjectSignature.bin"/>
+                </Relationships>
+                """)),
         "generated-pivots-001" => CreatePackage(
             ("xl/pivotTables/pivotTable1.xml", "<pivotTableDefinition/>"),
             ("xl/pivotCache/pivotCacheDefinition1.xml", "<pivotCacheDefinition/>")),
@@ -1050,12 +1068,15 @@ internal static partial class XlsxCorpusFixtureFactory
             "xl/diagrams/colors1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml",
             "xl/printerSettings/printerSettings1.bin" => "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings",
             "xl/calcChain.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml",
+            "xl/volatileDependencies.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.volatileDependencies+xml",
+            "docProps/thumbnail.png" => "image/png",
             "xl/chartsheets/sheet1.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml",
             "xl/dialogSheets/sheet2.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.dialogsheet+xml",
             "xl/macroSheets/sheet3.xml" => "application/vnd.ms-excel.macrosheet+xml",
             "xl/charts/chart1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.chart+xml",
             "xl/theme/theme1.xml" => "application/vnd.openxmlformats-officedocument.theme+xml",
             "xl/vbaProject.bin" => "application/vnd.ms-office.vbaProject",
+            "xl/vbaProjectSignature.bin" => "application/vnd.ms-office.vbaProjectSignature",
             "xl/pivotTables/pivotTable1.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml",
             "xl/pivotCache/pivotCacheDefinition1.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml",
             "xl/connections.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.connections+xml",

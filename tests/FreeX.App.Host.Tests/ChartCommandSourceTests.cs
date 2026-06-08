@@ -16,6 +16,13 @@ public sealed class ChartCommandSourceTests
     [InlineData("Doughnut Chart", "Doughnut", "DO", "ChartDoughnutMenuItem_Click")]
     [InlineData("Scatter Chart", "Scatter", "SX", "ChartScatterMenuItem_Click")]
     [InlineData("Stock Chart", "Stock", "ST", "ChartStockMenuItem_Click")]
+    [InlineData("3D Column Chart", "3D Column", "3C", "Chart3DColumnMenuItem_Click")]
+    [InlineData("3D Bar Chart", "3D Bar", "3B", "Chart3DBarMenuItem_Click")]
+    [InlineData("3D Line Chart", "3D Line", "3L", "Chart3DLineMenuItem_Click")]
+    [InlineData("3D Pie Chart", "3D Pie", "3P", "Chart3DPieMenuItem_Click")]
+    [InlineData("3D Area Chart", "3D Area", "3A", "Chart3DAreaMenuItem_Click")]
+    [InlineData("Surface Chart", "Surface", "UF", "ChartSurfaceMenuItem_Click")]
+    [InlineData("3D Surface Chart", "3D Surface", "3S", "Chart3DSurfaceMenuItem_Click")]
     public void InsertChartCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
         string title,
         string content,
