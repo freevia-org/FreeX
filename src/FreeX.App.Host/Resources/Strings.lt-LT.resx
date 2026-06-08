@@ -15399,4 +15399,22 @@ Išsaugotas XPS failas:
   <data name="GoToSpecial_NoCellsFoundMessage" xml:space="preserve">
     <value>No cells found.</value>
   </data>
+  <data name="MainWindow_Content_FieldHeaders" xml:space="preserve">
+    <value>Field Headers</value>
+  </data>
+  <data name="MainWindow_Content_PlusMinusButtons" xml:space="preserve">
+    <value>+/- Buttons</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_ShowOrHideExpandCollapseButtonsForTheSelectedPivotTable" xml:space="preserve">
+    <value>Show or hide expand and collapse buttons for the selected PivotTable.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_ShowOrHideFieldCaptionsAndFilterDropDownsForTheSelectedPivotTable" xml:space="preserve">
+    <value>Show or hide field captions and filter drop-downs for the selected PivotTable.</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_FieldHeaders" xml:space="preserve">
+    <value>Field Headers</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_PlusMinusButtons" xml:space="preserve">
+    <value>+/- Buttons</value>
+  </data>
 </root>

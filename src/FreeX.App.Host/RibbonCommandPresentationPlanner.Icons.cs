@@ -5,6 +5,7 @@ public static partial class RibbonCommandPresentationPlanner
     private static readonly IReadOnlyDictionary<string, RibbonCommandIcon> ExactCommandIcons =
         new Dictionary<string, RibbonCommandIcon>(StringComparer.Ordinal)
         {
+            ["+/- buttons"] = Icon(RibbonCommandIconKind.Expand),
             ["100%"] = Icon(RibbonCommandIconKind.Zoom),
             ["accounting number format"] = Icon(RibbonCommandIconKind.Currency),
             ["advanced filter"] = Icon(RibbonCommandIconKind.Filter),
