@@ -29,6 +29,34 @@ public class XlsxCorpusScaffoldTests
         "notes"
     ];
 
+    private static readonly string[] BidirectionalCoverageTags =
+    [
+        "basic-grid",
+        "cached-results",
+        "charts",
+        "comments",
+        "conditional-formatting",
+        "data-validation",
+        "external-links",
+        "formatting",
+        "formulas",
+        "hyperlinks",
+        "images",
+        "merged-cells",
+        "named-ranges",
+        "page-setup",
+        "pivot-caches",
+        "pivottables",
+        "protection",
+        "shapes",
+        "slicers",
+        "sparklines",
+        "styles",
+        "tables",
+        "threaded-comments",
+        "timelines"
+    ];
+
     [Fact]
     public void CorpusManifest_UsesDocumentedSchemaAndHasStarterGeneratedRows()
     {
@@ -187,6 +215,27 @@ public class XlsxCorpusScaffoldTests
             .Where(row => row.ExpectedStatus == "public-pass")
             .Should()
             .OnlyContain(row => row.SourceType == "public", "`public-pass` is reserved for redistributed public corpus files");
+    }
+
+    [Fact]
+    public void CorpusManifest_PreservesBidirectionalCoverageForSupportedFeatureTags()
+    {
+        var supportedRows = ReadManifestRows()
+            .Where(row =>
+                row.ExpectedStatus is "supported-pass" or "supported-metadata-pass" or "supported-pivot-metadata-pass" or "public-pass")
+            .ToArray();
+
+        foreach (var tag in BidirectionalCoverageTags)
+        {
+            supportedRows
+                .Where(row => row.SourceType == "generated")
+                .Should()
+                .Contain(row => HasFeatureTag(row, tag), $"{tag} should retain FreeX-generated coverage");
+            supportedRows
+                .Where(row => row.SourceType != "generated")
+                .Should()
+                .Contain(row => HasFeatureTag(row, tag), $"{tag} should retain independent Excel-authored, public, regression, or local-private coverage");
+        }
     }
 
     [Fact]
@@ -654,6 +703,11 @@ public class XlsxCorpusScaffoldTests
 
         return warnings;
     }
+
+    private static bool HasFeatureTag(ManifestRow row, string tag) =>
+        row.FeatureTags
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Contains(tag, StringComparer.Ordinal);
 
     private sealed record ManifestRow(
         string Path,
