@@ -883,6 +883,7 @@ jobs:
             artifacts/freex-${{ matrix.runtime }}-macos-notarization.log
             artifacts/freex-${{ matrix.runtime }}-macos-tester-instructions.md
           if-no-files-found: error
+          retention-days: 14
 
       - name: Upload app diagnostics
         if: always()
@@ -902,6 +903,7 @@ jobs:
             artifacts/freex-${{ matrix.runtime }}-macos-app.zip
             artifacts/freex-${{ matrix.runtime }}-macos-app.zip.sha256
           if-no-files-found: warn
+          retention-days: 14
 
   publish-distribution-candidate:
     name: Publish macOS distribution candidate
