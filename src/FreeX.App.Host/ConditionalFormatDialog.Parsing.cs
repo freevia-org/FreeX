@@ -65,17 +65,31 @@ public partial class ConditionalFormatDialog
             ? CfRuleType.UniqueValues
             : CfRuleType.DuplicateValues;
 
-    private static string DatePeriodValue(string? label) =>
-        DateOccurringPeriods.FirstOrDefault(period => period.Label == label) is var period
-            && period.Label is not null
-                ? period.Value
-                : "today";
+    private static string DatePeriodValue(string? label)
+    {
+        foreach (var period in DateOccurringPeriods)
+        {
+            if (period.Label == label)
+            {
+                return period.Value;
+            }
+        }
 
-    private static string DatePeriodLabel(string? value) =>
-        DateOccurringPeriods.FirstOrDefault(period => period.Value == value) is var period
-            && period.Label is not null
-                ? period.Label
-                : UiText.Get("ConditionalFormatDialog_DatePeriod_Today");
+        return "today";
+    }
+
+    private static string DatePeriodLabel(string? value)
+    {
+        foreach (var period in DateOccurringPeriods)
+        {
+            if (period.Value == value)
+            {
+                return period.Label;
+            }
+        }
+
+        return UiText.Get("ConditionalFormatDialog_DatePeriod_Today");
+    }
 
     private static string[] DataBarAxisPositionLabels() =>
         [
