@@ -772,7 +772,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("_session.FillSelectedRange(direction)");
         script.Should().Contain("private void SelectCurrentRegionOrAll()");
         script.Should().Contain("private NativeMenu CreateNativeOpenRecentMenu(bool isIdle)");
-        script.Should().Contain("private void RecordRecentWorkbook(string path)");
+        script.Should().Contain("private void RecordRecentWorkbook(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null)");
         script.Should().Contain("_closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();");
         script.Should().Contain("_sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true)");
         script.Should().Contain("RefreshViewportSizeForZoom();");
@@ -2368,10 +2368,13 @@ public sealed class MacOsAppReadinessPreflightTests
                     path => _session.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null
                     plan.ItemCount == 0
                     foreach (var entry in plan.Items)
+                    var fileAccessIdentity = entry.FileAccessIdentity;
                     Header = entry.Header
-                    await OpenWorkbookPathAsync(target.Path);
-                    _recentFiles.AddOrUpdate(target.Path);
-                    RecordRecentWorkbook(target.Path);
+                    if (!_session.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out _)
+                    await OpenWorkbookPathAsync(target.Path, target.FileAccessIdentity);
+                    _recentFiles.AddOrUpdate(target.Path, fileAccessIdentity ?? target.FileAccessIdentity);
+                    RecordRecentWorkbook(target.Path, target.FileAccessIdentity);
+                    RecordRecentWorkbook(target.Path, _session.CurrentFileAccessIdentity);
                     _closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();
                     fileMenu.Items.Add(_newWorkbookMenuItem);
                     fileMenu.Items.Add(_closeWorkbookMenuItem);
@@ -2754,9 +2757,9 @@ public sealed class MacOsAppReadinessPreflightTests
                 {
                     var range = _session.SelectCurrentRegionOrAll();
                 }
-                private async Task OpenRecentWorkbookAsync(string path) => await Task.CompletedTask;
+                private async Task OpenRecentWorkbookAsync(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null) => await Task.CompletedTask;
                 private void RecordStartupRecentWorkbook(StartupWorkbookLoadResult source) { }
-                private void RecordRecentWorkbook(string path) { }
+                private void RecordRecentWorkbook(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null) { }
                 private void CreateNewWorkbook() { }
                 private async Task CloseWorkbookAsync() => await Task.CompletedTask;
                 private void ResetToNewWorkbook(string status) { }
@@ -3313,7 +3316,19 @@ public sealed class MacOsAppReadinessPreflightTests
             """
             namespace FreeX.App.Services;
 
-            public sealed class RecentFileEntry { }
+            public sealed class RecentFileEntry
+            {
+                public WorkbookFileAccessIdentity? FileAccessIdentity { get; set; }
+            }
+
+            public sealed class WorkbookFileAccessIdentity
+            {
+                public bool TryWithLocalPath(string path, out WorkbookFileAccessIdentity? identity)
+                {
+                    identity = this;
+                    return true;
+                }
+            }
 
             public sealed class RecentFilesStore
             {
@@ -3802,7 +3817,8 @@ public sealed class MacOsAppReadinessPreflightTests
             public sealed record OpenRecentWorkbookMenuItemPlan(
                 string Path,
                 string Header,
-                DateTimeOffset LastOpened);
+                DateTimeOffset LastOpened,
+                WorkbookFileAccessIdentity? FileAccessIdentity = null);
 
             public sealed record OpenRecentWorkbookMenuPlan(IReadOnlyList<OpenRecentWorkbookMenuItemPlan> Items)
             {
@@ -3847,7 +3863,8 @@ public sealed class MacOsAppReadinessPreflightTests
                             .Select(item => new OpenRecentWorkbookMenuItemPlan(
                                 item.Path!,
                                 FormatHeader(item.Path!),
-                                item.Entry.LastOpened))
+                                item.Entry.LastOpened,
+                                ResolveIdentityForPath(item.Entry.FileAccessIdentity, item.Path!)))
                             .ToList());
                 }
 
@@ -3857,6 +3874,13 @@ public sealed class MacOsAppReadinessPreflightTests
                     Path.GetDirectoryName(path);
                     return path;
                 }
+
+                private static WorkbookFileAccessIdentity? ResolveIdentityForPath(
+                    WorkbookFileAccessIdentity? identity,
+                    string path) =>
+                    identity is not null && identity.TryWithLocalPath(path, out var resolvedIdentity)
+                        ? resolvedIdentity
+                        : null;
             }
             """);
 

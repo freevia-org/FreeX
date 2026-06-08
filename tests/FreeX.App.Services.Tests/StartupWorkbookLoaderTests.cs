@@ -12,6 +12,7 @@ public sealed class StartupWorkbookLoaderTests
         var result = new StartupWorkbookLoader().Load(["missing.xlsx"]);
 
         result.IsFallback.Should().BeFalse();
+        result.SourceFileAccessIdentity.Should().BeNull();
         result.DisplayName.Should().Be("macOS Preview Workbook");
         result.Workbook.Sheets.Single().Name.Should().Be("Port Plan");
     }
@@ -27,6 +28,9 @@ public sealed class StartupWorkbookLoaderTests
 
         result.IsFallback.Should().BeFalse();
         result.SourcePath.Should().Be(path);
+        result.SourceFileAccessIdentity.Should().NotBeNull();
+        result.SourceFileAccessIdentity!.LocalPath.Should().Be(path);
+        result.SourceFileAccessIdentity.HasBookmark.Should().BeFalse();
         result.DisplayName.Should().Be(Path.GetFileName(path));
         result.Workbook.Sheets.Single().Name.Should().Be("Very Long Sales _Draft_ Import");
         result.OpenedAsTemplate.Should().BeFalse();
@@ -45,6 +49,8 @@ public sealed class StartupWorkbookLoaderTests
 
         result.IsFallback.Should().BeFalse();
         result.SourcePath.Should().Be(Path.GetFullPath(path));
+        result.SourceFileAccessIdentity.Should().NotBeNull();
+        result.SourceFileAccessIdentity!.LocalPath.Should().Be(Path.GetFullPath(path));
         result.DisplayName.Should().Be(Path.GetFileName(path));
         result.Workbook.Sheets.Single().Name.Should().Be("Open With");
     }
@@ -62,6 +68,8 @@ public sealed class StartupWorkbookLoaderTests
 
         result.IsFallback.Should().BeFalse();
         result.SourcePath.Should().Be(workbookPath);
+        result.SourceFileAccessIdentity.Should().NotBeNull();
+        result.SourceFileAccessIdentity!.LocalPath.Should().Be(workbookPath);
         result.DisplayName.Should().Be(Path.GetFileName(workbookPath));
         result.Workbook.Sheets.Single().Name.Should().Be("OpenWith");
     }
@@ -97,6 +105,8 @@ public sealed class StartupWorkbookLoaderTests
 
         result.IsFallback.Should().BeFalse();
         result.SourcePath.Should().Be(path);
+        result.SourceFileAccessIdentity.Should().NotBeNull();
+        result.SourceFileAccessIdentity!.LocalPath.Should().Be(path);
         result.OpenedAsTemplate.Should().BeTrue();
         result.FeatureReport.Should().BeSameAs(featureReport);
         result.LoadWarnings.Should().BeEmpty();
@@ -112,6 +122,7 @@ public sealed class StartupWorkbookLoaderTests
         var result = new StartupWorkbookLoader().Load([path]);
 
         result.IsFallback.Should().BeTrue();
+        result.SourceFileAccessIdentity.Should().BeNull();
         result.Status.Should().Contain("Unsupported file type: .unsupported");
         result.Workbook.Sheets.Single().Name.Should().Be("Port Plan");
     }
@@ -128,6 +139,7 @@ public sealed class StartupWorkbookLoaderTests
         var result = new StartupWorkbookLoader().Load([firstPath, secondPath]);
 
         result.IsFallback.Should().BeTrue();
+        result.SourceFileAccessIdentity.Should().BeNull();
         result.Status.Should().Contain("Unsupported file type: .unsupported");
         result.Workbook.Sheets.Single().Name.Should().Be("Port Plan");
     }

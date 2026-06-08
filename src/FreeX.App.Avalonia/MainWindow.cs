@@ -12442,21 +12442,24 @@ public sealed class MainWindow : Window
         foreach (var entry in plan.Items)
         {
             var path = entry.Path;
+            var fileAccessIdentity = entry.FileAccessIdentity;
             var item = new NativeMenuItem
             {
                 Header = entry.Header,
                 IsEnabled = isIdle,
             };
-            item.Click += async (_, _) => await OpenRecentWorkbookAsync(path);
+            item.Click += async (_, _) => await OpenRecentWorkbookAsync(path, fileAccessIdentity);
             menu.Items.Add(item);
         }
 
         return menu;
     }
 
-    private async Task OpenRecentWorkbookAsync(string path)
+    private async Task OpenRecentWorkbookAsync(
+        string path,
+        WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
-        if (!_session.TryResolveOpenTarget(path, out var target, out _) ||
+        if (!_session.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out _) ||
             target is null ||
             !File.Exists(target.Path))
         {
@@ -12466,23 +12469,23 @@ public sealed class MainWindow : Window
             return;
         }
 
-        await OpenWorkbookPathAsync(target.Path);
+        await OpenWorkbookPathAsync(target.Path, target.FileAccessIdentity);
     }
 
     private void RecordStartupRecentWorkbook(StartupWorkbookLoadResult source)
     {
         if (!source.IsFallback && !string.IsNullOrWhiteSpace(source.SourcePath))
-            RecordRecentWorkbook(source.SourcePath);
+            RecordRecentWorkbook(source.SourcePath, source.SourceFileAccessIdentity);
     }
 
-    private void RecordRecentWorkbook(string path)
+    private void RecordRecentWorkbook(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
         if (!_session.TryResolveOpenTarget(path, out var target, out _) ||
             target is null ||
             !File.Exists(target.Path))
             return;
 
-        _recentFiles.AddOrUpdate(target.Path);
+        _recentFiles.AddOrUpdate(target.Path, fileAccessIdentity ?? target.FileAccessIdentity);
         RefreshNativeOpenRecentMenu(!_isOpening && !_isSaving);
     }
 
@@ -13152,7 +13155,9 @@ public sealed class MainWindow : Window
         }
     }
 
-    private async Task OpenWorkbookPathAsync(string path)
+    private async Task OpenWorkbookPathAsync(
+        string path,
+        WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
         if (_isOpening || _isSaving)
             return;
@@ -13166,7 +13171,7 @@ public sealed class MainWindow : Window
             return;
         }
 
-        if (!_session.TryResolveOpenTarget(path, out var target, out var message))
+        if (!_session.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out var message))
         {
             ShowOpenIssue(message);
             return;
@@ -13265,7 +13270,7 @@ public sealed class MainWindow : Window
             var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
             _session = _sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true);
             RefreshViewportSizeForZoom();
-            RecordRecentWorkbook(target.Path);
+            RecordRecentWorkbook(target.Path, target.FileAccessIdentity);
             ClearSelectedDrawingObject();
             RefreshShell(_session.StartupStatus);
         }
@@ -13756,7 +13761,7 @@ public sealed class MainWindow : Window
 
             await _saveService.SaveAsync(target.Path, target.Adapter, _session.Workbook, progress);
             _session.MarkSaved(target.Path);
-            RecordRecentWorkbook(target.Path);
+            RecordRecentWorkbook(target.Path, _session.CurrentFileAccessIdentity);
             RefreshShell($"Saved {Path.GetFileName(target.Path)}");
         }
         catch (Exception ex)
