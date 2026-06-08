@@ -23,6 +23,8 @@ public static class XlsxPackageHealthValidator
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink";
     private const string ExternalLinkPathRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath";
+    private const string VbaProjectRelationshipType =
+        "http://schemas.microsoft.com/office/2006/relationships/vbaProject";
     private const string WorksheetContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
     private const string ChartsheetContentType =
@@ -33,6 +35,8 @@ public static class XlsxPackageHealthValidator
         "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
     private const string ExternalLinkContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml";
+    private const string VbaProjectContentType =
+        "application/vnd.ms-office.vbaProject";
 
     private static readonly XNamespace PackageContentTypeNs =
         "http://schemas.openxmlformats.org/package/2006/content-types";
@@ -50,6 +54,12 @@ public static class XlsxPackageHealthValidator
         "application/vnd.ms-excel.template.macroEnabledTemplate.main+xml",
         "application/vnd.ms-excel.addin.macroEnabled.main+xml"
     };
+    private static readonly HashSet<string> MacroEnabledWorkbookMainContentTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "application/vnd.ms-excel.sheet.macroEnabled.main+xml",
+        "application/vnd.ms-excel.template.macroEnabledTemplate.main+xml",
+        "application/vnd.ms-excel.addin.macroEnabled.main+xml"
+    };
 
     public static IReadOnlyList<string> Validate(ZipArchive archive)
     {
@@ -62,6 +72,7 @@ public static class XlsxPackageHealthValidator
         AddSharedStringTableIssues(archive, issues);
         AddStylesPackageIssues(archive, issues);
         AddExternalLinkPackageIssues(archive, issues);
+        AddVbaProjectPackageIssues(archive, issues);
         return issues;
     }
 
@@ -1067,6 +1078,39 @@ public static class XlsxPackageHealthValidator
             if (!string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
                 issues.Add($"{externalLinkPart} externalBook #{externalBook.Ordinal} relationship {externalBook.RelationshipId} is not external");
         }
+    }
+
+    private static void AddVbaProjectPackageIssues(ZipArchive archive, List<string> issues)
+    {
+        if (!TryLoadPackageXml(archive, "[Content_Types].xml", issues, out var contentTypesXml) ||
+            contentTypesXml.Root?.Name != PackageContentTypeNs + "Types")
+        {
+            return;
+        }
+
+        var entryNames = archive.Entries
+            .Where(entry => !string.IsNullOrEmpty(entry.Name))
+            .Select(entry => NormalizePackagePart(entry.FullName))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (!entryNames.Contains("xl/vbaProject.bin"))
+            return;
+
+        var vbaContentType = GetEffectivePackageContentType(contentTypesXml, "xl/vbaProject.bin");
+        if (!string.Equals(vbaContentType, VbaProjectContentType, StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"xl/vbaProject.bin has content type {vbaContentType ?? "(none)"}; expected {VbaProjectContentType}");
+        }
+
+        if (!TryFindWorkbookPart(archive, entryNames, out var workbookPart))
+            return;
+
+        var workbookContentType = GetEffectivePackageContentType(contentTypesXml, workbookPart);
+        if (!MacroEnabledWorkbookMainContentTypes.Contains(workbookContentType ?? string.Empty))
+        {
+            issues.Add($"{workbookPart} has content type {workbookContentType ?? "(none)"} but contains xl/vbaProject.bin; expected a macro-enabled workbook content type");
+        }
+
+        ValidateWorkbookRelationshipToPart(archive, entryNames, VbaProjectRelationshipType, "xl/vbaProject.bin", issues);
     }
 
     private static bool TryFindWorkbookPart(
