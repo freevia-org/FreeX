@@ -38,8 +38,7 @@ public sealed class SetDataValidationCommand : IWorkbookCommand
         if (!Enum.IsDefined(_rule.AlertStyle))
             return new CommandOutcome(false, "Data validation alert style is not supported.");
 
-        var idx = sheet.DataValidations.FindIndex(r =>
-            r.Id == _rule.Id || r.AppliesTo == _rule.AppliesTo);
+        var idx = FindDataValidationReplacementIndex(sheet, _rule);
         if (idx >= 0)
         {
             _previous = sheet.DataValidations[idx];
@@ -60,7 +59,7 @@ public sealed class SetDataValidationCommand : IWorkbookCommand
 
         if (_previous is not null)
         {
-            var idx = sheet.DataValidations.FindIndex(r => r.Id == _rule.Id);
+            var idx = FindDataValidationIndex(sheet, _rule.Id);
             if (idx >= 0)
                 sheet.DataValidations[idx] = _previous;
         }
@@ -69,6 +68,13 @@ public sealed class SetDataValidationCommand : IWorkbookCommand
             sheet.DataValidations.RemoveAll(r => r.Id == _rule.Id);
         }
     }
+
+    private static int FindDataValidationReplacementIndex(Sheet sheet, DataValidation rule) =>
+        sheet.DataValidations.FindIndex(existing =>
+            existing.Id == rule.Id || existing.AppliesTo == rule.AppliesTo);
+
+    private static int FindDataValidationIndex(Sheet sheet, Guid ruleId) =>
+        sheet.DataValidations.FindIndex(rule => rule.Id == ruleId);
 }
 
 /// <summary>
