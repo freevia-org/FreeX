@@ -69,12 +69,28 @@ public sealed class SetDataValidationCommand : IWorkbookCommand
         }
     }
 
-    private static int FindDataValidationReplacementIndex(Sheet sheet, DataValidation rule) =>
-        sheet.DataValidations.FindIndex(existing =>
-            existing.Id == rule.Id || existing.AppliesTo == rule.AppliesTo);
+    private static int FindDataValidationReplacementIndex(Sheet sheet, DataValidation rule)
+    {
+        for (var i = 0; i < sheet.DataValidations.Count; i++)
+        {
+            var existing = sheet.DataValidations[i];
+            if (existing.Id == rule.Id || existing.AppliesTo == rule.AppliesTo)
+                return i;
+        }
 
-    private static int FindDataValidationIndex(Sheet sheet, Guid ruleId) =>
-        sheet.DataValidations.FindIndex(rule => rule.Id == ruleId);
+        return -1;
+    }
+
+    private static int FindDataValidationIndex(Sheet sheet, Guid ruleId)
+    {
+        for (var i = 0; i < sheet.DataValidations.Count; i++)
+        {
+            if (sheet.DataValidations[i].Id == ruleId)
+                return i;
+        }
+
+        return -1;
+    }
 }
 
 /// <summary>
