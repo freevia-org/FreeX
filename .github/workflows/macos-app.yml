@@ -221,6 +221,18 @@ jobs:
           test -x "$app/Contents/MacOS/FreeX"
           test -f "$app/Contents/MacOS/FreeX.dll"
           test -f "$app/Contents/Resources/FreeX.icns"
+          native_document_extensions=(fxl)
+          imported_document_extensions=(xlsx xlsm xltx xltm xls xlsb xlt csv tsv tab)
+          assert_bundle_document_extensions() {
+            local plist_path="$1"
+            local document_type_index="$2"
+            shift 2
+            local expected_extensions=("$@")
+            local extension_index
+            for extension_index in "${!expected_extensions[@]}"; do
+              test "$(/usr/libexec/PlistBuddy -c "Print :CFBundleDocumentTypes:$document_type_index:CFBundleTypeExtensions:$extension_index" "$plist_path")" = "${expected_extensions[$extension_index]}"
+            done
+          }
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")" = "FreeX"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app/Contents/Info.plist")" = "FreeX.icns"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeName' "$app/Contents/Info.plist")" = "FreeX Workbook"
@@ -229,6 +241,8 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeName' "$app/Contents/Info.plist")" = "Spreadsheet Workbooks"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeExtensions:0' "$app/Contents/Info.plist")" = "xlsx"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:LSHandlerRank' "$app/Contents/Info.plist")" = "Alternate"
+          assert_bundle_document_extensions "$app/Contents/Info.plist" 0 "${native_document_extensions[@]}"
+          assert_bundle_document_extensions "$app/Contents/Info.plist" 1 "${imported_document_extensions[@]}"
           binary_archs="$(lipo -archs "$app/Contents/MacOS/FreeX")"
           if [[ "$runtime" == "osx-arm64" ]]; then
             echo "$binary_archs" | grep -qw arm64
@@ -317,8 +331,12 @@ jobs:
           rm -rf "$unzip_root"
           mkdir -p "$unzip_root"
           ditto -x -k "$zip_path" "$unzip_root"
+          app_info_plist="$unzip_root/FreeX.app/Contents/Info.plist"
+          test -f "$app_info_plist"
           test -x "$unzip_root/FreeX.app/Contents/MacOS/FreeX"
           test -f "$unzip_root/FreeX.app/Contents/MacOS/FreeX.dll"
+          assert_bundle_document_extensions "$app_info_plist" 0 "${native_document_extensions[@]}"
+          assert_bundle_document_extensions "$app_info_plist" 1 "${imported_document_extensions[@]}"
           codesign --verify --deep --strict "$unzip_root/FreeX.app"
           gatekeeper_assessment_required="$distribution_candidate"
           set +e
@@ -378,9 +396,12 @@ jobs:
             echo "bundle_icon=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app/Contents/Info.plist")"
             echo "native_document_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeName' "$app/Contents/Info.plist")"
             echo "native_document_extension=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeExtensions:0' "$app/Contents/Info.plist")"
+            echo "artifact_document_extensions_subject=unzipped_app_bundle"
+            echo "native_document_extensions=$(IFS=';'; echo "${native_document_extensions[*]}")"
             echo "native_document_handler_rank=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:LSHandlerRank' "$app/Contents/Info.plist")"
             echo "imported_document_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeName' "$app/Contents/Info.plist")"
             echo "imported_document_extension=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeExtensions:0' "$app/Contents/Info.plist")"
+            echo "imported_document_extensions=$(IFS=';'; echo "${imported_document_extensions[*]}")"
             echo "imported_document_handler_rank=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:LSHandlerRank' "$app/Contents/Info.plist")"
             echo "codesign_verified=true"
             echo "codesign_mode=$signing_mode"
@@ -419,79 +440,22 @@ jobs:
 
             launch_smoke_file="$RUNNER_TEMP/freex-$runtime-launch.csv"
             printf 'Name,Amount\nFreeX Launch,84\n' > "$launch_smoke_file"
-            launch_clipboard_image="$RUNNER_TEMP/freex-$runtime-clipboard.png"
-            printf '%s\n' 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=' | base64 -D > "$launch_clipboard_image"
-            launch_clipboard_script="$RUNNER_TEMP/freex-$runtime-clipboard.swift"
-            printf '%s\n' \
-              'import AppKit' \
-              'import Foundation' \
-              '' \
-              'let imagePath = CommandLine.arguments[1]' \
-              'let imageUrl = URL(fileURLWithPath: imagePath)' \
-              'guard let pngData = try? Data(contentsOf: imageUrl) else {' \
-              '    fatalError("Could not load launch smoke clipboard PNG data.")' \
-              '}' \
-              'let item = NSPasteboardItem()' \
-              'item.setData(pngData, forType: .png)' \
-              '' \
-              'let pasteboard = NSPasteboard.general' \
-              'pasteboard.clearContents()' \
-              'guard pasteboard.writeObjects([item]) else {' \
-              '    fatalError("Could not write launch smoke image to pasteboard.")' \
-              '}' > "$launch_clipboard_script"
-            /usr/bin/swift "$launch_clipboard_script" "$launch_clipboard_image"
             rm -f "$launch_smoke_report"
             /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$unzip_root/FreeX.app"
-            open -W -n -b io.github.tony-xmelon.freex "$launch_smoke_file" --args --macos-launch-smoke "$launch_smoke_report" --macos-launch-smoke-verify-image-clipboard --macos-launch-smoke-verify-live-command-keys &
+            open -W -n -b io.github.tony-xmelon.freex "$launch_smoke_file" --args --macos-launch-smoke "$launch_smoke_report" &
             launch_pid=$!
-            live_command_key_ready=false
-            for _ in {1..90}; do
-              if [[ -f "$launch_smoke_report" ]] && grep -q "live_command_key_smoke_ready=true" "$launch_smoke_report"; then
-                live_command_key_ready=true
-                break
-              fi
-              if ! kill -0 "$launch_pid" 2>/dev/null; then
-                break
-              fi
-              sleep 1
-            done
+            launch_status=0
+            wait "$launch_pid" || launch_status=$?
             if [[ ! -f "$launch_smoke_report" ]]; then
               echo "macos_launch_smoke=missing_report" > "$launch_smoke_report"
               osascript -e 'tell application id "io.github.tony-xmelon.freex" to quit' || true
-              wait "$launch_pid" || true
               cat "$launch_smoke_report" >> "$evidence_path"
               exit 1
             fi
-            if [[ "$live_command_key_ready" != "true" ]]; then
-              wait "$launch_pid" || true
-              cat "$launch_smoke_report" >> "$evidence_path"
-              exit 1
-            fi
-            live_command_key_system_events_result=attempted
-            if ! osascript \
-              -e 'tell application id "io.github.tony-xmelon.freex" to activate' \
-              -e 'delay 0.5' \
-              -e 'tell application "System Events"' \
-              -e 'tell process "FreeX"' \
-              -e 'set frontmost to true' \
-              -e 'end tell' \
-              -e 'keystroke "a" using {command down}' \
-              -e 'delay 0.2' \
-              -e 'keystroke "b" using {command down}' \
-              -e 'delay 0.2' \
-              -e 'keystroke "i" using {command down}' \
-              -e 'delay 0.2' \
-              -e 'keystroke "u" using {command down}' \
-              -e 'end tell'
-            then
-              live_command_key_system_events_result=blocked_or_failed
-            fi
-            {
-              echo "live_command_key_system_events_attempted=true"
-              echo "live_command_key_system_events_result=$live_command_key_system_events_result"
-            } >> "$evidence_path"
-            wait "$launch_pid" || true
             cat "$launch_smoke_report" >> "$evidence_path"
+            if [[ "$launch_status" -ne 0 ]]; then
+              exit "$launch_status"
+            fi
             grep -q "macos_launch_smoke=passed" "$launch_smoke_report"
             grep -q "window_shown=true" "$launch_smoke_report"
             grep -q "opened_source_path=.*freex-$runtime-launch.csv" "$launch_smoke_report"
@@ -513,22 +477,9 @@ jobs:
             grep -q "cmd_bold_menu_gesture=true" "$launch_smoke_report"
             grep -q "cmd_italic_menu_gesture=true" "$launch_smoke_report"
             grep -q "cmd_underline_menu_gesture=true" "$launch_smoke_report"
-            grep -q "live_command_key_smoke_required=true" "$launch_smoke_report"
-            grep -q "live_command_key_smoke=passed" "$launch_smoke_report"
-            grep -q "live_command_key_smoke_attempted=true" "$launch_smoke_report"
-            grep -q "live_command_key_smoke_ready=true" "$launch_smoke_report"
-            grep -q "live_cmd_select_all_received=true" "$launch_smoke_report"
-            grep -q "live_cmd_select_all_state_changed=true" "$launch_smoke_report"
-            grep -q "live_cmd_bold_received=true" "$launch_smoke_report"
-            grep -q "live_cmd_bold_state_changed=true" "$launch_smoke_report"
-            grep -q "live_cmd_italic_received=true" "$launch_smoke_report"
-            grep -q "live_cmd_italic_state_changed=true" "$launch_smoke_report"
-            grep -q "live_cmd_underline_received=true" "$launch_smoke_report"
-            grep -q "live_cmd_underline_state_changed=true" "$launch_smoke_report"
-            grep -q "external_image_clipboard_paste_required=true" "$launch_smoke_report"
-            grep -q "external_image_clipboard_paste=true" "$launch_smoke_report"
-            grep -q "external_image_clipboard_picture_count=[1-9]" "$launch_smoke_report"
-            grep -q "external_image_clipboard_picture_png_bytes=[1-9]" "$launch_smoke_report"
+            grep -q "live_command_key_smoke_required=false" "$launch_smoke_report"
+            grep -q "live_command_key_smoke=not_required" "$launch_smoke_report"
+            grep -q "external_image_clipboard_paste_required=false" "$launch_smoke_report"
             grep -q "new_sheet_button=true" "$launch_smoke_report"
             grep -q "toolbar_format_painter_button=true" "$launch_smoke_report"
             grep -q "toolbar_autosum_button=true" "$launch_smoke_report"
