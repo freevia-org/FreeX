@@ -42,7 +42,7 @@ public sealed class ConfigurePivotTableLayoutCommand : IWorkbookCommand
         if (pivotTable is null)
             return CommandGuards.RejectPivotTableNotFound();
         if (_dataFields.Count == 0)
-            return new CommandOutcome(false, "PivotTable requires at least one data field.");
+            return CommandGuards.RejectPivotTableRequiresDataField();
 
         _snapshot = PivotLayoutSnapshot.Capture(pivotTable);
         _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);

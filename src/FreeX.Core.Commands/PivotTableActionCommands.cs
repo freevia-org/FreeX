@@ -24,7 +24,7 @@ public sealed class RenamePivotTableCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (string.IsNullOrWhiteSpace(_newName))
-            return new CommandOutcome(false, "PivotTable name is required.");
+            return CommandGuards.RejectPivotTableNameRequired();
 
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)
@@ -243,7 +243,7 @@ public sealed class MovePivotTableCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (_targetStart.Sheet != _sheetId)
-            return new CommandOutcome(false, "PivotTable target range must be on the target sheet.");
+            return CommandGuards.RejectPivotTableTargetRangeOnTargetSheet();
 
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)

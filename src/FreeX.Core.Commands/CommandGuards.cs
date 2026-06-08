@@ -9,6 +9,11 @@ internal static class CommandGuards
     private const string StructuredTableNotFoundMessage = "Table was not found.";
     private const string SourceSheetNotFoundMessage = "Source sheet was not found.";
     private const string TargetSheetNotFoundMessage = "Target sheet was not found.";
+    private const string PivotTableNameRequiredMessage = "PivotTable name is required.";
+    private const string PivotTableTargetRangeOnTargetSheetMessage = "PivotTable target range must be on the target sheet.";
+    private const string PivotTableSourceRangeRequiresHeadersMessage = "PivotTable source range must include headers and data.";
+    private const string PivotTableFieldIndexOutsideSourceRangeMessage = "PivotTable field index is outside the source range.";
+    private const string PivotTableRequiresDataFieldMessage = "PivotTable requires at least one data field.";
 
     public static CommandOutcome? RejectIfProtected(Sheet sheet)
     {
@@ -41,6 +46,21 @@ internal static class CommandGuards
 
     public static CommandOutcome RejectPivotTableNotFound() =>
         new(false, PivotTableNotFoundMessage);
+
+    public static CommandOutcome RejectPivotTableNameRequired() =>
+        new(false, PivotTableNameRequiredMessage);
+
+    public static CommandOutcome RejectPivotTableTargetRangeOnTargetSheet() =>
+        new(false, PivotTableTargetRangeOnTargetSheetMessage);
+
+    public static CommandOutcome RejectPivotTableSourceRangeRequiresHeaders() =>
+        new(false, PivotTableSourceRangeRequiresHeadersMessage);
+
+    public static CommandOutcome RejectPivotTableFieldIndexOutsideSourceRange() =>
+        new(false, PivotTableFieldIndexOutsideSourceRangeMessage);
+
+    public static CommandOutcome RejectPivotTableRequiresDataField() =>
+        new(false, PivotTableRequiresDataFieldMessage);
 
     public static CommandOutcome RejectStructuredTableNotFound() =>
         new(false, StructuredTableNotFoundMessage);
