@@ -226,6 +226,82 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         result.CombinedOutput.Should().Contain("at least two Format Cells style roundtrip confirmations");
     }
 
+    [Theory]
+    [InlineData("macos_launch_smoke=passed", "macos_launch_smoke=failed", "macos_launch_smoke=passed")]
+    [InlineData("opened_source_path=/tmp/freex-osx-arm64-open-with.csv", "opened_source_path=/tmp/freex-osx-arm64-launch.csv", "freex-osx-arm64-open-with\\.csv")]
+    public void ReadinessPreflight_FailsWhenOpenWithSmokeEvidenceIsStaleOrWeakened(
+        string oldValue,
+        string newValue,
+        string expectedNeedle)
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false);
+        ReplaceInFile(GetRuntimeArtifactPath(arm64, names => names.OpenWithSmoke), oldValue, newValue);
+
+        var result = RunPreflight(temp.Path);
+
+        AssertPreflightRejected(result, "osx-arm64 Open-With smoke", expectedNeedle);
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenDefaultOpenSmokeUsesAppOverride()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false);
+        ReplaceInFile(
+            GetRuntimeArtifactPath(arm64, names => names.DefaultOpenSmoke),
+            "launchservices_default_open_app_override=false",
+            "launchservices_default_open_app_override=true");
+
+        var result = RunPreflight(temp.Path);
+
+        AssertPreflightRejected(
+            result,
+            "osx-arm64 .fxl default-open boundary",
+            "launchservices_default_open_app_override=false");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenDefaultOpenSmokeOmitsCiLaunchServicesBoundary()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false);
+        RemoveLinesContaining(
+            GetRuntimeArtifactPath(arm64, names => names.DefaultOpenSmoke),
+            "launchservices_default_open_boundary=");
+
+        var result = RunPreflight(temp.Path);
+
+        AssertPreflightRejected(
+            result,
+            "osx-arm64 .fxl default-open boundary",
+            "launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click");
+    }
+
+    [Theory]
+    [InlineData("live_command_key_smoke=passed", "live_command_key_smoke=failed", "live_command_key_smoke=passed")]
+    [InlineData("live_cmd_select_all_state_changed=true", "live_cmd_select_all_state_changed=false", "live_cmd_select_all_state_changed=true")]
+    [InlineData("live_cmd_bold_state_changed=true", "live_cmd_bold_state_changed=false", "live_cmd_bold_state_changed=true")]
+    [InlineData("live_cmd_italic_state_changed=true", "live_cmd_italic_state_changed=false", "live_cmd_italic_state_changed=true")]
+    [InlineData("live_cmd_underline_state_changed=true", "live_cmd_underline_state_changed=false", "live_cmd_underline_state_changed=true")]
+    public void ReadinessPreflight_FailsWhenCommandKeySmokeEvidenceIsStaleOrWeakened(
+        string oldValue,
+        string newValue,
+        string expectedNeedle)
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false);
+        ReplaceInFile(GetRuntimeArtifactPath(arm64, names => names.LaunchSmoke), oldValue, newValue);
+
+        var result = RunPreflight(temp.Path);
+
+        AssertPreflightRejected(result, "osx-arm64 command key smoke", expectedNeedle);
+    }
+
     [Fact]
     public void ReadinessPreflight_FailsWhenChecksumDoesNotMatchZip()
     {
@@ -609,6 +685,25 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         var text = File.ReadAllText(path);
         text.Should().Contain(oldValue);
         File.WriteAllText(path, text.Replace(oldValue, newValue));
+    }
+
+    private static void RemoveLinesContaining(string path, string value)
+    {
+        var lines = File.ReadAllLines(path);
+        lines.Should().Contain(line => line.Contains(value, StringComparison.Ordinal));
+        File.WriteAllLines(path, lines.Where(line => !line.Contains(value, StringComparison.Ordinal)));
+    }
+
+    private static string GetRuntimeArtifactPath(SyntheticBundle bundle, Func<RuntimeArtifactNames, string> selectName) =>
+        Path.Combine(bundle.BundleDirectory, selectName(RuntimeArtifactNames.For(bundle.Runtime)));
+
+    private static void AssertPreflightRejected(PowerShellResult result, params string[] expectedNeedles)
+    {
+        result.ExitCode.Should().NotBe(0);
+        foreach (var needle in expectedNeedles)
+        {
+            result.CombinedOutput.Should().Contain(needle);
+        }
     }
 
     private sealed record SyntheticBundle(
