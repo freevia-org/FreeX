@@ -138,13 +138,13 @@ public sealed class SubtotalCommand : IWorkbookCommand
         List<CellAddress> affected)
     {
         if (!ApplyInsertions(ctx, plan.GroupRows, affected))
-            return new CommandOutcome(false, "Could not insert subtotal row.");
+            return CommandGuards.RejectCouldNotInsertSubtotalRow();
 
         if (_summaryBelowData)
             AddPlannedPageBreaks(sheet, plan);
 
         if (!ApplyInsertAndEdit(ctx, plan.GrandTotalRow, affected))
-            return new CommandOutcome(false, "Could not insert subtotal row.");
+            return CommandGuards.RejectCouldNotInsertSubtotalRow();
 
         if (!_summaryBelowData)
             AddPlannedPageBreaks(sheet, plan);
