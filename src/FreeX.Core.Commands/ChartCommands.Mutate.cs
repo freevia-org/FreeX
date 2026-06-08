@@ -27,8 +27,7 @@ public sealed class ChangePivotChartTypeCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } pivotProtectedOutcome)
             return pivotProtectedOutcome;
 
-        var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is null)
+        if (!ChartCommandGuards.TryFindChart(sheet, _chartId, out var chart))
             return ChartCommandGuards.PivotChartNotFound();
         if (!chart.IsPivotChart || string.IsNullOrWhiteSpace(chart.PivotTableName))
             return ChartCommandGuards.SelectedChartIsNotPivotChart();
@@ -47,8 +46,7 @@ public sealed class ChangePivotChartTypeCommand : IWorkbookCommand
         if (_previousType is null || _previousFirstColIsCategories is null)
             return;
 
-        var chart = ctx.GetSheet(_sheetId).Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is null)
+        if (!ChartCommandGuards.TryFindChart(ctx.GetSheet(_sheetId), _chartId, out var chart))
             return;
 
         chart.Type = _previousType.Value;
@@ -81,8 +79,7 @@ public sealed class SetChartStyleCommand : IWorkbookCommand
         if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is null)
+        if (!ChartCommandGuards.TryFindChart(sheet, _chartId, out var chart))
             return ChartCommandGuards.ChartNotFound();
 
         _previousChartStyleId = chart.ChartStyleId;
@@ -96,8 +93,7 @@ public sealed class SetChartStyleCommand : IWorkbookCommand
         if (!_applied)
             return;
 
-        var chart = ctx.GetSheet(_sheetId).Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is null)
+        if (!ChartCommandGuards.TryFindChart(ctx.GetSheet(_sheetId), _chartId, out var chart))
             return;
 
         chart.ChartStyleId = _previousChartStyleId;
@@ -137,8 +133,7 @@ public sealed class ChangeChartTypeCommand : IWorkbookCommand
         if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is null)
+        if (!ChartCommandGuards.TryFindChart(sheet, _chartId, out var chart))
             return ChartCommandGuards.ChartNotFound();
         if (chart.IsPivotChart)
             return ChartCommandGuards.SelectedChartIsPivotChart();
@@ -161,8 +156,7 @@ public sealed class ChangeChartTypeCommand : IWorkbookCommand
         if (_previousType is null || _previousFirstColIsCategories is null)
             return;
 
-        var chart = ctx.GetSheet(_sheetId).Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is null)
+        if (!ChartCommandGuards.TryFindChart(ctx.GetSheet(_sheetId), _chartId, out var chart))
             return;
 
         chart.Type = _previousType.Value;
@@ -223,8 +217,7 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
         if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is null)
+        if (!ChartCommandGuards.TryFindChart(sheet, _chartId, out var chart))
             return ChartCommandGuards.ChartNotFound();
         if (chart.IsPivotChart)
             return ChartCommandGuards.SelectedChartIsPivotChart();
@@ -254,8 +247,7 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
         if (_previousDataRange is null || _previousFirstRowIsHeader is null || _previousFirstColIsCategories is null)
             return;
 
-        var chart = ctx.GetSheet(_sheetId).Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is null)
+        if (!ChartCommandGuards.TryFindChart(ctx.GetSheet(_sheetId), _chartId, out var chart))
             return;
 
         chart.DataRange = _previousDataRange.Value;
