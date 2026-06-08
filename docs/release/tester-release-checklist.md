@@ -12,6 +12,7 @@ Use this checklist before promoting a tester build beyond internal validation. P
 - MSIX package was signed with the release certificate when signing secrets were configured; otherwise unsigned MSIX publication was accepted for this internal tester build.
 - GitHub release was published with the expected tester stream from `release/progress.json`.
 - Latest `.exe` and MSIX download links were checked from the published release.
+- If the workflow was dispatched with `prerelease=true`, direct release assets were checked from that release because GitHub's `releases/latest` redirect remains on the latest non-prerelease build.
 
 ## Public-Preview Accessibility Gate
 

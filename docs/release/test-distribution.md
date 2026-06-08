@@ -15,7 +15,7 @@
 
 ## Phase 4 Release Channel
 
-Latest tester downloads:
+Stable latest non-prerelease tester downloads:
 
 https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.exe
 
@@ -27,12 +27,12 @@ https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos
 
 Latest verified tester release:
 
-- Release: [FreeX (Test Release) v0.8.96](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-96-2026-06-08-10-13-38-run96-attempt1%2B9cd4f40e)
-- Tag: `v0-8-96-2026-06-08-10-13-38-run96-attempt1+9cd4f40e`
-- GitHub Actions run: [27130409777](https://github.com/tony-xmelon/FreeX/actions/runs/27130409777), run number 96 attempt 1, completed successfully
-- Target commit: `9cd4f40ecb37c5b91e953459243808bf256c9355`
-- Release posture: internal-only latest tester build; not a public-preview candidate because live keyboard-only, screen-reader, and known-issues accessibility gate evidence was not recorded
-- Asset check: stable latest `.exe`, `.exe.sha256`, MSIX, and MSIX checksum assets were published by the workflow after successful hosted release-gate verification. macOS release assets are attached by later tester-release dispatches when `include_macos_preview=true` and a successful matching `macOS App Preview` run exists for the release commit.
+- Release: [FreeX (Test Release) v0.8.105](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-105-2026-06-08-16-50-57-run105-attempt1%2B7adb8728)
+- Tag: `v0-8-105-2026-06-08-16-50-57-run105-attempt1+7adb8728`
+- GitHub Actions run: [27152044459](https://github.com/tony-xmelon/FreeX/actions/runs/27152044459), run number 105 attempt 1, completed successfully
+- Target commit: `7adb872810e38ff92b37e2aa92672707e4d71191`
+- Release posture: internal-only tester pre-release; not a public-preview candidate because live keyboard-only, screen-reader, and known-issues accessibility gate evidence was not recorded
+- Asset check: versioned Windows `.exe`, stable-name Windows `.exe`, versioned MSIX, stable-name MSIX, and matching checksum assets were published by the workflow after successful hosted release-gate verification. This dispatch used `include_macos_preview=false`, so macOS assets were not attached to v0.8.105. Because v0.8.105 is a prerelease, GitHub's `releases/latest` redirect remains on the latest non-prerelease tester build.
 
 The `Tester Release` GitHub Actions workflow runs repository preflight, restore, build, the default test lane, and the UI test lane before publishing a framework-dependent single-file Windows x64 `.exe` plus an MSIX package. When `include_macos_preview=true`, it also finds or uses the requested successful `macOS App Preview` run for the same commit, downloads both runtime app artifacts, and attaches stable macOS internal-preview assets to the same GitHub Release. It uses normal .NET restore/build caching and parallelism for speed, preserves `default-tests.trx` and `ui-tests.trx` results for every run, including failed release-gate attempts, then uploads both versioned artifacts produced by `tools/Publish-UserTestBuild.ps1` and stable latest assets:
 
@@ -112,7 +112,7 @@ GitHub-hosted macOS runners can produce downloadable macOS app artifacts without
 - `freex-<run-id>-<run-attempt>-osx-x64-macos-app`
 - `freex-<run-id>-<run-attempt>-macos-release-assets` for distribution-candidate dispatches
 
-Each download is a GitHub Actions artifact wrapper. Preserve the `freex-<run-id>-<run-attempt>-<runtime>-macos-app` and `freex-<run-id>-<run-attempt>-macos-release-assets` wrapper directory names under the artifact root. Preserve the `freex-<run-id>-<run-attempt>-macos-release-assets` wrapper directory name under the artifact root for distribution-candidate dispatches, then use the inner app ZIP, checksum, tester instructions, evidence file, smoke logs, release manifest, and release instructions. Do not flatten wrapper contents directly into the artifact root; the Windows evidence validator uses wrapper names to detect duplicate stale downloads, split or stale release-assets manifests/instructions, mixed runtime runs, and expected run identity mismatches. Internal-preview workflow outputs can also be bundled into the normal `Tester Release` GitHub Release when `include_macos_preview=true`; the tester-release workflow preserves the same-commit guard before attaching `FreeX-latest-macos-arm64.zip`, `FreeX-latest-macos-x64.zip`, matching checksum files, and per-runtime instruction/evidence files. Distribution-candidate dispatches also run a guarded publication job that prepares stable GitHub Release assets and uploads the macOS release-assets artifact.
+Each download is a GitHub Actions artifact wrapper. Preserve the `freex-<run-id>-<run-attempt>-<runtime>-macos-app` wrapper directory names under the artifact root. For distribution-candidate dispatches, also follow this stricter rule: Preserve the `freex-<run-id>-<run-attempt>-<runtime>-macos-app` and `freex-<run-id>-<run-attempt>-macos-release-assets` wrapper directory names under the artifact root, then use the inner app ZIP, checksum, tester instructions, evidence file, smoke logs, release manifest, and release instructions. Do not flatten wrapper contents directly into the artifact root; the Windows evidence validator uses wrapper names to detect duplicate stale downloads, split or stale release-assets manifests/instructions, mixed runtime runs, and expected run identity mismatches. Internal-preview workflow outputs can also be bundled into the normal `Tester Release` GitHub Release when `include_macos_preview=true`; the tester-release workflow preserves the same-commit guard before attaching `FreeX-latest-macos-arm64.zip`, `FreeX-latest-macos-x64.zip`, matching checksum files, and per-runtime instruction/evidence files. Distribution-candidate dispatches also run a guarded publication job that prepares stable GitHub Release assets and uploads the macOS release-assets artifact.
 
 Signed and internal ad-hoc outputs use the same artifact names. Treat `codesign_mode=ad-hoc` or a skipped notarization status as internal preview evidence only. External distribution requires `codesign_mode=developer-id`, `notarization_status=accepted`, `stapler_validated=true`, and a release-asset publication path.
 
