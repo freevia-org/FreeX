@@ -173,6 +173,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceDataValidations.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertAdditionalDataValidationTypesReloaded(reloaded.GetSheetAt(0));
     }
 
     [Fact]
@@ -302,6 +306,23 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Contain("C2:C5")
             .And
             .Contain("H2:H5");
+    }
+
+    private static void AssertAdditionalDataValidationTypesReloaded(Sheet sheet)
+    {
+        sheet.DataValidations.Should().HaveCount(5);
+        sheet.DataValidations
+            .Select(validation => validation.Type)
+            .Should()
+            .BeEquivalentTo([DvType.Decimal, DvType.Date, DvType.Time, DvType.TextLength, DvType.Custom]);
+
+        var decimalValidation = sheet.DataValidations.Single(validation => validation.Type == DvType.Decimal);
+        decimalValidation.Operator.Should().Be(DvOperator.Between);
+        decimalValidation.Formula1.Should().Be("0");
+        decimalValidation.Formula2.Should().Be("1");
+        decimalValidation.AppliesTo.Should().Be(Range(sheet, 2, 3, 5, 3));
+        decimalValidation.AdditionalRanges.Should().ContainSingle()
+            .Which.Should().Be(Range(sheet, 2, 8, 5, 8));
     }
 
     private static XElement ReadDataValidationsElement(Stream stream)
