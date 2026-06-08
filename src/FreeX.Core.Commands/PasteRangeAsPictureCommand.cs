@@ -52,7 +52,7 @@ public sealed class PasteRangeAsPictureCommand : IWorkbookCommand
             return new CommandOutcome(false, "Picture anchor must be on the target sheet.");
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (PictureCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
         sheet.Pictures.Add(_picture);

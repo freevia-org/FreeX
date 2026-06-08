@@ -20,12 +20,11 @@ public sealed class SetPictureAltTextCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (PictureCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var picture = sheet.Pictures.FirstOrDefault(item => item.Id == _pictureId);
-        if (picture is null)
-            return new CommandOutcome(false, "Picture was not found.");
+        if (!PictureCommandGuards.TryFindPicture(sheet, _pictureId, out var picture))
+            return PictureCommandGuards.PictureNotFound();
 
         picture.AltText = _change.Apply(picture.AltText);
         return new CommandOutcome(true, AffectedCells: [picture.Anchor]);
