@@ -103,7 +103,8 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("freex-<runtime>-macos-evidence.txt");
         source.Should().Contain("shasum -a 256 -c freex-<runtime>-macos-app.zip.sha256");
         source.Should().Contain("open `FreeX.app`");
-        source.Should().Contain("Human validation of Finder open, Gatekeeper prompts, basic workbook workflows");
+        source.Should().Contain("open a `.fxl` document without an app override as CI-verifiable default-open evidence");
+        source.Should().Contain("Human validation of Finder double-click open, Gatekeeper prompts, basic workbook workflows");
         source.Should().Contain("codesign_mode");
         source.Should().Contain("notarization_status");
         source.Should().Contain("stapler_validated");
