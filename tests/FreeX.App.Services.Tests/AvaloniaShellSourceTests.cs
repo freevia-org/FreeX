@@ -2254,6 +2254,92 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_SetsCompactDialogVoiceOverNamesAndHelpText()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var markers = new[]
+        {
+            "AutomationProperties.SetName(rangeText, \"Subtotal range\");",
+            "AutomationProperties.SetHelpText(rangeText, \"Shows the selected range for subtotaling.\");",
+            "AutomationProperties.SetName(groupColumnBox, \"At each change in\");",
+            "AutomationProperties.SetHelpText(groupColumnBox, \"Choose the column used to group subtotal rows.\");",
+            "AutomationProperties.SetName(functionBox, \"Use function\");",
+            "AutomationProperties.SetHelpText(functionBox, \"Choose the subtotal calculation function.\");",
+            "AutomationProperties.SetName(columnsPanel, \"Add subtotal to\");",
+            "AutomationProperties.SetHelpText(columnsPanel, \"Columns that receive subtotal calculations.\");",
+            "AutomationProperties.SetName(replaceBox, \"Replace current subtotals\");",
+            "AutomationProperties.SetHelpText(replaceBox, \"Replace existing subtotals before applying new ones.\");",
+            "AutomationProperties.SetName(pageBreakBox, \"Page break between groups\");",
+            "AutomationProperties.SetHelpText(pageBreakBox, \"Insert a page break after each subtotal group.\");",
+            "AutomationProperties.SetName(summaryBelowBox, \"Summary below data\");",
+            "AutomationProperties.SetHelpText(summaryBelowBox, \"Place summary rows below the grouped data.\");",
+            "AutomationProperties.SetName(errorText, \"Subtotal validation\");",
+            "AutomationProperties.SetHelpText(errorText, \"Shows Subtotal validation messages.\");",
+            "AutomationProperties.SetName(rangeText, \"Remove Duplicates range\");",
+            "AutomationProperties.SetHelpText(rangeText, \"Shows the selected range checked for duplicates.\");",
+            "AutomationProperties.SetName(hasHeadersBox, \"My data has headers\");",
+            "AutomationProperties.SetHelpText(hasHeadersBox, \"Treat the first row as headers when comparing duplicates.\");",
+            "AutomationProperties.SetName(columnsPanel, \"Columns\");",
+            "AutomationProperties.SetHelpText(columnsPanel, \"Columns used to identify duplicate rows.\");",
+            "AutomationProperties.SetName(selectAllButton, \"Select All\");",
+            "AutomationProperties.SetHelpText(selectAllButton, \"Select all columns for duplicate comparison.\");",
+            "AutomationProperties.SetName(unselectAllButton, \"Unselect All\");",
+            "AutomationProperties.SetHelpText(unselectAllButton, \"Clear all selected duplicate comparison columns.\");",
+            "AutomationProperties.SetName(errorText, \"Remove Duplicates validation\");",
+            "AutomationProperties.SetHelpText(errorText, \"Shows Remove Duplicates validation messages.\");",
+            "AutomationProperties.SetName(inPlaceButton, \"Filter in-place\");",
+            "AutomationProperties.SetHelpText(inPlaceButton, \"Filter the list range without copying results.\");",
+            "AutomationProperties.SetName(copyToAnotherLocationButton, \"Copy to another location\");",
+            "AutomationProperties.SetHelpText(copyToAnotherLocationButton, \"Copy filtered rows to the Copy to range.\");",
+            "AutomationProperties.SetName(uniqueBox, \"Unique records only\");",
+            "AutomationProperties.SetHelpText(uniqueBox, \"Return only unique matching records.\");",
+            "AutomationProperties.SetName(errorText, \"Advanced Filter validation\");",
+            "AutomationProperties.SetHelpText(errorText, \"Shows Advanced Filter readiness and validation messages.\");",
+            "AutomationProperties.SetName(errorText, \"Goal Seek validation\");",
+            "AutomationProperties.SetHelpText(errorText, \"Shows Goal Seek input validation messages.\");",
+            "AutomationProperties.SetHelpText(summaryBlock, \"Shows the Goal Seek result status.\");",
+            "AutomationProperties.SetName(restoreButton, \"Restore Original Values\");",
+            "AutomationProperties.SetHelpText(restoreButton, \"Undo the Goal Seek result and restore the original changing cell value.\");",
+            "AutomationProperties.SetName(keepButton, \"Keep Result\");",
+            "AutomationProperties.SetHelpText(keepButton, \"Keep the applied Goal Seek result in the workbook.\");",
+            "AutomationProperties.SetName(statusText, \"Scenario Manager status\");",
+            "AutomationProperties.SetHelpText(statusText, \"Shows Scenario Manager availability and status.\");",
+            "AutomationProperties.SetName(selectionText, \"Scenario Manager selection\");",
+            "AutomationProperties.SetHelpText(selectionText, \"Shows the current selection saved into new scenarios.\");",
+            "AutomationProperties.SetHelpText(scenarioList, \"Select a saved scenario.\");",
+            "AutomationProperties.SetName(scenarioDetailsText, \"Scenario details\");",
+            "AutomationProperties.SetHelpText(scenarioDetailsText, \"Shows details for the selected scenario.\");",
+            "AutomationProperties.SetName(saveButton, \"Save/Add\");",
+            "AutomationProperties.SetHelpText(saveButton, \"Save the selected cells as a new or updated scenario.\");",
+            "AutomationProperties.SetName(showButton, \"Show\");",
+            "AutomationProperties.SetHelpText(showButton, \"Apply the selected scenario values to the workbook.\");",
+            "AutomationProperties.SetName(deleteButton, \"Delete\");",
+            "AutomationProperties.SetHelpText(deleteButton, \"Delete the selected scenario.\");",
+            "AutomationProperties.SetName(summaryButton, \"Summary Report\");",
+            "AutomationProperties.SetHelpText(summaryButton, \"Create a scenario summary report sheet.\");",
+            "AutomationProperties.SetHelpText(closeButton, \"Close Scenario Manager.\");",
+            "AutomationProperties.SetName(rangeText, \"Data Table range\");",
+            "AutomationProperties.SetHelpText(rangeText, \"Shows the selected range used for the Data Table.\");",
+            "AutomationProperties.SetName(errorText, \"Data Table validation\");",
+            "AutomationProperties.SetHelpText(errorText, \"Shows Data Table readiness and validation messages.\");",
+            "AutomationProperties.SetName(sourceRangeText, \"Forecast source range\");",
+            "AutomationProperties.SetHelpText(sourceRangeText, \"Shows the selected source range for the forecast.\");",
+            "AutomationProperties.SetName(errorText, \"Forecast Sheet validation\");",
+            "AutomationProperties.SetHelpText(errorText, \"Shows Forecast Sheet readiness and validation messages.\");",
+            "AutomationProperties.SetName(formula1Box, formula1Label.Text);",
+            "\"List source range or comma-separated values.\"",
+            "\"Minimum value for the validation rule.\"",
+            "\"Value for the validation rule.\"",
+            "AutomationProperties.SetName(textBox, title);",
+            "AutomationProperties.SetHelpText(textBox, $\"Read-only {title} text.\");",
+            "AutomationProperties.SetHelpText(closeButton, $\"Close {title}.\");",
+        };
+
+        foreach (var marker in markers)
+            source.Should().Contain(marker);
+    }
+
+    [Fact]
     public void MainWindow_WiresNativeReviewMenuThroughSharedWorkflowPlanAndNavigation()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
