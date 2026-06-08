@@ -38,7 +38,7 @@ public sealed class ZoomDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        var checkedPreset = _presetButtons.FirstOrDefault(button => button.IsChecked == true);
+        var checkedPreset = FindCheckedPresetButton();
         if (checkedPreset is not null)
         {
             checkedPreset.Focus();
@@ -84,10 +84,7 @@ public sealed class ZoomDialog : Window
             return;
         }
 
-        var selectedPreset = _presetButtons
-            .Where(button => button.IsChecked == true)
-            .Select(button => button.Tag?.ToString())
-            .FirstOrDefault();
+        var selectedPreset = GetSelectedPresetText();
         var input = selectedPreset ?? _zoomBox.Text;
         if (!TryCreateResult(input, out var result, out var error))
         {
@@ -99,6 +96,25 @@ public sealed class ZoomDialog : Window
 
         Result = result;
         DialogResult = true;
+    }
+
+    private RadioButton? FindCheckedPresetButton()
+    {
+        foreach (var button in _presetButtons)
+        {
+            if (button.IsChecked == true)
+            {
+                return button;
+            }
+        }
+
+        return null;
+    }
+
+    private string? GetSelectedPresetText()
+    {
+        var selectedPreset = FindCheckedPresetButton();
+        return selectedPreset?.Tag?.ToString();
     }
 
     private UIElement CreateZoomContent(int currentZoomPercent)
