@@ -245,6 +245,54 @@ public sealed class GitHubWorkflowPreflightTests
     }
 
     [Fact]
+    public void MacOsAppWorkflow_AggregatesPreviewEvidenceFromCurrentRunArtifacts()
+    {
+        var workflow = ReadMacOsAppWorkflow();
+        var aggregateJob = ExtractRequiredYamlBlock(workflow, "macos-preview-readiness:");
+
+        aggregateJob.Should().Contain("needs: macos-app");
+        aggregateJob.Should().Contain("runs-on: ubuntu-latest");
+        aggregateJob.Should().Contain("timeout-minutes: 15");
+        aggregateJob.Should().Contain("actions: read");
+        aggregateJob.Should().Contain("contents: read");
+
+        var checkoutStep = ExtractRequiredYamlBlock(aggregateJob, "- name: Checkout");
+        checkoutStep.Should().Contain("uses: actions/checkout@v6");
+        checkoutStep.Should().Contain("persist-credentials: false");
+
+        var downloadStep = ExtractRequiredYamlBlock(aggregateJob, "- name: Download macOS preview artifacts");
+        downloadStep.Should().Contain("uses: actions/download-artifact@v7");
+        downloadStep.Should().Contain("pattern: freex-${{ github.run_id }}-${{ github.run_attempt }}-osx-*-macos-*");
+        downloadStep.Should().Contain("path: artifacts/macos-preview-evidence");
+        downloadStep.Should().Contain("merge-multiple: false");
+
+        var readinessStep = ExtractRequiredYamlBlock(aggregateJob, "- name: Validate aggregate readiness");
+        readinessStep.Should().Contain("tools/Test-MacOsPublicPreviewReadiness.ps1");
+        readinessStep.Should().Contain("\"-ExpectedRunId\", $env:GITHUB_RUN_ID");
+        readinessStep.Should().Contain("\"-ExpectedRunAttempt\", $env:GITHUB_RUN_ATTEMPT");
+        readinessStep.Should().Contain("\"-RequireSeparateDiagnosticsArtifact\"");
+        readinessStep.Should().Contain("$arguments += \"-DistributionCandidate\"");
+
+        var manifestStep = ExtractRequiredYamlBlock(aggregateJob, "- name: Write aggregate manifest");
+        manifestStep.Should().Contain("GH_TOKEN: ${{ github.token }}");
+        manifestStep.Should().Contain("gh api \"repos/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID/artifacts?per_page=100\"");
+        manifestStep.Should().Contain("app_artifact_digest = $artifactDigestByName[$appArtifactName]");
+        manifestStep.Should().Contain("diagnostics_artifact_digest = $artifactDigestByName[$diagnosticsArtifactName]");
+        manifestStep.Should().Contain("schema = \"io.github.tony-xmelon.freex.macos-preview-readiness.v1\"");
+        manifestStep.Should().Contain("source_artifact_pattern = \"freex-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-osx-*-macos-*\"");
+        manifestStep.Should().Contain("\"artifact_channel\"");
+        manifestStep.Should().Contain("\"distribution_readiness\"");
+        manifestStep.Should().Contain("\"smoke_status\"");
+
+        var uploadStep = ExtractRequiredYamlBlock(aggregateJob, "- name: Upload aggregate readiness");
+        uploadStep.Should().Contain("uses: actions/upload-artifact@v7");
+        uploadStep.Should().Contain("name: freex-${{ github.run_id }}-${{ github.run_attempt }}-macos-preview-readiness");
+        uploadStep.Should().Contain("path: artifacts/macos-preview-readiness/*");
+        uploadStep.Should().Contain("if-no-files-found: error");
+        uploadStep.Should().Contain("retention-days: 14");
+    }
+
+    [Fact]
     public void GitHubWorkflowPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
         var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory("Test-GitHubWorkflows.ps1");

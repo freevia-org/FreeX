@@ -1033,6 +1033,192 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  macos-preview-readiness:
+    name: Aggregate macOS preview evidence
+    needs: macos-app
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download macOS preview artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: freex-${{ github.run_id }}-${{ github.run_attempt }}-osx-*-macos-*
+          path: artifacts/macos-preview-evidence
+          merge-multiple: false
+
+      - name: Validate aggregate readiness
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Set-StrictMode -Version Latest
+
+          $artifactRoot = Join-Path $env:GITHUB_WORKSPACE "artifacts/macos-preview-evidence"
+          $arguments = @(
+            "-ArtifactRoot", $artifactRoot,
+            "-ExpectedRunId", $env:GITHUB_RUN_ID,
+            "-ExpectedRunAttempt", $env:GITHUB_RUN_ATTEMPT,
+            "-RequireSeparateDiagnosticsArtifact"
+          )
+          if ("${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}" -eq "true") {
+            $arguments += "-DistributionCandidate"
+          }
+
+          & (Join-Path $env:GITHUB_WORKSPACE "tools/Test-MacOsPublicPreviewReadiness.ps1") @arguments
+
+      - name: Write aggregate manifest
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          Set-StrictMode -Version Latest
+
+          $artifactRoot = Join-Path $env:GITHUB_WORKSPACE "artifacts/macos-preview-evidence"
+          $outputRoot = Join-Path $env:GITHUB_WORKSPACE "artifacts/macos-preview-readiness"
+          Remove-Item -LiteralPath $outputRoot -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
+
+          $artifactDigestByName = @{}
+          $artifactRows = @(gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID/artifacts?per_page=100" --jq '.artifacts[] | [.name, (.digest // "")] | @tsv')
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to query current run artifacts."
+          }
+
+          foreach ($row in $artifactRows) {
+            $parts = $row -split "`t", 2
+            if ($parts.Count -eq 2 -and -not [string]::IsNullOrWhiteSpace($parts[0])) {
+              $artifactDigestByName[$parts[0]] = $parts[1]
+            }
+          }
+
+          function Get-LatestEvidenceMarkers {
+            param(
+              [Parameter(Mandatory = $true)][string]$Path,
+              [Parameter(Mandatory = $true)][string[]]$Keys
+            )
+
+            $markers = [ordered]@{}
+            $lines = @(Get-Content -LiteralPath $Path)
+            foreach ($key in $Keys) {
+              $value = $null
+              $escapedKey = [System.Text.RegularExpressions.Regex]::Escape($key)
+              foreach ($line in $lines) {
+                $match = [System.Text.RegularExpressions.Regex]::Match($line, "^$escapedKey=(.*)$")
+                if ($match.Success) {
+                  $value = $match.Groups[1].Value
+                }
+              }
+
+              $markers[$key] = $value
+            }
+
+            return $markers
+          }
+
+          $markerKeys = @(
+            "github_run_id",
+            "github_run_attempt",
+            "artifact_channel",
+            "distribution_candidate",
+            "distribution_readiness",
+            "smoke_status",
+            "codesign_mode",
+            "notarization_status",
+            "stapler_validated",
+            "gatekeeper_assessment_status",
+            "gatekeeper_assessment_source",
+            "zip_sha256"
+          )
+
+          $runtimeEntries = @()
+          foreach ($runtime in @("osx-arm64", "osx-x64")) {
+            $appArtifactName = "freex-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-$runtime-macos-app"
+            $diagnosticsArtifactName = "freex-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-$runtime-macos-diagnostics"
+            $appDirectory = Join-Path $artifactRoot $appArtifactName
+            $diagnosticsDirectory = Join-Path $artifactRoot $diagnosticsArtifactName
+            if (-not (Test-Path -LiteralPath $appDirectory -PathType Container)) {
+              throw "Downloaded app artifact wrapper was not found: $appArtifactName"
+            }
+            if (-not (Test-Path -LiteralPath $diagnosticsDirectory -PathType Container)) {
+              throw "Downloaded diagnostics artifact wrapper was not found: $diagnosticsArtifactName"
+            }
+
+            $zipPath = Join-Path $appDirectory "freex-$runtime-macos-app.zip"
+            $checksumPath = Join-Path $appDirectory "freex-$runtime-macos-app.zip.sha256"
+            $evidencePath = Join-Path $appDirectory "freex-$runtime-macos-evidence.txt"
+            $zipSha256 = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            $checksumText = (Get-Content -LiteralPath $checksumPath -Raw).Trim()
+            $evidenceMarkers = Get-LatestEvidenceMarkers -Path $evidencePath -Keys $markerKeys
+
+            $runtimeEntries += [ordered]@{
+              runtime = $runtime
+              app_artifact = $appArtifactName
+              app_artifact_digest = $artifactDigestByName[$appArtifactName]
+              diagnostics_artifact = $diagnosticsArtifactName
+              diagnostics_artifact_digest = $artifactDigestByName[$diagnosticsArtifactName]
+              zip_sha256 = $zipSha256
+              checksum_file = $checksumText
+              evidence_file = "freex-$runtime-macos-evidence.txt"
+              evidence_markers = $evidenceMarkers
+            }
+          }
+
+          $manifest = [ordered]@{
+            schema = "io.github.tony-xmelon.freex.macos-preview-readiness.v1"
+            repository = $env:GITHUB_REPOSITORY
+            workflow = $env:GITHUB_WORKFLOW
+            run_id = $env:GITHUB_RUN_ID
+            run_attempt = $env:GITHUB_RUN_ATTEMPT
+            commit = $env:GITHUB_SHA
+            generated_at_utc = (Get-Date).ToUniversalTime().ToString("o")
+            source_artifact_pattern = "freex-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-osx-*-macos-*"
+            readiness_script = "tools/Test-MacOsPublicPreviewReadiness.ps1"
+            require_separate_diagnostics_artifact = $true
+            runtimes = $runtimeEntries
+          }
+
+          $manifestPath = Join-Path $outputRoot "macos-preview-readiness-manifest.json"
+          $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding ascii
+
+          $summaryLines = @(
+            "macos_preview_readiness=passed",
+            "run_id=$env:GITHUB_RUN_ID",
+            "run_attempt=$env:GITHUB_RUN_ATTEMPT",
+            "source_artifact_pattern=freex-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-osx-*-macos-*"
+          )
+          foreach ($entry in $runtimeEntries) {
+            $summaryLines += "runtime=$($entry.runtime)"
+            $summaryLines += "app_artifact=$($entry.app_artifact)"
+            $summaryLines += "app_artifact_digest=$($entry.app_artifact_digest)"
+            $summaryLines += "diagnostics_artifact=$($entry.diagnostics_artifact)"
+            $summaryLines += "diagnostics_artifact_digest=$($entry.diagnostics_artifact_digest)"
+            $summaryLines += "zip_sha256=$($entry.zip_sha256)"
+            $summaryLines += "artifact_channel=$($entry.evidence_markers.artifact_channel)"
+            $summaryLines += "distribution_readiness=$($entry.evidence_markers.distribution_readiness)"
+            $summaryLines += "smoke_status=$($entry.evidence_markers.smoke_status)"
+          }
+
+          Set-Content -LiteralPath (Join-Path $outputRoot "macos-preview-readiness-summary.txt") -Value $summaryLines -Encoding ascii
+
+      - name: Upload aggregate readiness
+        uses: actions/upload-artifact@v7
+        with:
+          name: freex-${{ github.run_id }}-${{ github.run_attempt }}-macos-preview-readiness
+          path: artifacts/macos-preview-readiness/*
+          if-no-files-found: error
+          retention-days: 14
+
   publish-distribution-candidate:
     name: Publish macOS distribution candidate
     needs: macos-app
