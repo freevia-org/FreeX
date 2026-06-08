@@ -27,9 +27,15 @@ public sealed class MacOsPlanningReadinessPreflightTests
         combined.Should().Contain("ApplyDataValidationToSelectedRange");
         combined.Should().Contain("ClearSelectedRangeDataValidation");
         combined.Should().Contain("DataValidationPreviewPlanner");
+        combined.Should().Contain("Native Share Sheet Integration Plan");
+        combined.Should().Contain("WorkbookShareActionPlanner");
+        combined.Should().Contain("WorkbookShareActionSurface");
+        combined.Should().Contain("NSSharingServicePicker");
+        combined.Should().Contain("GitHub-hosted macOS runners can build the app and prove that the menu route, saved-path preconditions, and fallback evidence stay wired");
 
         portPlan.Should().Contain("format_cells_style_roundtrip_count");
         portPlan.Should().Contain("tools/Test-MacOsPublicPreviewReadiness.ps1");
+        portPlan.Should().Contain("real macOS validation required for the interactive share sheet itself");
         portPlan.Should().Contain("Public distribution still needs");
         portPlan.Should().Contain("Human macOS proof is still needed");
         portPlan.Should().Contain("keyboard-only");
