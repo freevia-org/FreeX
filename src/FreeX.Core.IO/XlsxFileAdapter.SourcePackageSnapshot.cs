@@ -403,6 +403,7 @@ public sealed partial class XlsxFileAdapter
         private const string PivotCacheRecordsRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords";
         private const string CommentsRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
         private const string VmlDrawingRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
+        private const string TableRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table";
         private const string SingleCellTableRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableSingleCells";
         private const string RdRichValueRelationshipType = "http://schemas.microsoft.com/office/2017/06/relationships/rdRichValue";
         private const string RdRichValueStructureRelationshipType = "http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueStructure";
@@ -2302,23 +2303,16 @@ public sealed partial class XlsxFileAdapter
             if (!chart.IsPivotChart)
                 return true;
 
-            if (string.IsNullOrWhiteSpace(chart.PivotTableName) ||
+            var pivotTableName = chart.PivotTableName;
+            if (string.IsNullOrWhiteSpace(pivotTableName) ||
                 chart.PivotCacheId is not { } pivotCacheId)
             {
                 return false;
             }
 
-            var sourceSheetName = string.IsNullOrWhiteSpace(chart.PivotSourceSheetName)
-                ? chartSheet.Name
-                : chart.PivotSourceSheetName;
-            var sourceSheet = FindSheetByName(workbook, sourceSheetName);
-            if (sourceSheet is null)
-                return false;
-
-            var pivot = FindPivotTableByName(sourceSheet, chart.PivotTableName);
+            var pivot = FindPivotTableByChartSource(workbook, chartSheet, chart, pivotTableName, pivotCacheId);
             return pivot is not null &&
-                   pivot.CacheId == pivotCacheId &&
-                   workbook.PivotCaches.Any(cache => cache.CacheId == pivotCacheId);
+                   WorkbookContainsPivotCache(workbook, pivotCacheId);
         }
 
         private static bool SheetHasPatchUnsafeDrawingObjects(Sheet sheet)
@@ -2669,12 +2663,10 @@ public sealed partial class XlsxFileAdapter
             if (relationshipsRoot is null)
                 return false;
 
-            var drawingRelationship = relationshipsRoot
-                .Elements(packageRelNs + "Relationship")
-                .SingleOrDefault(candidate =>
-                    string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal) &&
-                    string.Equals(candidate.Attribute("Type")?.Value, DrawingRelationshipType, StringComparison.OrdinalIgnoreCase) &&
-                    candidate.Attribute("TargetMode") is null);
+            var drawingRelationship = FindInternalRelationshipByIdAndType(
+                relationshipsRoot.Elements(packageRelNs + "Relationship"),
+                relationshipId,
+                DrawingRelationshipType);
             var drawingTarget = drawingRelationship?.Attribute("Target")?.Value;
             if (string.IsNullOrWhiteSpace(drawingTarget))
                 return false;
@@ -3384,21 +3376,71 @@ public sealed partial class XlsxFileAdapter
             string relationshipType,
             out string target)
         {
-            var relationship = relationships.SingleOrDefault(candidate =>
-                string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal) &&
-                string.Equals(candidate.Attribute("Type")?.Value, relationshipType, StringComparison.OrdinalIgnoreCase) &&
-                candidate.Attribute("TargetMode") is null);
+            var relationship = FindInternalRelationshipByIdAndType(relationships, relationshipId, relationshipType);
             target = relationship?.Attribute("Target")?.Value ?? "";
             return !string.IsNullOrWhiteSpace(target);
         }
+
+        private static XElement? FindInternalRelationshipByIdAndType(
+            IEnumerable<XElement> relationships,
+            string relationshipId,
+            string relationshipType) =>
+            relationships.SingleOrDefault(relationship =>
+                RelationshipHasId(relationship, relationshipId) &&
+                RelationshipHasType(relationship, relationshipType) &&
+                RelationshipHasInternalTarget(relationship));
+
+        private static XElement? FindRelationshipByIdAndType(
+            IEnumerable<XElement> relationships,
+            string relationshipId,
+            string relationshipType) =>
+            relationships.SingleOrDefault(relationship =>
+                RelationshipHasId(relationship, relationshipId) &&
+                RelationshipHasType(relationship, relationshipType));
+
+        private static bool RelationshipHasId(XElement relationship, string relationshipId) =>
+            string.Equals(relationship.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal);
+
+        private static bool RelationshipHasType(XElement relationship, string relationshipType) =>
+            string.Equals(relationship.Attribute("Type")?.Value, relationshipType, StringComparison.OrdinalIgnoreCase);
+
+        private static bool RelationshipHasInternalTarget(XElement relationship) =>
+            relationship.Attribute("TargetMode") is null;
 
         private static Sheet? FindSheetByName(Workbook workbook, string sheetName) =>
             workbook.Sheets.FirstOrDefault(sheet =>
                 string.Equals(sheet.Name, sheetName, StringComparison.OrdinalIgnoreCase));
 
+        private static PivotTableModel? FindPivotTableByChartSource(
+            Workbook workbook,
+            Sheet chartSheet,
+            ChartModel chart,
+            string pivotTableName,
+            int pivotCacheId)
+        {
+            var sourceSheetName = GetFirstNonBlankPivotSourceSheetName(chart, chartSheet);
+            var sourceSheet = FindSheetByName(workbook, sourceSheetName);
+            var pivotTable = sourceSheet is null ? null : FindPivotTableByName(sourceSheet, pivotTableName);
+            return PivotTableCacheMatches(pivotTable, pivotCacheId) ? pivotTable : null;
+        }
+
+        private static string GetFirstNonBlankPivotSourceSheetName(ChartModel chart, Sheet chartSheet) =>
+            string.IsNullOrWhiteSpace(chart.PivotSourceSheetName)
+                ? chartSheet.Name
+                : chart.PivotSourceSheetName!;
+
         private static PivotTableModel? FindPivotTableByName(Sheet sheet, string pivotTableName) =>
             sheet.PivotTables.FirstOrDefault(candidate =>
-                string.Equals(candidate.Name, pivotTableName, StringComparison.OrdinalIgnoreCase));
+                PivotTableNameMatches(candidate, pivotTableName));
+
+        private static bool PivotTableNameMatches(PivotTableModel pivotTable, string pivotTableName) =>
+            string.Equals(pivotTable.Name, pivotTableName, StringComparison.OrdinalIgnoreCase);
+
+        private static bool PivotTableCacheMatches(PivotTableModel? pivotTable, int pivotCacheId) =>
+            pivotTable?.CacheId == pivotCacheId;
+
+        private static bool WorkbookContainsPivotCache(Workbook workbook, int pivotCacheId) =>
+            workbook.PivotCaches.Any(cache => cache.CacheId == pivotCacheId);
 
         private static string? ReadFirstEmbeddedImageRelationshipId(XElement pictureElement, XNamespace drawingNs, XNamespace relNs) =>
             pictureElement
@@ -3408,7 +3450,7 @@ public sealed partial class XlsxFileAdapter
 
         private static XElement? FindRelationshipById(IEnumerable<XElement> relationships, string relationshipId) =>
             relationships.FirstOrDefault(element =>
-                string.Equals(element.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal));
+                RelationshipHasId(element, relationshipId));
 
         private static bool TryAddPatchSafeLegacyNoteVmlDrawingPath(
             ZipArchive archive,
@@ -3447,11 +3489,10 @@ public sealed partial class XlsxFileAdapter
             if (relationshipsRoot is null)
                 return false;
 
-            var vmlRelationship = relationshipsRoot
-                .Elements(packageRelNs + "Relationship")
-                .SingleOrDefault(relationship =>
-                    string.Equals(relationship.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal) &&
-                    string.Equals(relationship.Attribute("Type")?.Value, VmlDrawingRelationshipType, StringComparison.OrdinalIgnoreCase));
+            var vmlRelationship = FindRelationshipByIdAndType(
+                relationshipsRoot.Elements(packageRelNs + "Relationship"),
+                relationshipId,
+                VmlDrawingRelationshipType);
             var target = vmlRelationship?.Attribute("Target")?.Value;
             if (string.IsNullOrWhiteSpace(target))
                 return false;
@@ -4217,14 +4258,10 @@ public sealed partial class XlsxFileAdapter
             var seenTablePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var relationshipId in worksheetGuardInfo.TablePartRelationshipIds)
             {
-                var relationship = relationshipsRoot
-                    .Elements(packageRelNs + "Relationship")
-                    .SingleOrDefault(candidate =>
-                        string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal) &&
-                        string.Equals(
-                            candidate.Attribute("Type")?.Value,
-                            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table",
-                            StringComparison.OrdinalIgnoreCase));
+                var relationship = FindRelationshipByIdAndType(
+                    relationshipsRoot.Elements(packageRelNs + "Relationship"),
+                    relationshipId,
+                    TableRelationshipType);
                 var target = relationship?.Attribute("Target")?.Value;
                 if (string.IsNullOrWhiteSpace(target))
                     return true;
@@ -4302,14 +4339,10 @@ public sealed partial class XlsxFileAdapter
                 if (string.IsNullOrWhiteSpace(relationshipId))
                     return true;
 
-                var relationship = relationshipsRoot
-                    .Elements(packageRelNs + "Relationship")
-                    .SingleOrDefault(candidate =>
-                        string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal) &&
-                        string.Equals(
-                            candidate.Attribute("Type")?.Value,
-                            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table",
-                            StringComparison.OrdinalIgnoreCase));
+                var relationship = FindRelationshipByIdAndType(
+                    relationshipsRoot.Elements(packageRelNs + "Relationship"),
+                    relationshipId,
+                    TableRelationshipType);
                 var target = relationship?.Attribute("Target")?.Value;
                 if (string.IsNullOrWhiteSpace(target))
                     return true;
@@ -5717,9 +5750,14 @@ public sealed partial class XlsxFileAdapter
             XNamespace worksheetNs,
             IReadOnlyCollection<string> laterWorksheetElements) =>
             root.Elements()
-                .FirstOrDefault(element =>
-                    element.Name.Namespace == worksheetNs &&
-                    laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
+                .FirstOrDefault(element => IsWorksheetInsertionMarker(element, worksheetNs, laterWorksheetElements));
+
+        private static bool IsWorksheetInsertionMarker(
+            XElement element,
+            XNamespace worksheetNs,
+            IReadOnlyCollection<string> laterWorksheetElements) =>
+            element.Name.Namespace == worksheetNs &&
+            laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal);
 
         private static bool ApplyRowDimension(
             XElement sheetData,
@@ -6870,7 +6908,10 @@ public sealed partial class XlsxFileAdapter
         private static XElement? FindCellByReference(XElement rowElement, XName cellName, string reference) =>
             rowElement
                 .Elements(cellName)
-                .FirstOrDefault(cell => string.Equals(cell.Attribute("r")?.Value, reference, StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefault(cell => CellReferenceMatches(cell, reference));
+
+        private static bool CellReferenceMatches(XElement cell, string reference) =>
+            string.Equals(cell.Attribute("r")?.Value, reference, StringComparison.OrdinalIgnoreCase);
 
         private static void RewriteLiteralCellValue(XElement cell, XNamespace worksheetNs, ScalarValue value)
         {
@@ -8433,13 +8474,28 @@ public sealed partial class XlsxFileAdapter
             string relationshipType,
             out string target)
         {
-            var relationship = relationships.SingleOrDefault(candidate =>
-                string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal) &&
-                string.Equals(candidate.Attribute("Type")?.Value, relationshipType, StringComparison.OrdinalIgnoreCase) &&
-                candidate.Attribute("TargetMode") is null);
+            var relationship = FindInternalRelationshipByIdAndType(relationships, relationshipId, relationshipType);
             target = relationship?.Attribute("Target")?.Value ?? "";
             return !string.IsNullOrWhiteSpace(target);
         }
+
+        private static XElement? FindInternalRelationshipByIdAndType(
+            IEnumerable<XElement> relationships,
+            string relationshipId,
+            string relationshipType) =>
+            relationships.SingleOrDefault(relationship =>
+                RelationshipHasId(relationship, relationshipId) &&
+                RelationshipHasType(relationship, relationshipType) &&
+                RelationshipHasInternalTarget(relationship));
+
+        private static bool RelationshipHasId(XElement relationship, string relationshipId) =>
+            string.Equals(relationship.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal);
+
+        private static bool RelationshipHasType(XElement relationship, string relationshipType) =>
+            string.Equals(relationship.Attribute("Type")?.Value, relationshipType, StringComparison.OrdinalIgnoreCase);
+
+        private static bool RelationshipHasInternalTarget(XElement relationship) =>
+            relationship.Attribute("TargetMode") is null;
     }
 
     private sealed record XlsxChartSourceSheetBaseline(
@@ -8474,15 +8530,12 @@ public sealed partial class XlsxFileAdapter
                 return null;
             }
 
-            var sheetIdsByName = workbook.Sheets.ToDictionary(
-                sheet => sheet.Name,
-                sheet => sheet.Id,
-                StringComparer.OrdinalIgnoreCase);
+            var sheetIdsByName = CreateSheetIdLookup(workbook);
             var rangesBySheet = new Dictionary<SheetId, List<GridRange>>();
             foreach (var cache in workbook.PivotCaches)
             {
                 if (IsPatchUnsafePivotCache(cache) ||
-                    !sheetIdsByName.TryGetValue(cache.SourceSheetName!, out var sourceSheetId))
+                    !TryGetPivotSourceSheetId(sheetIdsByName, cache, out var sourceSheetId))
                 {
                     blockReason = "baseline_pivot_source_model";
                     return null;
@@ -8566,6 +8619,22 @@ public sealed partial class XlsxFileAdapter
             !string.IsNullOrWhiteSpace(cache.SourceTableName) ||
             cache.ConnectionId is not null ||
             cache.IsOlap;
+
+        private static IReadOnlyDictionary<string, SheetId> CreateSheetIdLookup(Workbook workbook) =>
+            workbook.Sheets.ToDictionary(
+                sheet => sheet.Name,
+                sheet => sheet.Id,
+                StringComparer.OrdinalIgnoreCase);
+
+        private static bool TryGetPivotSourceSheetId(
+            IReadOnlyDictionary<string, SheetId> sheetIdsByName,
+            PivotCacheModel cache,
+            out SheetId sourceSheetId)
+        {
+            sourceSheetId = default;
+            return !string.IsNullOrWhiteSpace(cache.SourceSheetName) &&
+                   sheetIdsByName.TryGetValue(cache.SourceSheetName, out sourceSheetId);
+        }
     }
 
     private sealed record XlsxPivotSourceSheetBaseline(
