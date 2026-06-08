@@ -35,6 +35,21 @@ public sealed class StartupWorkbookLoaderTests
     }
 
     [Fact]
+    public async Task Load_WithLocalFileUri_OpensWorkbookThroughSharedAdapters()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "Open With.csv");
+        await File.WriteAllTextAsync(path, "Name,Amount\r\nFreeX,42\r\n");
+
+        var result = new StartupWorkbookLoader().Load([new Uri(path).AbsoluteUri]);
+
+        result.IsFallback.Should().BeFalse();
+        result.SourcePath.Should().Be(Path.GetFullPath(path));
+        result.DisplayName.Should().Be(Path.GetFileName(path));
+        result.Workbook.Sheets.Single().Name.Should().Be("Open With");
+    }
+
+    [Fact]
     public async Task Load_WithUnsupportedPathBeforeSupportedWorkbook_OpensSupportedWorkbook()
     {
         using var temp = new TestTemporaryDirectory();
