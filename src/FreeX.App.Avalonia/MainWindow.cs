@@ -364,6 +364,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _goalSeekMenuItem = new();
     private readonly NativeMenuItem _scenarioManagerMenuItem = new();
     private readonly NativeMenuItem _dataTableMenuItem = new();
+    private readonly NativeMenuItem _forecastSheetMenuItem = new();
     private readonly NativeMenuItem _reviewSummaryMenuItem = new();
     private readonly NativeMenuItem _checkAccessibilityMenuItem = new();
     private readonly NativeMenuItem _nextNoteMenuItem = new();
@@ -724,6 +725,9 @@ public sealed class MainWindow : Window
         _dataTableMenuItem.Header = "Data Table...";
         _dataTableMenuItem.Click += async (_, _) => await ShowDataTableDialogAsync();
 
+        _forecastSheetMenuItem.Header = "Forecast Sheet...";
+        _forecastSheetMenuItem.Click += async (_, _) => await ShowForecastSheetDialogAsync();
+
         _whatIfAnalysisMenuItem.Header = "What-If Analysis";
         _whatIfAnalysisMenuItem.Menu = CreateNativeWhatIfAnalysisMenu();
 
@@ -1023,6 +1027,7 @@ public sealed class MainWindow : Window
         dataMenu.Items.Add(_dataValidationMenuItem);
         dataMenu.Items.Add(new NativeMenuItemSeparator());
         dataMenu.Items.Add(_whatIfAnalysisMenuItem);
+        dataMenu.Items.Add(_forecastSheetMenuItem);
 
         var reviewMenu = new NativeMenu();
         reviewMenu.Items.Add(_reviewSummaryMenuItem);
@@ -1768,6 +1773,7 @@ public sealed class MainWindow : Window
         _goalSeekMenuItem.IsEnabled = isIdle;
         _scenarioManagerMenuItem.IsEnabled = isIdle;
         _dataTableMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1 && _session.SelectedRange.ColCount > 1;
+        _forecastSheetMenuItem.IsEnabled = isIdle;
         _reviewSummaryMenuItem.IsEnabled = isIdle;
         _checkAccessibilityMenuItem.IsEnabled = isIdle;
         _nextNoteMenuItem.IsEnabled = isIdle;
@@ -8162,6 +8168,190 @@ public sealed class MainWindow : Window
     }
 
     private static StackPanel CreateDataTableField(string label, Control control) =>
+        new()
+        {
+            Spacing = 4,
+            Children =
+            {
+                new TextBlock { Text = label },
+                control,
+            },
+        };
+
+    private async Task ShowForecastSheetDialogAsync()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var plan = await ShowForecastSheetInputDialogAsync();
+        if (plan is null)
+            return;
+
+        var sourceRange = FormatRangeReference(plan.SourceRange ?? _session.SelectedRange);
+        var result = _session.ExecuteForecastSheetPlan(plan);
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "Forecast Sheet failed.");
+            return;
+        }
+
+        RefreshShell($"Created Forecast Sheet from {sourceRange}");
+    }
+
+    private async Task<ForecastSheetPlan?> ShowForecastSheetInputDialogAsync()
+    {
+        ForecastSheetPlan? result = null;
+        var dialog = new Window
+        {
+            Title = "Forecast Sheet",
+            Width = 420,
+            Height = 250,
+            MinWidth = 360,
+            MinHeight = 230,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "ForecastSheetCompactDialog");
+
+        var sourceRangeText = new TextBlock
+        {
+            Text = $"Source range: {FormatRangeReference(_session.SelectedRange)}",
+            Foreground = HeaderForeground,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        AutomationProperties.SetAutomationId(sourceRangeText, "ForecastSheetSourceRangeSummaryText");
+
+        var periodsBox = new TextBox
+        {
+            Text = ForecastSheetPlanner.DefaultForecastPeriods.ToString(CultureInfo.InvariantCulture),
+            MinWidth = 160,
+        };
+        AutomationProperties.SetName(periodsBox, "Forecast periods");
+        AutomationProperties.SetAutomationId(periodsBox, "ForecastPeriodsBox");
+        AutomationProperties.SetHelpText(periodsBox, "Enter the positive whole number of periods to forecast.");
+
+        var errorText = new TextBlock
+        {
+            Foreground = Brush(143, 74, 18),
+            TextWrapping = TextWrapping.Wrap,
+        };
+        AutomationProperties.SetAutomationId(errorText, "ForecastSheetErrorText");
+
+        var createButton = new Button
+        {
+            Content = "Create",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(createButton, "ForecastSheetCreateButton");
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(cancelButton, "ForecastSheetCancelButton");
+
+        ForecastSheetPlan CreatePlan() =>
+            ForecastSheetPlanner.CreatePlan(
+                _session.Workbook,
+                _session.SelectedRange,
+                periodsBox.Text);
+
+        void RefreshPlanStatus()
+        {
+            var forecastPlan = CreatePlan();
+            errorText.Text = forecastPlan.IsReady
+                ? forecastPlan.StatusText
+                : FormatForecastSheetPlanError(forecastPlan);
+        }
+
+        void Accept()
+        {
+            var forecastPlan = CreatePlan();
+            if (!forecastPlan.IsReady)
+            {
+                errorText.Text = FormatForecastSheetPlanError(forecastPlan);
+                periodsBox.Focus();
+                periodsBox.SelectAll();
+                return;
+            }
+
+            result = forecastPlan;
+            dialog.Close();
+        }
+
+        createButton.Click += (_, _) => Accept();
+        cancelButton.Click += (_, _) => dialog.Close();
+        periodsBox.TextChanged += (_, _) => RefreshPlanStatus();
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                e.Handled = true;
+                Accept();
+            }
+            else if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                dialog.Close();
+            }
+        };
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 10, 0, 0),
+            Children =
+            {
+                cancelButton,
+                createButton,
+            },
+        };
+        DockPanel.SetDock(buttonRow, Dock.Bottom);
+
+        RefreshPlanStatus();
+        dialog.Content = new DockPanel
+        {
+            Margin = new Thickness(16),
+            Children =
+            {
+                buttonRow,
+                new StackPanel
+                {
+                    Spacing = 10,
+                    Children =
+                    {
+                        sourceRangeText,
+                        CreateForecastSheetField("Forecast periods", periodsBox),
+                        errorText,
+                    },
+                },
+            },
+        };
+        dialog.Opened += (_, _) =>
+        {
+            periodsBox.Focus();
+            periodsBox.SelectAll();
+        };
+
+        await dialog.ShowDialog(this);
+        return result;
+    }
+
+    private static string FormatForecastSheetPlanError(ForecastSheetPlan plan) =>
+        string.IsNullOrWhiteSpace(plan.InvalidText)
+            ? plan.StatusText
+            : $"{plan.StatusText} ({plan.InvalidText})";
+
+    private static StackPanel CreateForecastSheetField(string label, Control control) =>
         new()
         {
             Spacing = 4,

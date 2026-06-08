@@ -1567,6 +1567,84 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_WiresNativeForecastSheetThroughSharedPlannerSessionAndCompactDialog()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
+        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        source.Should().Contain("private readonly NativeMenuItem _forecastSheetMenuItem = new();");
+        source.Should().Contain("_forecastSheetMenuItem.Header = \"Forecast Sheet...\";");
+        source.Should().Contain("_forecastSheetMenuItem.Click += async (_, _) => await ShowForecastSheetDialogAsync();");
+        source.Should().Contain("dataMenu.Items.Add(_forecastSheetMenuItem);");
+        source.Should().Contain("_forecastSheetMenuItem.IsEnabled = isIdle;");
+
+        var whatIfMenuIndex = normalizedSource.IndexOf("dataMenu.Items.Add(_whatIfAnalysisMenuItem);", StringComparison.Ordinal);
+        var forecastSheetMenuIndex = normalizedSource.IndexOf("dataMenu.Items.Add(_forecastSheetMenuItem);", StringComparison.Ordinal);
+        whatIfMenuIndex.Should().BeGreaterThanOrEqualTo(0);
+        forecastSheetMenuIndex.Should().BeGreaterThan(whatIfMenuIndex);
+
+        var whatIfSubmenuIndex = normalizedSource.IndexOf("private NativeMenu CreateNativeWhatIfAnalysisMenu()", StringComparison.Ordinal);
+        whatIfSubmenuIndex.Should().BeGreaterThanOrEqualTo(0);
+        var nextMenuFactoryIndex = normalizedSource.IndexOf("\n    private NativeMenu CreateNativeClearMenu()", whatIfSubmenuIndex, StringComparison.Ordinal);
+        nextMenuFactoryIndex.Should().BeGreaterThan(whatIfSubmenuIndex);
+        var whatIfSubmenuSource = normalizedSource[whatIfSubmenuIndex..nextMenuFactoryIndex];
+        whatIfSubmenuSource.Should().NotContain("_forecastSheetMenuItem");
+
+        source.Should().Contain("private async Task ShowForecastSheetDialogAsync()");
+        source.Should().Contain("if (_isOpening || _isSaving)");
+        source.Should().Contain("if (!TryCommitPendingFormulaEdit())");
+        source.Should().Contain("var plan = await ShowForecastSheetInputDialogAsync();");
+        source.Should().Contain("var sourceRange = FormatRangeReference(plan.SourceRange ?? _session.SelectedRange);");
+        source.Should().Contain("var result = _session.ExecuteForecastSheetPlan(plan);");
+        source.Should().Contain("RefreshShell(_statusText.Text ?? \"Ready\");");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Forecast Sheet failed.\");");
+        source.Should().Contain("RefreshShell($\"Created Forecast Sheet from {sourceRange}\");");
+
+        source.Should().Contain("private async Task<ForecastSheetPlan?> ShowForecastSheetInputDialogAsync()");
+        source.Should().Contain("Title = \"Forecast Sheet\",");
+        source.Should().Contain("Text = $\"Source range: {FormatRangeReference(_session.SelectedRange)}\",");
+        source.Should().Contain("Text = ForecastSheetPlanner.DefaultForecastPeriods.ToString(CultureInfo.InvariantCulture),");
+        source.Should().Contain("AutomationProperties.SetName(periodsBox, \"Forecast periods\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(periodsBox, \"Enter the positive whole number of periods to forecast.\");");
+        source.Should().Contain("Content = \"Create\",");
+        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"ForecastSheetCompactDialog\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(sourceRangeText, \"ForecastSheetSourceRangeSummaryText\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(periodsBox, \"ForecastPeriodsBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(errorText, \"ForecastSheetErrorText\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(createButton, \"ForecastSheetCreateButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"ForecastSheetCancelButton\");");
+        source.Should().Contain("ForecastSheetPlanner.CreatePlan(");
+        source.Should().Contain("_session.Workbook");
+        source.Should().Contain("_session.SelectedRange");
+        source.Should().Contain("periodsBox.Text");
+        source.Should().Contain("_session.ExecuteForecastSheetPlan(plan)");
+        source.Should().Contain("CreateForecastSheetField(\"Forecast periods\", periodsBox)");
+
+        sessionSource.Should().Contain("public WorkbookCellEditResult ExecuteForecastSheetPlan(ForecastSheetPlan plan)");
+
+        var handlerIndex = normalizedSource.IndexOf("private async Task ShowForecastSheetDialogAsync()", StringComparison.Ordinal);
+        handlerIndex.Should().BeGreaterThanOrEqualTo(0);
+        var nextMethodIndex = normalizedSource.IndexOf("\n    private async Task ShowDataValidationDialogAsync()", handlerIndex, StringComparison.Ordinal);
+        nextMethodIndex.Should().BeGreaterThan(handlerIndex);
+        var routeSource = normalizedSource[handlerIndex..nextMethodIndex];
+
+        routeSource.Should().NotContain("new ForecastSheetCommand");
+        routeSource.Should().NotContain("new ForecastSheetDialog");
+        routeSource.Should().NotContain("TryExecuteCommand(");
+        routeSource.Should().NotContain("ForecastSheetInputParser");
+        routeSource.Should().NotContain("FreeX.App.Host");
+        routeSource.Should().NotContain("System.Windows");
+        routeSource.Should().NotContain("WindowInteropHelper");
+        routeSource.Should().NotContain("Microsoft.Win32");
+        routeSource.Should().NotContain("DataTransferManager");
+        routeSource.Should().NotContain("AddSheet(");
+        routeSource.Should().NotContain("SetCell(");
+        routeSource.Should().NotContain("Charts.Add");
+        routeSource.Should().NotContain("LastOrDefault");
+    }
+
+    [Fact]
     public void MainWindow_WiresNativeScenarioManagerThroughSharedPlannerSessionAndCompactDialog()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
