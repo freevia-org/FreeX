@@ -1300,13 +1300,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-print-options-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetPrintOptionsModel(sheet, "generated-worksheet-print-options-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-print-options-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-print-options-001");
         AssertWorksheetPrintOptions(saved, "generated-worksheet-print-options-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetPrintOptionsModel(
+            reloaded.GetSheetAt(0),
+            "worksheet print options model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -2155,6 +2163,12 @@ public partial class XlsxCorpusRunnerTests
         printOptions.Attribute("horizontalCentered")?.Value.Should().NotBe("1", because);
         printOptions.Attribute("verticalCentered")?.Value.Should().NotBe("1", because);
         printOptions.HasElements.Should().BeFalse(because);
+    }
+
+    private static void AssertWorksheetPrintOptionsModel(Sheet sheet, string because)
+    {
+        sheet.PrintOptionsMetadata.Should().NotBeNull(because);
+        BagAttr(sheet.PrintOptionsMetadata, "printOptions", "gridLinesSet").Should().Be("1", because);
     }
 
     private static void AssertWorksheetPageSetupNative(Stream package, string because)
