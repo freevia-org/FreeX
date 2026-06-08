@@ -44,9 +44,14 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
 
             if (cell is null)
             {
-                _snapshot.Add((addr, null, sheet.GetStyleOnly(addr.Row, addr.Col)));
+                var oldStyleOnly = sheet.GetStyleOnly(addr.Row, addr.Col);
+                _snapshot.Add((addr, null, oldStyleOnly));
 
-                var newStyleId = StyleDiffStyleCache.GetOrRegister(ctx.Workbook, _diff, StyleId.Default, styleCache);
+                var newStyleId = StyleDiffStyleCache.GetOrRegister(
+                    ctx.Workbook,
+                    _diff,
+                    oldStyleOnly ?? StyleId.Default,
+                    styleCache);
                 sheet.SetStyleOnly(addr.Row, addr.Col, newStyleId);
             }
             else

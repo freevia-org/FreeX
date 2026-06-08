@@ -147,6 +147,7 @@ public partial class MainWindow
         if (firstEnabledItem is null)
             return;
 
+        FocusManager.SetFocusedElement(menu, firstEnabledItem);
         firstEnabledItem.Focus();
         Keyboard.Focus(firstEnabledItem);
     }

@@ -87,7 +87,7 @@ public partial class XlsxCorpusRunnerTests
         var rows = ReadManifestRows()
             .Where(row => row.SourceType == "public")
             .Where(row => row.ExpectedStatus == "public-pass")
-            .Where(HasExpectedPublicPackageTags)
+            .Where(HasEditStablePublicPackageTags)
             .ToArray();
 
         rows.Should().NotBeEmpty("public package-tag rows prove package-only structures are retained after ordinary model edits");
@@ -185,6 +185,52 @@ public partial class XlsxCorpusRunnerTests
         var act = () => AssertExpectedPublicPackageTags(row, package);
 
         act.Should().Throw<Exception>().WithMessage("*public-chartsheet-probe*");
+    }
+
+    [Fact]
+    public void PublicPackageTags_RejectMacExcelPackageWithoutAppMetadata()
+    {
+        var row = new ManifestRow("public-mac-excel-probe", "", "public", "mac-excel-package", "", "public-pass", "");
+        using var package = CreatePublicPackageTagProbePackage(archive =>
+        {
+            WritePublicPackageTagContentTypes(archive, "");
+            WritePackageEntry(archive, "xl/workbook.xml", PublicWorkbookXml("rIdSheet1"));
+            WritePackageEntry(archive, "xl/_rels/workbook.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdSheet1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+                </Relationships>
+                """);
+            WritePackageEntry(archive, "xl/worksheets/sheet1.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """);
+        });
+
+        var act = () => AssertExpectedPublicPackageTags(row, package);
+
+        act.Should().Throw<Exception>().WithMessage("*public-mac-excel-probe*");
+    }
+
+    [Fact]
+    public void PublicPackageTags_RejectNumbersPackageWithoutSheetXmlTarget()
+    {
+        var row = new ManifestRow("public-numbers-target-probe", "", "public", "numbers-worksheet-target", "", "public-pass", "");
+        using var package = CreatePublicPackageTagProbePackage(archive =>
+        {
+            WritePublicPackageTagContentTypes(archive, "");
+            WritePackageEntry(archive, "xl/workbook.xml", PublicWorkbookXml("rIdSheet1"));
+            WritePackageEntry(archive, "xl/_rels/workbook.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdSheet1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+                </Relationships>
+                """);
+            WritePackageEntry(archive, "xl/worksheets/sheet1.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """);
+        });
+
+        var act = () => AssertExpectedPublicPackageTags(row, package);
+
+        act.Should().Throw<Exception>().WithMessage("*public-numbers-target-probe*");
     }
 
     private static MemoryStream CreatePublicPackageTagProbePackage(Action<ZipArchive> configure)

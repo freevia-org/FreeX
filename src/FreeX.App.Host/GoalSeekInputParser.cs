@@ -1,4 +1,4 @@
-using System.Globalization;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -15,51 +15,38 @@ public static class GoalSeekInputParser
         out GoalSeekDialogInput input,
         out string error)
     {
+        var result = GoalSeekRequestParser.Parse(
+            sheetId,
+            setCellText,
+            targetValueText,
+            changingCellText);
+        if (result.Request is { } request)
+        {
+            input = new GoalSeekDialogInput(request.SetCell, request.TargetValue, request.ChangingCell);
+            error = "";
+            return true;
+        }
+
         input = default!;
-        error = "";
-
-        var setCellInput = setCellText.Trim();
-        if (string.IsNullOrWhiteSpace(setCellInput))
-        {
-            error = UiText.Get("GoalSeek_SetCellRequiredMessage");
-            return false;
-        }
-
-        if (!CellAddress.TryParse(setCellInput, sheetId, out var setCell))
-        {
-            error = UiText.Format("GoalSeek_InvalidCellAddressMessage", setCellInput);
-            return false;
-        }
-
-        var targetInput = targetValueText.Trim();
-        if ((!double.TryParse(targetInput, NumberStyles.Any, CultureInfo.CurrentCulture, out var targetValue) &&
-             !double.TryParse(targetInput, NumberStyles.Any, CultureInfo.InvariantCulture, out targetValue)) ||
-            !double.IsFinite(targetValue))
-        {
-            error = UiText.Format("GoalSeek_InvalidNumberMessage", targetInput);
-            return false;
-        }
-
-        var changingCellInput = changingCellText.Trim();
-        if (string.IsNullOrWhiteSpace(changingCellInput))
-        {
-            error = UiText.Get("GoalSeek_ByChangingCellRequiredMessage");
-            return false;
-        }
-
-        if (!CellAddress.TryParse(changingCellInput, sheetId, out var changingCell))
-        {
-            error = UiText.Format("GoalSeek_InvalidCellAddressMessage", changingCellInput);
-            return false;
-        }
-
-        if (setCell == changingCell)
-        {
-            error = UiText.Get("GoalSeek_CellsMustDifferMessage");
-            return false;
-        }
-
-        input = new GoalSeekDialogInput(setCell, targetValue, changingCell);
-        return true;
+        error = CreateDialogError(result);
+        return false;
     }
+
+    private static string CreateDialogError(GoalSeekRequestParseResult result) =>
+        result.Error switch
+        {
+            GoalSeekRequestParseError.SetCellRequired => UiText.Get("GoalSeek_SetCellRequiredMessage"),
+            GoalSeekRequestParseError.InvalidSetCellAddress => UiText.Format(
+                "GoalSeek_InvalidCellAddressMessage",
+                result.InvalidText),
+            GoalSeekRequestParseError.InvalidTargetValue => UiText.Format(
+                "GoalSeek_InvalidNumberMessage",
+                result.InvalidText),
+            GoalSeekRequestParseError.ChangingCellRequired => UiText.Get("GoalSeek_ByChangingCellRequiredMessage"),
+            GoalSeekRequestParseError.InvalidChangingCellAddress => UiText.Format(
+                "GoalSeek_InvalidCellAddressMessage",
+                result.InvalidText),
+            GoalSeekRequestParseError.CellsMustDiffer => UiText.Get("GoalSeek_CellsMustDifferMessage"),
+            _ => ""
+        };
 }

@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\FreeX.App.Services\FreeX.App.Services.csproj" />
+    <ProjectReference Include="..\FreeX.Core.Calc\FreeX.Core.Calc.csproj" />
+    <ProjectReference Include="..\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />
+    <ProjectReference Include="..\FreeX.Core.IO\FreeX.Core.IO.csproj" />
+    <ProjectReference Include="..\FreeX.Core.Model\FreeX.Core.Model.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.0.4" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.0.4" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.4" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Packaging\macos\FreeX.icns" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <AssemblyName>FreeX</AssemblyName>
+    <ApplicationTitle>FreeX</ApplicationTitle>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>FreeX.App.Avalonia</RootNamespace>
+    <RuntimeIdentifiers>osx-arm64;osx-x64</RuntimeIdentifiers>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>

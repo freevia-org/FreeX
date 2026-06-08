@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Input;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -282,7 +283,11 @@ public sealed partial class SortDialog : Window
 
     private void ApplyColorChoices(SortDialogLevel level)
     {
-        level.SetColorChoices(SortDialogPlanner.BuildColorChoicesForSortOn(level.SortOn, _cellColorChoices, _fontColorChoices));
+        level.SetColorChoices(SortDialogPlanner.BuildColorChoicesForSortOn(
+            level.SortOn,
+            _cellColorChoices,
+            _fontColorChoices,
+            PlannerText));
     }
 
     private void ReplaceLevels(IEnumerable<SortDialogLevel> levels)

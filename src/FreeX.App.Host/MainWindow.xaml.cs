@@ -7,6 +7,7 @@ using FreeX.Core.Calc;
 using FreeX.Core.IO;
 using System.Collections.Generic;
 using System.ComponentModel;
+using FreeX.App.Services;
 using FreeX.App.UI;
 
 namespace FreeX.App.Host;

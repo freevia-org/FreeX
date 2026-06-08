@@ -172,6 +172,41 @@ public sealed class FlashFillCommandTests
     }
 
     [Fact]
+    public void FlashFillCommand_RejectsLockedTargetsOnProtectedSheet()
+    {
+        var (wb, sheet, ctx) = Setup();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("John Smith"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jane Doe"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("John"));
+        sheet.IsProtected = true;
+
+        var cmd = new FlashFillCommand(sheet.Id, fillColIndex: 2, sourceColIndex: 1, startRow: 1, endRow: 2);
+        var outcome = cmd.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.GetValue(2, 2).Should().BeOfType<BlankValue>();
+    }
+
+    [Fact]
+    public void FlashFillCommand_AllowsUnlockedTargetsOnProtectedSheet()
+    {
+        var (wb, sheet, ctx) = Setup();
+        var unlockedStyle = wb.RegisterStyle(new CellStyle { Locked = false });
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("John Smith"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jane Doe"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("John"));
+        sheet.SetStyleOnly(row: 2, col: 2, unlockedStyle);
+        sheet.IsProtected = true;
+
+        var cmd = new FlashFillCommand(sheet.Id, fillColIndex: 2, sourceColIndex: 1, startRow: 1, endRow: 2);
+        var outcome = cmd.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.GetValue(2, 2).Should().Be(new TextValue("Jane"));
+    }
+
+    [Fact]
     public void FlashFillCommand_Revert_RestoresBlankCells()
     {
         var (wb, sheet, ctx) = Setup();

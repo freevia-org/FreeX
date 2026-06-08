@@ -34,7 +34,7 @@ public sealed class ThirdPartyNoticeTests
         licenses.Should().Contain("Apache License");
         licenses.Should().Contain("SharpVectors.Wpf Package License File");
         licenses.Should().Contain("FluentAssertions Package License");
-        audit.Should().Contain("41 unique restored NuGet packages");
+        audit.Should().Contain("66 unique restored NuGet packages");
         audit.Should().Contain("Open Compliance Watch Item");
     }
 
