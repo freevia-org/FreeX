@@ -45,8 +45,7 @@ internal static class XlsxDocumentThumbnailPackageGraphNormalizer
             .Elements(PackageRelationshipNs + "Relationship")
             .Where(IsThumbnailRelationship)
             .ToList();
-        var canonicalRelationship = thumbnailRelationships
-            .FirstOrDefault(relationship => TryResolveValidThumbnailTarget(relationship, archive, out _));
+        var canonicalRelationship = FindCanonicalThumbnailRelationship(thumbnailRelationships, archive);
         string? activeThumbnailPart = null;
 
         foreach (var relationship in thumbnailRelationships)
@@ -179,14 +178,18 @@ internal static class XlsxDocumentThumbnailPackageGraphNormalizer
 
     private static bool HasEffectiveContentType(XElement root, string partName, string contentType)
     {
-        var overrideContentType = root
-            .Elements(ContentTypeNs + "Override")
-            .Where(element => TryNormalizePartName(element.Attribute("PartName")?.Value, out var overridePartName) &&
-                              string.Equals(overridePartName, partName, StringComparison.OrdinalIgnoreCase))
-            .Select(element => element.Attribute("ContentType")?.Value)
-            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
-        if (!string.IsNullOrWhiteSpace(overrideContentType))
-            return string.Equals(overrideContentType, contentType, StringComparison.OrdinalIgnoreCase);
+        foreach (var element in root.Elements(ContentTypeNs + "Override"))
+        {
+            if (!TryNormalizePartName(element.Attribute("PartName")?.Value, out var overridePartName) ||
+                !string.Equals(overridePartName, partName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var overrideContentType = element.Attribute("ContentType")?.Value;
+            if (!string.IsNullOrWhiteSpace(overrideContentType))
+                return string.Equals(overrideContentType, contentType, StringComparison.OrdinalIgnoreCase);
+        }
 
         var extension = Path.GetExtension(partName).TrimStart('.');
         return root
@@ -194,6 +197,19 @@ internal static class XlsxDocumentThumbnailPackageGraphNormalizer
             .Any(element =>
                 string.Equals(element.Attribute("Extension")?.Value, extension, StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(element.Attribute("ContentType")?.Value, contentType, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static XElement? FindCanonicalThumbnailRelationship(
+        IEnumerable<XElement> thumbnailRelationships,
+        ZipArchive archive)
+    {
+        foreach (var relationship in thumbnailRelationships)
+        {
+            if (TryResolveValidThumbnailTarget(relationship, archive, out _))
+                return relationship;
+        }
+
+        return null;
     }
 
     private static bool TryResolveValidThumbnailTarget(
