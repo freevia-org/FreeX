@@ -41,7 +41,7 @@ public sealed class MacOsPlanningReadinessPreflightTests
         portPlan.Should().Contain("Paste Special also handles FreeX-owned copied ranges when every selected target range matches the copied size");
         portPlan.Should().Contain("mismatched or cut-backed multi-range requests still fail explicitly");
         portPlan.Should().Contain("Public distribution still needs");
-        portPlan.Should().Contain("Human macOS proof is still needed");
+        portPlan.Should().Contain("human or local macOS proof is still needed");
         portPlan.Should().Contain("keyboard-only");
         portPlan.Should().Contain("VoiceOver");
         portPlan.Should().NotContain("Data Validation still needs fuller mutation parity beyond Paste Special metadata transfer.");

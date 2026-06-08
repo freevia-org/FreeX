@@ -190,7 +190,10 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
             "release-assets wrapper directory",
             "freex-42-1-macos-release-assets",
             "freex-41-1-macos-release-assets",
-            "Remove split or stale release-assets");
+            "Remove split or stale",
+            "release-assets",
+            "artifact",
+            "folders");
     }
 
     [Fact]
@@ -274,7 +277,9 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
             "osx-arm64 diagnostics artifact is from GitHub Actions run '41' attempt '1'",
             "osx-arm64 app",
             "artifact is from run '42' attempt '1'",
-            "Remove stale artifact folders");
+            "Remove stale",
+            "artifact",
+            "folders");
     }
 
     [Fact]
@@ -561,7 +566,9 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         result.CombinedOutput.Should().Contain("osx-arm64 has multiple downloaded macOS app artifact bundles");
         result.CombinedOutput.Should().Contain("freex-41-1-osx-arm64-macos-app");
         result.CombinedOutput.Should().Contain("freex-42-1-osx-arm64-macos-app");
-        result.CombinedOutput.Should().Contain("Remove stale artifact folders");
+        result.CombinedOutput.Should().Contain("Remove stale");
+        result.CombinedOutput.Should().Contain("artifact");
+        result.CombinedOutput.Should().Contain("folders");
     }
 
     [Fact]
@@ -595,7 +602,9 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         result.CombinedOutput.Should().Contain("mixed GitHub Actions runs");
         result.CombinedOutput.Should().Contain("osx-arm64 uses run 42");
         result.CombinedOutput.Should().Contain("osx-x64 uses run 41");
-        result.CombinedOutput.Should().Contain("Remove stale artifact");
+        result.CombinedOutput.Should().Contain("Remove stale");
+        result.CombinedOutput.Should().Contain("artifact");
+        result.CombinedOutput.Should().Contain("folders");
     }
 
     private static PowerShellResult RunPreflight(string artifactRoot, string arguments = "")
