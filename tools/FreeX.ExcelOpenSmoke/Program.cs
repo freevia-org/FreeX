@@ -17380,7 +17380,8 @@ internal static class ExcelOpenSmoke
                 RequiredFreeXSavedPackageParts =
                 [
                     "docProps/core.xml",
-                    "docProps/app.xml"
+                    "docProps/app.xml",
+                    "docProps/custom.xml"
                 ],
                 RequiredFreeXSavedPackageContentTypes =
                 [
@@ -17389,7 +17390,10 @@ internal static class ExcelOpenSmoke
                         "application/vnd.openxmlformats-package.core-properties+xml"),
                     new(
                         "docProps/app.xml",
-                        "application/vnd.openxmlformats-officedocument.extended-properties+xml")
+                        "application/vnd.openxmlformats-officedocument.extended-properties+xml"),
+                    new(
+                        "docProps/custom.xml",
+                        "application/vnd.openxmlformats-officedocument.custom-properties+xml")
                 ],
                 RequiredFreeXSavedPackageRelationships =
                 [
@@ -17400,7 +17404,11 @@ internal static class ExcelOpenSmoke
                     new(
                         "_rels/.rels",
                         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties",
-                        "docProps/app.xml")
+                        "docProps/app.xml"),
+                    new(
+                        "_rels/.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties",
+                        "docProps/custom.xml")
                 ],
                 RequiredExcelSavedPackageContentTypes =
                 [
@@ -17409,7 +17417,10 @@ internal static class ExcelOpenSmoke
                         "application/vnd.openxmlformats-package.core-properties+xml"),
                     new(
                         "docProps/app.xml",
-                        "application/vnd.openxmlformats-officedocument.extended-properties+xml")
+                        "application/vnd.openxmlformats-officedocument.extended-properties+xml"),
+                    new(
+                        "docProps/custom.xml",
+                        "application/vnd.openxmlformats-officedocument.custom-properties+xml")
                 ],
                 RequiredExcelSavedPackageRelationships =
                 [
@@ -17420,7 +17431,11 @@ internal static class ExcelOpenSmoke
                     new(
                         "_rels/.rels",
                         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties",
-                        "docProps/app.xml")
+                        "docProps/app.xml"),
+                    new(
+                        "_rels/.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties",
+                        "docProps/custom.xml")
                 ]
             };
         }
