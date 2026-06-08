@@ -181,8 +181,16 @@ public sealed class GoToSpecialDialog : Window
     private RadioButton? FirstButton() =>
         _buttons.FirstOrDefault();
 
-    private RadioButton? SelectedButton() =>
-        _buttons.FirstOrDefault(button => button.IsChecked == true);
+    private RadioButton? SelectedButton()
+    {
+        foreach (var button in _buttons)
+        {
+            if (button.IsChecked == true)
+                return button;
+        }
+
+        return null;
+    }
 
     private static bool UsesValueTypeOptions(GoToSpecialKind kind) =>
         kind is GoToSpecialKind.Constants or GoToSpecialKind.Formulas;

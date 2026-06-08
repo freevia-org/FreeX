@@ -64,11 +64,21 @@ public sealed partial class AutoFilterDialog
 
     private bool TryOpenVisibleFilterFamilySubmenu()
     {
-        var filterButton = new[]
-        {
-            _textFiltersButton, _numberFiltersButton, _dateFiltersButton
-        }.FirstOrDefault(button => button.Visibility == Visibility.Visible);
+        var filterButton = FindFirstVisibleFilterFamilyButton();
         return filterButton is not null && TryOpenFilterFamilySubmenu(filterButton);
+    }
+
+    private Button? FindFirstVisibleFilterFamilyButton()
+    {
+        if (_textFiltersButton.Visibility == Visibility.Visible)
+            return _textFiltersButton;
+
+        if (_numberFiltersButton.Visibility == Visibility.Visible)
+            return _numberFiltersButton;
+
+        return _dateFiltersButton.Visibility == Visibility.Visible
+            ? _dateFiltersButton
+            : null;
     }
 
     private bool TryOpenFilterFamilySubmenu(Button filterButton)

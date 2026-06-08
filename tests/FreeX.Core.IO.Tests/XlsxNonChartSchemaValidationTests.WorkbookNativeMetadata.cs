@@ -72,6 +72,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceExtensionList.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        adapter.Load(saved).FileRecoveryProperties.Should().ContainSingle(properties =>
+            properties.AutoRecover == true &&
+            properties.CrashSave == true &&
+            properties.RepairLoad == false);
     }
 
     [Fact]

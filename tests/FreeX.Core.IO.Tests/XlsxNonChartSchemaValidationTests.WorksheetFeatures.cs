@@ -151,6 +151,20 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceTableParts.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        reloadedSheet.GetCell(5, 5)!.Value.Should().Be(new NumberValue(42));
+        var reloadedTable = reloadedSheet.StructuredTables.Should().ContainSingle().Subject;
+        reloadedTable.Name.Should().Be("Table1");
+        reloadedTable.DisplayName.Should().Be("Table1");
+        reloadedTable.Range.ToString().Should().Be("A1:B3");
+        reloadedTable.HasAutoFilter.Should().BeTrue();
+        reloadedTable.StyleName.Should().Be("TableStyleMedium2");
+        reloadedTable.ShowRowStripes.Should().BeTrue();
+        reloadedTable.Columns.Select(column => (column.Id, column.Name))
+            .Should()
+            .Equal((1, "Name"), (2, "Value"));
     }
 
     [Fact]
@@ -485,6 +499,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .BeTrue(blockReason);
 
         var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetOutlineAndFormatModel(sheet);
         sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(42));
 
         using var saved = new MemoryStream();
@@ -497,6 +512,21 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceAutoFilter.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        reloadedSheet.GetCell(5, 2)!.Value.Should().Be(new NumberValue(42));
+        reloadedSheet.AutoFilter.Should().NotBeNull();
+        var reloadedAutoFilter = reloadedSheet.AutoFilter!;
+        reloadedAutoFilter.Reference.Should().Be("A1:B5");
+        reloadedAutoFilter.FilterColumns.Should().HaveCount(2);
+        reloadedAutoFilter.FilterColumns[0].ColumnId.Should().Be(0);
+        reloadedAutoFilter.FilterColumns[0].Values.Should().Equal("North");
+        reloadedAutoFilter.FilterColumns[0].IncludeBlank.Should().BeTrue();
+        reloadedAutoFilter.FilterColumns[1].ColumnId.Should().Be(1);
+        reloadedAutoFilter.FilterColumns[1].CustomFilters.Should().ContainSingle()
+            .Which.Should().Be(new WorksheetAutoFilterCustomFilterModel("greaterThan", "10"));
+        reloadedAutoFilter.FilterColumns[1].CustomFiltersAnd.Should().BeFalse();
     }
 
     [Fact]
@@ -860,6 +890,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
             .Should()
             .BeTrue(blockReason);
+        AssertWorksheetCustomPropertiesModel(workbook.GetSheetAt(0));
 
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
@@ -875,6 +906,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Should()
             .Be(sourceCustomProperties.ToString(SaveOptions.DisableFormatting));
         ReadWorksheetCustomPropertyPartBytes(saved).Should().Equal(sourceCustomPropertyPart);
+
+        saved.Position = 0;
+        var reloadedSheet = new XlsxFileAdapter().Load(saved).GetSheetAt(0);
+        reloadedSheet.GetCell(3, 3)!.Value.Should().Be(new NumberValue(42));
+        AssertWorksheetCustomPropertiesModel(reloadedSheet);
     }
 
     [Fact]
@@ -1101,6 +1137,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
             .Should()
             .BeTrue(blockReason);
+        AssertWorksheetScenariosModel(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
@@ -1115,6 +1152,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceScenarios.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        reloaded.GetSheetAt(0).GetCell(3, 3)!.Value.Should().Be(new NumberValue(42));
+        AssertWorksheetScenariosModel(reloaded);
     }
 
     [Fact]
@@ -1359,6 +1401,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceCalculationProperties.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        reloadedSheet.GetCell(3, 3)!.Value.Should().Be(new NumberValue(42));
+        reloadedSheet.FullCalculationOnLoad.Should().BeTrue();
     }
 
     [Fact]
@@ -1444,6 +1491,24 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceSheetViews.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        var reloadedSheet = reloaded.GetSheetAt(0);
+        reloadedSheet.GetCell(4, 4)!.Value.Should().Be(new NumberValue(42));
+        var reloadedCustomView = reloaded.CustomViews.Should().ContainSingle().Subject;
+        reloadedCustomView.Name.Should().Be("Review");
+        reloadedCustomView.Id.Should().Be("{33333333-3333-3333-3333-333333333333}");
+        var reloadedCustomSheet = reloadedCustomView.Sheets.Should().ContainSingle().Subject;
+        reloadedCustomSheet.SheetName.Should().Be("Data");
+        reloadedCustomSheet.ViewMode.Should().Be(WorksheetViewMode.PageLayout);
+        reloadedCustomSheet.FrozenRows.Should().Be(1);
+        reloadedCustomSheet.FrozenCols.Should().Be(1);
+        reloadedCustomSheet.ShowGridlines.Should().BeFalse();
+        reloadedCustomSheet.ShowHeadings.Should().BeFalse();
+        reloadedCustomSheet.ShowRulers.Should().BeFalse();
+        reloadedCustomSheet.ZoomPercent.Should().Be(125);
+        reloadedCustomSheet.ShowFormulas.Should().BeTrue();
     }
 
     [Fact]
@@ -1590,6 +1655,17 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceSheetViews.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        var reloadedSheet = reloaded.GetSheetAt(0);
+        reloadedSheet.GetCell(4, 4)!.Value.Should().Be(new NumberValue(42));
+        reloaded.AdditionalViews.Should().NotBeNull();
+        reloaded.AdditionalViews!.Views.Should().ContainSingle()
+            .Which.NativeXml.Should().Contain("workbookView");
+        reloadedSheet.AdditionalViews.Should().NotBeNull();
+        reloadedSheet.AdditionalViews!.Views.Should().ContainSingle()
+            .Which.WorkbookViewId.Should().Be("1");
     }
 
     [Fact]
@@ -2230,6 +2306,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
             .Should()
             .BeTrue(blockReason);
+        AssertWorksheetPhoneticPropertiesModel(workbook.GetSheetAt(0));
 
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(42));
@@ -2244,6 +2321,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourcePhoneticProperties.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        reloadedSheet.GetCell(4, 2)!.Value.Should().Be(new NumberValue(42));
+        AssertWorksheetPhoneticPropertiesModel(reloadedSheet);
     }
 
     [Fact]
@@ -2371,6 +2453,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceRow4.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        AssertWorksheetOutlineAndFormatModel(adapter.Load(saved).GetSheetAt(0));
     }
 
     [Fact]
@@ -3301,6 +3386,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     {
         var workbook = new Workbook("AutoFilterPatchSave");
         var sheet = workbook.AddSheet("Data");
+        ApplyWorksheetOutlineAndFormatFixture(sheet);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("North"));
@@ -3936,6 +4022,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         return workbook;
     }
 
+    private static void AssertWorksheetCustomPropertiesModel(Sheet sheet)
+    {
+        sheet.CustomProperties.Should().ContainSingle()
+            .Which.Should().Be(new WorksheetCustomProperty("FreeXModeledProperty", 7));
+    }
+
     private static void SetWorksheetCustomPropertiesInvalidAttributes(MemoryStream stream)
     {
         stream.Position = 0;
@@ -4118,6 +4210,20 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             Locked: true,
             User: "FreeXTest"));
         return workbook;
+    }
+
+    private static void AssertWorksheetScenariosModel(Workbook workbook)
+    {
+        var sheet = workbook.GetSheetAt(0);
+        var scenario = workbook.Scenarios.Should().ContainSingle().Subject;
+        scenario.Name.Should().Be("BestCase");
+        scenario.Comment.Should().Be("Scenario comment");
+        scenario.Hidden.Should().BeTrue();
+        scenario.Locked.Should().BeTrue();
+        scenario.User.Should().Be("FreeXTest");
+        scenario.ChangingCells.Should().Equal(
+            new ScenarioCellValue(new CellAddress(sheet.Id, 1, 1), new NumberValue(42)),
+            new ScenarioCellValue(new CellAddress(sheet.Id, 1, 2), new TextValue("Seattle")));
     }
 
     private static void SetWorksheetScenariosInvalidNativeMetadata(MemoryStream stream)
@@ -4766,6 +4872,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         return workbook;
     }
 
+    private static void AssertWorksheetPhoneticPropertiesModel(Sheet sheet)
+    {
+        sheet.PhoneticProperties.Should().Be(new WorksheetPhoneticProperties("1", "fullwidthKatakana", "center"));
+    }
+
     private static void SetWorksheetPhoneticProperties(
         MemoryStream stream,
         string fontId,
@@ -4840,6 +4951,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var workbook = new Workbook("WorksheetOutlineAndFormatPatchSave");
         var sheet = workbook.AddSheet("Data");
         SeedNumericGrid(sheet);
+        ApplyWorksheetOutlineAndFormatFixture(sheet);
+        return workbook;
+    }
+
+    private static void ApplyWorksheetOutlineAndFormatFixture(Sheet sheet)
+    {
         sheet.DefaultColumnWidth = 10.5;
         sheet.DefaultRowHeight = 24.0;
         sheet.ColumnWidths[2] = 14.25;
@@ -4854,7 +4971,29 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.ShowOutlineSymbols = false;
         sheet.ApplyOutlineStyles = true;
         sheet.SheetFormatMetadata = CreateWorksheetOutlineSheetFormatMetadata();
-        return workbook;
+    }
+
+    private static void AssertWorksheetOutlineAndFormatModel(Sheet sheet)
+    {
+        sheet.DefaultColumnWidth.Should().Be(10.5);
+        sheet.DefaultRowHeight.Should().Be(24.0);
+        sheet.ColumnWidths.Should().ContainKey(2).WhoseValue.Should().Be(14.25);
+        sheet.ColumnWidths.Should().ContainKey(3).WhoseValue.Should().Be(16.5);
+        sheet.RowHeights.Should().ContainKey(3).WhoseValue.Should().Be(28.0);
+        sheet.RowOutlineLevels.Should().ContainKey(3).WhoseValue.Should().Be(1);
+        sheet.RowOutlineLevels.Should().ContainKey(4).WhoseValue.Should().Be(2);
+        sheet.ColOutlineLevels.Should().ContainKey(2).WhoseValue.Should().Be(1);
+        sheet.ColOutlineLevels.Should().ContainKey(3).WhoseValue.Should().Be(2);
+        sheet.OutlineSummaryBelow.Should().BeFalse();
+        sheet.OutlineSummaryRight.Should().BeFalse();
+        sheet.ShowOutlineSymbols.Should().BeFalse();
+        sheet.ApplyOutlineStyles.Should().BeTrue();
+        sheet.SheetFormatMetadata.Should().NotBeNull();
+        sheet.SheetFormatMetadata!.Get("sheetFormatPr")
+            .Should()
+            .Contain("outlineLevelRow=\"2\"")
+            .And
+            .Contain("outlineLevelCol=\"2\"");
     }
 
     private static NativeXmlPreserveBag CreateWorksheetOutlineSheetFormatMetadata()

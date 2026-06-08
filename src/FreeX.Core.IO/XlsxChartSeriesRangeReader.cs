@@ -45,22 +45,34 @@ internal static class XlsxChartSeriesRangeReader
     {
         foreach (var containerName in containerNames)
         {
-            foreach (var formula in series
-                         .Elements()
-                         .FirstOrDefault(element => element.Name.LocalName == containerName)?
-                         .Descendants()
-                         .Where(element => element.Name.LocalName == "f")
-                         .Select(element => element.Value)
-                         .Where(text => !string.IsNullOrWhiteSpace(text))
-                     ?? [])
+            var container = ElementByLocalName(series, containerName);
+            if (container is null)
+                continue;
+
+            foreach (var element in container.Descendants())
             {
+                if (element.Name.LocalName != "f")
+                    continue;
+
+                var formula = element.Value;
+                if (string.IsNullOrWhiteSpace(formula))
+                    continue;
+
                 yield return formula;
             }
         }
     }
 
-    public static XElement? ElementByLocalName(XElement element, string localName) =>
-        element.Elements().FirstOrDefault(child => child.Name.LocalName == localName);
+    public static XElement? ElementByLocalName(XElement element, string localName)
+    {
+        foreach (var child in element.Elements())
+        {
+            if (child.Name.LocalName == localName)
+                return child;
+        }
+
+        return null;
+    }
 
     public static bool HasDescendant(XElement element, string localName) =>
         element.Descendants().Any(descendant => descendant.Name.LocalName == localName);

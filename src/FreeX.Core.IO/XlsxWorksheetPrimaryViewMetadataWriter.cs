@@ -35,8 +35,7 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
                 root.AddFirst(sheetViews);
             }
 
-            var sheetView = sheetViews.Elements(WorksheetNs + "sheetView")
-                .FirstOrDefault(element => string.Equals(element.Attribute("workbookViewId")?.Value ?? "0", "0", StringComparison.Ordinal));
+            var sheetView = FindPrimarySheetView(sheetViews);
             if (sheetView is null)
             {
                 sheetView = new XElement(WorksheetNs + "sheetView", new XAttribute("workbookViewId", "0"));
@@ -70,6 +69,17 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
 
     private static bool IsModeledPrimaryViewElement(string name) =>
         name is "pane" or "selection";
+
+    private static XElement? FindPrimarySheetView(XElement sheetViews)
+    {
+        foreach (var element in sheetViews.Elements(WorksheetNs + "sheetView"))
+        {
+            if (string.Equals(element.Attribute("workbookViewId")?.Value ?? "0", "0", StringComparison.Ordinal))
+                return element;
+        }
+
+        return null;
+    }
 
     private static void TryApplyNativePrimaryViewChild(XElement sheetView, string? childXml)
     {
@@ -119,10 +129,7 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
         if (string.IsNullOrWhiteSpace(nativeActiveCell) || string.IsNullOrWhiteSpace(nativeSelectionRef))
             return;
 
-        var targetSelection = sheetView.Elements(WorksheetNs + "selection")
-            .FirstOrDefault(selection =>
-                string.Equals(selection.Attribute("activeCell")?.Value, nativeActiveCell, StringComparison.Ordinal) &&
-                string.Equals(selection.Attribute("sqref")?.Value, nativeSelectionRef, StringComparison.Ordinal));
+        var targetSelection = FindMatchingSelection(sheetView, nativeActiveCell, nativeSelectionRef);
         if (targetSelection is null)
             return;
 
@@ -133,5 +140,17 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
 
             targetSelection.SetAttributeValue(attribute.Name, attribute.Value);
         }
+    }
+
+    private static XElement? FindMatchingSelection(XElement sheetView, string nativeActiveCell, string nativeSelectionRef)
+    {
+        foreach (var selection in sheetView.Elements(WorksheetNs + "selection"))
+        {
+            if (string.Equals(selection.Attribute("activeCell")?.Value, nativeActiveCell, StringComparison.Ordinal) &&
+                string.Equals(selection.Attribute("sqref")?.Value, nativeSelectionRef, StringComparison.Ordinal))
+                return selection;
+        }
+
+        return null;
     }
 }

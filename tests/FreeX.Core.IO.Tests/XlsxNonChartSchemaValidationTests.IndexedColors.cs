@@ -47,6 +47,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceColors.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        reloaded.IndexedColors.TryGetColor(5, out var blueOverride).Should().BeTrue();
+        blueOverride.Should().Be(CellColor.FromArgb(10, 20, 30));
+        reloaded.IndexedColors.TryGetColor(12, out var orangeOverride).Should().BeTrue();
+        orangeOverride.Should().Be(CellColor.FromArgb(200, 120, 40));
     }
 
     private static Workbook CreateIndexedColorsSourceWorkbook()

@@ -69,6 +69,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .BeTrue(blockReason);
 
         var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetBackgroundImageModel(sheet);
         sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(42));
 
         using var saved = new MemoryStream();
@@ -78,6 +79,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetBackgroundPictureMarkerSanitized(saved);
         ReadWorksheetBackgroundImageBytes(saved).Should().Equal(MinimalPngBytes());
+
+        saved.Position = 0;
+        AssertWorksheetBackgroundImageModel(adapter.Load(saved).GetSheetAt(0));
     }
 
     private static Workbook CreateWorksheetBackgroundImageSourceWorkbook()

@@ -144,8 +144,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
         var changed = MergeMissingAttributes(sourceSheetCalcPr, targetSheetCalcPr, ["fullCalcOnLoad"]);
         foreach (var sourceChild in sourceSheetCalcPr.Elements())
         {
-            var targetChild = targetSheetCalcPr.Elements(sourceChild.Name)
-                .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
+            var targetChild = FindChildByIdentity(targetSheetCalcPr, sourceChild);
             if (targetChild is not null)
             {
                 if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
@@ -182,8 +181,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
         var changed = MergeMissingAttributes(sourcePhoneticPr, targetPhoneticPr, modeledAttributes);
         foreach (var sourceChild in sourcePhoneticPr.Elements())
         {
-            var targetChild = targetPhoneticPr.Elements(sourceChild.Name)
-                .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
+            var targetChild = FindChildByIdentity(targetPhoneticPr, sourceChild);
             if (targetChild is not null)
             {
                 if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
@@ -242,8 +240,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 changed |= MergeMissingAttributes(sourceProperty, targetProperty, ["name", "id"]);
                 foreach (var sourceChild in sourceProperty.Elements())
                 {
-                    var targetChild = targetProperty.Elements(sourceChild.Name)
-                        .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
+                    var targetChild = FindChildByIdentity(targetProperty, sourceChild);
                     if (targetChild is not null)
                     {
                         if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
@@ -271,6 +268,18 @@ internal static partial class XlsxWorksheetMetadataPreserver
         }
 
         return changed;
+    }
+
+    private static XElement? FindChildByIdentity(XElement parent, XElement sourceChild)
+    {
+        var sourceIdentityKey = ElementIdentityKey(sourceChild);
+        foreach (var child in parent.Elements(sourceChild.Name))
+        {
+            if (ElementIdentityKey(child) == sourceIdentityKey)
+                return child;
+        }
+
+        return null;
     }
 
     private static bool RebindWorksheetCustomPropertyRelationships(

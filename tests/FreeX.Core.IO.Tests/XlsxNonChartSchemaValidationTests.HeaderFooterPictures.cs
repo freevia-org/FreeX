@@ -103,6 +103,15 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Should()
             .Be(sourceVmlRelationships.ToString(SaveOptions.DisableFormatting));
         ReadHeaderFooterImageBytes(saved, sourceVmlPath).Should().Equal(sourceImageBytes);
+
+        saved.Position = 0;
+        var reloadedSheet = new XlsxFileAdapter().Load(saved).GetSheetAt(0);
+        reloadedSheet.PageHeader.Should().Be(new WorksheetHeaderFooter("&[Picture]", "", ""));
+        reloadedSheet.PageHeaderPictures.Left.Should().NotBeNull();
+        reloadedSheet.PageHeaderPictures.Left!.ImageBytes.Should().Equal(sourceImageBytes);
+        reloadedSheet.PageHeaderPictures.Left.ContentType.Should().Be("image/png");
+        reloadedSheet.PageHeaderPictures.Center.Should().BeNull();
+        reloadedSheet.PageHeaderPictures.Right.Should().BeNull();
     }
 
     [Fact]

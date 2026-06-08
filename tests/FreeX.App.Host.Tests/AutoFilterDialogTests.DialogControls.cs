@@ -416,7 +416,10 @@ public sealed partial class AutoFilterDialogTests
         source.Should().Contain("TryOpenVisibleFilterFamilySubmenu()");
         source.Should().Contain("private bool TryOpenVisibleFilterFamilySubmenu()");
         source.Should().Contain("_textFiltersButton, _numberFiltersButton, _dateFiltersButton");
-        source.Should().Contain("FirstOrDefault(button => button.Visibility == Visibility.Visible)");
+        source.Should().Contain("private Button? FindFirstVisibleFilterFamilyButton()");
+        source.Should().Contain("_textFiltersButton.Visibility == Visibility.Visible");
+        source.Should().Contain("_numberFiltersButton.Visibility == Visibility.Visible");
+        source.Should().Contain("_dateFiltersButton.Visibility == Visibility.Visible");
         source.Should().Contain("private bool TryOpenFilterFamilySubmenu(Button filterButton)");
         source.Should().Contain("submenu.IsOpen = true;");
         source.Should().Contain("Keyboard.Focus(firstItem);");

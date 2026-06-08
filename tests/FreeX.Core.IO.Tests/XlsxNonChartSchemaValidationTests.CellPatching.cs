@@ -47,6 +47,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Value
             .Should()
             .Be("inserted");
+
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        reloadedSheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("kept"));
+        reloadedSheet.GetCell(1, 2)!.Value.Should().Be(new TextValue("inserted"));
     }
 
     [Fact]
@@ -86,6 +91,14 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Element(worksheetNs + "ext")
             .Should()
             .NotBeNull();
+
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        var reloadedCell = reloadedSheet.GetCell(1, 1);
+        reloadedCell.Should().NotBeNull();
+        reloadedCell.Value.Should().Be(new TextValue("filled"));
+        reloadedCell.StyleId.Should().Be(styleOnlyStyleId.Value);
+        reloadedSheet.GetStyleOnly(1, 1).Should().BeNull();
     }
 
     private static MemoryStream CreateRowExtensionInsertSourceWorkbook()

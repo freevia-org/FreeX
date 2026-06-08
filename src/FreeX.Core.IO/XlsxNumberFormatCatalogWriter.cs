@@ -25,12 +25,7 @@ internal static class XlsxNumberFormatCatalogWriter
         if (numFmts is null)
         {
             numFmts = new XElement(workbookNs + "numFmts");
-            var firstFormatPeer = root.Elements()
-                .FirstOrDefault(element => element.Name == workbookNs + "fonts" ||
-                                           element.Name == workbookNs + "fills" ||
-                                           element.Name == workbookNs + "borders" ||
-                                           element.Name == workbookNs + "cellStyleXfs" ||
-                                           element.Name == workbookNs + "cellXfs");
+            var firstFormatPeer = FindFirstFormatPeer(root, workbookNs);
             if (firstFormatPeer is null)
                 root.AddFirst(numFmts);
             else
@@ -46,8 +41,7 @@ internal static class XlsxNumberFormatCatalogWriter
         var nextId = Math.Max(164, usedIds.Count == 0 ? 164 : usedIds.Max() + 1);
         foreach (var (numberFormatId, formatCode) in catalog.OrderBy(pair => pair.Key))
         {
-            var existing = numFmts.Elements(workbookNs + "numFmt")
-                .FirstOrDefault(element => XlsxXmlAttributeReader.ReadIntAttribute(element, "numFmtId") == numberFormatId);
+            var existing = FindNumberFormatById(numFmts, workbookNs, numberFormatId);
             if (existing is not null &&
                 string.Equals(existing.Attribute("formatCode")?.Value, formatCode, StringComparison.Ordinal))
             {
@@ -57,11 +51,7 @@ internal static class XlsxNumberFormatCatalogWriter
 
             if (existing is not null)
             {
-                var equivalent = numFmts.Elements(workbookNs + "numFmt")
-                    .FirstOrDefault(element =>
-                        string.Equals(element.Attribute("formatCode")?.Value, formatCode, StringComparison.Ordinal) &&
-                        XlsxXmlAttributeReader.ReadIntAttribute(element, "numFmtId") is { } equivalentId &&
-                        equivalentId >= 164);
+                var equivalent = FindEquivalentNumberFormat(numFmts, workbookNs, formatCode);
                 if (equivalent is not null && XlsxXmlAttributeReader.ReadIntAttribute(equivalent, "numFmtId") is { } equivalentId)
                 {
                     remap[numberFormatId] = equivalentId;
@@ -156,4 +146,46 @@ internal static class XlsxNumberFormatCatalogWriter
         return catalog;
     }
 
+    private static XElement? FindFirstFormatPeer(XElement root, XNamespace workbookNs)
+    {
+        foreach (var element in root.Elements())
+        {
+            if (element.Name == workbookNs + "fonts" ||
+                element.Name == workbookNs + "fills" ||
+                element.Name == workbookNs + "borders" ||
+                element.Name == workbookNs + "cellStyleXfs" ||
+                element.Name == workbookNs + "cellXfs")
+            {
+                return element;
+            }
+        }
+
+        return null;
+    }
+
+    private static XElement? FindNumberFormatById(XElement numFmts, XNamespace workbookNs, int numberFormatId)
+    {
+        foreach (var element in numFmts.Elements(workbookNs + "numFmt"))
+        {
+            if (XlsxXmlAttributeReader.ReadIntAttribute(element, "numFmtId") == numberFormatId)
+                return element;
+        }
+
+        return null;
+    }
+
+    private static XElement? FindEquivalentNumberFormat(XElement numFmts, XNamespace workbookNs, string formatCode)
+    {
+        foreach (var element in numFmts.Elements(workbookNs + "numFmt"))
+        {
+            if (string.Equals(element.Attribute("formatCode")?.Value, formatCode, StringComparison.Ordinal) &&
+                XlsxXmlAttributeReader.ReadIntAttribute(element, "numFmtId") is { } equivalentId &&
+                equivalentId >= 164)
+            {
+                return element;
+            }
+        }
+
+        return null;
+    }
 }

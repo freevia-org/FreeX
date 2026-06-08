@@ -267,6 +267,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         saved.Position = 0;
         SchemaErrors(saved).Should().BeEmpty();
+
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        reloadedSheet.GetValue(new CellAddress(reloadedSheet.Id, 1, 1)).Should().Be(new TextValue("Rich font"));
+        reloadedSheet.GetValue(new CellAddress(reloadedSheet.Id, 2, 1)).Should().Be(new TextValue("edited"));
     }
 
     [Fact]
@@ -303,6 +308,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         saved.Position = 0;
         SchemaErrors(saved).Should().BeEmpty();
+
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        reloadedSheet.GetValue(new CellAddress(reloadedSheet.Id, 1, 1)).Should().Be(new TextValue("Rich inline font"));
+        reloadedSheet.GetValue(new CellAddress(reloadedSheet.Id, 2, 1)).Should().Be(new TextValue("edited"));
     }
 
     [Fact]
@@ -346,6 +356,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         saved.Position = 0;
         SchemaErrors(saved).Should().BeEmpty();
+
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        reloadedSheet.GetValue(new CellAddress(reloadedSheet.Id, 1, 1)).Should().Be(new TextValue("Rich inline font"));
+        reloadedSheet.GetValue(new CellAddress(reloadedSheet.Id, 1, 2)).Should().Be(new TextValue("edited"));
     }
 
     private static void AddCssFontFamilyRichInlineString(MemoryStream stream)

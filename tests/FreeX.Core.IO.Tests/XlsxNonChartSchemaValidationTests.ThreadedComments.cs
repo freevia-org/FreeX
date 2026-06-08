@@ -61,6 +61,22 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceWorksheetRelationships.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloadedSheet = new XlsxFileAdapter().Load(saved).GetSheetAt(0);
+        var reloadedAddress = new CellAddress(reloadedSheet.Id, 2, 3);
+        reloadedSheet.ThreadedComments.Should().ContainKey(reloadedAddress);
+        var reloadedComment = reloadedSheet.ThreadedComments[reloadedAddress];
+        reloadedComment.Text.Should().Be("Please review total");
+        reloadedComment.Author.Should().Be("Quinn");
+        reloadedComment.CreatedAtUtc.Should().Be(new DateTimeOffset(2026, 6, 2, 10, 0, 0, TimeSpan.Zero));
+        reloadedComment.ModifiedAtUtc.Should().Be(new DateTimeOffset(2026, 6, 2, 10, 15, 0, TimeSpan.Zero));
+        reloadedComment.IsResolved.Should().BeTrue();
+        reloadedComment.Replies.Should().Equal(new CommentReply("Adjusted after audit", "Codex")
+        {
+            CreatedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 15, 0, TimeSpan.Zero),
+            ModifiedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 15, 0, TimeSpan.Zero)
+        });
     }
 
     [Fact]

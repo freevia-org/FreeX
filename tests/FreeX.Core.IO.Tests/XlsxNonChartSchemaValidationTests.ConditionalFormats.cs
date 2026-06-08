@@ -332,6 +332,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SchemaErrors(saved).Should().BeEmpty();
         var conditionalFormatting = ReadWorksheetChildElements(saved, "conditionalFormatting").First();
         AssertConditionalFormatInvalidNativeMetadataSanitized(conditionalFormatting);
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        reloaded.GetSheetAt(0).GetCell(8, 8)!.Value.Should().Be(new NumberValue(42));
+        AssertStandardConditionalFormatsModel(reloaded.GetSheetAt(0));
     }
 
     [Fact]
@@ -356,6 +361,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         AssertConditionalFormatPayloadExtensionListsRemoved(saved);
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        reloaded.GetSheetAt(0).GetCell(8, 8)!.Value.Should().Be(new NumberValue(42));
+        AssertStandardConditionalFormatsModel(reloaded.GetSheetAt(0));
     }
 
 

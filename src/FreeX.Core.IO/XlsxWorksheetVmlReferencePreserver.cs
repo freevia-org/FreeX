@@ -126,12 +126,11 @@ internal static class XlsxWorksheetVmlReferencePreserver
             return false;
 
         var relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
-        var relationship = relationshipsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .FirstOrDefault(candidate =>
-                string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal) &&
-                string.Equals(candidate.Attribute("Type")?.Value, relationshipType, StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(candidate.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase));
+        var relationship = FindInternalRelationship(
+            relationshipsXml.Root,
+            packageRelNs,
+            relationshipId,
+            relationshipType);
         var target = relationship?.Attribute("Target")?.Value;
         if (string.IsNullOrWhiteSpace(target))
             return false;
@@ -147,15 +146,15 @@ internal static class XlsxWorksheetVmlReferencePreserver
         string relationshipId)
     {
         var existingMarkers = worksheetRoot.Elements(markerName).ToList();
-        var marker = existingMarkers.FirstOrDefault();
+        var marker = existingMarkers.Count > 0 ? existingMarkers[0] : null;
         if (marker is null)
         {
             marker = new XElement(markerName);
             InsertMarkerInWorksheetOrder(worksheetRoot, marker);
         }
 
-        foreach (var extraMarker in existingMarkers.Skip(1))
-            extraMarker.Remove();
+        for (var i = 1; i < existingMarkers.Count; i++)
+            existingMarkers[i].Remove();
 
         marker.RemoveAttributes();
         marker.RemoveNodes();
@@ -167,14 +166,50 @@ internal static class XlsxWorksheetVmlReferencePreserver
         var laterElementNames = marker.Name.LocalName == "legacyDrawing"
             ? new[] { "legacyDrawingHF", "picture", "oleObjects", "controls", "webPublishItems", "tableParts", "extLst" }
             : new[] { "picture", "oleObjects", "controls", "webPublishItems", "tableParts", "extLst" };
-        var insertionPoint = worksheetRoot.Elements()
-            .FirstOrDefault(element =>
-                element.Name.Namespace == marker.Name.Namespace &&
-                laterElementNames.Contains(element.Name.LocalName, StringComparer.Ordinal));
+        var insertionPoint = FindInsertionPoint(worksheetRoot, marker.Name.Namespace, laterElementNames);
 
         if (insertionPoint is null)
             worksheetRoot.Add(marker);
         else
             insertionPoint.AddBeforeSelf(marker);
+    }
+
+    private static XElement? FindInternalRelationship(
+        XElement? relationshipsRoot,
+        XNamespace packageRelNs,
+        string relationshipId,
+        string relationshipType)
+    {
+        if (relationshipsRoot is null)
+            return null;
+
+        foreach (var candidate in relationshipsRoot.Elements(packageRelNs + "Relationship"))
+        {
+            if (string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal) &&
+                string.Equals(candidate.Attribute("Type")?.Value, relationshipType, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(candidate.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private static XElement? FindInsertionPoint(
+        XElement worksheetRoot,
+        XNamespace markerNamespace,
+        string[] laterElementNames)
+    {
+        foreach (var element in worksheetRoot.Elements())
+        {
+            if (element.Name.Namespace == markerNamespace &&
+                laterElementNames.Contains(element.Name.LocalName, StringComparer.Ordinal))
+            {
+                return element;
+            }
+        }
+
+        return null;
     }
 }

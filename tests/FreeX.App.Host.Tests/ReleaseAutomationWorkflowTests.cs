@@ -13,6 +13,8 @@ public sealed class ReleaseAutomationWorkflowTests
 
         workflow.Should().Contain("workflow_dispatch:");
         workflow.Should().Contain("release_notes:");
+        workflow.Should().Contain("include_macos_preview:");
+        workflow.Should().Contain("macos_preview_run_id:");
         workflow.Should().Contain("public_preview_candidate:");
         workflow.Should().Contain("accessibility_keyboard_only:");
         workflow.Should().Contain("accessibility_screen_reader:");
@@ -67,6 +69,14 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("FreeX-latest-win-x64.exe");
         workflow.Should().Contain("FreeX-latest-win-x64.exe.sha256");
         workflow.Should().Contain("FreeX-latest-win-x64.msix");
+        workflow.Should().Contain("FreeX-latest-macos-arm64.zip");
+        workflow.Should().Contain("FreeX-latest-macos-x64.zip");
+        workflow.Should().Contain("include_macos_preview=true requires a successful macOS App Preview run");
+        workflow.Should().Contain("gh api \"repos/$env:GITHUB_REPOSITORY/actions/workflows/macos-app.yml/runs?branch=main&status=success&per_page=50\"");
+        workflow.Should().Contain("gh run download $($macOsRun.id) --name $artifactName --dir $runtimeRoot");
+        workflow.Should().Contain("FreeX-latest-macos-$assetLabel.zip");
+        workflow.Should().Contain("FreeX-latest-macos-$assetLabel-instructions.md");
+        workflow.Should().Contain("FreeX-latest-macos-$assetLabel-evidence.txt");
         workflow.Should().Contain("actions/upload-artifact@v7");
         workflow.Should().Contain("gh release create");
         workflow.Should().Contain("gh release upload");
@@ -100,6 +110,10 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("$assetPaths = @(");
         workflow.Should().Contain("\"artifacts/upload/*.exe.sha256\"");
         workflow.Should().Contain("\"artifacts/upload/*.msix.sha256\"");
+        workflow.Should().Contain("\"artifacts/upload/*.zip\"");
+        workflow.Should().Contain("\"artifacts/upload/*.zip.sha256\"");
+        workflow.Should().Contain("\"artifacts/upload/FreeX-latest-macos-*-instructions.md\"");
+        workflow.Should().Contain("\"artifacts/upload/FreeX-latest-macos-*-evidence.txt\"");
         workflow.Should().Contain("gh release create $tag @assetPaths --target $env:GITHUB_SHA --title $title --notes $notes --draft @prereleaseArgs");
         workflow.Should().Contain("gh release edit $tag --draft=false @latestArgs");
         workflow.Should().Contain("gh release upload $tag @assetPaths --clobber");
@@ -108,6 +122,15 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("Additional tester notes:");
         workflow.Should().Contain("FREEX_RELEASE_NOTES: ${{ inputs.release_notes }}");
         workflow.Should().Contain("$extraNotes = $env:FREEX_RELEASE_NOTES");
+        workflow.Should().Contain("Windows tester steps:");
+        workflow.Should().Contain("Get-FileHash .\\FreeX-latest-win-x64.exe -Algorithm SHA256");
+        workflow.Should().Contain("Windows SmartScreen warns about an unknown publisher");
+        workflow.Should().Contain("macOS tester downloads:");
+        workflow.Should().Contain("shasum -a 256 -c FreeX-latest-macos-arm64.zip.sha256");
+        workflow.Should().Contain("Control-click or right-click > Open");
+        workflow.Should().Contain("System Settings > Privacy & Security");
+        workflow.Should().Contain("Do not disable Gatekeeper globally");
+        workflow.Should().Contain("This is an internal preview while signing certificates are pending");
         workflow.Should().Contain("Public-preview accessibility gate:");
         workflow.Should().Contain("$publicPreviewCandidate = \"${{ inputs.public_preview_candidate }}\" -eq \"true\"");
         workflow.Should().Contain("\"Keyboard-only smoke validation\" = \"${{ inputs.accessibility_keyboard_only }}\" -eq \"true\"");
@@ -191,6 +214,7 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("MSIX package: FreeX-latest-win-x64.msix");
         workflow.Should().Contain("signed when the release certificate secret is configured");
         workflow.Should().Contain("published unsigned for tester continuity");
+        workflow.Should().Contain("macOS internal-preview assets are attached from macOS App Preview run");
 
         var prereleaseInput = Regex.Match(workflow, @"(?ms)^\s+prerelease:\s*$.*?^\s+type:\s+boolean\s*$");
         prereleaseInput.Success.Should().BeTrue("the workflow should expose a prerelease dispatch input");
@@ -232,6 +256,8 @@ public sealed class ReleaseAutomationWorkflowTests
         plan.Should().Contain("Latest tester download");
         plan.Should().Contain("FreeX-latest-win-x64.exe");
         plan.Should().Contain("https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.exe");
+        plan.Should().Contain("https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos-arm64.zip");
+        plan.Should().Contain("https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos-x64.zip");
         plan.Should().Contain("FREEX_MSIX_CERTIFICATE_BASE64");
         plan.Should().Contain("publishes an unsigned MSIX for tester continuity");
         plan.Should().Contain("Installer trust validation and Store-style submission remain release-gate work.");

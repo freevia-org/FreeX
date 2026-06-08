@@ -262,9 +262,17 @@ foreach ($workflow in $workflows) {
                     "FreeX.App.Services.Tests.PortablePdfDocumentExporterTests",
                     "FreeX.App.Services.Tests.PortablePdfExportPlannerTests",
                     "FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests",
+                    "FreeX.App.Services.Tests.PortablePdfTextCapabilityPlannerTests",
                     "FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests",
+                    "FreeX.App.Services.Tests.WorkbookShareActionPlannerTests",
+                    "FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests",
+                    "FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests",
                     "FreeX.App.Services.Tests.AppServicesPortabilityGuardTests",
+                    "FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests",
                     "FreeX.App.Services.Tests.ApplicationDataPathGuardTests",
+                    "FreeX.App.Services.Tests.AppStoragePathPlannerTests",
+                    "FreeX.App.Services.Tests.AppOptionsStoreTests",
+                    "FreeX.App.Services.Tests.AtomicFileWriterTests",
                     "FreeX.App.Services.Tests.AvaloniaShellSourceTests",
                     "FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests"
                 )
@@ -410,12 +418,20 @@ foreach ($workflow in $workflows) {
             } elseif (-not $appArtifactUploadBlock.Contains('name: freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-macos-app')) {
                 $errors.Add("$($workflow.Name): macOS app artifact upload name must include github.run_id, github.run_attempt, matrix runtime, and macos-app suffix.")
             }
+            if (-not [string]::IsNullOrWhiteSpace($appArtifactUploadBlock) -and
+                $appArtifactUploadBlock -notmatch "(?m)^\s*retention-days:\s*14\s*(?:#.*)?$") {
+                $errors.Add("$($workflow.Name): macOS app artifact upload must set retention-days: 14 for internal preview artifacts.")
+            }
 
             $appDiagnosticsUploadBlock = Get-WorkflowStepBlock -Workflow $macOsAppJobBlock -StepName "Upload app diagnostics"
             if ([string]::IsNullOrWhiteSpace($appDiagnosticsUploadBlock)) {
                 $errors.Add("$($workflow.Name): macOS app workflow must upload macOS diagnostics.")
             } elseif (-not $appDiagnosticsUploadBlock.Contains('name: freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-macos-diagnostics')) {
                 $errors.Add("$($workflow.Name): macOS diagnostics artifact upload name must include github.run_id, github.run_attempt, matrix runtime, and macos-diagnostics suffix.")
+            }
+            if (-not [string]::IsNullOrWhiteSpace($appDiagnosticsUploadBlock) -and
+                $appDiagnosticsUploadBlock -notmatch "(?m)^\s*retention-days:\s*14\s*(?:#.*)?$") {
+                $errors.Add("$($workflow.Name): macOS diagnostics artifact upload must set retention-days: 14 for internal preview artifacts.")
             }
 
             foreach ($command in $macOsAppTestCommands) {
