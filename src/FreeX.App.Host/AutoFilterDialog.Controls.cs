@@ -83,18 +83,29 @@ public sealed partial class AutoFilterDialog
         return true;
     }
 
-    private Button? FindFirstVisibleFilterFamilyButton() =>
-        FilterFamilyButtons().FirstOrDefault(button => button.Visibility == Visibility.Visible);
-
-    private IEnumerable<Button> FilterFamilyButtons()
+    private Button? FindFirstVisibleFilterFamilyButton()
     {
-        yield return _textFiltersButton;
-        yield return _numberFiltersButton;
-        yield return _dateFiltersButton;
+        if (_textFiltersButton.Visibility == Visibility.Visible)
+            return _textFiltersButton;
+
+        if (_numberFiltersButton.Visibility == Visibility.Visible)
+            return _numberFiltersButton;
+
+        return _dateFiltersButton.Visibility == Visibility.Visible
+            ? _dateFiltersButton
+            : null;
     }
 
-    private static MenuItem? FindFirstSubmenuItem(ContextMenu submenu) =>
-        submenu.Items.OfType<MenuItem>().FirstOrDefault();
+    private static MenuItem? FindFirstSubmenuItem(ContextMenu submenu)
+    {
+        foreach (var item in submenu.Items)
+        {
+            if (item is MenuItem menuItem)
+                return menuItem;
+        }
+
+        return null;
+    }
 
     private void ShowFilterFamilyButton(AutoFilterMenuFilterKind filterKind)
     {
@@ -135,8 +146,18 @@ public sealed partial class AutoFilterDialog
         parentButton.ContextMenu = submenu;
     }
 
-    private static AutoFilterMenuEntry? FindFilterFamilyEntry(AutoFilterMenuPlan menuPlan) =>
-        menuPlan.Entries.FirstOrDefault(entry => entry.Kind == AutoFilterMenuEntryKind.FilterFamily);
+    private static AutoFilterMenuEntry? FindFilterFamilyEntry(AutoFilterMenuPlan menuPlan)
+    {
+        var entries = menuPlan.Entries;
+        for (var i = 0; i < entries.Count; i++)
+        {
+            var entry = entries[i];
+            if (entry.Kind == AutoFilterMenuEntryKind.FilterFamily)
+                return entry;
+        }
+
+        return null;
+    }
 
     private Button GetFilterFamilyButton(AutoFilterMenuFilterKind filterKind) =>
         filterKind switch
@@ -181,10 +202,17 @@ public sealed partial class AutoFilterDialog
             _criteriaValueBox.Focus();
     }
 
-    private AutoFilterCriteriaOption? FindCriteriaOptionByPrefix(string criteriaPrefix) =>
-        _criteriaOperatorBox.Items
-            .OfType<AutoFilterCriteriaOption>()
-            .FirstOrDefault(item => HasCriteriaPrefix(item, criteriaPrefix));
+    private AutoFilterCriteriaOption? FindCriteriaOptionByPrefix(string criteriaPrefix)
+    {
+        var items = _criteriaOperatorBox.Items;
+        for (var i = 0; i < items.Count; i++)
+        {
+            if (items[i] is AutoFilterCriteriaOption option && HasCriteriaPrefix(option, criteriaPrefix))
+                return option;
+        }
+
+        return null;
+    }
 
     private static bool HasCriteriaPrefix(AutoFilterCriteriaOption option, string criteriaPrefix) =>
         string.Equals(option.CriteriaPrefix, criteriaPrefix, StringComparison.Ordinal);
