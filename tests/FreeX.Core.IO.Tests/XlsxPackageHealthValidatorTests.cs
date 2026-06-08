@@ -167,6 +167,20 @@ public sealed class XlsxPackageHealthValidatorTests
     }
 
     [Fact]
+    public void Validate_FlagsUnexpectedRelationshipAttribute()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookRelationships:
+            [
+                $"""<Relationship Id="rId1" Type="{WorksheetRelationshipType}" Target="worksheets/sheet1.xml" Extra="1" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("unexpected attribute 'Extra'", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Validate_FlagsCaseCollidingPackageEntries()
     {
         using var package = CreateMinimalWorkbookPackage(
