@@ -6877,13 +6877,20 @@ public sealed class MainWindow : Window
         SortDialogResult? result = null;
         var range = _session.SelectedRange;
         var levels = SortDialogPlanner.NormalizeLevels(null).ToList();
-        var orderChoices = SortDialogPlanner.BuildOrderChoices(SortDialogPlannerText.Default.SortOnCellValues);
+        var sortOnChoices = new[]
+        {
+            new SortOnChoice(SortDialogPlannerText.Default.SortOnCellValues),
+            new SortOnChoice(SortDialogPlannerText.Default.SortOnCellColor),
+            new SortOnChoice(SortDialogPlannerText.Default.SortOnFontColor),
+        };
+        var cellColorChoices = SortDialogPlanner.BuildColorChoices(_session.Workbook, _session.ActiveSheet, range, SortOn.CellColor);
+        var fontColorChoices = SortDialogPlanner.BuildColorChoices(_session.Workbook, _session.ActiveSheet, range, SortOn.FontColor);
         var dialog = new Window
         {
             Title = "Sort",
-            Width = 560,
+            Width = 760,
             Height = 430,
-            MinWidth = 500,
+            MinWidth = 700,
             MinHeight = 360,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -6891,7 +6898,7 @@ public sealed class MainWindow : Window
         AutomationProperties.SetAutomationId(dialog, "SortCompactDialog");
         AutomationProperties.SetHelpText(
             dialog,
-            "macOS preview custom sort supports cell values by column; color, custom-list, case-sensitive, and left-to-right options remain WPF-only.");
+            "macOS preview custom sort supports cell values, cell color, and font color by column; custom-list, case-sensitive, and left-to-right options remain WPF-only.");
 
         var headersCheck = new CheckBox
         {
@@ -6943,9 +6950,19 @@ public sealed class MainWindow : Window
                 .Select(choice => new SortDialogComboItem<SortColumnChoice>(choice.Label, choice))
                 .ToList();
 
-        IReadOnlyList<SortDialogComboItem<SortDirectionChoice>> CreateOrderItems() =>
-            orderChoices
+        IReadOnlyList<SortDialogComboItem<SortOnChoice>> CreateSortOnItems() =>
+            sortOnChoices
+                .Select(choice => new SortDialogComboItem<SortOnChoice>(choice.Label, choice))
+                .ToList();
+
+        IReadOnlyList<SortDialogComboItem<SortDirectionChoice>> CreateOrderItems(SortDialogLevel level) =>
+            level.OrderChoices
                 .Select(choice => new SortDialogComboItem<SortDirectionChoice>(choice.Label, choice))
+                .ToList();
+
+        IReadOnlyList<SortDialogComboItem<SortColorChoice>> CreateColorItems(SortDialogLevel level) =>
+            level.ColorChoices
+                .Select(choice => new SortDialogComboItem<SortColorChoice>(string.IsNullOrWhiteSpace(choice.Label) ? "None" : choice.Label, choice))
                 .ToList();
 
         void SelectColumn(ComboBox comboBox, IReadOnlyList<SortDialogComboItem<SortColumnChoice>> choices, SortDialogLevel level)
@@ -6954,11 +6971,34 @@ public sealed class MainWindow : Window
                 choices.FirstOrDefault();
         }
 
+        void SelectSortOn(ComboBox comboBox, IReadOnlyList<SortDialogComboItem<SortOnChoice>> choices, SortDialogLevel level)
+        {
+            comboBox.SelectedItem = choices.FirstOrDefault(choice => string.Equals(choice.Value.Label, level.SortOn, StringComparison.Ordinal)) ??
+                choices.FirstOrDefault();
+        }
+
         void SelectOrder(ComboBox comboBox, IReadOnlyList<SortDialogComboItem<SortDirectionChoice>> choices, SortDialogLevel level)
         {
             comboBox.SelectedItem = choices.FirstOrDefault(choice => choice.Value.Ascending == level.Ascending) ??
                 choices.FirstOrDefault();
         }
+
+        void SelectColor(ComboBox comboBox, IReadOnlyList<SortDialogComboItem<SortColorChoice>> choices, SortDialogLevel level)
+        {
+            comboBox.SelectedItem = choices.FirstOrDefault(choice => string.Equals(choice.Value.Label, level.TargetColor, StringComparison.OrdinalIgnoreCase)) ??
+                choices.FirstOrDefault();
+        }
+
+        void ApplyColorChoices(SortDialogLevel level)
+        {
+            level.SetColorChoices(SortDialogPlanner.BuildColorChoicesForSortOn(
+                level.SortOn,
+                cellColorChoices,
+                fontColorChoices));
+        }
+
+        static bool IsColorSort(SortDialogLevel level) =>
+            SortDialogPlanner.SortOnFromLabel(level.SortOn) is SortOn.CellColor or SortOn.FontColor;
 
         StackPanel CreateSortField(string label, Control control, double width) =>
             new()
@@ -6977,15 +7017,18 @@ public sealed class MainWindow : Window
             levels = SortDialogPlanner.NormalizeLevels(levels).ToList();
             levelsPanel.Children.Clear();
             var columnChoices = CreateColumnItems();
-            var directionChoices = CreateOrderItems();
+            var sortOnItems = CreateSortOnItems();
             for (var index = 0; index < levels.Count; index++)
             {
                 var levelIndex = index;
                 var level = levels[index];
+                ApplyColorChoices(level);
+                var directionChoices = CreateOrderItems(level);
+                var colorChoices = CreateColorItems(level);
                 var columnBox = new ComboBox
                 {
                     ItemsSource = columnChoices,
-                    MinWidth = 210,
+                    MinWidth = 150,
                 };
                 AutomationProperties.SetName(columnBox, "Sort by");
                 AutomationProperties.SetAutomationId(columnBox, $"SortLevel{levelIndex + 1}ColumnBox");
@@ -6993,21 +7036,71 @@ public sealed class MainWindow : Window
                 columnBox.SelectionChanged += (_, _) =>
                 {
                     if (columnBox.SelectedItem is SortDialogComboItem<SortColumnChoice> columnChoice)
-                        levels = SortDialogPlanner.UpdateLevel(levels, levelIndex, columnChoice.Value.ColumnOffset, levels[levelIndex].Ascending).ToList();
+                        levels[levelIndex].ColumnOffset = columnChoice.Value.ColumnOffset;
                 };
+
+                var sortOnBox = new ComboBox
+                {
+                    ItemsSource = sortOnItems,
+                    MinWidth = 120,
+                };
+                AutomationProperties.SetName(sortOnBox, "Sort On");
+                AutomationProperties.SetAutomationId(sortOnBox, $"SortLevel{levelIndex + 1}SortOnBox");
+                SelectSortOn(sortOnBox, sortOnItems, level);
 
                 var orderBox = new ComboBox
                 {
                     ItemsSource = directionChoices,
-                    MinWidth = 120,
+                    MinWidth = 105,
                 };
                 AutomationProperties.SetName(orderBox, "Order");
                 AutomationProperties.SetAutomationId(orderBox, $"SortLevel{levelIndex + 1}OrderBox");
                 SelectOrder(orderBox, directionChoices, level);
+
+                var colorBox = new ComboBox
+                {
+                    ItemsSource = colorChoices,
+                    MinWidth = 105,
+                    IsEnabled = IsColorSort(level),
+                };
+                AutomationProperties.SetName(colorBox, "Color");
+                AutomationProperties.SetAutomationId(colorBox, $"SortLevel{levelIndex + 1}ColorBox");
+                SelectColor(colorBox, colorChoices, level);
+
+                void RefreshSortOnDependentControls()
+                {
+                    var currentLevel = levels[levelIndex];
+                    ApplyColorChoices(currentLevel);
+
+                    var currentDirectionChoices = CreateOrderItems(currentLevel);
+                    orderBox.ItemsSource = currentDirectionChoices;
+                    SelectOrder(orderBox, currentDirectionChoices, currentLevel);
+
+                    var currentColorChoices = CreateColorItems(currentLevel);
+                    colorBox.ItemsSource = currentColorChoices;
+                    colorBox.IsEnabled = IsColorSort(currentLevel);
+                    SelectColor(colorBox, currentColorChoices, currentLevel);
+                }
+
+                sortOnBox.SelectionChanged += (_, _) =>
+                {
+                    if (sortOnBox.SelectedItem is not SortDialogComboItem<SortOnChoice> sortOnChoice)
+                        return;
+
+                    levels[levelIndex].SortOn = sortOnChoice.Value.Label;
+                    RefreshSortOnDependentControls();
+                };
+
                 orderBox.SelectionChanged += (_, _) =>
                 {
                     if (orderBox.SelectedItem is SortDialogComboItem<SortDirectionChoice> directionChoice)
-                        levels = SortDialogPlanner.UpdateLevel(levels, levelIndex, levels[levelIndex].ColumnOffset, directionChoice.Value.Ascending).ToList();
+                        levels[levelIndex].Ascending = directionChoice.Value.Ascending;
+                };
+
+                colorBox.SelectionChanged += (_, _) =>
+                {
+                    if (colorBox.SelectedItem is SortDialogComboItem<SortColorChoice> colorChoice)
+                        levels[levelIndex].TargetColor = colorChoice.Value.Label;
                 };
 
                 var removeButton = new Button
@@ -7032,8 +7125,10 @@ public sealed class MainWindow : Window
                     Spacing = 8,
                     Children =
                     {
-                        CreateSortField("Sort by", columnBox, 250),
-                        CreateSortField("Order", orderBox, 140),
+                        CreateSortField("Sort by", columnBox, 190),
+                        CreateSortField("Sort On", sortOnBox, 130),
+                        CreateSortField("Order", orderBox, 115),
+                        CreateSortField("Color", colorBox, 120),
                         removeButton,
                     },
                 };

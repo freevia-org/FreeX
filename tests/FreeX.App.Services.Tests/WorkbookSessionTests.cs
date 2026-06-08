@@ -1636,6 +1636,49 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SortSelectedRange_CustomColorKeyUsesTargetColorAndPreservesHeader()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var red = new CellColor(255, 0, 0);
+        var redStyle = workbook.RegisterStyle(new CellStyle { FillColor = red });
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("Status"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Owner"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Queued"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("Ava"));
+        var redCell = Cell.FromValue(new TextValue("Escalated"));
+        redCell.StyleId = redStyle;
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), redCell);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new TextValue("Ben"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Done"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new TextValue("Cia"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        var range = new GridRange(a1, new CellAddress(sheet.Id, 4, 2));
+        session.SelectRange(range);
+
+        var result = session.SortSelectedRange(
+            [new SortKey(0, true, SortOn.CellColor, red)],
+            new SortOptions(CaseSensitive: false, LeftToRight: false),
+            hasHeaders: true);
+
+        result.Success.Should().BeTrue();
+        session.SelectedRange.Should().Be(range);
+        session.ActiveCell.Should().Be(a1);
+        sheet.GetValue(1, 1).Should().Be(new TextValue("Status"));
+        sheet.GetValue(1, 2).Should().Be(new TextValue("Owner"));
+        sheet.GetValue(2, 1).Should().Be(new TextValue("Escalated"));
+        sheet.GetValue(2, 2).Should().Be(new TextValue("Ben"));
+        GetStyle(workbook, sheet, new CellAddress(sheet.Id, 2, 1)).FillColor.Should().Be(red);
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+    }
+
+    [Fact]
     public void CommitCellText_MarksDirtyAndRecalculatesDependents()
     {
         var workbook = CreateWorkbook();
