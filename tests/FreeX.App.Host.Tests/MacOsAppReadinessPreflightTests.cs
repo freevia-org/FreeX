@@ -78,6 +78,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("opened_source_path=.*freex-$runtime-default-open.fxl");
         script.Should().Contain("launchservices_default_open_app_override=false");
         script.Should().Contain("launchservices_default_open_document_extension=fxl");
+        script.Should().Contain("src\\FreeX.App.Services\\PortablePdfDocumentExporter.cs");
+        script.Should().Contain("/Encoding /WinAnsiEncoding");
+        script.Should().Contain("EncodeWinAnsiHexText(normalized)");
+        script.Should().Contain("private static byte EncodeWinAnsiByte(char ch)");
+        script.Should().Contain("built-in Helvetica/WinAnsi set");
         script.Should().Contain("launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click");
         script.Should().Contain("freex-${{ matrix.runtime }}-macos-default-open-launch-smoke.txt");
         script.Should().Contain("--macos-launch-smoke-verify-image-clipboard");
@@ -3258,6 +3263,26 @@ public sealed class MacOsAppReadinessPreflightTests
             public static class PackagingSmokeCommand
             {
                 public const string Argument = "--packaging-smoke";
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Services/PortablePdfDocumentExporter.cs",
+            """
+            namespace FreeX.App.Services;
+
+            public static class PortablePdfDocumentExporter
+            {
+                private static void Export()
+                {
+                    PortablePdfPageContentPlanner.CreatePlan(workbook, request);
+                    "/Encoding /WinAnsiEncoding".ToString();
+                    EncodeWinAnsiHexText(normalized);
+                    _ = "built-in Helvetica/WinAnsi set";
+                }
+
+                private static byte EncodeWinAnsiByte(char ch) => 0;
             }
             """);
 

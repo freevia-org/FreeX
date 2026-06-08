@@ -124,11 +124,32 @@ public sealed class PortablePdfDocumentExporterTests
     }
 
     [Fact]
-    public void Save_RejectsNonAsciiWorkbookTextWithoutWritingPdfBytes()
+    public void Save_WritesWinAnsiWorkbookSheetAndCellTextAsHex()
     {
-        var workbook = new Workbook("Budget");
+        var workbook = new Workbook("Budget Caf\u00e9");
+        var sheet = workbook.AddSheet("R\u00e9sum\u00e9");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("S\u00e3o Paulo \u20ac \u2013"));
+        var exportPlan = CreateExportPlan(workbook, sheet, GridRange.Parse("A1:A1", sheet.Id));
+        using var stream = new MemoryStream();
+
+        var result = PortablePdfDocumentExporter.Save(workbook, exportPlan, stream);
+
+        result.PageCount.Should().Be(1);
+        var pdf = Encoding.ASCII.GetString(stream.ToArray());
+        pdf.Should().Contain("/Encoding /WinAnsiEncoding");
+        pdf.Should().NotContain("/Subtype /Type0");
+        pdf.Should().NotContain("/Encoding /Identity-H");
+        pdf.Should().NotContain("/ArialMT");
+        pdf.Should().Contain("<42756467657420436166E9> Tj");
+        pdf.Should().Contain("<53E36F205061756C6F20802096> Tj");
+    }
+
+    [Fact]
+    public void Save_RejectsTextOutsideWinAnsiWithoutWritingPdfBytes()
+    {
+        var workbook = new Workbook("Budget \u041a\u0438\u0457\u0432");
         var sheet = workbook.AddSheet("Summary");
-        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("R\u00e9sum\u00e9"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region \uD83D\uDCC8"));
         var exportPlan = CreateExportPlan(workbook, sheet, GridRange.Parse("A1:A1", sheet.Id));
         using var stream = new MemoryStream();
 
@@ -136,8 +157,33 @@ public sealed class PortablePdfDocumentExporterTests
 
         act.Should()
             .Throw<InvalidOperationException>()
-            .WithMessage("Portable PDF export currently supports ASCII text only:*");
+            .WithMessage("Portable PDF export currently supports ASCII and WinAnsi text only;*");
         stream.ToArray().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Save_PathOverloadDoesNotOverwriteExistingFileWhenTextIsOutsideWinAnsi()
+    {
+        var workbook = new Workbook("Budget \u041a\u0438\u0457\u0432");
+        var sheet = workbook.AddSheet("Summary");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        var exportPlan = CreateExportPlan(workbook, sheet, GridRange.Parse("A1:A1", sheet.Id));
+        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.pdf");
+        File.WriteAllText(path, "keep me", Encoding.ASCII);
+
+        try
+        {
+            var act = () => PortablePdfDocumentExporter.Save(workbook, exportPlan, path);
+
+            act.Should()
+                .Throw<InvalidOperationException>()
+                .WithMessage("Portable PDF export currently supports ASCII and WinAnsi text only;*");
+            File.ReadAllText(path, Encoding.ASCII).Should().Be("keep me");
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     private static PortablePdfExportPlan CreateExportPlan(

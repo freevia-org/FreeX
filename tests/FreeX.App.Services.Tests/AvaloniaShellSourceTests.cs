@@ -125,6 +125,12 @@ public sealed class AvaloniaShellSourceTests
 
         exporterSource.Should().Contain("public static class PortablePdfDocumentExporter");
         exporterSource.Should().Contain("PortablePdfPageContentPlanner.CreatePlan(workbook, request)");
+        exporterSource.Should().Contain("/Encoding /WinAnsiEncoding");
+        exporterSource.Should().Contain("EncodeWinAnsiHexText(normalized)");
+        exporterSource.Should().Contain("private static byte EncodeWinAnsiByte(char ch)");
+        exporterSource.Should().Contain("built-in Helvetica/WinAnsi set");
+        exporterSource.Should().NotContain("/Encoding /Identity-H");
+        exporterSource.Should().NotContain("/ArialMT");
         exporterSource.Should().NotContain("System.Windows");
         exporterSource.Should().NotContain("Microsoft.Win32");
     }

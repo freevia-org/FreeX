@@ -204,8 +204,8 @@ public static class PortablePdfDocumentExporter
 
         objects.Add("<< /Type /Catalog /Pages 2 0 R >>");
         objects.Add($"<< /Type /Pages /Kids [{string.Join(" ", pageObjectIds.Select(id => $"{id} 0 R"))}] /Count {pageStreams.Count} >>");
-        objects.Add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
-        objects.Add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>");
+        objects.Add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
+        objects.Add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
 
         for (var index = 0; index < pageStreams.Count; index++)
         {
@@ -280,11 +280,12 @@ public static class PortablePdfDocumentExporter
         if (string.IsNullOrEmpty(text))
             return;
 
+        var textOperand = EncodeTextOperand(text);
         AppendRgb(content, color, "rg");
         content.AppendLine("BT");
         content.AppendLine($"/{fontResource} {FormatNumber(fontSize)} Tf");
         content.AppendLine($"1 0 0 1 {FormatNumber(x)} {FormatNumber(y)} Tm");
-        content.AppendLine($"({EscapePdfText(text)}) Tj");
+        content.AppendLine($"{textOperand} Tj");
         content.AppendLine("ET");
     }
 
@@ -292,7 +293,29 @@ public static class PortablePdfDocumentExporter
         content.AppendLine(
             $"{FormatNumber(color.R / 255d)} {FormatNumber(color.G / 255d)} {FormatNumber(color.B / 255d)} {operatorName}");
 
-    private static string EscapePdfText(string text)
+    private static string EncodeTextOperand(string text)
+    {
+        var normalized = NormalizePdfText(text);
+        if (!RequiresWinAnsiHexText(normalized))
+            return $"({EscapePdfLiteralText(normalized)})";
+
+        return $"<{EncodeWinAnsiHexText(normalized)}>";
+    }
+
+    private static string NormalizePdfText(string text)
+    {
+        var normalized = new StringBuilder(text.Length);
+        foreach (var ch in text)
+        {
+            normalized.Append(ch is '\r' or '\n' or '\t' ? ' ' : ch);
+        }
+
+        return normalized.ToString();
+    }
+
+    private static bool RequiresWinAnsiHexText(string text) => text.Any(ch => ch is < ' ' or > '~');
+
+    private static string EscapePdfLiteralText(string text)
     {
         var escaped = new StringBuilder(text.Length);
         foreach (var ch in text)
@@ -308,27 +331,79 @@ public static class PortablePdfDocumentExporter
                 case ')':
                     escaped.Append(@"\)");
                     break;
-                case '\r':
-                case '\n':
-                case '\t':
-                    escaped.Append(' ');
-                    break;
                 case >= ' ' and <= '~':
                     escaped.Append(ch);
                     break;
                 default:
-                    throw new InvalidOperationException(
-                        "Portable PDF export currently supports ASCII text only: non-ASCII workbook, sheet, or cell text cannot be rendered by the preview exporter.");
+                    throw new InvalidOperationException("Portable PDF ASCII text path received unsupported text.");
             }
         }
 
         return escaped.ToString();
     }
 
-    private static string Truncate(string text, int maximumLength) =>
-        maximumLength > 3 && text.Length > maximumLength
-            ? text[..(maximumLength - 3)] + "..."
-            : text;
+    private static string EncodeWinAnsiHexText(string text)
+    {
+        var hex = new StringBuilder(text.Length * 2);
+        foreach (var ch in text)
+            hex.Append(EncodeWinAnsiByte(ch).ToString("X2", CultureInfo.InvariantCulture));
+
+        return hex.ToString();
+    }
+
+    private static byte EncodeWinAnsiByte(char ch)
+    {
+        if (ch is >= ' ' and <= '~')
+            return (byte)ch;
+
+        if (ch is >= '\u00a0' and <= '\u00ff')
+            return (byte)ch;
+
+        return ch switch
+        {
+            '\u20ac' => 0x80,
+            '\u201a' => 0x82,
+            '\u0192' => 0x83,
+            '\u201e' => 0x84,
+            '\u2026' => 0x85,
+            '\u2020' => 0x86,
+            '\u2021' => 0x87,
+            '\u02c6' => 0x88,
+            '\u2030' => 0x89,
+            '\u0160' => 0x8A,
+            '\u2039' => 0x8B,
+            '\u0152' => 0x8C,
+            '\u017D' => 0x8E,
+            '\u2018' => 0x91,
+            '\u2019' => 0x92,
+            '\u201C' => 0x93,
+            '\u201D' => 0x94,
+            '\u2022' => 0x95,
+            '\u2013' => 0x96,
+            '\u2014' => 0x97,
+            '\u02dc' => 0x98,
+            '\u2122' => 0x99,
+            '\u0161' => 0x9A,
+            '\u203A' => 0x9B,
+            '\u0153' => 0x9C,
+            '\u017E' => 0x9E,
+            '\u0178' => 0x9F,
+            _ => throw new InvalidOperationException(
+                "Portable PDF export currently supports ASCII and WinAnsi text only; characters outside the built-in Helvetica/WinAnsi set require the deferred embedded-font Unicode PDF path.")
+        };
+    }
+
+    private static string Truncate(string text, int maximumLength)
+    {
+        if (maximumLength <= 3 || text.Length <= maximumLength)
+            return text;
+
+        var truncatedLength = maximumLength - 3;
+        if (char.IsHighSurrogate(text[truncatedLength - 1]))
+            truncatedLength--;
+
+        return text[..truncatedLength] + "...";
+    }
 
     private static string FormatNumber(double value) =>
         value.ToString("0.###", CultureInfo.InvariantCulture);

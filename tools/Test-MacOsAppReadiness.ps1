@@ -1668,6 +1668,18 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
+            Path = "src\FreeX.App.Services\PortablePdfDocumentExporter.cs"
+            Markers = @(
+                "public static class PortablePdfDocumentExporter",
+                "PortablePdfPageContentPlanner.CreatePlan(workbook, request)",
+                "/Encoding /WinAnsiEncoding",
+                "EncodeWinAnsiHexText(normalized)",
+                "private static byte EncodeWinAnsiByte(char ch)",
+                "built-in Helvetica/WinAnsi set"
+            )
+            OrderedPairs = @()
+        },
+        @{
             Path = "src\FreeX.Core.Calc\CellTextOrientationLayoutPlanner.cs"
             Markers = @(
                 "public readonly record struct CellTextLayoutPoint",
