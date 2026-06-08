@@ -10,6 +10,10 @@ public sealed class XlsxPackageHealthValidatorTests
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
     private const string WorksheetRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
+    private const string SharedStringsRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
+    private const string SharedStringsContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
 
     [Fact]
     public void Validate_AcceptsMinimalWorkbookPackage()
@@ -17,6 +21,82 @@ public sealed class XlsxPackageHealthValidatorTests
         using var package = CreateMinimalWorkbookPackage();
 
         XlsxPackageHealthValidator.Validate(package).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Validate_AcceptsWorkbookWithSharedStringTable()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            worksheetXml: SharedStringWorksheetXml("0"),
+            workbookRelationships:
+            [
+                Relationship("rId1", WorksheetRelationshipType, "worksheets/sheet1.xml"),
+                Relationship("rIdSharedStrings", SharedStringsRelationshipType, "sharedStrings.xml")
+            ],
+            extraEntries:
+            [
+                ("xl/sharedStrings.xml", SharedStringsXml("<si><t>Hello</t></si>"))
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/sharedStrings.xml" ContentType="{SharedStringsContentType}" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Validate_FlagsMissingSharedStringTableForSharedStringCell()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            worksheetXml: SharedStringWorksheetXml("0"));
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("missing xl/sharedStrings.xml for shared-string cells", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsSharedStringTableWithoutWorkbookRelationship()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            worksheetXml: SharedStringWorksheetXml("0"),
+            extraEntries:
+            [
+                ("xl/sharedStrings.xml", SharedStringsXml("<si><t>Hello</t></si>"))
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/sharedStrings.xml" ContentType="{SharedStringsContentType}" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("has no workbook relationship to xl/sharedStrings.xml", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsSharedStringCellIndexOutsideTable()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            worksheetXml: SharedStringWorksheetXml("2"),
+            workbookRelationships:
+            [
+                Relationship("rId1", WorksheetRelationshipType, "worksheets/sheet1.xml"),
+                Relationship("rIdSharedStrings", SharedStringsRelationshipType, "sharedStrings.xml")
+            ],
+            extraEntries:
+            [
+                ("xl/sharedStrings.xml", SharedStringsXml("<si><t>Hello</t></si>"))
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/sharedStrings.xml" ContentType="{SharedStringsContentType}" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("references shared-string index 2, but xl/sharedStrings.xml contains 1 entries", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -523,6 +603,7 @@ public sealed class XlsxPackageHealthValidatorTests
 
     private static MemoryStream CreateMinimalWorkbookPackage(
         string? workbookXml = null,
+        string? worksheetXml = null,
         IReadOnlyList<string>? rootRelationships = null,
         IReadOnlyList<string>? workbookRelationships = null,
         IReadOnlyList<string>? contentTypeOverrides = null,
@@ -546,7 +627,7 @@ public sealed class XlsxPackageHealthValidatorTests
                 [
                     Relationship("rId1", WorksheetRelationshipType, "worksheets/sheet1.xml")
                 ])),
-            ("xl/worksheets/sheet1.xml", """
+            ("xl/worksheets/sheet1.xml", worksheetXml ?? """
                 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
                   <sheetData />
                 </worksheet>
@@ -601,4 +682,22 @@ public sealed class XlsxPackageHealthValidatorTests
 
     private static string Relationship(string id, string type, string target) =>
         $"""<Relationship Id="{id}" Type="{type}" Target="{target}" />""";
+
+    private static string SharedStringWorksheetXml(string sharedStringIndex) =>
+        $"""
+        <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+          <sheetData>
+            <row r="1">
+              <c r="A1" t="s"><v>{sharedStringIndex}</v></c>
+            </row>
+          </sheetData>
+        </worksheet>
+        """;
+
+    private static string SharedStringsXml(string sharedStringItems) =>
+        $"""
+        <sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+          {sharedStringItems}
+        </sst>
+        """;
 }

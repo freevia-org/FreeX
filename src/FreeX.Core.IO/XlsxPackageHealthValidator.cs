@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Xml;
 using System.Xml.Linq;
@@ -14,10 +15,14 @@ public static class XlsxPackageHealthValidator
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
     private const string ChartsheetRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet";
+    private const string SharedStringsRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
     private const string WorksheetContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
     private const string ChartsheetContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml";
+    private const string SharedStringsContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
 
     private static readonly XNamespace PackageContentTypeNs =
         "http://schemas.openxmlformats.org/package/2006/content-types";
@@ -44,6 +49,7 @@ public static class XlsxPackageHealthValidator
         AddPackageRelationshipIssues(archive, issues);
         AddPackageRootWorkbookIssues(archive, issues);
         AddWorkbookSheetMapIssues(archive, issues);
+        AddSharedStringTableIssues(archive, issues);
         return issues;
     }
 
@@ -552,6 +558,132 @@ public static class XlsxPackageHealthValidator
         }
     }
 
+    private static void AddSharedStringTableIssues(ZipArchive archive, List<string> issues)
+    {
+        if (!TryLoadPackageXml(archive, "[Content_Types].xml", issues, out var contentTypesXml) ||
+            contentTypesXml.Root?.Name != PackageContentTypeNs + "Types")
+        {
+            return;
+        }
+
+        var entryNames = archive.Entries
+            .Where(entry => !string.IsNullOrEmpty(entry.Name))
+            .Select(entry => NormalizePackagePart(entry.FullName))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var sharedStringCells = FindSharedStringCells(archive, issues);
+        var hasSharedStringsPart = entryNames.Contains("xl/sharedStrings.xml");
+        if (sharedStringCells.Count == 0 && !hasSharedStringsPart)
+            return;
+
+        if (!hasSharedStringsPart)
+        {
+            issues.Add("missing xl/sharedStrings.xml for shared-string cells");
+            return;
+        }
+
+        var sharedStringsContentType = GetEffectivePackageContentType(contentTypesXml, "xl/sharedStrings.xml");
+        if (!string.Equals(sharedStringsContentType, SharedStringsContentType, StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add(
+                $"xl/sharedStrings.xml has content type {sharedStringsContentType ?? "(none)"}; expected {SharedStringsContentType}");
+        }
+
+        ValidateSharedStringWorkbookRelationship(archive, entryNames, issues);
+
+        if (!TryLoadPackageXml(archive, "xl/sharedStrings.xml", issues, out var sharedStringsXml))
+            return;
+
+        if (sharedStringsXml.Root?.Name != WorkbookNs + "sst")
+        {
+            issues.Add("xl/sharedStrings.xml has an invalid shared-string table root element");
+            return;
+        }
+
+        var sharedStringCount = sharedStringsXml.Root.Elements(WorkbookNs + "si").Count();
+        foreach (var sharedStringCell in sharedStringCells)
+        {
+            if (string.IsNullOrWhiteSpace(sharedStringCell.ValueText))
+            {
+                issues.Add($"{sharedStringCell.WorksheetPart} cell {sharedStringCell.CellReference} has no shared-string index");
+                continue;
+            }
+
+            if (!int.TryParse(sharedStringCell.ValueText, NumberStyles.None, CultureInfo.InvariantCulture, out var sharedStringIndex))
+            {
+                issues.Add($"{sharedStringCell.WorksheetPart} cell {sharedStringCell.CellReference} has invalid shared-string index '{sharedStringCell.ValueText}'");
+                continue;
+            }
+
+            if (sharedStringIndex < 0 || sharedStringIndex >= sharedStringCount)
+            {
+                issues.Add(
+                    $"{sharedStringCell.WorksheetPart} cell {sharedStringCell.CellReference} references shared-string index {sharedStringIndex}, but xl/sharedStrings.xml contains {sharedStringCount} entries");
+            }
+        }
+    }
+
+    private static void ValidateSharedStringWorkbookRelationship(
+        ZipArchive archive,
+        IReadOnlySet<string> entryNames,
+        List<string> issues)
+    {
+        if (!TryFindWorkbookPart(archive, entryNames, out var workbookPart))
+            return;
+
+        var workbookRelsPart = GetRelationshipPartPath(workbookPart);
+        if (!TryLoadPackageXml(archive, workbookRelsPart, issues, out var workbookRelsXml) ||
+            workbookRelsXml.Root?.Name != PackageRelationshipNs + "Relationships")
+        {
+            return;
+        }
+
+        var hasRelationship = workbookRelsXml.Root
+            .Elements(PackageRelationshipNs + "Relationship")
+            .Any(relationship =>
+                string.Equals(relationship.Attribute("Type")?.Value, SharedStringsRelationshipType, StringComparison.Ordinal) &&
+                !string.Equals(relationship.Attribute("TargetMode")?.Value?.Trim(), "External", StringComparison.OrdinalIgnoreCase) &&
+                TryResolvePackageRelationshipTarget(workbookRelsPart, relationship.Attribute("Target")?.Value?.Trim() ?? string.Empty, out var resolvedTarget, out _) &&
+                string.Equals(resolvedTarget, "xl/sharedStrings.xml", StringComparison.OrdinalIgnoreCase));
+
+        if (!hasRelationship)
+            issues.Add($"{workbookRelsPart} has no workbook relationship to xl/sharedStrings.xml");
+    }
+
+    private static List<SharedStringCellReference> FindSharedStringCells(ZipArchive archive, List<string> issues)
+    {
+        var cells = new List<SharedStringCellReference>();
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            var worksheetPart = NormalizePackagePart(worksheetEntry.FullName);
+            XDocument worksheetXml;
+            try
+            {
+                worksheetXml = LoadPackageXml(worksheetEntry);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or XmlException)
+            {
+                issues.Add($"{worksheetPart} is not parseable XML: {ex.Message}");
+                continue;
+            }
+
+            foreach (var cell in worksheetXml.Descendants(WorkbookNs + "c"))
+            {
+                if (!string.Equals(cell.Attribute("t")?.Value, "s", StringComparison.Ordinal))
+                    continue;
+
+                cells.Add(new SharedStringCellReference(
+                    worksheetPart,
+                    cell.Attribute("r")?.Value ?? "(unknown ref)",
+                    cell.Element(WorkbookNs + "v")?.Value));
+            }
+        }
+
+        return cells;
+    }
+
     private static bool TryFindWorkbookPart(
         ZipArchive archive,
         IReadOnlySet<string> entryNames,
@@ -917,4 +1049,9 @@ public static class XlsxPackageHealthValidator
         using var stream = entry.Open();
         return XDocument.Load(stream);
     }
+
+    private sealed record SharedStringCellReference(
+        string WorksheetPart,
+        string CellReference,
+        string? ValueText);
 }
