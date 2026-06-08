@@ -22,6 +22,10 @@ public sealed class XlsxChartSchemaOrderingTests
         var saved = SaveBytes(CreateLineChartWorkbook());
 
         SchemaErrors(saved).Should().BeEmpty();
+        var reloadedChart = AssertReloadedSingleChart(saved, ChartType.Line, "Revenue trend", "A1", "C6");
+        reloadedChart.ShowDataLabels.Should().BeTrue();
+        reloadedChart.ShowLinearTrendline.Should().BeTrue();
+        reloadedChart.YAxisDisplayUnit.Should().Be(ChartAxisDisplayUnit.Thousands);
 
         var chartXml = LoadChartXml(saved);
         AssertAllChartTextPropertiesStartWithBodyProperties(chartXml);
@@ -47,6 +51,9 @@ public sealed class XlsxChartSchemaOrderingTests
         var saved = SaveBytes(CreatePieChartWorkbook());
 
         SchemaErrors(saved).Should().BeEmpty();
+        var reloadedChart = AssertReloadedSingleChart(saved, ChartType.Pie, "Share", "A1", "B4");
+        reloadedChart.FirstSliceAngle.Should().Be(45);
+        reloadedChart.ShowDataLabelPercentage.Should().BeTrue();
 
         var chartXml = LoadChartXml(saved);
         AssertAllChartTextPropertiesStartWithBodyProperties(chartXml);
@@ -62,6 +69,11 @@ public sealed class XlsxChartSchemaOrderingTests
         var saved = SaveBytes(CreateLineGuideChartWorkbook());
 
         SchemaErrors(saved).Should().BeEmpty();
+        var reloadedChart = AssertReloadedSingleChart(saved, ChartType.Line, null, "A1", "C4");
+        reloadedChart.ShowDropLines.Should().BeTrue();
+        reloadedChart.ShowHighLowLines.Should().BeTrue();
+        reloadedChart.ShowUpDownBars.Should().BeTrue();
+        reloadedChart.UpDownBarGapWidth.Should().Be(180);
 
         var chartXml = LoadChartXml(saved);
         var lineChart = chartXml.Descendants(ChartNs + "lineChart").Should().ContainSingle().Subject;
@@ -86,6 +98,14 @@ public sealed class XlsxChartSchemaOrderingTests
         var saved = SaveBytes(CreateColumnComboChartWorkbook());
 
         SchemaErrors(saved).Should().BeEmpty();
+        var reloadedChart = AssertReloadedSingleChart(saved, ChartType.Column, "Sales, units, and margin", "A1", "D5");
+        reloadedChart.ShowErrorBars.Should().BeTrue();
+        reloadedChart.ErrorBarKind.Should().Be(ChartErrorBarKind.Percentage);
+        reloadedChart.ErrorBarDirection.Should().Be(ChartErrorBarDirection.Plus);
+        reloadedChart.ErrorBarValue.Should().Be(12.5);
+        reloadedChart.ShowSecondaryAxis.Should().BeTrue();
+        reloadedChart.SecondaryAxisSeriesIndexes.Should().Equal(2);
+        reloadedChart.ComboLineSeriesIndexes.Should().Equal(1, 2);
 
         var chartXml = LoadChartXml(saved);
         var barChart = chartXml.Descendants(ChartNs + "barChart").Should().ContainSingle().Subject;
@@ -120,6 +140,11 @@ public sealed class XlsxChartSchemaOrderingTests
         var saved = SaveBytes(CreateRichMetadataChartWorkbook());
 
         SchemaErrors(saved).Should().BeEmpty();
+        var reloadedChart = AssertReloadedSingleChart(saved, ChartType.ThreeDColumn, "Sales", "A1", "B4");
+        reloadedChart.Uses1904DateSystem.Should().BeTrue();
+        reloadedChart.ChartStyleId.Should().Be(42);
+        reloadedChart.PrintSettings.Should().NotBeNull();
+        reloadedChart.ThreeDView.Should().NotBeNull();
 
         var chartXml = LoadChartXml(saved);
         AssertAllChartTextPropertiesStartWithBodyProperties(chartXml);
@@ -520,6 +545,27 @@ public sealed class XlsxChartSchemaOrderingTests
         using var stream = new MemoryStream(package, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
         return XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/charts/chart1.xml", "xl/charts/chart1.xml");
+    }
+
+    private static ChartModel AssertReloadedSingleChart(
+        byte[] package,
+        ChartType expectedType,
+        string? expectedTitle,
+        string expectedDataRangeStart,
+        string expectedDataRangeEnd)
+    {
+        using var stream = new MemoryStream(package, writable: false);
+        var loaded = new XlsxFileAdapter().Load(stream);
+        var sheet = loaded.GetSheetAt(0);
+        var chart = sheet.Charts.Should().ContainSingle().Subject;
+
+        chart.Type.Should().Be(expectedType);
+        chart.Title.Should().Be(expectedTitle);
+        chart.DataRange.Start.ToA1().Should().Be(expectedDataRangeStart);
+        chart.DataRange.End.ToA1().Should().Be(expectedDataRangeEnd);
+        sheet.GetValue(1, 1).Should().NotBeNull();
+
+        return chart;
     }
 
     private static void AssertAllChartTextPropertiesStartWithBodyProperties(XDocument chartXml)
