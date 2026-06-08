@@ -88,7 +88,7 @@ Each download is a GitHub Actions artifact wrapper. Unzip the wrapper first, the
 
 Signed and internal ad-hoc outputs use the same artifact names. Treat `codesign_mode=ad-hoc` or a skipped notarization status as internal preview evidence only. External distribution requires `codesign_mode=developer-id`, `notarization_status=accepted`, `stapler_validated=true`, and a release-asset publication path.
 
-Without local macOS hardware, Windows agents can run repository preflight and static macOS readiness checks, while hosted macOS runners can build the bundle, verify metadata and checksums, ad-hoc or Developer ID sign when configured, run native-architecture packaging and launch smoke, exercise LaunchServices, and capture evidence/logs. Human validation of Finder open, Gatekeeper prompts, basic workbook workflows, and candidate accessibility checks still needs a tester on macOS.
+Without local macOS hardware, Windows agents can run repository preflight and static macOS readiness checks, while hosted macOS runners can build the bundle, verify metadata and checksums, ad-hoc or Developer ID sign when configured, run native-architecture packaging and launch smoke, exercise LaunchServices, and capture evidence/logs. Human validation of Finder open, Gatekeeper prompts, basic workbook workflows, and candidate accessibility checks still needs a tester on macOS; record that pass with the [macOS public-preview human checklist](macos-public-preview-checklist.md).
 
 Windows agents can also validate downloaded hosted evidence without a Mac:
 
