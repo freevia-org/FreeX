@@ -143,6 +143,24 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
     }
 
     [Fact]
+    public void ReadinessPreflight_FailsWhenDistributionCandidateEvidenceAppendsConflictingDuplicateSigningKey()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: true);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: true);
+        File.AppendAllText(arm64.EvidencePath, Lines("codesign_mode=ad-hoc"));
+
+        var result = RunPreflight(temp.Path, "-DistributionCandidate");
+
+        AssertPreflightRejected(
+            result,
+            "conflicting duplicate 'codesign_mode' values",
+            "codesign_mode=developer-id",
+            "ad-hoc",
+            "Remove stale or contradictory entries");
+    }
+
+    [Fact]
     public void ReadinessPreflight_FailsWhenDistributionCandidateLacksAcceptedGatekeeperAssessment()
     {
         using var temp = new TestTemporaryDirectory();
@@ -300,6 +318,27 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         var result = RunPreflight(temp.Path);
 
         AssertPreflightRejected(result, "osx-arm64 command key smoke", expectedNeedle);
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenCommandKeySmokeAppendsConflictingDuplicateStatus()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false);
+        File.AppendAllText(
+            GetRuntimeArtifactPath(arm64, names => names.LaunchSmoke),
+            Lines("live_command_key_smoke=failed"));
+
+        var result = RunPreflight(temp.Path);
+
+        AssertPreflightRejected(
+            result,
+            "osx-arm64 command key smoke",
+            "conflicting duplicate 'live_command_key_smoke' values",
+            "live_command_key_smoke=passed",
+            "failed",
+            "Remove stale or contradictory entries");
     }
 
     [Fact]
