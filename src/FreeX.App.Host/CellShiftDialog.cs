@@ -113,19 +113,31 @@ public sealed class CellShiftDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        var firstButton = _buttons.FirstOrDefault();
-        _buttons.FirstOrDefault()?.Focus();
+        var firstButton = FindFirstButton();
+        firstButton?.Focus();
         if (firstButton is not null)
             Keyboard.Focus(firstButton);
     }
 
     private void Accept()
     {
-        var selected = _buttons.FirstOrDefault(button => button.IsChecked == true);
+        var selected = FindSelectedButton();
         SelectedChoice = selected?.Tag is CellShiftDialogChoice choice
             ? choice
             : GetAvailableChoices(_mode)[0].Choice;
         DialogResult = true;
+    }
+
+    private RadioButton? FindFirstButton() =>
+        _buttons.Count > 0 ? _buttons[0] : null;
+
+    private RadioButton? FindSelectedButton()
+    {
+        foreach (var button in _buttons)
+            if (button.IsChecked == true)
+                return button;
+
+        return null;
     }
 
     private static string GetChoiceAutomationName(CellShiftDialogChoice choice) =>
