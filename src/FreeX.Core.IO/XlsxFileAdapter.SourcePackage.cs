@@ -175,7 +175,7 @@ public sealed partial class XlsxFileAdapter
             .Select(pair => new
             {
                 pair.Key,
-                SourcePath = XlsxPackagePath.NormalizeZipPath(pair.Value.Replace('\\', '/'))
+                SourcePath = XlsxPackagePath.NormalizePackagePath(pair.Value)
             })
             .Where(pair => IsWorksheetPartPath(pair.SourcePath))
             .ToList();
@@ -185,7 +185,7 @@ public sealed partial class XlsxFileAdapter
             if (!context.TargetSheets.TryGetValue(sourceSheet.Key, out var targetPath) ||
                 !string.Equals(
                     sourceSheet.SourcePath,
-                    XlsxPackagePath.NormalizeZipPath(targetPath.Replace('\\', '/')),
+                    XlsxPackagePath.NormalizePackagePath(targetPath),
                     StringComparison.OrdinalIgnoreCase))
             {
                 excludedPaths.Add(sourceSheet.SourcePath);
