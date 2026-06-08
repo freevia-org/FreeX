@@ -257,9 +257,7 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)
             return protectedOutcome;
 
-        var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
-            string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
-        if (pivotTable is null)
+        if (!CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
             return CommandGuards.RejectPivotTableNotFound();
 
         _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
