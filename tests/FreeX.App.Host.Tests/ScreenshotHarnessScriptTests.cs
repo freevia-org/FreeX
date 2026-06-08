@@ -260,6 +260,35 @@ public sealed class ScreenshotHarnessScriptTests
     }
 
     [Fact]
+    public void FreeXScreenshotScript_ProvidesOptInOpenWorkbookDialogTour()
+    {
+        var script = ReadScript("screenshot_ribbon.ps1");
+
+        script.Should().Contain("[string]$OpenWorkbookDialogTour = $env:FREEX_OPEN_WORKBOOK_DIALOG_TOUR");
+        script.Should().Contain("if ($OpenWorkbookDialogTour -eq \"1\")");
+        script.Should().Contain("function Invoke-FreeXOpenWorkbookDialogTour");
+        script.Should().Contain("function Find-FreeXOpenWorkbookDialogWindow");
+        script.Should().Contain("function Capture-ScreenRectangle");
+        script.Should().Contain("GetDpiForWindow");
+        script.Should().Contain("Join-Path $outDir \"open-workbook-dialog-tour\"");
+        script.Should().Contain("freex_open_workbook_dialog_tour_manifest.json");
+        script.Should().Contain("freex_open_workbook_dialog_opened.png");
+        script.Should().Contain("Tool = \"FREEX_OPEN_WORKBOOK_DIALOG_TOUR\"");
+        script.Should().Contain("EvidenceFamily = \"native-dialog\"");
+        script.Should().Contain("ScenarioId = \"native-dialog:open-workbook\"");
+        script.Should().Contain("DialogClassName = \"#32770\"");
+        script.Should().Contain("EntryPath = \"Ctrl+O\"");
+        script.Should().Contain("CaptureScale = $dialogScale");
+        script.Should().Contain("[System.Windows.Forms.SendKeys]::SendWait(\"^o\")");
+        script.Should().Contain("Find-FreeXOpenWorkbookDialogWindow $expectedPid $ownerWindowHandle");
+        script.Should().Contain("PairKey = \"interactive:open-workbook-dialog:opened\"");
+        script.Should().Contain("CounterpartTool = \"FREEX_EXCEL_OPEN_WORKBOOK_DIALOG_TOUR\"");
+        script.Should().Contain("CounterpartFileName = \"interactive_open_workbook_dialog_opened.png\"");
+        script.Should().Contain("Assert-ForegroundWindowOwnership $expectedPid $expectedTitle \"FreeX native Open dialog keyboard input\"");
+        script.Should().Contain("Assert-ForegroundProcessOwnership $expectedPid \"FreeX native Open dialog screen capture\"");
+    }
+
+    [Fact]
     public void ExcelScreenshotScript_FailsFastWhenExcelIsMissing()
     {
         var script = ReadScript("screenshot_excel.ps1");
