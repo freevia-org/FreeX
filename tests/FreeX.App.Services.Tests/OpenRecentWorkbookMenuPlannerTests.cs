@@ -72,6 +72,26 @@ public sealed class OpenRecentWorkbookMenuPlannerTests
     }
 
     [Fact]
+    public void Create_UsesResolvedOpenPathForExistenceHeaderAndDuplicates()
+    {
+        var now = new DateTimeOffset(2026, 6, 8, 10, 30, 0, TimeSpan.Zero);
+        var normalizedPath = "/Users/quinn/Work/Budget 2026.fxl";
+
+        var plan = OpenRecentWorkbookMenuPlanner.Create(
+            [
+                Entry("file:///Users/quinn/Work/Budget%202026.fxl", now.AddMinutes(1)),
+                Entry(normalizedPath, now)
+            ],
+            fileExists: path => path == normalizedPath,
+            resolveOpenWorkbookPath: path => LocalFilePath.TryNormalize(path, out var normalized) ? normalized : null);
+
+        plan.Items.Should().ContainSingle();
+        plan.Items[0].Path.Should().Be(normalizedPath);
+        plan.Items[0].Header.Should().Be($"Budget 2026.fxl - {Path.GetDirectoryName(normalizedPath)}");
+        plan.Items[0].LastOpened.Should().Be(now.AddMinutes(1));
+    }
+
+    [Fact]
     public void FormatHeader_UsesRawPathWhenNoFileNameCanBeDerived()
     {
         OpenRecentWorkbookMenuPlanner.FormatHeader("")
