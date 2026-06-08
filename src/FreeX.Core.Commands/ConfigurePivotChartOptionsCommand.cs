@@ -69,7 +69,7 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
         if (chart is null)
             return ChartCommandGuards.PivotChartNotFound();
         if (!chart.IsPivotChart || string.IsNullOrWhiteSpace(chart.PivotTableName))
-            return new CommandOutcome(false, "Selected chart is not a PivotChart.");
+            return ChartCommandGuards.SelectedChartIsNotPivotChart();
 
         _previousChartStyleId = chart.ChartStyleId;
         _previousShowFieldButtons = chart.ShowPivotChartFieldButtons;
