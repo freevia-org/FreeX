@@ -743,9 +743,6 @@ internal static partial class XlsxCorpusFixtureFactory
               <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="2" name="Department">
                 <vt:lpwstr>Compliance</vt:lpwstr>
               </property>
-              <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="3" name="MSIP_Label_01234567-89ab-cdef-0123-456789abcdef_Enabled">
-                <vt:lpwstr>true</vt:lpwstr>
-              </property>
             </Properties>
             """)),
         "generated-cf-retention-package-003" => CreatePackage(("xl/worksheets/sheet1.xml", """

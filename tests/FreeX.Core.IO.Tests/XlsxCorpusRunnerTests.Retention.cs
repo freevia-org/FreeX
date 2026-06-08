@@ -517,7 +517,7 @@ public partial class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(55, "the generated metadata-pass manifest currently declares fifty-five deterministic package-retention rows");
+        rows.Should().HaveCount(56, "the generated metadata-pass manifest currently declares fifty-six deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -3057,8 +3057,9 @@ public partial class XlsxCorpusRunnerTests
             .ToDictionary(property => property.Attribute("name")?.Value ?? "", StringComparer.OrdinalIgnoreCase);
         propertiesByName.Should().ContainKey("Department", because);
         propertiesByName["Department"].Value.Should().Be("Compliance", because);
-        propertiesByName.Should().ContainKey("MSIP_Label_01234567-89ab-cdef-0123-456789abcdef_Enabled", because);
-        propertiesByName["MSIP_Label_01234567-89ab-cdef-0123-456789abcdef_Enabled"].Value.Should().Be("true", because);
+        propertiesByName.Keys.Should().NotContain(
+            key => key.StartsWith("MSIP_Label_", StringComparison.OrdinalIgnoreCase),
+            because);
 
         var packageRelsXml = LoadPackageXml(archive, "_rels/.rels");
         packageRelsXml.Root!
