@@ -2564,6 +2564,34 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_WiresCompactHyperlinkRouteThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "HyperlinkDialogPlanner.cs"));
+
+        plannerSource.Should().Contain("public sealed record HyperlinkDialogPrefill(");
+        sessionSource.Should().Contain("public HyperlinkDialogPrefill GetSelectedRangeHyperlinkDialogPrefill()");
+        sessionSource.Should().Contain("public WorkbookCellEditResult SetSelectedRangeHyperlink(HyperlinkDialogPlan plan)");
+        sessionSource.Should().Contain("new HyperlinkMetadata(plan.LinkType, plan.ScreenTip, plan.Bookmark)");
+        sessionSource.Should().Contain("new SetHyperlinkCommand(");
+        sessionSource.Should().Contain("return ToCommand(\"Insert Hyperlink\", commands);");
+
+        source.Should().Contain("private readonly NativeMenuItem _insertHyperlinkMenuItem = new();");
+        source.Should().Contain("_insertHyperlinkMenuItem.Header = \"Hyperlink...\";");
+        source.Should().Contain("_insertHyperlinkMenuItem.Click += async (_, _) => await ShowInsertHyperlinkDialogAsync();");
+        source.Should().Contain("editMenu.Items.Add(_insertHyperlinkMenuItem);");
+        source.Should().Contain("_insertHyperlinkMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("private async Task ShowInsertHyperlinkDialogAsync()");
+        source.Should().Contain("private async Task<HyperlinkDialogPlan?> ShowInsertHyperlinkInputDialogAsync()");
+        source.Should().Contain("var prefill = _session.GetSelectedRangeHyperlinkDialogPrefill();");
+        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"HyperlinkCompactDialog\");");
+        source.Should().Contain("HyperlinkDialogPlanner.TryPlan(");
+        source.Should().Contain("var result = _session.SetSelectedRangeHyperlink(plan);");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Insert Hyperlink failed.\");");
+    }
+
+    [Fact]
     public void MainWindow_WiresBoldThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));

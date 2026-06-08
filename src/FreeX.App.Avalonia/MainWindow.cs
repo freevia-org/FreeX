@@ -376,6 +376,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _replaceMenuItem = new();
     private readonly NativeMenuItem _goToMenuItem = new();
     private readonly NativeMenuItem _goToSpecialMenuItem = new();
+    private readonly NativeMenuItem _insertHyperlinkMenuItem = new();
     private readonly NativeMenuItem _sortAscendingMenuItem = new();
     private readonly NativeMenuItem _sortDescendingMenuItem = new();
     private readonly NativeMenuItem _customSortMenuItem = new();
@@ -743,6 +744,9 @@ public sealed class MainWindow : Window
         _goToSpecialMenuItem.Header = "Go To Special...";
         _goToSpecialMenuItem.Click += async (_, _) => await ShowGoToSpecialDialogAsync();
 
+        _insertHyperlinkMenuItem.Header = "Hyperlink...";
+        _insertHyperlinkMenuItem.Click += async (_, _) => await ShowInsertHyperlinkDialogAsync();
+
         _sortAscendingMenuItem.Header = "Sort A to Z";
         _sortAscendingMenuItem.Click += (_, _) => SortSelectedRange(ascending: true);
 
@@ -1086,6 +1090,7 @@ public sealed class MainWindow : Window
         editMenu.Items.Add(_replaceMenuItem);
         editMenu.Items.Add(_goToMenuItem);
         editMenu.Items.Add(_goToSpecialMenuItem);
+        editMenu.Items.Add(_insertHyperlinkMenuItem);
         editMenu.Items.Add(new NativeMenuItemSeparator());
         editMenu.Items.Add(_autoSumMenuItem);
         editMenu.Items.Add(_fillCellsMenuItem);
@@ -1853,6 +1858,7 @@ public sealed class MainWindow : Window
         _replaceMenuItem.IsEnabled = isIdle;
         _goToMenuItem.IsEnabled = isIdle;
         _goToSpecialMenuItem.IsEnabled = isIdle;
+        _insertHyperlinkMenuItem.IsEnabled = isIdle;
         _sortAscendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _customSortMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
@@ -5208,6 +5214,242 @@ public sealed class MainWindow : Window
         RefreshShell($"Selected {selectedText}");
         return true;
     }
+
+    private async Task ShowInsertHyperlinkDialogAsync()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var plan = await ShowInsertHyperlinkInputDialogAsync();
+        if (plan is null)
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.SetSelectedRangeHyperlink(plan);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Insert Hyperlink failed.");
+            return;
+        }
+
+        RefreshShell($"Inserted hyperlink for {rangeReference}");
+    }
+
+    private async Task<HyperlinkDialogPlan?> ShowInsertHyperlinkInputDialogAsync()
+    {
+        HyperlinkDialogPlan? result = null;
+        var prefill = _session.GetSelectedRangeHyperlinkDialogPrefill();
+        var linkTypeChoices = CreateHyperlinkTypeChoices();
+        var selectedLinkType = linkTypeChoices.FirstOrDefault(choice => choice.Value == prefill.LinkType) ??
+            linkTypeChoices[0];
+        var dialog = new Window
+        {
+            Title = "Insert Hyperlink",
+            Width = 460,
+            Height = 420,
+            MinWidth = 400,
+            MinHeight = 380,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "HyperlinkCompactDialog");
+
+        var linkTypeBox = new ComboBox
+        {
+            ItemsSource = linkTypeChoices,
+            SelectedItem = selectedLinkType,
+            MinWidth = 300,
+        };
+        AutomationProperties.SetName(linkTypeBox, "Link type");
+        AutomationProperties.SetAutomationId(linkTypeBox, "HyperlinkLinkTypeBox");
+
+        var displayBox = new TextBox
+        {
+            Text = prefill.DisplayText,
+            MinWidth = 300,
+        };
+        AutomationProperties.SetName(displayBox, "Text to display");
+        AutomationProperties.SetAutomationId(displayBox, "HyperlinkDisplayTextBox");
+
+        var targetLabel = new TextBlock();
+        var targetBox = new TextBox
+        {
+            Text = prefill.Target,
+            MinWidth = 300,
+        };
+        AutomationProperties.SetAutomationId(targetBox, "HyperlinkTargetTextBox");
+
+        var screenTipBox = new TextBox
+        {
+            Text = prefill.ScreenTip,
+            MinWidth = 300,
+        };
+        AutomationProperties.SetName(screenTipBox, "Screen tip");
+        AutomationProperties.SetAutomationId(screenTipBox, "HyperlinkScreenTipTextBox");
+
+        var bookmarkBox = new TextBox
+        {
+            Text = prefill.Bookmark,
+            MinWidth = 300,
+        };
+        AutomationProperties.SetName(bookmarkBox, "Bookmark");
+        AutomationProperties.SetAutomationId(bookmarkBox, "HyperlinkBookmarkTextBox");
+
+        var validationText = new TextBlock
+        {
+            MinHeight = 20,
+            Foreground = Brush(143, 74, 18),
+        };
+        AutomationProperties.SetAutomationId(validationText, "HyperlinkValidationText");
+
+        var okButton = new Button
+        {
+            Content = "OK",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(okButton, "HyperlinkOkButton");
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(cancelButton, "HyperlinkCancelButton");
+
+        HyperlinkTargetKind CurrentLinkType() =>
+            linkTypeBox.SelectedItem is SortDialogComboItem<HyperlinkTargetKind> choice
+                ? choice.Value
+                : HyperlinkTargetKind.ExistingFileOrWebPage;
+
+        void RefreshTargetField()
+        {
+            var linkType = CurrentLinkType();
+            targetLabel.Text = GetHyperlinkTargetLabel(linkType);
+            AutomationProperties.SetName(targetBox, targetLabel.Text);
+            AutomationProperties.SetHelpText(targetBox, GetHyperlinkTargetHelpText(linkType));
+        }
+
+        void Accept()
+        {
+            if (!HyperlinkDialogPlanner.TryPlan(
+                    targetBox.Text,
+                    displayBox.Text,
+                    CurrentLinkType(),
+                    screenTipBox.Text,
+                    bookmarkBox.Text,
+                    out var plan,
+                    out var validationError))
+            {
+                validationText.Text = GetHyperlinkValidationErrorText(validationError);
+                targetBox.Focus();
+                targetBox.SelectAll();
+                return;
+            }
+
+            result = plan;
+            dialog.Close();
+        }
+
+        linkTypeBox.SelectionChanged += (_, _) => RefreshTargetField();
+        okButton.Click += (_, _) => Accept();
+        cancelButton.Click += (_, _) => dialog.Close();
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                e.Handled = true;
+                Accept();
+            }
+            else if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                dialog.Close();
+            }
+        };
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Children =
+            {
+                cancelButton,
+                okButton,
+            },
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = "Link type" },
+                linkTypeBox,
+                new TextBlock { Text = "Text to display" },
+                displayBox,
+                targetLabel,
+                targetBox,
+                new TextBlock { Text = "Screen tip" },
+                screenTipBox,
+                new TextBlock { Text = "Bookmark" },
+                bookmarkBox,
+                validationText,
+                buttonRow,
+            },
+        };
+        dialog.Opened += (_, _) =>
+        {
+            RefreshTargetField();
+            targetBox.Focus();
+            targetBox.SelectAll();
+        };
+
+        await dialog.ShowDialog(this);
+        return result;
+    }
+
+    private static SortDialogComboItem<HyperlinkTargetKind>[] CreateHyperlinkTypeChoices() =>
+    [
+        new("Existing File or Web Page", HyperlinkTargetKind.ExistingFileOrWebPage),
+        new("Place in This Document", HyperlinkTargetKind.PlaceInThisDocument),
+        new("Create New Document", HyperlinkTargetKind.CreateNewDocument),
+        new("Email Address", HyperlinkTargetKind.EmailAddress),
+    ];
+
+    private static string GetHyperlinkTargetLabel(HyperlinkTargetKind linkType) =>
+        linkType switch
+        {
+            HyperlinkTargetKind.PlaceInThisDocument => "Cell reference or defined name",
+            HyperlinkTargetKind.CreateNewDocument => "New document name",
+            HyperlinkTargetKind.EmailAddress => "Email address",
+            _ => "Address"
+        };
+
+    private static string GetHyperlinkTargetHelpText(HyperlinkTargetKind linkType) =>
+        linkType switch
+        {
+            HyperlinkTargetKind.PlaceInThisDocument => "Enter a workbook location such as Sheet1!A1.",
+            HyperlinkTargetKind.CreateNewDocument => "Enter the document name to store with this hyperlink.",
+            HyperlinkTargetKind.EmailAddress => "Enter an email address or mailto link.",
+            _ => "Enter a web page or file address."
+        };
+
+    private static string GetHyperlinkValidationErrorText(HyperlinkDialogValidationError error) =>
+        error switch
+        {
+            HyperlinkDialogValidationError.MissingDocumentLocation => "Enter a cell reference or defined name.",
+            HyperlinkDialogValidationError.MissingEmailAddress => "Enter an email address.",
+            HyperlinkDialogValidationError.MissingNewDocumentName => "Enter a new document name.",
+            HyperlinkDialogValidationError.InvalidEmailAddress => "Enter a valid email address.",
+            _ => "Enter an address."
+        };
 
     private async Task ShowWorkbookStatisticsDialogAsync()
     {
