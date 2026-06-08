@@ -103,6 +103,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         extension.Attribute("uri")!.Value.Should().Be(sourceUri);
         extension.Attribute("customWorksheetExtFlag").Should().BeNull();
         extension.ToString(SaveOptions.DisableFormatting).Should().Contain("sparklineGroups");
+
+        saved.Position = 0;
+        var reloadedWorkbook = adapter.Load(saved);
+        AssertSparklineModel(reloadedWorkbook.GetSheetAt(0));
     }
 
     private static Workbook CreateSparklineSourceWorkbook()
