@@ -32,6 +32,8 @@ Internal-preview runs produce downloadable GitHub Actions artifacts only. In Git
 - `freex-<run-id>-<run-attempt>-osx-arm64-macos-app`
 - `freex-<run-id>-<run-attempt>-osx-x64-macos-app`
 
+GitHub may show public workflow metadata without sign-in, but Actions artifact archive downloads are authenticated. For local validation, use a browser session signed in to GitHub or an authenticated GitHub CLI session (`gh auth login` or an appropriate `GITHUB_TOKEN`); unauthenticated archive URLs can return HTTP 401 even for successful public runs.
+
 Quick retrieval checklist:
 
 1. Pick `osx-arm64` for Apple Silicon Macs or `osx-x64` for Intel Macs.
