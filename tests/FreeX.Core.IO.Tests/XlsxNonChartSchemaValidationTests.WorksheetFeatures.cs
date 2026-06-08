@@ -1676,6 +1676,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceDefinedNames.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        AssertNamedRangesModel(reloaded);
     }
 
 
@@ -1718,6 +1722,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceMergeCells.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        AssertMergedCellsModel(reloaded.GetSheetAt(0));
     }
 
     [Fact]
@@ -1819,6 +1827,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceLegacyDrawing.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        AssertLegacyCommentModel(reloaded.GetSheetAt(0));
     }
 
     [Fact]
@@ -1961,6 +1973,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceSheetProtection.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        AssertSheetProtectionModel(reloaded.GetSheetAt(0));
     }
 
     [Fact]
@@ -5339,6 +5355,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         return workbook;
     }
 
+    private static void AssertMergedCellsModel(Sheet sheet)
+    {
+        sheet.MergedRegions.Should().HaveCount(2);
+        sheet.MergedRegions.Should().Contain(Range(sheet, 1, 1, 1, 3));
+        sheet.MergedRegions.Should().Contain(Range(sheet, 2, 4, 4, 4));
+    }
+
     private static void SetMergedCellInvalidAttributes(MemoryStream stream)
     {
         stream.Position = 0;
@@ -5388,6 +5411,28 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         workbook.DefineNamedRange("MyRange", Range(sheet, 2, 1, 5, 1));
         workbook.DefineNamedRange("SingleCell", Range(sheet, 1, 1, 1, 1));
         return workbook;
+    }
+
+    private static void AssertNamedRangesModel(Workbook workbook)
+    {
+        var sheet = workbook.GetSheetAt(0);
+        workbook.NamedRanges.Should().HaveCount(2);
+        workbook.NamedRanges.Should().ContainKey("MyRange");
+        workbook.NamedRanges["MyRange"].Should().Be(Range(sheet, 2, 1, 5, 1));
+        workbook.NamedRanges.Should().ContainKey("SingleCell");
+        workbook.NamedRanges["SingleCell"].Should().Be(Range(sheet, 1, 1, 1, 1));
+    }
+
+    private static void AssertLegacyCommentModel(Sheet sheet)
+    {
+        sheet.Comments.Should().ContainSingle();
+        sheet.Comments[new CellAddress(sheet.Id, 2, 3)].Should().Be("Original note");
+    }
+
+    private static void AssertSheetProtectionModel(Sheet sheet)
+    {
+        sheet.IsProtected.Should().BeTrue();
+        sheet.ProtectionPassword.Should().NotBeNullOrWhiteSpace();
     }
 
     private static XElement ReadWorkbookChildElement(Stream stream, string localName)
