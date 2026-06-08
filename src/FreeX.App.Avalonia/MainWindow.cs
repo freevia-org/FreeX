@@ -3767,18 +3767,38 @@ public sealed class MainWindow : Window
             return;
         }
 
-        items
-            .OfType<MenuItem>()
-            .FirstOrDefault(item => item.IsEnabled)?
-            .Focus();
+        FocusFirstEnabledSheetTabMenuItem(items);
     }
 
-    private Button? FindSheetTabButton(SheetId sheetId) =>
-        _sheetTabsHost.Content is StackPanel panel
-            ? panel.Children
-                .OfType<Button>()
-                .FirstOrDefault(button => button.Tag is SheetId tag && tag == sheetId)
-            : null;
+    private static void FocusFirstEnabledSheetTabMenuItem(IEnumerable<Control> items)
+    {
+        foreach (var item in items)
+        {
+            if (item is MenuItem { IsEnabled: true } menuItem)
+            {
+                menuItem.Focus();
+                return;
+            }
+        }
+    }
+
+    private Button? FindSheetTabButton(SheetId sheetId)
+    {
+        if (_sheetTabsHost.Content is not StackPanel panel)
+            return null;
+
+        foreach (var child in panel.Children)
+        {
+            if (child is Button button &&
+                button.Tag is SheetId tag &&
+                tag == sheetId)
+            {
+                return button;
+            }
+        }
+
+        return null;
+    }
 
     private void SelectSheet(SheetId sheetId, bool selectRange, bool toggle)
     {

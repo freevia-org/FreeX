@@ -59,21 +59,12 @@ public static class AppOptionsStore
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        string? tempPath = null;
         try
         {
             options.NormalizePersistedCollections();
-            var directory = Path.GetDirectoryName(storePath);
-            if (!string.IsNullOrEmpty(directory))
-                Directory.CreateDirectory(directory);
-
-            var tempDirectory = string.IsNullOrEmpty(directory) ? "." : directory;
-            tempPath = Path.Combine(
-                tempDirectory,
-                $".{Path.GetFileName(storePath)}.{Guid.NewGuid():N}.tmp");
-
-            File.WriteAllText(tempPath, JsonSerializer.Serialize(options, StoreJsonOptions));
-            File.Move(tempPath, storePath, overwrite: true);
+            AtomicFileWriter.WriteAllText(
+                storePath,
+                JsonSerializer.Serialize(options, StoreJsonOptions));
             options.SetPersistenceError(null);
             return true;
         }
@@ -81,11 +72,6 @@ public static class AppOptionsStore
         {
             options.SetPersistenceError($"Failed to save options to '{storePath}': {ex.Message}");
             return false;
-        }
-        finally
-        {
-            if (!string.IsNullOrWhiteSpace(tempPath) && File.Exists(tempPath))
-                File.Delete(tempPath);
         }
     }
 }

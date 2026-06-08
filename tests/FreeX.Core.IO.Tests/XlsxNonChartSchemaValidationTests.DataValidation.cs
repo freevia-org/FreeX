@@ -133,6 +133,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .BeTrue(blockReason);
 
         var sheet = workbook.GetSheetAt(0);
+        AssertDataValidationModel(sheet);
         sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(42));
 
         using var saved = new MemoryStream();
@@ -145,6 +146,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceDataValidations.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        AssertDataValidationModel(adapter.Load(saved).GetSheetAt(0));
     }
 
     [Fact]
@@ -161,6 +165,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .BeTrue(blockReason);
 
         var sheet = workbook.GetSheetAt(0);
+        AssertAdditionalDataValidationTypesModel(sheet);
         sheet.SetCell(new CellAddress(sheet.Id, 8, 8), new NumberValue(42));
 
         using var saved = new MemoryStream();
@@ -173,6 +178,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceDataValidations.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        AssertAdditionalDataValidationTypesModel(adapter.Load(saved).GetSheetAt(0));
     }
 
     [Fact]
@@ -302,6 +310,51 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Contain("C2:C5")
             .And
             .Contain("H2:H5");
+    }
+
+    private static void AssertDataValidationModel(Sheet sheet)
+    {
+        sheet.DataValidations.Should().HaveCount(2);
+
+        var wholeNumber = sheet.DataValidations.Single(validation => validation.Type == DvType.WholeNumber);
+        wholeNumber.AppliesTo.ToString().Should().Be("A2:A5");
+        wholeNumber.Operator.Should().Be(DvOperator.Between);
+        wholeNumber.Formula1.Should().Be("1");
+        wholeNumber.Formula2.Should().Be("100");
+        wholeNumber.AllowBlank.Should().BeTrue();
+        wholeNumber.ShowInputMessage.Should().BeTrue();
+        wholeNumber.PromptTitle.Should().Be("Enter a number");
+        wholeNumber.PromptMessage.Should().Be("Between 1 and 100");
+        wholeNumber.ShowErrorMessage.Should().BeTrue();
+        wholeNumber.ErrorTitle.Should().Be("Invalid");
+        wholeNumber.ErrorMessage.Should().Be("Out of range");
+        wholeNumber.AlertStyle.Should().Be(DvAlertStyle.Warning);
+
+        var list = sheet.DataValidations.Single(validation => validation.Type == DvType.List);
+        list.AppliesTo.ToString().Should().Be("B2:B5");
+        list.Formula1.Should().Be("Red,Green,Blue");
+        list.ShowDropdown.Should().BeTrue();
+    }
+
+    private static void AssertAdditionalDataValidationTypesModel(Sheet sheet)
+    {
+        sheet.DataValidations.Should().HaveCount(5);
+        sheet.DataValidations.Select(validation => validation.Type)
+            .Should()
+            .BeEquivalentTo([DvType.Decimal, DvType.Date, DvType.Time, DvType.TextLength, DvType.Custom]);
+
+        var decimalValidation = sheet.DataValidations.Single(validation => validation.Type == DvType.Decimal);
+        decimalValidation.AppliesTo.ToString().Should().Be("C2:C5");
+        decimalValidation.AdditionalRanges.Select(range => range.ToString()).Should().ContainSingle().Which.Should().Be("H2:H5");
+        decimalValidation.Operator.Should().Be(DvOperator.Between);
+        decimalValidation.Formula1.Should().Be("0");
+        decimalValidation.Formula2.Should().Be("1");
+        decimalValidation.AlertStyle.Should().Be(DvAlertStyle.Information);
+
+        sheet.DataValidations.Single(validation => validation.Type == DvType.Date).Formula1.Should().Be("DATE(2026,1,1)");
+        sheet.DataValidations.Single(validation => validation.Type == DvType.Time).Formula2.Should().Be("TIME(18,0,0)");
+        sheet.DataValidations.Single(validation => validation.Type == DvType.TextLength).Operator.Should().Be(DvOperator.LessThanOrEqual);
+        sheet.DataValidations.Single(validation => validation.Type == DvType.Custom).Formula1.Should().Be("LEN(G2)>0");
     }
 
     private static XElement ReadDataValidationsElement(Stream stream)
