@@ -246,7 +246,7 @@ public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand
 
         var table = sheet.StructuredTables.FirstOrDefault(candidate => candidate.Id == _tableId);
         if (table is null)
-            return new CommandOutcome(false, "Table was not found.");
+            return CommandGuards.RejectStructuredTableNotFound();
 
         var showFirstColumn = _showFirstColumn ?? table.ShowFirstColumn;
         var showLastColumn = _showLastColumn ?? table.ShowLastColumn;
@@ -429,7 +429,7 @@ public sealed class ReapplyStructuredTableStyleCommand : IWorkbookCommand
 
         var table = sheet.StructuredTables.FirstOrDefault(candidate => candidate.Id == _tableId);
         if (table is null)
-            return new CommandOutcome(false, "Table was not found.");
+            return CommandGuards.RejectStructuredTableNotFound();
 
         _applyStyleCommand = new ApplyStructuredTableStyleCommand(
             _sheetId,
@@ -502,7 +502,7 @@ public sealed class ConfigureStructuredTableStyleOptionsCommand : IWorkbookComma
 
         var tableIndex = sheet.StructuredTables.FindIndex(table => table.Id == _tableId);
         if (tableIndex < 0)
-            return new CommandOutcome(false, "Table was not found.");
+            return CommandGuards.RejectStructuredTableNotFound();
 
         _previousTable = sheet.StructuredTables[tableIndex];
         sheet.StructuredTables[tableIndex] = CopyWithStyleOptions(
