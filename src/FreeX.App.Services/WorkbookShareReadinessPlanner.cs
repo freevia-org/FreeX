@@ -138,24 +138,7 @@ public static class WorkbookShareReadinessPlanner
 
     private static bool TryNormalizePath(string path, out string normalizedPath)
     {
-        normalizedPath = "";
-        try
-        {
-            normalizedPath = System.IO.Path.GetFullPath(path);
-            return !string.IsNullOrWhiteSpace(normalizedPath);
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (NotSupportedException)
-        {
-            return false;
-        }
-        catch (PathTooLongException)
-        {
-            return false;
-        }
+        return LocalFilePath.TryNormalize(path, out normalizedPath);
     }
 
     private static bool FileExists(Func<string, bool> fileExists, string path)
