@@ -79,6 +79,7 @@ function Get-ExpectedFileNames {
         PackagingSmoke = "freex-$Runtime-macos-packaging-smoke.log"
         LaunchSmoke = "freex-$Runtime-macos-launch-smoke.txt"
         OpenWithSmoke = "freex-$Runtime-macos-open-with-launch-smoke.txt"
+        DefaultOpenSmoke = "freex-$Runtime-macos-default-open-launch-smoke.txt"
         NotarizationLog = "freex-$Runtime-macos-notarization.log"
         TesterInstructions = "freex-$Runtime-macos-tester-instructions.md"
     }
@@ -241,7 +242,7 @@ function Test-ArtifactFileSet {
     )
 
     $names = Get-ExpectedFileNames -Runtime $Runtime
-    $requiredKeys = @("Evidence", "PackagingSmoke", "LaunchSmoke", "OpenWithSmoke", "NotarizationLog", "TesterInstructions")
+    $requiredKeys = @("Evidence", "PackagingSmoke", "LaunchSmoke", "OpenWithSmoke", "DefaultOpenSmoke", "NotarizationLog", "TesterInstructions")
     if ($RequireZip) {
         $requiredKeys = @("Zip", "Checksum") + $requiredKeys
     }
@@ -400,6 +401,26 @@ function Test-OpenWithSmoke {
     Assert-KeyPositiveInteger -Map $openWith -Key "native_open_recent_item_count" -Minimum 1 -Label "$Runtime Open-With smoke"
 }
 
+function Test-DefaultOpenSmoke {
+    param(
+        [Parameter(Mandatory = $true)][string]$DefaultOpenSmokePath,
+        [Parameter(Mandatory = $true)][string]$Runtime
+    )
+
+    $defaultOpen = Get-KeyValueMap -Path $DefaultOpenSmokePath
+    Assert-KeyEquals -Map $defaultOpen -Key "macos_launch_smoke" -ExpectedValue "passed" -Label "$Runtime .fxl default-open smoke"
+    Assert-KeyEquals -Map $defaultOpen -Key "window_shown" -ExpectedValue "true" -Label "$Runtime .fxl default-open smoke"
+    Assert-KeyMatches -Map $defaultOpen -Key "opened_source_path" -Pattern ([System.Text.RegularExpressions.Regex]::Escape("freex-$Runtime-default-open.fxl")) -Label "$Runtime .fxl default-open smoke"
+    Assert-KeyPositiveInteger -Map $defaultOpen -Key "viewport_rows" -Minimum 1 -Label "$Runtime .fxl default-open smoke"
+    Assert-KeyPositiveInteger -Map $defaultOpen -Key "viewport_columns" -Minimum 1 -Label "$Runtime .fxl default-open smoke"
+    Assert-KeyEquals -Map $defaultOpen -Key "native_open_recent_menu_item" -ExpectedValue "true" -Label "$Runtime .fxl default-open smoke"
+    Assert-KeyPositiveInteger -Map $defaultOpen -Key "native_open_recent_item_count" -Minimum 1 -Label "$Runtime .fxl default-open smoke"
+    Assert-KeyEquals -Map $defaultOpen -Key "launchservices_default_open_attempted" -ExpectedValue "true" -Label "$Runtime .fxl default-open boundary"
+    Assert-KeyEquals -Map $defaultOpen -Key "launchservices_default_open_app_override" -ExpectedValue "false" -Label "$Runtime .fxl default-open boundary"
+    Assert-KeyEquals -Map $defaultOpen -Key "launchservices_default_open_document_extension" -ExpectedValue "fxl" -Label "$Runtime .fxl default-open boundary"
+    Assert-KeyEquals -Map $defaultOpen -Key "launchservices_default_open_boundary" -ExpectedValue "ci_open_document_without_app_override_not_finder_double_click" -Label "$Runtime .fxl default-open boundary"
+}
+
 function Test-NotarizationLog {
     param(
         [Parameter(Mandatory = $true)][string]$NotarizationLogPath,
@@ -440,6 +461,7 @@ function Test-TesterInstructions {
             $names.PackagingSmoke,
             $names.LaunchSmoke,
             $names.OpenWithSmoke,
+            $names.DefaultOpenSmoke,
             $names.NotarizationLog,
             "shasum -a 256 -c",
             "artifact_channel=",
@@ -524,6 +546,7 @@ function Test-RuntimeBundle {
     $packagingSmokePath = Join-Path $BundleDirectory $names.PackagingSmoke
     $launchSmokePath = Join-Path $BundleDirectory $names.LaunchSmoke
     $openWithSmokePath = Join-Path $BundleDirectory $names.OpenWithSmoke
+    $defaultOpenSmokePath = Join-Path $BundleDirectory $names.DefaultOpenSmoke
     $notarizationLogPath = Join-Path $BundleDirectory $names.NotarizationLog
     $testerInstructionsPath = Join-Path $BundleDirectory $names.TesterInstructions
 
@@ -534,6 +557,7 @@ function Test-RuntimeBundle {
     Test-PackagingSmoke -PackagingSmokePath $packagingSmokePath -Evidence $evidence -Runtime $Runtime
     Test-LaunchSmoke -LaunchSmokePath $launchSmokePath -Runtime $Runtime
     Test-OpenWithSmoke -OpenWithSmokePath $openWithSmokePath -Runtime $Runtime
+    Test-DefaultOpenSmoke -DefaultOpenSmokePath $defaultOpenSmokePath -Runtime $Runtime
     Test-NotarizationLog -NotarizationLogPath $notarizationLogPath -IsDistributionCandidateArtifact $isDistributionCandidateArtifact -Runtime $Runtime
     Test-TesterInstructions -InstructionsPath $testerInstructionsPath -Runtime $Runtime -IsDistributionCandidateArtifact $isDistributionCandidateArtifact
     Test-DiagnosticsArtifact -Root $Root -BundleDirectory $BundleDirectory -Runtime $Runtime
