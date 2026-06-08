@@ -389,6 +389,28 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public WorkbookCellEditResult ExecuteForecastSheetPlan(ForecastSheetPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        if (plan.TryCreateCommand() is not { } command)
+        {
+            return new WorkbookCellEditResult(
+                false,
+                plan.StatusText,
+                [],
+                RecalcReport: null);
+        }
+
+        var sheetIdsBefore = CaptureSheetIds();
+        var result = _cellEditService.ExecuteEditCommand(Workbook, command);
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulForecastSheetResult(result, sheetIdsBefore, plan);
+        return result;
+    }
+
     public WorkbookNavigationResult FindNext(
         string? searchText = null,
         FindOptions? options = null,
@@ -2604,6 +2626,34 @@ public sealed class WorkbookSession
             ? copyToRange
             : plan.ListRange;
 
+    private static GridRange GetForecastSheetSelectedRange(SheetId sheetId, ForecastSheetPlan plan)
+    {
+        var historicalDataRows = plan.InputExpectation?.HistoricalDataRowCount;
+        if (historicalDataRows is null && plan.SourceRange is { } sourceRange && sourceRange.RowCount > 0)
+            historicalDataRows = sourceRange.RowCount - 1;
+
+        var lastRow = 1u + (historicalDataRows ?? 0u) + plan.ForecastPeriods;
+        return new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, lastRow, 5));
+    }
+
+    private void ApplySuccessfulForecastSheetResult(
+        WorkbookCellEditResult result,
+        IReadOnlySet<SheetId> sheetIdsBefore,
+        ForecastSheetPlan plan)
+    {
+        if (FindNewSheetId(sheetIdsBefore) is not { } forecastSheetId)
+        {
+            ApplySuccessfulHistoryResult(result, sheetIdsBefore);
+            return;
+        }
+
+        ApplySuccessfulWorkbookStructureRangeResult(
+            forecastSheetId,
+            GetForecastSheetSelectedRange(forecastSheetId, plan));
+    }
+
     private void ApplySuccessfulWorkbookStructureResult(SheetId preferredSheetId)
     {
         var selection = _sheetSelectionService.SelectSheet(Workbook, preferredSheetId);
@@ -2614,6 +2664,23 @@ public sealed class WorkbookSession
         ActiveSheet.ActiveRow = ActiveCell.Row;
         ActiveSheet.ActiveCol = ActiveCell.Col;
         SetSingleSelectedRange(new GridRange(ActiveCell, ActiveCell));
+        FormulaEditAddress = null;
+        IsDirty = true;
+        _selectionStatsRevision++;
+        RefreshViewport();
+        EnsureActiveCellVisible();
+    }
+
+    private void ApplySuccessfulWorkbookStructureRangeResult(SheetId preferredSheetId, GridRange selectedRange)
+    {
+        var selection = _sheetSelectionService.SelectSheet(Workbook, preferredSheetId);
+        ActiveSheet = selection.Sheet;
+        SelectSingleSheetGroup(ActiveSheet.Id);
+        RefreshSheetTabsForActiveSheet();
+        ActiveCell = selectedRange.Start;
+        ActiveSheet.ActiveRow = ActiveCell.Row;
+        ActiveSheet.ActiveCol = ActiveCell.Col;
+        SetSingleSelectedRange(selectedRange);
         FormulaEditAddress = null;
         IsDirty = true;
         _selectionStatsRevision++;
