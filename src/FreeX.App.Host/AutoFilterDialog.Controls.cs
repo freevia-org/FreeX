@@ -56,8 +56,7 @@ public sealed partial class AutoFilterDialog
 
     private bool TryOpenVisibleFilterFamilySubmenu()
     {
-        var filterButton = new[] { _textFiltersButton, _numberFiltersButton, _dateFiltersButton }
-            .FirstOrDefault(button => button.Visibility == Visibility.Visible);
+        var filterButton = FindFirstVisibleFilterFamilyButton();
         return filterButton is not null && TryOpenFilterFamilySubmenu(filterButton);
     }
 
@@ -67,7 +66,7 @@ public sealed partial class AutoFilterDialog
         {
             submenu.PlacementTarget = filterButton;
             submenu.IsOpen = true;
-            var firstItem = submenu.Items.OfType<MenuItem>().FirstOrDefault();
+            var firstItem = FindFirstSubmenuItem(submenu);
             if (firstItem is not null)
             {
                 firstItem.Focus();
@@ -83,6 +82,19 @@ public sealed partial class AutoFilterDialog
         UpdateCriteriaTextFromTypedControls();
         return true;
     }
+
+    private Button? FindFirstVisibleFilterFamilyButton() =>
+        FilterFamilyButtons().FirstOrDefault(button => button.Visibility == Visibility.Visible);
+
+    private IEnumerable<Button> FilterFamilyButtons()
+    {
+        yield return _textFiltersButton;
+        yield return _numberFiltersButton;
+        yield return _dateFiltersButton;
+    }
+
+    private static MenuItem? FindFirstSubmenuItem(ContextMenu submenu) =>
+        submenu.Items.OfType<MenuItem>().FirstOrDefault();
 
     private void ShowFilterFamilyButton(AutoFilterMenuFilterKind filterKind)
     {
@@ -102,16 +114,11 @@ public sealed partial class AutoFilterDialog
 
     private void ConfigureFilterFamilySubmenu(AutoFilterMenuPlan menuPlan)
     {
-        var family = menuPlan.Entries.FirstOrDefault(entry => entry.Kind == AutoFilterMenuEntryKind.FilterFamily);
+        var family = FindFilterFamilyEntry(menuPlan);
         if (family is null || family.Children.Count == 0)
             return;
 
-        var parentButton = menuPlan.FilterKind switch
-        {
-            AutoFilterMenuFilterKind.Number => _numberFiltersButton,
-            AutoFilterMenuFilterKind.Date => _dateFiltersButton,
-            _ => _textFiltersButton
-        };
+        var parentButton = GetFilterFamilyButton(menuPlan.FilterKind);
         var submenu = new ContextMenu();
         var usedAccessKeys = new HashSet<char>();
         foreach (var child in family.Children)
@@ -127,6 +134,17 @@ public sealed partial class AutoFilterDialog
 
         parentButton.ContextMenu = submenu;
     }
+
+    private static AutoFilterMenuEntry? FindFilterFamilyEntry(AutoFilterMenuPlan menuPlan) =>
+        menuPlan.Entries.FirstOrDefault(entry => entry.Kind == AutoFilterMenuEntryKind.FilterFamily);
+
+    private Button GetFilterFamilyButton(AutoFilterMenuFilterKind filterKind) =>
+        filterKind switch
+        {
+            AutoFilterMenuFilterKind.Number => _numberFiltersButton,
+            AutoFilterMenuFilterKind.Date => _dateFiltersButton,
+            _ => _textFiltersButton
+        };
 
     private static string AddUniqueAccessKey(string header, HashSet<char> usedAccessKeys)
     {
@@ -151,9 +169,7 @@ public sealed partial class AutoFilterDialog
             return;
 
         ShowCustomFilterPanel();
-        var option = _criteriaOperatorBox.Items
-            .OfType<AutoFilterCriteriaOption>()
-            .FirstOrDefault(item => string.Equals(item.CriteriaPrefix, child.Value, StringComparison.Ordinal));
+        var option = FindCriteriaOptionByPrefix(child.Value);
         if (option is not null)
             _criteriaOperatorBox.SelectedItem = option;
 
@@ -164,6 +180,14 @@ public sealed partial class AutoFilterDialog
         else
             _criteriaValueBox.Focus();
     }
+
+    private AutoFilterCriteriaOption? FindCriteriaOptionByPrefix(string criteriaPrefix) =>
+        _criteriaOperatorBox.Items
+            .OfType<AutoFilterCriteriaOption>()
+            .FirstOrDefault(item => HasCriteriaPrefix(item, criteriaPrefix));
+
+    private static bool HasCriteriaPrefix(AutoFilterCriteriaOption option, string criteriaPrefix) =>
+        string.Equals(option.CriteriaPrefix, criteriaPrefix, StringComparison.Ordinal);
 
     private void ShowCustomFilterPanel()
     {
