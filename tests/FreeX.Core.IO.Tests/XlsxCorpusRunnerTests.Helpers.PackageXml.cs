@@ -60,6 +60,12 @@ public partial class XlsxCorpusRunnerTests
 
             if (tags.Contains("chartsheet") || tags.Contains("unsupported-sheet-types"))
                 AssertPublicChartsheetPackageGraph(archive, row.Id);
+
+            if (tags.Contains("mac-excel-package"))
+                AssertPublicMacExcelPackageGraph(archive, row.Id);
+
+            if (tags.Contains("numbers-worksheet-target"))
+                AssertPublicNumbersWorksheetTarget(archive, row.Id);
         }
         finally
         {
@@ -137,6 +143,172 @@ public partial class XlsxCorpusRunnerTests
         }
     }
 
+    private static void AssertPublicMacExcelPackageGraph(ZipArchive archive, string because)
+    {
+        AssertPublicMacExcelAppMetadata(archive, because);
+        AssertPublicMacExcelThemeGraph(archive, because);
+        AssertPublicMacExcelSharedStringAnchor(archive, because);
+        AssertPublicMacExcelStyleTable(archive, because);
+    }
+
+    private static void AssertPublicMacExcelAppMetadata(ZipArchive archive, string because)
+    {
+        const string extendedPropertiesContentType =
+            "application/vnd.openxmlformats-officedocument.extended-properties+xml";
+        const string extendedPropertiesRelationshipType =
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
+
+        var appEntry = archive.GetEntry("docProps/app.xml");
+        appEntry.Should().NotBeNull(because);
+        AssertContentTypeOverride(archive, "/docProps/app.xml", extendedPropertiesContentType, because);
+        PublicPackageRootRelationships(archive)
+            .Should()
+            .ContainSingle(rel =>
+                string.Equals(AttributeValue(rel, "Type"), extendedPropertiesRelationshipType, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(ResolvePackageRootRelationshipTarget(AttributeValue(rel, "Target")), "docProps/app.xml", StringComparison.OrdinalIgnoreCase),
+                because);
+
+        var appXml = LoadPackageXml(appEntry!);
+        appXml.Root!.Name.Should().Be(ExtendedPropertiesNs + "Properties", because);
+        appXml.Root.Element(ExtendedPropertiesNs + "Application")?.Value
+            .Should().Be("Microsoft Macintosh Excel", because);
+        appXml.Root.Element(ExtendedPropertiesNs + "AppVersion")?.Value
+            .Should().Be("14.0300", because);
+    }
+
+    private static void AssertPublicMacExcelThemeGraph(ZipArchive archive, string because)
+    {
+        const string themeContentType =
+            "application/vnd.openxmlformats-officedocument.theme+xml";
+        const string themeRelationshipType =
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
+
+        var themeEntry = archive.GetEntry("xl/theme/theme1.xml");
+        themeEntry.Should().NotBeNull(because);
+        AssertContentTypeOverride(archive, "/xl/theme/theme1.xml", themeContentType, because);
+        PublicWorkbookRelationships(archive)
+            .Should()
+            .ContainSingle(rel =>
+                string.Equals(AttributeValue(rel, "Type"), themeRelationshipType, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(ResolveWorkbookRelationshipTarget(AttributeValue(rel, "Target")), "xl/theme/theme1.xml", StringComparison.OrdinalIgnoreCase),
+                because);
+
+        var themeXml = LoadPackageXml(themeEntry!);
+        themeXml.Root!.Name.Should().Be(DrawingNs + "theme", because);
+        var themeElements = themeXml.Root.Element(DrawingNs + "themeElements");
+        themeElements.Should().NotBeNull(because);
+        themeElements!.Element(DrawingNs + "clrScheme")?.Attribute("name")?.Value
+            .Should().Be("Office", because);
+        themeElements.Element(DrawingNs + "fontScheme")?.Attribute("name")?.Value
+            .Should().Be("Office", because);
+        themeElements.Element(DrawingNs + "fmtScheme")?.Attribute("name")?.Value
+            .Should().Be("Office", because);
+    }
+
+    private static void AssertPublicMacExcelSharedStringAnchor(ZipArchive archive, string because)
+    {
+        AssertPublicSharedStringPackageGraph(archive, because);
+
+        var sharedStringsXml = LoadPackageXml(archive, "xl/sharedStrings.xml");
+        var sharedStringItems = sharedStringsXml.Root!
+            .Elements(WorksheetNs + "si")
+            .ToArray();
+
+        var firstCell = PublicWorksheetCells(archive)
+            .SingleOrDefault(cell => string.Equals(cell.Attribute("r")?.Value, "A1", StringComparison.Ordinal));
+        firstCell.Should().NotBeNull(because);
+        firstCell!.Attribute("t")?.Value.Should().Be("s", because);
+
+        int.TryParse(firstCell.Element(WorksheetNs + "v")?.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var sharedStringIndex)
+            .Should().BeTrue(because);
+        sharedStringIndex.Should().BeGreaterThanOrEqualTo(0, because);
+        sharedStringIndex.Should().BeLessThan(sharedStringItems.Length, because);
+        string.Concat(sharedStringItems[sharedStringIndex].Descendants(WorksheetNs + "t").Select(text => text.Value))
+            .Should().NotBeNullOrWhiteSpace(because);
+    }
+
+    private static void AssertPublicMacExcelStyleTable(ZipArchive archive, string because)
+    {
+        const string stylesContentType =
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
+        const string stylesRelationshipType =
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
+
+        var stylesEntry = archive.GetEntry("xl/styles.xml");
+        stylesEntry.Should().NotBeNull(because);
+        AssertContentTypeOverride(archive, "/xl/styles.xml", stylesContentType, because);
+        PublicWorkbookRelationships(archive)
+            .Should()
+            .ContainSingle(rel =>
+                string.Equals(AttributeValue(rel, "Type"), stylesRelationshipType, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(ResolveWorkbookRelationshipTarget(AttributeValue(rel, "Target")), "xl/styles.xml", StringComparison.OrdinalIgnoreCase),
+                because);
+
+        var stylesXml = LoadPackageXml(stylesEntry!);
+        stylesXml.Root!.Name.Should().Be(WorksheetNs + "styleSheet", because);
+        var cellXfsCount = GetPackageElementCount(RequireStyleElement(stylesXml, "cellXfs", because));
+        cellXfsCount.Should().BeGreaterThanOrEqualTo(2, because);
+
+        var cellStyleXfsCount = GetPackageElementCount(RequireStyleElement(stylesXml, "cellStyleXfs", because));
+        var cellStylesCount = GetPackageElementCount(RequireStyleElement(stylesXml, "cellStyles", because));
+        cellStyleXfsCount.Should().BeGreaterThan(0, because);
+        cellStylesCount.Should().BeGreaterThan(0, because);
+
+        var styleIndexes = PublicWorksheetCells(archive)
+            .Select(cell => int.TryParse(cell.Attribute("s")?.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var styleIndex)
+                ? styleIndex
+                : -1)
+            .Where(styleIndex => styleIndex >= 0)
+            .ToArray();
+        styleIndexes.Should().NotBeEmpty(because);
+        styleIndexes.Should().OnlyContain(styleIndex => styleIndex < cellXfsCount, because);
+    }
+
+    private static void AssertPublicNumbersWorksheetTarget(ZipArchive archive, string because)
+    {
+        const string worksheetContentType =
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
+        const string worksheetRelationshipType =
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
+
+        var workbookXml = LoadPublicWorkbookXml(archive);
+        var sheetRelationshipIds = workbookXml.Root!
+            .Element(WorksheetNs + "sheets")!
+            .Elements(WorksheetNs + "sheet")
+            .Select(sheet => sheet.Attribute(XName.Get("id", "http://schemas.openxmlformats.org/officeDocument/2006/relationships"))?.Value)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .ToArray();
+
+        sheetRelationshipIds.Should().ContainSingle(because);
+        var sheetRelationshipId = sheetRelationshipIds[0]!;
+        var worksheetRelationship = PublicWorkbookRelationships(archive)
+            .SingleOrDefault(rel =>
+                string.Equals(AttributeValue(rel, "Id"), sheetRelationshipId, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(AttributeValue(rel, "Type"), worksheetRelationshipType, StringComparison.OrdinalIgnoreCase));
+        worksheetRelationship.Should().NotBeNull(because);
+
+        ResolveWorkbookRelationshipTarget(AttributeValue(worksheetRelationship!, "Target"))
+            .Should().Be("xl/worksheets/sheet.xml", because);
+        archive.GetEntry("xl/worksheets/sheet1.xml").Should().BeNull(because);
+
+        var worksheetEntry = archive.GetEntry("xl/worksheets/sheet.xml");
+        worksheetEntry.Should().NotBeNull(because);
+        AssertContentTypeOverride(archive, "/xl/worksheets/sheet.xml", worksheetContentType, because);
+        LoadPackageXml(worksheetEntry!).Root!.Name.Should().Be(WorksheetNs + "worksheet", because);
+    }
+
+    private static XElement RequireStyleElement(XDocument stylesXml, string localName, string because)
+    {
+        var element = stylesXml.Root!.Element(WorksheetNs + localName);
+        element.Should().NotBeNull(because);
+        return element!;
+    }
+
+    private static int GetPackageElementCount(XElement element) =>
+        int.TryParse(element.Attribute("count")?.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var count)
+            ? count
+            : element.Elements().Count();
+
     private static IReadOnlyList<XElement> PublicWorksheetElements(ZipArchive archive, string localName)
     {
         return PublicWorksheetXmlDocuments(archive)
@@ -182,6 +354,16 @@ public partial class XlsxCorpusRunnerTests
             .ToArray();
     }
 
+    private static IReadOnlyList<XElement> PublicPackageRootRelationships(ZipArchive archive)
+    {
+        var packageRelsEntry = archive.GetEntry("_rels/.rels");
+        packageRelsEntry.Should().NotBeNull("public workbook packages should contain package root relationships");
+        return LoadPackageXml(packageRelsEntry!)
+            .Root!
+            .Elements(PackageRelationshipNs + "Relationship")
+            .ToArray();
+    }
+
     private static string ResolveWorkbookRelationshipTarget(string? target)
     {
         if (string.IsNullOrWhiteSpace(target))
@@ -194,9 +376,20 @@ public partial class XlsxCorpusRunnerTests
         return NormalizePackagePart("xl/" + target);
     }
 
+    private static string ResolvePackageRootRelationshipTarget(string? target)
+    {
+        if (string.IsNullOrWhiteSpace(target))
+            return "";
+
+        return NormalizePackagePart(target.Replace('\\', '/').Trim());
+    }
+
     private const string RelationshipPartContentType =
         "application/vnd.openxmlformats-package.relationships+xml";
     private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    private static readonly XNamespace DrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+    private static readonly XNamespace ExtendedPropertiesNs =
+        "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties";
     private static readonly XNamespace PackageContentTypeNs =
         "http://schemas.openxmlformats.org/package/2006/content-types";
     private static readonly XNamespace PackageRelationshipNs =
@@ -224,8 +417,32 @@ public partial class XlsxCorpusRunnerTests
                tags.Contains("cell-types") ||
                (tags.Contains("sheet-names") && tags.Contains("boundary")) ||
                tags.Contains("chartsheet") ||
-               tags.Contains("unsupported-sheet-types");
+               tags.Contains("unsupported-sheet-types") ||
+               tags.Contains("mac-excel-package") ||
+               tags.Contains("numbers-worksheet-target");
     }
+
+    private static bool HasEditStablePublicPackageTags(ManifestRow row)
+    {
+        if (!HasExpectedPublicPackageTags(row))
+            return false;
+
+        var tags = row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return tags.Any(tag => tag is not "numbers-worksheet-target" && HasEditStablePublicPackageTag(tag, tags));
+    }
+
+    private static bool HasEditStablePublicPackageTag(string tag, string[] tags) =>
+        tag is "styles" or
+            "formatting" or
+            "hyperlinks" or
+            "merged-cells" or
+            "inline-strings" or
+            "shared-string-package" or
+            "cell-types" or
+            "chartsheet" or
+            "unsupported-sheet-types" or
+            "mac-excel-package" ||
+        (tag == "sheet-names" && tags.Contains("boundary"));
 
     private static DataValidationSummary CaptureDataValidationSummary(DataValidation validation) =>
         new(
