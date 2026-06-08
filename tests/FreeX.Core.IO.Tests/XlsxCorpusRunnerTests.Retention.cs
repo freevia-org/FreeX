@@ -1196,14 +1196,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).FullCalculationOnLoad.Should().BeTrue();
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-worksheet-calculation-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetCalculationPropertiesModel(sheet, "generated-worksheet-calculation-properties-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-worksheet-calculation-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-calculation-properties-001");
         AssertWorksheetCalculationProperties(saved, "generated-worksheet-calculation-properties-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetCalculationPropertiesModel(
+            reloaded.GetSheetAt(0),
+            "worksheet calculation property model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -2000,6 +2007,9 @@ public partial class XlsxCorpusRunnerTests
         sheetCalcPr!.Attribute("fullCalcOnLoad")!.Value.Should().Be("1", because);
         sheetCalcPr.Attribute("calcId").Should().BeNull(because);
     }
+
+    private static void AssertWorksheetCalculationPropertiesModel(Sheet sheet, string because)
+        => sheet.FullCalculationOnLoad.Should().BeTrue(because);
 
     private static void AssertWorksheetSheetViews(Stream package, string because)
     {
