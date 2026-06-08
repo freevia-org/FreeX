@@ -61,8 +61,7 @@ public sealed class RenamePivotTableCommand : IWorkbookCommand
         pivotTable.Name = _newName;
         foreach (var (chartSheetId, chartId) in _updatedCharts)
         {
-            var chart = ctx.GetSheet(chartSheetId).Charts.FirstOrDefault(item => item.Id == chartId);
-            if (chart is not null)
+            if (ChartCommandGuards.TryFindChart(ctx.GetSheet(chartSheetId), chartId, out var chart))
                 chart.PivotTableName = _newName;
         }
 
@@ -86,8 +85,7 @@ public sealed class RenamePivotTableCommand : IWorkbookCommand
 
         foreach (var (chartSheetId, chartId) in _updatedCharts)
         {
-            var chart = ctx.GetSheet(chartSheetId).Charts.FirstOrDefault(item => item.Id == chartId);
-            if (chart is not null)
+            if (ChartCommandGuards.TryFindChart(ctx.GetSheet(chartSheetId), chartId, out var chart))
                 chart.PivotTableName = _oldName;
         }
 
