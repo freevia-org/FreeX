@@ -2305,6 +2305,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
             .Should()
             .BeTrue(blockReason);
+        AssertWorksheetPhoneticPropertiesModel(workbook.GetSheetAt(0));
 
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(42));
@@ -2319,6 +2320,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourcePhoneticProperties.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        reloadedSheet.GetCell(4, 2)!.Value.Should().Be(new NumberValue(42));
+        AssertWorksheetPhoneticPropertiesModel(reloadedSheet);
     }
 
     [Fact]
@@ -4859,6 +4865,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SeedNumericGrid(sheet);
         sheet.PhoneticProperties = new WorksheetPhoneticProperties("1", "fullwidthKatakana", "center");
         return workbook;
+    }
+
+    private static void AssertWorksheetPhoneticPropertiesModel(Sheet sheet)
+    {
+        sheet.PhoneticProperties.Should().Be(new WorksheetPhoneticProperties("1", "fullwidthKatakana", "center"));
     }
 
     private static void SetWorksheetPhoneticProperties(
