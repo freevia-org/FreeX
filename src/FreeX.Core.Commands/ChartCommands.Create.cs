@@ -237,12 +237,20 @@ internal static class ChartCommandGuards
     private const string ChartNotFoundMessage = "Chart was not found.";
     private const string PivotChartNotFoundMessage = "PivotChart was not found.";
     private const string InvalidChartSizeMessage = "Chart size must be positive.";
+    private const string SelectedChartIsPivotChartMessage = "Selected chart is a PivotChart.";
+    private const string SelectedChartIsNotPivotChartMessage = "Selected chart is not a PivotChart.";
 
     public static CommandOutcome ChartNotFound() =>
         new(false, ChartNotFoundMessage);
 
     public static CommandOutcome PivotChartNotFound() =>
         new(false, PivotChartNotFoundMessage);
+
+    public static CommandOutcome SelectedChartIsPivotChart() =>
+        new(false, SelectedChartIsPivotChartMessage);
+
+    public static CommandOutcome SelectedChartIsNotPivotChart() =>
+        new(false, SelectedChartIsNotPivotChartMessage);
 
     public static CommandOutcome? RejectIfEditObjectsBlocked(Sheet sheet) =>
         CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects);
