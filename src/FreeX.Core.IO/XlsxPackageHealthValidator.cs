@@ -263,14 +263,7 @@ public static class XlsxPackageHealthValidator
     private static string? GetEffectivePackageContentType(XDocument contentTypesXml, string normalizedPartName)
     {
         var normalizedContentTypePartName = $"/{NormalizePackagePart(normalizedPartName)}";
-        var overrideContentType = contentTypesXml.Root?
-            .Elements(PackageContentTypeNs + "Override")
-            .FirstOrDefault(element => string.Equals(
-                NormalizeContentTypePartName(element.Attribute("PartName")?.Value),
-                normalizedContentTypePartName,
-                StringComparison.OrdinalIgnoreCase))
-            ?.Attribute("ContentType")
-            ?.Value;
+        var overrideContentType = FindOverrideContentType(contentTypesXml.Root, normalizedContentTypePartName);
 
         if (!string.IsNullOrWhiteSpace(overrideContentType))
             return overrideContentType;
@@ -279,14 +272,45 @@ public static class XlsxPackageHealthValidator
         if (string.IsNullOrWhiteSpace(extension))
             return null;
 
-        return contentTypesXml.Root?
-            .Elements(PackageContentTypeNs + "Default")
-            .FirstOrDefault(element => string.Equals(
+        return FindDefaultContentType(contentTypesXml.Root, extension);
+    }
+
+    private static string? FindOverrideContentType(XElement? root, string normalizedContentTypePartName)
+    {
+        if (root is null)
+            return null;
+
+        foreach (var element in root.Elements(PackageContentTypeNs + "Override"))
+        {
+            if (string.Equals(
+                NormalizeContentTypePartName(element.Attribute("PartName")?.Value),
+                normalizedContentTypePartName,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                return element.Attribute("ContentType")?.Value;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? FindDefaultContentType(XElement? root, string extension)
+    {
+        if (root is null)
+            return null;
+
+        foreach (var element in root.Elements(PackageContentTypeNs + "Default"))
+        {
+            if (string.Equals(
                 element.Attribute("Extension")?.Value?.Trim(),
                 extension,
                 StringComparison.OrdinalIgnoreCase))
-            ?.Attribute("ContentType")
-            ?.Value;
+            {
+                return element.Attribute("ContentType")?.Value;
+            }
+        }
+
+        return null;
     }
 
     private static string NormalizeContentTypePartName(string? partName) =>
