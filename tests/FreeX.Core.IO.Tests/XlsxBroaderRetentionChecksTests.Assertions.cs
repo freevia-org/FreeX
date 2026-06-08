@@ -62,6 +62,34 @@ public sealed partial class XlsxBroaderRetentionChecksTests
         relationships.Should().Contain(("http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml", "customXml/item1.xml"));
     }
 
+    private static void AssertContentTypeOverridesWereRetained(ZipArchive archive)
+    {
+        var expectedOverrides = new (string PartName, string ContentType)[]
+        {
+            ("/docProps/core.xml", "application/vnd.openxmlformats-package.core-properties+xml"),
+            ("/docProps/app.xml", "application/vnd.openxmlformats-officedocument.extended-properties+xml"),
+            ("/docProps/custom.xml", "application/vnd.openxmlformats-officedocument.custom-properties+xml"),
+            ("/xl/externalLinks/externalLink1.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml"),
+            ("/customXml/itemProps1.xml", "application/vnd.openxmlformats-officedocument.customXmlProperties+xml")
+        };
+
+        var overrides = LoadXml(archive, "[Content_Types].xml")
+            .Root!
+            .Elements(ContentTypeNs + "Override")
+            .Select(overrideElement => (
+                PartName: overrideElement.Attribute("PartName")!.Value,
+                ContentType: overrideElement.Attribute("ContentType")!.Value))
+            .ToList();
+
+        foreach (var expectedOverride in expectedOverrides)
+        {
+            overrides.Should().Contain(expectedOverride);
+            archive.GetEntry(expectedOverride.PartName.TrimStart('/'))
+                .Should()
+                .NotBeNull($"{expectedOverride.PartName} should remain addressable by its content type override");
+        }
+    }
+
     private static void AssertWorkbookMetadataWasRetainedWithoutOverridingModeledState(ZipArchive archive)
     {
         var workbookXml = LoadXml(archive, "xl/workbook.xml");
