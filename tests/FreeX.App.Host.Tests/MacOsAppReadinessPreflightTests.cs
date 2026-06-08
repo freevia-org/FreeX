@@ -25,6 +25,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("Distribution-candidate macOS app runs require notarization secrets");
         script.Should().Contain("distribution_readiness=internal_preview_not_for_distribution");
         script.Should().Contain("distribution_readiness=distribution_candidate_ready");
+        script.Should().Contain("/usr/sbin/spctl --assess --type execute --verbose=4 \"$app_path\"");
+        script.Should().Contain("gatekeeper_assessment_subject=unzipped_app_bundle");
+        script.Should().Contain("gatekeeper_assessment_status=accepted");
+        script.Should().Contain("gatekeeper_assessment_source=Notarized Developer ID");
+        script.Should().Contain("Distribution-candidate run requires accepted Gatekeeper assessment from Notarized Developer ID.");
         script.Should().Contain("publish-distribution-candidate:");
         script.Should().Contain("actions/download-artifact@v7");
         script.Should().Contain("FreeX-latest-macos-arm64.zip");
@@ -826,7 +831,7 @@ public sealed class MacOsAppReadinessPreflightTests
               workflow_dispatch:
                 inputs:
                   distribution_candidate:
-                    description: Require Developer ID signing, accepted notarization, and stapled ticket evidence.
+                    description: Require Developer ID signing, accepted notarization, stapled ticket, and Gatekeeper assessment evidence.
                     type: boolean
                     default: false
             jobs:
@@ -868,6 +873,23 @@ public sealed class MacOsAppReadinessPreflightTests
                       echo "Distribution-candidate macOS app runs require Developer ID signing secrets: MACOS_CODESIGN_CERTIFICATE_P12, MACOS_CODESIGN_CERTIFICATE_PASSWORD, and MACOS_DEVELOPER_ID_APPLICATION."
                       echo "Distribution-candidate macOS app runs require notarization secrets: MACOS_NOTARY_APPLE_ID, MACOS_NOTARY_TEAM_ID, and MACOS_NOTARY_PASSWORD."
                       echo "Distribution-candidate run requires codesign_mode=developer-id, notarization_status=accepted, and stapler_validated=true."
+                      gatekeeper_assessment_required="$distribution_candidate"
+                      /usr/sbin/spctl --assess --type execute --verbose=4 "$app_path"
+                      echo "gatekeeper_assessment_attempted=true"
+                      echo "gatekeeper_assessment_required=$gatekeeper_assessment_required"
+                      echo "gatekeeper_assessment_subject=unzipped_app_bundle"
+                      echo "gatekeeper_assessment_type=execute"
+                      echo "gatekeeper_assessment_exit_code=$gatekeeper_assessment_exit_code"
+                      echo "gatekeeper_assessment_status=$gatekeeper_assessment_status"
+                      echo "gatekeeper_assessment_source=$gatekeeper_assessment_source"
+                      echo "gatekeeper_assessment_output=$gatekeeper_line"
+                      echo "distribution_readiness=distribution_candidate_blocked_gatekeeper_assessment"
+                      echo "Distribution-candidate run requires accepted Gatekeeper assessment from Notarized Developer ID."
+                      test 'gatekeeper_assessment_source" != "Notarized Developer ID"'
+                      echo "gatekeeper_assessment_required=true"
+                      echo "gatekeeper_assessment_exit_code=0"
+                      echo "gatekeeper_assessment_status=accepted"
+                      echo "gatekeeper_assessment_source=Notarized Developer ID"
                       echo "distribution_readiness=internal_preview_not_for_distribution"
                       echo "distribution_readiness=distribution_candidate_ready"
                       echo "Developer ID signing is disabled for pull_request events; using ad-hoc signing."
@@ -904,7 +926,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       zip_sha256="$(cut -d ' ' -f 1 "$artifact_root/$zip_name.sha256")"
                       echo "zip_sha256=$zip_sha256"
                       cat > "$tester_instructions_path" <<EOF
-                      This artifact is a macOS port validation build. Internal-preview artifacts are not a public release channel; distribution-candidate artifacts must show Developer ID signing, accepted notarization, and stapler validation in evidence.
+                      This artifact is a macOS port validation build. Internal-preview artifacts are not a public release channel; distribution-candidate artifacts must show Developer ID signing, accepted notarization, stapler validation, and accepted Gatekeeper assessment in evidence.
                       Use osx-arm64 for Apple Silicon Macs and osx-x64 for Intel Macs.
                       Unzip the GitHub Actions artifact wrapper first; these files are inside it.
                       If artifact_channel=internal-preview, ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing.

@@ -329,6 +329,13 @@ function Test-ChannelEvidence {
     Assert-KeyPresent -Map $Evidence -Key "codesign_mode" -Label "$Runtime evidence"
     Assert-KeyPresent -Map $Evidence -Key "notarization_status" -Label "$Runtime evidence"
     Assert-KeyPresent -Map $Evidence -Key "stapler_validated" -Label "$Runtime evidence"
+    Assert-KeyEquals -Map $Evidence -Key "gatekeeper_assessment_attempted" -ExpectedValue "true" -Label "$Runtime evidence"
+    Assert-KeyPresent -Map $Evidence -Key "gatekeeper_assessment_required" -Label "$Runtime evidence"
+    Assert-KeyEquals -Map $Evidence -Key "gatekeeper_assessment_subject" -ExpectedValue "unzipped_app_bundle" -Label "$Runtime evidence"
+    Assert-KeyEquals -Map $Evidence -Key "gatekeeper_assessment_type" -ExpectedValue "execute" -Label "$Runtime evidence"
+    Assert-KeyMatches -Map $Evidence -Key "gatekeeper_assessment_exit_code" -Pattern "^-?[0-9]+$" -Label "$Runtime evidence"
+    Assert-KeyMatches -Map $Evidence -Key "gatekeeper_assessment_status" -Pattern "^(accepted|rejected)$" -Label "$Runtime evidence"
+    Assert-KeyPresent -Map $Evidence -Key "gatekeeper_assessment_source" -Label "$Runtime evidence"
 
     $artifactChannel = Get-LatestKeyValue -Map $Evidence -Key "artifact_channel"
     $distributionCandidateValue = Get-LatestKeyValue -Map $Evidence -Key "distribution_candidate"
@@ -344,12 +351,17 @@ function Test-ChannelEvidence {
         Assert-KeyEquals -Map $Evidence -Key "codesign_mode" -ExpectedValue "developer-id" -Label "$Runtime distribution-candidate evidence"
         Assert-KeyEquals -Map $Evidence -Key "notarization_status" -ExpectedValue "accepted" -Label "$Runtime distribution-candidate evidence"
         Assert-KeyEquals -Map $Evidence -Key "stapler_validated" -ExpectedValue "true" -Label "$Runtime distribution-candidate evidence"
+        Assert-KeyEquals -Map $Evidence -Key "gatekeeper_assessment_required" -ExpectedValue "true" -Label "$Runtime distribution-candidate evidence"
+        Assert-KeyEquals -Map $Evidence -Key "gatekeeper_assessment_exit_code" -ExpectedValue "0" -Label "$Runtime distribution-candidate evidence"
+        Assert-KeyEquals -Map $Evidence -Key "gatekeeper_assessment_status" -ExpectedValue "accepted" -Label "$Runtime distribution-candidate evidence"
+        Assert-KeyEquals -Map $Evidence -Key "gatekeeper_assessment_source" -ExpectedValue "Notarized Developer ID" -Label "$Runtime distribution-candidate evidence"
     }
     else {
         Assert-KeyEquals -Map $Evidence -Key "artifact_channel" -ExpectedValue "internal-preview" -Label "$Runtime internal-preview evidence"
         Assert-KeyEquals -Map $Evidence -Key "distribution_candidate" -ExpectedValue "false" -Label "$Runtime internal-preview evidence"
         Assert-KeyEquals -Map $Evidence -Key "distribution_contract" -ExpectedValue "internal_preview_not_for_distribution_notarization_optional" -Label "$Runtime internal-preview evidence"
         Assert-KeyEquals -Map $Evidence -Key "distribution_readiness" -ExpectedValue "internal_preview_not_for_distribution" -Label "$Runtime internal-preview evidence"
+        Assert-KeyEquals -Map $Evidence -Key "gatekeeper_assessment_required" -ExpectedValue "false" -Label "$Runtime internal-preview evidence"
     }
 
     return $isDistributionCandidateArtifact
@@ -466,7 +478,12 @@ function Test-ReleasePublicationArtifact {
             "distribution_readiness=distribution_candidate_ready",
             "codesign_mode=developer-id",
             "notarization_status=accepted",
-            "stapler_validated=true")) {
+            "stapler_validated=true",
+            "gatekeeper_assessment_attempted=true",
+            "gatekeeper_assessment_required=true",
+            "gatekeeper_assessment_exit_code=0",
+            "gatekeeper_assessment_status=accepted",
+            "gatekeeper_assessment_source=Notarized Developer ID")) {
         Assert-True -Condition ($markers -contains $marker) -Message "macOS release publication manifest must include distribution candidate marker '$marker'."
     }
 
@@ -537,6 +554,8 @@ function Test-ReleasePublicationArtifact {
             "Developer ID",
             "notarization",
             "stapler",
+            "Gatekeeper",
+            "gatekeeper_assessment_status=accepted",
             "Reject")) {
         Assert-ContainsText -Text $releaseInstructions -Needle $needle -Message "macOS release publication instructions must mention '$needle'."
     }
@@ -669,6 +688,8 @@ function Test-TesterInstructions {
             "codesign_mode=",
             "notarization_status=",
             "stapler_validated=",
+            "gatekeeper_assessment_status=",
+            "gatekeeper_assessment_source=",
             "zip_sha256=")) {
         Assert-ContainsText -Text $instructions -Needle $needle -Message "$Runtime tester instructions must mention '$needle'."
     }

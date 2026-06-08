@@ -20,6 +20,8 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         script.Should().Contain("codesign_mode");
         script.Should().Contain("notarization_status");
         script.Should().Contain("stapler_validated");
+        script.Should().Contain("gatekeeper_assessment_status");
+        script.Should().Contain("gatekeeper_assessment_source");
         script.Should().Contain("zip_sha256");
         script.Should().Contain("RequireReleasePublicationArtifact");
         script.Should().Contain("FreeX-latest-macos-distribution-candidate-manifest.json");
@@ -98,6 +100,39 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         result.CombinedOutput.Should().Contain("codesign_mode=developer-id");
         result.CombinedOutput.Should().Contain("notarization_status=accepted");
         result.CombinedOutput.Should().Contain("stapler_validated=true");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenDistributionCandidateLacksAcceptedGatekeeperAssessment()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: true);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: true);
+        ReplaceInFile(arm64.EvidencePath, "gatekeeper_assessment_exit_code=0", "gatekeeper_assessment_exit_code=3");
+        ReplaceInFile(arm64.EvidencePath, "gatekeeper_assessment_status=accepted", "gatekeeper_assessment_status=rejected");
+        ReplaceInFile(arm64.EvidencePath, "gatekeeper_assessment_source=Notarized Developer ID", "gatekeeper_assessment_source=unavailable");
+
+        var result = RunPreflight(temp.Path, "-DistributionCandidate");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("gatekeeper_assessment_exit_code=0");
+        result.CombinedOutput.Should().Contain("gatekeeper_assessment_status=accepted");
+        result.CombinedOutput.Should().Contain("gatekeeper_assessment_source");
+        result.CombinedOutput.Should().Contain("Notarized");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenInternalPreviewDoesNotRecordGatekeeperAttempt()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false);
+        ReplaceInFile(arm64.EvidencePath, "gatekeeper_assessment_attempted=true", "gatekeeper_assessment_attempted=false");
+
+        var result = RunPreflight(temp.Path);
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("gatekeeper_assessment_attempted=true");
     }
 
     [Fact]
@@ -202,6 +237,10 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         var codesignMode = distributionCandidate ? "developer-id" : "ad-hoc";
         var notarizationStatus = distributionCandidate ? "accepted" : "skipped_missing_credentials";
         var staplerValidated = distributionCandidate ? "true" : "false";
+        var gatekeeperAssessmentRequired = distributionCandidate ? "true" : "false";
+        var gatekeeperAssessmentExitCode = distributionCandidate ? "0" : "3";
+        var gatekeeperAssessmentStatus = distributionCandidate ? "accepted" : "rejected";
+        var gatekeeperAssessmentSource = distributionCandidate ? "Notarized Developer ID" : "unavailable";
 
         var evidenceLines = new List<string>
         {
@@ -215,6 +254,13 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
             $"codesign_mode={codesignMode}",
             $"notarization_status={notarizationStatus}",
             $"stapler_validated={staplerValidated}",
+            "gatekeeper_assessment_attempted=true",
+            $"gatekeeper_assessment_required={gatekeeperAssessmentRequired}",
+            "gatekeeper_assessment_subject=unzipped_app_bundle",
+            "gatekeeper_assessment_type=execute",
+            $"gatekeeper_assessment_exit_code={gatekeeperAssessmentExitCode}",
+            $"gatekeeper_assessment_status={gatekeeperAssessmentStatus}",
+            $"gatekeeper_assessment_source={gatekeeperAssessmentSource}",
             $"zip_sha256={zipHash}",
             "format_cells_style_roundtrip=true",
             "format_cells_style_roundtrip_count=2",
@@ -309,12 +355,14 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
             $"codesign_mode={codesignMode}",
             $"notarization_status={notarizationStatus}",
             $"stapler_validated={staplerValidated}",
+            $"gatekeeper_assessment_status={gatekeeperAssessmentStatus}",
+            $"gatekeeper_assessment_source={gatekeeperAssessmentSource}",
             $"zip_sha256={zipHash}"
         };
 
         if (distributionCandidate)
         {
-            instructionLines.Add("If artifact_channel=distribution-candidate, reject the artifact unless it has Developer ID signing, accepted notarization, and stapling evidence.");
+            instructionLines.Add("If artifact_channel=distribution-candidate, reject the artifact unless it has Developer ID signing, accepted notarization, stapling evidence, and gatekeeper_assessment_status=accepted from gatekeeper_assessment_source=Notarized Developer ID.");
         }
 
         if (!distributionCandidate || includeInternalPreviewTesterGuidance)
@@ -406,7 +454,12 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
                 "distribution_readiness=distribution_candidate_ready",
                 "codesign_mode=developer-id",
                 "notarization_status=accepted",
-                "stapler_validated=true"
+                "stapler_validated=true",
+                "gatekeeper_assessment_attempted=true",
+                "gatekeeper_assessment_required=true",
+                "gatekeeper_assessment_exit_code=0",
+                "gatekeeper_assessment_status=accepted",
+                "gatekeeper_assessment_source=Notarized Developer ID"
             },
             ["assets"] = assets
         };
@@ -422,7 +475,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
                 "Published release assets include FreeX-latest-macos-arm64.zip and FreeX-latest-macos-x64.zip.",
                 "Use FreeX-latest-macos-distribution-candidate-manifest.json to verify the release asset set.",
                 "Each runtime includes default-open launch smoke, evidence, notarization, and tester instruction assets.",
-                "Reject the distribution-candidate unless Developer ID signing, accepted notarization, and stapler validation are present."));
+                "Reject the distribution-candidate unless Developer ID signing, accepted notarization, stapler validation, Gatekeeper, and gatekeeper_assessment_status=accepted are present."));
     }
 
     private static string CopyReleaseAsset(SyntheticBundle bundle, string sourceName, string releaseDirectory, string destinationName)

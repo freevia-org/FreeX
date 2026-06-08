@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       distribution_candidate:
-        description: Require Developer ID signing, accepted notarization, and stapled ticket evidence.
+        description: Require Developer ID signing, accepted notarization, stapled ticket, and Gatekeeper assessment evidence.
         required: false
         type: boolean
         default: false
@@ -301,6 +301,48 @@ jobs:
           test -x "$unzip_root/FreeX.app/Contents/MacOS/FreeX"
           test -f "$unzip_root/FreeX.app/Contents/MacOS/FreeX.dll"
           codesign --verify --deep --strict "$unzip_root/FreeX.app"
+          gatekeeper_assessment_required="$distribution_candidate"
+          set +e
+          gatekeeper_assessment_output="$(/usr/sbin/spctl --assess --type execute --verbose=4 "$app_path" 2>&1)"
+          gatekeeper_assessment_exit_code=$?
+          set -e
+          if [[ "$gatekeeper_assessment_exit_code" -eq 0 ]]; then
+            gatekeeper_assessment_status="accepted"
+          else
+            gatekeeper_assessment_status="rejected"
+          fi
+          gatekeeper_assessment_source="$(awk '/^source=/{print substr($0, 8); exit}' <<< "$gatekeeper_assessment_output")"
+          if [[ -z "$gatekeeper_assessment_source" ]]; then
+            gatekeeper_assessment_source="unavailable"
+          fi
+          {
+            echo ""
+            echo "[gatekeeper-assessment]"
+            echo "gatekeeper_assessment_attempted=true"
+            echo "gatekeeper_assessment_required=$gatekeeper_assessment_required"
+            echo "gatekeeper_assessment_subject=unzipped_app_bundle"
+            echo "gatekeeper_assessment_type=execute"
+            echo "gatekeeper_assessment_exit_code=$gatekeeper_assessment_exit_code"
+            echo "gatekeeper_assessment_status=$gatekeeper_assessment_status"
+            echo "gatekeeper_assessment_source=$gatekeeper_assessment_source"
+            if [[ -z "$gatekeeper_assessment_output" ]]; then
+              echo "gatekeeper_assessment_output=<empty>"
+            else
+              while IFS= read -r gatekeeper_line; do
+                echo "gatekeeper_assessment_output=$gatekeeper_line"
+              done <<< "$gatekeeper_assessment_output"
+            fi
+          } >> "$evidence_path"
+          if [[ "$distribution_candidate" == "true" ]]; then
+            if [[ "$gatekeeper_assessment_exit_code" -ne 0 ||
+                  "$gatekeeper_assessment_status" != "accepted" ||
+                  "$gatekeeper_assessment_source" != "Notarized Developer ID" ]]; then
+              distribution_readiness=distribution_candidate_blocked_gatekeeper_assessment
+              echo "distribution_readiness=$distribution_readiness" >> "$evidence_path"
+              echo "Distribution-candidate run requires accepted Gatekeeper assessment from Notarized Developer ID." | tee -a "$notary_log" >&2
+              exit 1
+            fi
+          fi
           host_arch="$(uname -m)"
           {
             echo ""
@@ -325,6 +367,13 @@ jobs:
             echo "codesign_mode=$signing_mode"
             echo "notarization_status=$notarization_status"
             echo "stapler_validated=$stapler_validated"
+            echo "gatekeeper_assessment_attempted=true"
+            echo "gatekeeper_assessment_required=$gatekeeper_assessment_required"
+            echo "gatekeeper_assessment_subject=unzipped_app_bundle"
+            echo "gatekeeper_assessment_type=execute"
+            echo "gatekeeper_assessment_exit_code=$gatekeeper_assessment_exit_code"
+            echo "gatekeeper_assessment_status=$gatekeeper_assessment_status"
+            echo "gatekeeper_assessment_source=$gatekeeper_assessment_source"
             echo "zip_sha256=$zip_sha256"
           } >> "$evidence_path"
           if [[ ("$runtime" == "osx-arm64" && "$host_arch" == "arm64") || ("$runtime" == "osx-x64" && "$host_arch" == "x86_64") ]]; then
@@ -746,11 +795,21 @@ jobs:
             echo "macos_launch_smoke=skipped_host_arch_mismatch" > "$default_open_report"
           fi
 
+          tester_channel_summary="This artifact is a macOS port validation build. Internal-preview artifacts are not a public release channel; distribution-candidate artifacts must show Developer ID signing, accepted notarization, stapler validation, and accepted Gatekeeper assessment in evidence."
+          tester_internal_preview_summary=""
+          tester_open_guidance="If artifact_channel=distribution-candidate, reject the artifact unless it has Developer ID signing, accepted notarization, stapling evidence, and gatekeeper_assessment_status=accepted from gatekeeper_assessment_source=Notarized Developer ID."
+          tester_internal_preview_open_guidance=""
+          if [[ "$distribution_candidate" != "true" ]]; then
+            tester_internal_preview_summary="For artifact_channel=internal-preview: This artifact is a preview build for macOS port validation. It is not a public release channel."
+            tester_open_guidance="If artifact_channel=internal-preview, ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing."
+            tester_internal_preview_open_guidance="For artifact_channel=internal-preview: Ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing."
+          fi
+
           cat > "$tester_instructions_path" <<EOF
           # FreeX macOS App ($artifact_channel, $runtime)
 
-          This artifact is a macOS port validation build. Internal-preview artifacts are not a public release channel; distribution-candidate artifacts must show Developer ID signing, accepted notarization, and stapler validation in evidence.
-          For artifact_channel=internal-preview: This artifact is a preview build for macOS port validation. It is not a public release channel.
+          $tester_channel_summary
+          $tester_internal_preview_summary
 
           Use osx-arm64 for Apple Silicon Macs and osx-x64 for Intel Macs. Unzip the GitHub Actions artifact wrapper first; these files are inside it.
 
@@ -791,10 +850,14 @@ jobs:
           - codesign_mode=$signing_mode
           - notarization_status=$notarization_status
           - stapler_validated=$stapler_validated
+          - gatekeeper_assessment_attempted=true
+          - gatekeeper_assessment_required=$gatekeeper_assessment_required
+          - gatekeeper_assessment_status=$gatekeeper_assessment_status
+          - gatekeeper_assessment_source=$gatekeeper_assessment_source
           - zip_sha256=$zip_sha256
 
-          If artifact_channel=internal-preview, ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing. If artifact_channel=distribution-candidate, reject the artifact unless it has Developer ID signing, accepted notarization, and stapling evidence.
-          For artifact_channel=internal-preview: Ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing.
+          $tester_open_guidance
+          $tester_internal_preview_open_guidance
 
           ## Report
 
@@ -954,6 +1017,13 @@ jobs:
               "codesign_mode=developer-id",
               "notarization_status=accepted",
               "stapler_validated=true",
+              "gatekeeper_assessment_attempted=true",
+              "gatekeeper_assessment_required=true",
+              "gatekeeper_assessment_subject=unzipped_app_bundle",
+              "gatekeeper_assessment_type=execute",
+              "gatekeeper_assessment_exit_code=0",
+              "gatekeeper_assessment_status=accepted",
+              "gatekeeper_assessment_source=Notarized Developer ID",
               "zip_sha256="
             )) {
               Assert-ContainsRequiredText -Text $evidenceText -Needle $marker -Label "$runtime evidence"
@@ -1036,7 +1106,12 @@ jobs:
               "distribution_readiness=distribution_candidate_ready",
               "codesign_mode=developer-id",
               "notarization_status=accepted",
-              "stapler_validated=true"
+              "stapler_validated=true",
+              "gatekeeper_assessment_attempted=true",
+              "gatekeeper_assessment_required=true",
+              "gatekeeper_assessment_exit_code=0",
+              "gatekeeper_assessment_status=accepted",
+              "gatekeeper_assessment_source=Notarized Developer ID"
             )
             assets = $manifestAssets
           }
@@ -1046,7 +1121,7 @@ jobs:
           Set-Content -LiteralPath $instructionsPath -Encoding ascii -Value @"
           # FreeX macOS Distribution Candidate
 
-          This release was published only after both hosted runtime artifacts completed and this publication job revalidated distribution-candidate evidence for Developer ID signing, accepted notarization, and stapler validation.
+          This release was published only after both hosted runtime artifacts completed and this publication job revalidated distribution-candidate evidence for Developer ID signing, accepted notarization, stapler validation, and accepted Gatekeeper assessment.
 
           Commit: $($env:GITHUB_SHA)
           Run: $($env:GITHUB_RUN_ID)
@@ -1060,7 +1135,7 @@ jobs:
           - FreeX-latest-macos-x64.zip.sha256
           - FreeX-latest-macos-distribution-candidate-manifest.json
 
-          Each runtime also publishes stable evidence, packaging smoke, launch smoke, Open With launch smoke, default-open launch smoke, notarization log, and tester-instruction assets. Reject the candidate if the evidence does not show artifact_channel=distribution-candidate, distribution_readiness=distribution_candidate_ready, codesign_mode=developer-id, notarization_status=accepted, and stapler_validated=true.
+          Each runtime also publishes stable evidence, packaging smoke, launch smoke, Open With launch smoke, default-open launch smoke, notarization log, and tester-instruction assets. Reject the candidate if the evidence does not show artifact_channel=distribution-candidate, distribution_readiness=distribution_candidate_ready, codesign_mode=developer-id, notarization_status=accepted, stapler_validated=true, gatekeeper_assessment_status=accepted, and gatekeeper_assessment_source=Notarized Developer ID.
 
           ## Verify
 
