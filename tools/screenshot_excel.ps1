@@ -1,6 +1,7 @@
 param(
     [string]$Widths = $env:FREEX_SS_TOUR_WIDTHS,
-    [string]$AutoFilterFlyoutTour = $env:FREEX_EXCEL_AUTOFILTER_FLYOUT_TOUR
+    [string]$AutoFilterFlyoutTour = $env:FREEX_EXCEL_AUTOFILTER_FLYOUT_TOUR,
+    [string]$NumberFormatDropdownTour = $env:FREEX_EXCEL_NUMBER_FORMAT_DROPDOWN_TOUR
 )
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -106,6 +107,7 @@ public class WindowInfoE {
 $outDir = Join-Path $PSScriptRoot "screenshots_excel"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 $autoFilterFlyoutOutDir = Join-Path $outDir "autofilter-flyout-tour"
+$numberFormatDropdownOutDir = Join-Path $outDir "home-number-format-dropdown-tour"
 function Clear-ScreenshotEvidenceArtifacts {
     Get-ChildItem $outDir -Filter "*.png" -ErrorAction SilentlyContinue |
         Remove-Item -Force -ErrorAction SilentlyContinue
@@ -117,6 +119,14 @@ function Clear-AutoFilterFlyoutEvidenceArtifacts {
         Get-ChildItem $autoFilterFlyoutOutDir -Filter "*.png" -ErrorAction SilentlyContinue |
             Remove-Item -Force -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath (Join-Path $autoFilterFlyoutOutDir "excel_autofilter_flyout_tour_manifest.json") -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Clear-NumberFormatDropdownEvidenceArtifacts {
+    if (Test-Path -LiteralPath $numberFormatDropdownOutDir -PathType Container) {
+        Get-ChildItem $numberFormatDropdownOutDir -Filter "*.png" -ErrorAction SilentlyContinue |
+            Remove-Item -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath (Join-Path $numberFormatDropdownOutDir "excel_home_number_format_dropdown_tour_manifest.json") -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -283,7 +293,6 @@ function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle, $operati
     $foreground = [Win32e]::GetForegroundWindow()
     if ($foreground -eq [IntPtr]::Zero) {
         Clear-ScreenshotEvidenceArtifacts
-        Clear-AutoFilterFlyoutEvidenceArtifacts
         throw "Blocked: no foreground window before $operation."
     }
 
@@ -294,7 +303,6 @@ function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle, $operati
     $actualTitle = $title.ToString()
     if ($actualPid -ne $expectedPid -or $actualTitle -ne $expectedTitle) {
         Clear-ScreenshotEvidenceArtifacts
-        Clear-AutoFilterFlyoutEvidenceArtifacts
         throw "Blocked: foreground window '$actualTitle' (PID $actualPid) does not match expected '$expectedTitle' (PID $expectedPid) before $operation."
     }
 }
@@ -302,7 +310,6 @@ function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle, $operati
 function Assert-ForegroundProcessOwnership($expectedPid, $operation = "capture") {
     $foreground = [Win32e]::GetForegroundWindow()
     if ($foreground -eq [IntPtr]::Zero) {
-        Clear-AutoFilterFlyoutEvidenceArtifacts
         throw "Blocked: no foreground window before $operation."
     }
 
@@ -311,22 +318,61 @@ function Assert-ForegroundProcessOwnership($expectedPid, $operation = "capture")
     if ($actualPid -ne $expectedPid) {
         $title = New-Object System.Text.StringBuilder 512
         [Win32e]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
-        Clear-AutoFilterFlyoutEvidenceArtifacts
         throw "Blocked: foreground window '$($title.ToString())' (PID $actualPid) does not belong to expected Excel PID $expectedPid before $operation."
     }
 }
 
-function Find-ExcelAutoFilterPopupWindow($expectedPid, $ownerWindowHandle) {
+function Set-ExcelForegroundWindow($excelHwnd, $excelPid, $expectedTitle, $operation) {
+    $shell = $null
+    try {
+        $shell = New-Object -ComObject WScript.Shell
+    }
+    catch {
+        $shell = $null
+    }
+
+    for ($attempt = 0; $attempt -lt 10; $attempt++) {
+        [Win32e]::ShowWindow($excelHwnd, 1) | Out-Null
+        [Win32e]::SetWindowPos($excelHwnd, [IntPtr](-1), 0, 0, 0, 0, 0x0043) | Out-Null
+        [Win32e]::SetForegroundWindow($excelHwnd) | Out-Null
+        if ($null -ne $shell) {
+            $shell.AppActivate([int]$excelPid) | Out-Null
+        }
+
+        Start-Sleep -Milliseconds 250
+
+        $foreground = [Win32e]::GetForegroundWindow()
+        if ($foreground -eq [IntPtr]::Zero) {
+            continue
+        }
+
+        $actualPid = 0
+        [Win32e]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
+        $title = New-Object System.Text.StringBuilder 512
+        [Win32e]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
+        if ($actualPid -eq $excelPid -and $title.ToString() -eq $expectedTitle) {
+            return
+        }
+    }
+
+    Assert-ForegroundWindowOwnership $excelPid $expectedTitle $operation
+}
+
+function Find-ExcelPopupWindow($expectedPid, $ownerWindowHandle, $minimumWidth, $minimumHeight) {
     $windows = [Win32e]::GetVisibleWindowsByProcess($expectedPid) |
         Where-Object {
             $_.Handle -ne $ownerWindowHandle -and
             $_.ClassName -ne "XLMAIN" -and
-            ($_.Right - $_.Left) -gt 120 -and
-            ($_.Bottom - $_.Top) -gt 80
+            ($_.Right - $_.Left) -gt $minimumWidth -and
+            ($_.Bottom - $_.Top) -gt $minimumHeight
         } |
         Sort-Object @{ Expression = { ($_.Right - $_.Left) * ($_.Bottom - $_.Top) }; Descending = $true }
 
     return $windows | Select-Object -First 1
+}
+
+function Find-ExcelAutoFilterPopupWindow($expectedPid, $ownerWindowHandle) {
+    return Find-ExcelPopupWindow $expectedPid $ownerWindowHandle 120 80
 }
 
 function New-ExcelAutoFilterSampleWorkbook($excelApp) {
@@ -364,6 +410,18 @@ function New-ExcelAutoFilterSampleWorkbook($excelApp) {
     return $workbook
 }
 
+function New-ExcelNumberFormatSampleWorkbook($excelApp) {
+    $workbook = $excelApp.Workbooks.Add()
+    $worksheet = $workbook.Worksheets.Item(1)
+    $worksheet.Name = "Number Format"
+    $worksheet.Range("A1").Value2 = 1234.56
+    $worksheet.Range("B1").Value2 = "Home Number Format dropdown sample"
+    $worksheet.Range("A:B").EntireColumn.AutoFit() | Out-Null
+    $worksheet.Range("A1").Select() | Out-Null
+
+    return $workbook
+}
+
 function Capture-ScreenRectangle($left, $top, $width, $height, $path) {
     $bmp = New-Object System.Drawing.Bitmap($width, $height)
     $g = [System.Drawing.Graphics]::FromImage($bmp)
@@ -389,6 +447,30 @@ function Click-ExcelAutoFilterHeaderDropdown($excelApp, $worksheet, $headerAddre
     Start-Sleep -Milliseconds 60
     Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel AutoFilter dropdown mouse up"
     [Win32e]::mouse_event(4, 0, 0, 0, 0)
+}
+
+function Expand-ExcelNumberFormatDropdown($expectedPid, $excelElement, $expectedTitle) {
+    $comboCondition = New-Object System.Windows.Automation.PropertyCondition(
+        [System.Windows.Automation.AutomationElement]::AutomationIdProperty,
+        "NumberFormatGallery")
+    $combo = $excelElement.FindFirst(
+        [System.Windows.Automation.TreeScope]::Descendants,
+        $comboCondition)
+    if ($null -eq $combo) {
+        Clear-NumberFormatDropdownEvidenceArtifacts
+        throw "Excel Home number-format dropdown tour could not find the NumberFormatGallery ComboBox."
+    }
+
+    $pattern = $null
+    if (-not $combo.TryGetCurrentPattern(
+            [System.Windows.Automation.ExpandCollapsePattern]::Pattern,
+            [ref]$pattern)) {
+        Clear-NumberFormatDropdownEvidenceArtifacts
+        throw "Excel Home number-format dropdown tour could not expand NumberFormatGallery through UI Automation."
+    }
+
+    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel Number Format dropdown expand"
+    $pattern.Expand()
 }
 
 function Invoke-ExcelAutoFilterFlyoutTour {
@@ -419,8 +501,7 @@ function Invoke-ExcelAutoFilterFlyoutTour {
         $excelPid = 0
         [Win32e]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
         $excelTitle = Get-WindowTitle $excelHwnd
-        [Win32e]::SetForegroundWindow($excelHwnd) | Out-Null
-        Start-Sleep -Milliseconds 700
+        Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle "Excel AutoFilter flyout setup"
         Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel AutoFilter flyout setup"
 
         Click-ExcelAutoFilterHeaderDropdown $excelApp $worksheet "A1" $excelPid $excelTitle
@@ -532,8 +613,159 @@ function Invoke-ExcelAutoFilterFlyoutTour {
     }
 }
 
+function Invoke-ExcelNumberFormatDropdownTour {
+    New-Item -ItemType Directory -Force -Path $numberFormatDropdownOutDir | Out-Null
+    Clear-NumberFormatDropdownEvidenceArtifacts
+
+    $excelApp = $null
+    $workbook = $null
+    try {
+        $excelApp = New-Object -ComObject Excel.Application
+        $excelApp.Visible = $true
+        $excelApp.DisplayAlerts = $false
+        $excelApp.WindowState = -4143
+        $excelApp.Top = 0
+        $excelApp.Left = 0
+        $excelApp.Width = 900
+        $excelApp.Height = 720
+        $workbook = New-ExcelNumberFormatSampleWorkbook $excelApp
+        Start-Sleep -Milliseconds 700
+
+        $excelHwnd = [IntPtr]$excelApp.Hwnd
+        if ($excelHwnd -eq [IntPtr]::Zero) {
+            Clear-NumberFormatDropdownEvidenceArtifacts
+            throw "Excel Home number-format dropdown tour could not resolve the Excel window handle."
+        }
+
+        $excelPid = 0
+        [Win32e]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
+        $excelTitle = Get-WindowTitle $excelHwnd
+        Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle "Excel Number Format dropdown setup"
+        Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel Number Format dropdown setup"
+
+        $desktop = [System.Windows.Automation.AutomationElement]::RootElement
+        $processCondition = New-Object System.Windows.Automation.PropertyCondition(
+            [System.Windows.Automation.AutomationElement]::ProcessIdProperty,
+            [int]$excelPid)
+        $excelElement = $desktop.FindFirst(
+            [System.Windows.Automation.TreeScope]::Children,
+            $processCondition)
+        if ($null -eq $excelElement) {
+            Clear-NumberFormatDropdownEvidenceArtifacts
+            throw "Excel Home number-format dropdown tour could not find the Excel UI Automation root."
+        }
+
+        Expand-ExcelNumberFormatDropdown $excelPid $excelElement $excelTitle
+        Start-Sleep -Milliseconds 900
+        Assert-ForegroundProcessOwnership $excelPid "Excel Number Format dropdown capture"
+
+        $popup = Find-ExcelPopupWindow $excelPid $excelHwnd 120 120
+        if ($null -eq $popup) {
+            Clear-NumberFormatDropdownEvidenceArtifacts
+            throw "Excel Home number-format dropdown tour did not detect a foreground Excel popup window after expanding NumberFormatGallery."
+        }
+
+        $captureSource = "popup-window-rectangle"
+        $captureBounds = [pscustomobject]@{
+            Left = $popup.Left
+            Top = $popup.Top
+            Right = $popup.Right
+            Bottom = $popup.Bottom
+            Width = $popup.Right - $popup.Left
+            Height = $popup.Bottom - $popup.Top
+        }
+        $popupBounds = [pscustomobject]@{
+            Handle = $popup.Handle.ToString()
+            ClassName = $popup.ClassName
+            Title = $popup.Title
+            Left = $popup.Left
+            Top = $popup.Top
+            Right = $popup.Right
+            Bottom = $popup.Bottom
+            Width = $popup.Right - $popup.Left
+            Height = $popup.Bottom - $popup.Top
+        }
+
+        $fileName = "interactive_home_number_format_opened.png"
+        $path = Join-Path $numberFormatDropdownOutDir $fileName
+        Assert-ForegroundProcessOwnership $excelPid "Excel Number Format dropdown screen capture"
+        Capture-ScreenRectangle $captureBounds.Left $captureBounds.Top $captureBounds.Width $captureBounds.Height $path
+
+        $manifestPath = Join-Path $numberFormatDropdownOutDir "excel_home_number_format_dropdown_tour_manifest.json"
+        [pscustomobject]@{
+            Tool = "FREEX_EXCEL_NUMBER_FORMAT_DROPDOWN_TOUR"
+            EvidenceFamily = "dropdown"
+            EvidenceSubject = "excel"
+            EvidenceApp = "Microsoft Excel"
+            OutputDirectory = $numberFormatDropdownOutDir
+            OutputNaming = "interactive_home_number_format_opened.png"
+            CatalogEvidenceTarget = "docs/testing/ui-test-catalog.md"
+            SelectedCell = "A1"
+            SelectedFormat = "General"
+            CaptureStatus = "complete"
+            CaptureMethod = $captureSource
+            ForegroundGuard = [pscustomobject]@{
+                Required = $true
+                ExpectedProcessId = $excelPid
+                ExpectedWindowTitle = $excelTitle
+                Policy = "Seed through Excel automation, then abort and clear number-format dropdown evidence unless Excel owns foreground immediately before expanding NumberFormatGallery and before screen capture."
+            }
+            Pairing = [pscustomobject]@{
+                PairKeyPattern = "interactive:home-number-format:<State>"
+                PairKey = "interactive:home-number-format:opened"
+                CounterpartSubject = "freex"
+                CounterpartTool = "FREEX_HOME_NUMBER_FORMAT_DROPDOWN_TOUR"
+                CounterpartFileName = "freex_dropdown_home_number_format_opened.png"
+            }
+            Scenario = [pscustomobject]@{
+                ScenarioId = "dropdown:home-number-format"
+                ScenarioFileName = "home_number_format"
+                State = "opened"
+                SelectedCell = "A1"
+                SampleValue = "1234.56"
+                Trigger = "Excel COM seeds A1, selects Home's NumberFormatGallery ComboBox through UI Automation, and expands it with a foreground guard."
+            }
+            WindowBounds = $captureBounds
+            PopupBounds = $popupBounds
+            Captures = @(
+                [pscustomobject]@{
+                    CaptureSequence = 1
+                    CaptureKey = "interactive:home-number-format:opened"
+                    PairKey = "interactive:home-number-format:opened"
+                    EvidenceSubject = "excel"
+                    CounterpartSubject = "freex"
+                    CounterpartFileName = "freex_dropdown_home_number_format_opened.png"
+                    FileName = $fileName
+                    Path = $path
+                    Width = $captureBounds.Width
+                    Height = $captureBounds.Height
+                    CaptureMethod = $captureSource
+                    CaptureStatus = "complete"
+                }
+            )
+        } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+
+        Write-Host "Saved $path"
+        Write-Host "Saved $manifestPath"
+    }
+    finally {
+        if ($null -ne $workbook) {
+            $workbook.Close($false) | Out-Null
+        }
+        if ($null -ne $excelApp) {
+            $excelApp.Quit() | Out-Null
+        }
+    }
+}
+
 if ($AutoFilterFlyoutTour -eq "1") {
     Invoke-ExcelAutoFilterFlyoutTour
+    Write-Host "Done."
+    exit 0
+}
+
+if ($NumberFormatDropdownTour -eq "1") {
+    Invoke-ExcelNumberFormatDropdownTour
     Write-Host "Done."
     exit 0
 }

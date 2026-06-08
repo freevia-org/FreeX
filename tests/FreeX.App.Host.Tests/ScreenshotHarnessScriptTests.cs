@@ -298,6 +298,10 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain("[Win32e]::SetCursorPos($clickX, $clickY) | Out-Null");
         script.Should().Contain("$pointToScreenScale = 2.0");
         script.Should().Contain("$clickX = [int]($left + ($header.Width * $pointToScreenScale) - 12)");
+        script.Should().Contain("function Set-ExcelForegroundWindow");
+        script.Should().Contain("New-Object -ComObject WScript.Shell");
+        script.Should().Contain("[Win32e]::SetWindowPos($excelHwnd, [IntPtr](-1), 0, 0, 0, 0, 0x0043) | Out-Null");
+        script.Should().Contain("Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle \"Excel AutoFilter flyout setup\"");
         script.Should().Contain("PairKey = \"interactive:table-autofilter-dropdown:opened\"");
         script.Should().Contain("CounterpartTool = \"FREEX_AUTOFILTER_FLYOUT_TOUR\"");
         script.Should().Contain("CounterpartFileName = \"freex_table_autofilter_dropdown.png\"");
@@ -308,6 +312,42 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain("Excel AutoFilter flyout tour did not detect a foreground Excel popup window");
         script.Should().Contain("Assert-ForegroundProcessOwnership $excelPid \"Excel AutoFilter flyout screen capture\"");
         script.Should().Contain("Find-ExcelAutoFilterPopupWindow $excelPid $excelHwnd");
+    }
+
+    [Fact]
+    public void ExcelScreenshotScript_ProvidesOptInHomeNumberFormatDropdownTour()
+    {
+        var script = ReadScript("screenshot_excel.ps1");
+
+        script.Should().Contain("[string]$NumberFormatDropdownTour = $env:FREEX_EXCEL_NUMBER_FORMAT_DROPDOWN_TOUR");
+        script.Should().Contain("if ($NumberFormatDropdownTour -eq \"1\")");
+        script.Should().Contain("function Invoke-ExcelNumberFormatDropdownTour");
+        script.Should().Contain("function New-ExcelNumberFormatSampleWorkbook");
+        script.Should().Contain("function Expand-ExcelNumberFormatDropdown");
+        script.Should().Contain("Join-Path $outDir \"home-number-format-dropdown-tour\"");
+        script.Should().Contain("excel_home_number_format_dropdown_tour_manifest.json");
+        script.Should().Contain("interactive_home_number_format_opened.png");
+        script.Should().Contain("Tool = \"FREEX_EXCEL_NUMBER_FORMAT_DROPDOWN_TOUR\"");
+        script.Should().Contain("EvidenceFamily = \"dropdown\"");
+        script.Should().Contain("EvidenceSubject = \"excel\"");
+        script.Should().Contain("EvidenceApp = \"Microsoft Excel\"");
+        script.Should().Contain("OutputNaming = \"interactive_home_number_format_opened.png\"");
+        script.Should().Contain("CatalogEvidenceTarget = \"docs/testing/ui-test-catalog.md\"");
+        script.Should().Contain("SelectedCell = \"A1\"");
+        script.Should().Contain("SelectedFormat = \"General\"");
+        script.Should().Contain("CaptureStatus = \"complete\"");
+        script.Should().Contain("State = \"opened\"");
+        script.Should().Contain("NumberFormatGallery");
+        script.Should().Contain("[System.Windows.Automation.ExpandCollapsePattern]::Pattern");
+        script.Should().Contain("$pattern.Expand()");
+        script.Should().Contain("Find-ExcelPopupWindow $excelPid $excelHwnd 120 120");
+        script.Should().Contain("Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle \"Excel Number Format dropdown setup\"");
+        script.Should().Contain("PairKey = \"interactive:home-number-format:opened\"");
+        script.Should().Contain("CounterpartTool = \"FREEX_HOME_NUMBER_FORMAT_DROPDOWN_TOUR\"");
+        script.Should().Contain("CounterpartFileName = \"freex_dropdown_home_number_format_opened.png\"");
+        script.Should().Contain("SampleValue = \"1234.56\"");
+        script.Should().Contain("Assert-ForegroundWindowOwnership $excelPid $excelTitle \"Excel Number Format dropdown setup\"");
+        script.Should().Contain("Assert-ForegroundProcessOwnership $excelPid \"Excel Number Format dropdown screen capture\"");
     }
 
     private static string ReadScript(string scriptName) =>
