@@ -161,7 +161,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("echo \"smoke_status=skipped_host_arch_mismatch\" >> \"$evidence_path\"");
         workflow.Should().Contain("codesign --verify --deep --strict");
         workflow.Should().Contain("host_arch=\"$(uname -m)\"");
-        workflow.Should().Contain("unzip -q");
+        workflow.Should().Contain("ditto -x -k \"$zip_path\" \"$unzip_root\"");
         workflow.Should().Contain("test -x \"$unzip_root/FreeX.app/Contents/MacOS/FreeX\"");
         workflow.Should().Contain("(cd \"$artifact_root\" && shasum -a 256 \"$zip_name\" > \"$zip_name.sha256\")");
         workflow.Should().Contain("(cd \"$artifact_root\" && shasum -a 256 -c \"$zip_name.sha256\")");
@@ -170,6 +170,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("This artifact is a preview build for macOS port validation. It is not a public release channel.");
         workflow.Should().Contain("Use osx-arm64 for Apple Silicon Macs and osx-x64 for Intel Macs.");
         workflow.Should().Contain("Unzip the GitHub Actions artifact wrapper first; these files are inside it.");
+        workflow.Should().Contain("ditto -x -k $zip_name .");
         workflow.Should().Contain("Ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing.");
         workflow.Should().Contain("codesign --verify --deep --strict \"$unzip_root/FreeX.app\"");
         workflow.Should().Contain("\"$unzip_root/FreeX.app/Contents/MacOS/FreeX\" --packaging-smoke | tee \"$smoke_log\"");
