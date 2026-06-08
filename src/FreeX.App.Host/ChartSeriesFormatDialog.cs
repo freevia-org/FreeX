@@ -29,12 +29,21 @@ public sealed record ChartSeriesFormatDialogResult(
             DashStyle,
             MarkerStyle,
             MarkerSize);
-        var existingIndex = formats.FindIndex(format => format.SeriesIndex == SeriesIndex);
+        var existingIndex = IndexOfSeriesFormat(formats, SeriesIndex);
         if (existingIndex >= 0)
             formats[existingIndex] = replacement;
         else
             formats.Add(replacement);
         return new ChartLayoutOptions(SeriesFormats: formats);
+    }
+
+    private static int IndexOfSeriesFormat(IReadOnlyList<ChartSeriesFormat> formats, int seriesIndex)
+    {
+        for (var index = 0; index < formats.Count; index++)
+            if (formats[index].SeriesIndex == seriesIndex)
+                return index;
+
+        return -1;
     }
 }
 
@@ -66,9 +75,21 @@ public sealed class ChartSeriesFormatDialog : Window
 
     public static ChartSeriesFormatDialogResult FromChart(ChartModel chart, int seriesCount)
     {
-        var seriesIndex = Math.Clamp(chart.SeriesFormats.FirstOrDefault()?.SeriesIndex ?? 0, 0, Math.Max(0, seriesCount - 1));
-        var format = chart.SeriesFormats.FirstOrDefault(item => item.SeriesIndex == seriesIndex) ?? new ChartSeriesFormat(seriesIndex);
+        var seriesIndex = Math.Clamp(GetFirstSeriesFormatIndex(chart), 0, Math.Max(0, seriesCount - 1));
+        var format = FindSeriesFormat(chart, seriesIndex) ?? new ChartSeriesFormat(seriesIndex);
         return CreateResult(seriesIndex, format.FillColor, format.StrokeColor, format.StrokeThickness, format.DashStyle, format.MarkerStyle, format.MarkerSize);
+    }
+
+    private static int GetFirstSeriesFormatIndex(ChartModel chart) =>
+        chart.SeriesFormats.Count > 0 ? chart.SeriesFormats[0].SeriesIndex : 0;
+
+    private static ChartSeriesFormat? FindSeriesFormat(ChartModel chart, int seriesIndex)
+    {
+        foreach (var format in chart.SeriesFormats)
+            if (format.SeriesIndex == seriesIndex)
+                return format;
+
+        return null;
     }
 
     public static ChartSeriesFormatDialogResult CreateResult(
