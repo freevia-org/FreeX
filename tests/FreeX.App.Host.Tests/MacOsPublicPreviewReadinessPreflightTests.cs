@@ -24,7 +24,10 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         script.Should().Contain("gatekeeper_assessment_status");
         script.Should().Contain("gatekeeper_assessment_source");
         script.Should().Contain("zip_sha256");
+        script.Should().Contain("RequireAggregateReadinessArtifact");
         script.Should().Contain("RequireReleasePublicationArtifact");
+        script.Should().Contain("macos-preview-readiness-manifest.json");
+        script.Should().Contain("freex-<run-id>-<run-attempt>-macos-preview-readiness");
         script.Should().Contain("FreeX-latest-macos-distribution-candidate-manifest.json");
         script.Should().Contain("default_open_launch_smoke_report");
         script.Should().Contain("format_cells_style_roundtrip_count");
@@ -115,6 +118,86 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         result.Output.Should().Contain("macOS public-preview evidence preflight passed");
         result.Output.Should().Contain("freex-42-1-osx-arm64-macos-app");
         result.Output.Should().Contain("freex-42-1-osx-x64-macos-app");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_PassesForSyntheticAggregateReadinessArtifactWithExpectedRun()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false, includeDiagnosticsArtifact: true);
+        var x64 = CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false, includeDiagnosticsArtifact: true);
+        CreateSyntheticAggregateReadinessArtifact(temp.Path, arm64, x64);
+
+        var result = RunPreflight(
+            temp.Path,
+            "-ExpectedRunId 42 -ExpectedRunAttempt 1 -RequireSeparateDiagnosticsArtifact -RequireAggregateReadinessArtifact");
+
+        result.ExitCode.Should().Be(0, result.Error);
+        result.Output.Should().Contain("macOS public-preview evidence preflight passed");
+        result.Output.Should().Contain("freex-42-1-macos-preview-readiness");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenExpectedAggregateReadinessArtifactIsMissing()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false, includeDiagnosticsArtifact: true);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false, includeDiagnosticsArtifact: true);
+
+        var result = RunPreflight(temp.Path, "-RequireSeparateDiagnosticsArtifact -RequireAggregateReadinessArtifact");
+
+        AssertPreflightRejected(
+            result,
+            "macos-preview-readiness-manifest.json",
+            "macos-preview-readiness-summary.txt");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenAggregateReadinessArtifactIsFlattened()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false, includeDiagnosticsArtifact: true);
+        var x64 = CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false, includeDiagnosticsArtifact: true);
+        var aggregateDirectory = CreateSyntheticAggregateReadinessArtifact(temp.Path, arm64, x64);
+        foreach (var file in Directory.EnumerateFiles(aggregateDirectory))
+        {
+            File.Move(file, Path.Combine(temp.Path, Path.GetFileName(file)), overwrite: true);
+        }
+
+        Directory.Delete(aggregateDirectory);
+
+        var result = RunPreflight(temp.Path, "-RequireSeparateDiagnosticsArtifact -RequireAggregateReadinessArtifact");
+
+        AssertPreflightRejected(
+            result,
+            "macOS aggregate readiness artifact does not preserve a GitHub Actions artifact wrapper directory",
+            "freex-<run-id>-<run-attempt>-macos-preview-readiness",
+            "Do not flatten aggregate readiness files");
+    }
+
+    [Theory]
+    [InlineData("manifest", "\"run_id\": \"42\"", "\"run_id\": \"41\"", "macOS aggregate readiness manifest JSON property 'run_id' must be '42'")]
+    [InlineData("summary", "run_attempt=1", "run_attempt=2", "macOS aggregate readiness summary must include 'run_attempt=1'")]
+    public void ReadinessPreflight_FailsWhenAggregateReadinessUsesStaleRunIdentity(
+        string target,
+        string oldValue,
+        string newValue,
+        string expectedNeedle)
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false, includeDiagnosticsArtifact: true);
+        var x64 = CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false, includeDiagnosticsArtifact: true);
+        var aggregateDirectory = CreateSyntheticAggregateReadinessArtifact(temp.Path, arm64, x64);
+        var fileName = target == "manifest"
+            ? "macos-preview-readiness-manifest.json"
+            : "macos-preview-readiness-summary.txt";
+        ReplaceInFile(Path.Combine(aggregateDirectory, fileName), oldValue, newValue);
+
+        var result = RunPreflight(
+            temp.Path,
+            "-ExpectedRunId 42 -ExpectedRunAttempt 1 -RequireSeparateDiagnosticsArtifact -RequireAggregateReadinessArtifact");
+
+        AssertPreflightRejected(result, expectedNeedle);
     }
 
     [Fact]
@@ -844,6 +927,90 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         }
 
         return diagnosticsDirectory;
+    }
+
+    private static string CreateSyntheticAggregateReadinessArtifact(string root, params SyntheticBundle[] bundles)
+    {
+        var aggregateDirectory = Path.Combine(root, "freex-42-1-macos-preview-readiness");
+        Directory.CreateDirectory(aggregateDirectory);
+
+        var runtimeEntries = new List<Dictionary<string, object?>>();
+        var summaryLines = new List<string>
+        {
+            "macos_preview_readiness=passed",
+            "run_id=42",
+            "run_attempt=1",
+            "source_artifact_pattern=freex-42-1-osx-*-macos-*"
+        };
+
+        foreach (var bundle in bundles)
+        {
+            var names = RuntimeArtifactNames.For(bundle.Runtime);
+            var zipHash = ComputeSha256(bundle.ZipPath);
+            var appArtifact = $"freex-42-1-{bundle.Runtime}-macos-app";
+            var diagnosticsArtifact = $"freex-42-1-{bundle.Runtime}-macos-diagnostics";
+            runtimeEntries.Add(new Dictionary<string, object?>
+            {
+                ["runtime"] = bundle.Runtime,
+                ["app_artifact"] = appArtifact,
+                ["app_artifact_digest"] = $"sha256:{zipHash}",
+                ["diagnostics_artifact"] = diagnosticsArtifact,
+                ["diagnostics_artifact_digest"] = $"sha256:{zipHash}",
+                ["zip_sha256"] = zipHash,
+                ["checksum_file"] = $"{zipHash}  {names.Zip}",
+                ["evidence_file"] = names.Evidence,
+                ["evidence_markers"] = new Dictionary<string, string>
+                {
+                    ["github_run_id"] = "42",
+                    ["github_run_attempt"] = "1",
+                    ["artifact_channel"] = "internal-preview",
+                    ["distribution_candidate"] = "false",
+                    ["distribution_readiness"] = "internal_preview_not_for_distribution",
+                    ["smoke_status"] = "passed",
+                    ["codesign_mode"] = "ad-hoc",
+                    ["notarization_status"] = "skipped_missing_credentials",
+                    ["stapler_validated"] = "false",
+                    ["gatekeeper_assessment_status"] = "rejected",
+                    ["gatekeeper_assessment_source"] = "unavailable",
+                    ["zip_sha256"] = zipHash
+                }
+            });
+
+            summaryLines.Add($"runtime={bundle.Runtime}");
+            summaryLines.Add($"app_artifact={appArtifact}");
+            summaryLines.Add($"app_artifact_digest=sha256:{zipHash}");
+            summaryLines.Add($"diagnostics_artifact={diagnosticsArtifact}");
+            summaryLines.Add($"diagnostics_artifact_digest=sha256:{zipHash}");
+            summaryLines.Add($"zip_sha256={zipHash}");
+            summaryLines.Add("artifact_channel=internal-preview");
+            summaryLines.Add("distribution_readiness=internal_preview_not_for_distribution");
+            summaryLines.Add("smoke_status=passed");
+        }
+
+        var manifest = new Dictionary<string, object?>
+        {
+            ["schema"] = "io.github.tony-xmelon.freex.macos-preview-readiness.v1",
+            ["repository"] = "tony-xmelon/FreeX",
+            ["workflow"] = "macOS App Preview",
+            ["run_id"] = "42",
+            ["run_attempt"] = "1",
+            ["commit"] = "0123abcdef0123456789abcdef0123456789abcd",
+            ["generated_at_utc"] = "2026-06-08T00:00:00.0000000Z",
+            ["source_artifact_pattern"] = "freex-42-1-osx-*-macos-*",
+            ["readiness_script"] = "tools/Test-MacOsPublicPreviewReadiness.ps1",
+            ["require_separate_diagnostics_artifact"] = true,
+            ["runtimes"] = runtimeEntries
+        };
+
+        File.WriteAllText(
+            Path.Combine(aggregateDirectory, "macos-preview-readiness-manifest.json"),
+            JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }));
+
+        File.WriteAllText(
+            Path.Combine(aggregateDirectory, "macos-preview-readiness-summary.txt"),
+            Lines(summaryLines.ToArray()));
+
+        return aggregateDirectory;
     }
 
     private static string CreateSyntheticReleasePublicationArtifact(string root, params SyntheticBundle[] bundles)
