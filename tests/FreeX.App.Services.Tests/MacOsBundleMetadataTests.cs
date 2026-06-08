@@ -91,6 +91,32 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("echo \"[xcodebuild -version]\"");
         workflow.Should().Contain("xcodebuild -version");
         workflow.Should().Contain("} | tee \"$evidence_path\"");
+        workflow.Should().Contain("- name: Test portable PDF macOS route");
+        workflow.Should().Contain("dotnet test tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj");
+        workflow.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests");
+        workflow.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests");
+        workflow.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests");
+        workflow.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests");
+        workflow.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests");
+        workflow.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests");
+        workflow.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests");
+        workflow.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests");
+        workflow.Should().Contain("dotnet test tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj");
+        workflow.Should().Contain("FullyQualifiedName~FreeX.Core.Model.Tests.ExportPathPlannerTests");
+        workflow.Should().Contain("freex-${{ matrix.runtime }}-portable-pdf-exporter-tests.trx");
+        workflow.Should().Contain("freex-${{ matrix.runtime }}-export-path-tests.trx");
+        workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-portable-pdf-exporter-tests.trx");
+        workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-export-path-tests.trx");
+        workflow.Should().Contain("--results-directory artifacts");
+        workflow.IndexOf("- name: Capture runner toolchain evidence", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(workflow.IndexOf("- name: Test portable PDF macOS route", StringComparison.Ordinal));
+        workflow.IndexOf("- name: Test portable PDF macOS route", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(workflow.IndexOf("- name: Build app project", StringComparison.Ordinal));
+        workflow.IndexOf("- name: Build app project", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(workflow.IndexOf("- name: Publish app bundle", StringComparison.Ordinal));
         workflow.Should().Contain("smoke_log=\"$artifact_root/freex-$runtime-macos-packaging-smoke.log\"");
         workflow.Should().Contain("launch_smoke_report=\"$artifact_root/freex-$runtime-macos-launch-smoke.txt\"");
         workflow.Should().Contain("notary_log=\"$artifact_root/freex-$runtime-macos-notarization.log\"");
@@ -354,18 +380,24 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"native_about_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_legal_notices_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_quit_menu_item=true\" \"$launch_smoke_report\"");
-        workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-app.zip");
-        workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-app.zip.sha256");
-        workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-evidence.txt");
-        workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-packaging-smoke.log");
-        workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-launch-smoke.txt");
-        workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-notarization.log");
-        workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-tester-instructions.md");
-        workflow.Should().Contain("if-no-files-found: error");
-        workflow.Should().Contain("- name: Upload app diagnostics");
-        workflow.Should().Contain("if: always()");
-        workflow.Should().Contain("name: freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-macos-diagnostics");
-        workflow.Should().Contain("if-no-files-found: warn");
+        var appArtifactUpload = ExtractWorkflowStepBlock(workflow, "Upload app artifact");
+        appArtifactUpload.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-app.zip");
+        appArtifactUpload.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-app.zip.sha256");
+        appArtifactUpload.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-evidence.txt");
+        appArtifactUpload.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-packaging-smoke.log");
+        appArtifactUpload.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-launch-smoke.txt");
+        appArtifactUpload.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-notarization.log");
+        appArtifactUpload.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-tester-instructions.md");
+        appArtifactUpload.Should().NotContain("portable-pdf-exporter-tests.trx");
+        appArtifactUpload.Should().NotContain("export-path-tests.trx");
+        appArtifactUpload.Should().Contain("if-no-files-found: error");
+
+        var diagnosticsUpload = ExtractWorkflowStepBlock(workflow, "Upload app diagnostics");
+        diagnosticsUpload.Should().Contain("if: always()");
+        diagnosticsUpload.Should().Contain("name: freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-macos-diagnostics");
+        diagnosticsUpload.Should().Contain("artifacts/freex-${{ matrix.runtime }}-portable-pdf-exporter-tests.trx");
+        diagnosticsUpload.Should().Contain("artifacts/freex-${{ matrix.runtime }}-export-path-tests.trx");
+        diagnosticsUpload.Should().Contain("if-no-files-found: warn");
     }
 
     [Fact]
@@ -428,6 +460,18 @@ public sealed class MacOsBundleMetadataTests
             .Elements(name)
             .Select(element => element.Value)
             .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+    private static string ExtractWorkflowStepBlock(string workflow, string stepName)
+    {
+        var marker = $"      - name: {stepName}";
+        var start = workflow.IndexOf(marker, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0, $"workflow should contain the {stepName} step");
+        var next = workflow.IndexOf("\n      - name:", start + marker.Length, StringComparison.Ordinal);
+        if (next < 0)
+            next = workflow.Length;
+
+        return workflow[start..next];
+    }
 
     private static void AssertIcnsFile(string path)
     {

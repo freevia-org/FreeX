@@ -112,7 +112,20 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("DefaultExtension = \"pdf\"");
         source.Should().Contain("ShowOverwritePrompt = true");
         source.Should().Contain("storageFile.TryGetLocalPath()");
-        source.Should().Contain("ExportPathPlanner.Plan(path, ExportFileFormat.Pdf).Path");
+        source.Should().Contain("var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);");
+        source.Should().Contain("ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists)");
+        source.Should().Contain("!await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path)");
+        source.Should().Contain("path = exportPathPlan.Path;");
+        source.Should().Contain("private async Task<bool> ConfirmNormalizedPdfOverwriteAsync(string normalizedPath)");
+        var normalizedOverwriteDialog = ExtractSourceBlock(
+            source,
+            "private async Task<bool> ConfirmNormalizedPdfOverwriteAsync(string normalizedPath)",
+            "await dialog.ShowDialog(this);");
+        normalizedOverwriteDialog.Should().NotContain("IsDefault = true,");
+        normalizedOverwriteDialog.Should().Contain("IsCancel = true,");
+        normalizedOverwriteDialog.Should().Contain("dialog.Opened += (_, _) => cancelButton.Focus();");
+        source.Should().Contain("AutomationProperties.SetAutomationId(replaceButton, \"PdfExportOverwriteReplaceButton\")");
+        source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"PdfExportOverwriteCancelButton\")");
         source.Should().Contain("WorkbookExportPrintPlanner.CreatePlan(");
         source.Should().Contain("WorkbookExportPrintSurface.MacOs");
         source.Should().Contain("PortablePdfExportPlanner.CreatePlan(exportPrintPlan)");
@@ -3804,5 +3817,14 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: true);");
         source.Should().Contain("ToggleSelectedRangeUnderline(trackLaunchSmokeLiveCommandKey: true);");
         source.Should().Contain("e.Key == Key.W && HasOnlyCommandModifier(e.KeyModifiers)");
+    }
+
+    private static string ExtractSourceBlock(string source, string startMarker, string endMarker)
+    {
+        var start = source.IndexOf(startMarker, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0, $"source should contain {startMarker}");
+        var end = source.IndexOf(endMarker, start, StringComparison.Ordinal);
+        end.Should().BeGreaterThanOrEqualTo(0, $"source should contain {endMarker} after {startMarker}");
+        return source[start..(end + endMarker.Length)];
     }
 }

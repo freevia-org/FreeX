@@ -80,6 +80,26 @@ function Assert-TextBefore {
     }
 }
 
+function Get-WorkflowStepBlock {
+    param(
+        [Parameter(Mandatory = $true)][string]$Workflow,
+        [Parameter(Mandatory = $true)][string]$StepName
+    )
+
+    $marker = "      - name: $StepName"
+    $start = $Workflow.IndexOf($marker, [System.StringComparison]::Ordinal)
+    if ($start -lt 0) {
+        throw "macOS workflow is missing the '$StepName' step."
+    }
+
+    $next = $Workflow.IndexOf("`n      - name:", $start + $marker.Length, [System.StringComparison]::Ordinal)
+    if ($next -lt 0) {
+        $next = $Workflow.Length
+    }
+
+    return $Workflow.Substring($start, $next - $start)
+}
+
 function Assert-ExactSet {
     param(
         [Parameter(Mandatory = $true)][string[]]$Actual,
@@ -379,6 +399,23 @@ function Test-MacOsWorkflow {
         "Require Developer ID signing, accepted notarization, stapled ticket, and Gatekeeper assessment evidence.",
         "dotnet-version: 10.0.x",
         "dotnet build $projectPath --configuration Release",
+        "Test portable PDF macOS route",
+        "dotnet test tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj",
+        "FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests",
+        "dotnet test tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj",
+        "FullyQualifiedName~FreeX.Core.Model.Tests.ExportPathPlannerTests",
+        'freex-${{ matrix.runtime }}-portable-pdf-exporter-tests.trx',
+        'freex-${{ matrix.runtime }}-export-path-tests.trx',
+        'artifacts/freex-${{ matrix.runtime }}-portable-pdf-exporter-tests.trx',
+        'artifacts/freex-${{ matrix.runtime }}-export-path-tests.trx',
+        "--results-directory artifacts",
         "dotnet publish $projectPath",
         "--framework net10.0",
         "--self-contained true",
@@ -765,6 +802,24 @@ function Test-MacOsWorkflow {
     foreach ($marker in $requiredWorkflowMarkers) {
         Assert-ContainsText -Text $workflow -Needle $marker -Message "macOS workflow is missing required readiness marker: $marker"
     }
+
+    Assert-TextBefore -Text $workflow -First "Capture runner toolchain evidence" -Second "Test portable PDF macOS route" -Message "macOS workflow must capture hosted runner evidence before running the focused portable PDF/service tests."
+    Assert-TextBefore -Text $workflow -First "Test portable PDF macOS route" -Second "dotnet build $projectPath --configuration Release" -Message "macOS workflow must run the focused portable PDF/service tests before building the Avalonia app project."
+    Assert-TextBefore -Text $workflow -First "dotnet build $projectPath --configuration Release" -Second "dotnet publish $projectPath" -Message "macOS workflow must build the Avalonia app project before publishing the app bundle."
+
+    $appArtifactUpload = Get-WorkflowStepBlock -Workflow $workflow -StepName "Upload app artifact"
+    $diagnosticsUpload = Get-WorkflowStepBlock -Workflow $workflow -StepName "Upload app diagnostics"
+    $testResultPaths = @(
+        'artifacts/freex-${{ matrix.runtime }}-portable-pdf-exporter-tests.trx',
+        'artifacts/freex-${{ matrix.runtime }}-export-path-tests.trx'
+    )
+    foreach ($testResultPath in $testResultPaths) {
+        Assert-ContainsText -Text $diagnosticsUpload -Needle $testResultPath -Message "macOS diagnostics upload must include $testResultPath."
+        Assert-True -Condition ($appArtifactUpload.IndexOf($testResultPath, [System.StringComparison]::Ordinal) -lt 0) -Message "macOS app artifact upload must not include diagnostic test result $testResultPath."
+    }
+
+    Assert-ContainsText -Text $diagnosticsUpload -Needle "if: always()" -Message "macOS diagnostics upload must run even when earlier workflow steps fail."
+    Assert-ContainsText -Text $diagnosticsUpload -Needle "if-no-files-found: warn" -Message "macOS diagnostics upload must warn, not fail, when optional diagnostics are missing."
 }
 
 function Test-SourceWiring {
@@ -826,6 +881,15 @@ function Test-SourceWiring {
                 "_exportPdfMenuItem.IsEnabled = isIdle && StorageProvider.CanSave;",
                 "HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, `"Export to PDF...`", requireGesture: false)",
                 "private async Task ExportActiveSheetPdfAsync()",
+                "var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);",
+                "ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists)",
+                "!await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path)",
+                "path = exportPathPlan.Path;",
+                "private async Task<bool> ConfirmNormalizedPdfOverwriteAsync(string normalizedPath)",
+                "IsCancel = true,",
+                "dialog.Opened += (_, _) => cancelButton.Focus();",
+                "AutomationProperties.SetAutomationId(replaceButton, `"PdfExportOverwriteReplaceButton`")",
+                "AutomationProperties.SetAutomationId(cancelButton, `"PdfExportOverwriteCancelButton`")",
                 "PortablePdfDocumentExporter.Save(_session.Workbook, exportPlan, path)",
                 "_workbookStatisticsMenuItem.Header = `"Workbook Statistics...`";",
                 "_workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);",

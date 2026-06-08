@@ -12434,7 +12434,16 @@ public sealed class MainWindow : Window
                 return;
             }
 
-            path = ExportPathPlanner.Plan(path, ExportFileFormat.Pdf).Path;
+            var requestedPath = path;
+            var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);
+            if (ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists) &&
+                !await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path))
+            {
+                ShowExportIssue("PDF export canceled.");
+                return;
+            }
+
+            path = exportPathPlan.Path;
             try
             {
                 _isSaving = true;
@@ -12463,6 +12472,104 @@ public sealed class MainWindow : Window
                 UpdateSaveButton();
             }
         }
+    }
+
+    private async Task<bool> ConfirmNormalizedPdfOverwriteAsync(string normalizedPath)
+    {
+        var fileName = Path.GetFileName(normalizedPath);
+        if (string.IsNullOrWhiteSpace(fileName))
+            fileName = normalizedPath;
+
+        var dialog = new Window
+        {
+            Title = "Replace PDF?",
+            Width = 460,
+            Height = 210,
+            MinWidth = 420,
+            MinHeight = 200,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+
+        var titleText = new TextBlock
+        {
+            Text = $"{fileName} already exists.",
+            FontSize = 16,
+            FontWeight = FontWeight.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        var detailText = new TextBlock
+        {
+            Text = "FreeX changed the selected file name to use the .pdf extension. Replace the existing PDF file?",
+            Foreground = HeaderForeground,
+            TextWrapping = TextWrapping.Wrap,
+        };
+
+        var replaceButton = new Button
+        {
+            Content = "Replace",
+            MinWidth = 92,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(replaceButton, "PdfExportOverwriteReplaceButton");
+        AutomationProperties.SetName(replaceButton, "Replace");
+        AutomationProperties.SetHelpText(replaceButton, "Replace the existing normalized PDF file.");
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 92,
+            Padding = new Thickness(10, 4),
+            IsCancel = true,
+        };
+        AutomationProperties.SetAutomationId(cancelButton, "PdfExportOverwriteCancelButton");
+        AutomationProperties.SetName(cancelButton, "Cancel");
+        AutomationProperties.SetHelpText(cancelButton, "Return without exporting the PDF.");
+
+        var shouldReplace = false;
+        void Finish(bool value)
+        {
+            shouldReplace = value;
+            dialog.Close();
+        }
+
+        replaceButton.Click += (_, _) => Finish(true);
+        cancelButton.Click += (_, _) => Finish(false);
+        dialog.Opened += (_, _) => cancelButton.Focus();
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape)
+            {
+                Finish(false);
+                e.Handled = true;
+            }
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(18),
+            Spacing = 12,
+            Children =
+            {
+                titleText,
+                detailText,
+                new Border { Height = 10 },
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+                    Children =
+                    {
+                        cancelButton,
+                        replaceButton,
+                    },
+                },
+            },
+        };
+
+        await dialog.ShowDialog(this);
+        return shouldReplace;
     }
 
     private WorkbookExportPrintPlan CreateActiveSheetPortablePdfPrintPlan() =>

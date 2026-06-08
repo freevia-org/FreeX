@@ -32,6 +32,21 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("Distribution-candidate run requires accepted Gatekeeper assessment from Notarized Developer ID.");
         script.Should().Contain("publish-distribution-candidate:");
         script.Should().Contain("actions/download-artifact@v7");
+        script.Should().Contain("Test portable PDF macOS route");
+        script.Should().Contain("dotnet test tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj");
+        script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests");
+        script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests");
+        script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests");
+        script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests");
+        script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests");
+        script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests");
+        script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests");
+        script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests");
+        script.Should().Contain("dotnet test tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj");
+        script.Should().Contain("FullyQualifiedName~FreeX.Core.Model.Tests.ExportPathPlannerTests");
+        script.Should().Contain("freex-${{ matrix.runtime }}-portable-pdf-exporter-tests.trx");
+        script.Should().Contain("freex-${{ matrix.runtime }}-export-path-tests.trx");
+        script.Should().Contain("--results-directory artifacts");
         script.Should().Contain("FreeX-latest-macos-arm64.zip");
         script.Should().Contain("FreeX-latest-macos-x64.zip");
         script.Should().Contain("FreeX-latest-macos-distribution-candidate-manifest.json");
@@ -83,6 +98,12 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("EncodeWinAnsiHexText(normalized)");
         script.Should().Contain("private static byte EncodeWinAnsiByte(char ch)");
         script.Should().Contain("built-in Helvetica/WinAnsi set");
+        script.Should().Contain("ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists)");
+        script.Should().Contain("private async Task<bool> ConfirmNormalizedPdfOverwriteAsync(string normalizedPath)");
+        script.Should().Contain("IsCancel = true,");
+        script.Should().Contain("dialog.Opened += (_, _) => cancelButton.Focus();");
+        script.Should().Contain("PdfExportOverwriteReplaceButton");
+        script.Should().Contain("PdfExportOverwriteCancelButton");
         script.Should().Contain("launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click");
         script.Should().Contain("freex-${{ matrix.runtime }}-macos-default-open-launch-smoke.txt");
         script.Should().Contain("--macos-launch-smoke-verify-image-clipboard");
@@ -981,7 +1002,23 @@ public sealed class MacOsAppReadinessPreflightTests
                   - uses: actions/setup-dotnet@v5
                     with:
                       dotnet-version: 10.0.x
-                  - run: dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release
+                  - name: Capture runner toolchain evidence
+                    run: echo runner
+                  - name: Test portable PDF macOS route
+                    shell: bash
+                    run: |
+                      dotnet test tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj \
+                        --configuration Release \
+                        --filter 'FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests|FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests' \
+                        --logger "trx;LogFileName=freex-${"{{"} matrix.runtime {"}}"}-portable-pdf-exporter-tests.trx" \
+                        --results-directory artifacts
+                      dotnet test tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj \
+                        --configuration Release \
+                        --filter 'FullyQualifiedName~FreeX.Core.Model.Tests.ExportPathPlannerTests' \
+                        --logger "trx;LogFileName=freex-${"{{"} matrix.runtime {"}}"}-export-path-tests.trx" \
+                        --results-directory artifacts
+                  - name: Build app project
+                    run: dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release
                   - shell: bash
                     run: |
                       app="$RUNNER_TEMP/FreeX.app"
@@ -1361,6 +1398,8 @@ public sealed class MacOsAppReadinessPreflightTests
                         artifacts/freex-osx-arm64-macos-evidence.txt
                         artifacts/freex-${"{{"} matrix.runtime {"}}"}-macos-open-with-launch-smoke.txt
                         artifacts/freex-${"{{"} matrix.runtime {"}}"}-macos-default-open-launch-smoke.txt
+                        artifacts/freex-${"{{"} matrix.runtime {"}}"}-portable-pdf-exporter-tests.trx
+                        artifacts/freex-${"{{"} matrix.runtime {"}}"}-export-path-tests.trx
               publish-distribution-candidate:
                 name: Publish macOS distribution candidate
                 needs: macos-app
@@ -1648,6 +1687,15 @@ public sealed class MacOsAppReadinessPreflightTests
                     _exportPdfMenuItem.IsEnabled = isIdle && StorageProvider.CanSave;
                     HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, "Export to PDF...", requireGesture: false)
                     private async Task ExportActiveSheetPdfAsync()
+                    var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);
+                    ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists)
+                    !await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path)
+                    path = exportPathPlan.Path;
+                    private async Task<bool> ConfirmNormalizedPdfOverwriteAsync(string normalizedPath)
+                    IsCancel = true,
+                    dialog.Opened += (_, _) => cancelButton.Focus();
+                    AutomationProperties.SetAutomationId(replaceButton, "PdfExportOverwriteReplaceButton");
+                    AutomationProperties.SetAutomationId(cancelButton, "PdfExportOverwriteCancelButton");
                     PortablePdfDocumentExporter.Save(_session.Workbook, exportPlan, path)
                     _workbookStatisticsMenuItem.Header = "Workbook Statistics...";
                     _workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);

@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 using FreeX.Core.Model;
 
@@ -124,6 +126,70 @@ public sealed class PortablePdfDocumentExporterTests
     }
 
     [Fact]
+    public void Save_WritesStructurallyConsistentStreamLengthXrefAndStartxref()
+    {
+        var workbook = new Workbook("Budget");
+        var sheet = workbook.AddSheet("Summary");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        var exportPlan = CreateExportPlan(workbook, sheet, GridRange.Parse("A1:A1", sheet.Id));
+        using var stream = new MemoryStream();
+
+        PortablePdfDocumentExporter.Save(workbook, exportPlan, stream);
+
+        var bytes = stream.ToArray();
+        var pdf = Encoding.ASCII.GetString(bytes);
+        var xrefIndex = pdf.IndexOf("xref\n", StringComparison.Ordinal);
+        xrefIndex.Should().BeGreaterThan(0);
+        var startxrefMatch = Regex.Match(pdf, @"startxref\n(?<offset>\d+)\n%%EOF\n$");
+        startxrefMatch.Success.Should().BeTrue();
+        int.Parse(startxrefMatch.Groups["offset"].Value, CultureInfo.InvariantCulture)
+            .Should()
+            .Be(xrefIndex);
+
+        var streamMatch = Regex.Match(
+            pdf,
+            @"<< /Length (?<length>\d+) >>\nstream\n(?<content>.*?)endstream",
+            RegexOptions.Singleline);
+        streamMatch.Success.Should().BeTrue();
+        Encoding.ASCII.GetByteCount(streamMatch.Groups["content"].Value)
+            .Should()
+            .Be(int.Parse(streamMatch.Groups["length"].Value, CultureInfo.InvariantCulture));
+
+        var xrefLines = pdf[(xrefIndex + "xref\n".Length)..]
+            .Split('\n')
+            .TakeWhile(line => !line.StartsWith("trailer", StringComparison.Ordinal))
+            .ToArray();
+        xrefLines.Should().NotBeEmpty();
+        var xrefLineIndex = 0;
+        var inUseEntries = 0;
+        while (xrefLineIndex < xrefLines.Length)
+        {
+            var subsectionMatch = Regex.Match(xrefLines[xrefLineIndex++], @"^(?<first>\d+) (?<count>\d+)$");
+            subsectionMatch.Success.Should().BeTrue();
+            var firstObjectId = int.Parse(subsectionMatch.Groups["first"].Value, CultureInfo.InvariantCulture);
+            var entryCount = int.Parse(subsectionMatch.Groups["count"].Value, CultureInfo.InvariantCulture);
+            xrefLines.Length.Should().BeGreaterThanOrEqualTo(xrefLineIndex + entryCount);
+
+            for (var entryIndex = 0; entryIndex < entryCount; entryIndex++)
+            {
+                var entry = xrefLines[xrefLineIndex++];
+                var entryMatch = Regex.Match(entry, @"^(?<offset>\d{10}) \d{5} (?<state>[fn]) ?$");
+                entryMatch.Success.Should().BeTrue();
+                if (entryMatch.Groups["state"].Value != "n")
+                    continue;
+
+                inUseEntries++;
+                var objectId = firstObjectId + entryIndex;
+                var offset = int.Parse(entryMatch.Groups["offset"].Value, CultureInfo.InvariantCulture);
+                Encoding.ASCII.GetString(bytes, offset, $"{objectId} 0 obj\n".Length)
+                    .Should()
+                    .Be($"{objectId} 0 obj\n");
+            }
+        }
+        inUseEntries.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void Save_WritesWinAnsiWorkbookSheetAndCellTextAsHex()
     {
         var workbook = new Workbook("Budget Caf\u00e9");
@@ -142,6 +208,27 @@ public sealed class PortablePdfDocumentExporterTests
         pdf.Should().NotContain("/ArialMT");
         pdf.Should().Contain("<42756467657420436166E9> Tj");
         pdf.Should().Contain("<53E36F205061756C6F20802096> Tj");
+    }
+
+    [Fact]
+    public void Save_WritesCurrentCultureWinAnsiDateTextAsHex()
+    {
+        using var cultureScope = TestCultureScope.CurrentCulture("fr-FR");
+        var workbook = new Workbook("Budget");
+        var sheet = workbook.AddSheet("Summary");
+        var dateStyle = workbook.RegisterStyle(new CellStyle { NumberFormat = "[$-F800]" });
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), DateTimeValue.FromDateTime(new DateTime(2026, 12, 1)));
+        sheet.GetCell(1, 1)!.StyleId = dateStyle;
+        var exportPlan = CreateExportPlan(workbook, sheet, GridRange.Parse("A1:A1", sheet.Id));
+        using var stream = new MemoryStream();
+
+        PortablePdfDocumentExporter.Save(workbook, exportPlan, stream);
+
+        var expectedDate = new DateTime(2026, 12, 1)
+            .ToString(CultureInfo.CurrentCulture.DateTimeFormat.LongDatePattern, CultureInfo.CurrentCulture.DateTimeFormat);
+        expectedDate.Should().Contain("\u00e9");
+        var pdf = Encoding.ASCII.GetString(stream.ToArray());
+        pdf.Should().Contain($"<{EncodeExpectedFrWinAnsiHex(expectedDate)}> Tj");
     }
 
     [Fact]
@@ -214,6 +301,23 @@ public sealed class PortablePdfDocumentExporterTests
         }
 
         throw new InvalidOperationException("Test workbook does not contain the requested sheet.");
+    }
+
+    private static string EncodeExpectedFrWinAnsiHex(string text)
+    {
+        var builder = new StringBuilder(text.Length * 2);
+        foreach (var ch in text)
+        {
+            var value = ch switch
+            {
+                >= ' ' and <= '~' => (byte)ch,
+                '\u00e9' => (byte)0xE9,
+                _ => throw new InvalidOperationException($"Unexpected non-WinAnsi test character: U+{(int)ch:X4}.")
+            };
+            builder.Append(value.ToString("X2", CultureInfo.InvariantCulture));
+        }
+
+        return builder.ToString();
     }
 
     private sealed class NonSeekableWriteStream : Stream
