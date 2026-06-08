@@ -158,6 +158,37 @@ public partial class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void PublicPackageTags_RejectHyperlinkRelationshipGraphWithoutWorksheetRelationship()
+    {
+        var row = new ManifestRow("public-hyperlink-probe", "", "public", "hyperlinks", "", "public-pass", "");
+        using var package = CreatePublicPackageTagProbePackage(archive =>
+        {
+            WritePublicPackageTagContentTypes(archive, "");
+            WritePackageEntry(archive, "xl/workbook.xml", PublicWorkbookXml("rIdSheet1"));
+            WritePackageEntry(archive, "xl/_rels/workbook.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdSheet1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+                </Relationships>
+                """);
+            WritePackageEntry(archive, "xl/worksheets/sheet1.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                           xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheetData>
+                    <row r="1"><c r="A1" t="inlineStr"><is><t>Broken link</t></is></c></row>
+                  </sheetData>
+                  <hyperlinks>
+                    <hyperlink ref="A1" r:id="rIdMissing"/>
+                  </hyperlinks>
+                </worksheet>
+                """);
+        });
+
+        var act = () => AssertExpectedPublicPackageTags(row, package);
+
+        act.Should().Throw<Exception>().WithMessage("*public-hyperlink-probe*");
+    }
+
+    [Fact]
     public void PublicPackageTags_RejectChartsheetEntriesWithoutWorkbookGraph()
     {
         var row = new ManifestRow("public-chartsheet-probe", "", "public", "chartsheet unsupported-sheet-types", "", "public-pass", "");
