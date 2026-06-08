@@ -71,6 +71,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetHyperlinksSanitized(saved);
+
+        saved.Position = 0;
+        AssertWorksheetHyperlinksModel(adapter.Load(saved).GetSheetAt(0));
     }
 
     [Fact]
@@ -95,6 +98,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetHyperlinksSanitized(saved);
+
+        saved.Position = 0;
+        AssertWorksheetHyperlinksModel(adapter.Load(saved).GetSheetAt(0));
     }
 
     private static void SetWorksheetHyperlinksInvalidNativeMetadata(MemoryStream stream)
