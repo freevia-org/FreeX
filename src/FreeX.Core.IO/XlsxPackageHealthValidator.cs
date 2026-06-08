@@ -37,6 +37,8 @@ public static class XlsxPackageHealthValidator
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
     private const string ImageRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+    private const string TableRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table";
     private const string WorksheetContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
     private const string ChartsheetContentType =
@@ -59,6 +61,8 @@ public static class XlsxPackageHealthValidator
         "application/vnd.openxmlformats-officedocument.drawing+xml";
     private const string ChartContentType =
         "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
+    private const string TableContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml";
 
     private static readonly XNamespace PackageContentTypeNs =
         "http://schemas.openxmlformats.org/package/2006/content-types";
@@ -104,6 +108,7 @@ public static class XlsxPackageHealthValidator
         AddPivotCachePackageIssues(archive, issues);
         AddPivotTablePackageIssues(archive, issues);
         AddWorksheetDrawingPackageIssues(archive, issues);
+        AddWorksheetTablePackageIssues(archive, issues);
         return issues;
     }
 
@@ -1940,6 +1945,241 @@ public static class XlsxPackageHealthValidator
         return true;
     }
 
+    private static void AddWorksheetTablePackageIssues(ZipArchive archive, List<string> issues)
+    {
+        if (!TryLoadPackageXml(archive, "[Content_Types].xml", issues, out var contentTypesXml) ||
+            contentTypesXml.Root?.Name != PackageContentTypeNs + "Types")
+        {
+            return;
+        }
+
+        var entryNames = archive.Entries
+            .Where(entry => !string.IsNullOrEmpty(entry.Name))
+            .Select(entry => NormalizePackagePart(entry.FullName))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var worksheetParts = entryNames
+            .Where(part => part.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase))
+            .Where(part => part.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            .Where(part => !IsPackageRelationshipPart(part))
+            .OrderBy(part => part, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var worksheetPart in worksheetParts)
+            AddWorksheetTablePackageIssues(archive, contentTypesXml, entryNames, worksheetPart, issues);
+    }
+
+    private static void AddWorksheetTablePackageIssues(
+        ZipArchive archive,
+        XDocument contentTypesXml,
+        IReadOnlySet<string> entryNames,
+        string worksheetPart,
+        List<string> issues)
+    {
+        if (!TryLoadPackageXml(archive, worksheetPart, issues, out var worksheetXml) ||
+            worksheetXml.Root?.Name != WorkbookNs + "worksheet")
+        {
+            return;
+        }
+
+        var tablePartReferences = worksheetXml.Root
+            .Descendants(WorkbookNs + "tableParts")
+            .SelectMany(tableParts =>
+            {
+                var references = tableParts
+                    .Elements(WorkbookNs + "tablePart")
+                    .Select((tablePart, index) => new WorksheetTablePartReference(
+                        worksheetPart,
+                        index + 1,
+                        tablePart.Attribute(OfficeRelationshipNs + "id")?.Value))
+                    .ToArray();
+                AddTablePartsCountIssues(worksheetPart, tableParts, references.Length, issues);
+                return references;
+            })
+            .ToArray();
+        if (tablePartReferences.Length == 0)
+            return;
+
+        var worksheetRelsPart = GetRelationshipPartPath(worksheetPart);
+        if (!TryLoadPackageXml(archive, worksheetRelsPart, issues, out var worksheetRelsXml) ||
+            worksheetRelsXml.Root?.Name != PackageRelationshipNs + "Relationships")
+        {
+            foreach (var reference in tablePartReferences.Where(reference => !string.IsNullOrWhiteSpace(reference.RelationshipId)))
+                issues.Add($"{worksheetPart} has no relationship part for tablePart reference {reference.RelationshipId}");
+            return;
+        }
+
+        var worksheetRelationships = worksheetRelsXml.Root
+            .Elements(PackageRelationshipNs + "Relationship")
+            .Where(relationship => !string.IsNullOrWhiteSpace(relationship.Attribute("Id")?.Value))
+            .GroupBy(relationship => relationship.Attribute("Id")!.Value, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+
+        foreach (var reference in tablePartReferences)
+            ValidateWorksheetTablePartReference(archive, contentTypesXml, entryNames, worksheetRelsPart, reference, worksheetRelationships, issues);
+    }
+
+    private static void AddTablePartsCountIssues(
+        string worksheetPart,
+        XElement tableParts,
+        int actualCount,
+        List<string> issues)
+    {
+        var countText = tableParts.Attribute("count")?.Value;
+        if (string.IsNullOrWhiteSpace(countText))
+            return;
+
+        if (!int.TryParse(countText, NumberStyles.None, CultureInfo.InvariantCulture, out var declaredCount) ||
+            declaredCount < 0)
+        {
+            issues.Add($"{worksheetPart} tableParts has invalid count '{countText}'");
+            return;
+        }
+
+        if (declaredCount != actualCount)
+            issues.Add($"{worksheetPart} tableParts count is {declaredCount}, but contains {actualCount} tablePart entries");
+    }
+
+    private static void ValidateWorksheetTablePartReference(
+        ZipArchive archive,
+        XDocument contentTypesXml,
+        IReadOnlySet<string> entryNames,
+        string worksheetRelsPart,
+        WorksheetTablePartReference reference,
+        IReadOnlyDictionary<string, XElement> worksheetRelationships,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(reference.RelationshipId))
+        {
+            issues.Add($"{reference.WorksheetPart} tablePart #{reference.Ordinal} has no relationship id");
+            return;
+        }
+
+        if (!worksheetRelationships.TryGetValue(reference.RelationshipId, out var relationship))
+        {
+            issues.Add($"{reference.WorksheetPart} tablePart #{reference.Ordinal} references missing relationship {reference.RelationshipId}");
+            return;
+        }
+
+        var relationshipType = relationship.Attribute("Type")?.Value;
+        if (!string.Equals(relationshipType, TableRelationshipType, StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{reference.WorksheetPart} tablePart #{reference.Ordinal} relationship {reference.RelationshipId} has Type={relationshipType ?? "(none)"}; expected {TableRelationshipType}");
+            return;
+        }
+
+        if (string.Equals(relationship.Attribute("TargetMode")?.Value?.Trim(), "External", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{reference.WorksheetPart} tablePart #{reference.Ordinal} relationship {reference.RelationshipId} must target a table package part internally");
+            return;
+        }
+
+        var target = relationship.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            issues.Add($"{reference.WorksheetPart} tablePart #{reference.Ordinal} relationship {reference.RelationshipId} has no Target");
+            return;
+        }
+
+        if (!TryResolvePackageRelationshipTarget(worksheetRelsPart, target.Trim(), out var tablePart, out var targetIssue))
+        {
+            issues.Add($"{reference.WorksheetPart} tablePart #{reference.Ordinal} relationship {reference.RelationshipId} has invalid Target {target}: {targetIssue}");
+            return;
+        }
+
+        if (!entryNames.Contains(tablePart))
+        {
+            issues.Add($"{reference.WorksheetPart} tablePart #{reference.Ordinal} relationship {reference.RelationshipId} targets missing package part {tablePart}");
+            return;
+        }
+
+        var contentType = GetEffectivePackageContentType(contentTypesXml, tablePart);
+        if (!string.Equals(contentType, TableContentType, StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{tablePart} has content type {contentType ?? "(none)"}; expected {TableContentType}");
+        }
+
+        if (!TryLoadPackageXml(archive, tablePart, issues, out var tableXml))
+            return;
+
+        if (tableXml.Root?.Name != WorkbookNs + "table")
+        {
+            issues.Add($"{tablePart} has an invalid table root element");
+            return;
+        }
+
+        AddWorksheetTableMetadataIssues(tablePart, tableXml.Root, issues);
+    }
+
+    private static void AddWorksheetTableMetadataIssues(string tablePart, XElement table, List<string> issues)
+    {
+        var tableIdText = table.Attribute("id")?.Value;
+        if (!int.TryParse(tableIdText, NumberStyles.None, CultureInfo.InvariantCulture, out var tableId) ||
+            tableId <= 0)
+        {
+            issues.Add($"{tablePart} table has invalid id '{tableIdText}'");
+        }
+
+        if (string.IsNullOrWhiteSpace(table.Attribute("ref")?.Value))
+            issues.Add($"{tablePart} table has no ref");
+        if (string.IsNullOrWhiteSpace(table.Attribute("displayName")?.Value))
+            issues.Add($"{tablePart} table has no displayName");
+
+        var tableColumns = table.Elements(WorkbookNs + "tableColumns").ToArray();
+        if (tableColumns.Length == 0)
+        {
+            issues.Add($"{tablePart} table has no tableColumns element");
+            return;
+        }
+
+        if (tableColumns.Length > 1)
+            issues.Add($"{tablePart} table has {tableColumns.Length} tableColumns elements; expected at most one");
+
+        AddWorksheetTableColumnsIssues(tablePart, tableColumns[0], issues);
+    }
+
+    private static void AddWorksheetTableColumnsIssues(string tablePart, XElement tableColumns, List<string> issues)
+    {
+        var columns = tableColumns.Elements(WorkbookNs + "tableColumn").ToArray();
+        var countText = tableColumns.Attribute("count")?.Value;
+        if (!int.TryParse(countText, NumberStyles.None, CultureInfo.InvariantCulture, out var declaredCount) ||
+            declaredCount < 0)
+        {
+            issues.Add($"{tablePart} tableColumns has invalid count '{countText}'");
+        }
+        else if (declaredCount != columns.Length)
+        {
+            issues.Add($"{tablePart} tableColumns count is {declaredCount}, but contains {columns.Length} tableColumn entries");
+        }
+
+        if (columns.Length == 0)
+            issues.Add($"{tablePart} tableColumns has no tableColumn entries");
+
+        var seenColumnIds = new HashSet<int>();
+        var seenColumnNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var column in columns.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            var columnIdText = column.Element.Attribute("id")?.Value;
+            if (!int.TryParse(columnIdText, NumberStyles.None, CultureInfo.InvariantCulture, out var columnId) ||
+                columnId <= 0)
+            {
+                issues.Add($"{tablePart} tableColumn #{column.Ordinal} has invalid id '{columnIdText}'");
+            }
+            else if (!seenColumnIds.Add(columnId))
+            {
+                issues.Add($"{tablePart} tableColumns has duplicate tableColumn id {columnId}");
+            }
+
+            var columnName = column.Element.Attribute("name")?.Value;
+            if (string.IsNullOrWhiteSpace(columnName))
+            {
+                issues.Add($"{tablePart} tableColumn #{column.Ordinal} has no name");
+            }
+            else if (!seenColumnNames.Add(columnName))
+            {
+                issues.Add($"{tablePart} tableColumns has duplicate tableColumn name '{columnName}'");
+            }
+        }
+    }
+
     private static bool TryFindWorkbookPart(
         ZipArchive archive,
         IReadOnlySet<string> entryNames,
@@ -2335,6 +2575,11 @@ public static class XlsxPackageHealthValidator
         string? RelationshipId);
 
     private sealed record WorksheetDrawingReference(
+        string WorksheetPart,
+        int Ordinal,
+        string? RelationshipId);
+
+    private sealed record WorksheetTablePartReference(
         string WorksheetPart,
         int Ordinal,
         string? RelationshipId);

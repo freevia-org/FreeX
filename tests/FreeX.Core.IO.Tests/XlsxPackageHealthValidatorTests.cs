@@ -32,6 +32,8 @@ public sealed class XlsxPackageHealthValidatorTests
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
     private const string ImageRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+    private const string TableRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table";
     private const string SharedStringsContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
     private const string StylesContentType =
@@ -54,6 +56,8 @@ public sealed class XlsxPackageHealthValidatorTests
         "application/vnd.openxmlformats-officedocument.drawing+xml";
     private const string ChartContentType =
         "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
+    private const string TableContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml";
 
     [Fact]
     public void Validate_AcceptsMinimalWorkbookPackage()
@@ -782,6 +786,93 @@ public sealed class XlsxPackageHealthValidatorTests
     }
 
     [Fact]
+    public void Validate_AcceptsWorkbookWithWorksheetTablePackage()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            worksheetXml: WorksheetWithTablePartsXml("rIdTable1"),
+            extraEntries:
+            [
+                ("xl/worksheets/_rels/sheet1.xml.rels", RelationshipsXml(
+                    Relationship("rIdTable1", TableRelationshipType, "../tables/table1.xml"))),
+                ("xl/tables/table1.xml", TableXml("1", "Table1", "A1:B2", """
+                    <tableColumn id="1" name="Column1" />
+                    <tableColumn id="2" name="Column2" />
+                    """))
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/tables/table1.xml" ContentType="{TableContentType}" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Validate_FlagsWorksheetTableMissingRelationship()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            worksheetXml: WorksheetWithTablePartsXml("rIdTable1"),
+            extraEntries:
+            [
+                ("xl/worksheets/_rels/sheet1.xml.rels", RelationshipsXml())
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("xl/worksheets/sheet1.xml tablePart #1 references missing relationship rIdTable1", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsWorksheetTableWithWrongContentType()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            worksheetXml: WorksheetWithTablePartsXml("rIdTable1"),
+            extraEntries:
+            [
+                ("xl/worksheets/_rels/sheet1.xml.rels", RelationshipsXml(
+                    Relationship("rIdTable1", TableRelationshipType, "../tables/table1.xml"))),
+                ("xl/tables/table1.xml", TableXml("1", "Table1", "A1:B2", """
+                    <tableColumn id="1" name="Column1" />
+                    <tableColumn id="2" name="Column2" />
+                    """))
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains($"xl/tables/table1.xml has content type application/xml; expected {TableContentType}", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsWorksheetTableMetadataCorruption()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            worksheetXml: WorksheetWithTablePartsXml("rIdTable1", count: "2"),
+            extraEntries:
+            [
+                ("xl/worksheets/_rels/sheet1.xml.rels", RelationshipsXml(
+                    Relationship("rIdTable1", TableRelationshipType, "../tables/table1.xml"))),
+                ("xl/tables/table1.xml", TableXml("0", "", "", """
+                    <tableColumn id="1" name="Column1" />
+                    <tableColumn id="1" name="Column1" />
+                    """, columnCount: "3"))
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/tables/table1.xml" ContentType="{TableContentType}" />"""
+            ]);
+
+        var issues = XlsxPackageHealthValidator.Validate(package);
+
+        issues.Should().Contain(issue => issue.Contains("xl/worksheets/sheet1.xml tableParts count is 2, but contains 1 tablePart entries", StringComparison.OrdinalIgnoreCase));
+        issues.Should().Contain(issue => issue.Contains("xl/tables/table1.xml table has invalid id '0'", StringComparison.OrdinalIgnoreCase));
+        issues.Should().Contain(issue => issue.Contains("xl/tables/table1.xml table has no ref", StringComparison.OrdinalIgnoreCase));
+        issues.Should().Contain(issue => issue.Contains("xl/tables/table1.xml table has no displayName", StringComparison.OrdinalIgnoreCase));
+        issues.Should().Contain(issue => issue.Contains("xl/tables/table1.xml tableColumns count is 3, but contains 2 tableColumn entries", StringComparison.OrdinalIgnoreCase));
+        issues.Should().Contain(issue => issue.Contains("xl/tables/table1.xml tableColumns has duplicate tableColumn id 1", StringComparison.OrdinalIgnoreCase));
+        issues.Should().Contain(issue => issue.Contains("xl/tables/table1.xml tableColumns has duplicate tableColumn name 'Column1'", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Validate_FlagsContentTypeOverrideForMissingPart()
     {
         using var package = CreateMinimalWorkbookPackage(
@@ -1494,6 +1585,36 @@ public sealed class XlsxPackageHealthValidatorTests
                       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
           <c:chart />
         </c:chartSpace>
+        """;
+
+    private static string WorksheetWithTablePartsXml(string relationshipId, string count = "1") =>
+        $"""
+        <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                   xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <sheetData />
+          <tableParts count="{count}">
+            <tablePart r:id="{relationshipId}" />
+          </tableParts>
+        </worksheet>
+        """;
+
+    private static string TableXml(
+        string id,
+        string displayName,
+        string reference,
+        string tableColumns,
+        string columnCount = "2") =>
+        $"""
+        <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+               id="{id}"
+               name="{displayName}"
+               displayName="{displayName}"
+               ref="{reference}">
+          <autoFilter ref="{reference}" />
+          <tableColumns count="{columnCount}">
+            {tableColumns}
+          </tableColumns>
+        </table>
         """;
 
     private static string SharedStringWorksheetXml(string sharedStringIndex) =>
