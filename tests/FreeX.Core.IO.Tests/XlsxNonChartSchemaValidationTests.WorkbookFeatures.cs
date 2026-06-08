@@ -31,6 +31,15 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var fileVersion = ReadWorkbookChildElement(saved, "fileVersion");
         fileVersion.Attribute("appName")!.Value.Should().Be("xl");
         fileVersion.Attribute("customVersionFlag").Should().BeNull();
+
+        var reloaded = ReloadWorkbook(saved);
+        reloaded.FileVersion.Should().BeEquivalentTo(new WorkbookFileVersionModel
+        {
+            AppName = "xl",
+            LastEdited = "7",
+            LowestEdited = "7",
+            RupBuild = "28129"
+        });
     }
 
     [Fact]
@@ -86,6 +95,15 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         fileVersion.Attribute("appName")!.Value.Should().Be("xl");
         fileVersion.Attribute("customVersionFlag").Should().BeNull();
         fileVersion.Element(fileVersion.Name.Namespace + "nativeFileVersionChild").Should().BeNull();
+
+        var reloaded = ReloadWorkbook(saved);
+        reloaded.FileVersion.Should().BeEquivalentTo(new WorkbookFileVersionModel
+        {
+            AppName = "xl",
+            LastEdited = "7",
+            LowestEdited = "7",
+            RupBuild = "28129"
+        });
     }
 
     [Fact]
@@ -152,6 +170,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         fileSharing.Attribute("customFileSharingFlag").Should().BeNull();
         fileSharing.Attribute("spinCount").Should().BeNull();
         fileSharing.Element(fileSharing.Name.Namespace + "nativeFileSharingChild").Should().BeNull();
+
+        var reloaded = ReloadWorkbook(saved);
+        reloaded.FileSharing.Should().BeEquivalentTo(new WorkbookFileSharingModel
+        {
+            UserName = "FreeXTest"
+        });
     }
 
     [Fact]
@@ -180,6 +204,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         fileSharing.Attribute("customFileSharingFlag").Should().BeNull();
         fileSharing.Attribute("spinCount").Should().BeNull();
         fileSharing.Element(fileSharing.Name.Namespace + "nativeFileSharingChild").Should().BeNull();
+
+        var reloaded = ReloadWorkbook(saved);
+        reloaded.FileSharing.Should().BeEquivalentTo(new WorkbookFileSharingModel
+        {
+            ReadOnlyRecommended = false,
+            UserName = "FreeXTest"
+        });
     }
 
     [Fact]
@@ -244,6 +275,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         fileRecoveryPr.Attribute("repairLoad").Should().BeNull();
         fileRecoveryPr.Attribute("customRecoveryFlag").Should().BeNull();
         fileRecoveryPr.Element(fileRecoveryPr.Name.Namespace + "nativeRecoveryChild").Should().BeNull();
+
+        var reloaded = ReloadWorkbook(saved);
+        reloaded.FileRecoveryProperties.Should().ContainSingle()
+            .Which.Should().BeEquivalentTo(new WorkbookFileRecoveryPropertiesModel());
     }
 
     [Fact]
@@ -267,6 +302,16 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var fileRecoveryPr = ReadWorkbookChildElement(saved, "fileRecoveryPr");
         fileRecoveryPr.Attribute("customRecoveryFlag").Should().BeNull();
         fileRecoveryPr.Element(fileRecoveryPr.Name.Namespace + "nativeRecoveryChild").Should().BeNull();
+
+        var reloaded = ReloadWorkbook(saved);
+        reloaded.FileRecoveryProperties.Should().ContainSingle()
+            .Which.Should().BeEquivalentTo(new WorkbookFileRecoveryPropertiesModel
+            {
+                AutoRecover = false,
+                CrashSave = false,
+                DataExtractLoad = false,
+                RepairLoad = false
+            });
     }
 
     [Fact]
@@ -291,6 +336,19 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var functionGroup = functionGroups.Element(functionGroups.Name.Namespace + "functionGroup")!;
         functionGroup.Attribute("name")!.Value.Should().Be("FreeXNativeFunctions");
         functionGroup.Attribute("customFunctionGroupFlag").Should().BeNull();
+
+        var reloaded = ReloadWorkbook(saved);
+        reloaded.FunctionGroups.Should().BeEquivalentTo(new WorkbookFunctionGroupsModel
+        {
+            BuiltInGroupCount = "16",
+            Groups =
+            {
+                new WorkbookFunctionGroupModel
+                {
+                    Name = "FreeXNativeFunctions"
+                }
+            }
+        });
     }
 
     [Fact]
@@ -351,6 +409,18 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         functionGroup.Attribute("name")!.Value.Should().Be("FreeXNativeFunctions");
         functionGroup.Attribute("customFunctionGroupFlag").Should().BeNull();
         functionGroup.Element(functionGroup.Name.Namespace + "nativeFunctionGroupChild").Should().BeNull();
+
+        var reloaded = ReloadWorkbook(saved);
+        reloaded.FunctionGroups.Should().BeEquivalentTo(new WorkbookFunctionGroupsModel
+        {
+            Groups =
+            {
+                new WorkbookFunctionGroupModel
+                {
+                    Name = "FreeXNativeFunctions"
+                }
+            }
+        });
     }
 
     [Fact]
@@ -373,6 +443,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         workbookPr.Attribute("defaultThemeVersion")!.Value.Should().Be("166925");
         workbookPr.Attribute("customWorkbookPrFlag").Should().BeNull();
         workbookPr.Element(workbookPr.Name.Namespace + "nativeWorkbookPrChild").Should().BeNull();
+
+        var reloaded = ReloadWorkbook(saved);
+        reloaded.Uses1904DateSystem.Should().BeTrue();
+        reloaded.Properties!.Get("workbookPr").Should().Contain("defaultThemeVersion=\"166925\"");
     }
 
     [Fact]
@@ -431,6 +505,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         workbookPr.Attribute("defaultThemeVersion").Should().BeNull();
         workbookPr.Attribute("customWorkbookPrFlag").Should().BeNull();
         workbookPr.Element(workbookPr.Name.Namespace + "nativeWorkbookPrChild").Should().BeNull();
+
+        var reloaded = ReloadWorkbook(saved);
+        reloaded.Uses1904DateSystem.Should().BeFalse();
+        reloaded.Properties!.Get("workbookPr").Should().Contain("codeName=\"ThisWorkbook\"");
+        reloaded.Properties.Get("workbookPr").Should().NotContain("customWorkbookPrFlag");
     }
 
     [Fact]
@@ -462,6 +541,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         protection.Attribute("spinCount").Should().BeNull();
         protection.Attribute("customWorkbookProtectionFlag").Should().BeNull();
         protection.Element(protection.Name.Namespace + "nativeWorkbookProtectionChild").Should().BeNull();
+
+        var reloaded = ReloadWorkbook(saved);
+        reloaded.IsStructureProtected.Should().BeTrue();
+        reloaded.StructureProtectionPassword.Should().Be("83AF");
+        reloaded.ProtectionMetadata!.Get("workbookProtection").Should().Contain("workbookAlgorithmName=\"SHA-512\"");
+        reloaded.ProtectionMetadata.Get("workbookProtection").Should().NotContain("customWorkbookProtectionFlag");
     }
 
     [Fact]
@@ -531,6 +616,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         protection.Attribute("spinCount").Should().BeNull();
         protection.Attribute("customWorkbookProtectionFlag").Should().BeNull();
         protection.Element(protection.Name.Namespace + "nativeWorkbookProtectionChild").Should().BeNull();
+
+        var reloaded = ReloadWorkbook(saved);
+        reloaded.IsStructureProtected.Should().BeFalse();
+        reloaded.StructureProtectionPassword.Should().BeNull();
+        reloaded.ProtectionMetadata.Should().BeNull();
     }
 
     [Fact]
@@ -569,6 +659,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         protection.Attribute("spinCount").Should().BeNull();
         protection.Attribute("customWorkbookProtectionFlag").Should().BeNull();
         protection.Element(protection.Name.Namespace + "nativeWorkbookProtectionChild").Should().BeNull();
+
+        var reloaded = ReloadWorkbook(saved);
+        reloaded.IsStructureProtected.Should().BeFalse();
+        reloaded.StructureProtectionPassword.Should().BeNull();
+        reloaded.ProtectionMetadata.Should().BeNull();
     }
 
     [Fact]
@@ -635,6 +730,14 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         calcPr.Attribute("concurrentManualCount").Should().BeNull();
         calcPr.Attribute("customCalcPrFlag").Should().BeNull();
         calcPr.Element(calcPr.Name.Namespace + "nativeCalcPrChild").Should().BeNull();
+
+        var reloaded = ReloadWorkbook(saved);
+        reloaded.CalculationMode.Should().Be(WorkbookCalculationMode.Manual);
+        reloaded.FullCalculationOnLoad.Should().BeTrue();
+        reloaded.ForceFullCalculation.Should().BeTrue();
+        reloaded.IterativeCalculation.Should().BeTrue();
+        reloaded.MaxCalculationIterations.Should().BeNull();
+        reloaded.MaxCalculationChange.Should().BeNull();
     }
 
     [Fact]
@@ -664,6 +767,14 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         calcPr.Attribute("concurrentManualCount").Should().BeNull();
         calcPr.Attribute("customCalcPrFlag").Should().BeNull();
         calcPr.Element(calcPr.Name.Namespace + "nativeCalcPrChild").Should().BeNull();
+
+        var reloaded = ReloadWorkbook(saved);
+        reloaded.CalculationMode.Should().Be(WorkbookCalculationMode.Manual);
+        reloaded.FullCalculationOnLoad.Should().BeTrue();
+        reloaded.ForceFullCalculation.Should().BeTrue();
+        reloaded.IterativeCalculation.Should().BeTrue();
+        reloaded.MaxCalculationIterations.Should().BeNull();
+        reloaded.MaxCalculationChange.Should().BeNull();
     }
 
     [Fact]
@@ -696,6 +807,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         definedName.Attribute("customDefinedNameFlag").Should().BeNull();
         definedName.Element(definedName.Name.Namespace + "nativeDefinedNameChild").Should().BeNull();
         definedName.Value.Should().Contain("1+1");
+
+        var reloaded = ReloadWorkbook(saved);
+        reloaded.GetSheetAt(0).GetValue(3, 3).Should().Be(new NumberValue(42));
     }
 
     [Fact]
@@ -760,6 +874,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             "customAdditionalWorkbookViewExtLstFlag",
             "customAdditionalWorkbookViewExtFlag",
             "nativeAdditionalWorkbookViewExtLstChild");
+
+        var reloaded = ReloadWorkbook(saved);
+        var reloadedAdditionalView = reloaded.AdditionalViews!.Views.Should().ContainSingle().Subject;
+        reloadedAdditionalView.NativeXml.Should().NotContain("customWorkbookViewFlag");
+        reloadedAdditionalView.NativeXml.Should().Contain("FreeXAdditionalWorkbookViewExtension");
     }
 
     [Fact]
@@ -816,6 +935,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         bookViews.Element(bookViews.Name.Namespace + "nativeBookViewsChild").Should().BeNull();
         var primaryView = bookViews.Elements(bookViews.Name.Namespace + "workbookView").First();
         AssertWorkbookViewInvalidAttributesRemoved(primaryView);
+
+        var reloaded = ReloadWorkbook(saved);
+        reloaded.AdditionalViews!.NativeAttributes.Should().BeEmpty();
+        reloaded.AdditionalViews.Views.Should().ContainSingle();
     }
 
     [Fact]
@@ -858,6 +981,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             "customAdditionalWorkbookViewExtLstFlag",
             "customAdditionalWorkbookViewExtFlag",
             "nativeAdditionalWorkbookViewExtLstChild");
+
+        var reloaded = ReloadWorkbook(saved);
+        reloaded.AdditionalViews!.Views.Should().ContainSingle()
+            .Which.NativeXml.Should().Contain("FreeXAdditionalWorkbookViewExtension");
     }
 
     private static Workbook CreateWorkbookFileVersionSourceWorkbook()
@@ -1340,5 +1467,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         workbookView.Attribute("windowWidth").Should().BeNull();
         workbookView.Attribute("customWorkbookViewFlag").Should().BeNull();
         workbookView.Element(workbookView.Name.Namespace + "nativeWorkbookViewChild").Should().BeNull();
+    }
+
+    private static Workbook ReloadWorkbook(Stream stream)
+    {
+        stream.Position = 0;
+        return new XlsxFileAdapter().Load(stream);
     }
 }
