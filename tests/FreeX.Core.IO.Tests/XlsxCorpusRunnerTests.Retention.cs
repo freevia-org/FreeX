@@ -1396,13 +1396,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-sheet-properties-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetSheetPropertiesModel(sheet, "generated-worksheet-sheet-properties-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-sheet-properties-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-sheet-properties-001");
         AssertWorksheetSheetProperties(saved, "generated-worksheet-sheet-properties-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetSheetPropertiesModel(
+            reloaded.GetSheetAt(0),
+            "worksheet sheet properties model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -2253,6 +2261,15 @@ public partial class XlsxCorpusRunnerTests
         sheetPr.Elements().Where(element => element.Name.NamespaceName == "urn:freex:test")
             .Should()
             .BeEmpty(because);
+    }
+
+    private static void AssertWorksheetSheetPropertiesModel(Sheet sheet, string because)
+    {
+        sheet.FitToPage.Should().BeTrue(because);
+        sheet.AutoPageBreaks.Should().BeFalse(because);
+        sheet.SheetPropertiesMetadata.Should().NotBeNull(because);
+        BagAttr(sheet.SheetPropertiesMetadata, "sheetPr", "filterMode").Should().Be("1", because);
+        BagChildren(sheet.SheetPropertiesMetadata, "sheetPr").Should().BeEmpty(because);
     }
 
     private static void AssertWorksheetProtectionNative(Stream package, string because)
