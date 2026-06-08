@@ -1377,16 +1377,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        var allowEditRange = workbook.GetSheetAt(0).AllowEditRanges.Should().ContainSingle().Subject;
-        allowEditRange.Start.ToA1().Should().Be("B2");
-        allowEditRange.End.ToA1().Should().Be("C3");
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-protected-ranges-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetProtectedRangesModel(sheet, "generated-worksheet-protected-ranges-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-protected-ranges-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-protected-ranges-001");
         AssertWorksheetProtectedRanges(saved, "generated-worksheet-protected-ranges-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetProtectedRangesModel(
+            reloaded.GetSheetAt(0),
+            "protected range model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -2151,6 +2156,13 @@ public partial class XlsxCorpusRunnerTests
             .Subject;
         nativeOnlyRange.Attribute("sqref")!.Value.Should().Be("B2 C3", because);
         nativeOnlyRange.Attribute("password")!.Value.Should().Be("1234", because);
+    }
+
+    private static void AssertWorksheetProtectedRangesModel(Sheet sheet, string because)
+    {
+        var allowEditRange = sheet.AllowEditRanges.Should().ContainSingle(because).Subject;
+        allowEditRange.Start.ToA1().Should().Be("B2", because);
+        allowEditRange.End.ToA1().Should().Be("C3", because);
     }
 
     private static void AssertWorksheetCellStructureNative(Stream package, string because)
