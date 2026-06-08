@@ -350,6 +350,33 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain("Assert-ForegroundProcessOwnership $excelPid \"Excel Number Format dropdown screen capture\"");
     }
 
+    [Fact]
+    public void ExcelScreenshotScript_ProvidesOptInWorksheetContextMenuTour()
+    {
+        var script = ReadScript("screenshot_excel.ps1");
+
+        script.Should().Contain("[string]$WorksheetContextMenuTour = $env:FREEX_EXCEL_WORKSHEET_CONTEXT_MENU_TOUR");
+        script.Should().Contain("if ($WorksheetContextMenuTour -eq \"1\")");
+        script.Should().Contain("function Invoke-ExcelWorksheetContextMenuTour");
+        script.Should().Contain("function New-ExcelWorksheetContextMenuSampleWorkbook");
+        script.Should().Contain("function Open-ExcelWorksheetContextMenu");
+        script.Should().Contain("Join-Path $outDir \"worksheet-context-menu-tour\"");
+        script.Should().Contain("excel_worksheet_context_menu_tour_manifest.json");
+        script.Should().Contain("interactive_worksheet_cell_context_menu_opened.png");
+        script.Should().Contain("Tool = \"FREEX_EXCEL_WORKSHEET_CONTEXT_MENU_TOUR\"");
+        script.Should().Contain("EvidenceFamily = \"context-menu\"");
+        script.Should().Contain("ScenarioId = \"context-menu:worksheet-cell\"");
+        script.Should().Contain("SelectedCell = \"B2\"");
+        script.Should().Contain("EntryPath = \"Shift+F10\"");
+        script.Should().Contain("[System.Windows.Forms.SendKeys]::SendWait(\"+{F10}\")");
+        script.Should().Contain("Find-ExcelPopupWindow $excelPid $excelHwnd 120 120");
+        script.Should().Contain("PairKey = \"interactive:worksheet-cell-context-menu:opened\"");
+        script.Should().Contain("CounterpartTool = \"FREEX_WORKSHEET_CONTEXT_MENU_TOUR\"");
+        script.Should().Contain("CounterpartFileName = \"freex_context_menu_worksheet_cell_opened.png\"");
+        script.Should().Contain("Assert-ForegroundWindowOwnership $excelPid $excelTitle \"Excel worksheet context menu setup\"");
+        script.Should().Contain("Assert-ForegroundProcessOwnership $excelPid \"Excel worksheet context menu screen capture\"");
+    }
+
     private static string ReadScript(string scriptName) =>
         WorkspaceFileLocator.ReadAllText("tools", scriptName);
 }

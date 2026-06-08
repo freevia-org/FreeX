@@ -1,7 +1,8 @@
 param(
     [string]$Widths = $env:FREEX_SS_TOUR_WIDTHS,
     [string]$AutoFilterFlyoutTour = $env:FREEX_EXCEL_AUTOFILTER_FLYOUT_TOUR,
-    [string]$NumberFormatDropdownTour = $env:FREEX_EXCEL_NUMBER_FORMAT_DROPDOWN_TOUR
+    [string]$NumberFormatDropdownTour = $env:FREEX_EXCEL_NUMBER_FORMAT_DROPDOWN_TOUR,
+    [string]$WorksheetContextMenuTour = $env:FREEX_EXCEL_WORKSHEET_CONTEXT_MENU_TOUR
 )
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -108,6 +109,7 @@ $outDir = Join-Path $PSScriptRoot "screenshots_excel"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 $autoFilterFlyoutOutDir = Join-Path $outDir "autofilter-flyout-tour"
 $numberFormatDropdownOutDir = Join-Path $outDir "home-number-format-dropdown-tour"
+$worksheetContextMenuOutDir = Join-Path $outDir "worksheet-context-menu-tour"
 function Clear-ScreenshotEvidenceArtifacts {
     Get-ChildItem $outDir -Filter "*.png" -ErrorAction SilentlyContinue |
         Remove-Item -Force -ErrorAction SilentlyContinue
@@ -127,6 +129,14 @@ function Clear-NumberFormatDropdownEvidenceArtifacts {
         Get-ChildItem $numberFormatDropdownOutDir -Filter "*.png" -ErrorAction SilentlyContinue |
             Remove-Item -Force -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath (Join-Path $numberFormatDropdownOutDir "excel_home_number_format_dropdown_tour_manifest.json") -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Clear-WorksheetContextMenuEvidenceArtifacts {
+    if (Test-Path -LiteralPath $worksheetContextMenuOutDir -PathType Container) {
+        Get-ChildItem $worksheetContextMenuOutDir -Filter "*.png" -ErrorAction SilentlyContinue |
+            Remove-Item -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath (Join-Path $worksheetContextMenuOutDir "excel_worksheet_context_menu_tour_manifest.json") -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -422,6 +432,22 @@ function New-ExcelNumberFormatSampleWorkbook($excelApp) {
     return $workbook
 }
 
+function New-ExcelWorksheetContextMenuSampleWorkbook($excelApp) {
+    $workbook = $excelApp.Workbooks.Add()
+    $worksheet = $workbook.Worksheets.Item(1)
+    $worksheet.Name = "Context Menu"
+    $worksheet.Range("A1").Value2 = "Region"
+    $worksheet.Range("B1").Value2 = "Score"
+    $worksheet.Range("C1").Value2 = "Note"
+    $worksheet.Range("A2").Value2 = "North"
+    $worksheet.Range("B2").Value2 = 1234.56
+    $worksheet.Range("C2").Value2 = "Worksheet context menu"
+    $worksheet.Range("A:C").EntireColumn.AutoFit() | Out-Null
+    $worksheet.Range("B2").Select() | Out-Null
+
+    return $workbook
+}
+
 function Capture-ScreenRectangle($left, $top, $width, $height, $path) {
     $bmp = New-Object System.Drawing.Bitmap($width, $height)
     $g = [System.Drawing.Graphics]::FromImage($bmp)
@@ -471,6 +497,11 @@ function Expand-ExcelNumberFormatDropdown($expectedPid, $excelElement, $expected
 
     Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel Number Format dropdown expand"
     $pattern.Expand()
+}
+
+function Open-ExcelWorksheetContextMenu($expectedPid, $expectedTitle) {
+    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel worksheet context menu keyboard input"
+    [System.Windows.Forms.SendKeys]::SendWait("+{F10}")
 }
 
 function Invoke-ExcelAutoFilterFlyoutTour {
@@ -758,6 +789,139 @@ function Invoke-ExcelNumberFormatDropdownTour {
     }
 }
 
+function Invoke-ExcelWorksheetContextMenuTour {
+    New-Item -ItemType Directory -Force -Path $worksheetContextMenuOutDir | Out-Null
+    Clear-WorksheetContextMenuEvidenceArtifacts
+
+    $excelApp = $null
+    $workbook = $null
+    try {
+        $excelApp = New-Object -ComObject Excel.Application
+        $excelApp.Visible = $true
+        $excelApp.DisplayAlerts = $false
+        $excelApp.WindowState = -4143
+        $excelApp.Top = 0
+        $excelApp.Left = 0
+        $excelApp.Width = 900
+        $excelApp.Height = 720
+        $workbook = New-ExcelWorksheetContextMenuSampleWorkbook $excelApp
+        Start-Sleep -Milliseconds 700
+
+        $excelHwnd = [IntPtr]$excelApp.Hwnd
+        if ($excelHwnd -eq [IntPtr]::Zero) {
+            Clear-WorksheetContextMenuEvidenceArtifacts
+            throw "Excel worksheet context menu tour could not resolve the Excel window handle."
+        }
+
+        $excelPid = 0
+        [Win32e]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
+        $excelTitle = Get-WindowTitle $excelHwnd
+        Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle "Excel worksheet context menu setup"
+        Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel worksheet context menu setup"
+
+        Open-ExcelWorksheetContextMenu $excelPid $excelTitle
+        Start-Sleep -Milliseconds 900
+        Assert-ForegroundProcessOwnership $excelPid "Excel worksheet context menu capture"
+
+        $popup = Find-ExcelPopupWindow $excelPid $excelHwnd 120 120
+        if ($null -eq $popup) {
+            Clear-WorksheetContextMenuEvidenceArtifacts
+            throw "Excel worksheet context menu tour did not detect a foreground Excel popup window after Shift+F10."
+        }
+
+        $captureSource = "popup-window-rectangle"
+        $captureBounds = [pscustomobject]@{
+            Left = $popup.Left
+            Top = $popup.Top
+            Right = $popup.Right
+            Bottom = $popup.Bottom
+            Width = $popup.Right - $popup.Left
+            Height = $popup.Bottom - $popup.Top
+        }
+        $popupBounds = [pscustomobject]@{
+            Handle = $popup.Handle.ToString()
+            ClassName = $popup.ClassName
+            Title = $popup.Title
+            Left = $popup.Left
+            Top = $popup.Top
+            Right = $popup.Right
+            Bottom = $popup.Bottom
+            Width = $popup.Right - $popup.Left
+            Height = $popup.Bottom - $popup.Top
+        }
+
+        $fileName = "interactive_worksheet_cell_context_menu_opened.png"
+        $path = Join-Path $worksheetContextMenuOutDir $fileName
+        Assert-ForegroundProcessOwnership $excelPid "Excel worksheet context menu screen capture"
+        Capture-ScreenRectangle $captureBounds.Left $captureBounds.Top $captureBounds.Width $captureBounds.Height $path
+
+        $manifestPath = Join-Path $worksheetContextMenuOutDir "excel_worksheet_context_menu_tour_manifest.json"
+        [pscustomobject]@{
+            Tool = "FREEX_EXCEL_WORKSHEET_CONTEXT_MENU_TOUR"
+            EvidenceFamily = "context-menu"
+            EvidenceSubject = "excel"
+            EvidenceApp = "Microsoft Excel"
+            OutputDirectory = $worksheetContextMenuOutDir
+            OutputNaming = "interactive_worksheet_cell_context_menu_opened.png"
+            CatalogEvidenceTarget = "docs/testing/ui-test-catalog.md"
+            SelectedCell = "B2"
+            EntryPath = "Shift+F10"
+            CaptureStatus = "complete"
+            CaptureMethod = $captureSource
+            ForegroundGuard = [pscustomobject]@{
+                Required = $true
+                ExpectedProcessId = $excelPid
+                ExpectedWindowTitle = $excelTitle
+                Policy = "Seed through Excel automation, then abort and clear worksheet context-menu evidence unless Excel owns foreground immediately before Shift+F10 and before screen capture."
+            }
+            Pairing = [pscustomobject]@{
+                PairKeyPattern = "interactive:worksheet-cell-context-menu:<State>"
+                PairKey = "interactive:worksheet-cell-context-menu:opened"
+                CounterpartSubject = "freex"
+                CounterpartTool = "FREEX_WORKSHEET_CONTEXT_MENU_TOUR"
+                CounterpartFileName = "freex_context_menu_worksheet_cell_opened.png"
+            }
+            Scenario = [pscustomobject]@{
+                ScenarioId = "context-menu:worksheet-cell"
+                ScenarioFileName = "worksheet_cell_context_menu"
+                State = "opened"
+                SelectedCell = "B2"
+                SampleValue = "1234.56"
+                Trigger = "Excel COM seeds B2 and a foreground-guarded Shift+F10 opens the worksheet-cell context menu."
+            }
+            WindowBounds = $captureBounds
+            PopupBounds = $popupBounds
+            Captures = @(
+                [pscustomobject]@{
+                    CaptureSequence = 1
+                    CaptureKey = "interactive:worksheet-cell-context-menu:opened"
+                    PairKey = "interactive:worksheet-cell-context-menu:opened"
+                    EvidenceSubject = "excel"
+                    CounterpartSubject = "freex"
+                    CounterpartFileName = "freex_context_menu_worksheet_cell_opened.png"
+                    FileName = $fileName
+                    Path = $path
+                    Width = $captureBounds.Width
+                    Height = $captureBounds.Height
+                    CaptureMethod = $captureSource
+                    CaptureStatus = "complete"
+                }
+            )
+        } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+
+        Write-Host "Saved $path"
+        Write-Host "Saved $manifestPath"
+    }
+    finally {
+        if ($null -ne $workbook) {
+            $workbook.Close($false) | Out-Null
+        }
+        if ($null -ne $excelApp) {
+            $excelApp.Quit() | Out-Null
+        }
+    }
+}
+
 if ($AutoFilterFlyoutTour -eq "1") {
     Invoke-ExcelAutoFilterFlyoutTour
     Write-Host "Done."
@@ -766,6 +930,12 @@ if ($AutoFilterFlyoutTour -eq "1") {
 
 if ($NumberFormatDropdownTour -eq "1") {
     Invoke-ExcelNumberFormatDropdownTour
+    Write-Host "Done."
+    exit 0
+}
+
+if ($WorksheetContextMenuTour -eq "1") {
+    Invoke-ExcelWorksheetContextMenuTour
     Write-Host "Done."
     exit 0
 }

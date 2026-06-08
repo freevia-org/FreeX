@@ -104,6 +104,22 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ScreenshotTour_ProvidesWorksheetContextMenuEvidenceHook()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+
+        source.Should().Contain("FREEX_WORKSHEET_CONTEXT_MENU_TOUR");
+        source.Should().Contain("CaptureWorksheetContextMenuTourAsync");
+        source.Should().Contain("worksheet-context-menu-tour");
+        source.Should().Contain("OnGridContextMenuRequested(address, GetKeyboardContextMenuGridPoint(address))");
+        source.Should().Contain("SheetGrid.ContextMenu");
+        source.Should().Contain("WorksheetContextMenuTourManifest");
+        source.Should().Contain("interactive:worksheet-cell-context-menu:opened");
+        source.Should().Contain("RenderTargetBitmap-worksheet-context-menu");
+        source.Should().Contain("interactive_worksheet_cell_context_menu_opened.png");
+    }
+
+    [Fact]
     public void AppChrome_DoesNotUseLegacyGreenThemeConstants()
     {
         var appHostDirectory = DialogSourceTestSupport.FindHostSourceDirectory("MainWindow.xaml");
