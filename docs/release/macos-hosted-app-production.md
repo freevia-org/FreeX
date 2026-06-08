@@ -63,6 +63,35 @@ A production candidate run must complete these jobs successfully:
 
 If either runtime fails, inspect the runtime diagnostics artifact from that same run attempt. A failed or partial run is not production-ready.
 
+## Optional macOS TFM Compile Validation
+
+When the opt-in macOS TFM validation input is enabled in `.github/workflows/macos-app.yml`, a maintainer may run it manually as a companion check for the future `net10.0-macos` compile path. Copy the exact input key from the workflow file or the GitHub Actions UI at the release commit; do not infer a name from this runbook.
+
+This validation is not the app artifact lane. It is useful for answering whether hosted macOS can install or restore the macOS workload/reference packs and compile the macOS-specific target, but it does not replace the current `net10.0` publish that produces the `osx-arm64` and `osx-x64` bundles.
+
+From the GitHub UI:
+
+1. Open GitHub > FreeX > Actions > `macOS App Preview`.
+2. Select `Run workflow`.
+3. Choose the ref to validate.
+4. Enable the opt-in macOS TFM validation input.
+5. Start the workflow and record the run id, run attempt, run number, ref, and commit SHA.
+
+From GitHub CLI, pass the exact input key exposed by `workflow_dispatch`:
+
+```powershell
+gh workflow run macos-app.yml --ref main -f <opt-in-macos-tfm-validation-input>=true
+gh run list --workflow macos-app.yml --branch main --limit 5
+```
+
+Interpret the result separately from production artifact readiness:
+
+- Passing workload install/restore and `net10.0-macos` compile evidence means the hosted runner can compile the future macOS TFM path.
+- A workload install/restore failure is an opt-in lane readiness issue, not a regression in the current hosted `net10.0` app bundle.
+- A `net10.0-macos` compile failure belongs to the macOS TFM lane or host-only source boundary; do not block the current app artifact lane unless its normal `osx-arm64` or `osx-x64` jobs also fail.
+- Uploaded TFM validation logs are evidence only. They are not app zips, release assets, signing evidence, notarization evidence, or human validation evidence.
+- Hosted compile evidence cannot prove native AppKit share-sheet runtime behavior. Real macOS human validation is still required before any release note claims native share-sheet support.
+
 ## Artifact And Evidence Map
 
 Download artifacts from the completed run summary under `Artifacts`, or use `gh run download`. Keep each downloaded artifact inside its wrapper directory; do not flatten files directly into `artifacts/macos-preview`.
