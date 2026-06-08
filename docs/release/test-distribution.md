@@ -57,7 +57,7 @@ Run these commands from the repository root when validating routine agent work o
 1. `dotnet build FreeX.slnx --configuration Release`
 2. `dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build --logger "trx;LogFileName=default-tests.trx"`
 
-Default agent verification does not run the UI lane and does not use `dotnet test FreeX.slnx`. Success means the repository preflight validates tracked JSON/XML-backed files, tool scripts, workflows, local .NET SDK readiness against the tester-release SDK band, .NET project references, solution membership, and generated docs; the Release solution build reports zero errors; and the default Release test lane reports zero failed tests. If output files are locked by a stale `dotnet`, `MSBuild`, `VBCSCompiler`, or `testhost` process from another local run, clear the stale process and rerun the same command before treating the build as failed.
+Default agent verification does not run the UI lane and does not use `dotnet test FreeX.slnx`. Success means the repository preflight validates tracked JSON/XML-backed files, tool scripts, workflows, local .NET SDK readiness against the tester-release SDK band, .NET project references, solution membership, macOS app readiness, and generated docs; the Release solution build reports zero errors; and the default Release test lane reports zero failed tests. If output files are locked by a stale `dotnet`, `MSBuild`, `VBCSCompiler`, or `testhost` process from another local run, clear the stale process and rerun the same command before treating the build as failed.
 
 ## UI Lane Verification
 
@@ -66,6 +66,55 @@ Run the UI lane separately only when a task explicitly requests UI tests, touche
 0. `dotnet test FreeX.UiTests.slnx --configuration Release --no-build --logger "trx;LogFileName=ui-tests.trx"`
 
 Success means the UI Release test lane reports zero failed tests. The `Tester Release` workflow remains a full release gate and still runs both the default and UI test lanes before publishing.
+
+## macOS Portable Lane
+
+The CI workflow also runs a macOS portable lane on GitHub-hosted macOS runners. This lane builds and tests `FreeX.DefaultTests.slnx` only, proving that the `Core.*` projects and non-UI tests remain portable while the app is still WPF-first.
+
+Success means the macOS Release build and non-UI test lane report zero failed tests. This lane does not build `FreeX.slnx`, `FreeX.UiTests.slnx`, `App.Host`, `App.UI`, WPF UI tests, Excel COM tools, tester-release artifacts, or macOS app packages. See [planning/multiplatform-macos-port.md](../planning/multiplatform-macos-port.md) for the macOS-first port plan.
+
+A separate `macOS App Preview` workflow builds and publishes `src/FreeX.App.Avalonia` on architecture-specific hosted macOS runners for `osx-arm64` and `osx-x64`, wraps the output in `FreeX.app` with `FreeX.icns`, verifies bundle metadata, ad-hoc signs by default, optionally Developer ID signs/notarizes when secrets are configured, self-checks each SHA-256 file with `shasum -a 256 -c`, records `zip_sha256` in evidence, and uploads zipped app artifacts, checksum files, tester instructions, and smoke evidence. The Windows-runnable `tools/Test-MacOsAppReadiness.ps1` preflight statically checks the app project, `Info.plist`, icon asset, workflow markers, source wiring, and portable-source hygiene. After hosted artifacts are downloaded and unzipped, the Windows-runnable `tools/Test-MacOsPublicPreviewReadiness.ps1` preflight validates both runtime evidence bundles, checksum files, LaunchServices/Open-With/default-open smoke, startup smoke, command key smoke, Format Cells roundtrip evidence, diagnostics artifact file sets, tester instructions, and distribution-candidate signing/notarization/stapler evidence.
+
+Use [release/macos-signing-notarization.md](macos-signing-notarization.md) to configure Developer ID signing secrets, run the non-PR hosted validation, and record the expected `codesign_mode=developer-id`, `notarization_status=accepted`, and `stapler_validated=true` evidence before treating a macOS artifact as externally distributable.
+
+### macOS Hosted Artifact Retrieval
+
+GitHub-hosted macOS runners can produce downloadable macOS app artifacts without local macOS hardware. Open GitHub Actions > `macOS App Preview` > the completed run, then download each runtime artifact from the run summary:
+
+- `freex-<run-id>-<run-attempt>-osx-arm64-macos-app`
+- `freex-<run-id>-<run-attempt>-osx-x64-macos-app`
+
+Each download is a GitHub Actions artifact wrapper. Unzip the wrapper first, then use the inner app ZIP, checksum, tester instructions, evidence file, and smoke logs. The current workflow uploads Actions artifacts only, has `contents: read`, and does not publish GitHub Release assets or stable `latest` links.
+
+Signed and internal ad-hoc outputs use the same artifact names. Treat `codesign_mode=ad-hoc` or a skipped notarization status as internal preview evidence only. External distribution requires `codesign_mode=developer-id`, `notarization_status=accepted`, `stapler_validated=true`, and a release-asset publication path.
+
+Without local macOS hardware, Windows agents can run repository preflight and static macOS readiness checks, while hosted macOS runners can build the bundle, verify metadata and checksums, ad-hoc or Developer ID sign when configured, run native-architecture packaging and launch smoke, exercise LaunchServices, open a `.fxl` document without an app override as CI-verifiable default-open evidence, and capture evidence/logs. Human validation of Finder double-click open, Gatekeeper prompts, basic workbook workflows, and candidate accessibility checks still needs a tester on macOS; record that pass with the [macOS public-preview human checklist](macos-public-preview-checklist.md).
+
+Windows agents can also validate downloaded hosted evidence without a Mac:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-MacOsPublicPreviewReadiness.ps1 -ArtifactRoot artifacts/macos-preview
+```
+
+For public-preview candidates, run it with `-DistributionCandidate -RequireSeparateDiagnosticsArtifact` after downloading the matching `freex-<run-id>-<run-attempt>-<runtime>-macos-diagnostics` artifacts beside the app artifacts.
+
+### macOS App Preview Tester Instructions
+
+This is a preview validation path, not a public release channel. Use `osx-arm64` for Apple Silicon Macs and `osx-x64` for Intel Macs. GitHub downloads the result as an Actions artifact wrapper; unzip that wrapper first, then use the files inside it:
+
+- `freex-osx-arm64-macos-app.zip` or `freex-osx-x64-macos-app.zip`
+- the matching `.zip.sha256`
+- `freex-<runtime>-macos-tester-instructions.md`
+- `freex-<runtime>-macos-evidence.txt`
+- packaging, LaunchServices, Open-With/default-open, and notarization logs
+
+Before opening the app, testers should run this from the directory containing the inner app ZIP and checksum:
+
+```bash
+shasum -a 256 -c freex-<runtime>-macos-app.zip.sha256
+```
+
+The expected result is `<zip-name>: OK`. After the checksum passes, unzip the inner app ZIP and open `FreeX.app`. If macOS Gatekeeper blocks the preview, testers should inspect `codesign_mode`, `notarization_status`, `stapler_validated`, and `zip_sha256` in the evidence file. Ad-hoc signed or non-notarized previews are internal validation artifacts and may require Control-click or right-click > Open on trusted test machines. Public distribution still requires Developer ID signing, accepted notarization, and stapling evidence.
 
 ## Conservative Rerun Fallback
 

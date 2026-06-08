@@ -1,5 +1,5 @@
 using System.Globalization;
-using System.IO;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
@@ -103,24 +103,21 @@ internal static partial class ExportPlanner
     public static string PdfFallbackMessage => UiText.Get("Export_PdfFallbackMessage");
 
     public static ExportFormat InferExportFormat(string path) =>
-        string.Equals(PlannerPathHelpers.TryGetExtension(path, out var extension) ? extension : "", ".xps", StringComparison.OrdinalIgnoreCase)
-            ? ExportFormat.Xps
-            : ExportFormat.Pdf;
+        ToHostFormat(ExportPathPlanner.InferFormat(path));
 
     public static ExportRequest PlanExport(string path) =>
         PlanExport(path, ExportOptions.ExcelLikeDefault);
 
     public static ExportRequest PlanExport(string path, ExportOptions options)
     {
-        var format = InferExportFormat(path);
-        var normalizedPath = NormalizeExportPath(path, format, forceMatchingExtension: format == ExportFormat.Pdf);
-        return new ExportRequest(normalizedPath, format, options, null);
+        var plan = ExportPathPlanner.Plan(path);
+        return new ExportRequest(plan.Path, ToHostFormat(plan.Format), options, plan.FallbackPath);
     }
 
     public static ExportRequest PlanExport(string path, ExportFormat format, ExportOptions options)
     {
-        var normalizedPath = NormalizeExportPath(path, format, forceMatchingExtension: true);
-        return new ExportRequest(normalizedPath, format, options, null);
+        var plan = ExportPathPlanner.Plan(path, ToCoreFormat(format));
+        return new ExportRequest(plan.Path, format, options, plan.FallbackPath);
     }
 
     public static bool ShouldPromptForNormalizedOverwrite(
@@ -129,73 +126,23 @@ internal static partial class ExportPlanner
         Func<string, bool> pathExists)
     {
         ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(pathExists);
 
-        return !PathsEqual(requestedPath, request.Path) && pathExists(request.Path);
+        var plan = new ExportPathPlan(request.Path, ToCoreFormat(request.Format), request.FallbackPath);
+        return ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, plan, pathExists);
     }
 
     public static string GetFallbackXpsPath(string requestedPath) =>
-        Path.ChangeExtension(requestedPath, ".xps");
+        ExportPathPlanner.GetFallbackXpsPath(requestedPath);
 
-    private static string NormalizeExportPath(string path, ExportFormat format, bool forceMatchingExtension)
-    {
-        if (!forceMatchingExtension && PlannerPathHelpers.TryGetExtension(path, out _))
-            return path;
+    private static ExportFormat ToHostFormat(ExportFileFormat format) =>
+        format == ExportFileFormat.Xps
+            ? ExportFormat.Xps
+            : ExportFormat.Pdf;
 
-        return TryChangeExtension(path, format == ExportFormat.Xps ? ".xps" : ".pdf", out var normalized)
-            ? normalized
-            : path;
-    }
-
-    private static bool TryChangeExtension(string path, string extension, out string normalizedPath)
-    {
-        if (PlannerPathHelpers.HasInvalidPathChars(path))
-        {
-            normalizedPath = path;
-            return false;
-        }
-
-        try
-        {
-            normalizedPath = Path.ChangeExtension(path, extension) ?? path;
-            return true;
-        }
-        catch (ArgumentException)
-        {
-            normalizedPath = path;
-            return false;
-        }
-        catch (NotSupportedException)
-        {
-            normalizedPath = path;
-            return false;
-        }
-        catch (PathTooLongException)
-        {
-            normalizedPath = path;
-            return false;
-        }
-    }
-
-    private static bool PathsEqual(string left, string right)
-    {
-        try
-        {
-            left = Path.GetFullPath(left);
-            right = Path.GetFullPath(right);
-        }
-        catch (ArgumentException)
-        {
-        }
-        catch (NotSupportedException)
-        {
-        }
-        catch (PathTooLongException)
-        {
-        }
-
-        return string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
-    }
+    private static ExportFileFormat ToCoreFormat(ExportFormat format) =>
+        format == ExportFormat.Xps
+            ? ExportFileFormat.Xps
+            : ExportFileFormat.Pdf;
 
     public static string NormalizePdfLanguage(string? pdfLanguage)
     {

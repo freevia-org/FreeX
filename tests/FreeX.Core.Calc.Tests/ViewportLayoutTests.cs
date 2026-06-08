@@ -472,6 +472,140 @@ public class ViewportLayoutTests
     }
 
     [Fact]
+    public void GetViewport_DrawingObjectsRespectIncludeObjectsFlag()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Name = "Shape 1"
+        });
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, 1, 100, 300, IncludeObjects: false));
+
+        viewport.DrawingObjects.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void GetViewport_DrawingObjectsExposeVisibleBoundsInZOrder()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Name = "Status Box",
+            Width = 90,
+            Height = 44,
+            RotationDegrees = 15
+        };
+        var hiddenPicture = new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 2),
+            Name = "Hidden Picture",
+            IsVisible = false
+        };
+        var textBox = new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 2),
+            Name = "Notes",
+            Width = 120,
+            Height = 48
+        };
+        sheet.DrawingShapes.Add(shape);
+        sheet.Pictures.Add(hiddenPicture);
+        sheet.TextBoxes.Add(textBox);
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, textBox.Id));
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, shape.Id));
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, 1, 100, 300));
+
+        viewport.DrawingObjects.Select(drawing => drawing.DisplayName)
+            .Should().Equal("Notes", "Status Box");
+        var notes = viewport.DrawingObjects[0];
+        notes.Kind.Should().Be(SelectionPaneObjectKind.TextBox);
+        notes.AnchorRow.Should().Be(3);
+        notes.AnchorCol.Should().Be(2);
+        notes.Left.Should().Be(64);
+        notes.Top.Should().Be(40);
+        notes.Width.Should().Be(120);
+        notes.Height.Should().Be(48);
+
+        var statusBox = viewport.DrawingObjects[1];
+        statusBox.Kind.Should().Be(SelectionPaneObjectKind.Shape);
+        statusBox.AnchorRow.Should().Be(1);
+        statusBox.AnchorCol.Should().Be(1);
+        statusBox.Left.Should().Be(0);
+        statusBox.Top.Should().Be(0);
+        statusBox.Width.Should().Be(90);
+        statusBox.Height.Should().Be(44);
+        statusBox.RotationDegrees.Should().Be(15);
+    }
+
+    [Fact]
+    public void GetViewport_DrawingObjectsExposeRenderablePayloads()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var imageBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47 };
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Name = "Decision",
+            Kind = DrawingShapeKind.Ellipse,
+            FillColor = new CellColor(0x22, 0x66, 0xAA),
+            OutlineColor = new CellColor(0x11, 0x22, 0x33)
+        };
+        var picture = new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 1),
+            Name = "Logo",
+            Kind = PictureKind.Image,
+            ImageBytes = imageBytes,
+            ContentType = "image/png"
+        };
+        var textBox = new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 1),
+            Name = "Callout",
+            Text = "Quarterly result",
+            FillColor = new CellColor(0xFF, 0xFF, 0xCC),
+            OutlineColor = new CellColor(0xAA, 0x88, 0x00)
+        };
+        sheet.DrawingShapes.Add(shape);
+        sheet.Pictures.Add(picture);
+        sheet.TextBoxes.Add(textBox);
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, 1, 120, 300));
+
+        var shapeBounds = viewport.DrawingObjects.Single(bounds => bounds.Kind == SelectionPaneObjectKind.Shape);
+        shapeBounds.ShapeKind.Should().Be(DrawingShapeKind.Ellipse);
+        shapeBounds.FillColor.Should().Be(new CellColor(0x22, 0x66, 0xAA));
+        shapeBounds.OutlineColor.Should().Be(new CellColor(0x11, 0x22, 0x33));
+
+        var pictureBounds = viewport.DrawingObjects.Single(bounds => bounds.Kind == SelectionPaneObjectKind.Picture);
+        pictureBounds.PictureKind.Should().Be(PictureKind.Image);
+        pictureBounds.ImageBytes.Should().Equal(imageBytes);
+        pictureBounds.ImageBytes.Should().NotBeSameAs(imageBytes);
+        pictureBounds.ImageContentType.Should().Be("image/png");
+
+        var textBounds = viewport.DrawingObjects.Single(bounds => bounds.Kind == SelectionPaneObjectKind.TextBox);
+        textBounds.Text.Should().Be("Quarterly result");
+        textBounds.FillColor.Should().Be(new CellColor(0xFF, 0xFF, 0xCC));
+        textBounds.OutlineColor.Should().Be(new CellColor(0xAA, 0x88, 0x00));
+    }
+
+    [Fact]
     public void HitTest_UniformRowAndColumnSizes_FastPathMatchesExpectedCell()
     {
         // DefaultRowHeight = 20.0 px, DefaultColumnWidth = 8.43 chars → 8.43*8 = 67.44 px.

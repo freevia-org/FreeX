@@ -6,6 +6,7 @@ param(
     [string]$DotNetSdkReadinessScriptPath = "tools\Test-DotNetSdkReadiness.ps1",
     [string]$DotNetProjectReferencesScriptPath = "tools\Test-DotNetProjectReferences.ps1",
     [string]$SolutionProjectsScriptPath = "tools\Test-SolutionProjects.ps1",
+    [string]$MacOsAppReadinessScriptPath = "tools\Test-MacOsAppReadiness.ps1",
     [string]$GeneratedDocsScriptPath = "tools\Test-GeneratedDocs.ps1",
     [string]$ConflictMarkersScriptPath = "tools\Test-ConflictMarkers.ps1"
 )
@@ -46,6 +47,7 @@ Invoke-RepositoryPreflight -ScriptPath $GitHubWorkflowsScriptPath -Label "GitHub
 Invoke-RepositoryPreflight -ScriptPath $DotNetSdkReadinessScriptPath -Label ".NET SDK readiness"
 Invoke-RepositoryPreflight -ScriptPath $DotNetProjectReferencesScriptPath -Label ".NET project references"
 Invoke-RepositoryPreflight -ScriptPath $SolutionProjectsScriptPath -Label "solution projects"
+Invoke-RepositoryPreflight -ScriptPath $MacOsAppReadinessScriptPath -Label "macOS app readiness"
 Invoke-RepositoryPreflight -ScriptPath $GeneratedDocsScriptPath -Label "generated docs"
 Invoke-RepositoryPreflight -ScriptPath $ConflictMarkersScriptPath -Label "Git conflict markers"
 

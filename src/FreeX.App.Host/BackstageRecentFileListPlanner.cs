@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host;
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Media;
 
+using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
 using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
@@ -950,29 +951,16 @@ public partial class GridView
     }
 
     internal static bool HasCellTextOrientation(int textRotation) =>
-        IsStackedCellTextRotation(textRotation) || NormalizeCellTextRotationForDisplay(textRotation) != 0;
+        CellTextOrientationLayoutPlanner.HasTextOrientation(textRotation);
 
-    internal static bool IsStackedCellTextRotation(int textRotation) => textRotation == 255;
+    internal static bool IsStackedCellTextRotation(int textRotation) =>
+        CellTextOrientationLayoutPlanner.IsStackedTextRotation(textRotation);
 
     internal static int NormalizeCellTextRotationForDisplay(int textRotation) =>
-        textRotation is >= -90 and <= 90 ? textRotation : 0;
+        CellTextOrientationLayoutPlanner.NormalizeRotationForDisplay(textRotation);
 
-    internal static string PrepareCellDisplayTextForRender(string text, int textRotation)
-    {
-        if (!IsStackedCellTextRotation(textRotation) || text.Length <= 1)
-            return text;
-
-        var stacked = new System.Text.StringBuilder(text.Length * 2 - 1);
-        foreach (var character in text)
-        {
-            if (stacked.Length > 0)
-                stacked.Append('\n');
-
-            stacked.Append(character);
-        }
-
-        return stacked.ToString();
-    }
+    internal static string PrepareCellDisplayTextForRender(string text, int textRotation) =>
+        CellTextOrientationLayoutPlanner.PrepareDisplayText(text, textRotation);
 
     internal static CellTextRenderLayout CalculateCellTextRenderLayout(
         Rect rect,
@@ -984,60 +972,16 @@ public partial class GridView
         double indentPx,
         int textRotation)
     {
-        var displayRotation = NormalizeCellTextRotationForDisplay(textRotation);
-        var transformAngle = -displayRotation;
-        var boundsSize = new Size(textWidth, textHeight);
-        var minX = 0.0;
-        var minY = 0.0;
-
-        if (displayRotation != 0)
-        {
-            var radians = transformAngle * Math.PI / 180.0;
-            var cos = Math.Cos(radians);
-            var sin = Math.Sin(radians);
-            var x1 = textWidth * cos;
-            var y1 = textWidth * sin;
-            var x2 = -textHeight * sin;
-            var y2 = textHeight * cos;
-            var x3 = x1 + x2;
-            var y3 = y1 + y2;
-
-            minX = Math.Min(0, Math.Min(x1, Math.Min(x2, x3)));
-            minY = Math.Min(0, Math.Min(y1, Math.Min(y2, y3)));
-            var maxX = Math.Max(0, Math.Max(x1, Math.Max(x2, x3)));
-            var maxY = Math.Max(0, Math.Max(y1, Math.Max(y2, y3)));
-            boundsSize = new Size(
-                maxX - minX,
-                maxY - minY);
-        }
-
-        var boundsX = hAlign switch
-        {
-            CellHAlign.Right => rect.Right - Math.Min(boundsSize.Width, rect.Width - 2) - 2,
-            CellHAlign.Justify or CellHAlign.Distributed => rect.Left + (rect.Width - boundsSize.Width) / 2,
-            CellHAlign.Center => rect.Left + (rect.Width - boundsSize.Width) / 2,
-            CellHAlign.General when isNumeric => rect.Right - Math.Min(boundsSize.Width, rect.Width - 2) - 2,
-            _ => rect.Left + 2 + indentPx
-        };
-        var boundsY = vAlign switch
-        {
-            CellVAlign.Top => rect.Top + 1,
-            CellVAlign.Center => rect.Top + (rect.Height - boundsSize.Height) / 2,
-            CellVAlign.Bottom => rect.Bottom - boundsSize.Height - 1,
-            _ => rect.Top + (rect.Height - boundsSize.Height) / 2
-        };
-        boundsY = Math.Max(rect.Top, boundsY);
-
-        var textPoint = new Point(
-            Math.Round(boundsX - minX),
-            Math.Round(boundsY - minY));
-        var bounds = new Rect(
-            textPoint.X + minX,
-            textPoint.Y + minY,
-            boundsSize.Width,
-            boundsSize.Height);
-
-        return new CellTextRenderLayout(textPoint, bounds, transformAngle);
+        var layout = CellTextOrientationLayoutPlanner.CalculateLayout(
+            new CellTextLayoutRect(rect.Left, rect.Top, rect.Width, rect.Height),
+            textWidth,
+            textHeight,
+            hAlign,
+            vAlign,
+            isNumeric,
+            indentPx,
+            textRotation);
+        return ToWpfLayout(layout);
     }
 
     private static void DrawCellText(
@@ -1071,15 +1015,21 @@ public partial class GridView
         FormattedText text,
         CellTextRenderLayout textLayout)
     {
-        const double tolerance = 0.5;
-        if (wrapText && text.Height > clipRect.Height + tolerance)
-            return true;
-
-        return textLayout.Bounds.Left < clipRect.Left - tolerance ||
-            textLayout.Bounds.Top < clipRect.Top - tolerance ||
-            textLayout.Bounds.Right > clipRect.Right + tolerance ||
-            textLayout.Bounds.Bottom > clipRect.Bottom + tolerance;
+        return CellTextOrientationLayoutPlanner.ShouldClip(
+            wrapText,
+            new CellTextLayoutRect(clipRect.Left, clipRect.Top, clipRect.Width, clipRect.Height),
+            text.Height,
+            new CellTextOrientationLayout(
+                new CellTextLayoutPoint(textLayout.TextPoint.X, textLayout.TextPoint.Y),
+                new CellTextLayoutRect(textLayout.Bounds.Left, textLayout.Bounds.Top, textLayout.Bounds.Width, textLayout.Bounds.Height),
+                textLayout.TransformAngle));
     }
+
+    private static CellTextRenderLayout ToWpfLayout(CellTextOrientationLayout layout) =>
+        new(
+            new Point(layout.TextPoint.X, layout.TextPoint.Y),
+            new Rect(layout.Bounds.Left, layout.Bounds.Top, layout.Bounds.Width, layout.Bounds.Height),
+            layout.TransformAngle);
 
     private static Pen UnderlinePenForTextBrush(Brush textBrush, Dictionary<Brush, Pen> underlinePenCache)
     {

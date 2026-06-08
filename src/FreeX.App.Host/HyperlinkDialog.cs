@@ -2,6 +2,8 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Services;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
@@ -104,17 +106,12 @@ public sealed class HyperlinkDialog : Window
         string? screenTip = "",
         string? bookmark = "")
     {
-        var trimmedTarget = target.Trim();
-        var normalizedTarget = NormalizeTargetForLinkType(trimmedTarget, linkType);
-        var normalizedDisplay = string.IsNullOrWhiteSpace(displayText)
-            ? CreateDefaultDisplayText(trimmedTarget, linkType)
-            : displayText.Trim();
-        return new HyperlinkDialogResult(
-            linkType,
-            normalizedTarget,
-            normalizedDisplay,
-            (screenTip ?? "").Trim(),
-            (bookmark ?? "").Trim());
+        return FromPlan(HyperlinkDialogPlanner.Plan(
+            target,
+            displayText,
+            ToCoreHyperlinkTargetKind(linkType),
+            screenTip,
+            bookmark));
     }
 
     public static bool TryCreateResult(
@@ -126,27 +123,23 @@ public sealed class HyperlinkDialog : Window
         out HyperlinkDialogResult result,
         out string? error)
     {
-        result = CreateResult(target ?? "", displayText, linkType, screenTip, bookmark);
-        if (string.IsNullOrWhiteSpace(result.Target))
+        if (HyperlinkDialogPlanner.TryPlan(
+                target,
+                displayText,
+                ToCoreHyperlinkTargetKind(linkType),
+                screenTip,
+                bookmark,
+                out var plan,
+                out var validationError))
         {
-            error = linkType switch
-            {
-                HyperlinkLinkType.PlaceInThisDocument => UiText.Get("Hyperlink_EnterValidCellReferenceOrDefinedName"),
-                HyperlinkLinkType.EmailAddress => UiText.Get("Hyperlink_EnterEmailAddress"),
-                HyperlinkLinkType.CreateNewDocument => UiText.Get("Hyperlink_EnterNewDocumentName"),
-                _ => UiText.Get("Hyperlink_EnterAddress")
-            };
-            return false;
+            result = FromPlan(plan);
+            error = null;
+            return true;
         }
 
-        if (linkType == HyperlinkLinkType.EmailAddress && !IsValidEmailAddressTarget(result.Target))
-        {
-            error = UiText.Get("Hyperlink_EnterValidEmailAddress");
-            return false;
-        }
-
-        error = null;
-        return true;
+        result = FromPlan(plan);
+        error = GetValidationErrorText(validationError);
+        return false;
     }
 
     private HyperlinkLinkType SelectedLinkType => _linkTypes.SelectedIndex switch
@@ -217,37 +210,36 @@ public sealed class HyperlinkDialog : Window
         Keyboard.Focus(_targetBox);
     }
 
-    private static bool IsValidEmailAddressTarget(string target)
-    {
-        var address = target.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase)
-            ? target["mailto:".Length..]
-            : target;
-        return address.IndexOf('@') > 0 &&
-            address.IndexOf('@') == address.LastIndexOf('@') &&
-            address.LastIndexOf('.') > address.IndexOf('@') + 1 &&
-            address.IndexOfAny([' ', '\t', '\r', '\n']) < 0;
-    }
+    private static HyperlinkDialogResult FromPlan(HyperlinkDialogPlan plan) =>
+        new(ToDialogLinkType(plan.LinkType), plan.Target, plan.DisplayText, plan.ScreenTip, plan.Bookmark);
 
-    private static string NormalizeTargetForLinkType(string target, HyperlinkLinkType linkType)
-    {
-        if (linkType != HyperlinkLinkType.EmailAddress ||
-            target.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase) ||
-            string.IsNullOrWhiteSpace(target))
-            return target;
+    private static HyperlinkTargetKind ToCoreHyperlinkTargetKind(HyperlinkLinkType linkType) =>
+        linkType switch
+        {
+            HyperlinkLinkType.CreateNewDocument => HyperlinkTargetKind.CreateNewDocument,
+            HyperlinkLinkType.PlaceInThisDocument => HyperlinkTargetKind.PlaceInThisDocument,
+            HyperlinkLinkType.EmailAddress => HyperlinkTargetKind.EmailAddress,
+            _ => HyperlinkTargetKind.ExistingFileOrWebPage
+        };
 
-        return "mailto:" + target;
-    }
+    private static HyperlinkLinkType ToDialogLinkType(HyperlinkTargetKind linkType) =>
+        linkType switch
+        {
+            HyperlinkTargetKind.CreateNewDocument => HyperlinkLinkType.CreateNewDocument,
+            HyperlinkTargetKind.PlaceInThisDocument => HyperlinkLinkType.PlaceInThisDocument,
+            HyperlinkTargetKind.EmailAddress => HyperlinkLinkType.EmailAddress,
+            _ => HyperlinkLinkType.ExistingFileOrWebPage
+        };
 
-    private static string CreateDefaultDisplayText(string target, HyperlinkLinkType linkType)
-    {
-        if (linkType != HyperlinkLinkType.EmailAddress ||
-            !target.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
-            return target;
-
-        var address = target["mailto:".Length..];
-        var queryStart = address.IndexOf('?', StringComparison.Ordinal);
-        return queryStart < 0 ? address : address[..queryStart];
-    }
+    private static string GetValidationErrorText(HyperlinkDialogValidationError error) =>
+        error switch
+        {
+            HyperlinkDialogValidationError.MissingDocumentLocation => UiText.Get("Hyperlink_EnterValidCellReferenceOrDefinedName"),
+            HyperlinkDialogValidationError.MissingEmailAddress => UiText.Get("Hyperlink_EnterEmailAddress"),
+            HyperlinkDialogValidationError.MissingNewDocumentName => UiText.Get("Hyperlink_EnterNewDocumentName"),
+            HyperlinkDialogValidationError.InvalidEmailAddress => UiText.Get("Hyperlink_EnterValidEmailAddress"),
+            _ => UiText.Get("Hyperlink_EnterAddress")
+        };
 
     private static Grid DialogGrid(int inputRows)
     {
@@ -267,7 +259,7 @@ public sealed class HyperlinkDialog : Window
             Content = label,
             Target = box,
             Padding = new Thickness(0),
-            VerticalAlignment = VerticalAlignment.Center,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 8)
         };
         grid.Children.Add(labelControl);

@@ -26,6 +26,13 @@ if ($workflows.Count -eq 0) {
     throw "No GitHub workflow files were found in $resolvedWorkflowDirectory."
 }
 
+$allowedActionMajors = @{
+    "actions/checkout" = "v6"
+    "actions/download-artifact" = "v7"
+    "actions/setup-dotnet" = "v5"
+    "actions/upload-artifact" = "v7"
+}
+
 $errors = [System.Collections.Generic.List[string]]::new()
 foreach ($workflow in $workflows) {
     $content = Get-Content -LiteralPath $workflow.FullName -Raw
@@ -133,6 +140,35 @@ foreach ($workflow in $workflows) {
         }
     }
 
+    if ($workflow.Name -eq "macos-app.yml") {
+        $requiredMacOsEvidenceMarkers = @(
+            "- name: Capture runner toolchain evidence",
+            'evidence_path="$artifact_root/freex-$runtime-macos-evidence.txt"',
+            'echo "runner_label=${{ matrix.runner }}"',
+            'echo "runner_os=${RUNNER_OS:-unknown}"',
+            'echo "runner_arch=${RUNNER_ARCH:-unknown}"',
+            'echo "image_os=${ImageOS:-unknown}"',
+            'echo "image_version=${ImageVersion:-unknown}"',
+            'echo "[sw_vers]"',
+            "sw_vers",
+            'echo "[uname -m]"',
+            "uname -m",
+            'echo "[dotnet --info]"',
+            "dotnet --info",
+            'echo "[xcodebuild -version]"',
+            "xcodebuild -version",
+            '} | tee "$evidence_path"',
+            'echo "[bundle]"',
+            '} >> "$evidence_path"'
+        )
+
+        foreach ($marker in $requiredMacOsEvidenceMarkers) {
+            if (-not $content.Contains($marker)) {
+                $errors.Add("$($workflow.Name): macOS app workflow is missing hosted runner/toolchain evidence marker: $marker")
+            }
+        }
+    }
+
     foreach ($match in [regex]::Matches($content, "(?m)^\s*(?:-\s*)?uses:\s+([^\s#]+)")) {
         $actionRef = $match.Groups[1].Value.Trim("`"", "'")
         if ($actionRef -match "^\.[\\/]") {
@@ -147,6 +183,13 @@ foreach ($workflow in $workflows) {
 
         if ($actionRef -notmatch "@v\d+$") {
             $errors.Add("$($workflow.Name): action '$actionRef' must be pinned to an explicit major version such as @v7.")
+            continue
+        }
+
+        $actionName = $actionRef.Substring(0, $actionRef.LastIndexOf("@", [System.StringComparison]::Ordinal))
+        $actionMajor = $actionRef.Substring($actionRef.LastIndexOf("@", [System.StringComparison]::Ordinal) + 1)
+        if ($allowedActionMajors.ContainsKey($actionName) -and $allowedActionMajors[$actionName] -ne $actionMajor) {
+            $errors.Add("$($workflow.Name): action '$actionRef' must use supported major $($allowedActionMajors[$actionName]).")
         }
     }
 }

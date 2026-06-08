@@ -365,8 +365,19 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
                 ?? throw new MissingFieldException(nameof(MainWindow), "_currentSheetId");
         }
 
-        public string? FocusedMenuHeader =>
-            Keyboard.FocusedElement is MenuItem menuItem ? menuItem.Header?.ToString() : null;
+        public string? FocusedMenuHeader
+        {
+            get
+            {
+                if (ActiveContextMenu is { } menu &&
+                    FocusManager.GetFocusedElement(menu) is MenuItem focusedMenuItem)
+                    return focusedMenuItem.Header?.ToString();
+
+                return Keyboard.FocusedElement is MenuItem menuItem
+                    ? menuItem.Header?.ToString()
+                    : null;
+            }
+        }
 
         public string? ContextMenuPlacementTargetName =>
             ActiveContextMenu?.PlacementTarget is FrameworkElement target ? target.Name : null;
