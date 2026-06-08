@@ -357,7 +357,7 @@ public sealed class Workbook
     /// <summary>Remove a sheet by its ID. Returns true if found and removed.</summary>
     public bool RemoveSheet(SheetId sheetId)
     {
-        var idx = _sheets.FindIndex(s => s.Id == sheetId);
+        var idx = FindSheetIndex(sheetId);
         if (idx < 0) return false;
         _sheets.RemoveAt(idx);
         _sheetById.Remove(sheetId);
@@ -365,6 +365,9 @@ public sealed class Workbook
         AdjustWorkbookViewSheetIndexes(idx);
         return true;
     }
+
+    private int FindSheetIndex(SheetId sheetId) =>
+        _sheets.FindIndex(sheet => sheet.Id == sheetId);
 
     private void RemoveNamedRangesForSheet(SheetId sheetId)
     {
@@ -471,7 +474,7 @@ public sealed class Workbook
         if (sheetId is null)
             return null;
 
-        var index = _sheets.FindIndex(sheet => sheet.Id == sheetId.Value);
+        var index = FindSheetIndex(sheetId.Value);
         return index < 0 ? null : index;
     }
 }

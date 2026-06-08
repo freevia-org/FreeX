@@ -55,7 +55,7 @@ public static class ManageConditionalFormatsPlanner
         Guid? newId = null)
     {
         var result = Reprioritize(rules).ToList();
-        var index = result.FindIndex(rule => rule.Id == ruleId);
+        var index = FindRuleIndex(result, ruleId);
         if (index < 0)
             return result;
 
@@ -68,7 +68,7 @@ public static class ManageConditionalFormatsPlanner
         ConditionalFormat editedRule)
     {
         var result = Reprioritize(rules).ToList();
-        var index = result.FindIndex(rule => rule.Id == editedRule.Id);
+        var index = FindRuleIndex(result, editedRule.Id);
         if (index < 0)
             return result;
 
@@ -89,7 +89,7 @@ public static class ManageConditionalFormatsPlanner
         ConditionalFormatRuleMoveDirection direction)
     {
         var result = Reprioritize(rules).ToList();
-        var index = result.FindIndex(rule => rule.Id == ruleId);
+        var index = FindRuleIndex(result, ruleId);
         if (index < 0)
             return result;
 
@@ -107,7 +107,7 @@ public static class ManageConditionalFormatsPlanner
         GridRange range)
     {
         var result = Reprioritize(rules).ToList();
-        var index = result.FindIndex(rule => rule.Id == ruleId);
+        var index = FindRuleIndex(result, ruleId);
         if (index < 0)
             return result;
 
@@ -115,6 +115,17 @@ public static class ManageConditionalFormatsPlanner
         updated.AppliesTo = range;
         result[index] = updated;
         return result;
+    }
+
+    private static int FindRuleIndex(IReadOnlyList<ConditionalFormat> rules, Guid ruleId)
+    {
+        for (var i = 0; i < rules.Count; i++)
+        {
+            if (rules[i].Id == ruleId)
+                return i;
+        }
+
+        return -1;
     }
 
     public static IReadOnlyList<ConditionalFormat> Reprioritize(IReadOnlyList<ConditionalFormat> rules) =>
