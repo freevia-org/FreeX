@@ -229,7 +229,7 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
         if (chart.IsPivotChart)
             return ChartCommandGuards.SelectedChartIsPivotChart();
         if (_dataRange.Start.Sheet != _sheetId || _dataRange.End.Sheet != _sheetId)
-            return new CommandOutcome(false, "Chart data range must be on the target sheet.");
+            return ChartCommandGuards.ChartDataRangeOnTargetSheet();
 
         var nextFirstRowIsHeader = _firstRowIsHeader ?? chart.FirstRowIsHeader;
         var nextFirstColIsCategories = _firstColIsCategories ?? chart.FirstColIsCategories;

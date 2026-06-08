@@ -40,13 +40,13 @@ public sealed class AddChartCommand : IWorkbookCommand
         if (ChartAuthoringPlanner.RejectIfUnsupported(_chart.Type) is { } unsupportedOutcome)
             return unsupportedOutcome;
         if (_chart.DataRange.Start.Sheet != _sheetId || _chart.DataRange.End.Sheet != _sheetId)
-            return new CommandOutcome(false, "Chart data range must be on the target sheet.");
+            return ChartCommandGuards.ChartDataRangeOnTargetSheet();
         if (ChartCommandGuards.RejectInvalidSize(_chart.Width, _chart.Height) is { } invalidSize)
             return invalidSize;
         if (ChartTypeSupport.GetDataSeriesCount(_chart) <= 0)
-            return new CommandOutcome(false, "Chart data range must include at least one data series.");
+            return ChartCommandGuards.ChartDataRangeRequiresDataSeries();
         if (ChartTypeSupport.GetDataPointCount(_chart) <= 0)
-            return new CommandOutcome(false, "Chart data range must include at least one data point.");
+            return ChartCommandGuards.ChartDataRangeRequiresDataPoint();
 
         var sheet = ctx.GetSheet(_sheetId);
         if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
@@ -111,9 +111,9 @@ public sealed class AddChartSheetCommand : IWorkbookCommand
             Title = _title
         };
         if (ChartTypeSupport.GetDataSeriesCount(candidate) <= 0)
-            return new CommandOutcome(false, "Chart data range must include at least one data series.");
+            return ChartCommandGuards.ChartDataRangeRequiresDataSeries();
         if (ChartTypeSupport.GetDataPointCount(candidate) <= 0)
-            return new CommandOutcome(false, "Chart data range must include at least one data point.");
+            return ChartCommandGuards.ChartDataRangeRequiresDataPoint();
 
         var target = ctx.Workbook.AddSheet(GetUniqueChartSheetName(ctx.Workbook));
         target.Charts.Add(candidate);
@@ -239,6 +239,9 @@ internal static class ChartCommandGuards
     private const string InvalidChartSizeMessage = "Chart size must be positive.";
     private const string SelectedChartIsPivotChartMessage = "Selected chart is a PivotChart.";
     private const string SelectedChartIsNotPivotChartMessage = "Selected chart is not a PivotChart.";
+    private const string ChartDataRangeOnTargetSheetMessage = "Chart data range must be on the target sheet.";
+    private const string ChartDataRangeRequiresDataSeriesMessage = "Chart data range must include at least one data series.";
+    private const string ChartDataRangeRequiresDataPointMessage = "Chart data range must include at least one data point.";
 
     public static CommandOutcome ChartNotFound() =>
         new(false, ChartNotFoundMessage);
@@ -251,6 +254,15 @@ internal static class ChartCommandGuards
 
     public static CommandOutcome SelectedChartIsNotPivotChart() =>
         new(false, SelectedChartIsNotPivotChartMessage);
+
+    public static CommandOutcome ChartDataRangeOnTargetSheet() =>
+        new(false, ChartDataRangeOnTargetSheetMessage);
+
+    public static CommandOutcome ChartDataRangeRequiresDataSeries() =>
+        new(false, ChartDataRangeRequiresDataSeriesMessage);
+
+    public static CommandOutcome ChartDataRangeRequiresDataPoint() =>
+        new(false, ChartDataRangeRequiresDataPointMessage);
 
     public static CommandOutcome? RejectIfEditObjectsBlocked(Sheet sheet) =>
         CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects);
