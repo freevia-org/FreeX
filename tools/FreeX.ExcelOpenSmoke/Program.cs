@@ -913,13 +913,13 @@ internal static class ExcelOpenSmoke
                 issues.Add(stylesContentTypeIssue);
         }
 
-        if (tags.Contains("shared-strings") &&
+        if (HasSharedStringPackageTag(tags) &&
             !PackageEntryExists(archive, "xl/sharedStrings.xml"))
         {
             issues.Add("missing xl/sharedStrings.xml for public shared-strings tag");
         }
 
-        if (tags.Contains("shared-strings") &&
+        if (HasSharedStringPackageTag(tags) &&
             !PackageRelationshipExists(
                 archive,
                 new PackageRelationshipExpectation(
@@ -930,7 +930,7 @@ internal static class ExcelOpenSmoke
             issues.Add("missing workbook relationship to xl/sharedStrings.xml for public shared-strings tag");
         }
 
-        if (tags.Contains("shared-strings"))
+        if (HasSharedStringPackageTag(tags))
         {
             var sharedStringsContentTypeIssue = FindPackageContentTypeIssue(
                 archive,
@@ -1003,7 +1003,7 @@ internal static class ExcelOpenSmoke
     private static bool HasExpectedPublicPackageTags(IReadOnlySet<string> tags) =>
         tags.Contains("styles") ||
         tags.Contains("formatting") ||
-        tags.Contains("shared-strings") ||
+        HasSharedStringPackageTag(tags) ||
         tags.Contains("hyperlinks") ||
         tags.Contains("merged-cells") ||
         tags.Contains("inline-strings") ||
@@ -1014,12 +1014,16 @@ internal static class ExcelOpenSmoke
     private static bool HasExpectedPublicWorksheetPackageTags(IReadOnlySet<string> tags) =>
         tags.Contains("styles") ||
         tags.Contains("formatting") ||
-        tags.Contains("shared-strings") ||
+        HasSharedStringPackageTag(tags) ||
         tags.Contains("hyperlinks") ||
         tags.Contains("merged-cells") ||
         tags.Contains("inline-strings") ||
         tags.Contains("cell-types") ||
         (tags.Contains("sheet-names") && tags.Contains("boundary"));
+
+    private static bool HasSharedStringPackageTag(IReadOnlySet<string> tags) =>
+        tags.Contains("shared-strings") ||
+        tags.Contains("shared-string-package");
 
     private static IReadOnlyList<XDocument> LoadPublicWorkbookWorksheetXmlDocuments(
         ZipArchive archive,
