@@ -99,12 +99,11 @@ public sealed class SetTextBoxAltTextCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var textBox = sheet.TextBoxes.FirstOrDefault(item => item.Id == _textBoxId);
-        if (textBox is null)
-            return new CommandOutcome(false, "Text box was not found.");
+        if (!TextBoxCommandGuards.TryFindTextBox(sheet, _textBoxId, out var textBox))
+            return TextBoxCommandGuards.TextBoxNotFound();
 
         textBox.AltText = _change.Apply(textBox.AltText);
         return new CommandOutcome(true, AffectedCells: [textBox.Anchor]);

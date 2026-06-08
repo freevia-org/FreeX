@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -82,9 +83,8 @@ public sealed class ResizeTextBoxCommand : IWorkbookCommand
         if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var textBox = sheet.TextBoxes.FirstOrDefault(item => item.Id == _textBoxId);
-        if (textBox is null)
-            return new CommandOutcome(false, "Text box was not found.");
+        if (!TextBoxCommandGuards.TryFindTextBox(sheet, _textBoxId, out var textBox))
+            return TextBoxCommandGuards.TextBoxNotFound();
 
         _previousWidth = textBox.Width;
         _previousHeight = textBox.Height;
@@ -131,9 +131,8 @@ public sealed class RotateTextBoxCommand : IWorkbookCommand
         if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var textBox = sheet.TextBoxes.FirstOrDefault(item => item.Id == _textBoxId);
-        if (textBox is null)
-            return new CommandOutcome(false, "Text box was not found.");
+        if (!TextBoxCommandGuards.TryFindTextBox(sheet, _textBoxId, out var textBox))
+            return TextBoxCommandGuards.TextBoxNotFound();
 
         _previousRotationDegrees = textBox.RotationDegrees;
         textBox.RotationDegrees = ObjectRotationNormalizer.NormalizeDegrees(_rotationDegrees);
@@ -184,9 +183,8 @@ public sealed class SetTextBoxColorsCommand : IWorkbookCommand
         if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var textBox = sheet.TextBoxes.FirstOrDefault(item => item.Id == _textBoxId);
-        if (textBox is null)
-            return new CommandOutcome(false, "Text box was not found.");
+        if (!TextBoxCommandGuards.TryFindTextBox(sheet, _textBoxId, out var textBox))
+            return TextBoxCommandGuards.TextBoxNotFound();
 
         _previousFillColor = textBox.FillColor;
         _previousOutlineColor = textBox.OutlineColor;
@@ -235,8 +233,8 @@ public sealed class RepositionTextBoxCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
-        var textBox = sheet.TextBoxes.FirstOrDefault(t => t.Id == _textBoxId);
-        if (textBox is null) return new CommandOutcome(false, "Text box was not found.");
+        if (!TextBoxCommandGuards.TryFindTextBox(sheet, _textBoxId, out var textBox))
+            return TextBoxCommandGuards.TextBoxNotFound();
         _previousAnchor = textBox.Anchor;
         textBox.Anchor = _anchor;
         _applied = true;
@@ -256,6 +254,7 @@ public sealed class RepositionTextBoxCommand : IWorkbookCommand
 internal static class TextBoxCommandGuards
 {
     private const string InvalidTextBoxSizeMessage = "Text box size must be positive.";
+    private const string TextBoxNotFoundMessage = "Text box was not found.";
 
     public static CommandOutcome? RejectIfEditObjectsBlocked(Sheet sheet) =>
         CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects);
@@ -264,4 +263,16 @@ internal static class TextBoxCommandGuards
         double.IsFinite(width) && double.IsFinite(height) && width > 0 && height > 0
             ? null
             : new CommandOutcome(false, InvalidTextBoxSizeMessage);
+
+    public static bool TryFindTextBox(
+        Sheet sheet,
+        Guid textBoxId,
+        [NotNullWhen(true)] out TextBoxModel? textBox)
+    {
+        textBox = sheet.TextBoxes.FirstOrDefault(item => item.Id == textBoxId);
+        return textBox is not null;
+    }
+
+    public static CommandOutcome TextBoxNotFound() =>
+        new(false, TextBoxNotFoundMessage);
 }
