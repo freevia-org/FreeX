@@ -17503,7 +17503,9 @@ internal static class ExcelOpenSmoke
                         "xl/worksheets/_rels/sheet1.xml.rels",
                         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing",
                         "xl/drawings/vmlDrawing1.vml")
-                ]
+                ],
+                MinExcelOpenedHeaderFooterSheets = 1,
+                MinExcelReopenedHeaderFooterSheets = reopen
             };
         }
         else if (string.Equals(row.Id, "generated-worksheet-legacy-drawing-001", StringComparison.OrdinalIgnoreCase))
