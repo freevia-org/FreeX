@@ -13,7 +13,7 @@ public static partial class XlsxChartPartReader
         SheetId sheetId,
         out ChartModel chart)
     {
-        var firstBarChart = barCharts.FirstOrDefault();
+        var firstBarChart = FirstChartElement(barCharts);
         var barDirection = firstBarChart?.Element(ChartNs + "barDir")?.Attribute("val")?.Value;
         if (barDirection is not ("col" or "bar"))
         {
@@ -130,7 +130,7 @@ public static partial class XlsxChartPartReader
         SheetId sheetId,
         out ChartModel chart)
     {
-        var firstBarChart = barCharts.FirstOrDefault();
+        var firstBarChart = FirstChartElement(barCharts);
         var barDirection = firstBarChart?.Element(ChartNs + "barDir")?.Attribute("val")?.Value;
         if (barDirection is not ("col" or "bar"))
         {
