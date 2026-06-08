@@ -71,16 +71,34 @@ public partial class MainWindow
         => FindSheetTabIndex(tabs, _currentSheetId);
 
     private SheetTabViewModel? FindSheetTab(SheetId sheetId)
-        => _sheetTabs.FirstOrDefault(tab => tab.Id == sheetId);
+    {
+        foreach (var tab in _sheetTabs)
+            if (tab.Id == sheetId)
+                return tab;
+
+        return null;
+    }
 
     private SheetTabViewModel? FindCurrentSheetTab()
         => FindSheetTab(_currentSheetId);
 
     private static MenuItem? FindFirstEnabledMenuItem(ContextMenu contextMenu)
-        => contextMenu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled);
+    {
+        foreach (var item in contextMenu.Items)
+            if (item is MenuItem { IsEnabled: true } menuItem)
+                return menuItem;
+
+        return null;
+    }
 
     private static Sheet? FindHiddenSheetByName(IReadOnlyList<Sheet> hiddenSheets, string sheetName)
-        => hiddenSheets.FirstOrDefault(sheet => sheet.Name.Equals(sheetName, StringComparison.OrdinalIgnoreCase));
+    {
+        foreach (var sheet in hiddenSheets)
+            if (sheet.Name.Equals(sheetName, StringComparison.OrdinalIgnoreCase))
+                return sheet;
+
+        return null;
+    }
 
     private void SelectSingleSheetTab(SheetId sheetId)
     {
