@@ -82,6 +82,31 @@ public sealed class SortDialogPlannerTests
     }
 
     [Fact]
+    public void BuildColorChoicesForSortOn_UsesScopedColorChoicesForColorSorts()
+    {
+        SortDialogPlanner.BuildColorChoicesForSortOn(
+                "Cell Values",
+                [new SortColorChoice("#FF0000")],
+                [new SortColorChoice("#0000FF")])
+            .Should()
+            .Equal(new SortColorChoice(""));
+
+        SortDialogPlanner.BuildColorChoicesForSortOn(
+                "Cell Color",
+                [new SortColorChoice(""), new SortColorChoice("#FF0000")],
+                [new SortColorChoice(""), new SortColorChoice("#0000FF")])
+            .Should()
+            .Equal(new SortColorChoice(""), new SortColorChoice("#FF0000"));
+
+        SortDialogPlanner.BuildColorChoicesForSortOn(
+                "Font Color",
+                [new SortColorChoice(""), new SortColorChoice("#FF0000")],
+                [new SortColorChoice(""), new SortColorChoice("#0000FF")])
+            .Should()
+            .Equal(new SortColorChoice(""), new SortColorChoice("#0000FF"));
+    }
+
+    [Fact]
     public void TextCatalog_LocalizesDefaultLevelsChoicesAndLabels()
     {
         var text = new SortDialogPlannerText(
