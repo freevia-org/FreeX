@@ -377,8 +377,16 @@ public static partial class PrintRenderer
         }
     }
 
-    private static bool IsPrintedChartLegendEntryDeleted(ChartModel chart, int index) =>
-        chart.LegendEntries.FirstOrDefault(entry => entry.Index == index) is { IsDeleted: true };
+    private static bool IsPrintedChartLegendEntryDeleted(ChartModel chart, int index)
+    {
+        foreach (var entry in chart.LegendEntries)
+        {
+            if (entry.Index == index)
+                return entry.IsDeleted == true;
+        }
+
+        return false;
+    }
 
     private static void AddPrintedChartValueAxisTickLabelOverlays(
         ICollection<PdfTextOverlay> textOverlays,
