@@ -153,7 +153,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         if (!CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
             return CommandGuards.RejectPivotTableNotFound();
 
-        var cache = ctx.Workbook.PivotCaches.FirstOrDefault(item => item.CacheId == pivotTable.CacheId);
+        var cache = CommandGuards.FindPivotCache(ctx.Workbook, pivotTable);
         _snapshot = PivotOptionsSnapshot.Capture(pivotTable, cache);
         _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
 
@@ -233,7 +233,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable) && _snapshot is not null)
         {
-            var cache = ctx.Workbook.PivotCaches.FirstOrDefault(item => item.CacheId == pivotTable.CacheId);
+            var cache = CommandGuards.FindPivotCache(ctx.Workbook, pivotTable);
             _snapshot.Restore(pivotTable, cache);
         }
         AddPivotTableCommand.Restore(sheet, _targetSnapshot);
