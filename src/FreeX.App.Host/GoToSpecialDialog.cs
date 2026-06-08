@@ -138,15 +138,15 @@ public sealed class GoToSpecialDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        var firstButton = _buttons.FirstOrDefault();
-        _buttons.FirstOrDefault()?.Focus();
+        var firstButton = FirstButton();
+        firstButton?.Focus();
         if (firstButton is not null)
             Keyboard.Focus(firstButton);
     }
 
     private void Accept()
     {
-        var selected = _buttons.FirstOrDefault(button => button.IsChecked == true);
+        var selected = SelectedButton();
         SelectedKind = selected?.Tag is GoToSpecialKind kind ? kind : GoToSpecialKind.Blanks;
         SelectedOptions = UsesValueTypeOptions(SelectedKind)
             ? new GoToSpecialOptions(GetSelectedValueTypes())
@@ -170,13 +170,19 @@ public sealed class GoToSpecialDialog : Window
 
     private void RefreshValueTypeOptions()
     {
-        var selected = _buttons.FirstOrDefault(button => button.IsChecked == true);
+        var selected = SelectedButton();
         var enabled = selected?.Tag is GoToSpecialKind kind && UsesValueTypeOptions(kind);
         _numbersBox.IsEnabled = enabled;
         _textBox.IsEnabled = enabled;
         _logicalsBox.IsEnabled = enabled;
         _errorsBox.IsEnabled = enabled;
     }
+
+    private RadioButton? FirstButton() =>
+        _buttons.FirstOrDefault();
+
+    private RadioButton? SelectedButton() =>
+        _buttons.FirstOrDefault(button => button.IsChecked == true);
 
     private static bool UsesValueTypeOptions(GoToSpecialKind kind) =>
         kind is GoToSpecialKind.Constants or GoToSpecialKind.Formulas;
