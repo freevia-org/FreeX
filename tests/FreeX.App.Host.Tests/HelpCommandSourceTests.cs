@@ -5,24 +5,29 @@ namespace FreeX.App.Host.Tests;
 public sealed class HelpCommandSourceTests
 {
     [Theory]
-    [InlineData("MainWindow_Content_HelpOnline", "Help Online", "HO", "HelpOnlineBtn_Click")]
-    [InlineData("MainWindow_Content_Feedback", "Feedback", "FE", "SendFeedbackBtn_Click")]
-    [InlineData("MainWindow_Content_CopyDiagnostics", "Copy Diagnostics", "DG", "CopyDiagnosticsBtn_Click")]
-    [InlineData("MainWindow_Content_CheckForUpdates", "Check for Updates", "UP", "CheckForUpdatesBtn_Click")]
-    [InlineData("MainWindow_Content_AboutFreeX", "About FreeX", "AB", "AboutBtn_Click")]
-    [InlineData("MainWindow_Content_LegalNotices", "Legal Notices", "LN", "LegalNoticesBtn_Click")]
-    public void HelpEnabledCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
+    [InlineData("MainWindow_Content_HelpOnline", "Help Online", "HO", "HelpOnlineBtn_Click", "HelpOnlineButton", "MainWindow_AutomationName_HelpOnline", "MainWindow_AutomationHelpText_OpenTheFreeXHelpDocumentationInAWebBrowser")]
+    [InlineData("MainWindow_Content_Feedback", "Feedback", "FE", "SendFeedbackBtn_Click", "HelpFeedbackButton", "MainWindow_AutomationName_Feedback", "MainWindow_AutomationHelpText_OpenAPrefilledGitHubIssueWithSafeAppDiagnostics")]
+    [InlineData("MainWindow_Content_CopyDiagnostics", "Copy Diagnostics", "DG", "CopyDiagnosticsBtn_Click", "HelpCopyDiagnosticsButton", "MainWindow_Content_CopyDiagnostics", "MainWindow_TooltipDescription_CopySafeAppVersionRuntimeOSAndSessionDiagnosticsForTesterReports")]
+    [InlineData("MainWindow_Content_CheckForUpdates", "Check for Updates", "UP", "CheckForUpdatesBtn_Click", "HelpCheckForUpdatesButton", "MainWindow_AutomationName_CheckForUpdates", "MainWindow_AutomationHelpText_OpenTheLatestFreeXTesterReleaseInAWebBrowser")]
+    [InlineData("MainWindow_Content_AboutFreeX", "About FreeX", "AB", "AboutBtn_Click", "HelpAboutFreeXButton", "MainWindow_AutomationName_AboutFreeX", "MainWindow_TooltipDescription_ViewVersionAndLicenseInformationAboutFreeX")]
+    [InlineData("MainWindow_Content_LegalNotices", "Legal Notices", "LN", "LegalNoticesBtn_Click", "HelpLegalNoticesButton", "MainWindow_AutomationName_LegalNotices", "MainWindow_AutomationHelpText_OpenLegalPrivacyAndThirdPartyNoticesPackagedWithFreeX")]
+    public void HelpEnabledCommands_ExposeExpectedAutomationKeyTipsAndHandlers(
         string contentKey,
         string commandName,
         string keyTip,
-        string handler)
+        string handler,
+        string automationId,
+        string automationNameKey,
+        string automationHelpTextKey)
     {
-        var elementName = commandName == "Copy Diagnostics" ? "Button" : "local:AutomationInvokeButton";
         var button = LocalizedXamlTestSupport.ReadMainWindowXaml()
-            .ExtractElementByInvariantCommandName(elementName, commandName, $"Click=\"{handler}\"");
+            .ExtractElementByInvariantCommandName("local:AutomationInvokeButton", commandName, $"Click=\"{handler}\"");
 
         button.ShouldContainLocalizedAttribute("Content", UiText.Get(contentKey));
+        button.ShouldContainLocalizedAttribute("AutomationProperties.Name", UiText.Get(automationNameKey));
+        button.ShouldContainLocalizedAttribute("AutomationProperties.HelpText", UiText.Get(automationHelpTextKey));
         button.ShouldContainInvariantCommandName(commandName);
+        button.Should().Contain($"AutomationProperties.AutomationId=\"{automationId}\"");
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
