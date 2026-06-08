@@ -2717,6 +2717,7 @@ public sealed class AvaloniaShellSourceTests
 
         plannerSource.Should().Contain("public enum HyperlinkNavigationKind");
         plannerSource.Should().Contain("HyperlinkTargetKind.PlaceInThisDocument");
+        plannerSource.Should().Contain("HyperlinkNavigationKind.LocalFile");
         plannerSource.Should().Contain("HyperlinkNavigationKind.External");
         plannerSource.Should().Contain("\"http\", \"https\", \"mailto\", \"ftp\"");
         launcherSource.Should().Contain("public static class ExternalUriLauncher");
@@ -2724,9 +2725,11 @@ public sealed class AvaloniaShellSourceTests
         launcherSource.Should().Contain("HyperlinkNavigationPlanner.IsAllowedScheme(normalizedTarget)");
 
         sessionSource.Should().Contain("public bool CanOpenSelectedHyperlink");
+        sessionSource.Should().Contain("HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, SelectedRange.Start, CurrentFilePath, out _)");
         sessionSource.Should().Contain("public bool TryGetSelectedHyperlinkPlan(out HyperlinkNavigationPlan? plan)");
         sessionSource.Should().Contain("public WorkbookNavigationResult OpenSelectedHyperlink()");
-        sessionSource.Should().Contain("return GoToReference(plan.Target);");
+        sessionSource.Should().Contain("HyperlinkNavigationKind.WorksheetCell => GoToReference(plan.Target)");
+        sessionSource.Should().Contain("Local file hyperlinks require a platform file-opening route.");
         sessionSource.Should().Contain("External hyperlinks are not supported on this platform.");
 
         source.Should().Contain("private readonly NativeMenuItem _openHyperlinkMenuItem = new();");

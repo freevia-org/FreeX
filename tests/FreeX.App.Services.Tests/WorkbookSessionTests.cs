@@ -345,6 +345,64 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void TryGetSelectedHyperlinkPlan_ResolvesRelativeLocalFileAgainstWorkbookPathWithoutNavigation()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var workbookDirectory = Path.Combine(Path.GetTempPath(), "FreeXWorkbookSessionHyperlinks");
+        var workbookPath = Path.Combine(workbookDirectory, "Book.fxl");
+        var expectedLocalPath = Path.GetFullPath(Path.Combine(workbookDirectory, "Reports", "Budget.xlsx"));
+        sheet.Hyperlinks[source] = " Reports/Budget.xlsx ";
+        sheet.HyperlinkMetadata[source] = new HyperlinkMetadata(HyperlinkTargetKind.ExistingFileOrWebPage);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false,
+            SourcePath: workbookPath));
+        session.SelectCell(source);
+
+        session.TryGetSelectedHyperlinkPlan(out var plan).Should().BeTrue();
+
+        plan.Should().Be(new HyperlinkNavigationPlan(
+            HyperlinkNavigationKind.LocalFile,
+            "Reports/Budget.xlsx",
+            null,
+            expectedLocalPath));
+        session.ActiveSheet.Id.Should().Be(sheet.Id);
+        session.SelectedRange.Should().Be(new GridRange(source, source));
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public void OpenSelectedHyperlink_LeavesLocalFileUnsupportedWithoutNavigation()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var workbookPath = Path.Combine(Path.GetTempPath(), "FreeXWorkbookSessionHyperlinks", "Book.fxl");
+        sheet.Hyperlinks[source] = " Reports/Budget.xlsx ";
+        sheet.HyperlinkMetadata[source] = new HyperlinkMetadata(HyperlinkTargetKind.ExistingFileOrWebPage);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false,
+            SourcePath: workbookPath));
+        session.SelectCell(source);
+
+        var result = session.OpenSelectedHyperlink();
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be("Local file hyperlinks require a platform file-opening route.");
+        session.ActiveSheet.Id.Should().Be(sheet.Id);
+        session.SelectedRange.Should().Be(new GridRange(source, source));
+        session.ActiveCell.Should().Be(source);
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
     public void GoToSpecial_SelectsBlanksWithoutDirtyingWorkbook()
     {
         var workbook = CreateWorkbook();
