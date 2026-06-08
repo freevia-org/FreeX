@@ -9109,10 +9109,11 @@ public sealed class MainWindow : Window
         var operatorChoices = CreateDataValidationOperatorChoices();
         var alertStyleChoices = CreateDataValidationAlertStyleChoices();
         var activeRule = summary.ActiveCellRule;
-        var initialType = activeRule is not null && typeChoices.Any(choice => choice.Type == activeRule.Type)
-            ? activeRule.Type
-            : DvType.WholeNumber;
-        var initialRule = activeRule is not null && typeChoices.Any(choice => choice.Type == activeRule.Type)
+        var activeTypeChoice = activeRule is null
+            ? null
+            : FindDataValidationTypeChoice(typeChoices, activeRule.Type);
+        var initialType = activeTypeChoice?.Type ?? DvType.WholeNumber;
+        var initialRule = activeRule is not null && activeTypeChoice is not null
             ? activeRule
             : CreateDefaultDataValidationRule(initialType, _session.SelectedRange);
 
@@ -9273,13 +9274,12 @@ public sealed class MainWindow : Window
 
         void SelectOperator(DvOperator op)
         {
-            operatorBox.SelectedItem = operatorChoices.FirstOrDefault(choice => choice.Operator == op) ??
-                operatorChoices[0];
+            operatorBox.SelectedItem = FindDataValidationOperatorChoice(operatorChoices, op);
         }
 
         void LoadRule(DataValidation rule)
         {
-            typeBox.SelectedItem = typeChoices.FirstOrDefault(choice => choice.Type == rule.Type) ?? typeChoices[0];
+            typeBox.SelectedItem = FindDataValidationTypeChoice(typeChoices, rule.Type) ?? typeChoices[0];
             SelectOperator(rule.Operator);
             formula1Box.Text = rule.Formula1 ?? "";
             formula2Box.Text = rule.Formula2 ?? "";
@@ -9287,8 +9287,7 @@ public sealed class MainWindow : Window
             showDropdownBox.IsChecked = rule.ShowDropdown;
             showInputMessageBox.IsChecked = rule.ShowInputMessage;
             showErrorMessageBox.IsChecked = rule.ShowErrorMessage;
-            alertStyleBox.SelectedItem = alertStyleChoices.FirstOrDefault(choice => choice.AlertStyle == rule.AlertStyle) ??
-                alertStyleChoices[0];
+            alertStyleBox.SelectedItem = FindDataValidationAlertStyleChoice(alertStyleChoices, rule.AlertStyle);
             promptTitleBox.Text = rule.PromptTitle ?? "";
             promptMessageBox.Text = rule.PromptMessage ?? "";
             errorTitleBox.Text = rule.ErrorTitle ?? "";
@@ -9497,6 +9496,21 @@ public sealed class MainWindow : Window
         new(DvAlertStyle.Warning, "Warning"),
         new(DvAlertStyle.Information, "Information"),
     ];
+
+    private static DataValidationTypeChoice? FindDataValidationTypeChoice(
+        IReadOnlyList<DataValidationTypeChoice> choices,
+        DvType type) =>
+        choices.FirstOrDefault(choice => choice.Type == type);
+
+    private static DataValidationOperatorChoice FindDataValidationOperatorChoice(
+        IReadOnlyList<DataValidationOperatorChoice> choices,
+        DvOperator op) =>
+        choices.FirstOrDefault(choice => choice.Operator == op) ?? choices[0];
+
+    private static DataValidationAlertStyleChoice FindDataValidationAlertStyleChoice(
+        IReadOnlyList<DataValidationAlertStyleChoice> choices,
+        DvAlertStyle alertStyle) =>
+        choices.FirstOrDefault(choice => choice.AlertStyle == alertStyle) ?? choices[0];
 
     private static DataValidation CreateDefaultDataValidationRule(DvType type, GridRange selectedRange)
     {
