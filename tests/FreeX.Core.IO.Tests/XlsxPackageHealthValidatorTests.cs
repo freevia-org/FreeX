@@ -199,6 +199,21 @@ public sealed class XlsxPackageHealthValidatorTests
     }
 
     [Fact]
+    public void Validate_FlagsDuplicateRelationshipId()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookRelationships:
+            [
+                Relationship("rId1", WorksheetRelationshipType, "worksheets/sheet1.xml"),
+                Relationship("rId1", WorksheetRelationshipType, "worksheets/sheet1.xml")
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("duplicate Relationship Id rId1", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Validate_FlagsCaseCollidingPackageEntries()
     {
         using var package = CreateMinimalWorkbookPackage(
