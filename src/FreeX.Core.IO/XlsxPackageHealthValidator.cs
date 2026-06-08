@@ -10,11 +10,23 @@ public static class XlsxPackageHealthValidator
         "application/vnd.openxmlformats-package.relationships+xml";
     private const string OfficeDocumentRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
+    private const string WorksheetRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
+    private const string ChartsheetRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet";
+    private const string WorksheetContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
+    private const string ChartsheetContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml";
 
     private static readonly XNamespace PackageContentTypeNs =
         "http://schemas.openxmlformats.org/package/2006/content-types";
     private static readonly XNamespace PackageRelationshipNs =
         "http://schemas.openxmlformats.org/package/2006/relationships";
+    private static readonly XNamespace WorkbookNs =
+        "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    private static readonly XNamespace OfficeRelationshipNs =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly HashSet<string> WorkbookMainContentTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml",
@@ -31,6 +43,7 @@ public static class XlsxPackageHealthValidator
         AddPackageContentTypeIssues(archive, issues);
         AddPackageRelationshipIssues(archive, issues);
         AddPackageRootWorkbookIssues(archive, issues);
+        AddWorkbookSheetMapIssues(archive, issues);
         return issues;
     }
 
@@ -494,6 +507,145 @@ public static class XlsxPackageHealthValidator
         }
     }
 
+    private static void AddWorkbookSheetMapIssues(ZipArchive archive, List<string> issues)
+    {
+        if (!TryLoadPackageXml(archive, "[Content_Types].xml", issues, out var contentTypesXml) ||
+            contentTypesXml.Root?.Name != PackageContentTypeNs + "Types")
+        {
+            return;
+        }
+
+        var entryNames = archive.Entries
+            .Where(entry => !string.IsNullOrEmpty(entry.Name))
+            .Select(entry => NormalizePackagePart(entry.FullName))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (!TryFindWorkbookPart(archive, entryNames, out var workbookPart))
+            return;
+
+        if (!TryLoadPackageXml(archive, workbookPart, issues, out var workbookXml) ||
+            workbookXml.Root?.Name != WorkbookNs + "workbook")
+        {
+            return;
+        }
+
+        var workbookRelsPart = GetRelationshipPartPath(workbookPart);
+        if (!TryLoadPackageXml(archive, workbookRelsPart, issues, out var workbookRelsXml) ||
+            workbookRelsXml.Root?.Name != PackageRelationshipNs + "Relationships")
+        {
+            return;
+        }
+
+        var workbookRelationships = new Dictionary<string, XElement>(StringComparer.Ordinal);
+        foreach (var relationship in workbookRelsXml.Root.Elements(PackageRelationshipNs + "Relationship"))
+        {
+            var id = relationship.Attribute("Id")?.Value;
+            if (!string.IsNullOrWhiteSpace(id) && !workbookRelationships.ContainsKey(id))
+                workbookRelationships.Add(id, relationship);
+        }
+
+        foreach (var sheet in workbookXml.Root
+                     .Element(WorkbookNs + "sheets")
+                     ?.Elements(WorkbookNs + "sheet") ?? [])
+        {
+            ValidateWorkbookSheetMap(workbookPart, workbookRelsPart, sheet, workbookRelationships, contentTypesXml, entryNames, issues);
+        }
+    }
+
+    private static bool TryFindWorkbookPart(
+        ZipArchive archive,
+        IReadOnlySet<string> entryNames,
+        out string workbookPart)
+    {
+        workbookPart = string.Empty;
+        if (!TryLoadPackageXml(archive, "_rels/.rels", [], out var rootRelationshipsXml) ||
+            rootRelationshipsXml.Root?.Name != PackageRelationshipNs + "Relationships")
+        {
+            return false;
+        }
+
+        foreach (var relationship in rootRelationshipsXml.Root
+                     .Elements(PackageRelationshipNs + "Relationship")
+                     .Where(relationship => string.Equals(
+                         relationship.Attribute("Type")?.Value,
+                         OfficeDocumentRelationshipType,
+                         StringComparison.Ordinal)))
+        {
+            var targetMode = relationship.Attribute("TargetMode")?.Value;
+            var target = relationship.Attribute("Target")?.Value;
+            if (string.Equals(targetMode?.Trim(), "External", StringComparison.OrdinalIgnoreCase) ||
+                string.IsNullOrWhiteSpace(target))
+            {
+                continue;
+            }
+
+            if (TryResolvePackageRelationshipTarget("_rels/.rels", target.Trim(), out var resolvedTarget, out _) &&
+                entryNames.Contains(resolvedTarget))
+            {
+                workbookPart = resolvedTarget;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static void ValidateWorkbookSheetMap(
+        string workbookPart,
+        string workbookRelsPart,
+        XElement sheet,
+        IReadOnlyDictionary<string, XElement> workbookRelationships,
+        XDocument contentTypesXml,
+        IReadOnlySet<string> entryNames,
+        List<string> issues)
+    {
+        var sheetName = sheet.Attribute("name")?.Value;
+        var sheetLabel = string.IsNullOrWhiteSpace(sheetName) ? "(unnamed sheet)" : sheetName;
+        var relationshipId = sheet.Attribute(OfficeRelationshipNs + "id")?.Value;
+        if (string.IsNullOrWhiteSpace(relationshipId))
+        {
+            issues.Add($"{workbookPart} sheet {sheetLabel} has no relationship id");
+            return;
+        }
+
+        if (!workbookRelationships.TryGetValue(relationshipId, out var relationship))
+        {
+            issues.Add($"{workbookPart} sheet {sheetLabel} references missing workbook relationship {relationshipId}");
+            return;
+        }
+
+        var relationshipType = relationship.Attribute("Type")?.Value;
+        if (relationshipType is not WorksheetRelationshipType and not ChartsheetRelationshipType)
+        {
+            issues.Add($"{workbookPart} sheet {sheetLabel} relationship {relationshipId} has non-sheet Type {relationshipType ?? "(none)"}");
+            return;
+        }
+
+        var targetMode = relationship.Attribute("TargetMode")?.Value;
+        if (string.Equals(targetMode?.Trim(), "External", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{workbookPart} sheet {sheetLabel} relationship {relationshipId} must target a sheet package part internally");
+            return;
+        }
+
+        var target = relationship.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target) ||
+            !TryResolvePackageRelationshipTarget(workbookRelsPart, target.Trim(), out var resolvedTarget, out _) ||
+            !entryNames.Contains(resolvedTarget))
+        {
+            return;
+        }
+
+        var contentType = GetEffectivePackageContentType(contentTypesXml, resolvedTarget);
+        var expectedContentType = relationshipType == WorksheetRelationshipType
+            ? WorksheetContentType
+            : ChartsheetContentType;
+        if (!string.Equals(contentType, expectedContentType, StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{workbookPart} sheet {sheetLabel} relationship {relationshipId} targets {resolvedTarget} with content type {contentType ?? "(none)"}; expected {expectedContentType}");
+        }
+    }
+
     private static bool IsPackageRelationshipPart(string part)
     {
         var normalizedPart = NormalizePackagePart(part);
@@ -720,8 +872,45 @@ public static class XlsxPackageHealthValidator
             : $"{directory}/{fileName}";
     }
 
+    private static string GetRelationshipPartPath(string sourcePartPath)
+    {
+        var normalizedPath = NormalizePackagePart(sourcePartPath);
+        var slashIndex = normalizedPath.LastIndexOf('/');
+        if (slashIndex < 0)
+            return $"_rels/{normalizedPath}.rels";
+
+        return string.Concat(
+            normalizedPath.AsSpan(0, slashIndex),
+            "/_rels/",
+            normalizedPath.AsSpan(slashIndex + 1),
+            ".rels");
+    }
+
     private static string NormalizePackagePart(string part) =>
         part.Replace('\\', '/').TrimStart('/');
+
+    private static bool TryLoadPackageXml(
+        ZipArchive archive,
+        string entryName,
+        List<string> issues,
+        out XDocument xml)
+    {
+        xml = new XDocument();
+        var entry = archive.GetEntry(entryName);
+        if (entry is null)
+            return false;
+
+        try
+        {
+            xml = LoadPackageXml(entry);
+            return true;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or XmlException)
+        {
+            issues.Add($"{entryName} is not parseable XML: {ex.Message}");
+            return false;
+        }
+    }
 
     private static XDocument LoadPackageXml(ZipArchiveEntry entry)
     {

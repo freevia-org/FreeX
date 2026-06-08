@@ -228,6 +228,100 @@ public sealed class XlsxPackageHealthValidatorTests
     }
 
     [Fact]
+    public void Validate_FlagsWorkbookSheetWithoutRelationshipId()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookXml: """
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheets>
+                    <sheet name="Sheet1" sheetId="1" />
+                  </sheets>
+                </workbook>
+                """);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("xl/workbook.xml sheet Sheet1 has no relationship id", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsWorkbookSheetMissingRelationship()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookXml: """
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheets>
+                    <sheet name="Sheet1" sheetId="1" r:id="rIdMissing" />
+                  </sheets>
+                </workbook>
+                """);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("xl/workbook.xml sheet Sheet1 references missing workbook relationship rIdMissing", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsWorkbookSheetRelationshipWithNonSheetType()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookRelationships:
+            [
+                Relationship("rId1", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles", "styles.xml")
+            ],
+            extraEntries:
+            [
+                ("xl/styles.xml", "<styleSheet />")
+            ],
+            contentTypeOverrides:
+            [
+                """<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("xl/workbook.xml sheet Sheet1 relationship rId1 has non-sheet Type http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsWorkbookSheetRelationshipWithExternalTarget()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookRelationships:
+            [
+                $"""<Relationship Id="rId1" Type="{WorksheetRelationshipType}" Target="https://example.invalid/sheet.xml" TargetMode="External" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("xl/workbook.xml sheet Sheet1 relationship rId1 must target a sheet package part internally", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsWorkbookSheetRelationshipTargetWithWrongContentType()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookRelationships:
+            [
+                Relationship("rId1", WorksheetRelationshipType, "styles.xml")
+            ],
+            extraEntries:
+            [
+                ("xl/styles.xml", "<styleSheet />")
+            ],
+            contentTypeOverrides:
+            [
+                """<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("xl/workbook.xml sheet Sheet1 relationship rId1 targets xl/styles.xml with content type application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml; expected application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Validate_FlagsRelationshipContentTypeOnNonRelationshipPart()
     {
         using var package = CreateMinimalWorkbookPackage(
@@ -428,6 +522,7 @@ public sealed class XlsxPackageHealthValidatorTests
     }
 
     private static MemoryStream CreateMinimalWorkbookPackage(
+        string? workbookXml = null,
         IReadOnlyList<string>? rootRelationships = null,
         IReadOnlyList<string>? workbookRelationships = null,
         IReadOnlyList<string>? contentTypeOverrides = null,
@@ -438,7 +533,7 @@ public sealed class XlsxPackageHealthValidatorTests
         var entries = new List<(string Path, string Content)>
         {
             ("[Content_Types].xml", ContentTypesXml(contentTypeOverrides, contentTypeDefaults)),
-            ("xl/workbook.xml", """
+            ("xl/workbook.xml", workbookXml ?? """
                 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
                           xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
                   <sheets>
