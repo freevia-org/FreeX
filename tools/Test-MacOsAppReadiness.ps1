@@ -411,6 +411,7 @@ function Test-MacOsWorkflow {
         "FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests",
@@ -2366,6 +2367,30 @@ function Test-SourceWiring {
                 "private static bool TryResolveReferenceSheet(",
                 "private static string? NormalizeAbsoluteA1Reference(string input)",
                 "private static bool TryParseAbsoluteR1C1CellReference(string input, SheetId sheetId, out CellAddress address)"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "src\FreeX.App.Services\WorkbookShareActionPlanner.cs"
+            Markers = @(
+                "public enum WorkbookShareActionPlanKind",
+                "ShareSheet,",
+                "OpenContainingFolder,",
+                "SaveAsBeforeShare,",
+                "Deferred",
+                "public sealed record WorkbookShareActionSurface(",
+                "bool CanShowShareSheet,",
+                "bool CanOpenContainingFolder = false",
+                "public static WorkbookShareActionSurface MacOsPreview",
+                'new("macOS Share Sheet", CanShowShareSheet: false);',
+                "public static class WorkbookShareActionPlanner",
+                "CreatePlan(currentFilePath, WorkbookShareActionSurface.MacOsPreview, fileExists);",
+                "WorkbookShareReadinessPlanner.CreatePlan(",
+                "surface.CanShowShareSheet || surface.CanOpenContainingFolder",
+                "WorkbookShareActionPlanKind.SaveAsBeforeShare",
+                "WorkbookShareActionPlanKind.OpenContainingFolder",
+                "WorkbookShareActionUnavailableReason.ShareSheetUnavailable",
+                "TryGetContainingFolderPath(readiness.Path, out var containingFolderPath)"
             )
             OrderedPairs = @()
         },
