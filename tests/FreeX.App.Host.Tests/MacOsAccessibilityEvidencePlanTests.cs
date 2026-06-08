@@ -21,6 +21,8 @@ public sealed class MacOsAccessibilityEvidencePlanTests
         source.Should().Contain("VoiceOver");
         source.Should().Contain("known accessibility issues");
         source.Should().Contain("internal-only");
+        source.Should().Contain("tools/Test-MacOsHumanValidationChecklist.ps1");
+        source.Should().Contain("stale-run human evidence");
     }
 
     [Fact]
@@ -35,6 +37,7 @@ public sealed class MacOsAccessibilityEvidencePlanTests
         signing.Should().Contain("keyboard-only");
         signing.Should().Contain("VoiceOver");
         signing.Should().Contain("known accessibility issues");
+        signing.Should().Contain("tools/Test-MacOsHumanValidationChecklist.ps1");
 
         multiplatform.Should().Contain("[macos-accessibility-evidence.md](macos-accessibility-evidence.md)");
         multiplatform.Should().Contain("macOS/Avalonia accessibility evidence requirement");
@@ -42,5 +45,6 @@ public sealed class MacOsAccessibilityEvidencePlanTests
         multiplatform.Should().Contain("keyboard-only");
         multiplatform.Should().Contain("VoiceOver");
         multiplatform.Should().Contain("known accessibility issues");
+        multiplatform.Should().Contain("tools/Test-MacOsHumanValidationChecklist.ps1");
     }
 }

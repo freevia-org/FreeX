@@ -130,7 +130,7 @@ shasum -a 256 -c freex-<runtime>-macos-app.zip.sha256
 
 The expected result is `<zip-name>: OK`.
 
-Before public-preview promotion, complete the macOS/Avalonia accessibility evidence requirement in [planning/macos-accessibility-evidence.md](../planning/macos-accessibility-evidence.md). Hosted checks cover packaging, signing, notarization, LaunchServices, menu, dialog, and workbook smoke prerequisites; human macOS validation must still record keyboard-only and VoiceOver coverage plus reviewed known accessibility issues.
+Before public-preview promotion, complete the macOS/Avalonia accessibility evidence requirement in [planning/macos-accessibility-evidence.md](../planning/macos-accessibility-evidence.md). Hosted checks cover packaging, signing, notarization, LaunchServices, menu, dialog, and workbook smoke prerequisites; human macOS validation must still record keyboard-only and VoiceOver coverage plus reviewed known accessibility issues. After the tester fills a release-specific copy of [macos-public-preview-checklist.md](macos-public-preview-checklist.md), run `tools/Test-MacOsHumanValidationChecklist.ps1 -ExpectedRuntime <runtime> -ExpectedRunId <run-id> -ExpectedRunAttempt <run-attempt>` from Windows or another checkout to reject incomplete, internal-only, or stale-run human evidence.
 
 ## Public Distribution Blockers
 
@@ -143,6 +143,7 @@ Do not present the macOS artifact as a public release until all of these are tru
 - The guarded release publication job has created the GitHub Release assets for both runtimes.
 - The tester instructions no longer require internal-only Control-click or right-click open guidance for notarization failures.
 - Human macOS validation covers Finder open, Gatekeeper launch, checksum verification, basic workbook open/save, and any accessibility checks required for the candidate.
+- The completed human validation checklist has passed `tools/Test-MacOsHumanValidationChecklist.ps1` with the expected runtime, run id, and run attempt.
 - The macOS/Avalonia accessibility evidence requirement from [planning/macos-accessibility-evidence.md](../planning/macos-accessibility-evidence.md) is complete, including human keyboard-only and VoiceOver validation with known accessibility issues reviewed.
 
 ## Reference Links

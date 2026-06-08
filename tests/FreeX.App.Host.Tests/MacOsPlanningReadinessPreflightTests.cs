@@ -35,6 +35,7 @@ public sealed class MacOsPlanningReadinessPreflightTests
 
         portPlan.Should().Contain("format_cells_style_roundtrip_count");
         portPlan.Should().Contain("tools/Test-MacOsPublicPreviewReadiness.ps1");
+        portPlan.Should().Contain("tools/Test-MacOsHumanValidationChecklist.ps1");
         portPlan.Should().Contain("real macOS validation required for the interactive share sheet itself");
         portPlan.Should().Contain("Public distribution still needs");
         portPlan.Should().Contain("Human macOS proof is still needed");

@@ -95,7 +95,8 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("GitHub Actions > `macOS App Preview` > the completed run");
         source.Should().Contain("freex-<run-id>-<run-attempt>-osx-arm64-macos-app");
         source.Should().Contain("freex-<run-id>-<run-attempt>-osx-x64-macos-app");
-        source.Should().Contain("does not publish GitHub Release assets or stable `latest` links");
+        source.Should().Contain("Internal-preview workflow outputs remain Actions artifacts only");
+        source.Should().Contain("distribution-candidate dispatches also run a guarded publication job");
         source.Should().Contain("Signed and internal ad-hoc outputs use the same artifact names");
         source.Should().Contain("Use `osx-arm64` for Apple Silicon Macs and `osx-x64` for Intel Macs");
         source.Should().Contain("Actions artifact wrapper");
@@ -109,6 +110,8 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("open `FreeX.app`");
         source.Should().Contain("open a `.fxl` document without an app override as CI-verifiable default-open evidence");
         source.Should().Contain("Human validation of Finder double-click open, Gatekeeper prompts, basic workbook workflows");
+        source.Should().Contain("tools/Test-MacOsHumanValidationChecklist.ps1");
+        source.Should().Contain("validate the completed release-record copy");
         source.Should().Contain("codesign_mode");
         source.Should().Contain("notarization_status");
         source.Should().Contain("stapler_validated");
@@ -155,6 +158,8 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("freex-<runtime>-macos-launch-smoke.txt");
         source.Should().Contain("The workflow submits the zipped `FreeX.app`, waits for an accepted notarization result, staples the ticket to the app bundle, validates stapling, then recreates the zip.");
         source.Should().Contain("The guarded release publication job has created the GitHub Release assets for both runtimes.");
+        source.Should().Contain("tools/Test-MacOsHumanValidationChecklist.ps1");
+        source.Should().Contain("stale-run human evidence");
         source.Should().Contain("https://developer.apple.com/support/developer-id/");
         source.Should().Contain("https://developer.apple.com/documentation/security/notarizing_macos_software_before_distribution");
         source.Should().Contain("https://developer.apple.com/documentation/security/notarizing_macos_software_before_distribution/customizing_the_notarization_workflow");
