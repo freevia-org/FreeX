@@ -98,6 +98,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
         SchemaErrors(saved).Should().BeEmpty();
         AssertExternalLinkPackage(saved);
+        AssertExternalLinkGraph(saved);
 
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -113,6 +114,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         externalReference.Attribute(relNs + "id")!.Value.Should().Be("rIdFreeXExternalLink");
         externalReference.Attribute("customExternalReferenceFlag").Should().BeNull();
         externalReference.Elements().Should().BeEmpty();
+
+        saved.Position = 0;
+        adapter.Load(saved).ExternalLinks.Should().ContainSingle(link =>
+            link.PackagePart == "xl/externalLinks/externalLink1.xml" &&
+            link.TargetUri == "linked-workbook.xlsx" &&
+            link.TargetMode == "External");
     }
 
     [Fact]
@@ -137,6 +144,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
         SchemaErrors(saved).Should().BeEmpty();
         AssertExternalLinkPackage(saved);
+        AssertExternalLinkGraph(saved);
 
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -168,6 +176,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         definedName.Attribute("sheetId")!.Value.Should().Be("0");
         definedName.Attribute("customDefinedNameFlag").Should().BeNull();
         definedName.Elements().Should().BeEmpty();
+
+        saved.Position = 0;
+        adapter.Load(saved).ExternalLinks.Should().ContainSingle(link =>
+            link.PackagePart == "xl/externalLinks/externalLink1.xml" &&
+            link.TargetUri == "linked-workbook.xlsx" &&
+            link.TargetMode == "External");
     }
 
     private static MemoryStream CreateExternalLinkSourcePackage()
