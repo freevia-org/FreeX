@@ -8,6 +8,9 @@ namespace FreeX.App.Services.Tests;
 
 public sealed class MacOsBundleMetadataTests
 {
+    private const string NativeWorkbookContentType = "io.github.tony-xmelon.freex.workbook";
+    private const string NativeWorkbookMimeType = "application/vnd.freex.workbook+json";
+
     [Fact]
     public void InfoPlist_DefinesPreviewBundleIdentityAndDocumentRegistration()
     {
@@ -39,11 +42,31 @@ public sealed class MacOsBundleMetadataTests
         PlistString(nativeWorkbook, "CFBundleTypeRole").Should().Be("Editor");
         PlistString(nativeWorkbook, "LSHandlerRank").Should().Be("Owner");
         PlistStringArray(nativeWorkbook, "CFBundleTypeExtensions").Should().Equal("fxl");
+        PlistStringArray(nativeWorkbook, "LSItemContentTypes").Should().Equal(NativeWorkbookContentType);
+
+        var exportedTypesElement = PlistArray(plist, "UTExportedTypeDeclarations");
+        exportedTypesElement.Should().NotBeNull("the native .fxl workbook should advertise a stable UTI");
+        var exportedTypes = exportedTypesElement!
+            .Elements("dict")
+            .ToList();
+        exportedTypes.Should().HaveCount(1);
+
+        var nativeWorkbookType = exportedTypes[0];
+        PlistString(nativeWorkbookType, "UTTypeIdentifier").Should().Be(NativeWorkbookContentType);
+        PlistString(nativeWorkbookType, "UTTypeDescription").Should().Be("FreeX Workbook");
+        PlistStringArray(nativeWorkbookType, "UTTypeConformsTo").Should().Equal("public.json");
+
+        var tagSpecification = PlistValue(nativeWorkbookType, "UTTypeTagSpecification");
+        tagSpecification.Should().NotBeNull();
+        tagSpecification!.Name.LocalName.Should().Be("dict");
+        PlistStringArray(tagSpecification, "public.filename-extension").Should().Equal("fxl");
+        PlistString(tagSpecification, "public.mime-type").Should().Be(NativeWorkbookMimeType);
 
         var importedWorkbooks = documentTypes[1];
         PlistString(importedWorkbooks, "CFBundleTypeName").Should().Be("Spreadsheet Workbooks");
         PlistString(importedWorkbooks, "CFBundleTypeRole").Should().Be("Viewer");
         PlistString(importedWorkbooks, "LSHandlerRank").Should().Be("Alternate");
+        PlistStringArray(importedWorkbooks, "LSItemContentTypes").Should().BeEmpty();
         PlistStringArray(importedWorkbooks, "CFBundleTypeExtensions")
             .Should()
             .Equal("xlsx", "xlsm", "xltx", "xltm", "xls", "xlsb", "xlt", "csv", "tsv", "tab");
