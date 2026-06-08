@@ -37,7 +37,7 @@ public static class ProtectionDialogPlanner
         string? password,
         IReadOnlyList<string> selectedSheetPermissions) =>
         sheet.IsProtected
-            ? new ProtectionDialogResult(ProtectionDialogMode.Unprotect, null, [])
+            ? new ProtectionDialogResult(ProtectionDialogMode.Unprotect, password, [])
             : new ProtectionDialogResult(ProtectionDialogMode.Protect, password, selectedSheetPermissions);
 
     public static ProtectionDialogResult CreateSheetResult(Sheet sheet, string? password, string? confirmation) =>
@@ -47,7 +47,7 @@ public static class ProtectionDialogPlanner
 
     public static ProtectionDialogResult CreateWorkbookResult(Workbook workbook, string? password) =>
         workbook.IsStructureProtected
-            ? new ProtectionDialogResult(ProtectionDialogMode.Unprotect, null, [])
+            ? new ProtectionDialogResult(ProtectionDialogMode.Unprotect, password, [])
             : new ProtectionDialogResult(ProtectionDialogMode.Protect, password, []);
 
     public static IReadOnlyList<string> GetDefaultSheetPermissions() =>

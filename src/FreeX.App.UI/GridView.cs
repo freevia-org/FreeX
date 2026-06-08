@@ -464,7 +464,6 @@ public partial class GridView : FrameworkElement
 
     private const double ResizeHitZone = 4;
     private const double SplitDividerHitZone = 4;
-    private const double MinCellSize = 5;
     private const double DefaultCellFontSizePoints = 11.0;
     private const double PageMarginGuideHitZone = 5;
     private const int MarchingAntsPhaseCount = 16;
@@ -551,6 +550,7 @@ public partial class GridView : FrameworkElement
     private static readonly Pen SplitScrollbarPen = MakePen(MakeBrush(196, 196, 196), 1);
     private static readonly Brush FormulaTraceArrowBrush = MakeBrush(0, 102, 204);
     private static readonly Pen FormulaTraceArrowPen = MakeFormulaTraceArrowPen();
+    private static readonly Pen ValidationCirclePen = MakePen(MakeBrush(226, 28, 33), 1.5);
     private static readonly Pen[] MarchingAntsBlackPens = CreateMarchingAntsPens(Brushes.Black, 2.5);
     private static readonly Pen[] MarchingAntsCopyOverlayPens = CreateMarchingAntsPens(Brushes.White, 1.5);
     private static readonly Pen[] MarchingAntsCutOverlayPens = CreateMarchingAntsPens(MakeBrush(245, 124, 0), 1.5);

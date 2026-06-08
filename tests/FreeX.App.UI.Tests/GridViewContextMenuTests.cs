@@ -166,7 +166,7 @@ public sealed class GridViewContextMenuTests
         var inputSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.Input.cs");
         var eventsSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.Events.cs");
         var resizeStart = inputSource[
-            inputSource.IndexOf("var (target, index, size) = HitTestResize(pos);", StringComparison.Ordinal)..
+            inputSource.IndexOf("var (target, index, size, isCollapsedBoundary) = HitTestResize(pos);", StringComparison.Ordinal)..
             inputSource.IndexOf("_resizeTarget    = target;", StringComparison.Ordinal)];
 
         eventsSource.Should().Contain("ColumnAutoFitRequested");

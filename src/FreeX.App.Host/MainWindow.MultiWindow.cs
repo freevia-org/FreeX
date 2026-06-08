@@ -1,4 +1,6 @@
+using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
 using Microsoft.Extensions.DependencyInjection;
 using FreeX.Core.Model;
 
@@ -188,6 +190,46 @@ public partial class MainWindow
 
     // ── Ribbon: View ▸ Window ▸ Hide / Unhide ─────────────────────────────────
 
+    private void SwitchWindowsContextMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ContextMenu menu)
+            return;
+
+        menu.Items.Clear();
+        if (_windowRegistry is null)
+        {
+            menu.Items.Add(new MenuItem
+            {
+                Header = UiText.Get("MainWindow_Content_SwitchWindows"),
+                IsEnabled = false
+            });
+            return;
+        }
+
+        foreach (var target in WorkbookWindowSelectionPlanner.BuildSwitchWindowTargets(
+                     _windowRegistry,
+                     this,
+                     _workbook.Name))
+        {
+            var item = new MenuItem
+            {
+                Header = target.DisplayName,
+                IsCheckable = true,
+                IsChecked = target.IsCurrent,
+                IsEnabled = !target.IsCurrent
+            };
+            item.Click += (_, _) =>
+            {
+                target.Window.ActivateWindow();
+                RefreshViewWindowCommandState();
+            };
+            menu.Items.Add(item);
+        }
+
+        MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
+        FocusFirstWorksheetContextMenuItem(menu);
+    }
+
     private void ViewHideWindowBtn_Click(object sender, RoutedEventArgs e)
     {
         if (_windowRegistry is null)
@@ -224,7 +266,22 @@ public partial class MainWindow
             return;
         }
 
-        _windowRegistry.Unhide(hidden[0]);
+        var targets = WorkbookWindowSelectionPlanner.BuildUnhideWindowTargets(_windowRegistry, _workbook.Name);
+        var dialog = new UnhideWindowDialog(targets) { Owner = this };
+        if (dialog.ShowDialog() != true)
+        {
+            RefreshViewWindowCommandState();
+            return;
+        }
+
+        if (dialog.Result?.Window is not { } window ||
+            !_windowRegistry.Unhide(window))
+        {
+            _messageService.ShowWarning(
+                "The selected workbook window is no longer hidden.",
+                "Unhide Window");
+        }
+
         RefreshViewWindowCommandState();
     }
 

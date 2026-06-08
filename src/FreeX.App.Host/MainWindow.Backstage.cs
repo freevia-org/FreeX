@@ -167,26 +167,44 @@ public partial class MainWindow
     private void OpenPrintBackstage()
     {
         ShowStartScreen();
-        SsPrintNavBtn.Focus();
-        Keyboard.Focus(SsPrintNavBtn);
-        PrintButton_Click(SsPrintNavBtn, new RoutedEventArgs());
+        ShowPrintView();
     }
 
     private void ShowHomeView()
     {
         SsHomeView.Visibility = Visibility.Visible;
         SsInfoView.Visibility = Visibility.Collapsed;
+        SsPrintView.Visibility = Visibility.Collapsed;
         SsHomeNavBtn.Style = (Style)FindResource("SsNavBtnActive");
         SsInfoNavBtn.Style = (Style)FindResource("SsNavBtn");
+        SsPrintNavBtn.Style = (Style)FindResource("SsNavBtn");
     }
 
     private void ShowInfoView()
     {
         SsHomeView.Visibility = Visibility.Collapsed;
         SsInfoView.Visibility = Visibility.Visible;
+        SsPrintView.Visibility = Visibility.Collapsed;
         SsHomeNavBtn.Style = (Style)FindResource("SsNavBtn");
         SsInfoNavBtn.Style = (Style)FindResource("SsNavBtnActive");
+        SsPrintNavBtn.Style = (Style)FindResource("SsNavBtn");
         UpdateInfoView();
+    }
+
+    private void ShowPrintView()
+    {
+        SsHomeView.Visibility = Visibility.Collapsed;
+        SsInfoView.Visibility = Visibility.Collapsed;
+        SsPrintView.Visibility = Visibility.Visible;
+        SsHomeNavBtn.Style = (Style)FindResource("SsNavBtn");
+        SsInfoNavBtn.Style = (Style)FindResource("SsNavBtn");
+        SsPrintNavBtn.Style = (Style)FindResource("SsNavBtnActive");
+        var activeSheet = _workbook.GetSheet(_currentSheetId);
+        SsPrintSettingsSummary.Text = activeSheet is null
+            ? string.Empty
+            : PrintSettingsPlanner.Build(activeSheet).Summary;
+        SsPrintNavBtn.Focus();
+        Keyboard.Focus(SsPrintNavBtn);
     }
 
     private void UpdateInfoView()
@@ -529,6 +547,7 @@ public partial class MainWindow
 
     private void SsHomeNavBtn_Click(object sender, RoutedEventArgs e)    => ShowHomeView();
     private void SsInfoBtn_Click(object sender, RoutedEventArgs e)       => ShowInfoView();
+    private void SsPrintNavBtn_Click(object sender, RoutedEventArgs e)   => ShowPrintView();
 
     private void SsMoreTemplatesBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -690,13 +709,18 @@ public partial class MainWindow
 
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
     {
+        bool saved;
         if (FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target))
         {
-            await SaveWorkbookToTargetAsync(target!);
-            return;
+            saved = await SaveWorkbookToTargetAsync(target!);
+        }
+        else
+        {
+            saved = await SaveWorkbookWithDialogAsync();
         }
 
-        await SaveWorkbookWithDialogAsync();
+        if (saved && IsStartScreenVisible())
+            HideStartScreen();
     }
 
     private async void SaveAsButton_Click(object sender, RoutedEventArgs e)

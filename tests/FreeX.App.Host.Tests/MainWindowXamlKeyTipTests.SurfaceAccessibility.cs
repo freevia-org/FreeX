@@ -41,17 +41,18 @@ public sealed partial class MainWindowXamlKeyTipTests
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
-        var textBox = document
-            .Descendants(presentation + "TextBox")
+        var elementType = controlName == "CellAddressBox" ? "ComboBox" : "TextBox";
+        var input = document
+            .Descendants(presentation + elementType)
             .Single(element => element.Attribute(x + "Name")?.Value == controlName);
 
-        var name = textBox.Attribute("AutomationProperties.Name");
-        var helpText = textBox.Attribute("AutomationProperties.HelpText");
+        var name = input.Attribute("AutomationProperties.Name");
+        var helpText = input.Attribute("AutomationProperties.HelpText");
 
         name.Should().NotBeNull("formula bar text fields are keyboard-focusable Excel surface controls");
         helpText.Should().NotBeNull("formula bar text fields should announce their workflow role");
-        LocalizedAttribute(textBox, "AutomationProperties.Name").Should().Be(UiText.Get(expectedNameKey));
-        LocalizedAttribute(textBox, "AutomationProperties.HelpText").Should().Be(UiText.Get(expectedHelpTextKey));
+        LocalizedAttribute(input, "AutomationProperties.Name").Should().Be(UiText.Get(expectedNameKey));
+        LocalizedAttribute(input, "AutomationProperties.HelpText").Should().Be(UiText.Get(expectedHelpTextKey));
     }
 
     [Fact]
@@ -63,9 +64,11 @@ public sealed partial class MainWindowXamlKeyTipTests
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
         var nameBox = document
-            .Descendants(presentation + "TextBox")
+            .Descendants(presentation + "ComboBox")
             .Single(element => element.Attribute(x + "Name")?.Value == "CellAddressBox");
 
+        nameBox.Attribute("IsEditable")?.Value.Should().Be("True");
+        nameBox.Attribute("StaysOpenOnEdit")?.Value.Should().Be("True");
         nameBox.Attribute("KeyDown")?.Value.Should().Be("CellAddressBox_KeyDown");
         source.Should().Contain("private void CellAddressBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)");
         source.Should().Contain("GoToDialog.TryParseReferenceRange(");
@@ -84,7 +87,7 @@ public sealed partial class MainWindowXamlKeyTipTests
         source.Should().Contain("FocusSheetGridIfNeeded();");
         source.Should().Contain("private void RestoreCellAddressBoxText()");
         source.Should().Contain("CellAddressBox.Text = SheetGrid.SelectedRange is { } range");
-        source.Should().Contain("? FormatRangeReference(range.Start, range.End)");
+        source.Should().Contain("? FormatNameBoxSelectionText(range)");
     }
 
     [Fact]
@@ -98,7 +101,7 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Descendants(presentation + "TextBox")
             .Single(element => element.Attribute(x + "Name")?.Value == "FormulaBar");
         var nameBox = document
-            .Descendants(presentation + "TextBox")
+            .Descendants(presentation + "ComboBox")
             .Single(element => element.Attribute(x + "Name")?.Value == "CellAddressBox");
         var overlay = document
             .Descendants(presentation + "TextBlock")

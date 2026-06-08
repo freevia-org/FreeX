@@ -15,6 +15,8 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
             harness.UndoQatIsEnabled.Should().BeFalse();
             harness.RedoQatIsEnabled.Should().BeFalse();
+            harness.UndoQatHistoryIsEnabled.Should().BeFalse();
+            harness.RedoQatHistoryIsEnabled.Should().BeFalse();
             harness.SelectActiveCell();
 
             harness.EnterKeyTipScope("TopLevel");
@@ -24,18 +26,24 @@ public sealed partial class MainWindowRibbonKeyTipTests
             harness.ActiveCellBold.Should().BeTrue();
             harness.UndoQatIsEnabled.Should().BeTrue();
             harness.RedoQatIsEnabled.Should().BeFalse();
+            harness.UndoQatHistoryIsEnabled.Should().BeTrue();
+            harness.RedoQatHistoryIsEnabled.Should().BeFalse();
 
             harness.HandleDirectTopLevelKeyTip(Key.D2).Should().BeTrue();
             harness.KeyTipScope.Should().Be("None");
             harness.ActiveCellBold.Should().BeFalse();
             harness.UndoQatIsEnabled.Should().BeFalse();
             harness.RedoQatIsEnabled.Should().BeTrue();
+            harness.UndoQatHistoryIsEnabled.Should().BeFalse();
+            harness.RedoQatHistoryIsEnabled.Should().BeTrue();
 
             harness.HandleDirectTopLevelKeyTip(Key.D3).Should().BeTrue();
             harness.KeyTipScope.Should().Be("None");
             harness.ActiveCellBold.Should().BeTrue();
             harness.UndoQatIsEnabled.Should().BeTrue();
             harness.RedoQatIsEnabled.Should().BeFalse();
+            harness.UndoQatHistoryIsEnabled.Should().BeTrue();
+            harness.RedoQatHistoryIsEnabled.Should().BeFalse();
         });
     }
 
@@ -69,7 +77,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
-    public void CustomQuickAccessToolbar_RebuildsBelowRibbonAndRoutesCustomKeyTips()
+    public void TitleBarQuickAccessToolbar_PreservesConfiguredOrderKeyTipsAndChromeHitTesting()
     {
         RunSta(() =>
         {
@@ -77,6 +85,38 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
             harness.ConfigureQuickAccessToolbar(
             [
+                QuickAccessToolbarCommandIds.Open,
+                QuickAccessToolbarCommandIds.Save,
+                QuickAccessToolbarCommandIds.Undo,
+                QuickAccessToolbarCommandIds.Redo
+            ],
+            belowRibbon: false);
+
+            harness.TitleBarQatIsVisible.Should().BeTrue();
+            harness.BelowRibbonQatIsVisible.Should().BeFalse();
+            harness.QuickAccessToolbarAutomationIds.Should().Equal(
+                "OpenQatBtn",
+                "SaveQatBtn",
+                "UndoQatBtn",
+                "UndoQatHistoryBtn",
+                "RedoQatBtn",
+                "RedoQatHistoryBtn");
+            harness.QuickAccessToolbarKeyTips.Should().Equal("1", "2", "3", "", "4", "");
+            harness.QuickAccessToolbarChromeHitTestVisibility
+                .Should()
+                .OnlyContain(isHitTestVisible => isHitTestVisible);
+        });
+    }
+
+    [Fact]
+    public void CustomQuickAccessToolbar_RebuildsBelowRibbonAndRoutesCustomKeyTips()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            var commandIds = new[]
+            {
                 QuickAccessToolbarCommandIds.Save,
                 QuickAccessToolbarCommandIds.Undo,
                 QuickAccessToolbarCommandIds.Redo,
@@ -87,12 +127,31 @@ public sealed partial class MainWindowRibbonKeyTipTests
                 QuickAccessToolbarCommandIds.Open,
                 QuickAccessToolbarCommandIds.InsertFunction,
                 QuickAccessToolbarCommandIds.NameManager
-            ],
-            belowRibbon: true);
+            };
+            harness.ConfigureQuickAccessToolbar(commandIds, belowRibbon: true);
 
             harness.TitleBarQatIsVisible.Should().BeFalse();
             harness.BelowRibbonQatIsVisible.Should().BeTrue();
+            harness.ButtonIsInBelowRibbonQat("UndoQatHistoryBtn").Should().BeTrue();
+            harness.ButtonIsInBelowRibbonQat("RedoQatHistoryBtn").Should().BeTrue();
             harness.ButtonIsInBelowRibbonQat("NameManagerQatBtn").Should().BeTrue();
+            harness.QuickAccessToolbarAutomationIds.Should().Equal(
+                "SaveQatBtn",
+                "UndoQatBtn",
+                "UndoQatHistoryBtn",
+                "RedoQatBtn",
+                "RedoQatHistoryBtn",
+                "BoldQatBtn",
+                "ItalicQatBtn",
+                "UnderlineQatBtn",
+                "PrintQatBtn",
+                "OpenQatBtn",
+                "InsertFunctionQatBtn",
+                "NameManagerQatBtn");
+            harness.QuickAccessToolbarKeyTips.Should().Equal("1", "2", "", "3", "", "4", "5", "6", "7", "8", "9", "01");
+            harness.QuickAccessToolbarChromeHitTestVisibility
+                .Should()
+                .OnlyContain(isHitTestVisible => !isHitTestVisible);
 
             harness.EnterKeyTipScope("TopLevel");
             harness.OverlayBadgeTexts.Should().Contain(["1", "4", "01"]);

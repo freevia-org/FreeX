@@ -132,7 +132,21 @@ public sealed class RibbonDisabledCommandGuardrailTests
             [new("Data", "Get & Transform Data", "Get Data")] =
                 "Allowed partial-scope copy: the command imports local CSV data; its tooltip only calls out excluded connector families.",
             [new("Data", "Queries & Connections", "Refresh All")] =
-                "Allowed partial-scope copy: the command recalculates and refreshes FreeX-managed workbook data; its tooltip only calls out excluded external query families."
+                "Allowed partial-scope copy: the command recalculates and refreshes FreeX-managed workbook data; its tooltip only calls out excluded external query families.",
+            [new("Insert", "Illustrations", "Pictures > Place in Cell > This Device Picture in Cell")] =
+                "Temporary Excel-parity placeholder: in-cell picture anchoring needs model/rendering support before local file insertion can be enabled.",
+            [new("Insert", "Illustrations", "Pictures > Place in Cell > Stock Images in Cell")] =
+                "Temporary Excel-parity placeholder: stock image service integration is intentionally unavailable until connector policy and licensing are defined.",
+            [new("Insert", "Illustrations", "Pictures > Place in Cell > Online Pictures in Cell")] =
+                "Temporary Excel-parity placeholder: online image search/source connectors are intentionally unavailable until connector policy is defined.",
+            [new("Insert", "Illustrations", "Pictures > Place over Cells > Stock Images over Cells")] =
+                "Temporary Excel-parity placeholder: stock image service integration is intentionally unavailable until connector policy and licensing are defined.",
+            [new("Insert", "Illustrations", "Pictures > Place over Cells > Online Pictures over Cells")] =
+                "Temporary Excel-parity placeholder: online image search/source connectors are intentionally unavailable until connector policy is defined.",
+            [new("Page Layout", "Page Setup", "Print Area > Add to Print Area")] =
+                "Temporary Excel-parity placeholder: additive print areas need multi-range print-area model and persistence support before enabling.",
+            [new("Data", "Outline", "Group > Auto Outline")] =
+                "Temporary Excel-parity placeholder: automatic outline inference is not implemented; manual group/ungroup remains the supported path."
         };
 
     private sealed record GuardedRibbonCommand(

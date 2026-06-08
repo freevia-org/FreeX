@@ -47,8 +47,8 @@ public sealed partial class FormulaAuditingServiceTests
         var arrows = FormulaAuditingService.GetPrecedentTraceArrows(wb, c1);
 
         arrows.Should().Equal(
-            new FormulaTraceArrow(b1, c1),
-            new FormulaTraceArrow(a1, b1));
+            new FormulaTraceArrow(b1, c1, FormulaTraceArrowKind.Precedent),
+            new FormulaTraceArrow(a1, b1, FormulaTraceArrowKind.Precedent));
     }
 
     [Fact]
@@ -102,7 +102,53 @@ public sealed partial class FormulaAuditingServiceTests
         var arrows = FormulaAuditingService.GetDependentTraceArrows(wb, a1);
 
         arrows.Should().Equal(
-            new FormulaTraceArrow(a1, b1),
-            new FormulaTraceArrow(b1, c1));
+            new FormulaTraceArrow(a1, b1, FormulaTraceArrowKind.Dependent),
+            new FormulaTraceArrow(b1, c1, FormulaTraceArrowKind.Dependent));
+    }
+
+    [Fact]
+    public void FormulaTraceArrowPlanner_PrecedentsExpandOneLevelPerRibbonInvocation()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(a1, new NumberValue(5));
+        sheet.SetCell(b1, Cell.FromFormula("A1+1"));
+        sheet.SetCell(c1, Cell.FromFormula("B1*2"));
+
+        var firstClick = FormulaTraceArrowPlanner.GetNextPrecedentTraceArrows(wb, c1, []);
+        var secondClick = FormulaTraceArrowPlanner.GetNextPrecedentTraceArrows(wb, c1, firstClick);
+        var allArrows = firstClick.Concat(secondClick).ToList();
+
+        firstClick.Should().Equal(new FormulaTraceArrow(b1, c1, FormulaTraceArrowKind.Precedent));
+        secondClick.Should().Equal(new FormulaTraceArrow(a1, b1, FormulaTraceArrowKind.Precedent));
+        FormulaTraceArrowPlanner.GetNextPrecedentTraceArrows(wb, c1, allArrows)
+            .Should()
+            .BeEmpty();
+    }
+
+    [Fact]
+    public void FormulaTraceArrowPlanner_DependentsExpandOneLevelPerRibbonInvocation()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(a1, new NumberValue(5));
+        sheet.SetCell(b1, Cell.FromFormula("A1+1"));
+        sheet.SetCell(c1, Cell.FromFormula("B1*2"));
+
+        var firstClick = FormulaTraceArrowPlanner.GetNextDependentTraceArrows(wb, a1, []);
+        var secondClick = FormulaTraceArrowPlanner.GetNextDependentTraceArrows(wb, a1, firstClick);
+        var allArrows = firstClick.Concat(secondClick).ToList();
+
+        firstClick.Should().Equal(new FormulaTraceArrow(a1, b1, FormulaTraceArrowKind.Dependent));
+        secondClick.Should().Equal(new FormulaTraceArrow(b1, c1, FormulaTraceArrowKind.Dependent));
+        FormulaTraceArrowPlanner.GetNextDependentTraceArrows(wb, a1, allArrows)
+            .Should()
+            .BeEmpty();
     }
 }

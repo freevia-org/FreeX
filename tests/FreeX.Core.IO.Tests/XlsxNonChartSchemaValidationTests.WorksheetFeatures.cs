@@ -3628,6 +3628,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     {
         var workbook = new Workbook("AutoFilterPatchSave");
         var sheet = workbook.AddSheet("Data");
+        ApplyWorksheetOutlineAndFormatFixture(sheet);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("North"));
@@ -5192,6 +5193,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var workbook = new Workbook("WorksheetOutlineAndFormatPatchSave");
         var sheet = workbook.AddSheet("Data");
         SeedNumericGrid(sheet);
+        ApplyWorksheetOutlineAndFormatFixture(sheet);
+        return workbook;
+    }
+
+    private static void ApplyWorksheetOutlineAndFormatFixture(Sheet sheet)
+    {
         sheet.DefaultColumnWidth = 10.5;
         sheet.DefaultRowHeight = 24.0;
         sheet.ColumnWidths[2] = 14.25;
@@ -5206,7 +5213,6 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.ShowOutlineSymbols = false;
         sheet.ApplyOutlineStyles = true;
         sheet.SheetFormatMetadata = CreateWorksheetOutlineSheetFormatMetadata();
-        return workbook;
     }
 
     private static void AssertWorksheetOutlineAndFormatModel(Sheet sheet)

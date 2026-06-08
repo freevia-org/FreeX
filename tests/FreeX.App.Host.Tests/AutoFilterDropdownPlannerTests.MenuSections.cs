@@ -56,6 +56,29 @@ public sealed partial class AutoFilterDropdownPlannerTests
     }
 
     [Fact]
+    public void CreateMenuPlan_DisablesClearFilterUntilRangeHasFilteredRows()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 1, 1), new TextValue("Fruit"));
+        sheet.SetCell(new CellAddress(SheetId, 2, 1), new TextValue("Apple"));
+        sheet.SetCell(new CellAddress(SheetId, 3, 1), new TextValue("Banana"));
+        var plan = new AutoFilterDropdownPlan(
+            new GridRange(
+                new CellAddress(SheetId, 1, 1),
+                new CellAddress(SheetId, 3, 1)),
+            FilterColumnOffset: 0);
+
+        var withoutFilter = AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan);
+        sheet.FilterHiddenRows.Add(3);
+        var withFilter = AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan);
+
+        withoutFilter.Entries.Single(entry => entry.Kind == AutoFilterMenuEntryKind.ClearFilter)
+            .IsEnabled.Should().BeFalse();
+        withFilter.Entries.Single(entry => entry.Kind == AutoFilterMenuEntryKind.ClearFilter)
+            .IsEnabled.Should().BeTrue();
+    }
+
+    [Fact]
     public void CreateMenuPlan_IncludesExcelStyleSectionSeparators()
     {
         var sheet = new Sheet(SheetId, "Sheet1");

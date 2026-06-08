@@ -178,7 +178,7 @@ public sealed class ViewCommandSourceTests
         source.Should().NotContain("ViewWindowCommandPlanner");
         source.Should().NotContain("ViewWindowCommandBtn_Click");
         SourceMethodExtractor.ExtractMethodSource(source, "private void FreezePanesPickerBtn_Click(")
-            .Should().Contain("FreezeAtSelectionMenuItem_Click(sender, e);");
+            .Should().Contain("OpenRibbonContextMenu(btn, cm);");
         source.Should().Contain("new SetFreezePanesCommand(_currentSheetId, frozenRows, frozenCols)");
         source.Should().Contain("private void FreezeAtSelectionMenuItem_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("private void UnfreezeAllMenuItem_Click(object sender, RoutedEventArgs e)");
@@ -194,7 +194,10 @@ public sealed class ViewCommandSourceTests
         source.Should().Contain("private void ViewHideWindowBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("_windowRegistry.Hide(this)");
         source.Should().Contain("private void ViewUnhideWindowBtn_Click(object sender, RoutedEventArgs e)");
-        source.Should().Contain("_windowRegistry.Unhide(hidden[0])");
+        source.Should().Contain("WorkbookWindowSelectionPlanner.BuildUnhideWindowTargets(_windowRegistry, _workbook.Name)");
+        source.Should().Contain("new UnhideWindowDialog(targets)");
+        source.Should().Contain("dialog.Result?.Window");
+        source.Should().Contain("_windowRegistry.Unhide(window)");
         source.Should().Contain("_messageService.ShowWarning(");
         source.Should().Contain("_messageService.ShowInfo(");
 

@@ -11,6 +11,9 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
+    private CommentListWindow? _reviewCommentsWindow;
+    private CommentListWindow? _reviewNotesWindow;
+
     private void SpellCheckBtn_Click(object sender, RoutedEventArgs e)
     {
         var customDictionary = SpellCheckWorkflowPlanner.CreateCustomDictionary(_options);
@@ -91,6 +94,11 @@ public partial class MainWindow
         dialog.ShowDialog();
     }
 
+    private void ReviewShowChangesBtn_Click(object sender, RoutedEventArgs e) =>
+        _messageService.ShowInfo(
+            DeferredCommandMessages.FormatUnsupportedXlsxFeatureKind(XlsxUnsupportedFeatureKind.TrackChanges),
+            UiText.Get("MainWindow_Content_ShowChanges"));
+
     private void AccessibilityCheckerBtn_Click(object sender, RoutedEventArgs e)
     {
         var issues = AccessibilityCheckerService.FindIssues(_workbook);
@@ -168,6 +176,8 @@ public partial class MainWindow
             return;
 
         UpdateViewport();
+        RefreshReviewCommentNoteCommandStates();
+        RefreshOpenReviewCommentNoteWindows();
         _messageService.ShowInfo(
             UiText.Format("MainWindowMessage_CommentAdded", addr.ToA1()),
             UiText.Get("MainWindowMessage_CommentTitle"));
@@ -241,31 +251,50 @@ public partial class MainWindow
             }
         }
 
-        if (changed) UpdateViewport();
+        if (changed)
+        {
+            UpdateViewport();
+            RefreshReviewCommentNoteCommandStates();
+            RefreshOpenReviewCommentNoteWindows();
+        }
     }
 
     private void ReviewDeleteCommentBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (SheetGrid.SelectedRange is null) return;
+        if (SheetGrid.SelectedRange is not { } selectedRange ||
+            !SheetHasNoteAtSelection(_workbook.GetSheet(_currentSheetId), selectedRange.Start))
+        {
+            return;
+        }
+
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Comment",
-                SheetGrid.SelectedRange.Value,
+                selectedRange,
                 currentRange => new DeleteCommentCommand(_currentSheetId, currentRange.Start)))
             return;
 
         UpdateViewport();
+        RefreshReviewCommentNoteCommandStates();
+        RefreshOpenReviewCommentNoteWindows();
     }
 
     private void ReviewDeleteThreadedCommentBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (SheetGrid.SelectedRange is null) return;
+        if (SheetGrid.SelectedRange is not { } selectedRange ||
+            !SheetHasThreadedCommentAtSelection(_workbook.GetSheet(_currentSheetId), selectedRange.Start))
+        {
+            return;
+        }
+
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Threaded Comment",
-                SheetGrid.SelectedRange.Value,
+                selectedRange,
                 currentRange => new DeleteThreadedCommentCommand(_currentSheetId, currentRange.Start)))
             return;
 
         UpdateViewport();
+        RefreshReviewCommentNoteCommandStates();
+        RefreshOpenReviewCommentNoteWindows();
     }
 
     private void ReviewPrevCommentBtn_Click(object sender, RoutedEventArgs e)
@@ -289,8 +318,12 @@ public partial class MainWindow
             return;
         }
 
-        var text = CommentNavigationPlanner.FormatThreadedCommentList(sheet.ThreadedComments);
-        _messageService.ShowInfo(text, UiText.Get("MainWindowMessage_CommentsTitle"));
+        var items = CommentListWindow.CreateThreadedCommentItems(sheet.ThreadedComments);
+        _reviewCommentsWindow = ShowOrRefreshCommentListWindow(
+            _reviewCommentsWindow,
+            UiText.Get("MainWindowMessage_CommentsTitle"),
+            items,
+            window => _reviewCommentsWindow = window);
     }
 
     private void ReviewPrevNoteBtn_Click(object sender, RoutedEventArgs e)
@@ -314,8 +347,33 @@ public partial class MainWindow
             return;
         }
 
-        var text = CommentNavigationPlanner.FormatNoteList(sheet.Comments);
-        _messageService.ShowInfo(text, UiText.Get("MainWindow_Text_Notes"));
+        var items = CommentListWindow.CreateNoteItems(sheet.Comments);
+        _reviewNotesWindow = ShowOrRefreshCommentListWindow(
+            _reviewNotesWindow,
+            UiText.Get("MainWindow_Text_Notes"),
+            items,
+            window => _reviewNotesWindow = window);
+    }
+
+    private CommentListWindow ShowOrRefreshCommentListWindow(
+        CommentListWindow? window,
+        string title,
+        IReadOnlyList<CommentListWindowItem> items,
+        Action<CommentListWindow?> setWindow)
+    {
+        if (window is null || !window.IsLoaded)
+        {
+            window = new CommentListWindow(title, items, NavigateToCell) { Owner = this };
+            window.Closed += (_, _) => setWindow(null);
+            window.Show();
+            return window;
+        }
+
+        window.Refresh(items);
+        if (window.WindowState == WindowState.Minimized)
+            window.WindowState = WindowState.Normal;
+        window.Activate();
+        return window;
     }
 
     private void NavigateThreadedComment(bool previous)
@@ -358,12 +416,62 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    private void RefreshReviewCommentNoteCommandStates()
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var selectedAddress = SheetGrid.SelectedRange?.Start;
+        var hasSelection = selectedAddress is not null;
+        var selectedHasThreadedComment = selectedAddress is { } threadedAddress &&
+            SheetHasThreadedCommentAtSelection(sheet, threadedAddress);
+        var selectedHasNote = selectedAddress is { } noteAddress &&
+            SheetHasNoteAtSelection(sheet, noteAddress);
+        var hasAnyThreadedComments = (sheet?.ThreadedComments.Count ?? 0) > 0;
+        var hasAnyNotes = (sheet?.Comments.Count ?? 0) > 0;
+
+        SetButtonEnabledIfChanged(ReviewNewThreadedCommentButton, hasSelection);
+        SetButtonEnabledIfChanged(ReviewDeleteThreadedCommentButton, selectedHasThreadedComment);
+        SetButtonEnabledIfChanged(ReviewPreviousThreadedCommentButton, hasAnyThreadedComments);
+        SetButtonEnabledIfChanged(ReviewNextThreadedCommentButton, hasAnyThreadedComments);
+
+        SetButtonEnabledIfChanged(ReviewNewNoteButton, hasSelection);
+        SetButtonEnabledIfChanged(ReviewEditNoteButton, selectedHasNote);
+        SetButtonEnabledIfChanged(ReviewDeleteNoteButton, selectedHasNote);
+        SetButtonEnabledIfChanged(ReviewPreviousNoteButton, hasAnyNotes);
+        SetButtonEnabledIfChanged(ReviewNextNoteButton, hasAnyNotes);
+    }
+
+    private static bool SheetHasThreadedCommentAtSelection(Sheet? sheet, CellAddress address) =>
+        sheet?.ThreadedComments.ContainsKey(address) == true;
+
+    private static bool SheetHasNoteAtSelection(Sheet? sheet, CellAddress address) =>
+        sheet?.Comments.ContainsKey(address) == true;
+
+    private static void SetButtonEnabledIfChanged(System.Windows.Controls.Primitives.ButtonBase button, bool isEnabled)
+    {
+        if (button.IsEnabled != isEnabled)
+            button.IsEnabled = isEnabled;
+    }
+
+    private void RefreshOpenReviewCommentNoteWindows()
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return;
+
+        _reviewCommentsWindow?.Refresh(CommentListWindow.CreateThreadedCommentItems(sheet.ThreadedComments));
+        _reviewNotesWindow?.Refresh(CommentListWindow.CreateNoteItems(sheet.Comments));
+    }
+
     private void ProtectSheetBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        var result = ProtectionDialogPlanner.CreateSheetResult(sheet, password: null);
+        string? unprotectPassword = null;
+        if (sheet.IsProtected && !TryConfirmSheetUnprotectPassword(sheet, out unprotectPassword))
+            return;
+
+        var result = ProtectionDialogPlanner.CreateSheetResult(sheet, unprotectPassword);
         if (!sheet.IsProtected)
         {
             var dialog = new PasswordProtectionDialog(
@@ -388,6 +496,12 @@ public partial class MainWindow
         RefreshSheetProtectionUi();
     }
 
+    private bool TryConfirmSheetUnprotectPassword(Sheet sheet, out string? password) =>
+        TryConfirmUnprotectPassword(
+            sheet.ProtectionPassword,
+            UiText.Get("Protection_UnprotectSheetTitle"),
+            out password);
+
     private void ProtectWorkbookBtn_Click(object sender, RoutedEventArgs e)
     {
         string? pwd = null;
@@ -399,6 +513,10 @@ public partial class MainWindow
             if (dialog.ShowDialog() != true) return;
             pwd = dialog.Password;
         }
+        else if (!TryConfirmWorkbookUnprotectPassword(out pwd))
+        {
+            return;
+        }
 
         var action = WorkbookProtectionWorkflow.CreateCommand(_workbook, pwd);
         if (!TryExecuteCommand(action.Command, action.Title))
@@ -408,6 +526,33 @@ public partial class MainWindow
         RefreshWorkbookProtectionUi();
         RefreshSheetTabs();
     }
+
+    private bool TryConfirmWorkbookUnprotectPassword(out string? password) =>
+        TryConfirmUnprotectPassword(
+            _workbook.StructureProtectionPassword,
+            UiText.Get("Protection_UnprotectWorkbookTitle"),
+            out password);
+
+    private bool TryConfirmUnprotectPassword(string? storedPassword, string title, out string? password)
+    {
+        password = null;
+        if (string.IsNullOrEmpty(storedPassword))
+            return true;
+
+        var dialog = new PasswordProtectionDialog(
+            title,
+            UiText.Get("Protection_Password2")) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return false;
+
+        password = dialog.Password;
+        if (ProtectionPasswordHelper.VerifyStoredPassword(storedPassword, password))
+            return true;
+
+        _messageService.ShowWarning("The password you supplied is not correct.", title);
+        return false;
+    }
+
     private void AllowEditRangesBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
@@ -430,6 +575,15 @@ public partial class MainWindow
             case { Action: AllowEditRangeDialogAction.Add, Range: { } range }:
                 command = new AllowEditRangeCommand(_currentSheetId, range);
                 successMessage = UiText.Format("MainWindowMessage_AllowEditRangeAdded", range);
+                break;
+            case { Action: AllowEditRangeDialogAction.Modify, PreviousRange: { } previousRange, Range: { } range }:
+                command = new CompositeWorkbookCommand(
+                    "Modify Allow Edit Range",
+                    [
+                        new RemoveAllowEditRangeCommand(_currentSheetId, previousRange),
+                        new AllowEditRangeCommand(_currentSheetId, range)
+                    ]);
+                successMessage = UiText.Format("MainWindowMessage_AllowEditRangeModified", range);
                 break;
             case { Action: AllowEditRangeDialogAction.Remove, Range: { } range }:
                 command = new RemoveAllowEditRangeCommand(_currentSheetId, range);
@@ -523,9 +677,8 @@ public partial class MainWindow
 
     private void AboutBtn_Click(object sender, RoutedEventArgs e)
     {
-        ShowOwnedMessage(
-            AppInfo.AboutText,
-            UiText.Get("MainWindowMessage_AboutFreeXTitle"), MessageBoxButton.OK, MessageBoxImage.Information);
+        var dialog = new AboutDialog();
+        ShowOwnedDialog(dialog);
     }
 
     private void LegalNoticesBtn_Click(object sender, RoutedEventArgs e)

@@ -22,7 +22,15 @@ public partial class MainWindow
         IWorkbookCommand CreateCommand()
         {
             var currentRange = SheetGrid.SelectedRange ?? range;
-            command = new AddChartSheetCommand(_currentSheetId, currentRange, ChartType.Column, "Chart");
+            var sheet = _workbook.GetSheet(_currentSheetId);
+            var dataRange = sheet is null
+                ? currentRange
+                : ChartDataSourcePlanner.ResolveInsertionRange(sheet, currentRange);
+            command = new AddChartSheetCommand(
+                _currentSheetId,
+                dataRange,
+                ChartType.Column,
+                "Chart");
             return command;
         }
 
@@ -58,7 +66,14 @@ public partial class MainWindow
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Insert Chart",
                 range,
-                currentRange => new AddChartCommand(_currentSheetId, currentRange, type, "Chart")))
+                currentRange =>
+                {
+                    var sheet = _workbook.GetSheet(_currentSheetId);
+                    var dataRange = sheet is null
+                        ? currentRange
+                        : ChartDataSourcePlanner.ResolveInsertionRange(sheet, currentRange);
+                    return new AddChartCommand(_currentSheetId, dataRange, type, "Chart");
+                }))
             return;
 
         UpdateViewport();
@@ -99,14 +114,15 @@ public partial class MainWindow
             FormatRangeReference(chart.DataRange.Start, chart.DataRange.End),
             chart.FirstColIsCategories,
             request => ApplySelectDataSourceRangeSelection(dialog, request),
-            sheetId: _currentSheetId)
+            sheetId: _currentSheetId,
+            resolveSheetId: ResolveSheetIdByName)
         {
             Owner = this
         };
         if (dialog.ShowDialog() != true)
             return;
 
-        if (!ChartInputParser.TryParseDataRange(dialog.Result.SourceRangeText, _currentSheetId, out var dataRange))
+        if (!ChartInputParser.TryParseDataRange(dialog.Result.SourceRangeText, _currentSheetId, ResolveSheetIdByName, out var dataRange))
         {
             _messageService.ShowWarning(
                 UiText.Get("MainWindowMessage_ChartInvalidDataRange"),
@@ -230,7 +246,8 @@ public partial class MainWindow
 
     private bool TryGetActiveNormalChart(string caption, out ChartModel chart)
     {
-        chart = FindFirstNormalChart(_workbook.GetSheet(_currentSheetId)) ?? null!;
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        chart = sheet?.Charts.FirstOrDefault(IsChartContextualRibbonTarget) ?? null!;
         if (chart is not null)
             return true;
 
@@ -238,20 +255,35 @@ public partial class MainWindow
         return false;
     }
 
-    private static ChartModel? FindFirstNormalChart(Sheet? sheet)
+    private void RefreshChartContextualTabs()
     {
-        if (sheet is null)
-            return null;
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        SetChartContextualTabsVisible(HasChartContextualRibbonTarget(sheet));
+    }
 
-        var charts = sheet.Charts;
-        for (var index = 0; index < charts.Count; index++)
+    private static bool HasChartContextualRibbonTarget(Sheet? sheet) =>
+        sheet?.Charts.Any(IsChartContextualRibbonTarget) == true;
+
+    private static bool IsChartContextualRibbonTarget(ChartModel chart) =>
+        chart.IsVisible && !chart.IsPivotChart;
+
+    private void SetChartContextualTabsVisible(bool visible)
+    {
+        var visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        if (ChartDesignTab is not null)
+            ChartDesignTab.Visibility = visibility;
+        if (ChartFormatTab is not null)
+            ChartFormatTab.Visibility = visibility;
+
+        if (!visible &&
+            RibbonTabs is not null &&
+            (ReferenceEquals(RibbonTabs.SelectedItem, ChartDesignTab) ||
+             ReferenceEquals(RibbonTabs.SelectedItem, ChartFormatTab)))
         {
-            var chart = charts[index];
-            if (!chart.IsPivotChart)
-                return chart;
+            RibbonTabs.SelectedIndex = 1;
         }
 
-        return null;
+        InvalidateVisibleKeyTipElementCache();
     }
 
     private void ChartColumnMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Column);

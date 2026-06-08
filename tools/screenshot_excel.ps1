@@ -61,13 +61,77 @@ public class Win32e {
 
 $outDir = Join-Path $PSScriptRoot "screenshots_excel"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-Get-ChildItem $outDir -Filter "*.png" | Remove-Item -Force
+function Clear-ScreenshotEvidenceArtifacts {
+    Get-ChildItem $outDir -Filter "*.png" -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath (Join-Path $outDir "screenshot_manifest.json") -Force -ErrorAction SilentlyContinue
+}
+
+Clear-ScreenshotEvidenceArtifacts
 $tabNames = @("Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Help")
 $script:capturedFiles = @()
 $captureLimitations = @(
     "Ribbon tab captures cover the top window band only.",
     "Transient popups, dropdowns, native dialogs, and context menus require separate guarded captures.",
-    "Global input is blocked unless the expected process and window title own the foreground window."
+    "Global input and screen capture are blocked unless the expected process and window title own the foreground window."
+)
+$interactiveCapturePlan = @(
+    [pscustomobject]@{
+        ScenarioId = "popup:table-autofilter-dropdown"
+        ScenarioFileName = "table_autofilter_dropdown"
+        Priority = 1
+        EvidenceFamily = "popup"
+        EvidenceSubject = "excel"
+        CaptureStatus = "planned-separate-foreground-guarded-capture"
+        CaptureOutputNaming = "interactive_<ScenarioFileName>_<State>.png"
+        PairKeyPattern = "interactive:table-autofilter-dropdown:<State>"
+        Trigger = "Create or open a sample table/range with values and blanks, enable AutoFilter, then open the active header dropdown with Alt+Down or the header arrow."
+        CaptureRequirement = "Capture the active popup/dialog/menu bounds, not the owner-window ribbon band."
+        ForegroundGuard = "Re-check Excel foreground ownership before each setup input and before the dropdown-opening input; discard captures when the expected Excel window or popup is not foreground-owned."
+        CounterpartSubject = "freex"
+    },
+    [pscustomobject]@{
+        ScenarioId = "dropdown:home-number-format"
+        ScenarioFileName = "home_number_format"
+        Priority = 2
+        EvidenceFamily = "dropdown"
+        EvidenceSubject = "excel"
+        CaptureStatus = "planned-separate-foreground-guarded-capture"
+        CaptureOutputNaming = "interactive_<ScenarioFileName>_<State>.png"
+        PairKeyPattern = "interactive:home-number-format:<State>"
+        Trigger = "Select Home, open the Number Format combo box, and capture the opened dropdown with the selected format visible."
+        CaptureRequirement = "Capture the active popup/dialog/menu bounds, not the owner-window ribbon band."
+        ForegroundGuard = "Re-check Excel foreground ownership before opening the dropdown and before the screenshot."
+        CounterpartSubject = "freex"
+    },
+    [pscustomobject]@{
+        ScenarioId = "context-menu:worksheet-cell"
+        ScenarioFileName = "worksheet_cell_context_menu"
+        Priority = 3
+        EvidenceFamily = "context-menu"
+        EvidenceSubject = "excel"
+        CaptureStatus = "planned-separate-foreground-guarded-capture"
+        CaptureOutputNaming = "interactive_<ScenarioFileName>_<State>.png"
+        PairKeyPattern = "interactive:worksheet-cell-context-menu:<State>"
+        Trigger = "Select a representative cell and open the worksheet context menu with Shift+F10, the Menu key, or a guarded right-click."
+        CaptureRequirement = "Capture the active popup/dialog/menu bounds, not the owner-window ribbon band."
+        ForegroundGuard = "Re-check Excel foreground ownership before the context-menu input and validate the menu belongs to the expected workbook window."
+        CounterpartSubject = "freex"
+    },
+    [pscustomobject]@{
+        ScenarioId = "native-dialog:open-workbook"
+        ScenarioFileName = "open_workbook_dialog"
+        Priority = 4
+        EvidenceFamily = "native-dialog"
+        EvidenceSubject = "excel"
+        CaptureStatus = "planned-separate-foreground-guarded-capture"
+        CaptureOutputNaming = "interactive_<ScenarioFileName>_<State>.png"
+        PairKeyPattern = "interactive:open-workbook-dialog:<State>"
+        Trigger = "Open File > Open > Browse or the equivalent guarded keyboard path that reaches Excel's native Open dialog."
+        CaptureRequirement = "Capture the active popup/dialog/menu bounds, not the owner-window ribbon band."
+        ForegroundGuard = "Treat the native dialog as the expected foreground target after the final launch input; abort if another process or unrelated dialog owns foreground focus."
+        CounterpartSubject = "freex"
+    }
 )
 $windowLogicalHeight = 768
 
@@ -207,11 +271,11 @@ function Get-WindowTitle($windowHandle) {
     return $title.ToString()
 }
 
-function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle) {
+function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle, $operation = "capture") {
     $foreground = [Win32e]::GetForegroundWindow()
     if ($foreground -eq [IntPtr]::Zero) {
-        Get-ChildItem $outDir -Filter "*.png" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
-        throw "Blocked: no foreground window before global input."
+        Clear-ScreenshotEvidenceArtifacts
+        throw "Blocked: no foreground window before $operation."
     }
 
     $actualPid = 0
@@ -220,8 +284,8 @@ function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle) {
     [Win32e]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
     $actualTitle = $title.ToString()
     if ($actualPid -ne $expectedPid -or $actualTitle -ne $expectedTitle) {
-        Get-ChildItem $outDir -Filter "*.png" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
-        throw "Blocked: foreground window '$actualTitle' (PID $actualPid) does not match expected '$expectedTitle' (PID $expectedPid)."
+        Clear-ScreenshotEvidenceArtifacts
+        throw "Blocked: foreground window '$actualTitle' (PID $actualPid) does not match expected '$expectedTitle' (PID $expectedPid) before $operation."
     }
 }
 
@@ -232,7 +296,7 @@ function Set-CaptureWindowWidth($windowHandle, $widthSpec) {
         [Win32e]::ShowWindow($windowHandle, 3) | Out-Null
         [Win32e]::SetForegroundWindow($windowHandle) | Out-Null
         Start-Sleep -Milliseconds 1200
-        Assert-ForegroundWindowOwnership $wpid $expectedTitle
+        Assert-ForegroundWindowOwnership $wpid $expectedTitle "window resize capture setup"
         return
     }
 
@@ -243,11 +307,17 @@ function Set-CaptureWindowWidth($windowHandle, $widthSpec) {
     [Win32e]::SetWindowPos($windowHandle, [IntPtr]::Zero, 0, 0, $physicalWidth, $physicalHeight, 0) | Out-Null
     [Win32e]::SetForegroundWindow($windowHandle) | Out-Null
     Start-Sleep -Milliseconds 700
-    Assert-ForegroundWindowOwnership $wpid $expectedTitle
+    Assert-ForegroundWindowOwnership $wpid $expectedTitle "window resize capture setup"
 }
 
-function Write-ScreenshotEvidenceManifest($toolName, $scriptOutDir, $windowRect, $captureLogicalHeight, $capturePhysicalHeight, $widths, $files) {
+function Write-ScreenshotEvidenceManifest($toolName, $scriptOutDir, $windowRect, $captureLogicalHeight, $capturePhysicalHeight, $widths, $files, $expectedPid, $expectedTitle) {
     $manifestPath = Join-Path $scriptOutDir "screenshot_manifest.json"
+    $plannedCaptureCount = $tabNames.Count * $widths.Count
+    if ($files.Count -ne $plannedCaptureCount) {
+        Clear-ScreenshotEvidenceArtifacts
+        throw "Blocked: captured $($files.Count) screenshot(s), expected $plannedCaptureCount. Discarded incomplete evidence matrix."
+    }
+
     [pscustomobject]@{
         Tool = $toolName
         EvidenceFamily = "ribbon"
@@ -257,7 +327,16 @@ function Write-ScreenshotEvidenceManifest($toolName, $scriptOutDir, $windowRect,
         OutputNaming = "excel_<WidthLabel>_<RibbonTab>.png"
         CatalogEvidenceTarget = "docs/testing/ui-test-catalog.md"
         WidthSource = "RibbonScreenshotTourPlanner.DefaultWidths"
-        PlannedCaptureCount = $tabNames.Count * $widths.Count
+        PlannedCaptureCount = $plannedCaptureCount
+        ActualCaptureCount = $files.Count
+        CaptureStatus = "complete"
+        CaptureMethod = "CopyFromScreen-window-rectangle-top-band"
+        ForegroundGuard = [pscustomobject]@{
+            Required = $true
+            ExpectedProcessId = $expectedPid
+            ExpectedWindowTitle = $expectedTitle
+            Policy = "Abort and clear current PNG/manifest evidence unless the expected process and window title own the foreground window immediately before global input and screen capture."
+        }
         Pairing = [pscustomobject]@{
             PairKeyPattern = "ribbon:<WidthLabel>:<TabFileName>"
             CounterpartSubject = "freex"
@@ -277,6 +356,7 @@ function Write-ScreenshotEvidenceManifest($toolName, $scriptOutDir, $windowRect,
         Widths = $widths
         Tabs = $tabNames
         Limitations = $captureLimitations
+        InteractiveCapturePlan = $interactiveCapturePlan
         Captures = $files
     } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
     Write-Host "Saved $manifestPath"
@@ -287,7 +367,7 @@ function Screenshot-Tab($tabName, $widthSpec) {
                    [System.Windows.Automation.AutomationElement]::NameProperty, $tabName)
     $tabEl   = $appEl.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $tabCond)
     if ($tabEl -eq $null) {
-        Get-ChildItem $outDir -Filter "*.png" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+        Clear-ScreenshotEvidenceArtifacts
         throw "Ribbon screenshot tab '$tabName' was not found; aborting instead of writing an incomplete evidence matrix."
     }
 
@@ -297,20 +377,21 @@ function Screenshot-Tab($tabName, $widthSpec) {
     $cy   = [int]($rect.Top  + $rect.Height / 2)
     [System.Windows.Forms.Cursor]::Position = [System.Drawing.Point]::new($cx, $cy)
     Start-Sleep -Milliseconds 100
-    Assert-ForegroundWindowOwnership $wpid $expectedTitle
+    Assert-ForegroundWindowOwnership $wpid $expectedTitle "ribbon tab keyboard input"
     [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
     # Also try a real mouse click via mouse_event
     Add-Type -TypeDefinition 'using System.Runtime.InteropServices; public class Clicker { [DllImport("user32.dll")] public static extern void mouse_event(int f,int x,int y,int c,int e); }' -ErrorAction SilentlyContinue
-    Assert-ForegroundWindowOwnership $wpid $expectedTitle
+    Assert-ForegroundWindowOwnership $wpid $expectedTitle "ribbon tab mouse down"
     [Clicker]::mouse_event(2,0,0,0,0)
     Start-Sleep -Milliseconds 50
-    Assert-ForegroundWindowOwnership $wpid $expectedTitle
+    Assert-ForegroundWindowOwnership $wpid $expectedTitle "ribbon tab mouse up"
     [Clicker]::mouse_event(4,0,0,0,0)
     Start-Sleep -Milliseconds 800
 
     $wrect = New-Object Win32e+RECT
     [Win32e]::GetWindowRect($hwnd, [ref]$wrect) | Out-Null
     $w = $wrect.Right - $wrect.Left
+    Assert-ForegroundWindowOwnership $wpid $expectedTitle "screen capture"
 
     $bmp = New-Object System.Drawing.Bitmap($w, $captureH)
     $g   = [System.Drawing.Graphics]::FromImage($bmp)
@@ -323,6 +404,8 @@ function Screenshot-Tab($tabName, $widthSpec) {
     $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
     $bmp.Dispose()
     $script:capturedFiles += [pscustomobject]@{
+        CaptureSequence = $script:capturedFiles.Count + 1
+        CaptureKey = "ribbon:$($widthSpec.Label):$safe"
         PairKey = "ribbon:$($widthSpec.Label):$safe"
         EvidenceSubject = "excel"
         CounterpartSubject = "freex"
@@ -332,6 +415,8 @@ function Screenshot-Tab($tabName, $widthSpec) {
         WidthLabel = $widthSpec.Label
         WindowLogicalWidth = $widthSpec.WindowLogicalWidth
         EvidencePurpose = $widthSpec.EvidencePurpose
+        CaptureMethod = "CopyFromScreen-window-rectangle-top-band"
+        CaptureStatus = "complete"
         FileName = $fileName
         Path = $path
         Width = $w
@@ -359,7 +444,7 @@ foreach ($widthSpec in $captureWidths) {
 
 $finalRect = New-Object Win32e+RECT
 [Win32e]::GetWindowRect($hwnd, [ref]$finalRect) | Out-Null
-Write-ScreenshotEvidenceManifest "screenshot_excel.ps1" $outDir $finalRect 300 $captureH $captureWidths $script:capturedFiles
+Write-ScreenshotEvidenceManifest "screenshot_excel.ps1" $outDir $finalRect 300 $captureH $captureWidths $script:capturedFiles $wpid $expectedTitle
 
 # Close Excel gracefully
 $xlProc = Get-Process -Id $wpid -ErrorAction SilentlyContinue

@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -55,6 +56,20 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
         source.Should().Contain("SetAltTextBtn_Click(this, new RoutedEventArgs());");
         source.Should().Contain("case WorksheetContextMenuAction.SelectionPane:");
         source.Should().Contain("SelectionPaneBtn_Click(this, new RoutedEventArgs());");
+    }
+
+    [Fact]
+    public void ObjectContextMenuTargeting_UsesSelectedObjectOrExactAnchorWithoutFallback()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+
+        source.Should().Contain("GetSelectedWorksheetContextMenuTargetKind(sheet, address)");
+        source.Should().Contain("DrawingTargetResolver.GetTargetPicture(sheet, address, allowFallback: false)");
+        source.Should().Contain("allowFallback: false)?.Kind switch");
+        source.Should().Contain("includePictures: true");
+        source.Should().Contain("target.Anchor.Row != address.Row");
+        source.Should().Contain("DrawingObjectTargetKind.Picture => WorksheetContextMenuTargetKind.Picture");
     }
 
     [Fact]

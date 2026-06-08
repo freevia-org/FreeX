@@ -403,6 +403,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void SlicerTimelinePane_ExposesInteractivePivotFilters()
     {
         var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
+        var xamlSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
         var source = ReadPivotCommandSource();
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
@@ -426,6 +427,10 @@ public sealed partial class MainWindowXamlKeyTipTests
         source.Should().Contain("SetTimelineRangeCommand");
         source.Should().Contain("SlicerTileButton_Click");
         source.Should().Contain("TimelineApplyButton_Click");
+        source.Should().Contain("SlicerTimelinePlanner.HasActiveSlicerFilter(slicer)");
+        xamlSource.Should().Contain("Binding=\"{Binding HasActiveFilter}\"");
+        xamlSource.Should().Contain("IsEnabled=\"{Binding HasActiveFilter}\"");
+        xamlSource.Should().Contain("Binding=\"{Binding IsSelected}\"");
     }
 
     [Fact]

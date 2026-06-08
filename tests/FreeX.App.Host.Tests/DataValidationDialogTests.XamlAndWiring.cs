@@ -77,8 +77,8 @@ public sealed partial class DataValidationDialogTests
             "_Use Selection",
             "Use _Selection",
             "_In-cell dropdown",
-            "_Ignore blank",
-            "Apply these changes to all other cells with the _same settings",
+            "Ignore _blank",
+            "Apply these changes to all other cells _with the same settings",
             "Show _input message when cell is selected",
             "Show error _alert after invalid data is entered",
             "C_lear All",
@@ -86,6 +86,98 @@ public sealed partial class DataValidationDialogTests
             "_Cancel"
         })
             xaml.ShouldContainLocalizedAttribute("Content", content);
+    }
+
+    [Fact]
+    public void DataValidationDialog_SettingsTabAccessKeysAvoidVisibleEnglishCollisions()
+    {
+        AssertUniqueAccessKeys(
+            "DataValidation_Allow",
+            "DataValidation_IgnoreBlank",
+            "DataValidation_ApplyTheseChangesToAllOtherCellsWithTheSameSettings",
+            "DataValidation_ClearAll",
+            "Common_Ok",
+            "Common_Cancel");
+
+        AssertUniqueAccessKeys(
+            "DataValidation_Allow",
+            "DataValidation_Source",
+            "DataValidation_UseSelection",
+            "DataValidation_InCellDropdown",
+            "DataValidation_IgnoreBlank",
+            "DataValidation_ApplyTheseChangesToAllOtherCellsWithTheSameSettings",
+            "DataValidation_ClearAll",
+            "Common_Ok",
+            "Common_Cancel");
+
+        AssertUniqueAccessKeys(
+            "DataValidation_Allow",
+            "DataValidation_Data",
+            "DataValidation_Minimum",
+            "DataValidation_Maximum",
+            "DataValidation_UseSelection",
+            "DataValidation_UseSelection2",
+            "DataValidation_IgnoreBlank",
+            "DataValidation_ApplyTheseChangesToAllOtherCellsWithTheSameSettings",
+            "DataValidation_ClearAll",
+            "Common_Ok",
+            "Common_Cancel");
+
+        AssertUniqueAccessKeys(
+            "DataValidation_Allow",
+            "DataValidation_Data",
+            "DataValidation_Value",
+            "DataValidation_UseSelection",
+            "DataValidation_IgnoreBlank",
+            "DataValidation_ApplyTheseChangesToAllOtherCellsWithTheSameSettings",
+            "DataValidation_ClearAll",
+            "Common_Ok",
+            "Common_Cancel");
+
+        AssertUniqueAccessKeys(
+            "DataValidation_Allow",
+            "DataValidation_Formula",
+            "DataValidation_UseSelection",
+            "DataValidation_IgnoreBlank",
+            "DataValidation_ApplyTheseChangesToAllOtherCellsWithTheSameSettings",
+            "DataValidation_ClearAll",
+            "Common_Ok",
+            "Common_Cancel");
+    }
+
+    [Fact]
+    public void DataValidationDialog_ExposesStableAutomationIdsForFocusableFieldsAndActions()
+    {
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("DataValidationDialog.xaml");
+
+        foreach (var automationId in new[]
+        {
+            "DataValidationAllowTypeCombo",
+            "DataValidationOperatorCombo",
+            "DataValidationFormula1Box",
+            "DataValidationFormula2Box",
+            "DataValidationSourcePickerButton",
+            "DataValidationUseSelectionButton",
+            "DataValidationSourcePicker2Button",
+            "DataValidationUseSelection2Button",
+            "DataValidationInCellDropdownCheckBox",
+            "DataValidationIgnoreBlankCheckBox",
+            "DataValidationSameSettingsCheckBox",
+            "DataValidationShowInputMessageCheckBox",
+            "DataValidationPromptTitleBox",
+            "DataValidationPromptMessageBox",
+            "DataValidationShowErrorMessageCheckBox",
+            "DataValidationAlertStyleCombo",
+            "DataValidationErrorTitleBox",
+            "DataValidationErrorMessageBox",
+            "DataValidationClearAllButton",
+            "DataValidationOkButton",
+            "DataValidationCancelButton"
+        })
+            xaml.Should().Contain($"AutomationProperties.AutomationId=\"{automationId}\"");
+
+        xaml.Should().Contain("IsDefault=\"True\"");
+        xaml.Should().Contain("IsCancel=\"True\"");
     }
 
     [Fact]

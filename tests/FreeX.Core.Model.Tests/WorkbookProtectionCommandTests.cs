@@ -26,6 +26,35 @@ public sealed class WorkbookProtectionCommandTests
     }
 
     [Fact]
+    public void UnprotectWorkbookCommand_RequiresMatchingPassword()
+    {
+        var wb = new Workbook("test")
+        {
+            IsStructureProtected = true,
+            StructureProtectionPassword = "secret"
+        };
+        var ctx = new TestCommandContext(wb);
+
+        var wrong = new UnprotectWorkbookCommand("wrong").Apply(ctx);
+
+        wrong.Success.Should().BeFalse();
+        wb.IsStructureProtected.Should().BeTrue();
+        wb.StructureProtectionPassword.Should().Be("secret");
+
+        var correctCommand = new UnprotectWorkbookCommand("secret");
+        var correct = correctCommand.Apply(ctx);
+
+        correct.Success.Should().BeTrue();
+        wb.IsStructureProtected.Should().BeFalse();
+        wb.StructureProtectionPassword.Should().BeNull();
+
+        correctCommand.Revert(ctx);
+
+        wb.IsStructureProtected.Should().BeTrue();
+        wb.StructureProtectionPassword.Should().Be("secret");
+    }
+
+    [Fact]
     public void AddSheetCommand_RejectsWhenWorkbookStructureProtected()
     {
         var wb = new Workbook("test");

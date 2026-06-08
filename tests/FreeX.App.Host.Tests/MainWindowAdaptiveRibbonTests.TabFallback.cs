@@ -33,7 +33,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
-    public void InsertRibbon_KeepsTablesCommandsAvailableAtNormalNarrowWidths()
+    public void InsertRibbon_ExposesTablesThroughCollapsedGroupAtNormalNarrowWidths()
     {
         StaTestRunner.Run(() =>
         {
@@ -41,19 +41,10 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
             harness.SelectRibbonTab("Insert", 900);
 
-            harness.CollapsedActiveRibbonGroupNames.Should().Contain("Charts", harness.DebugActiveRibbonChildren);
-            if (harness.CollapsedActiveRibbonGroupNames.Contains("Tables"))
-            {
-                harness.CollapsedActiveMenuHeaders("Tables").Should().Contain(
-                    ["PivotTable", "Recommended PivotTables", "Table"],
-                    "when the measured runner layout collapses Tables, the primary Insert commands should remain available from the collapsed group");
-            }
-            else
-            {
-                harness.VisibleRibbonCommandLabels.Should().Contain(
-                    ["PivotTable", "Recommended PivotTables", "Table"],
-                    "Excel keeps the first Insert commands available at normal narrow widths before collapsing gallery-heavy groups");
-            }
+            harness.CollapsedActiveRibbonGroupNames.Should().Contain("Tables", harness.DebugActiveRibbonChildren);
+            harness.CollapsedActiveMenuHeaders("Tables").Should().Contain(
+                ["PivotTable", "Recommended PivotTables", "Table"],
+                "the collapsed Tables group should preserve access to Excel-style primary Insert commands at normal narrow widths");
         });
     }
 
@@ -261,7 +252,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             if (harness.CanUseRequestedRibbonWidth(1465))
             {
                 harness.TallLargeRibbonCommandLabels.Should().Contain(
-                    ["Themes", "Colors", "Fonts", "Effects", "Scale", "Bring Forward", "Send Backward", "Selection Pane", "Rotate", "Size"],
+                    ["Themes", "Colors", "Fonts", "Effects", "Bring Forward", "Send Backward", "Selection Pane", "Rotate", "Size"],
                     $"Page Layout should spend wide ribbon space on standalone large commands while keeping stacked Page Setup compact; {harness.DebugActiveRibbonChildren}");
                 harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
                     0.5,

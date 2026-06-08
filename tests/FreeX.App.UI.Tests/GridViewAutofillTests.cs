@@ -491,7 +491,7 @@ public sealed class GridViewAutofillTests
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Input.cs");
         var cursorAssignment = source[
-            source.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal)..
+            source.IndexOf("var (target, _, _, _) = HitTestResize(pos);", StringComparison.Ordinal)..
             source.IndexOf("public static GridAutoScrollRequest", StringComparison.Ordinal)];
 
         cursorAssignment.Should().Contain("IsOnAutofillHandle(pos) ? Cursors.Cross");

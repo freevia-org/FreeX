@@ -46,8 +46,20 @@ public partial class MainWindow
 
     private void PasteFormattingMenuItem_Click(object sender, RoutedEventArgs e) => ExecutePaste(PasteMode.Formats);
 
+    private void PasteKeepSourceColumnWidthsMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ExecutePaste(PasteMode.All, keepColumnWidths: true);
+
+    private void PasteValuesAndSourceFormattingMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ExecutePaste(PasteMode.All, new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.ValuesAndSourceFormatting));
+
     private void PasteTransposeMenuItem_Click(object sender, RoutedEventArgs e) =>
         ExecutePaste(PasteMode.All, new PasteSpecialOptions(Transpose: true));
+
+    private void PasteLinkMenuItem_Click(object sender, RoutedEventArgs e) => ExecutePasteLink(transpose: false);
+
+    private void PastePictureMenuItem_Click(object sender, RoutedEventArgs e) => ExecutePasteAsPicture(isLinkedPicture: false);
+
+    private void PasteLinkedPictureMenuItem_Click(object sender, RoutedEventArgs e) => ExecutePasteAsPicture(isLinkedPicture: true);
 
     private void ExecuteCopy(bool isCut = false)
     {
@@ -151,16 +163,17 @@ public partial class MainWindow
                     return;
                 }
 
+                var preserveClipboardVisual = ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut);
                 _repeatPostAction = _ =>
                 {
-                    CompletePasteSelection(clip.SourceRange, options);
+                    CompletePasteSelection(clip.SourceRange, options, preserveClipboardVisual);
                     if (clip.IsCut)
                         _internalClipboard = null;
                 };
                 if (mode != PasteMode.Formats)
                     RecalculateIfAutomatic(pasteOutcome.AffectedCells ?? []);
 
-                CompletePasteSelection(clip.SourceRange, options);
+                CompletePasteSelection(clip.SourceRange, options, preserveClipboardVisual);
                 if (clip.IsCut)
                     _internalClipboard = null;
                 UpdateViewport();
@@ -251,14 +264,17 @@ public partial class MainWindow
             return;
         }
 
-        _repeatPostAction = _ => CompletePasteSelection(clip.SourceRange, default);
+        var preserveClipboardVisual = ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut);
+        _repeatPostAction = _ => CompletePasteSelection(clip.SourceRange, default, preserveClipboardVisual);
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
-        CompletePasteSelection(clip.SourceRange, default);
+        CompletePasteSelection(clip.SourceRange, default, preserveClipboardVisual);
+        if (clip.IsCut)
+            _internalClipboard = null;
         UpdateViewport();
         RefreshToolbar();
     }
 
-    private void CompletePasteSelection(GridRange sourceRange, PasteSpecialOptions options)
+    private void CompletePasteSelection(GridRange sourceRange, PasteSpecialOptions options, bool preserveClipboardVisual = false)
     {
         if (SheetGrid.SelectedRange is not { } range)
             return;
@@ -274,6 +290,18 @@ public partial class MainWindow
         _selectionCursor = pastedEnd;
         SheetGrid.SelectedRanges = null;
         SheetGrid.SelectedRange = new GridRange(range.Start, pastedEnd);
+        ApplyClipboardVisualStateAfterInternalPaste(sourceRange, preserveClipboardVisual);
+    }
+
+    private void ApplyClipboardVisualStateAfterInternalPaste(GridRange sourceRange, bool preserveClipboardVisual)
+    {
+        if (preserveClipboardVisual)
+        {
+            SheetGrid.ClipboardRange = sourceRange;
+            SheetGrid.ClipboardIsCut = false;
+            return;
+        }
+
         ClearClipboardVisualState();
     }
 
@@ -430,6 +458,11 @@ public partial class MainWindow
         if (!outcome.Success)
             return;
 
+        ApplyClipboardVisualStateAfterInternalPaste(
+            clip.SourceRange,
+            ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut));
+        if (clip.IsCut)
+            _internalClipboard = null;
         UpdateViewport();
         RefreshToolbar();
     }
@@ -456,7 +489,12 @@ public partial class MainWindow
         if (!outcome.Success)
             return;
 
-        CompletePasteSelection(clip.SourceRange, new PasteSpecialOptions(Transpose: transpose));
+        CompletePasteSelection(
+            clip.SourceRange,
+            new PasteSpecialOptions(Transpose: transpose),
+            ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut));
+        if (clip.IsCut)
+            _internalClipboard = null;
         UpdateViewport();
         RefreshToolbar();
     }
@@ -483,7 +521,12 @@ public partial class MainWindow
         if (!outcome.Success)
             return;
 
-        CompletePasteSelection(clip.SourceRange, new PasteSpecialOptions(Transpose: transpose));
+        CompletePasteSelection(
+            clip.SourceRange,
+            new PasteSpecialOptions(Transpose: transpose),
+            ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut));
+        if (clip.IsCut)
+            _internalClipboard = null;
         UpdateViewport();
         RefreshToolbar();
     }
@@ -521,8 +564,11 @@ public partial class MainWindow
             return;
         }
 
-        _repeatPostAction = _ => ClearClipboardVisualState();
-        ClearClipboardVisualState();
+        var preserveClipboardVisual = ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut);
+        _repeatPostAction = _ => ApplyClipboardVisualStateAfterInternalPaste(clip.SourceRange, preserveClipboardVisual);
+        ApplyClipboardVisualStateAfterInternalPaste(clip.SourceRange, preserveClipboardVisual);
+        if (clip.IsCut)
+            _internalClipboard = null;
         UpdateViewport();
         RefreshToolbar();
     }
@@ -565,9 +611,12 @@ public partial class MainWindow
             return;
         }
 
-        _repeatPostAction = _ => CompletePasteSelection(clip.SourceRange, new PasteSpecialOptions(Transpose: transpose));
+        var preserveClipboardVisual = ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut);
+        _repeatPostAction = _ => CompletePasteSelection(clip.SourceRange, new PasteSpecialOptions(Transpose: transpose), preserveClipboardVisual);
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
-        CompletePasteSelection(clip.SourceRange, new PasteSpecialOptions(Transpose: transpose));
+        CompletePasteSelection(clip.SourceRange, new PasteSpecialOptions(Transpose: transpose), preserveClipboardVisual);
+        if (clip.IsCut)
+            _internalClipboard = null;
         UpdateViewport();
         RefreshToolbar();
     }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -112,10 +113,9 @@ public partial class MainWindow
         if (e.Key != Key.Tab)
             return false;
 
-        var request = new TraversalRequest(Keyboard.Modifiers == ModifierKeys.Shift
-            ? FocusNavigationDirection.Previous
-            : FocusNavigationDirection.Next);
-        focusedElement.MoveFocus(request);
+        if (!TryMoveStatusBarFocus(focusedElement, Keyboard.Modifiers == ModifierKeys.Shift))
+            return false;
+
         e.Handled = true;
         return true;
     }
@@ -267,7 +267,80 @@ public partial class MainWindow
 
     private bool FocusStatusBar()
     {
+        if (TryFocusStatusBarElement(StatusZoomOutButton) || TryFocusStatusBarElement(ZoomSlider))
+            return true;
+
+        foreach (var target in GetStatusBarFocusOrder())
+        {
+            if (ReferenceEquals(target, StatusZoomOutButton) || ReferenceEquals(target, ZoomSlider))
+                continue;
+
+            if (TryFocusStatusBarElement(target))
+                return true;
+        }
+
         return StatusZoomOutButton.Focus() || ZoomSlider.Focus();
+    }
+
+    private bool TryMoveStatusBarFocus(UIElement focusedElement, bool reverse)
+    {
+        var targets = GetAvailableStatusBarFocusTargets();
+        if (targets.Count == 0)
+            return false;
+
+        var currentIndex = FindStatusBarFocusIndex(focusedElement, targets);
+        var nextIndex = currentIndex < 0
+            ? 0
+            : (currentIndex + (reverse ? -1 : 1) + targets.Count) % targets.Count;
+
+        return TryFocusStatusBarElement(targets[nextIndex]);
+    }
+
+    private List<FrameworkElement> GetAvailableStatusBarFocusTargets()
+    {
+        var targets = new List<FrameworkElement>();
+        foreach (var target in GetStatusBarFocusOrder())
+        {
+            if (target.IsVisible && target.IsEnabled)
+                targets.Add(target);
+        }
+
+        return targets;
+    }
+
+    private FrameworkElement[] GetStatusBarFocusOrder() =>
+    [
+        StatusZoomOutButton,
+        ZoomSlider,
+        StatusZoomInButton,
+        StatusZoomText,
+        StatusNormalViewButton,
+        StatusPageLayoutViewButton,
+        StatusPageBreakPreviewButton
+    ];
+
+    private static int FindStatusBarFocusIndex(UIElement focusedElement, IReadOnlyList<FrameworkElement> targets)
+    {
+        for (var i = 0; i < targets.Count; i++)
+        {
+            if (ReferenceEquals(focusedElement, targets[i]) || IsDescendantOf(focusedElement, targets[i]))
+                return i;
+        }
+
+        return -1;
+    }
+
+    private static bool TryFocusStatusBarElement(FrameworkElement control)
+    {
+        if (!control.IsVisible || !control.IsEnabled)
+            return false;
+
+        control.BringIntoView();
+        control.UpdateLayout();
+        var focused = control.Focus();
+        var keyboardFocus = Keyboard.Focus(control);
+        FocusManager.SetFocusedElement(FocusManager.GetFocusScope(control), control);
+        return focused || keyboardFocus is not null || control.IsKeyboardFocusWithin || ReferenceEquals(Keyboard.FocusedElement, control);
     }
 
     private bool FocusVisibleTaskPane()

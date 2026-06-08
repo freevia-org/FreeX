@@ -325,6 +325,13 @@ public partial class MainWindow
         ulong NavigationRevision,
         Visibility TableDesignVisibility);
 
+    private readonly record struct ChartContextRefreshKey(
+        Sheet? Sheet,
+        bool HasVisibleNormalChart,
+        ulong NavigationRevision,
+        Visibility ChartDesignVisibility,
+        Visibility ChartFormatVisibility);
+
     private readonly record struct PivotFieldListRefreshKey(
         Sheet? Sheet,
         GridRange? SelectedRange,
@@ -341,6 +348,7 @@ public partial class MainWindow
         int TimelineCount);
 
     private TableContextRefreshKey? _lastViewportTableContextRefreshKey;
+    private ChartContextRefreshKey? _lastViewportChartContextRefreshKey;
     private PivotFieldListRefreshKey? _lastViewportPivotFieldListRefreshKey;
     private SlicerTimelineRefreshKey? _lastViewportSlicerTimelineRefreshKey;
 
@@ -374,6 +382,8 @@ public partial class MainWindow
             viewport = CreateViewport(sheet, topRow, leftCol, actualRowHeaderWidth);
 
         SheetGrid.Viewport = viewport;
+        SheetGrid.HiddenRows = sheet?.HiddenRows;
+        SheetGrid.HiddenColumns = sheet?.HiddenCols;
         SheetGrid.FormulaTraceSheetId = _currentSheetId;
         SheetGrid.FormulaTraceArrows = _formulaTraceArrows;
         SheetGrid.ObjectDisplayMode = _options.ObjectsDisplay switch
@@ -425,6 +435,7 @@ public partial class MainWindow
             }
             if (SplitViewBtn is not null)
                 SplitViewBtn.IsChecked = sheet?.SplitRow is not null || sheet?.SplitColumn is not null;
+            SyncStatusViewShortcutState(SheetGrid.WorksheetViewMode);
             RefreshViewWindowCommandState();
         }
         finally
@@ -455,6 +466,7 @@ public partial class MainWindow
         RefreshViewportValidationDropdown(sheet);
         RefreshViewportFormulaReferenceHighlights();
         RefreshViewportTableContextualTab(sheet);
+        RefreshViewportChartContextualTabs(sheet);
         RefreshViewportPivotFieldListPane(sheet);
         RefreshViewportSlicerTimelinePane();
     }
@@ -493,6 +505,24 @@ public partial class MainWindow
             SheetGrid.SelectedRange,
             _navigationCacheRevision,
             TableDesignTab?.Visibility ?? Visibility.Collapsed);
+
+    private void RefreshViewportChartContextualTabs(Sheet? sheet)
+    {
+        var key = CreateChartContextRefreshKey(sheet);
+        if (_lastViewportChartContextRefreshKey == key)
+            return;
+
+        RefreshChartContextualTabs();
+        _lastViewportChartContextRefreshKey = CreateChartContextRefreshKey(sheet);
+    }
+
+    private ChartContextRefreshKey CreateChartContextRefreshKey(Sheet? sheet) =>
+        new(
+            sheet,
+            HasChartContextualRibbonTarget(sheet),
+            _navigationCacheRevision,
+            ChartDesignTab?.Visibility ?? Visibility.Collapsed,
+            ChartFormatTab?.Visibility ?? Visibility.Collapsed);
 
     private void RefreshViewportPivotFieldListPane(Sheet? sheet)
     {

@@ -127,6 +127,8 @@ public partial class MainWindow
         if (SheetGrid is not null)
         {
             SheetGrid.Viewport = null;
+            SheetGrid.HiddenRows = null;
+            SheetGrid.HiddenColumns = null;
             SheetGrid.SelectedRange = null;
             SheetGrid.SelectedRanges = null;
             SheetGrid.QuickAnalysisPreviewRange = null;
@@ -184,6 +186,7 @@ public partial class MainWindow
             TimelineItemsControl.ItemsSource = null;
 
         _lastViewportTableContextRefreshKey = null;
+        _lastViewportChartContextRefreshKey = null;
         _lastViewportPivotFieldListRefreshKey = null;
         _lastViewportSlicerTimelineRefreshKey = null;
     }

@@ -22,7 +22,7 @@ public sealed partial class ProtectionDialogTests
         var result = ProtectionDialogPlanner.CreateSheetResult(sheet, password: "ignored");
 
         result.Mode.Should().Be(ProtectionDialogMode.Unprotect);
-        result.Password.Should().BeNull();
+        result.Password.Should().Be("ignored");
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public sealed partial class ProtectionDialogTests
         var result = ProtectionDialogPlanner.CreateWorkbookResult(workbook, password: "ignored");
 
         result.Mode.Should().Be(ProtectionDialogMode.Unprotect);
-        result.Password.Should().BeNull();
+        result.Password.Should().Be("ignored");
     }
 
     [Fact]

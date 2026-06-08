@@ -22,6 +22,8 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
             "Data",
             "Review",
             "View",
+            "Chart Design",
+            "Format",
             "Table Design",
             "PivotTable Analyze",
             "Design",
@@ -40,6 +42,8 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
             "Help");
 
         catalog.ContextualTabs.Select(tab => tab.Header).Should().Equal(
+            "Chart Design",
+            "Format",
             "Table Design",
             "PivotTable Analyze",
             "Design");
@@ -50,8 +54,10 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
         AssertGroups(catalog, "Page Layout", "Themes", "Page Setup", "Scale to Fit", "Sheet Options", "Arrange");
         AssertGroups(catalog, "Formulas", "Function Library", "Defined Names", "Formula Auditing", "Calculation");
         AssertGroups(catalog, "Data", "Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast", "Outline");
-        AssertGroups(catalog, "Review", "Proofing", "Accessibility", "Comments", "Notes", "Protect");
+        AssertGroups(catalog, "Review", "Proofing", "Accessibility", "Comments", "Notes", "Protect", "Changes");
         AssertGroups(catalog, "View", "Workbook Views", "Show", "Zoom", "Window");
+        AssertGroups(catalog, "Chart Design", "Chart Layouts", "Chart Styles", "Data", "Type", "Location");
+        AssertGroups(catalog, "Format", "Current Selection", "Shape Styles", "Text", "Axes");
         AssertGroups(catalog, "Table Design", "Properties", "Tools", "Table Style Options", "Table Styles");
         AssertGroups(catalog, "PivotTable Analyze", "PivotTable", "Active Field", "Group", "Filter", "Data", "Actions", "Calculations", "Tools", "Show");
         AssertGroups(catalog, "Design", "Layout", "PivotTable Style Options", "PivotTable Styles");
@@ -71,8 +77,10 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
             ["Page Layout"] = ("PageLayoutTab", ["PageLayoutThemesGroup", "PageLayoutPageSetupGroup", "PageLayoutScaleToFitGroup", "PageLayoutSheetOptionsGroup", "PageLayoutArrangeGroup"]),
             ["Formulas"] = ("FormulasTab", ["FormulasFunctionLibraryGroup", "FormulasDefinedNamesGroup", "FormulasFormulaAuditingGroup", "FormulasCalculationGroup"]),
             ["Data"] = ("DataTab", ["DataGetTransformGroup", "DataQueriesConnectionsGroup", "DataSortFilterGroup", "DataToolsGroup", "DataForecastGroup", "DataOutlineGroup"]),
-            ["Review"] = ("ReviewTab", ["ReviewProofingGroup", "ReviewAccessibilityGroup", "ReviewCommentsGroup", "ReviewNotesGroup", "ReviewProtectGroup"]),
+            ["Review"] = ("ReviewTab", ["ReviewProofingGroup", "ReviewAccessibilityGroup", "ReviewCommentsGroup", "ReviewNotesGroup", "ReviewProtectGroup", "ReviewChangesGroup"]),
             ["View"] = ("ViewTab", ["ViewWorkbookViewsGroup", "ViewShowGroup", "ViewZoomGroup", "ViewWindowGroup"]),
+            ["Chart Design"] = ("ChartDesignTab", ["ChartDesignLayoutsGroup", "ChartDesignStylesGroup", "ChartDesignDataGroup", "ChartDesignTypeGroup", "ChartDesignLocationGroup"]),
+            ["Format"] = ("ChartFormatTab", ["ChartFormatCurrentSelectionGroup", "ChartFormatShapeStylesGroup", "ChartFormatTextGroup", "ChartFormatAxesGroup"]),
             ["Table Design"] = ("TableDesignTab", ["TableDesignPropertiesGroup", "TableDesignToolsGroup", "TableDesignStyleOptionsGroup", "TableDesignStylesGroup"]),
             ["PivotTable Analyze"] = ("PivotTableAnalyzeTab", ["PivotTableAnalyzePivotTableGroup", "PivotTableAnalyzeActiveFieldGroup", "PivotTableAnalyzeGroupGroup", "PivotTableAnalyzeFilterGroup", "PivotTableAnalyzeDataGroup", "PivotTableAnalyzeActionsGroup", "PivotTableAnalyzeCalculationsGroup", "PivotTableAnalyzeToolsGroup", "PivotTableAnalyzeShowGroup"]),
             ["Design"] = ("PivotTableDesignTab", ["PivotTableDesignLayoutGroup", "PivotTableDesignStyleOptionsGroup", "PivotTableDesignStylesGroup"]),
@@ -430,6 +438,9 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
         new("Page Layout", "Print Area", "Print Area (set/clear)"),
         new("Page Layout", "Print Titles", "Print Titles"),
         new("Page Layout", "Scale to Fit", "Scale to Fit"),
+        new("Page Layout", "Scale Width", "Scale to Fit"),
+        new("Page Layout", "Scale Height", "Scale to Fit"),
+        new("Page Layout", "Scale Percent", "Scale to Fit"),
         new("Page Layout", "View Gridlines", "Sheet Options"),
         new("Page Layout", "View Headings", "Sheet Options"),
         new("Page Layout", "Gridlines", "Sheet Options"),
@@ -457,13 +468,17 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
         new("Data", "Refresh All", "Refresh All"),
         new("Data", "Sort A to Z", "Sort"),
         new("Data", "Sort Z to A", "Sort"),
+        new("Data", "Clear", "Filter"),
         new("Data", "Clear Filter", "Filter"),
         new("Data", "Reapply", "Filter"),
+        new("Data", "Advanced", "Advanced Filter"),
         new("Data", "Advanced Filter", "Advanced"),
         new("Data", "Data Validation", "Data Validation"),
         new("Data", "What-If Analysis", "Goal Seek"),
         new("Data", "Forecast Sheet", "Forecast Sheet"),
         new("Data", "Group", "Group/Outline"),
+        new("Data", "Hide Detail", "Show/Hide Detail"),
+        new("Data", "Show Detail", "Show/Hide Detail"),
         new("Data", "Collapse Group", "Show/Hide Detail"),
         new("Data", "Expand Group", "Show/Hide Detail"),
 
@@ -479,6 +494,7 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
         new("Review", "Show Notes", "Show Notes"),
         new("Review", "Previous Note", "Previous/Next Note"),
         new("Review", "Next Note", "Previous/Next Note"),
+        new("Review", "Show Changes", "Track Changes"),
         new("Review", "Share Workbook", "Share Workbook (legacy)"),
 
         new("View", "Page Break Preview", "Page Break Preview"),

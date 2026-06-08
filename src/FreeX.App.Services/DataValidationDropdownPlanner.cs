@@ -41,7 +41,7 @@ public static class DataValidationDropdownPlanner
         if (activeCell.Sheet != sheet.Id || !HasUsableBounds(cellBounds))
             return false;
 
-        var rule = FindDropdownRule(sheet, activeCell);
+        var rule = FindDropdownRule(DataValidationService.GetApplicable(sheet, activeCell));
         if (rule is null)
             return false;
 
@@ -76,9 +76,9 @@ public static class DataValidationDropdownPlanner
     private static bool IsFinite(double value) =>
         !double.IsNaN(value) && !double.IsInfinity(value);
 
-    private static DataValidation? FindDropdownRule(Sheet sheet, CellAddress address)
+    private static DataValidation? FindDropdownRule(IEnumerable<DataValidation> rules)
     {
-        foreach (var rule in DataValidationService.GetApplicable(sheet, address))
+        foreach (var rule in rules)
         {
             if (rule.Type == DvType.List && rule.ShowDropdown)
                 return rule;

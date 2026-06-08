@@ -31,6 +31,20 @@ public sealed class DrawingTargetResolverTests
     }
 
     [Fact]
+    public void GetTargetPicture_CanRequireExactAnchorMatchForContextMenus()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.Pictures.Add(new PictureModel { Anchor = new CellAddress(sheet.Id, 5, 5) });
+
+        DrawingTargetResolver.GetTargetPicture(
+                sheet,
+                new CellAddress(sheet.Id, 2, 2),
+                allowFallback: false)
+            .Should()
+            .BeNull();
+    }
+
+    [Fact]
     public void GetTargetPicture_SkipsHiddenPictures()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");
@@ -113,6 +127,67 @@ public sealed class DrawingTargetResolverTests
         target.Id.Should().Be(textBox.Id);
         target.Width.Should().Be(90);
         target.Height.Should().Be(40);
+    }
+
+    [Fact]
+    public void GetTargetDrawingObject_HonorsSelectedPictureWhenTransformsIncludePictures()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var selected = new CellAddress(sheet.Id, 2, 2);
+        var picture = new PictureModel
+        {
+            Anchor = selected,
+            Width = 320,
+            Height = 180,
+            RotationDegrees = 30
+        };
+        sheet.DrawingShapes.Add(new DrawingShapeModel { Anchor = selected });
+        sheet.Pictures.Add(picture);
+
+        var target = DrawingTargetResolver.GetTargetDrawingObject(
+            sheet,
+            selected,
+            DrawingObjectTargetKind.Picture,
+            picture.Id,
+            includePictures: true);
+
+        target.Should().NotBeNull();
+        target!.Kind.Should().Be(DrawingObjectTargetKind.Picture);
+        target.Id.Should().Be(picture.Id);
+        target.Width.Should().Be(320);
+        target.Height.Should().Be(180);
+        target.RotationDegrees.Should().Be(30);
+    }
+
+    [Fact]
+    public void GetTargetDrawingObject_DoesNotReturnPicturesForShapeTextFormattingByDefault()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var selected = new CellAddress(sheet.Id, 2, 2);
+        var picture = new PictureModel { Anchor = selected };
+        sheet.Pictures.Add(picture);
+
+        DrawingTargetResolver.GetTargetDrawingObject(
+                sheet,
+                selected,
+                DrawingObjectTargetKind.Picture,
+                picture.Id)
+            .Should()
+            .BeNull();
+    }
+
+    [Fact]
+    public void GetTargetDrawingObject_CanRequireExactAnchorMatchForShapeTextContextMenus()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.DrawingShapes.Add(new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 5, 5) });
+
+        DrawingTargetResolver.GetTargetDrawingObject(
+                sheet,
+                new CellAddress(sheet.Id, 2, 2),
+                allowFallback: false)
+            .Should()
+            .BeNull();
     }
 
     [Fact]

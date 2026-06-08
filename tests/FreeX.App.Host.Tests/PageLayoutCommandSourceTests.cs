@@ -15,7 +15,7 @@ public sealed class PageLayoutCommandSourceTests
     [InlineData("Paper Size", "Size", "SZ", "PageSizeBtn_Click")]
     [InlineData("Print Area", "Print Area", "PA", "PrintAreaBtn_Click")]
     [InlineData("Breaks", "Breaks", "BK", "PageBreaksBtn_Click")]
-    [InlineData("Scale to Fit", "Scale", "SF", "ScaleToFitBtn_Click")]
+    [InlineData("Scale to Fit", "...", "SF", "ScaleToFitBtn_Click")]
     [InlineData("Print Titles", "Print Titles", "PT", "PrintTitlesBtn_Click")]
     public void PageLayoutButtons_ExposeExpectedTitlesKeyTipsAndHandlers(
         string title,
@@ -112,13 +112,16 @@ public sealed class PageLayoutCommandSourceTests
         source.Should().Contain("new SetPageOrientationCommand(sheetId, WorksheetPageOrientation.Portrait)");
         source.Should().Contain("new SetPaperSizeCommand(sheetId, WorksheetPaperSize.Letter)");
         SourceMethodExtractor.ExtractMethodSource(source, "private void PrintAreaBtn_Click(")
-            .Should().Contain("PrintAreaSetMenuItem_Click(sender, e);");
+            .Should().Contain("OpenRibbonContextMenu(btn, cm);");
+        SourceMethodExtractor.ExtractMethodSource(source, "private void PageBreaksBtn_Click(")
+            .Should().Contain("OpenRibbonContextMenu(btn, cm);");
         SourceMethodExtractor.ExtractMethodSource(source, "private void BackgroundBtn_Click(")
             .Should().Contain("BackgroundChooseMenuItem_Click(sender, e);");
         source.Should().Contain("new SetPrintAreaCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId))");
         source.Should().Contain("new ClearPrintAreaCommand(sheetId)");
         source.Should().Contain("ShowPageSetupDialog(PageSetupInitialFocusTarget.ScaleToFit)");
-        source.Should().Contain("new PageBreakDialog(defaultValue)");
+        source.Should().Contain("PageBreakSelectionPlanner.Insert(selectedRange, sheet.RowPageBreaks, sheet.ColumnPageBreaks)");
+        source.Should().Contain("PageBreakSelectionPlanner.Remove(selectedRange, sheet.RowPageBreaks, sheet.ColumnPageBreaks)");
         source.Should().Contain("new SetPageBreaksCommand(sheetId, rowBreaks, columnBreaks)");
         source.Should().Contain("PageSetupCommandBuilder.Build(sheetId, dialog)");
         source.Should().Contain("new SetPrintOptionsCommand(_currentSheetId, isChecked, sheet?.PrintHeadings ?? false)");

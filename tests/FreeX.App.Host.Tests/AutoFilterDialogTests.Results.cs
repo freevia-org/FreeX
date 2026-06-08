@@ -52,9 +52,9 @@ public sealed partial class AutoFilterDialogTests
             addCurrentSelectionToFilter: true);
 
         searchOnly.SelectedValues.Should().Equal("Apple");
-        searchOnly.CriteriaText.Should().Be("Apple");
+        searchOnly.CriteriaText.Should().BeEmpty();
         addCurrentSelection.SelectedValues.Should().Equal("Apple", "Banana");
-        addCurrentSelection.CriteriaText.Should().Be("Apple, Banana");
+        addCurrentSelection.CriteriaText.Should().BeEmpty();
     }
 
     [Fact]
@@ -70,7 +70,8 @@ public sealed partial class AutoFilterDialogTests
             new AutoFilterColorFilter(AutoFilterColorFilterKind.CellFillColor, color));
 
         result.ColorFilter.Should().Be(new AutoFilterColorFilter(AutoFilterColorFilterKind.CellFillColor, color));
-        result.CriteriaText.Should().Be("Apple");
+        result.SelectedValues.Should().Equal("Apple");
+        result.CriteriaText.Should().BeEmpty();
     }
 
     [Fact]
@@ -84,6 +85,26 @@ public sealed partial class AutoFilterDialogTests
             new AutoFilterColorFilter(AutoFilterColorFilterKind.NoFill, null));
 
         result.ColorFilter.Should().Be(new AutoFilterColorFilter(AutoFilterColorFilterKind.NoFill, null));
+    }
+
+    [Fact]
+    public void BuildResult_KeepsChecklistValuesAtomicWithoutCommaSerializing()
+    {
+        var items = new[]
+        {
+            new AutoFilterDialogItem("ACME, Inc.", "ACME, Inc.", true),
+            new AutoFilterDialogItem("(Blanks)", "", true),
+            new AutoFilterDialogItem("Beta", "Beta", false)
+        };
+
+        var result = AutoFilterDialog.BuildResult(
+            AutoFilterSortDirection.None,
+            items,
+            "",
+            "");
+
+        result.SelectedValues.Should().Equal("ACME, Inc.", "");
+        result.CriteriaText.Should().BeEmpty();
     }
 
     [Fact]

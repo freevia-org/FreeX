@@ -20,7 +20,12 @@ public sealed partial class MainWindowRibbonKeyTipTests
             harness.ActiveMenuItemGestureText("Values").Should().Be("V");
             harness.ActiveMenuItemGestureText("Formulas").Should().Be("F");
             harness.ActiveMenuItemGestureText("Formatting").Should().Be("R");
+            harness.ActiveMenuItemGestureText("Keep Source Column Widths").Should().Be("W");
+            harness.ActiveMenuItemGestureText("Values & Source Formatting").Should().Be("A");
             harness.ActiveMenuItemGestureText("Transpose").Should().Be("T");
+            harness.ActiveMenuItemGestureText("Paste Link").Should().Be("L");
+            harness.ActiveMenuItemGestureText("Picture").Should().Be("I");
+            harness.ActiveMenuItemGestureText("Linked Picture").Should().Be("K");
             harness.ActiveMenuItemGestureText("Paste Special...").Should().Be("S");
         });
     }

@@ -16,6 +16,8 @@ public sealed class RibbonTopLevelKeyTipRouterTests
     [InlineData("R", RibbonTopLevelKeyTipActionKind.RibbonTab, "Review")]
     [InlineData("W", RibbonTopLevelKeyTipActionKind.RibbonTab, "View")]
     [InlineData("Y", RibbonTopLevelKeyTipActionKind.RibbonTab, "Help")]
+    [InlineData("JC", RibbonTopLevelKeyTipActionKind.RibbonTab, "Chart Design")]
+    [InlineData("JF", RibbonTopLevelKeyTipActionKind.RibbonTab, "Format")]
     [InlineData("JT", RibbonTopLevelKeyTipActionKind.RibbonTab, "Table Design")]
     [InlineData("JA", RibbonTopLevelKeyTipActionKind.RibbonTab, "PivotTable Analyze")]
     [InlineData("JD", RibbonTopLevelKeyTipActionKind.RibbonTab, "Design")]
@@ -45,9 +47,15 @@ public sealed class RibbonTopLevelKeyTipRouterTests
         var visibleEntries = VisibleCatalogEntries();
 
         RibbonTopLevelKeyTipRouter.Resolve("J", visibleEntries)!.Value.RibbonTabHeader.Should().Be("Draw");
+        RibbonTopLevelKeyTipRouter.Resolve("JC", visibleEntries).Should().BeNull(
+            "hidden chart contextual tabs should not route from top-level keytip mode");
+        RibbonTopLevelKeyTipRouter.Resolve("JF", visibleEntries).Should().BeNull(
+            "hidden chart contextual tabs should not route from top-level keytip mode");
         RibbonTopLevelKeyTipRouter.Resolve("JA", visibleEntries).Should().BeNull(
             "hidden contextual tabs should not route from top-level keytip mode");
 
+        RibbonTopLevelKeyTipRouter.Resolve("JC", AllCatalogEntries())!.Value.RibbonTabHeader.Should().Be("Chart Design");
+        RibbonTopLevelKeyTipRouter.Resolve("JF", AllCatalogEntries())!.Value.RibbonTabHeader.Should().Be("Format");
         RibbonTopLevelKeyTipRouter.Resolve("JA", AllCatalogEntries())!.Value.RibbonTabHeader.Should().Be("PivotTable Analyze");
         RibbonTopLevelKeyTipRouter.Resolve("JD", AllCatalogEntries())!.Value.RibbonTabHeader.Should().Be("Design");
     }
@@ -69,7 +77,7 @@ public sealed class RibbonTopLevelKeyTipRouterTests
     [InlineData("j")]
     public void HasLongerVisibleKeyTipPrefix_DetectsContextualTabPrefix(string prefix)
     {
-        RibbonTopLevelKeyTipRouter.HasLongerKeyTipPrefix(prefix, ["J", "JT", "JA", "JD"])
+        RibbonTopLevelKeyTipRouter.HasLongerKeyTipPrefix(prefix, ["J", "JC", "JF", "JT", "JA", "JD"])
             .Should()
             .BeTrue();
     }
@@ -77,7 +85,7 @@ public sealed class RibbonTopLevelKeyTipRouterTests
     [Fact]
     public void HasLongerVisibleKeyTipPrefix_NormalizesWhitespace()
     {
-        RibbonTopLevelKeyTipRouter.HasLongerKeyTipPrefix(" j ", ["J", " JA ", "JD"])
+        RibbonTopLevelKeyTipRouter.HasLongerKeyTipPrefix(" j ", ["J", " JC ", "JA", "JD"])
             .Should()
             .BeTrue("metadata-derived top-level keytips should route after normalization");
     }

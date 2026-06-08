@@ -33,10 +33,13 @@ public sealed class MainWindowSheetTabKeyboardTests
 
             harness.SheetTabContextMenuIsOpen.Should().BeTrue(harness.DebugSheetTabs);
             harness.SheetTabContextMenuPlacementTargetIsFocusedTab.Should().BeTrue();
-            harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_Rename")).Should().Be("R");
             harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_InsertSheet")).Should().Be("I");
-            harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_Duplicate")).Should().Be("D");
-            harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_TabColor_EDBDA613")).Should().Be("T");
+            harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_DeleteSheet")).Should().Be("E");
+            harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_Rename")).Should().Be("R");
+            harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_MoveOrCopy")).Should().Be("M");
+            harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_ViewCode")).Should().Be("V");
+            harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_ProtectSheet")).Should().Be("P");
+            harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_TabColor")).Should().Be("T");
         });
     }
 

@@ -63,10 +63,13 @@ public sealed class WorkbookWindowRegistry
     /// <summary>Live windows in registration order.</summary>
     public IReadOnlyList<IWorkbookWindow> Windows => _windows;
 
+    /// <summary>Registered windows that are currently visible, in registration order.</summary>
+    public IReadOnlyList<IWorkbookWindow> VisibleWindows => _windows.Where(w => !_hidden.Contains(w)).ToList();
+
     public int Count => _windows.Count;
 
     /// <summary>Number of registered windows that are currently visible (not hidden).</summary>
-    public int VisibleCount => _windows.Count(w => !_hidden.Contains(w));
+    public int VisibleCount => VisibleWindows.Count;
 
     /// <summary>Currently-hidden windows, in registration order.</summary>
     public IReadOnlyList<IWorkbookWindow> HiddenWindows => _windows.Where(_hidden.Contains).ToList();

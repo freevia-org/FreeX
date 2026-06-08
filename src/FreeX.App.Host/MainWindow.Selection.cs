@@ -653,7 +653,7 @@ public partial class MainWindow
             sheet.ActiveCol = merge.Value.Start.Col;
             SetSelectedRangesIfChanged(null);
             SheetGrid.SelectedRange = merge.Value;
-            CellAddressBox.Text = FormatCellReference(merge.Value.Start);
+            CellAddressBox.Text = FormatNameBoxSelectionText(merge.Value);
             var mergedCell = sheet!.GetCell(merge.Value.Start);
             SetFormulaBarSelectionText(FormatFormulaBarText(mergedCell, merge.Value.Start));
             FocusSheetGridIfNeeded();
@@ -673,8 +673,9 @@ public partial class MainWindow
         }
 
         SetSelectedRangesIfChanged(null);
-        SheetGrid.SelectedRange = new GridRange(addr, addr);
-        SetCellAddressBoxSelectionText(FormatCellReference(addr));
+        var selectionRange = new GridRange(addr, addr);
+        SheetGrid.SelectedRange = selectionRange;
+        SetCellAddressBoxSelectionText(FormatNameBoxSelectionText(selectionRange));
 
         var cell = sheet?.GetCell(addr);
         SetFormulaBarSelectionText(FormatFormulaBarText(cell, addr));
@@ -831,7 +832,7 @@ public partial class MainWindow
         _selectionCursor = range.End;
         SetSelectedRangesIfChanged(null);
         SheetGrid.SelectedRange = range;
-        CellAddressBox.Text = FormatRangeReference(range.Start, range.End);
+        CellAddressBox.Text = FormatNameBoxSelectionText(range);
         var activeCellModel = sheet?.GetCell(activeCell);
         SetFormulaBarSelectionText(FormatFormulaBarText(activeCellModel, activeCell));
         FocusSheetGridIfNeeded();
@@ -1079,20 +1080,20 @@ public partial class MainWindow
         if (CellAddressBox.Text == text)
             return;
 
-        if (CellAddressBox.IsKeyboardFocusWithin || !CellAddressBox.IsUndoEnabled)
+        if (CellAddressBox.IsKeyboardFocusWithin || !CellAddressBox.IsEditableTextUndoEnabled())
         {
             CellAddressBox.Text = text;
             return;
         }
 
-        CellAddressBox.IsUndoEnabled = false;
+        CellAddressBox.SetEditableTextUndoEnabled(false);
         try
         {
             CellAddressBox.Text = text;
         }
         finally
         {
-            CellAddressBox.IsUndoEnabled = true;
+            CellAddressBox.SetEditableTextUndoEnabled(true);
         }
     }
 

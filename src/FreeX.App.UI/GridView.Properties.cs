@@ -34,6 +34,24 @@ public partial class GridView
         set => SetValue(ViewportProperty, value);
     }
 
+    public static readonly DependencyProperty HiddenRowsProperty =
+        DependencyProperty.Register(nameof(HiddenRows), typeof(IReadOnlyCollection<uint>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public IReadOnlyCollection<uint>? HiddenRows
+    {
+        get => (IReadOnlyCollection<uint>?)GetValue(HiddenRowsProperty);
+        set => SetValue(HiddenRowsProperty, value);
+    }
+
+    public static readonly DependencyProperty HiddenColumnsProperty =
+        DependencyProperty.Register(nameof(HiddenColumns), typeof(IReadOnlyCollection<uint>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public IReadOnlyCollection<uint>? HiddenColumns
+    {
+        get => (IReadOnlyCollection<uint>?)GetValue(HiddenColumnsProperty);
+        set => SetValue(HiddenColumnsProperty, value);
+    }
+
     public static readonly DependencyProperty IsLiveResizingProperty =
         DependencyProperty.Register(nameof(IsLiveResizing), typeof(bool), typeof(GridView),
             new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
@@ -104,6 +122,15 @@ public partial class GridView
     {
         get => (SheetId)GetValue(FormulaTraceSheetIdProperty);
         set => SetValue(FormulaTraceSheetIdProperty, value);
+    }
+
+    public static readonly DependencyProperty ValidationCircleCellsProperty =
+        DependencyProperty.Register(nameof(ValidationCircleCells), typeof(IReadOnlyList<CellAddress>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public IReadOnlyList<CellAddress>? ValidationCircleCells
+    {
+        get => (IReadOnlyList<CellAddress>?)GetValue(ValidationCircleCellsProperty);
+        set => SetValue(ValidationCircleCellsProperty, value);
     }
 
     public static readonly DependencyProperty ChartsProperty =
@@ -221,6 +248,24 @@ public partial class GridView
     {
         get => (IReadOnlyList<GridRange>?)GetValue(MergedRegionsProperty);
         set => SetValue(MergedRegionsProperty, value);
+    }
+
+    public static readonly DependencyProperty AutoFilterRangeProperty =
+        DependencyProperty.Register(nameof(AutoFilterRange), typeof(GridRange?), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public GridRange? AutoFilterRange
+    {
+        get => (GridRange?)GetValue(AutoFilterRangeProperty);
+        set => SetValue(AutoFilterRangeProperty, value);
+    }
+
+    public static readonly DependencyProperty ActiveAutoFilterColumnsProperty =
+        DependencyProperty.Register(nameof(ActiveAutoFilterColumns), typeof(IReadOnlySet<uint>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public IReadOnlySet<uint>? ActiveAutoFilterColumns
+    {
+        get => (IReadOnlySet<uint>?)GetValue(ActiveAutoFilterColumnsProperty);
+        set => SetValue(ActiveAutoFilterColumnsProperty, value);
     }
 
     public static readonly DependencyProperty ShowGridLinesProperty =

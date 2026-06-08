@@ -50,11 +50,11 @@ public sealed class PasteSpecialDialogTests
     [InlineData("_rbColumnWidths", "Column _widths")]
     [InlineData("_rbFormulasAndNumberFormats", "Formulas and number fo_rmats")]
     [InlineData("_rbValuesAndNumberFormats", "Values and number for_mats")]
-    [InlineData("_rbValuesAndSourceFormatting", "Values and source f_ormatting")]
+    [InlineData("_rbValuesAndSourceFormatting", "Values & Source F_ormatting")]
     [InlineData("_rbText", "T_ext")]
     [InlineData("_rbUnicodeText", "_Unicode Text")]
     [InlineData("_rbPicture", "_Picture")]
-    [InlineData("_rbLinkedPicture", "_Linked picture")]
+    [InlineData("_rbLinkedPicture", "_Linked Picture")]
     public void Choices_ExposeKeyboardAccessKeys(string fieldName, string expectedContent)
     {
         StaTestRunner.Run(() =>

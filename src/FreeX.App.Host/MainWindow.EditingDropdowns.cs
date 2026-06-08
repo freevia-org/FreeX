@@ -105,41 +105,95 @@ public partial class MainWindow
     private void OpenAutoFilterDropdownForActiveCell()
     {
         if (SheetGrid.SelectedRange?.Start is not { } activeCell ||
-            _workbook.GetSheet(_currentSheetId) is not { } sheet ||
-            SelectionRangeService.GetCurrentRegion(sheet, activeCell) is not { } currentRegion ||
-            !AutoFilterDropdownPlanner.TryPlan(currentRegion, activeCell, out var plan))
+            _workbook.GetSheet(_currentSheetId) is not { } sheet)
         {
             return;
         }
 
+        ShowAutoFilterDropdownForHeaderCell(sheet, activeCell);
+    }
+
+    private void OnAutoFilterDropdownRequested(CellAddress headerCell, System.Windows.Point position)
+    {
+        if (_workbook.GetSheet(_currentSheetId) is not { } sheet)
+            return;
+
+        SheetGrid.SelectedRange = new GridRange(headerCell, headerCell);
+        SheetGrid.SelectedRanges = null;
+        _selectionAnchor = headerCell;
+        _selectionCursor = headerCell;
+        CellAddressBox.Text = headerCell.ToA1();
+        ShowAutoFilterDropdownForHeaderCell(sheet, headerCell, position);
+    }
+
+    private void ShowAutoFilterDropdownForHeaderCell(
+        Sheet sheet,
+        CellAddress headerCell,
+        System.Windows.Point? anchorPoint = null)
+    {
+        if (CreateAutoFilterFlyoutDialog(sheet, headerCell, anchorPoint, out var createdPlan) is not { } dialog ||
+            createdPlan is not { } plan)
+        {
+            return;
+        }
+
+        dialog.ResultCommitted += (_, result) =>
+        {
+            if (!ApplyAutoFilterDialogResult(plan.Range, plan.FilterColumnOffset, result, "AutoFilter"))
+                return;
+            UpdateViewport();
+        };
+        dialog.Show();
+        dialog.Activate();
+    }
+
+    private AutoFilterDialog? CreateAutoFilterFlyoutDialog(
+        Sheet sheet,
+        CellAddress headerCell,
+        System.Windows.Point? anchorPoint,
+        out AutoFilterDropdownPlan? createdPlan)
+    {
+        var currentRegion = AutoFilterDropdownPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange)
+            ? autoFilterRange
+            : SelectionRangeService.GetCurrentRegion(sheet, headerCell);
+        createdPlan = null;
+        if (currentRegion is not { } range ||
+            !AutoFilterDropdownPlanner.TryPlan(range, headerCell, out var plan))
+        {
+            return null;
+        }
+
         var menuPlan = AutoFilterDropdownPlanner.CreateMenuPlan(_workbook, sheet, plan);
         if (menuPlan.Entries.All(entry => entry.Kind != AutoFilterMenuEntryKind.ChecklistItem))
-            return;
+            return null;
 
         var dialog = new AutoFilterDialog(menuPlan)
         {
             Owner = this
         };
-        PositionAutoFilterDialogAtActiveCell(dialog, activeCell);
-
-        if (dialog.ShowDialog() != true)
-            return;
-
-        if (!ApplyAutoFilterDialogResult(plan.Range, plan.FilterColumnOffset, dialog.Result, "AutoFilter"))
-            return;
-        UpdateViewport();
+        dialog.ConfigureAsModelessFlyout();
+        PositionAutoFilterFlyout(dialog, headerCell, anchorPoint);
+        createdPlan = plan;
+        return dialog;
     }
 
-    private void PositionAutoFilterDialogAtActiveCell(Window dialog, CellAddress activeCell)
+    private void PositionAutoFilterFlyout(Window dialog, CellAddress headerCell, System.Windows.Point? anchorPoint)
     {
-        if (TryGetCellOverlayRect(activeCell) is not { } rect)
-            return;
+        var point = anchorPoint is { } clickedPoint
+            ? new System.Windows.Point(clickedPoint.X, clickedPoint.Y + 18)
+            : (System.Windows.Point?)null;
+        if (point is null)
+        {
+            if (TryGetCellOverlayRect(headerCell) is not { } rect)
+                return;
 
-        var screenPoint = SheetGrid.PointToScreen(new System.Windows.Point(rect.Left, rect.Bottom));
+            point = new System.Windows.Point(rect.Left, rect.Bottom);
+        }
+
+        var screenPoint = SheetGrid.PointToScreen(point.Value);
         if (PresentationSource.FromVisual(this)?.CompositionTarget is { } target)
             screenPoint = target.TransformFromDevice.Transform(screenPoint);
 
-        dialog.WindowStartupLocation = WindowStartupLocation.Manual;
         dialog.Left = screenPoint.X;
         dialog.Top = screenPoint.Y;
     }

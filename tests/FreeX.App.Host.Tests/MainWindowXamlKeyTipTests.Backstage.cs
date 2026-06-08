@@ -111,7 +111,7 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Button")
             .Single(element => element.Attribute(x + "Name")?.Value == "SsPrintNavBtn");
 
-        printButton.Attribute("Click")?.Value.Should().Be("PrintButton_Click");
+        printButton.Attribute("Click")?.Value.Should().Be("SsPrintNavBtn_Click");
         printButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("P");
         printButton.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be("BackstagePrintButton");
         LocalizedAttribute(printButton, "AutomationProperties.Name").Should().Be("Print");

@@ -2769,7 +2769,7 @@ Continuare a salvare?</value>
     <value>{0} è rimandato fino a quando FreeX non avrà un modello di tema della cartella di lavoro. È tracciato come una discrepanza documentata di parità, non come un'implementazione parziale silenziosa.</value>
   </data>
   <data name="Startup_CrashReportsConsentPrompt" xml:space="preserve">
-    <value>FreeX può inviare rapporti di crash per aiutare a stabilizzare le versioni di test. I rapporti includono versione dell'app, runtime, sistema operativo, ID sessione, messaggio di eccezione e traccia dello stack. Il contenuto delle cartelle di lavoro, le formule, i nomi dei file e i percorsi non vengono raccolti intenzionalmente, ma i dettagli delle eccezioni possono occasionalmente includere valori sensibili. 
+    <value>FreeX può inviare rapporti di crash per aiutare a stabilizzare le versioni di test. I rapporti includono versione dell'app, runtime, sistema operativo, ID sessione, messaggio di eccezione e traccia dello stack. Il contenuto delle cartelle di lavoro, le formule, i nomi dei file e i percorsi non vengono raccolti intenzionalmente, ma i dettagli delle eccezioni possono occasionalmente includere valori sensibili.
 
  Inviare rapporti di crash per questa build di test?</value>
   </data>
@@ -3490,6 +3490,9 @@ Continuare a salvare?</value>
   <data name="MainWindow_Content_Feedback" xml:space="preserve">
     <value>Feedback</value>
   </data>
+  <data name="MainWindow_Content_FieldHeaders" xml:space="preserve">
+    <value>Field Headers</value>
+  </data>
   <data name="MainWindow_Content_FieldList" xml:space="preserve">
     <value>Elenco campi</value>
   </data>
@@ -3741,6 +3744,9 @@ Continuare a salvare?</value>
   </data>
   <data name="MainWindow_Content_PieFormat" xml:space="preserve">
     <value>Formato a torta</value>
+  </data>
+  <data name="MainWindow_Content_PlusMinusButtons" xml:space="preserve">
+    <value>+/- Buttons</value>
   </data>
   <data name="MainWindow_Content_PivotChart" xml:space="preserve">
     <value>Grafico pivot</value>
@@ -4864,7 +4870,35 @@ Continuare a salvare?</value>
   <data name="MainWindow_Text_AutoSum" xml:space="preserve">
     <value>Somma Automatica</value>
   </data>
-  <data name="MainWindow_Text_BlankWorkbook" xml:space="preserve">
+  <data name="QuickAccessToolbar_HistoryAutomationNameFormat" xml:space="preserve">
+    <value>{0} History</value>
+  </data>
+  <data name="QuickAccessToolbar_HistoryDescriptionFormat" xml:space="preserve">
+    <value>Show recent {0} actions.</value>
+  </data>  <data name="ReviewCommentList_OpenButton" xml:space="preserve">
+    <value>Open</value>
+  </data>
+  <data name="ReviewCommentList_OpenButtonAutomationName" xml:space="preserve">
+    <value>Open selected item</value>
+  </data>
+  <data name="ReviewCommentList_OpenButtonHelpText" xml:space="preserve">
+    <value>Navigates to the selected comment or note cell.</value>
+  </data>
+  <data name="ReviewCommentList_CloseButton" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="ReviewCommentList_CloseButtonAutomationName" xml:space="preserve">
+    <value>Close comments list</value>
+  </data>
+  <data name="ReviewCommentList_CellColumnHeader" xml:space="preserve">
+    <value>Cell</value>
+  </data>
+  <data name="ReviewCommentList_TextColumnHeader" xml:space="preserve">
+    <value>Text</value>
+  </data>
+  <data name="ReviewCommentList_ListHelpText" xml:space="preserve">
+    <value>Lists comments or notes on the active sheet. Double-click an item to navigate to its cell.</value>
+  </data>  <data name="MainWindow_Text_BlankWorkbook" xml:space="preserve">
     <value>Cartella di lavoro vuota</value>
   </data>
   <data name="MainWindow_Text_Calculation" xml:space="preserve">
@@ -6166,6 +6200,12 @@ Continuare a salvare?</value>
   <data name="MainWindow_TooltipDescription_ShowOrHideTheFormulaBar" xml:space="preserve">
     <value>Mostra o nascondi la barra della formula.</value>
   </data>
+  <data name="MainWindow_TooltipDescription_ShowOrHideExpandCollapseButtonsForTheSelectedPivotTable" xml:space="preserve">
+    <value>Show or hide expand and collapse buttons for the selected PivotTable.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_ShowOrHideFieldCaptionsAndFilterDropDownsForTheSelectedPivotTable" xml:space="preserve">
+    <value>Show or hide field captions and filter drop-downs for the selected PivotTable.</value>
+  </data>
   <data name="MainWindow_TooltipDescription_ShowOrHideThePivotTableFieldsTaskPane" xml:space="preserve">
     <value>Mostra o nascondi il riquadro attività Campi tabella pivot.</value>
   </data>
@@ -6610,6 +6650,9 @@ Continuare a salvare?</value>
   <data name="MainWindow_TooltipTitle_Feedback" xml:space="preserve">
     <value>Feedback</value>
   </data>
+  <data name="MainWindow_TooltipTitle_FieldHeaders" xml:space="preserve">
+    <value>Field Headers</value>
+  </data>
   <data name="MainWindow_TooltipTitle_FieldList" xml:space="preserve">
     <value>Elenco campi</value>
   </data>
@@ -6930,6 +6973,9 @@ Continuare a salvare?</value>
   </data>
   <data name="MainWindow_TooltipTitle_Pinned" xml:space="preserve">
     <value>Aggiunti</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_PlusMinusButtons" xml:space="preserve">
+    <value>+/- Buttons</value>
   </data>
   <data name="MainWindow_TooltipTitle_PivotChart" xml:space="preserve">
     <value>Grafico pivot</value>
@@ -14300,7 +14346,7 @@ Valore della cella da modificare: {2}</value>
     <value>Seleziona origine dati</value>
   </data>
   <data name="MainWindowMessage_ShareWorkbookFailed" xml:space="preserve">
-    <value>Impossibile aprire condivisione Windows: 
+    <value>Impossibile aprire condivisione Windows:
 {0}</value>
   </data>
   <data name="MainWindowMessage_ShareWorkbookTitle" xml:space="preserve">
@@ -14478,7 +14524,7 @@ File XPS salvato:
     <value>Inserisci un criterio di filtro supportato.</value>
   </data>
   <data name="MainWindowMessage_InsertPictureReadFailed" xml:space="preserve">
-    <value>Impossibile leggere il file immagine: 
+    <value>Impossibile leggere il file immagine:
 {0}</value>
   </data>
   <data name="MainWindowMessage_InsertPictureTitle" xml:space="preserve">
@@ -14570,7 +14616,7 @@ File XPS salvato:
     <value>Errore di salvataggio</value>
   </data>
   <data name="MainWindowMessage_SaveFileFailed" xml:space="preserve">
-    <value>Impossibile salvare il file: 
+    <value>Impossibile salvare il file:
 {0}</value>
   </data>
   <data name="MainWindowMessage_SelectRangeFirst" xml:space="preserve">
@@ -15399,22 +15445,370 @@ e {0} in più.</value>
   <data name="GoToSpecial_NoCellsFoundMessage" xml:space="preserve">
     <value>No cells found.</value>
   </data>
-  <data name="MainWindow_Content_FieldHeaders" xml:space="preserve">
-    <value>Field Headers</value>
+  <data name="AllowEditRange_ModifyAutomationName" xml:space="preserve">
+    <value>Modify</value>
   </data>
-  <data name="MainWindow_Content_PlusMinusButtons" xml:space="preserve">
-    <value>+/- Buttons</value>
+  <data name="AllowEditRange_ModifyButton" xml:space="preserve">
+    <value>_Modify...</value>
   </data>
-  <data name="MainWindow_TooltipDescription_ShowOrHideExpandCollapseButtonsForTheSelectedPivotTable" xml:space="preserve">
-    <value>Show or hide expand and collapse buttons for the selected PivotTable.</value>
+  <data name="AllowEditRange_ModifyHelpText" xml:space="preserve">
+    <value>Load the selected editable range into the range editor.</value>
   </data>
-  <data name="MainWindow_TooltipDescription_ShowOrHideFieldCaptionsAndFilterDropDownsForTheSelectedPivotTable" xml:space="preserve">
-    <value>Show or hide field captions and filter drop-downs for the selected PivotTable.</value>
+  <data name="AllowEditRange_NewAutomationName" xml:space="preserve">
+    <value>New</value>
   </data>
-  <data name="MainWindow_TooltipTitle_FieldHeaders" xml:space="preserve">
-    <value>Field Headers</value>
+  <data name="AllowEditRange_NewButton" xml:space="preserve">
+    <value>_New...</value>
   </data>
-  <data name="MainWindow_TooltipTitle_PlusMinusButtons" xml:space="preserve">
-    <value>+/- Buttons</value>
+  <data name="AllowEditRange_NewHelpText" xml:space="preserve">
+    <value>Create a new editable range from the range editor.</value>
+  </data>
+  <data name="AllowEditRange_PermissionsAutomationName" xml:space="preserve">
+    <value>Permissions</value>
+  </data>
+  <data name="AllowEditRange_PermissionsButton" xml:space="preserve">
+    <value>_Permissions...</value>
+  </data>
+  <data name="AllowEditRange_PermissionsHelpText" xml:space="preserve">
+    <value>Permissions are not yet available because FreeX does not model per-user editable range permissions.</value>
+  </data>
+  <data name="MainWindow_Content_ShowChanges" xml:space="preserve">
+    <value>Show Changes</value>
+  </data>
+  <data name="MainWindow_Content_HideDetail" xml:space="preserve">
+    <value>Hide Detail</value>
+  </data>
+  <data name="MainWindow_Content_ShowDetail" xml:space="preserve">
+    <value>Show Detail</value>
+  </data>
+  <data name="MainWindow_Header_ViewCode" xml:space="preserve">
+    <value>View Code</value>
+  </data>
+  <data name="MainWindow_Text_Changes" xml:space="preserve">
+    <value>Changes</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_OpenWorkbookChangeHistoryPane" xml:space="preserve">
+    <value>Open the workbook change history pane.</value>
+  </data>
+  <data name="RecommendedPivotTables_BlankPivotTable" xml:space="preserve">
+    <value>Blank PivotTable...</value>
+  </data>
+  <data name="RecommendedPivotTables_BlankPivotTableAutomationHelpText" xml:space="preserve">
+    <value>Open the standard Create PivotTable dialog.</value>
+  </data>
+  <data name="RecommendedPivotTables_BlankPivotTableAutomationName" xml:space="preserve">
+    <value>Blank PivotTable</value>
+  </data>
+  <data name="RecommendedPivotTables_NoRecommendationsBody" xml:space="preserve">
+    <value>FreeX can still create a blank PivotTable from the selected data.</value>
+  </data>
+  <data name="RecommendedPivotTables_NoRecommendationsHeading" xml:space="preserve">
+    <value>No recommended PivotTables are available</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_HideDetail" xml:space="preserve">
+    <value>Hide Detail</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_ShowDetail" xml:space="preserve">
+    <value>Show Detail</value>
+  </data>
+  <data name="MainWindowMessage_AllowEditRangeModified" xml:space="preserve">
+    <value>{0} can now be edited while this sheet is protected.</value>
+  </data>
+  <data name="ActivateSheet_CancelAutomationName" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="ActivateSheet_CancelHelpText" xml:space="preserve">
+    <value>Close without changing the active worksheet.</value>
+  </data>
+  <data name="ActivateSheet_ListAutomationName" xml:space="preserve">
+    <value>Sheets</value>
+  </data>
+  <data name="ActivateSheet_ListHelpText" xml:space="preserve">
+    <value>Select the worksheet to activate.</value>
+  </data>
+  <data name="ActivateSheet_OkAutomationName" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="ActivateSheet_OkHelpText" xml:space="preserve">
+    <value>Activate the selected worksheet.</value>
+  </data>
+  <data name="ActivateSheet_Title" xml:space="preserve">
+    <value>Activate</value>
+  </data>
+  <data name="MainWindow_Header_A3" xml:space="preserve">
+    <value>A3</value>
+  </data>
+  <data name="MainWindow_Header_A5" xml:space="preserve">
+    <value>A5</value>
+  </data>
+  <data name="MainWindow_Header_AccountingEUR" xml:space="preserve">
+    <value>Euro (&#x20AC;)</value>
+  </data>
+  <data name="MainWindow_Header_AccountingGBP" xml:space="preserve">
+    <value>British Pound (&#x00A3;)</value>
+  </data>
+  <data name="MainWindow_Header_AccountingJPY" xml:space="preserve">
+    <value>Japanese Yen (&#x00A5;)</value>
+  </data>
+  <data name="MainWindow_Header_AccountingUSD" xml:space="preserve">
+    <value>US Dollar ($)</value>
+  </data>
+  <data name="MainWindow_Header_AddToPrintArea" xml:space="preserve">
+    <value>Add to Print Area</value>
+  </data>
+  <data name="MainWindow_Header_AutomaticExceptDataTables" xml:space="preserve">
+    <value>Automatic Except Data Tables</value>
+  </data>
+  <data name="MainWindow_Header_AutoOutline" xml:space="preserve">
+    <value>Auto Outline</value>
+  </data>
+  <data name="MainWindow_Header_B4" xml:space="preserve">
+    <value>B4 (JIS)</value>
+  </data>
+  <data name="MainWindow_Header_B5" xml:space="preserve">
+    <value>B5 (JIS)</value>
+  </data>
+  <data name="MainWindow_Header_CircleInvalidData" xml:space="preserve">
+    <value>Circle Invalid Data</value>
+  </data>
+  <data name="MainWindow_Header_ClearOutline" xml:space="preserve">
+    <value>Clear Outline</value>
+  </data>
+  <data name="MainWindow_Header_ClearValidationCircles" xml:space="preserve">
+    <value>Clear Validation Circles</value>
+  </data>
+  <data name="MainWindow_Header_Constants" xml:space="preserve">
+    <value>Constants</value>
+  </data>
+  <data name="MainWindow_Header_DataValidationDialog" xml:space="preserve">
+    <value>Data Validation...</value>
+  </data>
+  <data name="MainWindow_Header_Executive" xml:space="preserve">
+    <value>Executive</value>
+  </data>
+  <data name="MainWindow_Header_MergeAcross" xml:space="preserve">
+    <value>Merge Across</value>
+  </data>
+  <data name="MainWindow_Header_MergeCells" xml:space="preserve">
+    <value>Merge Cells</value>
+  </data>
+  <data name="MainWindow_Header_MoreAccountingFormats" xml:space="preserve">
+    <value>More Accounting Formats...</value>
+  </data>
+  <data name="MainWindow_Header_MoveOrCopy" xml:space="preserve">
+    <value>Move or Copy...</value>
+  </data>
+  <data name="MainWindow_Header_PictureOnlinePictures" xml:space="preserve">
+    <value>Online Pictures</value>
+  </data>
+  <data name="MainWindow_Header_PicturePlaceInCell" xml:space="preserve">
+    <value>Place in Cell</value>
+  </data>
+  <data name="MainWindow_Header_PicturePlaceOverCells" xml:space="preserve">
+    <value>Place over Cells</value>
+  </data>
+  <data name="MainWindow_Header_PictureStockImages" xml:space="preserve">
+    <value>Stock Images</value>
+  </data>
+  <data name="MainWindow_Header_PictureThisDevice" xml:space="preserve">
+    <value>This Device...</value>
+  </data>
+  <data name="MainWindow_Header_RemoveArrows" xml:space="preserve">
+    <value>Remove Arrows</value>
+  </data>
+  <data name="MainWindow_Header_RemoveDependentArrows" xml:space="preserve">
+    <value>Remove Dependent Arrows</value>
+  </data>
+  <data name="MainWindow_Header_RemovePrecedentArrows" xml:space="preserve">
+    <value>Remove Precedent Arrows</value>
+  </data>
+  <data name="MainWindow_Header_SelectionPaneEllipsis" xml:space="preserve">
+    <value>Selection Pane...</value>
+  </data>
+  <data name="MainWindow_Header_SelectObjects" xml:space="preserve">
+    <value>Select Objects</value>
+  </data>
+  <data name="MainWindow_Header_Statement" xml:space="preserve">
+    <value>Statement</value>
+  </data>
+  <data name="MainWindow_Header_Tabloid" xml:space="preserve">
+    <value>Tabloid</value>
+  </data>
+  <data name="MainWindow_Header_UnmergeCells" xml:space="preserve">
+    <value>Unmerge Cells</value>
+  </data>
+  <data name="MainWindow_Text_Height" xml:space="preserve">
+    <value>Height</value>
+  </data>
+  <data name="MainWindow_Text_Width" xml:space="preserve">
+    <value>Width</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_CancelFormulaBarEdit" xml:space="preserve">
+    <value>Cancel the formula bar edit.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_EnterFormulaBarEdit" xml:space="preserve">
+    <value>Enter the formula bar edit.</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_CancelFormulaBarEdit" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_EnterFormulaBarEdit" xml:space="preserve">
+    <value>Enter</value>
+  </data>
+  <data name="MoveOrCopySheet_BeforeSheet" xml:space="preserve">
+    <value>Before sheet:</value>
+  </data>
+  <data name="MoveOrCopySheet_BeforeSheetAutomationName" xml:space="preserve">
+    <value>Before sheet</value>
+  </data>
+  <data name="MoveOrCopySheet_BeforeSheetHelpText" xml:space="preserve">
+    <value>Select where to place the moved or copied sheet.</value>
+  </data>
+  <data name="MoveOrCopySheet_CancelAutomationName" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="MoveOrCopySheet_CancelHelpText" xml:space="preserve">
+    <value>Close without moving or copying the sheet.</value>
+  </data>
+  <data name="MoveOrCopySheet_CreateACopy" xml:space="preserve">
+    <value>Create a copy</value>
+  </data>
+  <data name="MoveOrCopySheet_CreateCopyHelpText" xml:space="preserve">
+    <value>Copy the selected sheet instead of moving it.</value>
+  </data>
+  <data name="MoveOrCopySheet_MoveSelectedSheets" xml:space="preserve">
+    <value>Move selected sheets</value>
+  </data>
+  <data name="MoveOrCopySheet_MoveToEnd" xml:space="preserve">
+    <value>(move to end)</value>
+  </data>
+  <data name="MoveOrCopySheet_OkAutomationName" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="MoveOrCopySheet_OkHelpText" xml:space="preserve">
+    <value>Move or copy the selected sheet.</value>
+  </data>
+  <data name="MoveOrCopySheet_Title" xml:space="preserve">
+    <value>Move or Copy</value>
+  </data>
+  <data name="MoveOrCopySheet_ToBook" xml:space="preserve">
+    <value>To book:</value>
+  </data>
+  <data name="MoveOrCopySheet_ToBookAutomationName" xml:space="preserve">
+    <value>To book</value>
+  </data>
+  <data name="MoveOrCopySheet_ToBookHelpText" xml:space="preserve">
+    <value>The destination workbook.</value>
+  </data>
+  <data name="PasteNames_NamesAutomationName" xml:space="preserve">
+    <value>Names</value>
+  </data>
+  <data name="PasteNames_NamesLabel" xml:space="preserve">
+    <value>Names:</value>
+  </data>
+  <data name="PasteNames_NoNamesMessage" xml:space="preserve">
+    <value>No names are defined in this workbook.</value>
+  </data>
+  <data name="PasteNames_NotEnoughColumnsMessage" xml:space="preserve">
+    <value>There are not enough columns to paste the list of names.</value>
+  </data>
+  <data name="PasteNames_NotEnoughRowsMessage" xml:space="preserve">
+    <value>There are not enough rows to paste the list of names.</value>
+  </data>
+  <data name="PasteNames_PasteList" xml:space="preserve">
+    <value>Paste List</value>
+  </data>
+  <data name="PasteNames_Title" xml:space="preserve">
+    <value>Paste Names</value>
+  </data>
+  <data name="Sort_Title" xml:space="preserve">
+    <value>Sort</value>
+  </data>
+  <data name="StatusBar_Average" xml:space="preserve">
+    <value>Average</value>
+  </data>
+  <data name="StatusBar_CellMode" xml:space="preserve">
+    <value>Cell Mode</value>
+  </data>
+  <data name="StatusBar_Count" xml:space="preserve">
+    <value>Count</value>
+  </data>
+  <data name="StatusBar_CustomizeStatusBar" xml:space="preserve">
+    <value>Customize Status Bar</value>
+  </data>
+  <data name="StatusBar_Maximum" xml:space="preserve">
+    <value>Maximum</value>
+  </data>
+  <data name="StatusBar_Minimum" xml:space="preserve">
+    <value>Minimum</value>
+  </data>
+  <data name="StatusBar_NumericalCount" xml:space="preserve">
+    <value>Numerical Count</value>
+  </data>
+  <data name="StatusBar_PageNumber" xml:space="preserve">
+    <value>Page Number</value>
+  </data>
+  <data name="StatusBar_SelectionMode" xml:space="preserve">
+    <value>Selection Mode</value>
+  </data>
+  <data name="StatusBar_Sum" xml:space="preserve">
+    <value>Sum</value>
+  </data>
+  <data name="StatusBar_ViewShortcuts" xml:space="preserve">
+    <value>View Shortcuts</value>
+  </data>
+  <data name="StatusBar_Zoom" xml:space="preserve">
+    <value>Zoom</value>
+  </data>
+  <data name="StatusBar_ZoomSlider" xml:space="preserve">
+    <value>Zoom Slider</value>
+  </data>
+  <data name="UnhideWindow_CancelAutomationName" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="UnhideWindow_CancelHelpText" xml:space="preserve">
+    <value>Close without unhiding a window.</value>
+  </data>
+  <data name="UnhideWindow_ListAutomationName" xml:space="preserve">
+    <value>Hidden windows</value>
+  </data>
+  <data name="UnhideWindow_ListHelpText" xml:space="preserve">
+    <value>Select the window to unhide.</value>
+  </data>
+  <data name="UnhideWindow_OkAutomationName" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="UnhideWindow_OkHelpText" xml:space="preserve">
+    <value>Unhide the selected window.</value>
+  </data>
+  <data name="UnhideWindow_Title" xml:space="preserve">
+    <value>Unhide</value>
+  </data>
+  <data name="UnhideWindow_WindowLabel" xml:space="preserve">
+    <value>Unhide workbook:</value>
+  </data>
+  <data name="MainWindow_Header_ChartDesign" xml:space="preserve">
+    <value>Chart Design</value>
+  </data>
+  <data name="MainWindow_Text_Axes" xml:space="preserve">
+    <value>Axes</value>
+  </data>
+  <data name="MainWindow_Text_ChartLayouts" xml:space="preserve">
+    <value>Chart Layouts</value>
+  </data>
+  <data name="MainWindow_Text_ChartStyles" xml:space="preserve">
+    <value>Chart Styles</value>
+  </data>
+  <data name="MainWindow_Text_CurrentSelection" xml:space="preserve">
+    <value>Current Selection</value>
+  </data>
+  <data name="MainWindow_Text_Location" xml:space="preserve">
+    <value>Location</value>
+  </data>
+  <data name="MainWindow_Text_ShapeStyles" xml:space="preserve">
+    <value>Shape Styles</value>
+  </data>
+  <data name="MainWindow_Text_Type" xml:space="preserve">
+    <value>Type</value>
   </data>
 </root>

@@ -61,20 +61,25 @@ public sealed class ProtectSheetCommand : IWorkbookCommand
 public sealed class UnprotectSheetCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
+    private readonly string? _password;
     private bool _previousProtected;
     private string? _previousPassword;
     private List<SheetProtectionPermission>? _previousPermissions;
 
     public string Label => "Unprotect Sheet";
 
-    public UnprotectSheetCommand(SheetId sheetId)
+    public UnprotectSheetCommand(SheetId sheetId, string? password = null)
     {
         _sheetId = sheetId;
+        _password = password;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+        if (!ProtectionPasswordHelper.VerifyStoredPassword(sheet.ProtectionPassword, _password))
+            return new CommandOutcome(false, "The password you supplied is not correct.");
+
         _previousProtected = sheet.IsProtected;
         _previousPassword = sheet.ProtectionPassword;
         _previousPermissions = sheet.ProtectionPermissions.ToList();
@@ -236,13 +241,22 @@ public sealed class ProtectWorkbookCommand : IWorkbookCommand
 /// <summary>Remove workbook structure protection with undo support.</summary>
 public sealed class UnprotectWorkbookCommand : IWorkbookCommand
 {
+    private readonly string? _password;
     private bool _previousProtected;
     private string? _previousPassword;
 
     public string Label => "Unprotect Workbook";
 
+    public UnprotectWorkbookCommand(string? password = null)
+    {
+        _password = password;
+    }
+
     public CommandOutcome Apply(ICommandContext ctx)
     {
+        if (!ProtectionPasswordHelper.VerifyStoredPassword(ctx.Workbook.StructureProtectionPassword, _password))
+            return new CommandOutcome(false, "The password you supplied is not correct.");
+
         _previousProtected = ctx.Workbook.IsStructureProtected;
         _previousPassword = ctx.Workbook.StructureProtectionPassword;
         ctx.Workbook.IsStructureProtected = false;

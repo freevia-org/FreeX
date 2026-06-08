@@ -41,6 +41,9 @@ public partial class GridView
     /// <summary>Fired on right mouse button down over a row or column header.</summary>
     public event Action<GridHeaderContextMenuTarget, uint, System.Windows.Point>? HeaderContextMenuRequested;
 
+    /// <summary>Fired when the user activates a rendered worksheet AutoFilter dropdown button.</summary>
+    public event Action<CellAddress, System.Windows.Point>? AutoFilterDropdownRequested;
+
     /// <summary>Fired when the user activates a rendered PivotChart field button.</summary>
     public event Action<ChartModel, string, System.Windows.Point>? PivotChartFieldButtonRequested;
 
@@ -73,4 +76,10 @@ public partial class GridView
 
     /// <summary>Fired when the user finishes dragging a selected image picture crop handle.</summary>
     public event Action<Guid, double, double, double, double>? PictureCropped;
+
+    /// <summary>Fired when the user finishes placing a new drawing shape on the grid.</summary>
+    public event Action<ShapePlacementRequest>? ShapePlacementRequested;
+
+    /// <summary>Fired when the user finishes placing a new text box on the grid.</summary>
+    public event Action<TextBoxPlacementRequest>? TextBoxPlacementRequested;
 }

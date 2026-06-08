@@ -46,6 +46,18 @@ public sealed class SlicerTimelinePlannerTests
     }
 
     [Fact]
+    public void HasActiveSlicerFilter_UsesStoredSelectedItemsLikeExcelClearFilterState()
+    {
+        var slicer = new SlicerModel { Name = "Region Slicer" };
+
+        SlicerTimelinePlanner.HasActiveSlicerFilter(slicer).Should().BeFalse();
+
+        slicer.SelectedItems.Add("East");
+
+        SlicerTimelinePlanner.HasActiveSlicerFilter(slicer).Should().BeTrue();
+    }
+
+    [Fact]
     public void BuildTimelineItem_UsesSelectedDatesThenCacheDateBounds()
     {
         var timeline = new TimelineModel
@@ -64,6 +76,25 @@ public sealed class SlicerTimelinePlannerTests
         item.FieldName.Should().Be("Order Date");
         item.SelectedStartDate.Should().Be("2026-05-01");
         item.SelectedEndDate.Should().Be("2026-12-31");
+        item.HasActiveFilter.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildTimelineItem_TreatsDisplayedCacheBoundsAsUnfilteredClearState()
+    {
+        var timeline = new TimelineModel
+        {
+            Name = "Order Date Timeline",
+            CacheName = "Fallback",
+            StartDate = "2026-01-01",
+            EndDate = "2026-12-31"
+        };
+
+        var item = SlicerTimelinePlanner.BuildTimelineItem(timeline);
+
+        item.SelectedStartDate.Should().Be("2026-01-01");
+        item.SelectedEndDate.Should().Be("2026-12-31");
+        item.HasActiveFilter.Should().BeFalse();
     }
 
     [Theory]

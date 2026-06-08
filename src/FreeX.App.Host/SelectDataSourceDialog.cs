@@ -14,6 +14,7 @@ public sealed partial class SelectDataSourceDialog : Window
     private readonly ListBox _seriesList = new() { Height = 72 };
     private readonly ListBox _axisLabelsList = new() { Height = 72 };
     private readonly Action<SelectDataSourceRangeSelectionRequest>? _requestRangeSelection;
+    private readonly Func<string, SheetId?> _resolveSheetId;
     private Button? _editSeriesButton;
     private Button? _removeSeriesButton;
     private Button? _editAxisLabelsButton;
@@ -25,10 +26,12 @@ public sealed partial class SelectDataSourceDialog : Window
         string sourceRangeText,
         bool firstColumnIsCategories = true,
         Action<SelectDataSourceRangeSelectionRequest>? requestRangeSelection = null,
-        SheetId sheetId = default)
+        SheetId sheetId = default,
+        Func<string, SheetId?>? resolveSheetId = null)
     {
         _sheetId = sheetId;
         _requestRangeSelection = requestRangeSelection;
+        _resolveSheetId = resolveSheetId ?? (_ => null);
         Result = CreateResult(sourceRangeText, firstColumnIsCategories);
         Title = UiText.Get("SelectDataSource_Title");
         Width = 620;
@@ -120,7 +123,7 @@ public sealed partial class SelectDataSourceDialog : Window
 
     private bool ValidateInputs()
     {
-        if (!ChartInputParser.TryParseDataRange(_rangeBox.Text, _sheetId, out _))
+        if (!ChartInputParser.TryParseDataRange(_rangeBox.Text, _sheetId, _resolveSheetId, out _))
         {
             ShowInvalidInputWarning(UiText.Get("SelectDataSource_InvalidRangeMessage"), _rangeBox);
             return false;

@@ -38,7 +38,7 @@ public sealed class ZoomDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        var checkedPreset = FindCheckedPresetButton();
+        var checkedPreset = _presetButtons.FirstOrDefault(button => button.IsChecked == true);
         if (checkedPreset is not null)
         {
             checkedPreset.Focus();

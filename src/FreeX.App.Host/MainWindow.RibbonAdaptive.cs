@@ -1160,9 +1160,17 @@ public partial class MainWindow
 
     private static void EnsureCollapsedRibbonGroupMenuItems(ContextMenu menu)
     {
-        if (menu.Items.Count > 0 || menu.Tag is not FrameworkElement group)
+        if (menu.Tag is not FrameworkElement group)
             return;
 
+        if (menu.Items.Count > 0 &&
+            GetMenuItems(menu).Any(item => !string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(item))))
+        {
+            return;
+        }
+
+        menu.Items.Clear();
+        group.UpdateLayout();
         PopulateCollapsedRibbonGroupMenu(menu, group);
     }
 

@@ -5,6 +5,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Shell;
 using FluentAssertions;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
@@ -176,6 +177,12 @@ public sealed partial class MainWindowRibbonKeyTipTests
         public bool RedoQatIsEnabled =>
             (_window.FindName("RedoQatBtn") as Button)?.IsEnabled == true;
 
+        public bool UndoQatHistoryIsEnabled =>
+            (_window.FindName("UndoQatHistoryBtn") as Button)?.IsEnabled == true;
+
+        public bool RedoQatHistoryIsEnabled =>
+            (_window.FindName("RedoQatHistoryBtn") as Button)?.IsEnabled == true;
+
         public bool TitleBarQatIsVisible =>
             (_window.FindName("TitleBarQatPanel") as FrameworkElement)?.Visibility == Visibility.Visible;
 
@@ -341,6 +348,21 @@ public sealed partial class MainWindowRibbonKeyTipTests
             _window.FindName(name) is Button button &&
             ReferenceEquals(button.Parent, _window.FindName("BelowRibbonQatPanel"));
 
+        public IReadOnlyList<string> QuickAccessToolbarAutomationIds =>
+            QuickAccessToolbarButtons()
+                .Select(AutomationProperties.GetAutomationId)
+                .ToList();
+
+        public IReadOnlyList<string> QuickAccessToolbarKeyTips =>
+            QuickAccessToolbarButtons()
+                .Select(button => RibbonTooltip.GetKeyTip(button) ?? "")
+                .ToList();
+
+        public IReadOnlyList<bool> QuickAccessToolbarChromeHitTestVisibility =>
+            QuickAccessToolbarButtons()
+                .Select(WindowChrome.GetIsHitTestVisibleInChrome)
+                .ToList();
+
         public void ConfigureQuickAccessToolbar(IReadOnlyList<string> commandIds, bool belowRibbon)
         {
             var options = (FreeXOptions)_optionsField.GetValue(_window)!;
@@ -414,6 +436,12 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
         public ChartType? LastChartType => _workbook.Sheets[0].Charts.LastOrDefault()?.Type;
 
+        public void ClearCharts()
+        {
+            _workbook.Sheets[0].Charts.Clear();
+            PumpDispatcher();
+        }
+
         public string? ActiveMenuItemGestureText(string header) =>
             FindActiveMenuItem(header)?.InputGestureText;
 
@@ -435,6 +463,16 @@ public sealed partial class MainWindowRibbonKeyTipTests
                 .Select(element => RibbonTooltip.GetTitle(element) ?? element.Name ?? element.GetType().Name)
                 .ToList();
             return elements;
+        }
+
+        public IReadOnlyList<string> VisibleCommandKeyTipDump()
+        {
+            var scope = Enum.Parse(_scopeType, "Commands");
+            return ((System.Collections.IEnumerable)_getVisibleKeyTipElements.Invoke(_window, [scope])!)
+                .OfType<FrameworkElement>()
+                .Select(element => $"{RibbonTooltip.GetKeyTip(element)}:{RibbonTooltip.GetTitle(element) ?? element.Name ?? element.GetType().Name}")
+                .Order(StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
 
         public bool? CommandButtonIsEnabled(string name) =>
@@ -484,10 +522,28 @@ public sealed partial class MainWindowRibbonKeyTipTests
                 .Where(button => button.IsVisible);
         }
 
+        private IEnumerable<Button> QuickAccessToolbarButtons()
+        {
+            if (_window.FindName("TitleBarQatPanel") is Panel titlePanel)
+            {
+                foreach (var button in titlePanel.Children.OfType<Button>())
+                    yield return button;
+            }
+
+            if (_window.FindName("BelowRibbonQatPanel") is Panel belowRibbonPanel)
+            {
+                foreach (var button in belowRibbonPanel.Children.OfType<Button>())
+                    yield return button;
+            }
+        }
+
         private MenuItem? FindActiveMenuItem(string header) =>
             ActiveMenu is { } menu
-                ? EnumerateMenuItems(menu).FirstOrDefault(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal))
+                ? EnumerateMenuItems(menu).FirstOrDefault(item => string.Equals(NormalizeMenuHeader(item.Header), header, StringComparison.Ordinal))
                 : null;
+
+        private static string NormalizeMenuHeader(object? header) =>
+            header?.ToString()?.Replace("_", string.Empty, StringComparison.Ordinal) ?? string.Empty;
 
         public static MainWindowHarness Create(Action<Workbook>? configureWorkbook = null)
         {
@@ -700,6 +756,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
                 numberFormatBox.IsDropDownOpen = false;
             SelectActiveCell();
             _window.UpdateLayout();
+            _updateRibbonCompactMode.Invoke(_window, [true]);
             PumpDispatcher();
         }
 
@@ -825,6 +882,45 @@ public sealed partial class MainWindowRibbonKeyTipTests
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
         sheet.PivotTables.Add(pivot);
+    }
+
+    private static void ConfigureWorkbookWithChart(Workbook workbook)
+    {
+        var sheet = workbook.Sheets[0];
+        var sheetId = sheet.Id;
+        sheet.SetCell(new CellAddress(sheetId, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheetId, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheetId, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheetId, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheetId, 3, 1), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheetId, 3, 2), new NumberValue(20));
+
+        sheet.Charts.Add(new ChartModel
+        {
+            Name = "Chart 1",
+            Type = ChartType.Column,
+            DataRange = new GridRange(
+                new CellAddress(sheetId, 1, 1),
+                new CellAddress(sheetId, 3, 2)),
+            Title = "Sales"
+        });
+    }
+
+    private static void ConfigureWorkbookWithPivotAndHiddenCharts(Workbook workbook)
+    {
+        var sheet = workbook.Sheets[0];
+        sheet.Charts.Add(new ChartModel
+        {
+            Name = "Pivot Chart",
+            Type = ChartType.Column,
+            IsPivotChart = true
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Name = "Hidden Chart",
+            Type = ChartType.Line,
+            IsVisible = false
+        });
     }
 
     private static void PumpDispatcher()

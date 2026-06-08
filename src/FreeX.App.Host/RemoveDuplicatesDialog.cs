@@ -123,13 +123,8 @@ public sealed partial class RemoveDuplicatesDialog : Window
         Keyboard.Focus(firstColumnBox);
     }
 
-    private CheckBox? FindFirstColumnBox()
-    {
-        foreach (var box in _boxes)
-            return box;
-
-        return null;
-    }
+    private CheckBox? FindFirstColumnBox() =>
+        _boxes.FirstOrDefault();
 
     private void RefreshColumnLabels()
     {

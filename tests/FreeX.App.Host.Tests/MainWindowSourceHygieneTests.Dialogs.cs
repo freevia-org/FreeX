@@ -58,7 +58,7 @@ public sealed partial class MainWindowSourceHygieneTests
         drawingSource.Should().Contain("if (dialog.ShowDialog(this) != true) return;");
         drawingSource.Should().Contain("System.IO.File.ReadAllBytes(dialog.FileName)");
         drawingSource.Should().Contain("DrawingInputParser.GetImageContentType(dialog.FileName)");
-        drawingSource.Should().Contain("new InsertPictureCommand(");
+        drawingSource.Should().Contain("InsertObjectPlacementPlanner.CreateInsertPictureCommand(");
         drawingSource.Should().Contain("UiText.Format(\"MainWindowMessage_InsertPictureReadFailed\", ex.Message)");
         drawingSource.Should().Contain("SetActiveCell(range.Start);");
         drawingSource.Should().Contain("UpdateViewport();");
