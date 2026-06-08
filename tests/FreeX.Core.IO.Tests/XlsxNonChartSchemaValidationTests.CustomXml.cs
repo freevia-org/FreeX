@@ -92,6 +92,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SchemaErrors(saved).Should().BeEmpty();
         AssertCustomXmlPackage(saved);
         AssertSecondCustomXmlPackageItem(saved);
+
+        saved.Position = 0;
+        adapter.Load(saved)
+            .GetSheet("New Sheet")!
+            .GetValue(1, 1)
+            .Should()
+            .Be(new TextValue("forces full save"));
     }
 
     [Fact]
@@ -118,6 +125,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SchemaErrors(saved).Should().BeEmpty();
         AssertCustomXmlPackage(saved);
         AssertSecondCustomXmlPackageItem(saved);
+
+        saved.Position = 0;
+        adapter.Load(saved)
+            .GetSheet("New Sheet")!
+            .GetValue(1, 1)
+            .Should()
+            .Be(new TextValue("forces full save"));
     }
 
     [Fact]
