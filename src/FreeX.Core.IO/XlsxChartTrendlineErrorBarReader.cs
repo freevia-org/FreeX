@@ -226,9 +226,7 @@ internal static class XlsxChartTrendlineErrorBarReader
         if (int.TryParse(bodyProperties?.Attribute("rot")?.Value, out var rotation))
             chart.TrendlineLabelAngle = Math.Clamp(rotation / 60000.0, -90, 90);
 
-        var textProperties = textPropertiesRoot?
-            .Descendants(DrawingNs + "defRPr")
-            .FirstOrDefault();
+        var textProperties = FirstDescendant(textPropertiesRoot, DrawingNs + "defRPr");
         if (textProperties is null)
             return;
 
@@ -388,15 +386,35 @@ internal static class XlsxChartTrendlineErrorBarReader
             _ => null
         };
 
-    private static string? ReadErrorBarRangeFormula(XElement? element) =>
-        element?
-            .Descendants(ChartNs + "f")
-            .Select(formula => formula.Value)
-            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+    private static string? ReadErrorBarRangeFormula(XElement? element)
+    {
+        if (element is null)
+            return null;
+
+        foreach (var formula in element.Descendants(ChartNs + "f"))
+        {
+            var value = formula.Value;
+            if (!string.IsNullOrWhiteSpace(value))
+                return value;
+        }
+
+        return null;
+    }
 
     private static string? ReadErrorBarRangeCacheXml(XElement? element) =>
         element?
             .Element(ChartNs + "numRef")?
             .Element(ChartNs + "numCache")?
             .ToString(SaveOptions.DisableFormatting);
+
+    private static XElement? FirstDescendant(XElement? element, XName name)
+    {
+        if (element is null)
+            return null;
+
+        foreach (var descendant in element.Descendants(name))
+            return descendant;
+
+        return null;
+    }
 }
