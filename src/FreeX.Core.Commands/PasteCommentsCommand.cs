@@ -28,7 +28,7 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
 
         var sourceSheet = ctx.GetSheet(_sourceRange.Start.Sheet);
         var targetSheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(targetSheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (CommentCommandGuards.RejectIfEditObjectsBlocked(targetSheet) is { } protectedOutcome)
             return protectedOutcome;
 
         var sourceComments = _sourceRange.AllCells()
