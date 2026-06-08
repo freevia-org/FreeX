@@ -4,7 +4,7 @@ This runbook explains how the `macOS App Preview` GitHub Actions workflow produc
 
 ## Current Workflow Contract
 
-The workflow is `.github/workflows/macos-app.yml`. It runs on `workflow_dispatch`, `push` to `main`, and `pull_request` to `main`; pull request events intentionally fall back to ad-hoc signing even when secrets are present. `workflow_dispatch` includes a `distribution_candidate` input that defaults to `false`. Default hosted runs are `artifact_channel=internal-preview`, where notarization may be skipped with explicit evidence. A dispatch run with `distribution_candidate=true` is `artifact_channel=distribution-candidate` and fails unless Developer ID signing, accepted notarization, and stapler validation all complete. Only those distribution-candidate dispatches run the release publication job, which uses job-level `actions: read` and `contents: write` permissions after the matrix succeeds.
+The workflow is `.github/workflows/macos-app.yml`. It runs on `workflow_dispatch` and `pull_request` to `main`; pull request events intentionally fall back to ad-hoc signing even when secrets are present. `workflow_dispatch` includes a `distribution_candidate` input that defaults to `false`. Default hosted runs are `artifact_channel=internal-preview`, where notarization may be skipped with explicit evidence. A dispatch run with `distribution_candidate=true` is `artifact_channel=distribution-candidate` and fails unless Developer ID signing, accepted notarization, and stapler validation all complete. Only those distribution-candidate dispatches run the release publication job, which uses job-level `actions: read` and `contents: write` permissions after the matrix succeeds.
 
 The workflow builds two app artifacts:
 
@@ -117,7 +117,7 @@ Paste the base64 output into `MACOS_CODESIGN_CERTIFICATE_P12` exactly as generat
 ## Hosted Validation Steps
 
 1. Configure all six secrets above in the GitHub repository.
-2. Run `macOS App Preview` from `main` with `workflow_dispatch` and set `distribution_candidate=true`; default dispatch, push, and pull request runs remain internal previews.
+2. Run `macOS App Preview` from `main` with `workflow_dispatch` and set `distribution_candidate=true`; default dispatch and pull request runs remain internal previews.
 3. Confirm both matrix jobs complete, or inspect the diagnostics artifact for the failed runtime.
 4. Download each `freex-<run-id>-<run-attempt>-<runtime>-macos-app` artifact and the `freex-<run-id>-<run-attempt>-macos-release-assets` artifact from the run summary or with `gh run download`, preserving the wrapper directory names under the artifact root.
 5. Verify `freex-<runtime>-macos-evidence.txt` contains:

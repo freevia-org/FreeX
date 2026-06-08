@@ -35,6 +35,8 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         script.Should().Contain("live_command_key_smoke");
         script.Should().Contain("macos_launch_smoke");
         script.Should().Contain("RequireSeparateDiagnosticsArtifact");
+        script.Should().Contain("GITHUB_ACTIONS");
+        script.Should().Contain("::error title=macOS public-preview readiness::");
         script.Should().Contain("freex-$Runtime-macos-open-with-launch-smoke.txt");
         script.Should().Contain("freex-$Runtime-macos-default-open-launch-smoke.txt");
         script.Should().Contain("launchservices_default_open_boundary");
@@ -118,6 +120,29 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         result.Output.Should().Contain("macOS public-preview evidence preflight passed");
         result.Output.Should().Contain("freex-42-1-osx-arm64-macos-app");
         result.Output.Should().Contain("freex-42-1-osx-x64-macos-app");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_PassesForDownloadedWrappersWithArtifactsSubdirectory()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false, includeDiagnosticsArtifact: true);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false, includeDiagnosticsArtifact: true);
+        MoveWrapperContentsUnderArtifactsSubdirectory(temp.Path);
+        AssertNestedWrapperFile(temp.Path, "freex-42-1-osx-arm64-macos-app", "freex-osx-arm64-macos-app.zip");
+        AssertNestedWrapperFile(temp.Path, "freex-42-1-osx-arm64-macos-diagnostics", "freex-osx-arm64-macos-app.zip");
+        AssertNestedWrapperFile(temp.Path, "freex-42-1-osx-x64-macos-app", "freex-osx-x64-macos-app.zip");
+        AssertNestedWrapperFile(temp.Path, "freex-42-1-osx-x64-macos-diagnostics", "freex-osx-x64-macos-app.zip");
+
+        var result = RunPreflight(
+            temp.Path,
+            "-ExpectedRunId 42 -ExpectedRunAttempt 1 -RequireSeparateDiagnosticsArtifact");
+
+        result.ExitCode.Should().Be(0, result.Error);
+        result.Output.Should().Contain("macOS public-preview evidence preflight passed");
+        result.Output.Should().Contain("freex-42-1-osx-arm64-macos-app");
+        result.Output.Should().Contain("freex-42-1-osx-x64-macos-app");
+        result.Output.Should().Contain("artifacts");
     }
 
     [Fact]
@@ -922,6 +947,40 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         }
 
         return diagnosticsDirectory;
+    }
+
+    private static void MoveWrapperContentsUnderArtifactsSubdirectory(string root)
+    {
+        foreach (var wrapperDirectory in Directory.EnumerateDirectories(root))
+        {
+            var artifactsDirectory = Path.Combine(wrapperDirectory, "artifacts");
+            Directory.CreateDirectory(artifactsDirectory);
+
+            foreach (var file in Directory.EnumerateFiles(wrapperDirectory))
+            {
+                File.Move(
+                    file,
+                    Path.Combine(artifactsDirectory, Path.GetFileName(file)));
+            }
+
+            foreach (var directory in Directory.EnumerateDirectories(wrapperDirectory)
+                         .Where(directory => !string.Equals(
+                             directory,
+                             artifactsDirectory,
+                             StringComparison.OrdinalIgnoreCase)))
+            {
+                Directory.Move(
+                    directory,
+                    Path.Combine(artifactsDirectory, Path.GetFileName(directory)));
+            }
+        }
+    }
+
+    private static void AssertNestedWrapperFile(string root, string wrapperName, string fileName)
+    {
+        var wrapperDirectory = Path.Combine(root, wrapperName);
+        Directory.EnumerateFiles(wrapperDirectory).Should().BeEmpty();
+        File.Exists(Path.Combine(wrapperDirectory, "artifacts", fileName)).Should().BeTrue();
     }
 
     private static string CreateSyntheticAggregateReadinessArtifact(string root, params SyntheticBundle[] bundles)

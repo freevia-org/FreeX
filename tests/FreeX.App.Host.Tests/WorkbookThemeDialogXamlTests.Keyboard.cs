@@ -24,7 +24,8 @@ public sealed partial class WorkbookThemeDialogXamlTests
 
         source.Should().Contain("WorkbookThemeDialogPlanner.TryCreateTheme");
         source.Should().Contain("private void ShowInvalidThemeColor(WorkbookThemeDialogValidationError error)");
-        source.Should().Contain("ThemeColorFields().FirstOrDefault(field => field.Slot == error.Slot)");
+        source.Should().Contain("foreach (var field in ThemeColorFields())");
+        source.Should().Contain("if (field.Slot != error.Slot)");
         source.Should().Contain("FocusInvalidColorInput(field.TextBox);");
         source.Should().Contain("private static void FocusInvalidColorInput(TextBox colorBox)");
         source.Should().Contain("colorBox.Focus();");

@@ -258,11 +258,12 @@ public sealed class ReleaseAutomationWorkflowTests
     {
         var plan = WorkspaceFileLocator.ReadAllText("docs", "release/test-distribution.md");
 
-        plan.Should().Contain("Latest tester download");
+        plan.Should().Contain("Stable latest non-prerelease tester downloads");
         plan.Should().Contain("FreeX-latest-win-x64.exe");
         plan.Should().Contain("https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.exe");
         plan.Should().Contain("https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos-arm64.zip");
         plan.Should().Contain("https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos-x64.zip");
+        plan.Should().Contain("GitHub's `releases/latest` redirect remains on the latest non-prerelease tester build");
         plan.Should().Contain("FREEX_MSIX_CERTIFICATE_BASE64");
         plan.Should().Contain("publishes an unsigned MSIX for tester continuity");
         plan.Should().Contain("Installer trust validation and Store-style submission remain release-gate work.");

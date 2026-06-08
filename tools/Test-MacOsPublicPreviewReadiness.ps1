@@ -14,6 +14,27 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $validationErrors = New-Object System.Collections.Generic.List[string]
 
+function ConvertTo-GitHubWorkflowCommandValue {
+    param([string]$Value)
+
+    if ($null -eq $Value) {
+        return ""
+    }
+
+    return $Value.Replace("%", "%25").Replace("`r", "%0D").Replace("`n", "%0A")
+}
+
+function Write-GitHubErrorAnnotation {
+    param([Parameter(Mandatory = $true)][string]$Message)
+
+    if ($env:GITHUB_ACTIONS -ne "true") {
+        return
+    }
+
+    $escapedMessage = ConvertTo-GitHubWorkflowCommandValue -Value $Message
+    Write-Host "::error title=macOS public-preview readiness::$escapedMessage"
+}
+
 function Resolve-InputPath {
     param([Parameter(Mandatory = $true)][string]$Path)
 
@@ -33,6 +54,7 @@ function Add-ValidationError {
     param([Parameter(Mandatory = $true)][string]$Message)
 
     $validationErrors.Add($Message)
+    Write-GitHubErrorAnnotation -Message $Message
     Write-Error $Message -ErrorAction Continue
 }
 
@@ -1354,13 +1376,34 @@ function Find-DiagnosticsArtifactDirectories {
         [Parameter(Mandatory = $true)][string]$Runtime
     )
 
-    return @(Get-ChildItem -LiteralPath $Root -Recurse -Directory -ErrorAction SilentlyContinue |
-        Where-Object {
-            $_.Name.IndexOf($Runtime, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -and
-            $_.Name.IndexOf("macos-diagnostics", [System.StringComparison]::OrdinalIgnoreCase) -ge 0
-        } |
-        ForEach-Object { $_.FullName } |
-        Sort-Object)
+    $names = Get-ExpectedFileNames -Runtime $Runtime
+    $directories = New-Object System.Collections.Generic.List[string]
+    $candidateFiles = @()
+    $candidateFiles += @(Get-ChildItem -LiteralPath $Root -Recurse -File -Filter $names.Zip -ErrorAction SilentlyContinue)
+    $candidateFiles += @(Get-ChildItem -LiteralPath $Root -Recurse -File -Filter $names.Evidence -ErrorAction SilentlyContinue)
+
+    foreach ($file in $candidateFiles) {
+        if ($null -eq $file.Directory) {
+            continue
+        }
+
+        $identity = Get-ArtifactDownloadIdentity -Root $Root -Directory $file.Directory.FullName
+        if ($null -ne $identity) {
+            if ($identity.Runtime -ne $Runtime -or $identity.Kind -ne "diagnostics") {
+                continue
+            }
+        }
+        elseif ($file.Directory.FullName.IndexOf($Runtime, [System.StringComparison]::OrdinalIgnoreCase) -lt 0 -or
+            $file.Directory.FullName.IndexOf("macos-diagnostics", [System.StringComparison]::OrdinalIgnoreCase) -lt 0) {
+            continue
+        }
+
+        if (-not $directories.Contains($file.Directory.FullName)) {
+            $directories.Add($file.Directory.FullName)
+        }
+    }
+
+    return @($directories | Sort-Object)
 }
 
 function Test-DiagnosticsArtifact {

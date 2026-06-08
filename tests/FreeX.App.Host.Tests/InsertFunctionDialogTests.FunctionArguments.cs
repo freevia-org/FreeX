@@ -90,7 +90,9 @@ public sealed partial class InsertFunctionDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_argumentBoxes.FirstOrDefault()");
+        source.Should().Contain("TextBox? firstArgument = null;");
+        source.Should().Contain("foreach (var argumentBox in _argumentBoxes)");
+        source.Should().Contain("firstArgument = argumentBox;");
         source.Should().Contain("firstArgument.Focus();");
         source.Should().Contain("firstArgument.SelectAll();");
         source.Should().Contain("Keyboard.Focus(firstArgument);");

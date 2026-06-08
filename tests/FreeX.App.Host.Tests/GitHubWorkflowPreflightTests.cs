@@ -11,7 +11,7 @@ public sealed class GitHubWorkflowPreflightTests
     {
         var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "ci.yml");
 
-        workflow.Should().Contain("push:");
+        workflow.Should().NotContain("push:");
         workflow.Should().Contain("pull_request:");
         workflow.Should().Contain("branches:");
         workflow.Should().Contain("- main");
@@ -103,6 +103,8 @@ public sealed class GitHubWorkflowPreflightTests
     {
         var workflow = ReadMacOsAppWorkflow();
 
+        workflow.Should().NotContain("push:");
+        workflow.Should().Contain("pull_request:");
         var workflowDispatch = ExtractRequiredYamlBlock(workflow, "workflow_dispatch:");
         var distributionCandidateInput = ExtractRequiredYamlBlock(workflowDispatch, "distribution_candidate:");
         distributionCandidateInput.Should().Contain("type: boolean");
