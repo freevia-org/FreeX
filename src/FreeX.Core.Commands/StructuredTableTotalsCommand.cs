@@ -22,8 +22,7 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var table = sheet.StructuredTables.FirstOrDefault(candidate => candidate.Id == _tableId);
-        if (table is null)
+        if (!CommandGuards.TryFindStructuredTable(sheet, _tableId, out var table))
             return CommandGuards.RejectStructuredTableNotFound();
         if (!table.TotalsRowShown)
             return new CommandOutcome(false, "Table totals row is not shown.");
@@ -187,8 +186,7 @@ public sealed class SetStructuredTableTotalsRowCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var table = sheet.StructuredTables.FirstOrDefault(candidate => candidate.Id == _tableId);
-        if (table is null)
+        if (!CommandGuards.TryFindStructuredTable(sheet, _tableId, out var table))
             return CommandGuards.RejectStructuredTableNotFound();
         if (table.TotalsRowShown == _showTotalsRow)
             return new CommandOutcome(true, AffectedCells: [table.Range.End]);
