@@ -110,12 +110,23 @@ internal static class XlsxSlicerTimelineMetadataReader
         if (root is null)
             return null;
 
-        if (string.Equals(root.Name.LocalName, localName, StringComparison.OrdinalIgnoreCase))
+        if (HasLocalName(root, localName))
             return root;
 
-        return root.Elements()
-            .FirstOrDefault(element => string.Equals(element.Name.LocalName, localName, StringComparison.OrdinalIgnoreCase));
+        return FirstChildByLocalName(root, localName);
     }
+
+    private static XElement? FirstChildByLocalName(XElement root, string localName) =>
+        root.Elements().FirstOrDefault(element => HasLocalName(element, localName));
+
+    private static XElement? FirstDescendantByLocalName(XElement? root, string localName) =>
+        root?.Descendants().FirstOrDefault(element => HasLocalName(element, localName));
+
+    private static bool HasLocalName(XElement element, string localName) =>
+        string.Equals(element.Name.LocalName, localName, StringComparison.OrdinalIgnoreCase);
+
+    private static string? ReadPivotTableName(XElement? root) =>
+        FirstDescendantByLocalName(root, "pivotTable")?.Attribute("name")?.Value;
 
     private static SlicerCacheMetadata ReadSlicerCache(XDocument xml)
     {
@@ -123,7 +134,7 @@ internal static class XlsxSlicerTimelineMetadataReader
         return new SlicerCacheMetadata(
             root?.Attribute("name")?.Value ?? "",
             root?.Attribute("sourceName")?.Value,
-            root?.Descendants().FirstOrDefault(e => string.Equals(e.Name.LocalName, "pivotTable", StringComparison.OrdinalIgnoreCase))?.Attribute("name")?.Value,
+            ReadPivotTableName(root),
             root?.Descendants()
                 .Where(e => string.Equals(e.Name.LocalName, "selectedItem", StringComparison.OrdinalIgnoreCase))
                 .Select(e => e.Attribute("value")?.Value)
@@ -138,7 +149,7 @@ internal static class XlsxSlicerTimelineMetadataReader
         return new TimelineCacheMetadata(
             root?.Attribute("name")?.Value ?? "",
             root?.Attribute("sourceName")?.Value,
-            root?.Descendants().FirstOrDefault(e => string.Equals(e.Name.LocalName, "pivotTable", StringComparison.OrdinalIgnoreCase))?.Attribute("name")?.Value,
+            ReadPivotTableName(root),
             root?.Attribute("startDate")?.Value,
             root?.Attribute("endDate")?.Value,
             root?.Attribute("selectedStartDate")?.Value,
@@ -198,13 +209,12 @@ internal static class XlsxSlicerTimelineMetadataReader
         if (from is null || to is null)
             return null;
 
-        var shapeName = anchor
-            .Descendants(spreadsheetDrawingNs + "cNvPr")
-            .FirstOrDefault()
-            ?.Attribute("name")
-            ?.Value;
+        var shapeName = ReadFirstShapeName(anchor, spreadsheetDrawingNs);
         return new DrawingControlMetadata(new DrawingAnchorRange(from, to), shapeName);
     }
+
+    private static string? ReadFirstShapeName(XElement anchor, XNamespace spreadsheetDrawingNs) =>
+        anchor.Descendants(spreadsheetDrawingNs + "cNvPr").FirstOrDefault()?.Attribute("name")?.Value;
 
     private static DrawingAnchorPoint? ReadAnchorPoint(XElement? point, XNamespace spreadsheetDrawingNs)
     {
