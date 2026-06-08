@@ -11513,7 +11513,7 @@ public sealed class MainWindow : Window
         var plan = OpenRecentWorkbookMenuPlanner.Create(
             _recentFiles.Entries,
             File.Exists,
-            path => _session.TryResolveOpenTarget(path, out _, out _));
+            path => _session.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null);
         if (plan.ItemCount == 0)
         {
             menu.Items.Add(new NativeMenuItem
@@ -11541,7 +11541,9 @@ public sealed class MainWindow : Window
 
     private async Task OpenRecentWorkbookAsync(string path)
     {
-        if (!File.Exists(path))
+        if (!_session.TryResolveOpenTarget(path, out var target, out _) ||
+            target is null ||
+            !File.Exists(target.Path))
         {
             _recentFiles.Remove(path);
             RefreshNativeOpenRecentMenu(!_isOpening && !_isSaving);
@@ -11549,7 +11551,7 @@ public sealed class MainWindow : Window
             return;
         }
 
-        await OpenWorkbookPathAsync(path);
+        await OpenWorkbookPathAsync(target.Path);
     }
 
     private void RecordStartupRecentWorkbook(StartupWorkbookLoadResult source)
@@ -11560,10 +11562,12 @@ public sealed class MainWindow : Window
 
     private void RecordRecentWorkbook(string path)
     {
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        if (!_session.TryResolveOpenTarget(path, out var target, out _) ||
+            target is null ||
+            !File.Exists(target.Path))
             return;
 
-        _recentFiles.AddOrUpdate(path);
+        _recentFiles.AddOrUpdate(target.Path);
         RefreshNativeOpenRecentMenu(!_isOpening && !_isSaving);
     }
 
@@ -12230,19 +12234,19 @@ public sealed class MainWindow : Window
         foreach (var file in files)
         {
             var candidate = file.TryGetLocalPath();
-            if (string.IsNullOrWhiteSpace(candidate))
+            if (!LocalFilePath.TryNormalize(candidate, out var normalizedCandidate))
                 continue;
 
             sawLocalPath = true;
-            if (Directory.Exists(candidate))
+            if (Directory.Exists(normalizedCandidate))
                 continue;
-            if (!File.Exists(candidate))
+            if (!File.Exists(normalizedCandidate))
                 continue;
 
             sawFileCandidate = true;
-            if (_session.TryResolveOpenTarget(candidate, out _, out unsupportedMessage))
+            if (_session.TryResolveOpenTarget(normalizedCandidate, out var target, out unsupportedMessage))
             {
-                path = candidate;
+                path = target!.Path;
                 message = "";
                 return true;
             }

@@ -113,9 +113,14 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("public static (uint TopRow, uint LeftCol) CalculateViewportOrigin(");
         script.Should().Contain("WorkbookViewportScrollPlanner.Create(_session.ActiveSheet, _session.Viewport)");
         script.Should().Contain("WorkbookViewportScrollPlanner.CalculateViewportOrigin(");
+        script.Should().Contain("src\\FreeX.App.Services\\LocalFilePath.cs");
+        script.Should().Contain("public static bool TryNormalize(string? candidate, out string normalizedPath)");
+        script.Should().Contain("TryCreateExplicitUri(path, out var uri)");
         script.Should().Contain("src\\FreeX.App.Services\\OpenRecentWorkbookMenuPlanner.cs");
         script.Should().Contain("OpenRecentWorkbookMenuPlanner.Create(");
         script.Should().Contain("public const int DefaultMaximumItems = 10;");
+        script.Should().Contain("Func<string, string?> resolveOpenWorkbookPath");
+        script.Should().Contain("PlatformPathIdentityComparer.Current");
         script.Should().Contain("/Encoding /WinAnsiEncoding");
         script.Should().Contain("EncodeWinAnsiHexText(normalized)");
         script.Should().Contain("private static byte EncodeWinAnsiByte(char ch)");
@@ -1703,6 +1708,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     _openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);
                     fileMenu.Items.Add(_openRecentMenuItem);
                     RefreshNativeOpenRecentMenu(isIdle);
+                    LocalFilePath.TryNormalize(candidate, out var normalizedCandidate)
+                    Directory.Exists(normalizedCandidate)
+                    File.Exists(normalizedCandidate)
+                    _session.TryResolveOpenTarget(normalizedCandidate, out var target, out unsupportedMessage)
+                    path = target!.Path;
                     private readonly NativeMenuItem _workbookStatisticsMenuItem = new();
                     private readonly NativeMenuItem _exportPdfMenuItem = new();
                     _exportPdfMenuItem.Header = "Export to PDF...";
@@ -2016,11 +2026,12 @@ public sealed class MacOsAppReadinessPreflightTests
                     OpenRecentWorkbookMenuPlanner.Create(
                     _recentFiles.Entries
                     File.Exists
-                    path => _session.TryResolveOpenTarget(path, out _, out _)
+                    path => _session.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null
                     plan.ItemCount == 0
                     foreach (var entry in plan.Items)
                     Header = entry.Header
-                    _recentFiles.AddOrUpdate(path);
+                    await OpenWorkbookPathAsync(target.Path);
+                    _recentFiles.AddOrUpdate(target.Path);
                     RecordRecentWorkbook(target.Path);
                     _closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();
                     fileMenu.Items.Add(_newWorkbookMenuItem);
@@ -3384,6 +3395,47 @@ public sealed class MacOsAppReadinessPreflightTests
 
         WriteFile(
             root,
+            "src/FreeX.App.Services/LocalFilePath.cs",
+            """
+            namespace FreeX.App.Services;
+
+            public static class LocalFilePath
+            {
+                public static bool TryNormalize(string? candidate, out string normalizedPath)
+                {
+                    normalizedPath = "";
+                    var path = candidate!.Trim();
+                    if (TryCreateExplicitUri(path, out var uri))
+                    {
+                        if (!uri.IsFile)
+                            return false;
+
+                        path = uri.LocalPath;
+                    }
+
+                    path.Contains('\0', StringComparison.Ordinal);
+                    IsUnixAbsolutePath(path);
+                    Path.GetFullPath(path);
+                    return true;
+                }
+
+                private static bool TryCreateExplicitUri(string candidate, out Uri uri)
+                {
+                    Uri.TryCreate(candidate, UriKind.Absolute, out var parsed);
+                    IsWindowsDrivePath(candidate, parsed.Scheme);
+                    uri = parsed;
+                    return true;
+                }
+
+                private static bool IsWindowsDrivePath(string candidate, string scheme) =>
+                    char.IsAsciiLetter(candidate[0]);
+
+                private static bool IsUnixAbsolutePath(string path) => true;
+            }
+            """);
+
+        WriteFile(
+            root,
             "src/FreeX.App.Services/OpenRecentWorkbookMenuPlanner.cs",
             """
             namespace FreeX.App.Services;
@@ -3408,19 +3460,35 @@ public sealed class MacOsAppReadinessPreflightTests
                     Func<string, bool> canOpenWorkbook,
                     int maximumItems = DefaultMaximumItems)
                 {
+                    return Create(
+                        entries,
+                        fileExists,
+                        path => canOpenWorkbook(path) ? path : null,
+                        maximumItems);
+                }
+
+                public static OpenRecentWorkbookMenuPlan Create(
+                    IEnumerable<RecentFileEntry> entries,
+                    Func<string, bool> fileExists,
+                    Func<string, string?> resolveOpenWorkbookPath,
+                    int maximumItems = DefaultMaximumItems)
+                {
                     if (maximumItems < 1)
                         return new OpenRecentWorkbookMenuPlan([]);
 
+                    var seenPaths = new HashSet<string>(PlatformPathIdentityComparer.Current);
                     return new OpenRecentWorkbookMenuPlan(
                         entries
                             .Where(entry => !string.IsNullOrWhiteSpace(entry.Path))
-                            .Where(entry => fileExists(entry.Path) && canOpenWorkbook(entry.Path))
                             .OrderByDescending(entry => entry.LastOpened)
+                            .Select(entry => (Entry: entry, Path: resolveOpenWorkbookPath(entry.Path)))
+                            .Where(item => !string.IsNullOrWhiteSpace(item.Path) && fileExists(item.Path))
+                            .Where(item => seenPaths.Add(item.Path!))
                             .Take(maximumItems)
-                            .Select(entry => new OpenRecentWorkbookMenuItemPlan(
-                                entry.Path,
-                                FormatHeader(entry.Path),
-                                entry.LastOpened))
+                            .Select(item => new OpenRecentWorkbookMenuItemPlan(
+                                item.Path!,
+                                FormatHeader(item.Path!),
+                                item.Entry.LastOpened))
                             .ToList());
                 }
 
