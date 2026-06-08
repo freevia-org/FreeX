@@ -1,3 +1,4 @@
+using FreeX.App.Services;
 using Sentry;
 
 namespace FreeX.App.Host;
