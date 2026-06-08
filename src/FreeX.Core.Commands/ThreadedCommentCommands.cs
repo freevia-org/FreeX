@@ -29,7 +29,7 @@ public sealed class SetThreadedCommentCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (CommentCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
         _hadPrevious = sheet.ThreadedComments.TryGetValue(_address, out _previousComment);
@@ -74,7 +74,7 @@ public sealed class AddThreadedCommentReplyCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (CommentCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
         if (!sheet.ThreadedComments.TryGetValue(_address, out _previous))
             return new CommandOutcome(false, "No threaded comment exists at the selected cell.");
@@ -118,7 +118,7 @@ public sealed class UpdateThreadedCommentTextCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (CommentCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
         if (!sheet.ThreadedComments.TryGetValue(_address, out _previous))
             return new CommandOutcome(false, "No threaded comment exists at the selected cell.");
@@ -167,7 +167,7 @@ public sealed class UpdateThreadedCommentReplyCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (CommentCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
         if (!sheet.ThreadedComments.TryGetValue(_address, out _previous))
             return new CommandOutcome(false, "No threaded comment exists at the selected cell.");
@@ -226,7 +226,7 @@ public sealed class DeleteThreadedCommentReplyCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (CommentCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
         if (!sheet.ThreadedComments.TryGetValue(_address, out _previous))
             return new CommandOutcome(false, "No threaded comment exists at the selected cell.");
@@ -282,7 +282,7 @@ public sealed class ResolveThreadedCommentCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (CommentCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
         if (!sheet.ThreadedComments.TryGetValue(_address, out _previous))
             return new CommandOutcome(false, "No threaded comment exists at the selected cell.");
@@ -333,7 +333,7 @@ public sealed class ApplyThreadedCommentChangesCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (CommentCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
         if (!sheet.ThreadedComments.TryGetValue(_address, out _previous))
             return new CommandOutcome(false, "No threaded comment exists at the selected cell.");
@@ -393,7 +393,7 @@ public sealed class DeleteThreadedCommentCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (CommentCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
         if (!sheet.ThreadedComments.TryGetValue(_address, out _previousComment))
