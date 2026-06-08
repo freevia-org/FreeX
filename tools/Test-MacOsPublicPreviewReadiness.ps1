@@ -943,14 +943,45 @@ function Test-LaunchSmoke {
     Assert-KeyPositiveInteger -Map $launch -Key "viewport_columns" -Minimum 1 -Label "$Runtime LaunchServices smoke"
     Assert-KeyEquals -Map $launch -Key "native_open_recent_menu_item" -ExpectedValue "true" -Label "$Runtime LaunchServices smoke"
     Assert-KeyPositiveInteger -Map $launch -Key "native_open_recent_item_count" -Minimum 1 -Label "$Runtime LaunchServices smoke"
-    Assert-KeyEquals -Map $launch -Key "live_command_key_smoke_required" -ExpectedValue "true" -Label "$Runtime command key smoke"
-    Assert-KeyEquals -Map $launch -Key "live_command_key_smoke" -ExpectedValue "passed" -Label "$Runtime command key smoke"
-    Assert-KeyEquals -Map $launch -Key "live_command_key_smoke_attempted" -ExpectedValue "true" -Label "$Runtime command key smoke"
-    Assert-KeyEquals -Map $launch -Key "live_command_key_smoke_ready" -ExpectedValue "true" -Label "$Runtime command key smoke"
-    Assert-KeyEquals -Map $launch -Key "live_cmd_select_all_state_changed" -ExpectedValue "true" -Label "$Runtime command key smoke"
-    Assert-KeyEquals -Map $launch -Key "live_cmd_bold_state_changed" -ExpectedValue "true" -Label "$Runtime command key smoke"
-    Assert-KeyEquals -Map $launch -Key "live_cmd_italic_state_changed" -ExpectedValue "true" -Label "$Runtime command key smoke"
-    Assert-KeyEquals -Map $launch -Key "live_cmd_underline_state_changed" -ExpectedValue "true" -Label "$Runtime command key smoke"
+    Assert-KeyEquals -Map $launch -Key "command_key_smoke" -ExpectedValue "passed" -Label "$Runtime command key smoke"
+    Assert-KeyEquals -Map $launch -Key "command_key_smoke_attempted" -ExpectedValue "true" -Label "$Runtime command key smoke"
+    foreach ($key in @(
+            "cmd_new_workbook_menu_gesture",
+            "cmd_open_menu_gesture",
+            "cmd_save_menu_gesture",
+            "cmd_save_as_menu_gesture",
+            "cmd_close_workbook_menu_gesture",
+            "cmd_quit_menu_gesture",
+            "cmd_select_all_menu_gesture",
+            "cmd_find_menu_gesture",
+            "cmd_find_direct_route_source_guard",
+            "cmd_page_up_direct_route_source_guard",
+            "cmd_page_down_direct_route_source_guard",
+            "cmd_bold_menu_gesture",
+            "cmd_italic_menu_gesture",
+            "cmd_underline_menu_gesture")) {
+        Assert-KeyEquals -Map $launch -Key $key -ExpectedValue "true" -Label "$Runtime command key smoke"
+    }
+
+    Assert-KeyPresent -Map $launch -Key "live_command_key_smoke_required" -Label "$Runtime command key smoke"
+    $liveCommandKeyRequiredValues = @(Get-KeyValues -Map $launch -Key "live_command_key_smoke_required")
+    Assert-KeyHasNoConflictingDuplicateValues -Values $liveCommandKeyRequiredValues -Key "live_command_key_smoke_required" -Label "$Runtime command key smoke" -ExpectedDescription "Expected 'live_command_key_smoke_required=true' or 'live_command_key_smoke_required=false'." | Out-Null
+    $liveCommandKeyRequired = Get-LatestKeyValue -Map $launch -Key "live_command_key_smoke_required"
+    if ($liveCommandKeyRequired -eq "true") {
+        Assert-KeyEquals -Map $launch -Key "live_command_key_smoke" -ExpectedValue "passed" -Label "$Runtime command key smoke"
+        Assert-KeyEquals -Map $launch -Key "live_command_key_smoke_attempted" -ExpectedValue "true" -Label "$Runtime command key smoke"
+        Assert-KeyEquals -Map $launch -Key "live_command_key_smoke_ready" -ExpectedValue "true" -Label "$Runtime command key smoke"
+        Assert-KeyEquals -Map $launch -Key "live_cmd_select_all_state_changed" -ExpectedValue "true" -Label "$Runtime command key smoke"
+        Assert-KeyEquals -Map $launch -Key "live_cmd_bold_state_changed" -ExpectedValue "true" -Label "$Runtime command key smoke"
+        Assert-KeyEquals -Map $launch -Key "live_cmd_italic_state_changed" -ExpectedValue "true" -Label "$Runtime command key smoke"
+        Assert-KeyEquals -Map $launch -Key "live_cmd_underline_state_changed" -ExpectedValue "true" -Label "$Runtime command key smoke"
+    }
+    elseif ($liveCommandKeyRequired -eq "false") {
+        Assert-KeyEquals -Map $launch -Key "live_command_key_smoke" -ExpectedValue "not_required" -Label "$Runtime command key smoke"
+    }
+    else {
+        Add-ValidationError "$Runtime command key smoke must include 'live_command_key_smoke_required=true' or 'live_command_key_smoke_required=false'. Actual value(s): $($liveCommandKeyRequiredValues -join ', ')."
+    }
 }
 
 function Test-OpenWithSmoke {

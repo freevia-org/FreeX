@@ -28,6 +28,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         script.Should().Contain("FreeX-latest-macos-distribution-candidate-manifest.json");
         script.Should().Contain("default_open_launch_smoke_report");
         script.Should().Contain("format_cells_style_roundtrip_count");
+        script.Should().Contain("command_key_smoke_attempted");
         script.Should().Contain("live_command_key_smoke");
         script.Should().Contain("macos_launch_smoke");
         script.Should().Contain("RequireSeparateDiagnosticsArtifact");
@@ -72,7 +73,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
     }
 
     [Fact]
-    public void ReadinessPreflight_PassesForSyntheticInternalPreviewBundles()
+    public void ReadinessPreflight_PassesForSyntheticInternalPreviewBundlesWithExplicitLiveCommandKeySmoke()
     {
         using var temp = new TestTemporaryDirectory();
         CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
@@ -84,6 +85,21 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         result.Output.Should().Contain("macOS public-preview evidence preflight passed");
         result.Output.Should().Contain("osx-arm64");
         result.Output.Should().Contain("osx-x64");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_PassesWhenHostedLaunchSmokeMarksLiveCommandKeySmokeNotRequired()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
+        var x64 = CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false);
+        MarkLiveCommandKeySmokeNotRequired(arm64);
+        MarkLiveCommandKeySmokeNotRequired(x64);
+
+        var result = RunPreflight(temp.Path);
+
+        result.ExitCode.Should().Be(0, result.Error);
+        result.Output.Should().Contain("macOS public-preview evidence preflight passed");
     }
 
     [Fact]
@@ -442,7 +458,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
     [InlineData("live_cmd_bold_state_changed=true", "live_cmd_bold_state_changed=false", "live_cmd_bold_state_changed=true")]
     [InlineData("live_cmd_italic_state_changed=true", "live_cmd_italic_state_changed=false", "live_cmd_italic_state_changed=true")]
     [InlineData("live_cmd_underline_state_changed=true", "live_cmd_underline_state_changed=false", "live_cmd_underline_state_changed=true")]
-    public void ReadinessPreflight_FailsWhenCommandKeySmokeEvidenceIsStaleOrWeakened(
+    public void ReadinessPreflight_FailsWhenExplicitLiveCommandKeySmokeEvidenceIsStaleOrWeakened(
         string oldValue,
         string newValue,
         string expectedNeedle)
@@ -450,6 +466,28 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         using var temp = new TestTemporaryDirectory();
         var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
         CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false);
+        ReplaceInFile(GetRuntimeArtifactPath(arm64, names => names.LaunchSmoke), oldValue, newValue);
+
+        var result = RunPreflight(temp.Path);
+
+        AssertPreflightRejected(result, "osx-arm64 command key smoke", expectedNeedle);
+    }
+
+    [Theory]
+    [InlineData("command_key_smoke=passed", "command_key_smoke=failed", "command_key_smoke=passed")]
+    [InlineData("command_key_smoke_attempted=true", "command_key_smoke_attempted=false", "command_key_smoke_attempted=true")]
+    [InlineData("cmd_find_direct_route_source_guard=true", "cmd_find_direct_route_source_guard=false", "cmd_find_direct_route_source_guard=true")]
+    [InlineData("cmd_bold_menu_gesture=true", "cmd_bold_menu_gesture=false", "cmd_bold_menu_gesture=true")]
+    public void ReadinessPreflight_FailsWhenHostedCommandKeySmokeLosesNonLiveProof(
+        string oldValue,
+        string newValue,
+        string expectedNeedle)
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
+        var x64 = CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false);
+        MarkLiveCommandKeySmokeNotRequired(arm64);
+        MarkLiveCommandKeySmokeNotRequired(x64);
         ReplaceInFile(GetRuntimeArtifactPath(arm64, names => names.LaunchSmoke), oldValue, newValue);
 
         var result = RunPreflight(temp.Path);
@@ -673,6 +711,22 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
                 "viewport_columns=8",
                 "native_open_recent_menu_item=true",
                 "native_open_recent_item_count=1",
+                "command_key_smoke=passed",
+                "command_key_smoke_attempted=true",
+                "cmd_new_workbook_menu_gesture=true",
+                "cmd_open_menu_gesture=true",
+                "cmd_save_menu_gesture=true",
+                "cmd_save_as_menu_gesture=true",
+                "cmd_close_workbook_menu_gesture=true",
+                "cmd_quit_menu_gesture=true",
+                "cmd_select_all_menu_gesture=true",
+                "cmd_find_menu_gesture=true",
+                "cmd_find_direct_route_source_guard=true",
+                "cmd_page_up_direct_route_source_guard=true",
+                "cmd_page_down_direct_route_source_guard=true",
+                "cmd_bold_menu_gesture=true",
+                "cmd_italic_menu_gesture=true",
+                "cmd_underline_menu_gesture=true",
                 "live_command_key_smoke_required=true",
                 "live_command_key_smoke=passed",
                 "live_command_key_smoke_attempted=true",
@@ -901,6 +955,19 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         var lines = File.ReadAllLines(path);
         lines.Should().Contain(line => line.Contains(value, StringComparison.Ordinal));
         File.WriteAllLines(path, lines.Where(line => !line.Contains(value, StringComparison.Ordinal)));
+    }
+
+    private static void MarkLiveCommandKeySmokeNotRequired(SyntheticBundle bundle)
+    {
+        var launchSmokePath = GetRuntimeArtifactPath(bundle, names => names.LaunchSmoke);
+        ReplaceInFile(launchSmokePath, "live_command_key_smoke_required=true", "live_command_key_smoke_required=false");
+        ReplaceInFile(launchSmokePath, "live_command_key_smoke=passed", "live_command_key_smoke=not_required");
+        ReplaceInFile(launchSmokePath, "live_command_key_smoke_attempted=true", "live_command_key_smoke_attempted=false");
+        ReplaceInFile(launchSmokePath, "live_command_key_smoke_ready=true", "live_command_key_smoke_ready=false");
+        ReplaceInFile(launchSmokePath, "live_cmd_select_all_state_changed=true", "live_cmd_select_all_state_changed=false");
+        ReplaceInFile(launchSmokePath, "live_cmd_bold_state_changed=true", "live_cmd_bold_state_changed=false");
+        ReplaceInFile(launchSmokePath, "live_cmd_italic_state_changed=true", "live_cmd_italic_state_changed=false");
+        ReplaceInFile(launchSmokePath, "live_cmd_underline_state_changed=true", "live_cmd_underline_state_changed=false");
     }
 
     private static string GetRuntimeArtifactPath(SyntheticBundle bundle, Func<RuntimeArtifactNames, string> selectName) =>
