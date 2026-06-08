@@ -1143,6 +1143,8 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
+        var beforeMetadata = CaptureWorkbookMetadataSummary(workbook);
+        beforeMetadata.WatchedCells.Should().NotBeEmpty("the generated cell-watches corpus row must expose model metadata");
         workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-cell-watches-edit"));
 
         using var saved = new MemoryStream();
@@ -1150,6 +1152,13 @@ public partial class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-cell-watches-001");
         AssertWorksheetCellWatches(saved, "generated-worksheet-cell-watches-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        CaptureWorkbookMetadataSummary(reloaded).WatchedCells.Should().BeEquivalentTo(
+            beforeMetadata.WatchedCells,
+            options => options.WithStrictOrdering(),
+            "watched-cell model metadata should survive ordinary save and reload");
     }
 
     [Fact]
