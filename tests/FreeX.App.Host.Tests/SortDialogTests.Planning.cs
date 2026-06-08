@@ -47,7 +47,7 @@ public sealed partial class SortDialogTests
     [Fact]
     public void PlannerHotPaths_AvoidLinqIteratorChains()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("SortDialog.Planning.cs");
+        var source = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", "SortDialogPlanner.cs");
 
         source.Should().NotContain(".Append(");
         source.Should().NotContain(".Select(");
@@ -97,17 +97,18 @@ public sealed partial class SortDialogTests
     {
         var planningSource = DialogSourceTestSupport.ReadHostSources("SortDialog.Planning.cs");
 
-        planningSource.Should().Contain("internal static class SortDialogPlanner");
-        planningSource.Should().Contain("SortDialogPlanner.BuildSortKeys(levels)");
-        planningSource.Should().Contain("SortDialogPlanner.BuildOrderChoices(sortOn)");
-        planningSource.Should().Contain("SortDialogPlanner.AddLevel(levels, columnOffset, ascending)");
-        planningSource.Should().Contain("SortDialogPlanner.RemoveLevel(levels, index)");
-        planningSource.Should().Contain("SortDialogPlanner.CopyLevel(levels, index)");
-        planningSource.Should().Contain("SortDialogPlanner.MoveLevel(levels, index, direction)");
-        planningSource.Should().Contain("SortDialogPlanner.UpdateLevel(levels, index, columnOffset, ascending)");
-        planningSource.Should().Contain("SortDialogPlanner.BuildColumnChoices(range)");
-        planningSource.Should().Contain("SortDialogPlanner.BuildColumnChoices(sheet, range, hasHeaders)");
-        planningSource.Should().Contain("SortDialogPlanner.BuildRowChoices(range)");
+        planningSource.Should().Contain("using FreeX.App.Services;");
+        planningSource.Should().NotContain("internal static class SortDialogPlanner");
+        planningSource.Should().Contain("SortDialogPlanner.BuildSortKeys(levels, PlannerText)");
+        planningSource.Should().Contain("SortDialogPlanner.BuildOrderChoices(sortOn, PlannerText)");
+        planningSource.Should().Contain("SortDialogPlanner.AddLevel(levels, columnOffset, ascending, PlannerText)");
+        planningSource.Should().Contain("SortDialogPlanner.RemoveLevel(levels, index, PlannerText)");
+        planningSource.Should().Contain("SortDialogPlanner.CopyLevel(levels, index, PlannerText)");
+        planningSource.Should().Contain("SortDialogPlanner.MoveLevel(levels, index, direction, PlannerText)");
+        planningSource.Should().Contain("SortDialogPlanner.UpdateLevel(levels, index, columnOffset, ascending, PlannerText)");
+        planningSource.Should().Contain("SortDialogPlanner.BuildColumnChoices(range, PlannerText)");
+        planningSource.Should().Contain("SortDialogPlanner.BuildColumnChoices(sheet, range, hasHeaders, PlannerText)");
+        planningSource.Should().Contain("SortDialogPlanner.BuildRowChoices(range, PlannerText)");
         planningSource.Should().Contain("SortDialogPlanner.BuildColorChoices(workbook, sheet, range)");
         planningSource.Should().Contain("SortDialogPlanner.BuildColorChoices(workbook, sheet, range, sortOn)");
         planningSource.Should().Contain("SortDialogPlanner.ExcludeHeaderRow(range, hasHeaders)");

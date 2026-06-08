@@ -45,7 +45,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         var (maxOccupied, movedSnapshot) = CaptureMovedCells(sheet);
         if (maxOccupied > 0 && maxOccupied + _count > Model.CellAddress.MaxRow)
             return new CommandOutcome(false,
-                ErrorMessage: $"Cannot insert {_count} row(s): data would be pushed past the last row ({Model.CellAddress.MaxRow}).");
+                ErrorMessage: CommandGuards.CannotInsertRowsPastLastRow(_count));
 
         _addressStateSnapshot = RowColumnShiftHelpers.CaptureAddressBearingState(ctx.Workbook, sheet);
 
