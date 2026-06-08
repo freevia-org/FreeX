@@ -8,8 +8,7 @@ internal static class XlsxSparklineMapper
 {
     public static IReadOnlyList<SparklineModel> Read(XDocument worksheetXml)
     {
-        var extensionList = worksheetXml.Root?.Elements()
-            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "extLst", StringComparison.OrdinalIgnoreCase));
+        var extensionList = FindChildByLocalName(worksheetXml.Root, "extLst");
         if (extensionList is null)
             return [];
 
@@ -28,10 +27,8 @@ internal static class XlsxSparklineMapper
             foreach (var sparkline in group.Descendants().Where(element =>
                          string.Equals(element.Name.LocalName, "sparkline", StringComparison.OrdinalIgnoreCase)))
             {
-                var formula = sparkline.Elements().FirstOrDefault(element =>
-                    string.Equals(element.Name.LocalName, "f", StringComparison.OrdinalIgnoreCase))?.Value;
-                var location = sparkline.Elements().FirstOrDefault(element =>
-                    string.Equals(element.Name.LocalName, "sqref", StringComparison.OrdinalIgnoreCase))?.Value;
+                var formula = FindChildByLocalName(sparkline, "f")?.Value;
+                var location = FindChildByLocalName(sparkline, "sqref")?.Value;
                 if (string.IsNullOrWhiteSpace(formula) || string.IsNullOrWhiteSpace(location))
                     continue;
 
@@ -128,6 +125,10 @@ internal static class XlsxSparklineMapper
             XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
         }
     }
+
+    private static XElement? FindChildByLocalName(XElement? element, string localName) =>
+        element?.Elements().FirstOrDefault(child =>
+            string.Equals(child.Name.LocalName, localName, StringComparison.OrdinalIgnoreCase));
 
     private static XElement ToSparklineGroupXml(
         Sheet sheet,
