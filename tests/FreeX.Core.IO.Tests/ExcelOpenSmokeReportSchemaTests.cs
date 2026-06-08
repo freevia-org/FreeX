@@ -64,6 +64,15 @@ public sealed class ExcelOpenSmokeReportSchemaTests
         expectationBlock.Should().Contain("MinFreeXReopenedComments = reopen");
     }
 
+    [Fact]
+    public void SupportedMetadataExpectations_EnforceDataValidationCountPackageReopenedCounter()
+    {
+        var programSource = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ExcelOpenSmoke", "Program.cs");
+        var expectationBlock = ExtractExpectationBlock(programSource, "generated-dv-count-package-003");
+
+        expectationBlock.Should().Contain("MinFreeXReopenedDataValidations = saveReopen ? 10 : 0");
+    }
+
     private static void AssertCoreValidationCalls(
         string source,
         string pathExpression,
