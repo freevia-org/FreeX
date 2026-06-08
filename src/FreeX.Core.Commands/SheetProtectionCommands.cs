@@ -112,7 +112,7 @@ public sealed class AllowEditRangeCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (_range.Start.Sheet != _sheetId || _range.End.Sheet != _sheetId)
-            return new CommandOutcome(false, "Allowed edit range must be on the target sheet.");
+            return CommandGuards.RejectAllowedEditRangeOnTargetSheet();
 
         var sheet = ctx.GetSheet(_sheetId);
         if (!sheet.AllowEditRanges.Contains(_range))
@@ -149,7 +149,7 @@ public sealed class RemoveAllowEditRangeCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (_range.Start.Sheet != _sheetId || _range.End.Sheet != _sheetId)
-            return new CommandOutcome(false, "Allowed edit range must be on the target sheet.");
+            return CommandGuards.RejectAllowedEditRangeOnTargetSheet();
 
         var ranges = ctx.GetSheet(_sheetId).AllowEditRanges;
         _removedIndex = ranges.IndexOf(_range);
