@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using FluentAssertions;
 
 namespace FreeX.App.Services.Tests;
@@ -15,6 +16,15 @@ public sealed class AvaloniaProjectPortabilityGuardTests
         ".targets"
     };
 
+    private static readonly string[] AllowedProjectReferences =
+    [
+        "FreeX.App.Services",
+        "FreeX.Core.Calc",
+        "FreeX.Core.Commands",
+        "FreeX.Core.IO",
+        "FreeX.Core.Model"
+    ];
+
     private static readonly (string Description, Regex Pattern)[] ForbiddenPatterns =
     [
         ("System.Windows namespace", new(@"(?<![\w.])System\.Windows(?:\.[A-Za-z_]\w*)?(?![\w.])", DefaultRegexOptions)),
@@ -27,12 +37,39 @@ public sealed class AvaloniaProjectPortabilityGuardTests
         ("Windows-targeted framework", new(@"(?<![\w.-])net\d+(?:\.\d+)?-windows(?:\d+(?:\.\d+)*)?(?![\w.-])", DefaultRegexOptions | RegexOptions.IgnoreCase)),
         ("Windows Forms project marker", new(@"(?<![\w])UseWindowsForms(?![\w])", DefaultRegexOptions | RegexOptions.IgnoreCase)),
         ("WindowsDesktop framework reference", new(@"(?<![\w.])Microsoft\.WindowsDesktop\.App(?:\.(?:WPF|WindowsForms))?(?![\w.])", DefaultRegexOptions)),
+        ("WPF assembly reference", new(@"(?<![\w.])(?:PresentationCore|PresentationFramework|System\.Xaml|WindowsBase|WindowsFormsIntegration)(?![\w.])", DefaultRegexOptions)),
+        ("WinForms dependency marker", new(@"(?<![\w.])(?:System\.Windows\.Forms|WinForms|WindowsForms)(?![\w.])", DefaultRegexOptions | RegexOptions.IgnoreCase)),
         ("AppKit namespace", new(@"(?<![\w.])AppKit(?:\.[A-Za-z_]\w*)?(?![\w.])", DefaultRegexOptions)),
         ("Foundation namespace", new(@"(?<![\w.])Foundation(?:\.[A-Za-z_]\w*)?(?![\w.])", DefaultRegexOptions)),
         ("ObjCRuntime namespace", new(@"(?<![\w.])ObjCRuntime(?:\.[A-Za-z_]\w*)?(?![\w.])", DefaultRegexOptions)),
         ("NSSharingService type", new(@"(?<![\w.])NSSharingService(?![\w.])", DefaultRegexOptions)),
         ("NSSharingServicePicker type", new(@"(?<![\w.])NSSharingServicePicker(?![\w.])", DefaultRegexOptions))
     ];
+
+    [Fact]
+    public void AvaloniaProjectReferences_StayInsidePortableAppBoundary()
+    {
+        var projectPath = RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "FreeX.App.Avalonia.csproj");
+        var project = XDocument.Load(projectPath);
+
+        var projectReferences = ProjectItemIncludes(project, "ProjectReference")
+            .Select(ProjectReferenceName)
+            .ToArray();
+
+        projectReferences.Should().Equal(
+            AllowedProjectReferences,
+            "the Avalonia app path must stay explicitly bounded to app services and core projects, not the Windows/WPF host projects");
+
+        var dependencyViolations = ProjectDependencyMarkers(project)
+            .SelectMany(marker => ForbiddenPatterns
+                .Where(forbidden => forbidden.Pattern.IsMatch(marker))
+                .Select(forbidden => $"{forbidden.Description}: {marker}"))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        dependencyViolations.Should().BeEmpty(
+            "the Avalonia project must not acquire WPF, WinForms, System.Windows, Microsoft.Win32, FreeX.App.Host, or FreeX.App.UI dependencies or project references");
+    }
 
     [Fact]
     public void AvaloniaProjectSources_DoNotReferenceDesktopOrNativeMacOsDependenciesWithoutCompileStrategy()
@@ -74,6 +111,45 @@ public sealed class AvaloniaProjectPortabilityGuardTests
         var segments = path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         return !segments.Contains("bin", StringComparer.OrdinalIgnoreCase)
             && !segments.Contains("obj", StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static IEnumerable<string> ProjectDependencyMarkers(XDocument project)
+    {
+        if (project.Root?.Attribute("Sdk")?.Value is { Length: > 0 } sdk)
+            yield return $"Project Sdk={sdk}";
+
+        foreach (var itemName in new[] { "ProjectReference", "PackageReference", "FrameworkReference", "Reference" })
+        {
+            foreach (var include in ProjectItemIncludes(project, itemName))
+                yield return $"{itemName} Include={include}";
+        }
+
+        foreach (var propertyName in new[] { "TargetFramework", "TargetFrameworks", "UseWPF", "UseWindowsForms" })
+        {
+            foreach (var value in ProjectPropertyValues(project, propertyName))
+                yield return $"{propertyName}={value}";
+        }
+    }
+
+    private static IEnumerable<string> ProjectItemIncludes(XDocument project, string itemName) =>
+        project
+            .Descendants()
+            .Where(element => element.Name.LocalName == itemName)
+            .Select(element => element.Attribute("Include")?.Value)
+            .Where(include => !string.IsNullOrWhiteSpace(include))
+            .Select(include => include!);
+
+    private static IEnumerable<string> ProjectPropertyValues(XDocument project, string propertyName) =>
+        project
+            .Descendants()
+            .Where(element => element.Name.LocalName == propertyName)
+            .Select(element => element.Value)
+            .Where(value => !string.IsNullOrWhiteSpace(value));
+
+    private static string ProjectReferenceName(string include)
+    {
+        var fileName = include.Split('\\', '/').Last();
+        return Path.GetFileNameWithoutExtension(fileName);
     }
 
     private static IEnumerable<SourceViolation> FindViolations(string path, string repositoryRoot)
