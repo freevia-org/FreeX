@@ -95,12 +95,16 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("GitHub Actions > `macOS App Preview` > the completed run");
         source.Should().Contain("freex-<run-id>-<run-attempt>-osx-arm64-macos-app");
         source.Should().Contain("freex-<run-id>-<run-attempt>-osx-x64-macos-app");
-        source.Should().Contain("Internal-preview workflow outputs remain Actions artifacts only");
-        source.Should().Contain("distribution-candidate dispatches also run a guarded publication job");
+        source.Should().Contain("Internal-preview workflow outputs can also be bundled into the normal `Tester Release` GitHub Release when `include_macos_preview=true`");
+        source.Should().Contain("FreeX-latest-macos-arm64.zip");
+        source.Should().Contain("FreeX-latest-macos-x64.zip");
+        source.Should().Contain("FreeX-latest-macos-<runtime>-instructions.md");
+        source.Should().Contain("FreeX-latest-macos-<runtime>-evidence.txt");
+        source.Should().Contain("Distribution-candidate dispatches also run a guarded publication job");
         source.Should().Contain("Signed and internal ad-hoc outputs use the same artifact names");
         source.Should().Contain("Use `osx-arm64` for Apple Silicon Macs and `osx-x64` for Intel Macs");
         source.Should().Contain("Actions artifact wrapper");
-        source.Should().Contain("Preserve the `freex-<run-id>-<run-attempt>-<runtime>-macos-app` wrapper directory names under the artifact root");
+        source.Should().Contain("Preserve the `freex-<run-id>-<run-attempt>-<runtime>-macos-app` and `freex-<run-id>-<run-attempt>-macos-release-assets` wrapper directory names under the artifact root");
         source.Should().Contain("Do not flatten wrapper contents directly into the artifact root");
         source.Should().Contain("-ExpectedRunId <run-id>");
         source.Should().Contain("-ExpectedRunAttempt <run-attempt>");
@@ -117,6 +121,10 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("stapler_validated");
         source.Should().Contain("zip_sha256");
         source.Should().Contain("Control-click or right-click > Open");
+        source.Should().Contain("System Settings > Privacy & Security");
+        source.Should().Contain("Open Anyway");
+        source.Should().Contain("Do not disable Gatekeeper globally");
+        source.Should().Contain("Tester-facing warning for both platforms");
         source.Should().Contain("Public distribution still requires Developer ID signing, accepted notarization, and stapling evidence.");
     }
 
