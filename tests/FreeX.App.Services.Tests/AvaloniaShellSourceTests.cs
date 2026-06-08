@@ -1490,13 +1490,76 @@ public sealed class AvaloniaShellSourceTests
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowGoalSeekDialogAsync()", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);
-        var nextMethodIndex = normalizedSource.IndexOf("\n    private async Task ShowDataValidationDialogAsync()", handlerIndex, StringComparison.Ordinal);
+        var nextMethodIndex = normalizedSource.IndexOf("\n    private async Task ShowDataTableDialogAsync()", handlerIndex, StringComparison.Ordinal);
         nextMethodIndex.Should().BeGreaterThan(handlerIndex);
         var routeSource = normalizedSource[handlerIndex..nextMethodIndex];
 
         routeSource.Should().NotContain("GoalSeekService.Seek");
         routeSource.Should().NotContain("new GoalSeekCommand");
         routeSource.Should().NotContain("SetCell(");
+        routeSource.Should().NotContain("DataTransferManager");
+        routeSource.Should().NotContain("WindowInteropHelper");
+        routeSource.Should().NotContain("Microsoft.Win32");
+        routeSource.Should().NotContain("System.Windows");
+    }
+
+    [Fact]
+    public void MainWindow_WiresNativeDataTableThroughSharedPlannerSessionAndCompactDialog()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "DataTablePlanner.cs"));
+        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        source.Should().Contain("private readonly NativeMenuItem _dataTableMenuItem = new();");
+        source.Should().Contain("_dataTableMenuItem.Header = \"Data Table...\";");
+        source.Should().Contain("_dataTableMenuItem.Click += async (_, _) => await ShowDataTableDialogAsync();");
+        source.Should().Contain("_dataTableMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1 && _session.SelectedRange.ColCount > 1;");
+        source.Should().Contain("menu.Items.Add(_goalSeekMenuItem);");
+        source.Should().Contain("menu.Items.Add(_dataTableMenuItem);");
+
+        source.Should().Contain("private async Task ShowDataTableDialogAsync()");
+        source.Should().Contain("if (!TryCommitPendingFormulaEdit())");
+        source.Should().Contain("var plan = await ShowDataTableInputDialogAsync();");
+        source.Should().Contain("var result = _session.ExecuteDataTablePlan(plan);");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Data Table failed.\");");
+        source.Should().Contain("RefreshShell($\"Created {FormatDataTableMode(plan)} Data Table for {tableRange}\");");
+
+        source.Should().Contain("private async Task<DataTablePlan?> ShowDataTableInputDialogAsync()");
+        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"DataTableCompactDialog\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(rowInputBox, \"DataTableRowInputCellBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(columnInputBox, \"DataTableColumnInputCellBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(errorText, \"DataTableErrorText\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"DataTableOkButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"DataTableCancelButton\");");
+        source.Should().Contain("DataTablePlanner.CreatePlan(");
+        source.Should().Contain("_session.ActiveSheet");
+        source.Should().Contain("_session.SelectedRange");
+        source.Should().Contain("rowInputBox.Text");
+        source.Should().Contain("columnInputBox.Text");
+        source.Should().Contain("sheetName => _session.Workbook.GetSheet(sheetName)?.Id");
+        source.Should().Contain("FocusDataTableErrorField(planResult.Status, rowInputBox, columnInputBox);");
+        source.Should().Contain("private static string FormatDataTableMode(DataTablePlan plan)");
+        source.Should().Contain("private static string FormatDataTablePlanError(DataTablePlanResult result)");
+        source.Should().Contain("private static void FocusDataTableErrorField(");
+        source.Should().Contain("private static StackPanel CreateDataTableField(string label, Control control)");
+
+        sessionSource.Should().Contain("public WorkbookCellEditResult ExecuteDataTablePlan(DataTablePlan plan)");
+        sessionSource.Should().Contain("plan.CreateCommand()");
+        sessionSource.Should().Contain("ApplySuccessfulRangeEditResult(result, plan.OutputRange);");
+        plannerSource.Should().Contain("public static DataTablePlanResult CreatePlan(");
+        plannerSource.Should().Contain("public IWorkbookCommand CreateCommand()");
+
+        var handlerIndex = normalizedSource.IndexOf("private async Task ShowDataTableDialogAsync()", StringComparison.Ordinal);
+        handlerIndex.Should().BeGreaterThanOrEqualTo(0);
+        var nextMethodIndex = normalizedSource.IndexOf("\n    private async Task ShowDataValidationDialogAsync()", handlerIndex, StringComparison.Ordinal);
+        nextMethodIndex.Should().BeGreaterThan(handlerIndex);
+        var routeSource = normalizedSource[handlerIndex..nextMethodIndex];
+
+        routeSource.Should().NotContain("new OneVariableDataTableCommand");
+        routeSource.Should().NotContain("new TwoVariableDataTableCommand");
+        routeSource.Should().NotContain("new DataTableDialog");
+        routeSource.Should().NotContain("FreeX.App.Host");
         routeSource.Should().NotContain("DataTransferManager");
         routeSource.Should().NotContain("WindowInteropHelper");
         routeSource.Should().NotContain("Microsoft.Win32");
