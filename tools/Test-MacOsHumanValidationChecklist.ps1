@@ -171,6 +171,7 @@ function Test-TemplateValue {
         "Apple Silicon / Intel",
         "osx-arm64 / osx-x64",
         "Pass / Fail",
+        "Not implemented / Pass / Fail",
         "Pass / Fail / Internal-only",
         "Yes / No"
     )
@@ -628,6 +629,59 @@ function Test-VoiceOverKnownIssuesReviewConsistency {
     Assert-TextIncludesValue -Text $knownIssuesEvidence -ExpectedValue "Accessibility Known Issues" -Label "VoiceOver Smoke 'Known issues review'"
 }
 
+function Test-NativeShareSheetReadiness {
+    param([Parameter(Mandatory = $true)][object]$Table)
+
+    Assert-TableContainsHeaders -Table $Table -ExpectedHeaders @(
+        "Gate",
+        "Expected result when native AppKit share sheet is implemented",
+        "Actual result",
+        "Status",
+        "Evidence"
+    )
+
+    $expectedRows = @(
+        "Native AppKit share sheet implementation status",
+        "Saved workbook opens native share sheet",
+        "Cancel leaves workbook and file unchanged",
+        "Share target receives workbook file",
+        "Existing share fallback still works",
+        "Keyboard focus after open and cancel",
+        "VoiceOver announcement and navigation"
+    )
+    Assert-TableContainsLabels -Table $Table -LabelColumn "Gate" -ExpectedLabels $expectedRows
+
+    $implementationRow = Get-TableRowByLabel -Table $Table -LabelColumn "Gate" -Label "Native AppKit share sheet implementation status"
+    if ($null -eq $implementationRow) {
+        return
+    }
+
+    $implementationStatus = Get-CellValue -Row $implementationRow -Column "Status"
+    Assert-AllowedValue -Value $implementationStatus -AllowedValues @("Pass", "Not implemented") -Label "Future Native Share Sheet Readiness 'Native AppKit share sheet implementation status' status"
+
+    $nativeShareSheetImplemented = [string]::Equals($implementationStatus, "Pass", [System.StringComparison]::OrdinalIgnoreCase)
+    $nativeShareSheetNotImplemented = [string]::Equals($implementationStatus, "Not implemented", [System.StringComparison]::OrdinalIgnoreCase)
+    if (-not $nativeShareSheetImplemented -and -not $nativeShareSheetNotImplemented) {
+        return
+    }
+
+    $requiredStatus = "Pass"
+    if ($nativeShareSheetNotImplemented) {
+        $requiredStatus = "Not implemented"
+    }
+
+    foreach ($row in $Table.Rows) {
+        $gate = Get-CellValue -Row $row -Column "Gate"
+        if ([string]::IsNullOrWhiteSpace($gate)) {
+            Add-ValidationError "Checklist section '$($Table.Section)' has a row with a blank 'Gate' value."
+            continue
+        }
+
+        Assert-AllowedValue -Value (Get-CellValue -Row $row -Column "Status") -AllowedValues @($requiredStatus) -Label "$($Table.Section) '$gate' status"
+        Assert-AnyEvidenceValue -Row $row -Columns @("Actual result", "Evidence") -Label "$($Table.Section) '$gate'"
+    }
+}
+
 function Test-LogAndArtifactCollection {
     param([Parameter(Mandatory = $true)][object]$Table)
 
@@ -799,6 +853,11 @@ if ($null -ne $workbook) {
         "Recent files"
     )
     Test-StatusTable -Table $workbook -LabelColumn "Step" -StatusColumn "Status" -EvidenceColumns @("Actual result", "Evidence")
+}
+
+$nativeShareSheet = Get-RequiredTable -Tables $tables -Section "Future Native Share Sheet Readiness"
+if ($null -ne $nativeShareSheet) {
+    Test-NativeShareSheetReadiness -Table $nativeShareSheet
 }
 
 $commandKey = Get-RequiredTable -Tables $tables -Section "Command-Key Menu Behavior"
