@@ -75,11 +75,10 @@ public static class StructuredReferenceResolver
                         sheet,
                         table,
                         currentAddress,
-                        table.Columns.FirstOrDefault()?.Name ?? "",
-                        table.Columns.LastOrDefault()?.Name ?? "");
+                        FirstColumnNameOrEmpty(table),
+                        LastColumnNameOrEmpty(table));
 
-                var columnIndex = table.Columns.FindIndex(column =>
-                    string.Equals(column.Name, selector, StringComparison.OrdinalIgnoreCase));
+                var columnIndex = FindColumnIndex(table, selector);
                 if (columnIndex < 0)
                     return null;
 
@@ -119,8 +118,7 @@ public static class StructuredReferenceResolver
                 if (currentAddress.Value.Col < table.Range.Start.Col || currentAddress.Value.Col > table.Range.End.Col)
                     continue;
 
-                var columnIndex = table.Columns.FindIndex(column =>
-                    string.Equals(column.Name, columnName, StringComparison.OrdinalIgnoreCase));
+                var columnIndex = FindColumnIndex(table, columnName);
                 if (columnIndex < 0)
                     return null;
 
@@ -158,8 +156,7 @@ public static class StructuredReferenceResolver
         string section,
         string columnName)
     {
-        var columnIndex = table.Columns.FindIndex(column =>
-            string.Equals(column.Name, columnName, StringComparison.OrdinalIgnoreCase));
+        var columnIndex = FindColumnIndex(table, columnName);
         if (columnIndex < 0)
             return null;
 
@@ -301,9 +298,17 @@ public static class StructuredReferenceResolver
         return cleaned.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList();
     }
 
+    private static string FirstColumnNameOrEmpty(StructuredTableModel table) =>
+        table.Columns.FirstOrDefault()?.Name ?? "";
+
+    private static string LastColumnNameOrEmpty(StructuredTableModel table) =>
+        table.Columns.LastOrDefault()?.Name ?? "";
+
     private static int FindColumnIndex(StructuredTableModel table, string columnName) =>
-        table.Columns.FindIndex(column =>
-            string.Equals(column.Name, columnName, StringComparison.OrdinalIgnoreCase));
+        table.Columns.FindIndex(column => ColumnNameMatches(column, columnName));
+
+    private static bool ColumnNameMatches(StructuredTableColumnModel column, string columnName) =>
+        string.Equals(column.Name, columnName, StringComparison.OrdinalIgnoreCase);
 
     private static bool IsThisRowSection(string selector) =>
         string.Equals(selector.Trim(), "#THIS ROW", StringComparison.OrdinalIgnoreCase);
