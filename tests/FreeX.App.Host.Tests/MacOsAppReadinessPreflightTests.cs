@@ -2103,7 +2103,13 @@ public sealed class MacOsAppReadinessPreflightTests
                     Key.Home => GetEdgeSheetTabId(first: true);
                     Key.End => GetEdgeSheetTabId(first: false);
                     Math.Clamp(targetIndex, 0, _session.SheetTabs.Count - 1);
-                    FirstOrDefault(item => item.IsEnabled)?.Focus();
+                    FocusFirstEnabledSheetTabMenuItem(items);
+                    private static void FocusFirstEnabledSheetTabMenuItem(IEnumerable<Control> items);
+                    foreach (var item in items);
+                    item is MenuItem { IsEnabled: true } menuItem;
+                    menuItem.Focus();
+                    button.Tag is SheetId tag &&
+                    tag == sheetId;
                     if (!args.GetCurrentPoint(this).Properties.IsLeftButtonPressed);
                     var selectRange = modifiers.HasFlag(KeyModifiers.Shift);
                     var toggle = modifiers.HasFlag(KeyModifiers.Control) || modifiers.HasFlag(KeyModifiers.Meta);
@@ -2391,8 +2397,10 @@ public sealed class MacOsAppReadinessPreflightTests
                 private SheetId? GetEdgeSheetTabId(bool first) => null;
                 private bool FocusActiveSheetTab() => true;
                 private bool FocusSheetTab(SheetId sheetId) => true;
-                private static void SheetTabContextMenu_Opened(object? sender, RoutedEventArgs args) { }
-                private Button? FindSheetTabButton(SheetId sheetId) => button.Tag is SheetId tag && tag == sheetId ? new() : null;
+                private static void SheetTabContextMenu_Opened(object? sender, RoutedEventArgs args) { FocusFirstEnabledSheetTabMenuItem([]); }
+                private static void FocusFirstEnabledSheetTabMenuItem(IEnumerable<Control> items) { foreach (var item in items) { if (item is MenuItem { IsEnabled: true } menuItem) { menuItem.Focus(); return; } } }
+                private Button? FindSheetTabButton(SheetId sheetId) => button.Tag is SheetId tag &&
+                    tag == sheetId ? new() : null;
                 private bool HasSheetTabButton(Func<Button, bool> predicate) => true;
                 private void SelectSheetFromPointer(SheetId sheetId, PointerPressedEventArgs args) { }
                 private NativeMenu CreateNativeSheetTabColorMenu() => new();

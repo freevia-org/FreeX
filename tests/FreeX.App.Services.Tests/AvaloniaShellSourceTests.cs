@@ -3323,10 +3323,14 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private bool FocusActiveSheetTab()");
         source.Should().Contain("private bool FocusSheetTab(SheetId sheetId)");
         source.Should().Contain("private static void SheetTabContextMenu_Opened(object? sender, RoutedEventArgs args)");
-        source.Should().Contain("FirstOrDefault(item => item.IsEnabled)?");
-        source.Should().Contain(".Focus();");
+        source.Should().Contain("FocusFirstEnabledSheetTabMenuItem(items);");
+        source.Should().Contain("private static void FocusFirstEnabledSheetTabMenuItem(IEnumerable<Control> items)");
+        source.Should().Contain("foreach (var item in items)");
+        source.Should().Contain("item is MenuItem { IsEnabled: true } menuItem");
+        source.Should().Contain("menuItem.Focus();");
         source.Should().Contain("private Button? FindSheetTabButton(SheetId sheetId)");
-        source.Should().Contain("button.Tag is SheetId tag && tag == sheetId");
+        source.Should().Contain("button.Tag is SheetId tag &&");
+        source.Should().Contain("tag == sheetId");
         source.Should().Contain("button.PointerPressed += (_, args) => SelectSheetFromPointer(tab.Id, args);");
         source.Should().Contain("private void SelectSheetFromPointer(SheetId sheetId, PointerPressedEventArgs args)");
         source.Should().Contain("if (!args.GetCurrentPoint(this).Properties.IsLeftButtonPressed)");

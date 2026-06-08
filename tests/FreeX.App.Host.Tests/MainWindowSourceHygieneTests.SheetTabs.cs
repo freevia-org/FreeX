@@ -394,7 +394,10 @@ public sealed partial class MainWindowSourceHygieneTests
 
         sheetTabsSource.Should().Contain("contextMenu.Opened += SheetTabContextMenu_Opened;");
         sheetTabsSource.Should().Contain("private static void SheetTabContextMenu_Opened(object sender, RoutedEventArgs e)");
-        sheetTabsSource.Should().Contain("contextMenu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled)");
+        sheetTabsSource.Should().Contain("private static MenuItem? FindFirstEnabledMenuItem(ContextMenu contextMenu)");
+        sheetTabsSource.Should().Contain("foreach (var item in contextMenu.Items)");
+        sheetTabsSource.Should().Contain("item is MenuItem { IsEnabled: true } menuItem");
+        sheetTabsSource.Should().Contain("var firstEnabledItem = FindFirstEnabledMenuItem(contextMenu);");
         sheetTabsSource.Should().Contain("Keyboard.Focus(firstEnabledItem);");
     }
 
