@@ -882,6 +882,10 @@ jobs:
             echo "macos_launch_smoke=skipped_host_arch_mismatch" > "$launch_smoke_report"
             echo "macos_launch_smoke=skipped_host_arch_mismatch" > "$open_with_report"
             echo "macos_launch_smoke=skipped_host_arch_mismatch" > "$default_open_report"
+            echo "app_artifact_upload_blocked=host_arch_mismatch" >> "$evidence_path"
+            rm -f "$zip_path" "$zip_path.sha256"
+            echo "Host/runtime architecture mismatch for $runtime on $host_arch cannot publish a macOS app artifact." | tee -a "$smoke_log" >&2
+            exit 1
           fi
 
           tester_channel_summary="This artifact is a macOS port validation build. Internal-preview artifacts are not a public release channel; distribution-candidate artifacts must show Developer ID signing, accepted notarization, stapler validation, and accepted Gatekeeper assessment in evidence."
@@ -952,6 +956,30 @@ jobs:
 
           When filing feedback, include the runtime ($runtime), the GitHub Actions run, freex-$runtime-macos-evidence.txt, the matching macOS diagnostics artifact, and the smoke logs when relevant.
           EOF
+
+      - name: Require hosted smoke before app artifact upload
+        shell: bash
+        env:
+          FREEX_RUNTIME: ${{ matrix.runtime }}
+        run: |
+          set -euo pipefail
+
+          runtime="$FREEX_RUNTIME"
+          artifact_root="$GITHUB_WORKSPACE/artifacts"
+          evidence_path="$artifact_root/freex-$runtime-macos-evidence.txt"
+          launch_smoke_report="$artifact_root/freex-$runtime-macos-launch-smoke.txt"
+          open_with_report="$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt"
+          default_open_report="$artifact_root/freex-$runtime-macos-default-open-launch-smoke.txt"
+
+          if grep -q "^smoke_status=skipped_host_arch_mismatch$" "$evidence_path"; then
+            echo "Host/runtime architecture mismatch for $runtime cannot publish a macOS app artifact." >&2
+            exit 1
+          fi
+
+          grep -q "^smoke_status=passed$" "$evidence_path"
+          grep -q "^macos_launch_smoke=passed$" "$launch_smoke_report"
+          grep -q "^macos_launch_smoke=passed$" "$open_with_report"
+          grep -q "^macos_launch_smoke=passed$" "$default_open_report"
 
       - name: Upload app artifact
         uses: actions/upload-artifact@v7
@@ -1109,6 +1137,7 @@ jobs:
               "github_run_id=$($env:GITHUB_RUN_ID)",
               "github_run_attempt=$($env:GITHUB_RUN_ATTEMPT)",
               "distribution_readiness=distribution_candidate_ready",
+              "smoke_status=passed",
               "codesign_verified=true",
               "codesign_mode=developer-id",
               "notarization_status=accepted",
@@ -1123,6 +1152,20 @@ jobs:
               "zip_sha256="
             )) {
               Assert-ContainsRequiredText -Text $evidenceText -Needle $marker -Label "$runtime evidence"
+            }
+
+            $packagingSmokeText = Get-Content -LiteralPath $packagingSmokePath -Raw
+            foreach ($marker in @("Packaging smoke opened", "format_cells_style_roundtrip=true", "edited, saved, and reopened")) {
+              Assert-ContainsRequiredText -Text $packagingSmokeText -Needle $marker -Label "$runtime packaging smoke"
+            }
+
+            foreach ($smokeReport in @(
+              [ordered]@{ Path = $launchSmokePath; Label = "$runtime launch smoke" },
+              [ordered]@{ Path = $openWithSmokePath; Label = "$runtime Open With launch smoke" },
+              [ordered]@{ Path = $defaultOpenSmokePath; Label = "$runtime default-open launch smoke" }
+            )) {
+              $smokeReportText = Get-Content -LiteralPath ([string]$smokeReport.Path) -Raw
+              Assert-ContainsRequiredText -Text $smokeReportText -Needle "macos_launch_smoke=passed" -Label ([string]$smokeReport.Label)
             }
 
             $notarizationText = Get-Content -LiteralPath $notarizationLogPath -Raw
@@ -1201,6 +1244,7 @@ jobs:
               "artifact_channel=distribution-candidate",
               "distribution_candidate=true",
               "distribution_readiness=distribution_candidate_ready",
+              "smoke_status=passed",
               "codesign_mode=developer-id",
               "notarization_status=accepted",
               "stapler_validated=true",
@@ -1218,7 +1262,7 @@ jobs:
           Set-Content -LiteralPath $instructionsPath -Encoding ascii -Value @"
           # FreeX macOS Distribution Candidate
 
-          This release was published only after both hosted runtime artifacts completed and this publication job revalidated distribution-candidate evidence for Developer ID signing, accepted notarization, stapler validation, and accepted Gatekeeper assessment.
+          This release was published only after both hosted runtime artifacts completed and this publication job revalidated distribution-candidate smoke evidence, Developer ID signing, accepted notarization, stapler validation, and accepted Gatekeeper assessment.
 
           Commit: $($env:GITHUB_SHA)
           Run: $($env:GITHUB_RUN_ID)
@@ -1233,7 +1277,7 @@ jobs:
           - FreeX-latest-macos-x64.zip.sha256
           - FreeX-latest-macos-distribution-candidate-manifest.json
 
-          Each runtime also publishes stable evidence, packaging smoke, launch smoke, Open With launch smoke, default-open launch smoke, notarization log, and tester-instruction assets. Reject the candidate if the evidence does not show artifact_channel=distribution-candidate, distribution_readiness=distribution_candidate_ready, codesign_mode=developer-id, notarization_status=accepted, stapler_validated=true, gatekeeper_assessment_status=accepted, and gatekeeper_assessment_source=Notarized Developer ID.
+          Each runtime also publishes stable evidence, packaging smoke, launch smoke, Open With launch smoke, default-open launch smoke, notarization log, and tester-instruction assets. Reject the candidate if the evidence does not show artifact_channel=distribution-candidate, distribution_readiness=distribution_candidate_ready, smoke_status=passed, codesign_mode=developer-id, notarization_status=accepted, stapler_validated=true, gatekeeper_assessment_status=accepted, and gatekeeper_assessment_source=Notarized Developer ID.
 
           ## Verify
 

@@ -147,6 +147,7 @@ public sealed class GitHubWorkflowPreflightTests
         {
             "- name: Build app project",
             "- name: Publish app bundle",
+            "- name: Require hosted smoke before app artifact upload",
             "- name: Upload app artifact",
             "- name: Upload app diagnostics"
         })
@@ -156,6 +157,42 @@ public sealed class GitHubWorkflowPreflightTests
 
         var releaseJob = ExtractRequiredYamlBlock(workflow, "publish-distribution-candidate:");
         releaseJob.Should().NotContain("dotnet test");
+    }
+
+    [Fact]
+    public void MacOsAppWorkflow_BlocksHostArchitectureMismatchBeforeAppArtifactUpload()
+    {
+        var workflow = ReadMacOsAppWorkflow();
+        var appJob = ExtractRequiredYamlBlock(workflow, "macos-app:");
+        var publishStep = ExtractRequiredYamlBlock(appJob, "- name: Publish app bundle");
+
+        publishStep.Should().Contain("smoke_status=skipped_host_arch_mismatch");
+        publishStep.Should().Contain("app_artifact_upload_blocked=host_arch_mismatch");
+        publishStep.Should().Contain("rm -f \"$zip_path\" \"$zip_path.sha256\"");
+        publishStep.Should().Contain("Host/runtime architecture mismatch for $runtime on $host_arch cannot publish a macOS app artifact.");
+        publishStep.Should().Contain("echo \"Host/runtime architecture mismatch for $runtime on $host_arch cannot publish a macOS app artifact.\" | tee -a \"$smoke_log\" >&2\n            exit 1");
+        publishStep.IndexOf("smoke_status=skipped_host_arch_mismatch", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(publishStep.IndexOf("Host/runtime architecture mismatch for $runtime on $host_arch cannot publish a macOS app artifact.", StringComparison.Ordinal));
+        publishStep.IndexOf("rm -f \"$zip_path\" \"$zip_path.sha256\"", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(publishStep.IndexOf("Host/runtime architecture mismatch for $runtime on $host_arch cannot publish a macOS app artifact.", StringComparison.Ordinal));
+
+        var hostedSmokeGate = ExtractRequiredYamlBlock(appJob, "- name: Require hosted smoke before app artifact upload");
+        hostedSmokeGate.Should().Contain("smoke_status=skipped_host_arch_mismatch");
+        hostedSmokeGate.Should().Contain("grep -q \"^smoke_status=passed$\" \"$evidence_path\"");
+        hostedSmokeGate.Should().Contain("grep -q \"^macos_launch_smoke=passed$\" \"$launch_smoke_report\"");
+        hostedSmokeGate.Should().Contain("grep -q \"^macos_launch_smoke=passed$\" \"$open_with_report\"");
+        hostedSmokeGate.Should().Contain("grep -q \"^macos_launch_smoke=passed$\" \"$default_open_report\"");
+
+        appJob.IndexOf("- name: Require hosted smoke before app artifact upload", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(appJob.IndexOf("- name: Upload app artifact", StringComparison.Ordinal));
+
+        var releaseJob = ExtractRequiredYamlBlock(workflow, "publish-distribution-candidate:");
+        releaseJob.Should().Contain("\"smoke_status=passed\"");
+        releaseJob.Should().Contain("$packagingSmokeText = Get-Content -LiteralPath $packagingSmokePath -Raw");
+        releaseJob.Should().Contain("Assert-ContainsRequiredText -Text $smokeReportText -Needle \"macos_launch_smoke=passed\"");
     }
 
     [Fact]
