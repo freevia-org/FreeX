@@ -450,7 +450,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 if (string.IsNullOrWhiteSpace(partName))
                     continue;
 
-                var normalizedPartName = XlsxPackagePath.NormalizeZipPath(partName.Trim().TrimStart('/').Replace('\\', '/'));
+                var normalizedPartName = XlsxPackagePath.NormalizePackagePath(partName.Trim());
                 if (IsCustomRibbonPart(normalizedPartName) && archive.GetEntry(normalizedPartName) is null)
                     return true;
             }
