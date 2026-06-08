@@ -35,9 +35,7 @@ public static partial class XlsxChartPartReader
             .ToList();
         if (chartExSeries.Count > 0)
         {
-            var hasParetoLine = chartExSeries.Any(series =>
-                string.Equals(series.Attribute("layoutId")?.Value, "paretoLine", StringComparison.OrdinalIgnoreCase));
-            var primarySeries = FindPrimaryChartExSeries(chartExSeries);
+            var primarySeries = FindPrimaryChartExSeries(chartExSeries, out var hasParetoLine);
             if (primarySeries is not null && ToChartExChartType(primarySeries.Attribute("layoutId")?.Value, hasParetoLine) is { } chartType)
                 return (primarySeries.Parent ?? primarySeries, chartType);
         }
@@ -46,12 +44,34 @@ public static partial class XlsxChartPartReader
         return mapChart is null ? null : (mapChart, ChartType.Map);
     }
 
-    private static XElement? FindPrimaryChartExSeries(IEnumerable<XElement> chartExSeries) =>
-        chartExSeries.FirstOrDefault(series =>
-            !string.Equals(series.Attribute("layoutId")?.Value, "paretoLine", StringComparison.OrdinalIgnoreCase));
+    private static XElement? FindPrimaryChartExSeries(IEnumerable<XElement> chartExSeries, out bool hasParetoLine)
+    {
+        hasParetoLine = false;
+        XElement? primarySeries = null;
+        foreach (var series in chartExSeries)
+        {
+            if (string.Equals(series.Attribute("layoutId")?.Value, "paretoLine", StringComparison.OrdinalIgnoreCase))
+            {
+                hasParetoLine = true;
+                continue;
+            }
 
-    private static XElement? FindMapChartElement(XElement plotArea) =>
-        plotArea.Descendants().FirstOrDefault(IsMapChartElement);
+            primarySeries ??= series;
+        }
+
+        return primarySeries;
+    }
+
+    private static XElement? FindMapChartElement(XElement plotArea)
+    {
+        foreach (var element in plotArea.Descendants())
+        {
+            if (IsMapChartElement(element))
+                return element;
+        }
+
+        return null;
+    }
 
     private static ChartType? ToChartExChartType(string? layoutId, bool hasParetoLine) =>
         layoutId?.ToLowerInvariant() switch
@@ -258,13 +278,30 @@ public static partial class XlsxChartPartReader
         return string.IsNullOrWhiteSpace(dataId) ? null : FindChartExData(chartXml, dataId);
     }
 
-    private static XElement? FindChartExData(XDocument chartXml, string dataId) =>
-        chartXml.Root?
-            .Descendants()
-            .FirstOrDefault(element => IsChartExDataElement(element, dataId));
+    private static XElement? FindChartExData(XDocument chartXml, string dataId)
+    {
+        if (chartXml.Root is not { } root)
+            return null;
 
-    private static XElement? FirstChildElementByLocalName(XElement element, string localName) =>
-        element.Elements().FirstOrDefault(child => child.Name.LocalName == localName);
+        foreach (var element in root.Descendants())
+        {
+            if (IsChartExDataElement(element, dataId))
+                return element;
+        }
+
+        return null;
+    }
+
+    private static XElement? FirstChildElementByLocalName(XElement element, string localName)
+    {
+        foreach (var child in element.Elements())
+        {
+            if (child.Name.LocalName == localName)
+                return child;
+        }
+
+        return null;
+    }
 
     private static string? ReadChartExSeriesDataId(XElement series) =>
         FirstChildElementByLocalName(series, "dataId")?
@@ -277,6 +314,17 @@ public static partial class XlsxChartPartReader
 
     private static bool IsMapChartElement(XElement element) =>
         element.Name.LocalName is "geoChart" or "mapChart" or "regionMapChart";
+
+    private static XElement? FindFirstMapChartElement(XElement plotArea)
+    {
+        foreach (var element in plotArea.Descendants())
+        {
+            if (IsMapChartElement(element))
+                return element;
+        }
+
+        return null;
+    }
 
     private static bool TryReadThreeDBarChart(
         XDocument chartXml,
