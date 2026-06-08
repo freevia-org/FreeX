@@ -2076,36 +2076,131 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
-    public void PasteSpecialClipboardAtActiveCell_RejectsMultipleSelectedRanges()
+    public void PasteSpecialClipboardAtActiveCell_ValuesModePastesToMatchingMultipleSelectedRangesPreservesSelectionAndUndo()
     {
         var workbook = CreateWorkbook();
         var sheet = workbook.Sheets.Single();
         var a1 = new CellAddress(sheet.Id, 1, 1);
-        var c1 = new CellAddress(sheet.Id, 1, 3);
-        var e1 = new CellAddress(sheet.Id, 1, 5);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c3 = new CellAddress(sheet.Id, 3, 3);
+        var d3 = new CellAddress(sheet.Id, 3, 4);
+        var f5 = new CellAddress(sheet.Id, 5, 6);
+        var g5 = new CellAddress(sheet.Id, 5, 7);
         sheet.SetCell(a1, new NumberValue(42));
-        sheet.SetCell(c1, new TextValue("left"));
-        sheet.SetCell(e1, new TextValue("right"));
+        sheet.SetCell(b1, new TextValue("West"));
+        sheet.SetCell(c3, new TextValue("old c3"));
+        sheet.SetCell(d3, new TextValue("old d3"));
+        sheet.SetCell(f5, new TextValue("old f5"));
+        sheet.SetCell(g5, new TextValue("old g5"));
         var session = CreateSession(new StartupWorkbookLoadResult(
             workbook,
             "Book.fxl",
             "Opened .fxl.",
             IsFallback: false));
-        session.SelectCell(a1);
+        session.SelectRange(new GridRange(a1, b1));
         var clipboardText = session.CopySelectedRangeText();
-        session.SelectRange(new GridRange(c1, e1));
-        session.GoToSpecial(
-            GoToSpecialKind.Constants,
-            new GoToSpecialOptions(GoToSpecialValueTypes.Text));
+        var firstTarget = new GridRange(c3, d3);
+        var secondTarget = new GridRange(f5, g5);
+        session.SelectRanges(firstTarget, [firstTarget, secondTarget]);
+
+        var result = session.PasteSpecialClipboardAtActiveCell(clipboardText, PasteCellsMode.Values, default);
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().Equal(c3, d3, f5, g5);
+        session.SelectedRange.Should().Be(firstTarget);
+        session.SelectedRanges.Should().Equal(firstTarget, secondTarget);
+        session.ActiveCell.Should().Be(c3);
+        sheet.GetValue(c3).Should().Be(new NumberValue(42));
+        sheet.GetValue(d3).Should().Be(new TextValue("West"));
+        sheet.GetValue(f5).Should().Be(new NumberValue(42));
+        sheet.GetValue(g5).Should().Be(new TextValue("West"));
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.GetValue(c3).Should().Be(new TextValue("old c3"));
+        sheet.GetValue(d3).Should().Be(new TextValue("old d3"));
+        sheet.GetValue(f5).Should().Be(new TextValue("old f5"));
+        sheet.GetValue(g5).Should().Be(new TextValue("old g5"));
+    }
+
+    [Fact]
+    public void PasteSpecialClipboardAtActiveCell_RejectsMultipleSelectedRangesWithMismatchedPasteSize()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        var e1 = new CellAddress(sheet.Id, 1, 5);
+        var f1 = new CellAddress(sheet.Id, 1, 6);
+        sheet.SetCell(a1, new NumberValue(42));
+        sheet.SetCell(b1, new TextValue("West"));
+        sheet.SetCell(c1, new TextValue("left"));
+        sheet.SetCell(e1, new TextValue("middle"));
+        sheet.SetCell(f1, new TextValue("right"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b1));
+        var clipboardText = session.CopySelectedRangeText();
+        var shortTarget = new GridRange(c1, c1);
+        var matchingTarget = new GridRange(e1, f1);
+        session.SelectRanges(shortTarget, [shortTarget, matchingTarget]);
 
         var result = session.PasteSpecialClipboardAtActiveCell(clipboardText, PasteCellsMode.Values, default);
 
         result.Success.Should().BeFalse();
         result.ErrorMessage.Should().Be("Paste Special does not support multiple selected ranges yet.");
         result.AffectedCells.Should().BeEmpty();
-        session.SelectedRanges.Should().Equal(new GridRange(c1, c1), new GridRange(e1, e1));
+        session.SelectedRanges.Should().Equal(shortTarget, matchingTarget);
         sheet.GetValue(c1).Should().Be(new TextValue("left"));
-        sheet.GetValue(e1).Should().Be(new TextValue("right"));
+        sheet.GetValue(e1).Should().Be(new TextValue("middle"));
+        sheet.GetValue(f1).Should().Be(new TextValue("right"));
+    }
+
+    [Fact]
+    public void PasteSpecialClipboardAtActiveCell_RejectsMultipleSelectedRangesFromCutClipboard()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        var d1 = new CellAddress(sheet.Id, 1, 4);
+        var f1 = new CellAddress(sheet.Id, 1, 6);
+        var g1 = new CellAddress(sheet.Id, 1, 7);
+        sheet.SetCell(a1, new NumberValue(42));
+        sheet.SetCell(b1, new TextValue("West"));
+        sheet.SetCell(c1, new TextValue("old c1"));
+        sheet.SetCell(d1, new TextValue("old d1"));
+        sheet.SetCell(f1, new TextValue("old f1"));
+        sheet.SetCell(g1, new TextValue("old g1"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b1));
+        var clipboardText = session.CutSelectedRangeText();
+        var firstTarget = new GridRange(c1, d1);
+        var secondTarget = new GridRange(f1, g1);
+        session.SelectRanges(firstTarget, [firstTarget, secondTarget]);
+
+        var result = session.PasteSpecialClipboardAtActiveCell(clipboardText, PasteCellsMode.Values, default);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be("Paste Special does not support multiple selected ranges yet.");
+        result.AffectedCells.Should().BeEmpty();
+        session.SelectedRanges.Should().Equal(firstTarget, secondTarget);
+        sheet.GetValue(a1).Should().Be(new NumberValue(42));
+        sheet.GetValue(b1).Should().Be(new TextValue("West"));
+        sheet.GetValue(c1).Should().Be(new TextValue("old c1"));
+        sheet.GetValue(d1).Should().Be(new TextValue("old d1"));
+        sheet.GetValue(f1).Should().Be(new TextValue("old f1"));
+        sheet.GetValue(g1).Should().Be(new TextValue("old g1"));
     }
 
     [Fact]
