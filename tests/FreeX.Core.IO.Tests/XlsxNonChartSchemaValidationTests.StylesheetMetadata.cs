@@ -21,6 +21,19 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var stylesXml = ReadPackageRootElement(saved, "xl/styles.xml");
         AssertStylesheetTableStyleMetadata(stylesXml, "FreeXAuthoredTableStyle", "FreeXAuthoredPivotStyle");
         AssertStylesheetChildOrder(stylesXml);
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        reloaded.StructuredTableStyles.Should().ContainSingle(style =>
+            style.Name == "FreeXAuthoredTableStyle" &&
+            style.AppliesToTables &&
+            !style.AppliesToPivotTables &&
+            style.Elements.Count == 2);
+        reloaded.PivotTableStyles.Should().ContainSingle(style =>
+            style.Name == "FreeXAuthoredPivotStyle" &&
+            style.AppliesToPivotTables &&
+            !style.AppliesToTables &&
+            style.Elements.Count == 2);
     }
 
     [Fact]
