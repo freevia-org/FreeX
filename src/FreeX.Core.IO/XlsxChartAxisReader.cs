@@ -76,9 +76,15 @@ internal static class XlsxChartAxisReader
 
     private static XElement? FindAxisByIdOrIndex(IReadOnlyList<XElement> axes, IReadOnlyList<string?> axisIds, int index)
     {
-        var axisId = axisIds.Skip(index).FirstOrDefault();
-        return FindAxisById(axes, axisId) ?? axes.Skip(index).FirstOrDefault();
+        var axisId = AxisIdAt(axisIds, index);
+        return FindAxisById(axes, axisId) ?? AxisAt(axes, index);
     }
+
+    private static string? AxisIdAt(IReadOnlyList<string?> axisIds, int index) =>
+        index >= 0 && index < axisIds.Count ? axisIds[index] : null;
+
+    private static XElement? AxisAt(IReadOnlyList<XElement> axes, int index) =>
+        index >= 0 && index < axes.Count ? axes[index] : null;
 
     private static XElement? AxisTitle(XElement? axisElement) =>
         axisElement?.Element(ChartNs + "title");
