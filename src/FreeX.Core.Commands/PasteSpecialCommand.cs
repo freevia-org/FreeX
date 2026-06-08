@@ -75,7 +75,7 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
         {
             foreach (var (address, _) in cells)
                 if (!CommandGuards.CanEditCell(ctx.Workbook, sheet, address))
-                    return new CommandOutcome(false, "The sheet is protected.");
+                    return CommandGuards.RejectSheetProtected();
         }
 
         _snapshot = [];

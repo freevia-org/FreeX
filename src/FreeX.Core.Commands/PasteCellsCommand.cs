@@ -27,7 +27,7 @@ public sealed class PasteCellsCommand : IWorkbookCommand
             foreach (var (addr, _) in _cells)
             {
                 if (!CommandGuards.CanEditCell(ctx.Workbook, sheet, addr))
-                    return new CommandOutcome(false, "The sheet is protected.");
+                    return CommandGuards.RejectSheetProtected();
             }
         }
 

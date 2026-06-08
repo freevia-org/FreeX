@@ -42,7 +42,7 @@ public sealed class FillCellsCommand : IWorkbookCommand
         if (targets.Count == 0)
             return new CommandOutcome(false, "The fill range must include at least one target cell.");
         if (targets.Any(address => !CommandGuards.CanEditCell(ctx.Workbook, sheet, address)))
-            return new CommandOutcome(false, "The sheet is protected.");
+            return CommandGuards.RejectSheetProtected();
 
         _snapshot = [];
         _hyperlinkSnapshot = [];
