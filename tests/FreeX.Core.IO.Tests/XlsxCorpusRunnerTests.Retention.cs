@@ -1274,13 +1274,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-page-breaks-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetPageBreaksModel(sheet, "generated-worksheet-page-breaks-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-page-breaks-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-page-breaks-001");
         AssertWorksheetPageBreaks(saved, "generated-worksheet-page-breaks-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetPageBreaksModel(
+            reloaded.GetSheetAt(0),
+            "worksheet page break model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -2110,6 +2118,26 @@ public partial class XlsxCorpusRunnerTests
         columnBreak.Attribute("man")!.Value.Should().Be("1", because);
         columnBreak.Attribute("pt")!.Value.Should().Be("1", because);
         columnBreak.Attribute("customAttr").Should().BeNull(because);
+    }
+
+    private static void AssertWorksheetPageBreaksModel(Sheet sheet, string because)
+    {
+        sheet.RowPageBreaks.Should().ContainSingle(because).Which.Should().Be(20u, because);
+        sheet.ColumnPageBreaks.Should().ContainSingle(because).Which.Should().Be(5u, because);
+
+        sheet.RowPageBreaksMetadata.Should().NotBeNull(because);
+        sheet.RowPageBreaksMetadata!.NativeAttributes.Should().Contain("manualBreakCount", "1", because);
+        sheet.RowPageBreaksMetadata.BreakNativeAttributes.Should().ContainKey(20u, because);
+        sheet.RowPageBreaksMetadata.BreakNativeAttributes[20u].Should().Contain("max", "16383", because);
+        sheet.RowPageBreaksMetadata.BreakNativeAttributes[20u].Should().Contain("man", "1", because);
+        sheet.RowPageBreaksMetadata.BreakNativeAttributes[20u].Should().Contain("pt", "1", because);
+
+        sheet.ColumnPageBreaksMetadata.Should().NotBeNull(because);
+        sheet.ColumnPageBreaksMetadata!.NativeAttributes.Should().Contain("manualBreakCount", "1", because);
+        sheet.ColumnPageBreaksMetadata.BreakNativeAttributes.Should().ContainKey(5u, because);
+        sheet.ColumnPageBreaksMetadata.BreakNativeAttributes[5u].Should().Contain("max", "1048575", because);
+        sheet.ColumnPageBreaksMetadata.BreakNativeAttributes[5u].Should().Contain("man", "1", because);
+        sheet.ColumnPageBreaksMetadata.BreakNativeAttributes[5u].Should().Contain("pt", "1", because);
     }
 
     private static void AssertWorksheetPrintOptions(Stream package, string because)
