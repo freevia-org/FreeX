@@ -29,7 +29,7 @@ jobs:
       matrix:
         include:
           - runtime: osx-arm64
-            runner: macos-latest
+            runner: macos-15
           - runtime: osx-x64
             runner: macos-15-intel
 
