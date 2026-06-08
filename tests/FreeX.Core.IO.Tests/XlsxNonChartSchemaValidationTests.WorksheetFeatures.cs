@@ -1260,6 +1260,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
             .Should()
             .BeTrue(blockReason);
+        AssertProtectedRangesModel(workbook.GetSheetAt(0));
 
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(42));
@@ -1274,6 +1275,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceProtectedRanges.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        AssertProtectedRangesModel(reloaded.GetSheetAt(0));
     }
 
     [Fact]
@@ -4335,6 +4340,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         protectedRange.Attribute("spinCount").Should().BeNull();
         protectedRange.Attribute("customProtectedRangeFlag").Should().BeNull();
         protectedRange.Elements().Should().BeEmpty();
+    }
+
+    private static void AssertProtectedRangesModel(Sheet sheet)
+    {
+        var allowEditRange = sheet.AllowEditRanges.Should().ContainSingle().Subject;
+        allowEditRange.Start.ToA1().Should().Be("B2");
+        allowEditRange.End.ToA1().Should().Be("C3");
     }
 
     private static Workbook CreateWorksheetCalculationPropertiesSourceWorkbook()

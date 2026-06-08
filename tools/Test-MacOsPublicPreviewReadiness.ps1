@@ -362,6 +362,19 @@ function Test-ArtifactIdentityConsistency {
     }
 }
 
+function Test-ArtifactIdentityMatches {
+    param(
+        [Parameter(Mandatory = $true)][object]$Identity,
+        [Parameter(Mandatory = $true)][object]$ExpectedIdentity,
+        [Parameter(Mandatory = $true)][string]$Label,
+        [Parameter(Mandatory = $true)][string]$ExpectedLabel
+    )
+
+    if ($Identity.RunId -ne $ExpectedIdentity.RunId -or $Identity.RunAttempt -ne $ExpectedIdentity.RunAttempt) {
+        Add-ValidationError "$Label is from GitHub Actions run '$($Identity.RunId)' attempt '$($Identity.RunAttempt)', but $ExpectedLabel is from run '$($ExpectedIdentity.RunId)' attempt '$($ExpectedIdentity.RunAttempt)'. Remove stale artifact folders under the artifact root or re-download the matching artifact set."
+    }
+}
+
 function Find-RuntimeBundleDirectories {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
@@ -432,6 +445,16 @@ function Get-FileTextOrEmpty {
     return Get-Content -LiteralPath $Path -Raw
 }
 
+function Get-FirstSha256HashFromText {
+    param([Parameter(Mandatory = $true)][string]$Text)
+
+    if ($Text -match "([0-9a-fA-F]{64})") {
+        return $Matches[1].ToLowerInvariant()
+    }
+
+    return $null
+}
+
 function Test-ChecksumEvidence {
     param(
         [Parameter(Mandatory = $true)][string]$BundleDirectory,
@@ -451,10 +474,7 @@ function Test-ChecksumEvidence {
     $checksumText = Get-FileTextOrEmpty -Path $checksumPath
     Assert-ContainsText -Text $checksumText -Needle $names.Zip -Message "$Runtime checksum file must name $($names.Zip)."
 
-    $checksumHash = $null
-    if ($checksumText -match "([0-9a-fA-F]{64})") {
-        $checksumHash = $Matches[1].ToLowerInvariant()
-    }
+    $checksumHash = Get-FirstSha256HashFromText -Text $checksumText
 
     Assert-True -Condition (-not [string]::IsNullOrWhiteSpace($checksumHash)) -Message "$Runtime checksum file must contain a SHA-256 hash."
     if (-not [string]::IsNullOrWhiteSpace($checksumHash)) {
@@ -615,8 +635,28 @@ function Test-ReleasePublicationArtifact {
         Assert-JsonPropertyPresent -Object $manifest -PropertyName $propertyName -Label "macOS release publication manifest"
     }
 
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedRunId)) {
+        Assert-JsonPropertyEquals -Object $manifest -PropertyName "run_id" -ExpectedValue $ExpectedRunId -Label "macOS release publication manifest"
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedRunAttempt)) {
+        Assert-JsonPropertyEquals -Object $manifest -PropertyName "run_attempt" -ExpectedValue $ExpectedRunAttempt -Label "macOS release publication manifest"
+    }
+
     $sourceArtifactPattern = [string](Get-JsonPropertyValue -Object $manifest -PropertyName "source_artifact_pattern")
     Assert-True -Condition ($sourceArtifactPattern.IndexOf("*-macos-app", [System.StringComparison]::Ordinal) -ge 0) -Message "macOS release publication manifest source_artifact_pattern must target downloaded macOS app artifacts."
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedRunId) -and -not [string]::IsNullOrWhiteSpace($ExpectedRunAttempt)) {
+        $expectedSourceArtifactPattern = "freex-$ExpectedRunId-$ExpectedRunAttempt-*-macos-app"
+        Assert-JsonPropertyEquals -Object $manifest -PropertyName "source_artifact_pattern" -ExpectedValue $expectedSourceArtifactPattern -Label "macOS release publication manifest"
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace($ExpectedRunId)) {
+        $expectedRunPattern = "^freex-$([System.Text.RegularExpressions.Regex]::Escape($ExpectedRunId))-[0-9]+-\*-macos-app$"
+        Assert-True -Condition ($sourceArtifactPattern -match $expectedRunPattern) -Message "macOS release publication manifest source_artifact_pattern must include expected run '$ExpectedRunId'."
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace($ExpectedRunAttempt)) {
+        $expectedAttemptPattern = "^freex-[0-9]+-$([System.Text.RegularExpressions.Regex]::Escape($ExpectedRunAttempt))-\*-macos-app$"
+        Assert-True -Condition ($sourceArtifactPattern -match $expectedAttemptPattern) -Message "macOS release publication manifest source_artifact_pattern must include expected run attempt '$ExpectedRunAttempt'."
+    }
 
     $rawMarkers = Get-JsonPropertyValue -Object $manifest -PropertyName "distribution_candidate_required_markers"
     if ($null -eq $rawMarkers) {
@@ -676,9 +716,11 @@ function Test-ReleasePublicationArtifact {
         }
 
         $sha256 = [string](Get-JsonPropertyValue -Object $asset -PropertyName "sha256")
-        Assert-True -Condition ($sha256 -match "^[0-9a-fA-F]{64}$") -Message "$runtime release publication manifest asset sha256 must be a SHA-256 hash."
+        $manifestHashLooksValid = $sha256 -match "^[0-9a-fA-F]{64}$"
+        $manifestHash = $sha256.ToLowerInvariant()
+        Assert-True -Condition $manifestHashLooksValid -Message "$runtime release publication manifest asset sha256 must be a SHA-256 hash."
 
-        foreach ($propertyName in @("stable_zip", "stable_zip_checksum", "evidence", "packaging_smoke_log", "launch_smoke_report", "open_with_launch_smoke_report", "default_open_launch_smoke_report", "notarization_log", "tester_instructions")) {
+        foreach ($propertyName in @("evidence", "packaging_smoke_log", "launch_smoke_report", "open_with_launch_smoke_report", "default_open_launch_smoke_report", "notarization_log", "tester_instructions")) {
             $fileName = [string](Get-JsonPropertyValue -Object $asset -PropertyName $propertyName)
             if ([string]::IsNullOrWhiteSpace($fileName)) {
                 Add-ValidationError "$runtime release publication manifest asset must include '$propertyName'."
@@ -688,11 +730,59 @@ function Test-ReleasePublicationArtifact {
             Assert-FileExists -Path (Join-Path $releaseDirectory $fileName) -Label "$runtime release publication asset $propertyName" | Out-Null
         }
 
-        $checksumPath = Join-Path $releaseDirectory "$stableZip.sha256"
-        if (Test-Path -LiteralPath $checksumPath -PathType Leaf) {
-            $checksumText = Get-FileTextOrEmpty -Path $checksumPath
-            Assert-ContainsText -Text $checksumText -Needle $stableZip -Message "$runtime release publication checksum must name $stableZip."
-            Assert-ContainsText -Text $checksumText -Needle $sha256 -Message "$runtime release publication checksum must contain the manifest hash."
+        $stableZipFileName = [string](Get-JsonPropertyValue -Object $asset -PropertyName "stable_zip")
+        $stableChecksumFileName = [string](Get-JsonPropertyValue -Object $asset -PropertyName "stable_zip_checksum")
+        if ([string]::IsNullOrWhiteSpace($stableZipFileName)) {
+            Add-ValidationError "$runtime release publication manifest asset must include 'stable_zip'."
+        }
+
+        if ([string]::IsNullOrWhiteSpace($stableChecksumFileName)) {
+            Add-ValidationError "$runtime release publication manifest asset must include 'stable_zip_checksum'."
+        }
+
+        $stableZipPath = Join-Path $releaseDirectory $stableZipFileName
+        $stableChecksumPath = Join-Path $releaseDirectory $stableChecksumFileName
+        $stableZipExists = Assert-FileExists -Path $stableZipPath -Label "$runtime release publication asset stable_zip"
+        $stableChecksumExists = Assert-FileExists -Path $stableChecksumPath -Label "$runtime release publication asset stable_zip_checksum"
+
+        $stableZipHash = $null
+        if ($stableZipExists) {
+            $stableZipHash = (Get-FileHash -LiteralPath $stableZipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($manifestHashLooksValid) {
+                Assert-True -Condition ($stableZipHash -eq $manifestHash) -Message "$runtime release publication manifest asset sha256 must match stable ZIP $stableZipFileName."
+            }
+        }
+
+        if ($stableChecksumExists) {
+            $checksumText = Get-FileTextOrEmpty -Path $stableChecksumPath
+            Assert-ContainsText -Text $checksumText -Needle $stableZipFileName -Message "$runtime release publication checksum must name $stableZipFileName."
+            $checksumHash = Get-FirstSha256HashFromText -Text $checksumText
+            Assert-True -Condition (-not [string]::IsNullOrWhiteSpace($checksumHash)) -Message "$runtime release publication checksum must contain a SHA-256 hash."
+            if (-not [string]::IsNullOrWhiteSpace($checksumHash) -and $manifestHashLooksValid) {
+                Assert-True -Condition ($checksumHash -eq $manifestHash) -Message "$runtime release publication checksum hash must match manifest sha256."
+            }
+
+            if (-not [string]::IsNullOrWhiteSpace($checksumHash) -and -not [string]::IsNullOrWhiteSpace($stableZipHash)) {
+                Assert-True -Condition ($checksumHash -eq $stableZipHash) -Message "$runtime release publication checksum hash must match stable ZIP $stableZipFileName."
+            }
+        }
+
+        $releaseEvidenceName = [string](Get-JsonPropertyValue -Object $asset -PropertyName "evidence")
+        $releaseEvidencePath = Join-Path $releaseDirectory $releaseEvidenceName
+        if (Test-Path -LiteralPath $releaseEvidencePath -PathType Leaf) {
+            $releaseEvidence = Get-KeyValueMap -Path $releaseEvidencePath
+            Assert-KeyEquals -Map $releaseEvidence -Key "runtime" -ExpectedValue $runtime -Label "$runtime release publication evidence asset"
+            if ($manifestHashLooksValid) {
+                Assert-KeyEquals -Map $releaseEvidence -Key "zip_sha256" -ExpectedValue $manifestHash -Label "$runtime release publication evidence asset"
+            }
+
+            if (-not [string]::IsNullOrWhiteSpace($ExpectedRunId)) {
+                Assert-KeyEquals -Map $releaseEvidence -Key "github_run_id" -ExpectedValue $ExpectedRunId -Label "$runtime release publication evidence asset"
+            }
+
+            if (-not [string]::IsNullOrWhiteSpace($ExpectedRunAttempt)) {
+                Assert-KeyEquals -Map $releaseEvidence -Key "github_run_attempt" -ExpectedValue $ExpectedRunAttempt -Label "$runtime release publication evidence asset"
+            }
         }
     }
 
@@ -886,7 +976,8 @@ function Test-DiagnosticsArtifact {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
         [Parameter(Mandatory = $true)][string]$BundleDirectory,
-        [Parameter(Mandatory = $true)][string]$Runtime
+        [Parameter(Mandatory = $true)][string]$Runtime,
+        [object]$AppIdentity
     )
 
     $diagnosticsDirectories = @(Find-DiagnosticsArtifactDirectories -Root $Root -Runtime $Runtime)
@@ -895,6 +986,14 @@ function Test-DiagnosticsArtifact {
         foreach ($directory in $diagnosticsDirectories) {
             if (Test-ArtifactFileSet -Directory $directory -Runtime $Runtime -Label "$Runtime diagnostics artifact" -RequireZip $true) {
                 $validatedAny = $true
+                $diagnosticsIdentity = Test-ArtifactDownloadIdentity -Root $Root -Directory $directory -Runtime $Runtime -Kind "diagnostics" -Label "$Runtime diagnostics artifact"
+                if ($null -ne $AppIdentity -and $null -ne $diagnosticsIdentity) {
+                    Test-ArtifactIdentityMatches -Identity $diagnosticsIdentity -ExpectedIdentity $AppIdentity -Label "$Runtime diagnostics artifact" -ExpectedLabel "$Runtime app artifact"
+                }
+                elseif ($null -ne $AppIdentity -and $null -eq $diagnosticsIdentity) {
+                    $expectedWrapper = Get-ExpectedArtifactWrapperName -Runtime $Runtime -Kind "diagnostics"
+                    Add-ValidationError "$Runtime diagnostics artifact does not preserve a GitHub Actions artifact wrapper directory named '$expectedWrapper', so it cannot be matched to the $Runtime app artifact from run '$($AppIdentity.RunId)' attempt '$($AppIdentity.RunAttempt)'."
+                }
             }
         }
 
@@ -914,7 +1013,8 @@ function Test-RuntimeBundle {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
         [Parameter(Mandatory = $true)][string]$BundleDirectory,
-        [Parameter(Mandatory = $true)][string]$Runtime
+        [Parameter(Mandatory = $true)][string]$Runtime,
+        [object]$ArtifactIdentity
     )
 
     Write-Host "Validating macOS public-preview evidence for $Runtime in $BundleDirectory..."
@@ -941,7 +1041,7 @@ function Test-RuntimeBundle {
     Test-DefaultOpenSmoke -DefaultOpenSmokePath $defaultOpenSmokePath -Runtime $Runtime
     Test-NotarizationLog -NotarizationLogPath $notarizationLogPath -IsDistributionCandidateArtifact $isDistributionCandidateArtifact -Runtime $Runtime
     Test-TesterInstructions -InstructionsPath $testerInstructionsPath -Runtime $Runtime -IsDistributionCandidateArtifact $isDistributionCandidateArtifact
-    Test-DiagnosticsArtifact -Root $Root -BundleDirectory $BundleDirectory -Runtime $Runtime
+    Test-DiagnosticsArtifact -Root $Root -BundleDirectory $BundleDirectory -Runtime $Runtime -AppIdentity $ArtifactIdentity
 }
 
 $resolvedArtifactRoot = Resolve-InputPath $ArtifactRoot
@@ -974,7 +1074,7 @@ foreach ($runtime in $Runtimes) {
         $artifactIdentities.Add($identity)
     }
 
-    Test-RuntimeBundle -Root $resolvedArtifactRoot -BundleDirectory $bundleDirectory -Runtime $runtime
+    Test-RuntimeBundle -Root $resolvedArtifactRoot -BundleDirectory $bundleDirectory -Runtime $runtime -ArtifactIdentity $identity
 }
 
 Test-ArtifactIdentityConsistency -Identities $artifactIdentities.ToArray() -Root $resolvedArtifactRoot

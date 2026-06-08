@@ -125,6 +125,69 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
     }
 
     [Fact]
+    public void ReadinessPreflight_FailsWhenReleasePublicationArtifactUsesStaleRunIdentity()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: true);
+        var x64 = CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: true);
+        var releaseDirectory = CreateSyntheticReleasePublicationArtifact(temp.Path, arm64, x64);
+        var manifestPath = Path.Combine(releaseDirectory, "FreeX-latest-macos-distribution-candidate-manifest.json");
+        ReplaceInFile(manifestPath, "\"run_id\": \"42\"", "\"run_id\": \"41\"");
+        ReplaceInFile(manifestPath, "freex-42-1-*-macos-app", "freex-41-1-*-macos-app");
+        ReplaceInFile(
+            Path.Combine(releaseDirectory, "FreeX-latest-macos-arm64-evidence.txt"),
+            "github_run_id=42",
+            "github_run_id=41");
+
+        var result = RunPreflight(
+            temp.Path,
+            "-DistributionCandidate -RequireReleasePublicationArtifact -ExpectedRunId 42 -ExpectedRunAttempt 1");
+
+        AssertPreflightRejected(
+            result,
+            "macOS release publication manifest JSON property 'run_id' must be '42'",
+            "source_artifact_pattern",
+            "osx-arm64 release publication evidence asset must include 'github_run_id=42'");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenReleasePublicationStableZipHashIsStale()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: true);
+        var x64 = CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: true);
+        var releaseDirectory = CreateSyntheticReleasePublicationArtifact(temp.Path, arm64, x64);
+        File.AppendAllText(Path.Combine(releaseDirectory, "FreeX-latest-macos-arm64.zip"), "corrupt");
+
+        var result = RunPreflight(temp.Path, "-DistributionCandidate -RequireReleasePublicationArtifact");
+
+        AssertPreflightRejected(
+            result,
+            "osx-arm64 release publication manifest asset sha256 must match stable ZIP",
+            "osx-arm64 release publication checksum hash must match stable ZIP",
+            "FreeX-latest-macos-arm64.zip");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenSeparateDiagnosticsArtifactUsesStaleRunIdentity()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: true);
+        var x64 = CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: true);
+        CreateSyntheticDiagnosticsArtifact(temp.Path, arm64, runId: "41");
+        CreateSyntheticDiagnosticsArtifact(temp.Path, x64);
+
+        var result = RunPreflight(temp.Path, "-DistributionCandidate -RequireSeparateDiagnosticsArtifact");
+
+        AssertPreflightRejected(
+            result,
+            "osx-arm64 diagnostics artifact is from GitHub Actions run '41' attempt '1'",
+            "osx-arm64 app",
+            "artifact is from run '42' attempt '1'",
+            "Remove stale artifact folders");
+    }
+
+    [Fact]
     public void ReadinessPreflight_FailsWhenDistributionCandidateLacksSigningEvidence()
     {
         using var temp = new TestTemporaryDirectory();
@@ -601,12 +664,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
 
         if (includeDiagnosticsArtifact)
         {
-            var diagnosticsDirectory = Path.Combine(root, $"freex-{runId}-{runAttempt}-{runtime}-macos-diagnostics");
-            Directory.CreateDirectory(diagnosticsDirectory);
-            foreach (var file in Directory.EnumerateFiles(bundleDirectory))
-            {
-                File.Copy(file, Path.Combine(diagnosticsDirectory, Path.GetFileName(file)), overwrite: true);
-            }
+            CreateSyntheticDiagnosticsArtifact(root, new SyntheticBundle(runtime, bundleDirectory, zipPath, evidencePath, packagingSmokePath), runId, runAttempt);
         }
 
         return new SyntheticBundle(
@@ -617,7 +675,23 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
             packagingSmokePath);
     }
 
-    private static void CreateSyntheticReleasePublicationArtifact(string root, params SyntheticBundle[] bundles)
+    private static string CreateSyntheticDiagnosticsArtifact(
+        string root,
+        SyntheticBundle bundle,
+        string runId = "42",
+        string runAttempt = "1")
+    {
+        var diagnosticsDirectory = Path.Combine(root, $"freex-{runId}-{runAttempt}-{bundle.Runtime}-macos-diagnostics");
+        Directory.CreateDirectory(diagnosticsDirectory);
+        foreach (var file in Directory.EnumerateFiles(bundle.BundleDirectory))
+        {
+            File.Copy(file, Path.Combine(diagnosticsDirectory, Path.GetFileName(file)), overwrite: true);
+        }
+
+        return diagnosticsDirectory;
+    }
+
+    private static string CreateSyntheticReleasePublicationArtifact(string root, params SyntheticBundle[] bundles)
     {
         var releaseDirectory = Path.Combine(root, "freex-42-1-macos-release-assets");
         Directory.CreateDirectory(releaseDirectory);
@@ -702,6 +776,8 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
                 "Use FreeX-latest-macos-distribution-candidate-manifest.json to verify the release asset set.",
                 "Each runtime includes default-open launch smoke, evidence, notarization, and tester instruction assets.",
                 "Reject the distribution-candidate unless Developer ID signing, accepted notarization, stapler validation, Gatekeeper, and gatekeeper_assessment_status=accepted are present."));
+
+        return releaseDirectory;
     }
 
     private static string CopyReleaseAsset(SyntheticBundle bundle, string sourceName, string releaseDirectory, string destinationName)
