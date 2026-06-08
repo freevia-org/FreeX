@@ -359,6 +359,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _sortDescendingMenuItem = new();
     private readonly NativeMenuItem _customSortMenuItem = new();
     private readonly NativeMenuItem _advancedFilterMenuItem = new();
+    private readonly NativeMenuItem _dataValidationPreviewMenuItem = new();
     private readonly NativeMenuItem _dataValidationMenuItem = new();
     private readonly NativeMenuItem _whatIfAnalysisMenuItem = new();
     private readonly NativeMenuItem _goalSeekMenuItem = new();
@@ -713,6 +714,9 @@ public sealed class MainWindow : Window
         _advancedFilterMenuItem.Header = "Advanced Filter...";
         _advancedFilterMenuItem.Click += async (_, _) => await ShowAdvancedFilterDialogAsync();
 
+        _dataValidationPreviewMenuItem.Header = "Data Validation Preview...";
+        _dataValidationPreviewMenuItem.Click += async (_, _) => await ShowDataValidationPreviewDialogAsync();
+
         _dataValidationMenuItem.Header = "Data Validation...";
         _dataValidationMenuItem.Click += async (_, _) => await ShowDataValidationDialogAsync();
 
@@ -1024,6 +1028,7 @@ public sealed class MainWindow : Window
         dataMenu.Items.Add(_customSortMenuItem);
         dataMenu.Items.Add(_advancedFilterMenuItem);
         dataMenu.Items.Add(new NativeMenuItemSeparator());
+        dataMenu.Items.Add(_dataValidationPreviewMenuItem);
         dataMenu.Items.Add(_dataValidationMenuItem);
         dataMenu.Items.Add(new NativeMenuItemSeparator());
         dataMenu.Items.Add(_whatIfAnalysisMenuItem);
@@ -1768,6 +1773,7 @@ public sealed class MainWindow : Window
         _sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _customSortMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _advancedFilterMenuItem.IsEnabled = isIdle;
+        _dataValidationPreviewMenuItem.IsEnabled = isIdle;
         _dataValidationMenuItem.IsEnabled = isIdle;
         _whatIfAnalysisMenuItem.IsEnabled = isIdle;
         _goalSeekMenuItem.IsEnabled = isIdle;
@@ -8405,6 +8411,19 @@ public sealed class MainWindow : Window
             : $"Data validation already matches {rangeReference}");
     }
 
+    private async Task ShowDataValidationPreviewDialogAsync()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        var preview = DataValidationPreviewPlanner.Create(
+            _session.Workbook,
+            _session.ActiveSheet,
+            _session.ActiveCell,
+            _session.SelectedRange);
+        await ShowTextDialogAsync("Data Validation Preview", preview.Text, 520, 360);
+    }
+
     private async Task<DataValidationDialogResult?> ShowDataValidationInputDialogAsync()
     {
         DataValidationDialogResult? result = null;
@@ -10596,6 +10615,7 @@ public sealed class MainWindow : Window
             HasNativeSortAscendingMenuItem: HasNativeMenuItem(_sortAscendingMenuItem, "Sort A to Z", requireGesture: false),
             HasNativeSortDescendingMenuItem: HasNativeMenuItem(_sortDescendingMenuItem, "Sort Z to A", requireGesture: false),
             HasNativeAdvancedFilterMenuItem: HasNativeMenuItem(_advancedFilterMenuItem, "Advanced Filter...", requireGesture: false),
+            HasNativeDataValidationPreviewMenuItem: HasNativeMenuItem(_dataValidationPreviewMenuItem, "Data Validation Preview...", requireGesture: false),
             HasNativeDataValidationMenuItem: HasNativeMenuItem(_dataValidationMenuItem, "Data Validation...", requireGesture: false),
             HasNativeWhatIfAnalysisMenuItem: HasNativeMenuItem(_whatIfAnalysisMenuItem, "What-If Analysis", requireGesture: false),
             HasNativeGoalSeekMenuItem: HasNativeSubmenuItem(_whatIfAnalysisMenuItem.Menu, "Goal Seek..."),

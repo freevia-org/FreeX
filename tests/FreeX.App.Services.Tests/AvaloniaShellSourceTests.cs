@@ -706,6 +706,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_go_to_menu_item={FormatBool(snapshot.HasNativeGoToMenuItem)}");
         smokeSource.Should().Contain("native_go_to_special_menu_item={FormatBool(snapshot.HasNativeGoToSpecialMenuItem)}");
         smokeSource.Should().Contain("native_advanced_filter_menu_item={FormatBool(snapshot.HasNativeAdvancedFilterMenuItem)}");
+        smokeSource.Should().Contain("native_data_validation_preview_menu_item={FormatBool(snapshot.HasNativeDataValidationPreviewMenuItem)}");
         smokeSource.Should().Contain("native_data_validation_menu_item={FormatBool(snapshot.HasNativeDataValidationMenuItem)}");
         smokeSource.Should().Contain("native_what_if_analysis_menu_item={FormatBool(snapshot.HasNativeWhatIfAnalysisMenuItem)}");
         smokeSource.Should().Contain("native_goal_seek_menu_item={FormatBool(snapshot.HasNativeGoalSeekMenuItem)}");
@@ -1377,6 +1378,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("HasNativeSortAscendingMenuItem &&");
         smokeSource.Should().Contain("HasNativeSortDescendingMenuItem &&");
         smokeSource.Should().Contain("HasNativeAdvancedFilterMenuItem &&");
+        smokeSource.Should().Contain("HasNativeDataValidationPreviewMenuItem &&");
         smokeSource.Should().Contain("HasNativeDataValidationMenuItem &&");
         smokeSource.Should().Contain("HasNativeWhatIfAnalysisMenuItem &&");
         smokeSource.Should().Contain("HasNativeGoalSeekMenuItem &&");
@@ -1394,6 +1396,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_sort_ascending_menu_item={FormatBool(snapshot.HasNativeSortAscendingMenuItem)}");
         smokeSource.Should().Contain("native_sort_descending_menu_item={FormatBool(snapshot.HasNativeSortDescendingMenuItem)}");
         smokeSource.Should().Contain("native_advanced_filter_menu_item={FormatBool(snapshot.HasNativeAdvancedFilterMenuItem)}");
+        smokeSource.Should().Contain("native_data_validation_preview_menu_item={FormatBool(snapshot.HasNativeDataValidationPreviewMenuItem)}");
         smokeSource.Should().Contain("native_data_validation_menu_item={FormatBool(snapshot.HasNativeDataValidationMenuItem)}");
         smokeSource.Should().Contain("native_what_if_analysis_menu_item={FormatBool(snapshot.HasNativeWhatIfAnalysisMenuItem)}");
         smokeSource.Should().Contain("native_goal_seek_menu_item={FormatBool(snapshot.HasNativeGoalSeekMenuItem)}");
@@ -1470,6 +1473,49 @@ public sealed class AvaloniaShellSourceTests
 
         handlerSource.Should().NotContain("SetDataValidationCommand");
         handlerSource.Should().NotContain("ClearDataValidationCommand");
+        handlerSource.Should().NotContain("PasteDataValidationFromClipboardAtActiveCell");
+        handlerSource.Should().NotContain("Clipboard");
+        handlerSource.Should().NotContain("DataTransferManager");
+        handlerSource.Should().NotContain("WindowInteropHelper");
+        handlerSource.Should().NotContain("Microsoft.Win32");
+        handlerSource.Should().NotContain("System.Windows");
+    }
+
+    [Fact]
+    public void MainWindow_WiresNativeDataValidationPreviewWithoutWorkbookMutation()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "DataValidationPreviewPlanner.cs"));
+        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        source.Should().Contain("private readonly NativeMenuItem _dataValidationPreviewMenuItem = new();");
+        source.Should().Contain("_dataValidationPreviewMenuItem.Header = \"Data Validation Preview...\";");
+        source.Should().Contain("_dataValidationPreviewMenuItem.Click += async (_, _) => await ShowDataValidationPreviewDialogAsync();");
+        source.Should().Contain("dataMenu.Items.Add(_dataValidationPreviewMenuItem);");
+        source.Should().Contain("_dataValidationPreviewMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("HasNativeDataValidationPreviewMenuItem: HasNativeMenuItem(_dataValidationPreviewMenuItem, \"Data Validation Preview...\", requireGesture: false)");
+        source.Should().Contain("private async Task ShowDataValidationPreviewDialogAsync()");
+        source.Should().Contain("DataValidationPreviewPlanner.Create(");
+        source.Should().Contain("_session.Workbook");
+        source.Should().Contain("_session.ActiveSheet");
+        source.Should().Contain("_session.ActiveCell");
+        source.Should().Contain("_session.SelectedRange");
+        source.Should().Contain("await ShowTextDialogAsync(\"Data Validation Preview\", preview.Text, 520, 360);");
+
+        plannerSource.Should().Contain("DataValidationService.GetApplicable(sheet, activeCell)");
+        plannerSource.Should().Contain("DataValidationService.GetListItems(rule, sheet, workbook)");
+        plannerSource.Should().Contain("DataValidationService.FormatListSourceRange");
+
+        var handlerIndex = normalizedSource.IndexOf("private async Task ShowDataValidationPreviewDialogAsync()", StringComparison.Ordinal);
+        handlerIndex.Should().BeGreaterThanOrEqualTo(0);
+        var nextMethodIndex = normalizedSource.IndexOf("\n    private async Task<DataValidationDialogResult?> ShowDataValidationInputDialogAsync()", handlerIndex, StringComparison.Ordinal);
+        nextMethodIndex.Should().BeGreaterThan(handlerIndex);
+        var handlerSource = normalizedSource[handlerIndex..nextMethodIndex];
+
+        handlerSource.Should().NotContain("TryCommitPendingFormulaEdit");
+        handlerSource.Should().NotContain("SetDataValidationCommand");
+        handlerSource.Should().NotContain("ClearDataValidationCommand");
+        handlerSource.Should().NotContain("ApplyDataValidationToSelectedRange");
         handlerSource.Should().NotContain("PasteDataValidationFromClipboardAtActiveCell");
         handlerSource.Should().NotContain("Clipboard");
         handlerSource.Should().NotContain("DataTransferManager");
