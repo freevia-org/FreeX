@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host;
 
@@ -16,28 +17,20 @@ public enum ExternalUrlLaunchResult
 }
 
 /// <summary>
-/// Single guarded entry point for opening external URLs via the shell. Every shell
-/// launch of a URL goes through here so the <see cref="HyperlinkNavigationPlanner.IsAllowedScheme"/>
-/// allowlist (http/https/mailto/ftp) cannot be bypassed by a new call site.
+/// Single guarded entry point for opening external URLs via the shell. Every URL
+/// launch goes through the shared service allowlist so guarded schemes cannot be
+/// bypassed by a new call site.
 /// </summary>
 public static class ExternalUrlLauncher
 {
     public static ExternalUrlLaunchResult Open(string url) =>
         Open(url, target => Process.Start(new ProcessStartInfo(target) { UseShellExecute = true }));
 
-    public static ExternalUrlLaunchResult Open(string url, Action<string> launch)
-    {
-        if (string.IsNullOrWhiteSpace(url) || !HyperlinkNavigationPlanner.IsAllowedScheme(url))
-            return ExternalUrlLaunchResult.BlockedScheme;
-
-        try
+    public static ExternalUrlLaunchResult Open(string url, Action<string> launch) =>
+        ExternalUriLauncher.Open(url, uri => launch(uri.AbsoluteUri)) switch
         {
-            launch(url);
-            return ExternalUrlLaunchResult.Launched;
-        }
-        catch (Exception)
-        {
-            return ExternalUrlLaunchResult.LaunchFailed;
-        }
-    }
+            ExternalUriLaunchResult.Launched => ExternalUrlLaunchResult.Launched,
+            ExternalUriLaunchResult.BlockedScheme => ExternalUrlLaunchResult.BlockedScheme,
+            _ => ExternalUrlLaunchResult.LaunchFailed
+        };
 }
