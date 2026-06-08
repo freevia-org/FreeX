@@ -2311,13 +2311,11 @@ public sealed partial class XlsxFileAdapter
             var sourceSheetName = string.IsNullOrWhiteSpace(chart.PivotSourceSheetName)
                 ? chartSheet.Name
                 : chart.PivotSourceSheetName;
-            var sourceSheet = workbook.Sheets.FirstOrDefault(sheet =>
-                string.Equals(sheet.Name, sourceSheetName, StringComparison.OrdinalIgnoreCase));
+            var sourceSheet = FindSheetByName(workbook, sourceSheetName);
             if (sourceSheet is null)
                 return false;
 
-            var pivot = sourceSheet.PivotTables.FirstOrDefault(candidate =>
-                string.Equals(candidate.Name, chart.PivotTableName, StringComparison.OrdinalIgnoreCase));
+            var pivot = FindPivotTableByName(sourceSheet, chart.PivotTableName);
             return pivot is not null &&
                    pivot.CacheId == pivotCacheId &&
                    workbook.PivotCaches.Any(cache => cache.CacheId == pivotCacheId);
@@ -2851,10 +2849,7 @@ public sealed partial class XlsxFileAdapter
 
             foreach (var pictureElement in pictureElements)
             {
-                var imageRelId = pictureElement
-                    .Descendants(drawingNs + "blip")
-                    .Select(blip => blip.Attribute(relNs + "embed")?.Value)
-                    .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+                var imageRelId = ReadFirstEmbeddedImageRelationshipId(pictureElement, drawingNs, relNs);
                 if (string.IsNullOrWhiteSpace(imageRelId) ||
                     pictureElement.Descendants(drawingNs + "blip").Any(blip => blip.Attribute(relNs + "link") is not null) ||
                     !referencedRelationshipIds.Add(imageRelId) ||
@@ -2902,8 +2897,7 @@ public sealed partial class XlsxFileAdapter
             var relationshipTypesById = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var id in relationshipIds)
             {
-                var relationship = relationshipElements.FirstOrDefault(element =>
-                    string.Equals(element.Attribute("Id")?.Value, id, StringComparison.Ordinal));
+                var relationship = FindRelationshipById(relationshipElements, id);
                 var type = relationship?.Attribute("Type")?.Value;
                 if (string.Equals(type, DiagramDataRelationshipType, StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(type, DiagramLayoutRelationshipType, StringComparison.OrdinalIgnoreCase) ||
@@ -3397,6 +3391,24 @@ public sealed partial class XlsxFileAdapter
             target = relationship?.Attribute("Target")?.Value ?? "";
             return !string.IsNullOrWhiteSpace(target);
         }
+
+        private static Sheet? FindSheetByName(Workbook workbook, string sheetName) =>
+            workbook.Sheets.FirstOrDefault(sheet =>
+                string.Equals(sheet.Name, sheetName, StringComparison.OrdinalIgnoreCase));
+
+        private static PivotTableModel? FindPivotTableByName(Sheet sheet, string pivotTableName) =>
+            sheet.PivotTables.FirstOrDefault(candidate =>
+                string.Equals(candidate.Name, pivotTableName, StringComparison.OrdinalIgnoreCase));
+
+        private static string? ReadFirstEmbeddedImageRelationshipId(XElement pictureElement, XNamespace drawingNs, XNamespace relNs) =>
+            pictureElement
+                .Descendants(drawingNs + "blip")
+                .Select(blip => blip.Attribute(relNs + "embed")?.Value)
+                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+        private static XElement? FindRelationshipById(IEnumerable<XElement> relationships, string relationshipId) =>
+            relationships.FirstOrDefault(element =>
+                string.Equals(element.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal));
 
         private static bool TryAddPatchSafeLegacyNoteVmlDrawingPath(
             ZipArchive archive,
@@ -5693,15 +5705,21 @@ public sealed partial class XlsxFileAdapter
                 "tableParts",
                 "extLst"
             ];
-            var insertionPoint = root.Elements()
-                .FirstOrDefault(element =>
-                    element.Name.Namespace == worksheetNs &&
-                    laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
+            var insertionPoint = FindWorksheetInsertionPoint(root, worksheetNs, laterWorksheetElements);
             if (insertionPoint is null)
                 root.Add(mergeCells);
             else
                 insertionPoint.AddBeforeSelf(mergeCells);
         }
+
+        private static XElement? FindWorksheetInsertionPoint(
+            XElement root,
+            XNamespace worksheetNs,
+            IReadOnlyCollection<string> laterWorksheetElements) =>
+            root.Elements()
+                .FirstOrDefault(element =>
+                    element.Name.Namespace == worksheetNs &&
+                    laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
 
         private static bool ApplyRowDimension(
             XElement sheetData,
@@ -6843,13 +6861,16 @@ public sealed partial class XlsxFileAdapter
                     continue;
                 }
 
-                return rowElement
-                    .Elements(cellName)
-                    .FirstOrDefault(cell => string.Equals(cell.Attribute("r")?.Value, reference, StringComparison.OrdinalIgnoreCase));
+                return FindCellByReference(rowElement, cellName, reference);
             }
 
             return null;
         }
+
+        private static XElement? FindCellByReference(XElement rowElement, XName cellName, string reference) =>
+            rowElement
+                .Elements(cellName)
+                .FirstOrDefault(cell => string.Equals(cell.Attribute("r")?.Value, reference, StringComparison.OrdinalIgnoreCase));
 
         private static void RewriteLiteralCellValue(XElement cell, XNamespace worksheetNs, ScalarValue value)
         {
