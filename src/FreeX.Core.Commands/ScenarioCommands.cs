@@ -40,7 +40,7 @@ public sealed class SaveScenarioCommand : IWorkbookCommand
         {
             var sheet = ctx.Workbook.GetSheet(cell.Address.Sheet);
             if (sheet is null)
-                return new CommandOutcome(false, "Scenario changing cells must belong to this workbook.");
+                return ScenarioCommandHelpers.ChangingCellsOutsideWorkbook();
         }
 
         if (ScenarioProtectionGuards.RejectIfChangingCellsProtected(ctx.Workbook, _scenario.ChangingCells) is { } protectedOutcome)
@@ -116,7 +116,7 @@ public sealed class ApplyScenarioCommand : IWorkbookCommand
         {
             var sheet = ctx.Workbook.GetSheet(change.Address.Sheet);
             if (sheet is null)
-                return new CommandOutcome(false, "Scenario changing cells must belong to this workbook.");
+                return ScenarioCommandHelpers.ChangingCellsOutsideWorkbook();
 
             _snapshot.Add((change.Address, sheet.GetCell(change.Address)?.Clone()));
             sheet.SetCell(change.Address, Cell.FromValue(change.Value));
@@ -203,7 +203,7 @@ internal static class ScenarioProtectionGuards
 
             var sheet = workbook.GetSheet(sheetId);
             if (sheet is null)
-                return new CommandOutcome(false, "Scenario changing cells must belong to this workbook.");
+                return ScenarioCommandHelpers.ChangingCellsOutsideWorkbook();
             if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditScenarios) is { } protectedOutcome)
                 return protectedOutcome;
         }
@@ -215,9 +215,13 @@ internal static class ScenarioProtectionGuards
 file static class ScenarioCommandHelpers
 {
     private const string ScenarioNotFoundMessage = "Scenario was not found.";
+    private const string ChangingCellsOutsideWorkbookMessage = "Scenario changing cells must belong to this workbook.";
 
     public static CommandOutcome ScenarioNotFound() =>
         new(false, ScenarioNotFoundMessage);
+
+    public static CommandOutcome ChangingCellsOutsideWorkbook() =>
+        new(false, ChangingCellsOutsideWorkbookMessage);
 
     public static List<CellAddress> BuildAffectedCells(IReadOnlyList<ScenarioCellValue> changingCells)
     {
