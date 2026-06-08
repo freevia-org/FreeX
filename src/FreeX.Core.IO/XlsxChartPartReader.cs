@@ -20,20 +20,20 @@ public static partial class XlsxChartPartReader
     {
         chart = new ChartModel();
         var plotArea = FindPlotArea(chartXml);
-        var barCharts = plotArea?.Elements(ChartNs + "barChart").ToList() ?? [];
-        var barChart = barCharts.FirstOrDefault();
-        var lineCharts = plotArea?.Elements(ChartNs + "lineChart").ToList() ?? [];
-        var lineChart = lineCharts.FirstOrDefault();
-        var threeDLineCharts = plotArea?.Elements(ChartNs + "line3DChart").ToList() ?? [];
-        var threeDLineChart = threeDLineCharts.FirstOrDefault();
-        var scatterCharts = plotArea?.Elements(ChartNs + "scatterChart").ToList() ?? [];
-        var scatterChart = scatterCharts.FirstOrDefault();
-        var areaCharts = plotArea?.Elements(ChartNs + "areaChart").ToList() ?? [];
-        var areaChart = areaCharts.FirstOrDefault();
-        var threeDAreaCharts = plotArea?.Elements(ChartNs + "area3DChart").ToList() ?? [];
-        var threeDAreaChart = threeDAreaCharts.FirstOrDefault();
-        var radarCharts = plotArea?.Elements(ChartNs + "radarChart").ToList() ?? [];
-        var stockCharts = plotArea?.Elements(ChartNs + "stockChart").ToList() ?? [];
+        var barCharts = FindChartElements(plotArea, "barChart");
+        var barChart = FirstChartElement(barCharts);
+        var lineCharts = FindChartElements(plotArea, "lineChart");
+        var lineChart = FirstChartElement(lineCharts);
+        var threeDLineCharts = FindChartElements(plotArea, "line3DChart");
+        var threeDLineChart = FirstChartElement(threeDLineCharts);
+        var scatterCharts = FindChartElements(plotArea, "scatterChart");
+        var scatterChart = FirstChartElement(scatterCharts);
+        var areaCharts = FindChartElements(plotArea, "areaChart");
+        var areaChart = FirstChartElement(areaCharts);
+        var threeDAreaCharts = FindChartElements(plotArea, "area3DChart");
+        var threeDAreaChart = FirstChartElement(threeDAreaCharts);
+        var radarCharts = FindChartElements(plotArea, "radarChart");
+        var stockCharts = FindChartElements(plotArea, "stockChart");
         var deferredAdvancedChart = HasDirectSupportedChart(plotArea) ? null : FindDeferredAdvancedChart(plotArea);
         var threeDBarChart = plotArea?.Element(ChartNs + "bar3DChart");
         var bubbleChart = plotArea?.Element(ChartNs + "bubbleChart");
@@ -96,8 +96,15 @@ public static partial class XlsxChartPartReader
         if (standardPlotArea is not null)
             return standardPlotArea;
 
-        return chartXml.Root?
-            .Descendants()
-            .FirstOrDefault(element => element.Name.LocalName == "plotArea");
+        return FindDescendantByLocalName(chartXml.Root, "plotArea");
     }
+
+    private static List<XElement> FindChartElements(XElement? plotArea, string localName) =>
+        plotArea?.Elements(ChartNs + localName).ToList() ?? [];
+
+    private static XElement? FirstChartElement(IReadOnlyList<XElement> elements) =>
+        elements.Count == 0 ? null : elements[0];
+
+    private static XElement? FindDescendantByLocalName(XElement? element, string localName) =>
+        element?.Descendants().FirstOrDefault(candidate => candidate.Name.LocalName == localName);
 }
