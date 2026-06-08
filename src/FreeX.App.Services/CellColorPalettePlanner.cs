@@ -7,8 +7,51 @@ public sealed record CellColorSwatch(string Hex, CellColor Color);
 
 public sealed record CellColorThemeColumn(string Name, IReadOnlyList<CellColorSwatch> Shades);
 
+public sealed record CellColorPalettePlan(IReadOnlyList<CellColorPaletteSection> Sections);
+
+public sealed record CellColorPaletteSection(
+    CellColorPaletteSectionKind Kind,
+    IReadOnlyList<CellColorSwatch> Swatches,
+    IReadOnlyList<CellColorThemeColumn> ThemeColumns);
+
+public enum CellColorPaletteSectionKind
+{
+    Theme,
+    Standard,
+    Recent,
+    CustomSpectrum
+}
+
 public static class CellColorPalettePlanner
 {
+    public const int DefaultRecentColorCapacity = 10;
+
+    public static CellColorPalettePlan BuildMenuPlan(
+        IEnumerable<CellColor>? recentColors = null,
+        int recentColorCapacity = DefaultRecentColorCapacity,
+        bool includeCustomSpectrum = true)
+    {
+        var themePalette = BuildThemePalette();
+        var standardSwatches = BuildStandardSwatches();
+        var recentSwatches = BuildRecentSwatches(recentColors, recentColorCapacity);
+        var sections = new List<CellColorPaletteSection>
+        {
+            new(
+                CellColorPaletteSectionKind.Theme,
+                themePalette.SelectMany(column => column.Shades).ToList(),
+                themePalette),
+            new(CellColorPaletteSectionKind.Standard, standardSwatches, [])
+        };
+
+        if (recentSwatches.Count > 0)
+            sections.Add(new(CellColorPaletteSectionKind.Recent, recentSwatches, []));
+
+        if (includeCustomSpectrum)
+            sections.Add(new(CellColorPaletteSectionKind.CustomSpectrum, BuildCustomSpectrumSwatches(), []));
+
+        return new CellColorPalettePlan(sections);
+    }
+
     public static IReadOnlyList<CellColorSwatch> BuildDefaultSwatches() =>
         BuildThemePalette().SelectMany(column => column.Shades)
             .Concat(BuildStandardSwatches())
@@ -44,6 +87,60 @@ public static class CellColorPalettePlanner
             Swatch("#002060"),
             Swatch("#7030A0")
         };
+
+    public static IReadOnlyList<CellColorSwatch> BuildRecentSwatches(
+        IEnumerable<CellColor>? recentColors,
+        int capacity = DefaultRecentColorCapacity)
+    {
+        if (recentColors is null || capacity <= 0)
+            return [];
+
+        var swatches = new List<CellColorSwatch>(capacity);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var color in recentColors)
+        {
+            var hex = FormatHexColor(color);
+            if (!seen.Add(hex))
+                continue;
+
+            swatches.Add(new CellColorSwatch(hex, color));
+            if (swatches.Count == capacity)
+                break;
+        }
+
+        return swatches;
+    }
+
+    public static IReadOnlyList<CellColor> PromoteRecentColor(
+        IEnumerable<CellColor>? recentColors,
+        CellColor color,
+        int capacity = DefaultRecentColorCapacity)
+    {
+        if (capacity <= 0)
+            return [];
+
+        var colors = new List<CellColor>(capacity);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        Add(color);
+
+        foreach (var recentColor in recentColors ?? [])
+        {
+            Add(recentColor);
+            if (colors.Count == capacity)
+                break;
+        }
+
+        return colors;
+
+        void Add(CellColor candidate)
+        {
+            if (colors.Count == capacity)
+                return;
+
+            if (seen.Add(FormatHexColor(candidate)))
+                colors.Add(candidate);
+        }
+    }
 
     public static IReadOnlyList<CellColorSwatch> BuildCustomSpectrumSwatches()
     {
