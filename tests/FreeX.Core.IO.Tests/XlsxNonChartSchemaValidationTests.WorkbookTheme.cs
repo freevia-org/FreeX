@@ -133,6 +133,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         ReadThemeMajorLatinTypeface(saved).Should().Be("Google Sans");
+
+        saved.Position = 0;
+        var reloadedTheme = adapter.Load(saved).Theme;
+        reloadedTheme.MajorFontName.Should().Be("Google Sans");
+        reloadedTheme.MinorFontName.Should().Be("FreeX Minor");
+        reloadedTheme.GetColor(WorkbookThemeColorSlot.Accent1).Should().Be(new CellColor(12, 34, 56));
     }
 
     [Fact]
@@ -154,6 +160,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         ReadThemeMajorLatinTypeface(saved).Should().Be("Google Sans");
+
+        saved.Position = 0;
+        var reloadedTheme = adapter.Load(saved).Theme;
+        reloadedTheme.MajorFontName.Should().Be("Google Sans");
+        reloadedTheme.MinorFontName.Should().Be("FreeX Minor");
+        reloadedTheme.GetColor(WorkbookThemeColorSlot.Accent1).Should().Be(new CellColor(12, 34, 56));
     }
 
     private static Workbook CreateWorkbookThemeSourceWorkbook()
