@@ -269,16 +269,39 @@ public partial class MainWindow
         }
     }
 
-    private Sheet? GetCurrentOrFirstScreenshotTourSheet() =>
-        _workbook.GetSheet(_currentSheetId) ?? _workbook.Sheets.FirstOrDefault();
+    private Sheet? GetCurrentOrFirstScreenshotTourSheet()
+    {
+        var currentSheet = _workbook.GetSheet(_currentSheetId);
+        if (currentSheet is not null)
+            return currentSheet;
 
-    private static StructuredTableModel? FindScreenshotTourTable(Sheet sheet) =>
-        sheet.StructuredTables.FirstOrDefault(candidate =>
-            string.Equals(candidate.Name, ScreenshotTourTableName, StringComparison.OrdinalIgnoreCase));
+        foreach (var sheet in _workbook.Sheets)
+            return sheet;
 
-    private static PivotTableModel? FindScreenshotTourPivotTable(Sheet sheet) =>
-        sheet.PivotTables.FirstOrDefault(candidate =>
-            string.Equals(candidate.Name, ScreenshotTourPivotTableName, StringComparison.OrdinalIgnoreCase));
+        return null;
+    }
+
+    private static StructuredTableModel? FindScreenshotTourTable(Sheet sheet)
+    {
+        foreach (var table in sheet.StructuredTables)
+        {
+            if (string.Equals(table.Name, ScreenshotTourTableName, StringComparison.OrdinalIgnoreCase))
+                return table;
+        }
+
+        return null;
+    }
+
+    private static PivotTableModel? FindScreenshotTourPivotTable(Sheet sheet)
+    {
+        foreach (var pivotTable in sheet.PivotTables)
+        {
+            if (string.Equals(pivotTable.Name, ScreenshotTourPivotTableName, StringComparison.OrdinalIgnoreCase))
+                return pivotTable;
+        }
+
+        return null;
+    }
 
     private async Task CaptureRibbonBurstTourAsync(string outputDir, RibbonScreenshotTourPlan plan)
     {
@@ -326,10 +349,22 @@ public partial class MainWindow
 
     private TabItem? FindRibbonTourTab(RibbonScreenshotTourTab tab)
     {
-        var tabItems = RibbonTabs.Items.OfType<TabItem>();
-        return tabItems.FirstOrDefault(item => RibbonMetadata.TryGetCatalogId(item, out var catalogId) &&
-                                               string.Equals(catalogId, tab.CatalogId, StringComparison.Ordinal))
-            ?? tabItems.FirstOrDefault(item => string.Equals(item.Header?.ToString(), tab.Header, StringComparison.Ordinal));
+        foreach (var item in RibbonTabs.Items)
+        {
+            if (item is TabItem tabItem &&
+                RibbonMetadata.TryGetCatalogId(tabItem, out var catalogId) &&
+                string.Equals(catalogId, tab.CatalogId, StringComparison.Ordinal))
+                return tabItem;
+        }
+
+        foreach (var item in RibbonTabs.Items)
+        {
+            if (item is TabItem tabItem &&
+                string.Equals(tabItem.Header?.ToString(), tab.Header, StringComparison.Ordinal))
+                return tabItem;
+        }
+
+        return null;
     }
 
     private async Task PrepareRibbonBurstCapturePhaseAsync(RibbonScreenshotTourPhase phase)

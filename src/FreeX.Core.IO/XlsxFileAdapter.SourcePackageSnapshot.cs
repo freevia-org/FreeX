@@ -3407,9 +3407,16 @@ public sealed partial class XlsxFileAdapter
         private static bool RelationshipHasInternalTarget(XElement relationship) =>
             relationship.Attribute("TargetMode") is null;
 
-        private static Sheet? FindSheetByName(Workbook workbook, string sheetName) =>
-            workbook.Sheets.FirstOrDefault(sheet =>
-                string.Equals(sheet.Name, sheetName, StringComparison.OrdinalIgnoreCase));
+        private static Sheet? FindSheetByName(Workbook workbook, string sheetName)
+        {
+            foreach (var sheet in workbook.Sheets)
+            {
+                if (string.Equals(sheet.Name, sheetName, StringComparison.OrdinalIgnoreCase))
+                    return sheet;
+            }
+
+            return null;
+        }
 
         private static PivotTableModel? FindPivotTableByChartSource(
             Workbook workbook,
@@ -3429,9 +3436,16 @@ public sealed partial class XlsxFileAdapter
                 ? chartSheet.Name
                 : chart.PivotSourceSheetName!;
 
-        private static PivotTableModel? FindPivotTableByName(Sheet sheet, string pivotTableName) =>
-            sheet.PivotTables.FirstOrDefault(candidate =>
-                PivotTableNameMatches(candidate, pivotTableName));
+        private static PivotTableModel? FindPivotTableByName(Sheet sheet, string pivotTableName)
+        {
+            foreach (var candidate in sheet.PivotTables)
+            {
+                if (PivotTableNameMatches(candidate, pivotTableName))
+                    return candidate;
+            }
+
+            return null;
+        }
 
         private static bool PivotTableNameMatches(PivotTableModel pivotTable, string pivotTableName) =>
             string.Equals(pivotTable.Name, pivotTableName, StringComparison.OrdinalIgnoreCase);
@@ -3442,15 +3456,28 @@ public sealed partial class XlsxFileAdapter
         private static bool WorkbookContainsPivotCache(Workbook workbook, int pivotCacheId) =>
             workbook.PivotCaches.Any(cache => cache.CacheId == pivotCacheId);
 
-        private static string? ReadFirstEmbeddedImageRelationshipId(XElement pictureElement, XNamespace drawingNs, XNamespace relNs) =>
-            pictureElement
-                .Descendants(drawingNs + "blip")
-                .Select(blip => blip.Attribute(relNs + "embed")?.Value)
-                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+        private static string? ReadFirstEmbeddedImageRelationshipId(XElement pictureElement, XNamespace drawingNs, XNamespace relNs)
+        {
+            foreach (var blip in pictureElement.Descendants(drawingNs + "blip"))
+            {
+                var value = blip.Attribute(relNs + "embed")?.Value;
+                if (!string.IsNullOrWhiteSpace(value))
+                    return value;
+            }
 
-        private static XElement? FindRelationshipById(IEnumerable<XElement> relationships, string relationshipId) =>
-            relationships.FirstOrDefault(element =>
-                RelationshipHasId(element, relationshipId));
+            return null;
+        }
+
+        private static XElement? FindRelationshipById(IEnumerable<XElement> relationships, string relationshipId)
+        {
+            foreach (var element in relationships)
+            {
+                if (RelationshipHasId(element, relationshipId))
+                    return element;
+            }
+
+            return null;
+        }
 
         private static bool TryAddPatchSafeLegacyNoteVmlDrawingPath(
             ZipArchive archive,
@@ -5748,9 +5775,16 @@ public sealed partial class XlsxFileAdapter
         private static XElement? FindWorksheetInsertionPoint(
             XElement root,
             XNamespace worksheetNs,
-            IReadOnlyCollection<string> laterWorksheetElements) =>
-            root.Elements()
-                .FirstOrDefault(element => IsWorksheetInsertionMarker(element, worksheetNs, laterWorksheetElements));
+            IReadOnlyCollection<string> laterWorksheetElements)
+        {
+            foreach (var element in root.Elements())
+            {
+                if (IsWorksheetInsertionMarker(element, worksheetNs, laterWorksheetElements))
+                    return element;
+            }
+
+            return null;
+        }
 
         private static bool IsWorksheetInsertionMarker(
             XElement element,
@@ -6905,10 +6939,16 @@ public sealed partial class XlsxFileAdapter
             return null;
         }
 
-        private static XElement? FindCellByReference(XElement rowElement, XName cellName, string reference) =>
-            rowElement
-                .Elements(cellName)
-                .FirstOrDefault(cell => CellReferenceMatches(cell, reference));
+        private static XElement? FindCellByReference(XElement rowElement, XName cellName, string reference)
+        {
+            foreach (var cell in rowElement.Elements(cellName))
+            {
+                if (CellReferenceMatches(cell, reference))
+                    return cell;
+            }
+
+            return null;
+        }
 
         private static bool CellReferenceMatches(XElement cell, string reference) =>
             string.Equals(cell.Attribute("r")?.Value, reference, StringComparison.OrdinalIgnoreCase);

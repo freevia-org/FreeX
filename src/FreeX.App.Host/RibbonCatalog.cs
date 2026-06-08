@@ -8,8 +8,14 @@ public sealed record RibbonCatalog(IReadOnlyList<RibbonTabDefinition> Tabs)
     public IEnumerable<RibbonTabDefinition> ContextualTabs =>
         Tabs.Where(tab => tab.IsContextual);
 
-    public RibbonTabDefinition? FindTab(string header) =>
-        Tabs.FirstOrDefault(tab => string.Equals(tab.Header, header, StringComparison.Ordinal));
+    public RibbonTabDefinition? FindTab(string header)
+    {
+        foreach (var tab in Tabs)
+            if (string.Equals(tab.Header, header, StringComparison.Ordinal))
+                return tab;
+
+        return null;
+    }
 }
 
 public sealed record RibbonTabDefinition(
@@ -20,8 +26,14 @@ public sealed record RibbonTabDefinition(
     bool IsContextual,
     IReadOnlyList<RibbonGroupDefinition> Groups)
 {
-    public RibbonGroupDefinition? FindGroup(string name) =>
-        Groups.FirstOrDefault(group => string.Equals(group.Name, name, StringComparison.Ordinal));
+    public RibbonGroupDefinition? FindGroup(string name)
+    {
+        foreach (var group in Groups)
+            if (string.Equals(group.Name, name, StringComparison.Ordinal))
+                return group;
+
+        return null;
+    }
 }
 
 public sealed record RibbonGroupDefinition(
@@ -29,8 +41,14 @@ public sealed record RibbonGroupDefinition(
     string? Id,
     IReadOnlyList<RibbonCommandDefinition> Commands)
 {
-    public RibbonCommandDefinition? FindCommand(string title) =>
-        Commands.FirstOrDefault(command => string.Equals(command.Title, title, StringComparison.Ordinal));
+    public RibbonCommandDefinition? FindCommand(string title)
+    {
+        foreach (var command in Commands)
+            if (string.Equals(command.Title, title, StringComparison.Ordinal))
+                return command;
+
+        return null;
+    }
 }
 
 public sealed record RibbonCommandDefinition(
