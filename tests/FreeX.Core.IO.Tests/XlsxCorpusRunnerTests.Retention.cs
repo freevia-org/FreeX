@@ -380,6 +380,25 @@ public partial class XlsxCorpusRunnerTests
                 relationship.Attribute("Target")?.Value == "ExternalWorkbook.xlsx" &&
                 relationship.Attribute("TargetMode")?.Value == "External")
             .Should().ContainSingle();
+
+        var adapter = new XlsxFileAdapter();
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-external-links-001");
+        var workbook = adapter.Load(source);
+        var beforeMetadata = CaptureWorkbookMetadataSummary(workbook);
+        beforeMetadata.ExternalLinks.Should().NotBeEmpty("the generated external-links corpus row must expose model metadata");
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 11, 1), new TextValue("freex-external-link-retention-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+
+        CaptureWorkbookMetadataSummary(reloaded).ExternalLinks.Should().BeEquivalentTo(
+            beforeMetadata.ExternalLinks,
+            options => options.WithStrictOrdering(),
+            "external link model metadata should survive ordinary save and reload");
     }
 
     [Fact]
