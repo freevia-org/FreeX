@@ -120,6 +120,9 @@ public static class XlsxPackagePath
     public static string NormalizeEntryPath(ZipArchiveEntry entry) =>
         NormalizeZipPath(entry.FullName.Replace('\\', '/'));
 
+    public static string NormalizePackagePath(string path) =>
+        NormalizeZipPath(path.Replace('\\', '/').TrimStart('/'));
+
     public static bool IsXmlEntryInDirectory(ZipArchiveEntry entry, string directory)
     {
         var path = NormalizeEntryPath(entry);
