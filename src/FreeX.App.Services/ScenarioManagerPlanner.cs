@@ -338,12 +338,25 @@ public static class ScenarioManagerPlanner
         string? replaceScenarioName)
     {
         var replaceName = NormalizeName(replaceScenarioName);
-        return workbook.Scenarios.FirstOrDefault(scenario =>
-            IsDuplicateScenarioName(scenario, name, replaceName));
+        foreach (var scenario in workbook.Scenarios)
+        {
+            if (IsDuplicateScenarioName(scenario, name, replaceName))
+                return scenario;
+        }
+
+        return null;
     }
 
-    private static WorkbookScenario? FindScenarioByName(Workbook workbook, string name) =>
-        workbook.Scenarios.FirstOrDefault(scenario => ScenarioNameEquals(scenario, name));
+    private static WorkbookScenario? FindScenarioByName(Workbook workbook, string name)
+    {
+        foreach (var scenario in workbook.Scenarios)
+        {
+            if (ScenarioNameEquals(scenario, name))
+                return scenario;
+        }
+
+        return null;
+    }
 
     private static int FindSelectedScenarioIndex(Workbook workbook, string? selectedScenarioName)
     {
@@ -357,8 +370,16 @@ public static class ScenarioManagerPlanner
             : 0;
     }
 
-    private static int FindScenarioIndexByName(Workbook workbook, string name) =>
-        workbook.Scenarios.FindIndex(scenario => ScenarioNameEquals(scenario, name));
+    private static int FindScenarioIndexByName(Workbook workbook, string name)
+    {
+        for (var index = 0; index < workbook.Scenarios.Count; index++)
+        {
+            if (ScenarioNameEquals(workbook.Scenarios[index], name))
+                return index;
+        }
+
+        return -1;
+    }
 
     private static bool IsDuplicateScenarioName(
         WorkbookScenario scenario,
