@@ -581,9 +581,7 @@ internal static partial class XlsxExcelCompatibilityNormalizer
                 RelationshipHasTypeOrTargetsPart(relationship, VolatileDependenciesRelationshipType, VolatileDependenciesPath))
             .ToList();
 
-        var current = volatileRelationships.FirstOrDefault(relationship =>
-            RelationshipHasType(relationship, VolatileDependenciesRelationshipType) &&
-            RelationshipTargetsPart(relationship, VolatileDependenciesPath));
+        var current = FindVolatileDependenciesRelationship(volatileRelationships);
         var changed = false;
         foreach (var relationship in volatileRelationships)
         {
@@ -640,15 +638,36 @@ internal static partial class XlsxExcelCompatibilityNormalizer
             XlsxPackageXmlEditor.ReplaceXml(archive, "xl/_rels/workbook.xml.rels", workbookRelationships!);
     }
 
+    private static XElement? FindVolatileDependenciesRelationship(IEnumerable<XElement> relationships)
+    {
+        foreach (var relationship in relationships)
+        {
+            if (RelationshipHasType(relationship, VolatileDependenciesRelationshipType) &&
+                RelationshipTargetsPart(relationship, VolatileDependenciesPath))
+            {
+                return relationship;
+            }
+        }
+
+        return null;
+    }
+
     private static XElement? FindRelationshipByIdAndType(
         XElement relationshipsRoot,
         string relationshipId,
-        string relationshipType) =>
-        relationshipsRoot
-            .Elements(PackageRelNs + "Relationship")
-            .FirstOrDefault(relationship =>
-                RelationshipHasId(relationship, relationshipId) &&
-                RelationshipHasType(relationship, relationshipType));
+        string relationshipType)
+    {
+        foreach (var relationship in relationshipsRoot.Elements(PackageRelNs + "Relationship"))
+        {
+            if (RelationshipHasId(relationship, relationshipId) &&
+                RelationshipHasType(relationship, relationshipType))
+            {
+                return relationship;
+            }
+        }
+
+        return null;
+    }
 
     private static bool RelationshipHasId(XElement relationship, string relationshipId) =>
         string.Equals(relationship.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal);
@@ -754,8 +773,13 @@ internal static partial class XlsxExcelCompatibilityNormalizer
             XlsxPackageXmlEditor.ReplaceXml(archive, "[Content_Types].xml", contentTypes!);
     }
 
-    private static XElement? FindContentTypeOverride(XElement contentTypesRoot, string normalizedPartName) =>
-        FindContentTypeOverrides(contentTypesRoot, normalizedPartName).FirstOrDefault();
+    private static XElement? FindContentTypeOverride(XElement contentTypesRoot, string normalizedPartName)
+    {
+        foreach (var overrideElement in FindContentTypeOverrides(contentTypesRoot, normalizedPartName))
+            return overrideElement;
+
+        return null;
+    }
 
     private static IEnumerable<XElement> FindContentTypeOverrides(XElement contentTypesRoot, string normalizedPartName) =>
         contentTypesRoot
