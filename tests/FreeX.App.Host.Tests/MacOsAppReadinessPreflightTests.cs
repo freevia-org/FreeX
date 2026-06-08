@@ -56,6 +56,15 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("open -W -n -a \"$app_path\" \"$open_with_smoke_file\" --args --macos-launch-smoke \"$open_with_report\"");
         script.Should().Contain("opened_source_path=.*freex-$runtime-open-with.csv");
         script.Should().Contain("freex-${{ matrix.runtime }}-macos-open-with-launch-smoke.txt");
+        script.Should().Contain("default_open_report=\"$artifact_root/freex-$runtime-macos-default-open-launch-smoke.txt\"");
+        script.Should().Contain("default_open_smoke_file=\"$RUNNER_TEMP/freex-$runtime-default-open.fxl\"");
+        script.Should().Contain("\"FileFormat\": \"FreeX.NativeJsonWorkbook\"");
+        script.Should().Contain("open -W -n \"$default_open_smoke_file\" --args --macos-launch-smoke \"$default_open_report\"");
+        script.Should().Contain("opened_source_path=.*freex-$runtime-default-open.fxl");
+        script.Should().Contain("launchservices_default_open_app_override=false");
+        script.Should().Contain("launchservices_default_open_document_extension=fxl");
+        script.Should().Contain("launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click");
+        script.Should().Contain("freex-${{ matrix.runtime }}-macos-default-open-launch-smoke.txt");
         script.Should().Contain("--macos-launch-smoke-verify-image-clipboard");
         script.Should().Contain("--macos-launch-smoke-verify-live-command-keys");
         script.Should().Contain("live_command_key_smoke_ready=true");
@@ -837,6 +846,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       unzip_root="$RUNNER_TEMP/freex-$runtime-unzip"
                       app_path="$unzip_root/FreeX.app"
                       open_with_report="$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt"
+                      default_open_report="$artifact_root/freex-$runtime-macos-default-open-launch-smoke.txt"
                       distribution_candidate="${"{{"} github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true {"}}"}"
                       artifact_channel="internal-preview"
                       distribution_contract="internal_preview_not_for_distribution_notarization_optional"
@@ -927,6 +937,18 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "viewport_columns=[1-9]" "$open_with_report"
                       grep -q "native_open_recent_menu_item=true" "$open_with_report"
                       grep -q "native_open_recent_item_count=[1-9]" "$open_with_report"
+                      default_open_smoke_file="$RUNNER_TEMP/freex-$runtime-default-open.fxl"
+                      cat > "$default_open_smoke_file" <<'JSON'
+                      {"{"} "FileFormat": "FreeX.NativeJsonWorkbook" {"}"}
+                      JSON
+                      open -W -n "$default_open_smoke_file" --args --macos-launch-smoke "$default_open_report"
+                      launchservices_default_open_app_override=false
+                      launchservices_default_open_document_extension=fxl
+                      launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click
+                      grep -q "opened_source_path=.*freex-$runtime-default-open.fxl" "$default_open_report"
+                      grep -q "launchservices_default_open_app_override=false" "$default_open_report"
+                      grep -q "launchservices_default_open_document_extension=fxl" "$default_open_report"
+                      grep -q "launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click" "$default_open_report"
                       grep -q "external_image_clipboard_paste_required=true" "$artifact_root/launch.txt"
                       grep -q "external_image_clipboard_paste=true" "$artifact_root/launch.txt"
                       grep -q "external_image_clipboard_picture_count=[1-9]" "$artifact_root/launch.txt"
@@ -1119,6 +1141,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       path: |
                         artifacts/freex-osx-arm64-macos-tester-instructions.md
                         artifacts/freex-${"{{"} matrix.runtime {"}}"}-macos-open-with-launch-smoke.txt
+                        artifacts/freex-${"{{"} matrix.runtime {"}}"}-macos-default-open-launch-smoke.txt
                   - name: Upload app diagnostics
                     if: always()
                     uses: actions/upload-artifact@v7
@@ -1128,6 +1151,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       path: |
                         artifacts/freex-osx-arm64-macos-evidence.txt
                         artifacts/freex-${"{{"} matrix.runtime {"}}"}-macos-open-with-launch-smoke.txt
+                        artifacts/freex-${"{{"} matrix.runtime {"}}"}-macos-default-open-launch-smoke.txt
             """);
 
         WriteMinimalIcns(root, "src/FreeX.App.Avalonia/Packaging/macos/FreeX.icns");

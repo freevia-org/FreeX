@@ -25,6 +25,8 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         script.Should().Contain("macos_launch_smoke");
         script.Should().Contain("RequireSeparateDiagnosticsArtifact");
         script.Should().Contain("freex-$Runtime-macos-open-with-launch-smoke.txt");
+        script.Should().Contain("freex-$Runtime-macos-default-open-launch-smoke.txt");
+        script.Should().Contain("launchservices_default_open_boundary");
         script.Should().Contain("macOS public-preview evidence preflight passed");
 
         signingRunbook.Should().Contain("tools/Test-MacOsPublicPreviewReadiness.ps1");
@@ -214,6 +216,21 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
                 "native_open_recent_item_count=1"));
 
         File.WriteAllText(
+            Path.Combine(bundleDirectory, names.DefaultOpenSmoke),
+            Lines(
+                "macos_launch_smoke=passed",
+                "window_shown=true",
+                $"opened_source_path=/tmp/freex-{runtime}-default-open.fxl",
+                "viewport_rows=24",
+                "viewport_columns=8",
+                "native_open_recent_menu_item=true",
+                "native_open_recent_item_count=1",
+                "launchservices_default_open_attempted=true",
+                "launchservices_default_open_app_override=false",
+                "launchservices_default_open_document_extension=fxl",
+                "launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click"));
+
+        File.WriteAllText(
             Path.Combine(bundleDirectory, names.NotarizationLog),
             distributionCandidate
                 ? Lines(
@@ -234,7 +251,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
                 $"# FreeX macOS App ({channel}, {runtime})",
                 "This artifact is a macOS port validation build. Internal-preview artifacts are not a public release channel.",
                 "For artifact_channel=internal-preview: This artifact is a preview build for macOS port validation. It is not a public release channel.",
-                $"Download {names.Zip}, {names.Checksum}, {names.Evidence}, {names.PackagingSmoke}, {names.LaunchSmoke}, {names.OpenWithSmoke}, {names.NotarizationLog}.",
+                $"Download {names.Zip}, {names.Checksum}, {names.Evidence}, {names.PackagingSmoke}, {names.LaunchSmoke}, {names.OpenWithSmoke}, {names.DefaultOpenSmoke}, {names.NotarizationLog}.",
                 $"Run shasum -a 256 -c {names.Checksum}.",
                 $"artifact_channel={channel}",
                 $"distribution_readiness={readiness}",
@@ -290,6 +307,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         string PackagingSmoke,
         string LaunchSmoke,
         string OpenWithSmoke,
+        string DefaultOpenSmoke,
         string NotarizationLog,
         string TesterInstructions)
     {
@@ -301,6 +319,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
                 $"freex-{runtime}-macos-packaging-smoke.log",
                 $"freex-{runtime}-macos-launch-smoke.txt",
                 $"freex-{runtime}-macos-open-with-launch-smoke.txt",
+                $"freex-{runtime}-macos-default-open-launch-smoke.txt",
                 $"freex-{runtime}-macos-notarization.log",
                 $"freex-{runtime}-macos-tester-instructions.md");
     }

@@ -102,6 +102,7 @@ jobs:
           smoke_log="$artifact_root/freex-$runtime-macos-packaging-smoke.log"
           launch_smoke_report="$artifact_root/freex-$runtime-macos-launch-smoke.txt"
           open_with_report="$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt"
+          default_open_report="$artifact_root/freex-$runtime-macos-default-open-launch-smoke.txt"
           notary_log="$artifact_root/freex-$runtime-macos-notarization.log"
           tester_instructions_path="$artifact_root/freex-$runtime-macos-tester-instructions.md"
           distribution_candidate="${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}"
@@ -679,11 +680,70 @@ jobs:
             grep -q "viewport_columns=[1-9]" "$open_with_report"
             grep -q "native_open_recent_menu_item=true" "$open_with_report"
             grep -q "native_open_recent_item_count=[1-9]" "$open_with_report"
+
+            default_open_smoke_file="$RUNNER_TEMP/freex-$runtime-default-open.fxl"
+            printf '%s\n' \
+              '{' \
+              '  "FileFormat": "FreeX.NativeJsonWorkbook",' \
+              '  "SchemaVersion": 1,' \
+              '  "MinimumReaderVersion": 1,' \
+              '  "Name": "macOS Default Open Smoke",' \
+              '  "Sheets": [' \
+              '    {' \
+              '      "Name": "Default Open"' \
+              '    }' \
+              '  ]' \
+              '}' > "$default_open_smoke_file"
+            rm -f "$default_open_report"
+            open -W -n "$default_open_smoke_file" --args --macos-launch-smoke "$default_open_report" &
+            default_open_pid=$!
+            for _ in {1..60}; do
+              if [[ -f "$default_open_report" ]]; then
+                break
+              fi
+              if ! kill -0 "$default_open_pid" 2>/dev/null; then
+                break
+              fi
+              sleep 1
+            done
+            if [[ ! -f "$default_open_report" ]]; then
+              {
+                echo "macos_launch_smoke=missing_report"
+                echo "launchservices_default_open_attempted=true"
+                echo "launchservices_default_open_app_override=false"
+                echo "launchservices_default_open_document_extension=fxl"
+                echo "launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click"
+              } > "$default_open_report"
+              osascript -e 'tell application id "io.github.tony-xmelon.freex" to quit' || true
+              wait "$default_open_pid" || true
+              cat "$default_open_report" >> "$evidence_path"
+              exit 1
+            fi
+            wait "$default_open_pid" || true
+            {
+              echo "launchservices_default_open_attempted=true"
+              echo "launchservices_default_open_app_override=false"
+              echo "launchservices_default_open_document_extension=fxl"
+              echo "launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click"
+            } >> "$default_open_report"
+            cat "$default_open_report" >> "$evidence_path"
+            grep -q "macos_launch_smoke=passed" "$default_open_report"
+            grep -q "window_shown=true" "$default_open_report"
+            grep -q "opened_source_path=.*freex-$runtime-default-open.fxl" "$default_open_report"
+            grep -q "viewport_rows=[1-9]" "$default_open_report"
+            grep -q "viewport_columns=[1-9]" "$default_open_report"
+            grep -q "native_open_recent_menu_item=true" "$default_open_report"
+            grep -q "native_open_recent_item_count=[1-9]" "$default_open_report"
+            grep -q "launchservices_default_open_attempted=true" "$default_open_report"
+            grep -q "launchservices_default_open_app_override=false" "$default_open_report"
+            grep -q "launchservices_default_open_document_extension=fxl" "$default_open_report"
+            grep -q "launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click" "$default_open_report"
           else
             echo "Skipping launch smoke for $runtime on $host_arch host." | tee "$smoke_log"
             echo "smoke_status=skipped_host_arch_mismatch" >> "$evidence_path"
             echo "macos_launch_smoke=skipped_host_arch_mismatch" > "$launch_smoke_report"
             echo "macos_launch_smoke=skipped_host_arch_mismatch" > "$open_with_report"
+            echo "macos_launch_smoke=skipped_host_arch_mismatch" > "$default_open_report"
           fi
 
           cat > "$tester_instructions_path" <<EOF
@@ -704,6 +764,7 @@ jobs:
           - freex-$runtime-macos-packaging-smoke.log
           - freex-$runtime-macos-launch-smoke.txt
           - freex-$runtime-macos-open-with-launch-smoke.txt
+          - freex-$runtime-macos-default-open-launch-smoke.txt
           - freex-$runtime-macos-notarization.log
 
           ## Verify
@@ -751,6 +812,7 @@ jobs:
             artifacts/freex-${{ matrix.runtime }}-macos-packaging-smoke.log
             artifacts/freex-${{ matrix.runtime }}-macos-launch-smoke.txt
             artifacts/freex-${{ matrix.runtime }}-macos-open-with-launch-smoke.txt
+            artifacts/freex-${{ matrix.runtime }}-macos-default-open-launch-smoke.txt
             artifacts/freex-${{ matrix.runtime }}-macos-notarization.log
             artifacts/freex-${{ matrix.runtime }}-macos-tester-instructions.md
           if-no-files-found: error
@@ -765,6 +827,7 @@ jobs:
             artifacts/freex-${{ matrix.runtime }}-macos-packaging-smoke.log
             artifacts/freex-${{ matrix.runtime }}-macos-launch-smoke.txt
             artifacts/freex-${{ matrix.runtime }}-macos-open-with-launch-smoke.txt
+            artifacts/freex-${{ matrix.runtime }}-macos-default-open-launch-smoke.txt
             artifacts/freex-${{ matrix.runtime }}-macos-notarization.log
             artifacts/freex-${{ matrix.runtime }}-macos-tester-instructions.md
             artifacts/freex-${{ matrix.runtime }}-macos-app.zip
