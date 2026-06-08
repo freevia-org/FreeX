@@ -31,8 +31,7 @@ public sealed class SetWaterfallTotalPointCommand : IWorkbookCommand
         if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is null)
+        if (!ChartCommandGuards.TryFindChart(sheet, _chartId, out var chart))
             return ChartCommandGuards.ChartNotFound();
 
         if (chart.Type != ChartType.Waterfall)
@@ -59,9 +58,10 @@ public sealed class SetWaterfallTotalPointCommand : IWorkbookCommand
         if (!_applied)
             return;
 
-        var chart = ctx.GetSheet(_sheetId).Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is not null)
-            chart.WaterfallTotalPointIndices = _previousTotals?.ToList();
+        if (!ChartCommandGuards.TryFindChart(ctx.GetSheet(_sheetId), _chartId, out var chart))
+            return;
+
+        chart.WaterfallTotalPointIndices = _previousTotals?.ToList();
     }
 
     private static SortedSet<int> ResolveEffectiveTotals(ChartModel chart, int pointCount)
