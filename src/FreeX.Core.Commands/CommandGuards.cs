@@ -7,6 +7,8 @@ internal static class CommandGuards
     private const string SheetProtectedMessage = "The sheet is protected.";
     private const string PivotTableNotFoundMessage = "PivotTable was not found.";
     private const string StructuredTableNotFoundMessage = "Table was not found.";
+    private const string SourceSheetNotFoundMessage = "Source sheet was not found.";
+    private const string TargetSheetNotFoundMessage = "Target sheet was not found.";
 
     public static CommandOutcome? RejectIfProtected(Sheet sheet)
     {
@@ -39,6 +41,12 @@ internal static class CommandGuards
 
     public static CommandOutcome RejectStructuredTableNotFound() =>
         new(false, StructuredTableNotFoundMessage);
+
+    public static CommandOutcome RejectSourceSheetNotFound() =>
+        new(false, SourceSheetNotFoundMessage);
+
+    public static CommandOutcome RejectTargetSheetNotFound() =>
+        new(false, TargetSheetNotFoundMessage);
 
     public static string CannotInsertColumnsPastLastColumn(uint count) =>
         $"Cannot insert {count} column(s): data would be pushed past the last column ({CellAddress.MaxCol}).";
