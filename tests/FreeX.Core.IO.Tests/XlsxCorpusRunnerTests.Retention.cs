@@ -1222,13 +1222,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-sheet-views-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetSheetViewsModel(sheet, "generated-worksheet-sheet-views-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-sheet-views-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-sheet-views-001");
         AssertWorksheetSheetViews(saved, "generated-worksheet-sheet-views-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetSheetViewsModel(
+            reloaded.GetSheetAt(0),
+            "worksheet sheet view model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -2028,6 +2036,13 @@ public partial class XlsxCorpusRunnerTests
         sheetView.Attribute("showZeros")!.Value.Should().Be("0", because);
         sheetView.Attribute("rightToLeft")!.Value.Should().Be("1", because);
         sheetView.Element(worksheetNs + "pivotSelection").Should().BeNull(because);
+    }
+
+    private static void AssertWorksheetSheetViewsModel(Sheet sheet, string because)
+    {
+        sheet.PrimaryViewMetadata.Should().NotBeNull(because);
+        BagAttr(sheet.PrimaryViewMetadata, "sheetView", "showZeros").Should().Be("0", because);
+        BagAttr(sheet.PrimaryViewMetadata, "sheetView", "rightToLeft").Should().Be("1", because);
     }
 
     private static void AssertWorksheetSheetFormat(Stream package, string because)
