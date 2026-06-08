@@ -271,6 +271,27 @@ function Assert-TableContainsLabels {
     }
 }
 
+function Assert-TableContainsHeaders {
+    param(
+        [Parameter(Mandatory = $true)][object]$Table,
+        [Parameter(Mandatory = $true)][string[]]$ExpectedHeaders
+    )
+
+    foreach ($expected in $ExpectedHeaders) {
+        $headerFound = $false
+        foreach ($header in @($Table.Headers)) {
+            if ([string]::Equals([string]$header, $expected, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $headerFound = $true
+                break
+            }
+        }
+
+        if (-not $headerFound) {
+            Add-ValidationError "Checklist section '$($Table.Section)' table must include a '$expected' column."
+        }
+    }
+}
+
 function Get-StatusAllowedValues {
     param(
         [Parameter(Mandatory = $true)][string]$Label,
@@ -511,6 +532,102 @@ function Test-HostedEvidenceCopyForwardConsistency {
     Assert-TextIncludesValue -Text $checksumEvidence -ExpectedValue $CandidateSummary.ZipSha256 -Label "Hosted Evidence Copy-Forward 'Checksum' evidence"
 }
 
+function Test-AccessibilityKnownIssues {
+    param([Parameter(Mandatory = $true)][object]$Table)
+
+    Assert-TableContainsHeaders -Table $Table -ExpectedHeaders @(
+        "Issue ID",
+        "Affected workflow",
+        "Severity",
+        "User impact / evidence",
+        "Workaround",
+        "Owner",
+        "Public-preview blocking",
+        "Decision / rationale"
+    )
+
+    if ($Table.Rows.Count -eq 0) {
+        return [pscustomobject]@{
+            IssueCount = 0
+            BlockingIssueCount = 0
+            HasNoneRow = $false
+        }
+    }
+
+    $noneRows = @()
+    foreach ($row in $Table.Rows) {
+        $issueId = Get-CellValue -Row $row -Column "Issue ID"
+        if ([string]::Equals($issueId, "None", [System.StringComparison]::OrdinalIgnoreCase)) {
+            $noneRows += $row
+        }
+    }
+
+    if ($noneRows.Count -gt 0) {
+        if ($noneRows.Count -ne 1 -or $Table.Rows.Count -ne 1) {
+            Add-ValidationError "Accessibility Known Issues must contain either exactly one 'None' row or issue rows, not both."
+        }
+
+        $noneRow = $noneRows[0]
+        Assert-ValueEquals -Value (Get-CellValue -Row $noneRow -Column "Affected workflow") -ExpectedValue "None" -Label "Accessibility Known Issues 'None' affected workflow"
+        Assert-ValueEquals -Value (Get-CellValue -Row $noneRow -Column "Severity") -ExpectedValue "None" -Label "Accessibility Known Issues 'None' severity"
+        Assert-FilledValue -Value (Get-CellValue -Row $noneRow -Column "User impact / evidence") -Label "Accessibility Known Issues 'None' user impact / evidence"
+        Assert-ValueEquals -Value (Get-CellValue -Row $noneRow -Column "Workaround") -ExpectedValue "None" -Label "Accessibility Known Issues 'None' workaround"
+        Assert-FilledValue -Value (Get-CellValue -Row $noneRow -Column "Owner") -Label "Accessibility Known Issues 'None' owner"
+        Assert-AllowedValue -Value (Get-CellValue -Row $noneRow -Column "Public-preview blocking") -AllowedValues @("No") -Label "Accessibility Known Issues 'None' public-preview blocking"
+        Assert-FilledValue -Value (Get-CellValue -Row $noneRow -Column "Decision / rationale") -Label "Accessibility Known Issues 'None' decision / rationale"
+
+        return [pscustomobject]@{
+            IssueCount = 0
+            BlockingIssueCount = 0
+            HasNoneRow = $true
+        }
+    }
+
+    $issueCount = 0
+    $blockingIssueCount = 0
+    foreach ($row in $Table.Rows) {
+        $issueId = Get-CellValue -Row $row -Column "Issue ID"
+        $issueLabel = $issueId
+        if ([string]::IsNullOrWhiteSpace($issueLabel)) {
+            $issueLabel = "<blank issue id>"
+        }
+
+        Assert-FilledValue -Value $issueId -Label "Accessibility Known Issues issue id"
+        Assert-FilledValue -Value (Get-CellValue -Row $row -Column "Affected workflow") -Label "Accessibility Known Issues '$issueLabel' affected workflow"
+        Assert-AllowedValue -Value (Get-CellValue -Row $row -Column "Severity") -AllowedValues @("Critical", "High", "Medium", "Low") -Label "Accessibility Known Issues '$issueLabel' severity"
+        Assert-FilledValue -Value (Get-CellValue -Row $row -Column "User impact / evidence") -Label "Accessibility Known Issues '$issueLabel' user impact / evidence"
+        Assert-FilledValue -Value (Get-CellValue -Row $row -Column "Workaround") -Label "Accessibility Known Issues '$issueLabel' workaround"
+        Assert-FilledValue -Value (Get-CellValue -Row $row -Column "Owner") -Label "Accessibility Known Issues '$issueLabel' owner"
+        $blocking = Get-CellValue -Row $row -Column "Public-preview blocking"
+        Assert-AllowedValue -Value $blocking -AllowedValues @("Yes", "No") -Label "Accessibility Known Issues '$issueLabel' public-preview blocking"
+        Assert-FilledValue -Value (Get-CellValue -Row $row -Column "Decision / rationale") -Label "Accessibility Known Issues '$issueLabel' decision / rationale"
+
+        $issueCount++
+        if ([string]::Equals($blocking, "Yes", [System.StringComparison]::OrdinalIgnoreCase)) {
+            $blockingIssueCount++
+            Add-ValidationError "Accessibility Known Issues '$issueLabel' is marked public-preview blocking; public-preview candidates must be Internal-only until it is resolved or accepted as non-blocking."
+        }
+    }
+
+    return [pscustomobject]@{
+        IssueCount = $issueCount
+        BlockingIssueCount = $blockingIssueCount
+        HasNoneRow = $false
+    }
+}
+
+function Test-VoiceOverKnownIssuesReviewConsistency {
+    param([Parameter(Mandatory = $true)][object]$VoiceOverTable)
+
+    $knownIssuesRow = Get-TableRowByLabel -Table $VoiceOverTable -LabelColumn "Surface" -Label "Known issues review"
+    if ($null -eq $knownIssuesRow) {
+        return
+    }
+
+    $knownIssuesEvidence = Get-RowEvidenceText -Row $knownIssuesRow -Columns @("Actual announcement or issue", "Evidence")
+    Assert-TextIncludesValue -Text $knownIssuesEvidence -ExpectedValue "Accessibility Known Issues" -Label "VoiceOver Smoke 'Known issues review'"
+}
+
 function Test-LogAndArtifactCollection {
     param([Parameter(Mandatory = $true)][object]$Table)
 
@@ -554,6 +671,18 @@ function Test-LogAndArtifactCollectionConsistency {
         Assert-TextIncludesValue -Text $evidenceFileEvidence -ExpectedValue $CandidateSummary.EvidenceFile -Label "Log And Artifact Collection '$($CandidateSummary.EvidenceFile)'"
     }
 
+    $releaseAssetsRow = Get-TableRowByLabel -Table $Table -LabelColumn "Artifact" -Label "macOS release-assets wrapper"
+    if ($null -ne $releaseAssetsRow) {
+        $releaseAssetsEvidence = Get-RowEvidenceText -Row $releaseAssetsRow -Columns @("Collected path or attachment", "Notes")
+        Assert-TextIncludesValue -Text $releaseAssetsEvidence -ExpectedValue "macos-release-assets" -Label "Log And Artifact Collection 'macOS release-assets wrapper'"
+    }
+
+    $manifestRow = Get-TableRowByLabel -Table $Table -LabelColumn "Artifact" -Label "FreeX-latest-macos-distribution-candidate-manifest.json"
+    if ($null -ne $manifestRow) {
+        $manifestEvidence = Get-RowEvidenceText -Row $manifestRow -Columns @("Collected path or attachment", "Notes")
+        Assert-TextIncludesValue -Text $manifestEvidence -ExpectedValue "FreeX-latest-macos-distribution-candidate-manifest.json" -Label "Log And Artifact Collection 'FreeX-latest-macos-distribution-candidate-manifest.json'"
+    }
+
     $diagnosticsRow = Get-TableRowByLabel -Table $Table -LabelColumn "Artifact" -Label "Diagnostics artifact"
     if ($null -ne $diagnosticsRow) {
         $diagnosticsEvidence = Get-RowEvidenceText -Row $diagnosticsRow -Columns @("Collected path or attachment", "Notes")
@@ -562,7 +691,10 @@ function Test-LogAndArtifactCollectionConsistency {
 }
 
 function Test-PublicPreviewDecision {
-    param([Parameter(Mandatory = $true)][object]$Table)
+    param(
+        [Parameter(Mandatory = $true)][object]$Table,
+        [AllowNull()][object]$AccessibilityKnownIssues
+    )
 
     $expectedDecisionRows = @(
         "Hosted public-preview preflight passed for both runtimes",
@@ -583,6 +715,10 @@ function Test-PublicPreviewDecision {
         else {
             Assert-AllowedValue -Value $result -AllowedValues @("Pass") -Label "Public-Preview Decision '$label'"
         }
+    }
+
+    if ($null -ne $AccessibilityKnownIssues -and $AccessibilityKnownIssues.BlockingIssueCount -gt 0) {
+        Add-ValidationError "Public-Preview Decision 'Known issues are listed with severity, workaround, owner, and blocking decision' cannot pass while Accessibility Known Issues has public-preview blocking issues."
     }
 }
 
@@ -716,6 +852,13 @@ if ($null -ne $voiceOver) {
         "Drawing objects*" = @("Pass", "N/A")
         "Gatekeeper or accessibility prompts" = @("Pass", "N/A")
     } -EvidenceColumns @("Actual announcement or issue", "Evidence")
+    Test-VoiceOverKnownIssuesReviewConsistency -VoiceOverTable $voiceOver
+}
+
+$accessibilityKnownIssues = Get-RequiredTable -Tables $tables -Section "Accessibility Known Issues"
+$accessibilityKnownIssuesDetails = $null
+if ($null -ne $accessibilityKnownIssues) {
+    $accessibilityKnownIssuesDetails = Test-AccessibilityKnownIssues -Table $accessibilityKnownIssues
 }
 
 $logCollection = Get-RequiredTable -Tables $tables -Section "Log And Artifact Collection"
@@ -730,6 +873,8 @@ if ($null -ne $logCollection) {
         "GitHub Actions app artifact wrapper",
         "Inner app ZIP and .sha256 file",
         $evidenceArtifactLabel,
+        "macOS release-assets wrapper",
+        "FreeX-latest-macos-distribution-candidate-manifest.json",
         "Packaging smoke log",
         "Launch smoke file",
         "Notarization log",
@@ -746,7 +891,7 @@ if ($null -ne $logCollection) {
 
 $publicDecision = Get-RequiredTable -Tables $tables -Section "Public-Preview Decision"
 if ($null -ne $publicDecision) {
-    Test-PublicPreviewDecision -Table $publicDecision
+    Test-PublicPreviewDecision -Table $publicDecision -AccessibilityKnownIssues $accessibilityKnownIssuesDetails
 }
 
 if ($validationErrors.Count -gt 0) {
