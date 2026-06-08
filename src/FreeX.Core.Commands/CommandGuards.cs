@@ -92,6 +92,12 @@ internal static class CommandGuards
         return table is not null;
     }
 
+    public static bool TryFindStructuredTableIndex(Sheet sheet, int tableId, out int tableIndex)
+    {
+        tableIndex = sheet.StructuredTables.FindIndex(table => table.Id == tableId);
+        return tableIndex >= 0;
+    }
+
     public static CommandOutcome RejectStructuredTableHasNoColumns() =>
         new(false, StructuredTableHasNoColumnsMessage);
 
