@@ -570,7 +570,9 @@ internal static class ExcelOpenSmoke
             return WorkbookSmokeResult.Fail(
                 input,
                 freeXSavedPath,
-                FormatFailure(ex));
+                FormatFailure(ex),
+                ex.Data["ExpectationFailureCounter"] as string,
+                ex.Data["ExpectationFailureKind"] as string);
         }
     }
 
@@ -19028,14 +19030,20 @@ internal static class ExcelOpenSmoke
 
         if (actual is null)
         {
-            throw new InvalidDataException(
+            var exception = new InvalidDataException(
                 $"{label} expectation for {input.Description} was not measured; expected at least {minimum}.");
+            exception.Data["ExpectationFailureCounter"] = label;
+            exception.Data["ExpectationFailureKind"] = "not-measured";
+            throw exception;
         }
 
         if (actual < minimum)
         {
-            throw new InvalidDataException(
+            var exception = new InvalidDataException(
                 $"{label} expectation failed for {input.Description}: expected at least {minimum}, observed {actual}.");
+            exception.Data["ExpectationFailureCounter"] = label;
+            exception.Data["ExpectationFailureKind"] = "below-minimum";
+            throw exception;
         }
     }
 
@@ -19173,6 +19181,21 @@ internal static class ExcelOpenSmoke
             total = summary.Total,
             passed = summary.Passed,
             failed = summary.Failed,
+            aggregates = new
+            {
+                openedTotals = BuildSummaryTotals(summary.Results.Select(result => result.Opened)),
+                reopenedTotals = BuildSummaryTotals(summary.Results.Select(result => result.Reopened)),
+                freeXPreSaveTotals = BuildSummaryTotals(summary.Results.Select(result => result.FreeXPreSave)),
+                freeXReopenedExcelSaveTotals = BuildSummaryTotals(summary.Results.Select(result => result.FreeXReopenedExcelSave)),
+                freeXWarningCounts = new
+                {
+                    preSaveWorkbookCount = summary.Results.Count(result => result.FreeXPreSaveWarnings.Count > 0),
+                    preSaveTotal = summary.Results.Sum(result => result.FreeXPreSaveWarnings.Count),
+                    reopenedWorkbookCount = summary.Results.Count(result => result.FreeXReopenedExcelSaveWarnings.Count > 0),
+                    reopenedTotal = summary.Results.Sum(result => result.FreeXReopenedExcelSaveWarnings.Count)
+                },
+                expectationFailuresByCounter = CountExpectationFailuresByCounter(summary.Results)
+            },
             corpus = corpusSelection is null
                 ? null
                 : new
@@ -19216,7 +19239,9 @@ internal static class ExcelOpenSmoke
                 freeXPreSaveWarnings = result.FreeXPreSaveWarnings,
                 freeXReopenedExcelSave = result.FreeXReopenedExcelSave,
                 freeXReopenedExcelSaveWarnings = result.FreeXReopenedExcelSaveWarnings,
-                error = result.Error
+                error = result.Error,
+                expectationFailureCounter = result.ExpectationFailureCounter,
+                expectationFailureKind = result.ExpectationFailureKind
             })
         };
 
@@ -19227,6 +19252,39 @@ internal static class ExcelOpenSmoke
         File.WriteAllText(reportPath, json);
         Console.WriteLine($"Report: {reportPath}");
     }
+
+    private static IReadOnlyDictionary<string, int> BuildSummaryTotals<TSummary>(IEnumerable<TSummary?> summaries)
+        where TSummary : class
+    {
+        var properties = typeof(TSummary)
+            .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+            .Where(property => property.PropertyType == typeof(int))
+            .ToArray();
+        var totals = properties.ToDictionary(
+            property => property.Name,
+            _ => 0,
+            StringComparer.Ordinal);
+
+        foreach (var summary in summaries)
+        {
+            if (summary is null)
+                continue;
+
+            foreach (var property in properties)
+            {
+                totals[property.Name] += (int)property.GetValue(summary)!;
+            }
+        }
+
+        return totals;
+    }
+
+    private static IReadOnlyDictionary<string, int> CountExpectationFailuresByCounter(IEnumerable<WorkbookSmokeResult> results) =>
+        results
+            .Select(result => result.ExpectationFailureCounter)
+            .Where(counter => !string.IsNullOrWhiteSpace(counter))
+            .GroupBy(counter => counter!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
 
     private static string GetUserProfile()
     {
