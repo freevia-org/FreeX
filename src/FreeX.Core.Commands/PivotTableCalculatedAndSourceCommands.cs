@@ -43,7 +43,7 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
         var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
             string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
         if (pivotTable is null)
-            return new CommandOutcome(false, "PivotTable was not found.");
+            return CommandGuards.RejectPivotTableNotFound();
 
         var fieldCount = checked((int)pivotTable.SourceRange.ColCount);
         if (_rowFields.Concat(_columnFields).Concat(_pageFields)
@@ -149,7 +149,7 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
         var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
             string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
         if (pivotTable is null)
-            return new CommandOutcome(false, "PivotTable was not found.");
+            return CommandGuards.RejectPivotTableNotFound();
 
         var fieldCount = checked((int)_sourceRange.ColCount);
         if (pivotTable.RowFields.Concat(pivotTable.ColumnFields).Concat(pivotTable.PageFields)
