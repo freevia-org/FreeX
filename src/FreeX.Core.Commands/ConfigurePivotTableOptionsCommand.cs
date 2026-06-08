@@ -150,9 +150,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)
             return protectedOutcome;
 
-        var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
-            string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
-        if (pivotTable is null)
+        if (!CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
             return CommandGuards.RejectPivotTableNotFound();
 
         var cache = ctx.Workbook.PivotCaches.FirstOrDefault(item => item.CacheId == pivotTable.CacheId);
@@ -233,13 +231,11 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
-            string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
-        var cache = pivotTable is null
-            ? null
-            : ctx.Workbook.PivotCaches.FirstOrDefault(item => item.CacheId == pivotTable.CacheId);
-        if (pivotTable is not null && _snapshot is not null)
+        if (CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable) && _snapshot is not null)
+        {
+            var cache = ctx.Workbook.PivotCaches.FirstOrDefault(item => item.CacheId == pivotTable.CacheId);
             _snapshot.Restore(pivotTable, cache);
+        }
         AddPivotTableCommand.Restore(sheet, _targetSnapshot);
         _snapshot = null;
         _targetSnapshot = null;
