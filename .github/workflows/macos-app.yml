@@ -106,10 +106,12 @@ jobs:
           MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
           MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
           MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+          FREEX_RUNTIME: ${{ matrix.runtime }}
+          FREEX_DISTRIBUTION_CANDIDATE: ${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}
         run: |
           set -euo pipefail
 
-          runtime="${{ matrix.runtime }}"
+          runtime="$FREEX_RUNTIME"
           output_root="$RUNNER_TEMP/freex-$runtime"
           app="$output_root/FreeX.app"
           artifact_root="$GITHUB_WORKSPACE/artifacts"
@@ -122,7 +124,7 @@ jobs:
           default_open_report="$artifact_root/freex-$runtime-macos-default-open-launch-smoke.txt"
           notary_log="$artifact_root/freex-$runtime-macos-notarization.log"
           tester_instructions_path="$artifact_root/freex-$runtime-macos-tester-instructions.md"
-          distribution_candidate="${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}"
+          distribution_candidate="$FREEX_DISTRIBUTION_CANDIDATE"
           artifact_channel="internal-preview"
           distribution_contract="internal_preview_not_for_distribution_notarization_optional"
           if [[ "$distribution_candidate" == "true" ]]; then
