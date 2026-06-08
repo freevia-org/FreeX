@@ -17798,6 +17798,13 @@ internal static class ExcelOpenSmoke
                 ]
             };
         }
+        else if (string.Equals(row.Id, "generated-dv-count-package-003", StringComparison.OrdinalIgnoreCase))
+        {
+            expectations = EnsureExpectations() with
+            {
+                MinFreeXReopenedDataValidations = saveReopen ? 10 : 0
+            };
+        }
         else if (string.Equals(row.Id, "generated-table-ref-formulas-package-003", StringComparison.OrdinalIgnoreCase))
         {
             expectations = EnsureExpectations() with

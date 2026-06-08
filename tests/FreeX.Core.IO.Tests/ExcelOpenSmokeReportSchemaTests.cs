@@ -25,6 +25,15 @@ public sealed class ExcelOpenSmokeReportSchemaTests
         AssertCoreValidationCalls(programSource, "excelSavedPath", "Excel-saved workbook", "stagedPath");
     }
 
+    [Fact]
+    public void SupportedMetadataExpectations_EnforceDataValidationCountPackageReopenedCounter()
+    {
+        var programSource = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ExcelOpenSmoke", "Program.cs");
+
+        programSource.Should().Contain("generated-dv-count-package-003");
+        programSource.Should().Contain("MinFreeXReopenedDataValidations = saveReopen ? 10 : 0");
+    }
+
     private static void AssertCoreValidationCalls(
         string source,
         string pathExpression,
