@@ -61,7 +61,8 @@ public sealed partial class MainWindowXamlKeyTipTests
         qatSource.Should().Contain("RebuildQuickAccessToolbar()");
         qatSource.Should().Contain("RibbonTooltip.SetKeyTip(button, FormatQuickAccessToolbarKeyTip(visibleIndex));");
         qatSource.Should().Contain("AutomationProperties.SetAutomationId(button, command.AutomationId);");
-        qatSource.Should().Contain("RegisterName(command.AutomationId, button);");
+        qatSource.Should().Contain("RegisterQuickAccessToolbarName(command.AutomationId, button);");
+        qatSource.Should().Contain("RegisterQuickAccessToolbarName(historyButton.Name, historyButton);");
         qatSource.Should().Contain("ExecuteQuickAccessToolbarCommand(command.Id, button, args)");
 
         keyTipSource.Should().Contain("private bool TryInvokeTopLevelQatKeyTip(string keyTip)");

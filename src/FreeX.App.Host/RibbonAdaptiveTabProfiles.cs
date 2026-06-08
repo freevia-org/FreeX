@@ -184,6 +184,19 @@ internal static class RibbonAdaptiveTabProfiles
                 Rule(760, collapseFromIndex: 0)
             ]),
         new(
+            Name: "PivotTable Analyze",
+            CatalogId: "PivotTableAnalyzeTab",
+            RequiredGroups: ["PivotTable", "Active Field", "Group", "Filter", "Data", "Actions", "Calculations", "Tools", "Show"],
+            Defaults: [],
+            Breakpoints:
+            [
+                Rule(760, collapseAll: true),
+                Rule(900, collapseGroups: ["Calculations", "Tools", "Show"]),
+                Rule(1100, collapseGroups: ["Tools", "Show"])
+            ],
+            RequiresMeasuredCorrection: true,
+            DisablePriorityExpansion: true),
+        new(
             Name: "Tiny",
             CatalogId: "HelpTab",
             RequiredGroups: [],
@@ -577,6 +590,12 @@ internal static class RibbonAdaptiveTabProfiles
             ["Window"] = ["ViewWindowGroup"],
             ["Help"] = ["HelpHelpGroup"],
             ["PivotTable"] = ["PivotTableAnalyzePivotTableGroup"],
+            ["Active Field"] = ["PivotTableAnalyzeActiveFieldGroup"],
+            ["Group"] = ["PivotTableAnalyzeGroupGroup"],
+            ["Filter"] = ["PivotTableAnalyzeFilterGroup"],
+            ["Data"] = ["PivotTableAnalyzeDataGroup"],
+            ["Actions"] = ["PivotTableAnalyzeActionsGroup"],
+            ["Calculations"] = ["PivotTableAnalyzeCalculationsGroup"],
             ["Layout"] = ["PivotTableDesignLayoutGroup"]
         };
 

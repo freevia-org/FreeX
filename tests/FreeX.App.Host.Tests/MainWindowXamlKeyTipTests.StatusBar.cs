@@ -50,6 +50,73 @@ public sealed partial class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void StatusBarCustomizeMenu_ExposesCheckableAggregatePanes()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var statusBarRoot = document
+            .Descendants(presentation + "Border")
+            .Single(border => border.Attribute(x + "Name")?.Value == "StatusBarRoot");
+
+        var menu = statusBarRoot
+            .Descendants(presentation + "ContextMenu")
+            .Single(contextMenu => contextMenu.Attribute(x + "Name")?.Value == "StatusBarCustomizeMenu");
+
+        menu.Attribute("Opened")?.Value.Should().Be("StatusBarCustomizeMenu_Opened");
+
+        var paneItems = menu
+            .Elements(presentation + "MenuItem")
+            .Where(item => item.Attribute("Click")?.Value == "StatusBarCustomizeMenuItem_Click")
+            .Where(item => item.Attribute("Tag")?.Value is "Average" or "Count" or "NumericalCount" or "Sum" or "Minimum" or "Maximum")
+            .Select(item => (
+                Name: item.Attribute(x + "Name")?.Value,
+                Header: LocalizedXamlTestSupport.ResolveLocalizedValue(item.Attribute("Header")?.Value),
+                Tag: item.Attribute("Tag")?.Value,
+                IsCheckable: item.Attribute("IsCheckable")?.Value))
+            .ToArray();
+
+        paneItems.Should().Equal(
+            ("StatusBarAverageMenuItem", UiText.Get("StatusBar_Average"), "Average", "True"),
+            ("StatusBarCountMenuItem", UiText.Get("StatusBar_Count"), "Count", "True"),
+            ("StatusBarNumericalCountMenuItem", UiText.Get("StatusBar_NumericalCount"), "NumericalCount", "True"),
+            ("StatusBarMinimumMenuItem", UiText.Get("StatusBar_Minimum"), "Minimum", "True"),
+            ("StatusBarMaximumMenuItem", UiText.Get("StatusBar_Maximum"), "Maximum", "True"),
+            ("StatusBarSumMenuItem", UiText.Get("StatusBar_Sum"), "Sum", "True"));
+    }
+
+    [Fact]
+    public void StatusBarViewShortcutButtons_InvokeWorkbookViewCommands()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var buttons = document
+            .Descendants(presentation + "ToggleButton")
+            .Where(button => button.Attribute(x + "Name")?.Value is
+                "StatusNormalViewButton" or
+                "StatusPageLayoutViewButton" or
+                "StatusPageBreakPreviewButton")
+            .ToDictionary(button => button.Attribute(x + "Name")!.Value);
+
+        buttons.Keys.Should().BeEquivalentTo(
+            "StatusNormalViewButton",
+            "StatusPageLayoutViewButton",
+            "StatusPageBreakPreviewButton");
+        buttons["StatusNormalViewButton"].Attribute("Click")?.Value.Should().Be("NormalViewBtn_Click");
+        buttons["StatusPageLayoutViewButton"].Attribute("Click")?.Value.Should().Be("PageLayoutViewBtn_Click");
+        buttons["StatusPageBreakPreviewButton"].Attribute("Click")?.Value.Should().Be("PageBreakPreviewBtn_Click");
+        buttons.Values.All(button =>
+            string.Equals(button.Attribute("Style")?.Value, "{StaticResource StatusBarViewToggleButtonStyle}", StringComparison.Ordinal) &&
+            button.Attribute("AutomationProperties.AutomationId") != null &&
+            button.Attribute("ToolTip") != null)
+            .Should()
+            .BeTrue();
+    }
+
+    [Fact]
     public void StatusBarAggregates_AreConstrainedAwayFromZoomControls()
     {
         var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");

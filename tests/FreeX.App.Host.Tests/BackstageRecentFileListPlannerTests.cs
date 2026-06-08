@@ -140,4 +140,106 @@ public sealed class BackstageRecentFileListPlannerTests
         source.Should().Contain("LastOpened = _clock()");
         source.Should().NotContain("LastOpened = DateTime.Now");
     }
+
+    [Fact]
+    public void RecentFilesStore_LimitForPersistence_PreservesPinnedFilesBeyondRecentLimit()
+    {
+        var entries = Enumerable.Range(0, RecentFilesStore.MaxRecentEntries)
+            .Select(index => new RecentFileEntry
+            {
+                Path = $@"C:\Work\Recent{index:00}.xlsx",
+                LastOpened = DateTimeOffset.UtcNow.AddMinutes(-index)
+            })
+            .Append(new RecentFileEntry
+            {
+                Path = @"C:\Work\PinnedOld.xlsx",
+                LastOpened = DateTimeOffset.UtcNow.AddDays(-30),
+                IsPinned = true
+            })
+            .Append(new RecentFileEntry
+            {
+                Path = @"C:\Work\DroppedOld.xlsx",
+                LastOpened = DateTimeOffset.UtcNow.AddDays(-31)
+            });
+
+        var limited = RecentFilesStore.LimitForPersistence(entries);
+
+        limited.Select(entry => entry.Path).Should().Contain(@"C:\Work\PinnedOld.xlsx");
+        limited.Select(entry => entry.Path).Should().NotContain(@"C:\Work\DroppedOld.xlsx");
+        limited.Count(entry => !entry.IsPinned).Should().Be(RecentFilesStore.MaxRecentEntries);
+    }
+
+    [Fact]
+    public void RecentFilesStore_LimitForPersistence_PreservesEntryOrder()
+    {
+        var entries = new[]
+        {
+            new RecentFileEntry { Path = @"C:\Work\New.xlsx" },
+            new RecentFileEntry { Path = @"C:\Work\Pinned.xlsx", IsPinned = true },
+            new RecentFileEntry { Path = @"C:\Work\Old.xlsx" }
+        };
+
+        var limited = RecentFilesStore.LimitForPersistence(entries, maxRecentEntries: 1);
+
+        limited.Select(entry => entry.Path).Should().Equal(@"C:\Work\New.xlsx", @"C:\Work\Pinned.xlsx");
+    }
+
+    [Fact]
+    public void RecentFilesStore_AddOrUpdate_DoesNotEvictPinnedEntriesWhenTrimming()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var storePath = Path.Combine(temp.Path, "recent.json");
+        var timestamp = new DateTimeOffset(2026, 6, 8, 12, 0, 0, TimeSpan.Zero);
+        var store = new RecentFilesStore(storePath, () => timestamp);
+        var pinnedPath = @"C:\Work\Recent00.xlsx";
+
+        for (var i = 0; i < RecentFilesStore.MaxRecentEntries; i++)
+        {
+            timestamp = timestamp.AddMinutes(1);
+            store.AddOrUpdate($@"C:\Work\Recent{i:00}.xlsx");
+        }
+
+        store.Pin(pinnedPath);
+
+        for (var i = RecentFilesStore.MaxRecentEntries; i < RecentFilesStore.MaxRecentEntries + 6; i++)
+        {
+            timestamp = timestamp.AddMinutes(1);
+            store.AddOrUpdate($@"C:\Work\Recent{i:00}.xlsx");
+        }
+
+        store.Entries.Count(entry => !entry.IsPinned).Should().Be(RecentFilesStore.MaxRecentEntries);
+        store.Entries.Should().Contain(entry => entry.Path == pinnedPath && entry.IsPinned);
+        store.Entries.Should().NotContain(entry => entry.Path == @"C:\Work\Recent01.xlsx");
+
+        var reloaded = RecentFilesStore.Load(storePath);
+        reloaded.Entries.Should().Contain(entry => entry.Path == pinnedPath && entry.IsPinned);
+    }
+
+    [Fact]
+    public void RecentFilesStore_Load_TrimsOverflowWithoutDroppingPinnedEntries()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var storePath = Path.Combine(temp.Path, "recent.json");
+        var entries = new List<RecentFileEntry>();
+        var timestamp = new DateTimeOffset(2026, 6, 8, 12, 0, 0, TimeSpan.Zero);
+        var pinnedPath = @"C:\Work\Pinned.xlsx";
+        entries.Add(new RecentFileEntry { Path = pinnedPath, LastOpened = timestamp, IsPinned = true });
+        for (var i = 0; i < RecentFilesStore.MaxRecentEntries + 5; i++)
+        {
+            entries.Add(new RecentFileEntry
+            {
+                Path = $@"C:\Work\Recent{i:00}.xlsx",
+                LastOpened = timestamp.AddMinutes(i + 1),
+                IsPinned = false
+            });
+        }
+
+        File.WriteAllText(storePath, JsonSerializer.Serialize(entries));
+
+        var store = RecentFilesStore.Load(storePath);
+
+        store.Entries.Count(entry => !entry.IsPinned).Should().Be(RecentFilesStore.MaxRecentEntries);
+        store.Entries.Should().Contain(entry => entry.Path == pinnedPath && entry.IsPinned);
+        store.Entries.Should().NotContain(entry => entry.Path == @"C:\Work\Recent25.xlsx");
+    }
 }

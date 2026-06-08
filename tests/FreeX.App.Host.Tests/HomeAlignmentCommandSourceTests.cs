@@ -64,6 +64,26 @@ public sealed class HomeAlignmentCommandSourceTests
         menuItem.Should().Contain($"Click=\"{handler}\"");
     }
 
+    [Theory]
+    [InlineData("MergeCenterMenuItem_Click", "Merge &amp; Center", "C", "Merge &amp; Center")]
+    [InlineData("MergeAcrossMenuItem_Click", "Merge Across", "A", "Merge Across")]
+    [InlineData("MergeCellsMenuItem_Click", "Merge Cells", "M", "Merge Cells")]
+    [InlineData("UnmergeCellsMenuItem_Click", "Unmerge Cells", "U", "Unmerge Cells")]
+    public void MergeMenuItems_ExposeExcelStyleChoices(
+        string handler,
+        string header,
+        string keyTip,
+        string commandName)
+    {
+        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
+        var menuItem = xaml.ExtractMenuItemElementByClickHandler(handler);
+
+        menuItem.ShouldContainLocalizedAttribute("Header", header);
+        menuItem.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
+        menuItem.Should().Contain($"Click=\"{handler}\"");
+        menuItem.ShouldContainInvariantCommandName(commandName);
+    }
+
     [Fact]
     public void AlignmentCommandHandlers_RouteThroughStyleDiffsAndRepeatableMergeCommand()
     {
@@ -81,6 +101,9 @@ public sealed class HomeAlignmentCommandSourceTests
         source.Should().Contain("TryExecuteRepeatableCurrentRangeCommand(");
         source.Should().Contain("\"Merge & Center\"");
         source.Should().Contain("CreateMergeAndCenterCommand");
+        source.Should().Contain("MergeAcrossMenuItem_Click");
+        source.Should().Contain("MergeCellsMenuItem_Click");
+        source.Should().Contain("UnmergeCellsMenuItem_Click");
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(TextRotation: 0))");
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(TextRotation: 45))");
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(TextRotation: -45))");

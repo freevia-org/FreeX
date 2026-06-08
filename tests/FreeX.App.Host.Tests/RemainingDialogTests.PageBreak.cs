@@ -25,12 +25,16 @@ public sealed partial class RemainingDialogTests
 
     [Theory]
     [InlineData("row 0")]
+    [InlineData("row 1")]
     [InlineData("row 1048577")]
     [InlineData("col 0")]
+    [InlineData("col 1")]
+    [InlineData("col A")]
     [InlineData("col 16385")]
     [InlineData("column 0")]
+    [InlineData("column A")]
     [InlineData("column XFE")]
-    public void PageBreakDialog_TryCreateResult_RejectsOutOfWorksheetBreakEntries(string input)
+    public void PageBreakDialog_TryCreateResult_RejectsInvalidBreakEntries(string input)
     {
         PageBreakDialog.TryCreateResult(input, out _).Should().BeFalse();
     }

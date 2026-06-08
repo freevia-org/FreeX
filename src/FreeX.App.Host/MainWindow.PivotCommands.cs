@@ -14,21 +14,13 @@ public partial class MainWindow
     private void PivotTableBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null || SheetGrid.SelectedRange is not { } sourceRange)
+        var sourcePlan = PivotTableSourceRangePlanner.CreatePlan(sheet, SheetGrid.SelectedRange);
+        if (!sourcePlan.IsValid || sourcePlan.SourceRange is not { } sourceRange)
         {
-            _messageService.ShowInfo(
-                UiText.Get("MainWindowMessage_PivotTableSelectSourceRange"),
-                UiText.Get("MainWindowMessage_InsertPivotTableTitle"));
+            ShowPivotTableSourceRangeError(sourcePlan.Error);
             return;
         }
-
-        if (sourceRange.RowCount < 2 || sourceRange.ColCount < 2)
-        {
-            _messageService.ShowInfo(
-                UiText.Get("MainWindowMessage_PivotTableSourceMinimumShape"),
-                UiText.Get("MainWindowMessage_InsertPivotTableTitle"));
-            return;
-        }
+        var activeSheet = sheet!;
 
         PivotTableDialog? dialog = null;
         dialog = new PivotTableDialog(
@@ -47,14 +39,14 @@ public partial class MainWindow
             return;
         }
 
-        var sourceSheet = _workbook.GetSheet(dialogSourceRange.Start.Sheet) ?? sheet;
+        var sourceSheet = _workbook.GetSheet(dialogSourceRange.Start.Sheet) ?? activeSheet;
         var dataFieldIndex = PivotUiPlanner.ChooseDefaultDataField(sourceSheet, dialogSourceRange);
         var rowFieldIndex = dataFieldIndex == 0 ? 1 : 0;
         if (dialog.Result.DestinationKind == PivotTableDestinationKind.NewWorksheet)
         {
             var command = new AddPivotTableToNewWorksheetCommand(
                 dialogSourceRange,
-                PivotUiPlanner.GenerateUniquePivotTableName(sheet),
+                PivotUiPlanner.GenerateUniquePivotTableName(activeSheet),
                 rowFieldIndexes: [rowFieldIndex],
                 dataFieldIndexes: [dataFieldIndex]);
 
@@ -89,7 +81,7 @@ public partial class MainWindow
             return;
         }
 
-        var name = PivotUiPlanner.GenerateUniquePivotTableName(sheet);
+        var name = PivotUiPlanner.GenerateUniquePivotTableName(activeSheet);
 
         if (!TryExecuteCommand(
                 new AddPivotTableCommand(
@@ -105,6 +97,28 @@ public partial class MainWindow
         UpdateViewport();
         if (dialog.Result.OpenFieldList)
             RefreshPivotFieldListPane();
+    }
+
+    private void ShowPivotTableSourceRangeError(PivotTableSourceRangeError error)
+    {
+        switch (error)
+        {
+            case PivotTableSourceRangeError.MissingSource:
+                _messageService.ShowInfo(
+                    UiText.Get("MainWindowMessage_PivotTableSelectSourceRange"),
+                    UiText.Get("MainWindowMessage_InsertPivotTableTitle"));
+                break;
+            case PivotTableSourceRangeError.MinimumShape:
+                _messageService.ShowInfo(
+                    UiText.Get("MainWindowMessage_PivotTableSourceMinimumShape"),
+                    UiText.Get("MainWindowMessage_InsertPivotTableTitle"));
+                break;
+            case PivotTableSourceRangeError.MissingHeaders:
+                _messageService.ShowWarning(
+                    UiText.Get("MainWindowMessage_PivotTableInvalidSourceRange"),
+                    UiText.Get("MainWindowMessage_InsertPivotTableTitle"));
+                break;
+        }
     }
 
     private void ApplyPivotTableRangeSelection(
@@ -388,7 +402,7 @@ public partial class MainWindow
     private void PivotFieldListBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var pivotTable = sheet is null ? null : PivotUiPlanner.FindPivotTableForSelection(sheet, SheetGrid.SelectedRange);
+        var pivotTable = sheet is null ? null : PivotUiPlanner.FindPivotTableContainingSelection(sheet, SheetGrid.SelectedRange);
         if (pivotTable is null)
         {
             _messageService.ShowInfo(
@@ -407,7 +421,7 @@ public partial class MainWindow
     private void PivotChangeDataSourceBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var pivotTable = sheet is null ? null : PivotUiPlanner.FindPivotTableForSelection(sheet, SheetGrid.SelectedRange);
+        var pivotTable = sheet is null ? null : PivotUiPlanner.FindPivotTableContainingSelection(sheet, SheetGrid.SelectedRange);
         if (sheet is null || pivotTable is null)
             return;
 
@@ -509,7 +523,7 @@ public partial class MainWindow
     private bool TryGetActivePivotTable(out Sheet sheet, out PivotTableModel pivotTable)
     {
         sheet = _workbook.GetSheet(_currentSheetId)!;
-        pivotTable = sheet is null ? null! : PivotUiPlanner.FindPivotTableForSelection(sheet, SheetGrid.SelectedRange)!;
+        pivotTable = sheet is null ? null! : PivotUiPlanner.FindPivotTableContainingSelection(sheet, SheetGrid.SelectedRange)!;
         return sheet is not null && pivotTable is not null;
     }
 

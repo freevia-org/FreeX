@@ -174,17 +174,19 @@ public sealed class RibbonTabParityTests
         CommandTitles(sortFilterGroup).Should().ContainInOrder(
             "Sort A to Z",
             "Sort Z to A",
+            "Sort",
             "Filter",
-            "Clear Filter",
-            "Advanced Filter");
+            "Clear",
+            "Advanced",
+            "Reapply");
         CommandTitles(sortFilterGroup).Should().NotContain(["Sort Ascending", "Sort Descending"]);
         CommandTitles(Group(dataTab, "Data Tools")).Should().NotContain("Subtotal");
         CommandTitles(Group(dataTab, "Outline")).Should().ContainInOrder(
             "Group",
             "Ungroup",
             "Subtotal",
-            "Collapse Group",
-            "Expand Group");
+            "Hide Detail",
+            "Show Detail");
         CommandTitles(Group(dataTab, "Forecast")).Should().Contain(["Forecast Sheet", "What-If Analysis"]);
     }
 
@@ -200,7 +202,8 @@ public sealed class RibbonTabParityTests
             "Accessibility",
             "Comments",
             "Notes",
-            "Protect");
+            "Protect",
+            "Changes");
 
         Command(proofingGroup, "Workbook Statistics").Content.Should().Be("Workbook Statistics");
         CommandTitles(proofingGroup).Should().NotContain("Workbook Stats");
@@ -211,6 +214,7 @@ public sealed class RibbonTabParityTests
             "Next Comment",
             "Show Comments"]);
         CommandTitles(Group(reviewTab, "Notes")).Should().Contain(["New Note", "Show Notes"]);
+        CommandTitles(Group(reviewTab, "Changes")).Should().Contain("Show Changes");
     }
 
     [Fact]
@@ -273,6 +277,67 @@ public sealed class RibbonTabParityTests
         CommandTitles(Group(analyzeTab, "Calculations")).Should().Contain("Calculated Field");
         CommandTitles(Group(analyzeTab, "Tools")).Should().Contain("PivotChart");
         CommandTitles(Group(analyzeTab, "Show")).Should().ContainInOrder("Field List", "+/- Buttons", "Field Headers");
+    }
+
+    [Fact]
+    public void ChartDesignTab_UsesExcelLikeContextualGroupOrder()
+    {
+        var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
+        var designTab = Tab(catalog, "Chart Design");
+
+        GroupNames(designTab).Should().Equal(
+            "Chart Layouts",
+            "Chart Styles",
+            "Data",
+            "Type",
+            "Location");
+
+        CommandTitles(Group(designTab, "Chart Layouts")).Should().Contain([
+            "Chart Titles",
+            "Data Labels",
+            "Trendline",
+            "Error Bars",
+            "Secondary Axis"]);
+        Command(Group(designTab, "Chart Styles"), "Chart Styles").KeyTip.Should().Be("Y");
+        Command(Group(designTab, "Data"), "Select Data Source").KeyTip.Should().Be("A");
+        CommandTitles(Group(designTab, "Type")).Should().ContainInOrder(
+            "Change Chart Type",
+            "Combo Chart",
+            "Combo Chart Series");
+        Command(Group(designTab, "Location"), "Move Chart").KeyTip.Should().Be("M");
+    }
+
+    [Fact]
+    public void ChartFormatTab_UsesExcelLikeContextualGroupOrder()
+    {
+        var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
+        var formatTab = Tab(catalog, "Format");
+
+        GroupNames(formatTab).Should().Equal(
+            "Current Selection",
+            "Shape Styles",
+            "Text",
+            "Axes");
+
+        CommandTitles(Group(formatTab, "Current Selection")).Should().Contain([
+            "Format Chart Area",
+            "Format Bar/Column",
+            "Format Pie/Doughnut"]);
+        CommandTitles(Group(formatTab, "Shape Styles")).Should().Contain([
+            "Chart Area Fill",
+            "Plot Area Fill",
+            "Series Color",
+            "Series Width",
+            "Marker Size"]);
+        CommandTitles(Group(formatTab, "Text")).Should().Contain([
+            "Chart Title Color",
+            "Chart Title Size",
+            "Legend Text",
+            "Data Label Text"]);
+        CommandTitles(Group(formatTab, "Axes")).Should().ContainInOrder(
+            "X Axis Bounds",
+            "Y Axis Bounds",
+            "X Axis Gridlines");
     }
 
     [Fact]

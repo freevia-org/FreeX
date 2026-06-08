@@ -197,7 +197,7 @@ public partial class MainWindow
             SheetGrid.SelectedRanges = null;
             _selectionAnchor = selectedRange.Start;
             _selectionCursor = selectedRange.End;
-            CellAddressBox.Text = FormatRangeReference(selectedRange.Start, selectedRange.End);
+            CellAddressBox.Text = FormatNameBoxSelectionText(selectedRange);
             FormulaBar.Text = FormatFormulaBarText(_workbook.GetSheet(_currentSheetId)?.GetCell(selectedRange.Start), selectedRange.Start);
             EnsureCellVisible(selectedRange.Start);
             FocusSheetGridIfNeeded();
@@ -221,6 +221,27 @@ public partial class MainWindow
 
         SelectGoToSpecialMatches(dialog.SelectedKind, dialog.SelectedOptions, showEmptyMessage: true, sheet, range);
     }
+
+    private void FindFormulasMenuItem_Click(object sender, RoutedEventArgs e) =>
+        SelectGoToSpecialMatches(GoToSpecialKind.Formulas, showEmptyMessage: true);
+
+    private void FindNotesMenuItem_Click(object sender, RoutedEventArgs e) =>
+        SelectGoToSpecialMatches(GoToSpecialKind.Comments, showEmptyMessage: true);
+
+    private void FindConditionalFormattingMenuItem_Click(object sender, RoutedEventArgs e) =>
+        SelectGoToSpecialMatches(GoToSpecialKind.ConditionalFormats, showEmptyMessage: true);
+
+    private void FindConstantsMenuItem_Click(object sender, RoutedEventArgs e) =>
+        SelectGoToSpecialMatches(GoToSpecialKind.Constants, showEmptyMessage: true);
+
+    private void FindDataValidationMenuItem_Click(object sender, RoutedEventArgs e) =>
+        SelectGoToSpecialMatches(GoToSpecialKind.DataValidation, showEmptyMessage: true);
+
+    private void FindSelectObjectsMenuItem_Click(object sender, RoutedEventArgs e) =>
+        SelectGoToSpecialMatches(GoToSpecialKind.Objects, showEmptyMessage: true);
+
+    private void FindSelectionPaneMenuItem_Click(object sender, RoutedEventArgs e) =>
+        SelectionPaneBtn_Click(sender, e);
 
     private void SelectGoToSpecialMatches(GoToSpecialKind kind, bool showEmptyMessage)
         => SelectGoToSpecialMatches(kind, null, showEmptyMessage);

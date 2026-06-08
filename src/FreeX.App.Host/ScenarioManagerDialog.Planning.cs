@@ -154,7 +154,7 @@ public sealed partial class ScenarioManagerDialog
             ChangingCellsText: "",
             ResultCellsText: "",
             CommentText: "",
-            Locked: false,
+            Locked: true,
             Hidden: false);
     }
 

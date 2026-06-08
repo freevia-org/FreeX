@@ -408,14 +408,51 @@ public partial class MainWindow
         }
 
         var sheet = _workbook.GetSheet(_currentSheetId);
-        if (DrawingTargetResolver.GetTargetPicture(sheet, address) is not null)
+        if (GetSelectedWorksheetContextMenuTargetKind(sheet, address) is { } selectedObjectKind)
+            return selectedObjectKind;
+
+        if (DrawingTargetResolver.GetTargetPicture(sheet, address, allowFallback: false) is not null)
             return WorksheetContextMenuTargetKind.Picture;
 
-        return DrawingTargetResolver.GetTargetDrawingObject(sheet, address)?.Kind switch
+        return DrawingTargetResolver.GetTargetDrawingObject(
+            sheet,
+            address,
+            allowFallback: false)?.Kind switch
         {
             DrawingObjectTargetKind.Shape => WorksheetContextMenuTargetKind.Shape,
             DrawingObjectTargetKind.TextBox => WorksheetContextMenuTargetKind.TextBox,
             _ => WorksheetContextMenuTargetKind.Worksheet
+        };
+    }
+
+    private WorksheetContextMenuTargetKind? GetSelectedWorksheetContextMenuTargetKind(Sheet? sheet, CellAddress address)
+    {
+        if (SheetGrid.SelectedObjectId == Guid.Empty ||
+            GetSelectedDrawingObjectTargetKind() is not { } selectedKind)
+        {
+            return null;
+        }
+
+        var target = DrawingTargetResolver.GetTargetDrawingObject(
+            sheet,
+            address,
+            selectedKind,
+            SheetGrid.SelectedObjectId,
+            includePictures: true,
+            allowFallback: false);
+        if (target is null ||
+            target.Anchor.Row != address.Row ||
+            target.Anchor.Col != address.Col)
+        {
+            return null;
+        }
+
+        return target.Kind switch
+        {
+            DrawingObjectTargetKind.Picture => WorksheetContextMenuTargetKind.Picture,
+            DrawingObjectTargetKind.Shape => WorksheetContextMenuTargetKind.Shape,
+            DrawingObjectTargetKind.TextBox => WorksheetContextMenuTargetKind.TextBox,
+            _ => null
         };
     }
 

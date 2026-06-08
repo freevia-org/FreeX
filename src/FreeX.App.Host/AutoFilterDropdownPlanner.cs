@@ -47,15 +47,11 @@ public sealed record AutoFilterMenuEntry(
     AutoFilterMenuEntryKind Kind,
     IReadOnlyList<string> CriteriaSuggestions,
     string Value,
-    IReadOnlyList<AutoFilterMenuEntry> Children)
+    IReadOnlyList<AutoFilterMenuEntry> Children,
+    bool IsEnabled = true)
 {
-    public AutoFilterMenuEntry(string header, AutoFilterMenuEntryKind kind)
-        : this(header, kind, [], header, [])
-    {
-    }
-
-    public AutoFilterMenuEntry(string header, AutoFilterMenuEntryKind kind, IReadOnlyList<string> criteriaSuggestions)
-        : this(header, kind, criteriaSuggestions, header, [])
+    public AutoFilterMenuEntry(string header, AutoFilterMenuEntryKind kind, bool isEnabled = true)
+        : this(header, kind, [], header, [], isEnabled)
     {
     }
 
@@ -63,8 +59,18 @@ public sealed record AutoFilterMenuEntry(
         string header,
         AutoFilterMenuEntryKind kind,
         IReadOnlyList<string> criteriaSuggestions,
-        string value)
-        : this(header, kind, criteriaSuggestions, value, [])
+        bool isEnabled = true)
+        : this(header, kind, criteriaSuggestions, header, [], isEnabled)
+    {
+    }
+
+    public AutoFilterMenuEntry(
+        string header,
+        AutoFilterMenuEntryKind kind,
+        IReadOnlyList<string> criteriaSuggestions,
+        string value,
+        bool isEnabled = true)
+        : this(header, kind, criteriaSuggestions, value, [], isEnabled)
     {
     }
 
@@ -99,6 +105,31 @@ public static class AutoFilterDropdownPlanner
 {
     public static string BlankDisplayText => UiText.Get("AutoFilter_BlankDisplayText");
 
+    public static bool TryGetAutoFilterRange(Sheet sheet, out GridRange range)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+        range = default;
+        if (sheet.AutoFilter is not { Reference: { } reference } ||
+            string.IsNullOrWhiteSpace(reference))
+        {
+            return false;
+        }
+
+        try
+        {
+            range = GridRange.Parse(reference, sheet.Id);
+            return true;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
     public static bool TryPlan(GridRange currentRegion, CellAddress activeCell, out AutoFilterDropdownPlan plan)
     {
         plan = default!;
@@ -131,8 +162,54 @@ public static class AutoFilterDropdownPlanner
                 value));
         }
 
+        items.Sort(CompareChecklistItems);
         return items;
     }
+
+    private static int CompareChecklistItems(AutoFilterChecklistItem left, AutoFilterChecklistItem right)
+    {
+        var leftKey = CreateChecklistSortKey(left.Value);
+        var rightKey = CreateChecklistSortKey(right.Value);
+        var rankComparison = leftKey.Rank.CompareTo(rightKey.Rank);
+        if (rankComparison != 0)
+            return rankComparison;
+
+        var numericComparison = leftKey.Number.CompareTo(rightKey.Number);
+        if (numericComparison != 0)
+            return numericComparison;
+
+        return string.Compare(left.DisplayText, right.DisplayText, StringComparison.CurrentCultureIgnoreCase);
+    }
+
+    private static AutoFilterChecklistSortKey CreateChecklistSortKey(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return new AutoFilterChecklistSortKey(5, 0);
+
+        if (double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.CurrentCulture, out var number) ||
+            double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out number))
+        {
+            return new AutoFilterChecklistSortKey(0, number);
+        }
+
+        if (DateTime.TryParse(value, System.Globalization.CultureInfo.CurrentCulture, out var date) ||
+            DateTime.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out date))
+        {
+            return new AutoFilterChecklistSortKey(1, date.Ticks);
+        }
+
+        if (string.Equals(value, "TRUE", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(value, "FALSE", StringComparison.OrdinalIgnoreCase))
+        {
+            return new AutoFilterChecklistSortKey(3, string.Equals(value, "TRUE", StringComparison.OrdinalIgnoreCase) ? 1 : 0);
+        }
+
+        return value.StartsWith('#')
+            ? new AutoFilterChecklistSortKey(4, 0)
+            : new AutoFilterChecklistSortKey(2, 0);
+    }
+
+    private readonly record struct AutoFilterChecklistSortKey(int Rank, double Number);
 
     public static AutoFilterMenuPlan CreateMenuPlan(Sheet sheet, AutoFilterDropdownPlan plan)
     {
@@ -150,12 +227,13 @@ public static class AutoFilterDropdownPlanner
         var filterEntry = AutoFilterMenuCatalog.CreateFilterFamilyEntry(filterKind);
         var colorOptions = CollectColorOptions(workbook, sheet, plan);
 
+        var hasActiveFilter = HasActiveFilter(sheet, plan.Range);
         var entries = new List<AutoFilterMenuEntry>
         {
             new(UiText.Get("AutoFilter_SortAscending"), AutoFilterMenuEntryKind.SortAscending),
             new(UiText.Get("AutoFilter_SortDescending"), AutoFilterMenuEntryKind.SortDescending),
             new(string.Empty, AutoFilterMenuEntryKind.Separator),
-            new(UiText.Format("AutoFilter_ClearFilterFrom", headerText), AutoFilterMenuEntryKind.ClearFilter)
+            new(UiText.Format("AutoFilter_ClearFilterFrom", headerText), AutoFilterMenuEntryKind.ClearFilter, isEnabled: hasActiveFilter)
         };
         if (colorOptions.Count > 0)
             entries.Add(new AutoFilterMenuEntry(UiText.Get("AutoFilter_FilterByColor"), AutoFilterMenuEntryKind.FilterByColor));
@@ -224,6 +302,33 @@ public static class AutoFilterDropdownPlanner
             sheet.GetStyleOnly(row, col) ??
             StyleId.Default;
         return workbook.GetStyle(styleId);
+    }
+
+    private static bool HasActiveFilter(Sheet sheet, GridRange range)
+    {
+        var firstDataRow = range.Start.Row + 1;
+        var lastDataRow = range.End.Row;
+        if (sheet.FilterHiddenRows.Count == 0 || firstDataRow > lastDataRow)
+            return false;
+
+        if ((uint)sheet.FilterHiddenRows.Count < range.RowCount)
+        {
+            foreach (var row in sheet.FilterHiddenRows)
+            {
+                if (row >= firstDataRow && row <= lastDataRow)
+                    return true;
+            }
+
+            return false;
+        }
+
+        for (var row = firstDataRow; row <= lastDataRow; row++)
+        {
+            if (sheet.FilterHiddenRows.Contains(row))
+                return true;
+        }
+
+        return false;
     }
 
     private static AutoFilterMenuFilterKind DetectFilterKind(Sheet sheet, AutoFilterDropdownPlan plan)

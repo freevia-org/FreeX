@@ -389,8 +389,10 @@
         </TabControl>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-            <Button Content="{local:Loc Key=Common_Ok}"     Width="70" Height="26" Margin="4,0" IsDefault="True" Click="OkButton_Click"/>
-            <Button Content="{local:Loc Key=Common_Cancel}" Width="70" Height="26" Margin="4,0" IsCancel="True"/>
+            <Button Content="{local:Loc Key=Common_Ok}"     Width="70" Height="26" Margin="4,0" IsDefault="True" Click="OkButton_Click"
+                    AutomationProperties.AutomationId="FormatCellsOkButton"/>
+            <Button Content="{local:Loc Key=Common_Cancel}" Width="70" Height="26" Margin="4,0" IsCancel="True"
+                    AutomationProperties.AutomationId="FormatCellsCancelButton"/>
         </StackPanel>
     </Grid>
 </Window>

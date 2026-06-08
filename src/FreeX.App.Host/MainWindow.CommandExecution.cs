@@ -294,10 +294,12 @@ public partial class MainWindow
         Func<SheetId, IWorkbookCommand> createCommand) =>
         TryExecuteGroupedSheetCommand(title, createCommand, out _);
 
-    private void ExecuteUndo()
+    private bool ExecuteUndo()
     {
         var outcome = _commandBus.Undo(_workbook.Id);
-        if (!outcome.Success) return;
+        if (!outcome.Success)
+            return false;
+
         MarkWorkbookDirty();
         InvalidateNavigationCaches();
         RecalculateAfterCommandOutcome(outcome);
@@ -305,12 +307,15 @@ public partial class MainWindow
         RefreshToolbar();
         RefreshStatusBar();
         NotifyOtherWindowsOfWorkbookChange();
+        return true;
     }
 
-    private void ExecuteRedo()
+    private bool ExecuteRedo()
     {
         var outcome = _commandBus.Redo(_workbook.Id);
-        if (!outcome.Success) return;
+        if (!outcome.Success)
+            return false;
+
         MarkWorkbookDirty();
         InvalidateNavigationCaches();
         RecalculateAfterCommandOutcome(outcome);
@@ -318,6 +323,7 @@ public partial class MainWindow
         RefreshToolbar();
         RefreshStatusBar();
         NotifyOtherWindowsOfWorkbookChange();
+        return true;
     }
 
     private void ExecuteRepeatLast()

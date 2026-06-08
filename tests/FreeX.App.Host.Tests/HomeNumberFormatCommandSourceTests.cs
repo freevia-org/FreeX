@@ -28,29 +28,43 @@ public sealed class HomeNumberFormatCommandSourceTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
 
-        source.Should().Contain("private void CurrencyBtn_Click(object sender, RoutedEventArgs e)    => ApplyStyleDiff(new StyleDiff(NumberFormat: \"$#,##0.00\"));");
+        source.Should().Contain("private void CurrencyBtn_Click(object sender, RoutedEventArgs e)    => ApplyStyleDiff(new StyleDiff(NumberFormat: HomeNumberFormatDropdownPlanner.AccountingNumberFormatCode));");
         source.Should().Contain("private void PercentBtn_Click(object sender, RoutedEventArgs e)     => ApplyStyleDiff(new StyleDiff(NumberFormat: \"0%\"));");
-        source.Should().Contain("private void CommaStyleBtn_Click(object sender, RoutedEventArgs e)  => ApplyStyleDiff(new StyleDiff(NumberFormat: \"#,##0.00\"));");
+        source.Should().Contain("private void CommaStyleBtn_Click(object sender, RoutedEventArgs e)  => ApplyStyleDiff(new StyleDiff(NumberFormat: HomeNumberFormatDropdownPlanner.CommaStyleNumberFormatCode));");
     }
 
     [Fact]
-    public void HomeNumberFormatDropdown_ProjectsFormatCellsCatalogAndMoreNumberFormatsAction()
+    public void HomeNumberFormatDropdown_UsesExcelLikeCompactCatalogAndMoreNumberFormatsAction()
     {
         HomeNumberFormatDropdownPlanner.Options
             .Where(option => !option.OpensFormatCellsDialog)
             .Select(option => option.Label)
             .Should()
-            .Contain(FormatCellsNumberFormatPlanner.Options.Select(option => option.Label).Distinct(StringComparer.OrdinalIgnoreCase));
+            .Equal(
+                "General",
+                "Number",
+                "Currency",
+                "Accounting",
+                "Short Date",
+                "Long Date",
+                "Time",
+                "Percentage",
+                "Fraction",
+                "Scientific",
+                "Text");
 
         HomeNumberFormatDropdownPlanner.Options.Should().ContainSingle(option =>
             option.Label == HomeNumberFormatDropdownPlanner.MoreNumberFormatsLabel
             && option.Code == null
             && option.OpensFormatCellsDialog);
         HomeNumberFormatDropdownPlanner.Options.Last().OpensFormatCellsDialog.Should().BeTrue();
+        HomeNumberFormatDropdownPlanner.Options.Single(option => option.Label == "Accounting").Code
+            .Should()
+            .Be(HomeNumberFormatDropdownPlanner.AccountingNumberFormatCode);
     }
 
     [Fact]
-    public void HomeNumberFormatDropdown_SourceUsesProjectionPlannerAndOpensFormatCellsNumberTab()
+    public void HomeNumberFormatDropdown_SourceUsesPlannerAndOpensFormatCellsNumberTab()
     {
         var startupSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Startup.cs");
         var formattingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");

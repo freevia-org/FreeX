@@ -63,7 +63,11 @@ public sealed partial class MainWindowRibbonKeyTipTests
         RunSta(() =>
         {
             using var harness = MainWindowHarness.Create();
-            harness.SelectRibbonTab("Insert", 800);
+            harness.SelectRibbonTab("Insert", 620);
+
+            harness.VisibleCommandKeyTipDump().Should().Contain(
+                "CH:Charts",
+                string.Join(", ", harness.VisibleCommandKeyTipDump()));
 
             harness.OpenRibbonMenu(Key.N, Key.C, Key.H);
             harness.ActiveMenuItemGestureText("Column Chart").Should().Be("CC");

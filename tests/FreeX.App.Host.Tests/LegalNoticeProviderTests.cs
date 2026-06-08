@@ -72,6 +72,7 @@ public sealed class LegalNoticeProviderTests
             close.IsDefault.Should().BeTrue();
             close.IsCancel.Should().BeTrue();
             AutomationProperties.GetAutomationId(close).Should().Be("LegalNoticesCloseButton");
+            AutomationProperties.GetHelpText(close).Should().Be("Shows the legal, privacy, and third-party notices packaged with this FreeX executable.");
         });
     }
 }

@@ -36,7 +36,7 @@ public sealed partial class ScenarioManagerDialogTests
         state.ChangingCellsText.Should().Be("");
         state.ResultCellsText.Should().Be("");
         state.CommentText.Should().Be("");
-        state.Locked.Should().BeFalse();
+        state.Locked.Should().BeTrue();
         state.Hidden.Should().BeFalse();
     }
 

@@ -32,7 +32,7 @@ public static class SheetProtectionWorkflow
         if (sheet.IsProtected)
         {
             return new SheetProtectionAction(
-                new UnprotectSheetCommand(sheet.Id),
+                new UnprotectSheetCommand(sheet.Id, result.Password),
                 UiText.Get("Protection_UnprotectSheetTitle"),
                 UiText.Get("Protection_SheetUnprotectedMessage"),
                 []);

@@ -157,6 +157,7 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("cut")) return new(RibbonCommandIconKind.Cut);
         if (name.Contains("copy")) return new(RibbonCommandIconKind.Copy);
         if (name.Contains("format painter")) return new(RibbonCommandIconKind.FormatPainter);
+        if (name.Contains("source formatting")) return new(RibbonCommandIconKind.FormatPainter);
         if (name.Contains("paste")) return new(RibbonCommandIconKind.Paste);
         if (name.Contains("increase font") || name.Contains("grow font")) return new(RibbonCommandIconKind.Font);
         if (name.Contains("decrease font") || name.Contains("shrink font")) return new(RibbonCommandIconKind.Font);
@@ -176,7 +177,8 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("wrap")) return new(RibbonCommandIconKind.Wrap);
         if (name.Contains("angle") || name.Contains("vertical text")) return new(RibbonCommandIconKind.Rotate);
         if (name == "100%") return new(RibbonCommandIconKind.Zoom);
-        if (name is "a4" or "letter" or "legal") return new(RibbonCommandIconKind.Page);
+        if (name is "letter" or "legal" or "executive" or "statement" or "tabloid" or "a3" or "a4" or "a5" or "b4 (jis)" or "b5 (jis)")
+            return new(RibbonCommandIconKind.Page);
         if (name.Contains("page orientation")) return new(RibbonCommandIconKind.Page);
         if (name.Contains("orientation")) return new(RibbonCommandIconKind.Orientation);
         if (name.Contains("align")) return new(RibbonCommandIconKind.Align);
@@ -188,6 +190,8 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("selection pane")) return new(RibbonCommandIconKind.Window);
         if (name is "hide" or "unhide") return new(RibbonCommandIconKind.Window);
         if (name.Contains("lasso")) return new(RibbonCommandIconKind.Target);
+        if (name == "constants") return new(RibbonCommandIconKind.Search);
+        if (name == "formulas") return new(RibbonCommandIconKind.Function);
         if (name.Contains("find") || name.Contains("select")) return new(RibbonCommandIconKind.Search);
         if (name.Contains("increase decimal")) return new(RibbonCommandIconKind.Decimal);
         if (name.Contains("decrease decimal")) return new(RibbonCommandIconKind.Decimal);
@@ -216,6 +220,7 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("chart")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart);
         if (name.Contains("sparkline")) return new(RibbonCommandIconKind.Sparkline, RibbonCommandIconAccent.Chart);
         if (name.Contains("stocks") || name.Contains("geography")) return new(RibbonCommandIconKind.Table, RibbonCommandIconAccent.Data);
+        if (name.Contains("circle invalid data")) return new(RibbonCommandIconKind.Target, RibbonCommandIconAccent.Warning);
         if (name.Contains("slicer")) return new(RibbonCommandIconKind.Filter);
         if (name.Contains("timeline")) return new(RibbonCommandIconKind.Date);
         if (name.Contains("link")) return new(RibbonCommandIconKind.Link);

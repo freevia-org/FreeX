@@ -340,6 +340,41 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    private void CircleInvalidDataMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return;
+
+        var matches = DataValidationCirclePlanner.FindInvalidDataCells(_workbook, sheet);
+        if (matches.Count == 0)
+        {
+            _messageService.ShowInfo(
+                "No invalid data found.",
+                "Circle Invalid Data");
+            return;
+        }
+
+        var ranges = SelectionRangeService.CompressAddresses(matches);
+        _selectionAnchor = matches[0];
+        _selectionCursor = matches[0];
+        SheetGrid.SelectedRange = ranges[0];
+        SheetGrid.SelectedRanges = ranges;
+        CellAddressBox.Text = ranges.Count == 1
+            ? FormatRangeReference(ranges[0].Start, ranges[0].End)
+            : $"{matches.Count} cells";
+        EnsureCellVisible(matches[0]);
+        UpdateViewport();
+        RefreshStatusBar();
+    }
+
+    private void ClearValidationCirclesMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        SheetGrid.SelectedRanges = null;
+        UpdateViewport();
+        RefreshStatusBar();
+    }
+
     private void ApplyConsolidateRangeSelection(
         ConsolidateDialog? dialog,
         ConsolidateRangeSelectionRequest request)
@@ -368,6 +403,12 @@ public partial class MainWindow
     }
 
     // ── What-If Analysis ─────────────────────────────────────────────────────
+
+    private void WhatIfAnalysisButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
+            OpenRibbonContextMenu(btn, cm);
+    }
 
     private void SubtotalBtn_Click(object sender, RoutedEventArgs e)
     {

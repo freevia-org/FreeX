@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Reflection;
@@ -139,7 +140,7 @@ public sealed class StatusBarLayoutTests
     }
 
     [Fact]
-    public void F6StatusBarFocus_StartsAtZoomOutAndTabStaysInZoomControls()
+    public void F6StatusBarFocus_StartsAtZoomOutAndTabsThroughFooterControls()
     {
         StaTestRunner.Run(() =>
         {
@@ -173,6 +174,9 @@ public sealed class StatusBarLayoutTests
 
             harness.HandleFocusedStatusBarTab().Should().BeTrue();
             harness.FocusedElementName.Should().Be("StatusZoomText");
+
+            harness.HandleFocusedStatusBarTab().Should().BeTrue();
+            harness.FocusedElementName.Should().Be("StatusNormalViewButton");
         });
     }
 
@@ -187,12 +191,24 @@ public sealed class StatusBarLayoutTests
             harness.FocusedElementName.Should().Be("StatusZoomOutButton");
 
             harness.HandleFocusedStatusBarTab().Should().BeTrue();
+            harness.FocusedElementName.Should().Be("ZoomSlider");
+
             harness.HandleFocusedStatusBarTab().Should().BeTrue();
+            harness.FocusedElementName.Should().Be("StatusZoomInButton");
+
             harness.HandleFocusedStatusBarTab().Should().BeTrue();
             harness.FocusedElementName.Should().Be("StatusZoomText");
 
             harness.HandleFocusedStatusBarTab().Should().BeTrue();
+            harness.FocusedElementName.Should().Be("StatusNormalViewButton");
 
+            harness.HandleFocusedStatusBarTab().Should().BeTrue();
+            harness.FocusedElementName.Should().Be("StatusPageLayoutViewButton");
+
+            harness.HandleFocusedStatusBarTab().Should().BeTrue();
+            harness.FocusedElementName.Should().Be("StatusPageBreakPreviewButton");
+
+            harness.HandleFocusedStatusBarTab().Should().BeTrue();
             harness.FocusedElementName.Should().Be("StatusZoomOutButton");
         });
     }
@@ -235,6 +251,63 @@ public sealed class StatusBarLayoutTests
             CenterY(zoomOut, window).Should().BeApproximately(sliderCenter, 0.75);
             CenterY(zoomIn, window).Should().BeApproximately(sliderCenter, 0.75);
             CenterY(zoomText, window).Should().BeApproximately(sliderCenter, 0.75);
+        });
+    }
+
+    [Fact]
+    public void StatusBarViewShortcuts_InvokeExistingWorksheetViewCommands()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.ClickStatusViewShortcut("StatusPageLayoutViewButton");
+
+            harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.PageLayout);
+            harness.StatusViewShortcutIsChecked("StatusPageLayoutViewButton").Should().BeTrue();
+
+            harness.ClickStatusViewShortcut("StatusPageBreakPreviewButton");
+
+            harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.PageBreakPreview);
+            harness.StatusViewShortcutIsChecked("StatusPageBreakPreviewButton").Should().BeTrue();
+
+            harness.ClickStatusViewShortcut("StatusNormalViewButton");
+
+            harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.Normal);
+            harness.StatusViewShortcutIsChecked("StatusNormalViewButton").Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public void StatusBarCustomizeMenu_TogglesAggregatePanes()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var sheet = harness.ActiveWorkbook.GetSheet(harness.CurrentSheetId)
+                ?? throw new InvalidOperationException("The active sheet should exist.");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(2)));
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new NumberValue(4)));
+
+            harness.OpenStatusBarCustomizeMenu();
+            harness.SetStatusBarCustomizeMenuItemChecked("StatusBarCountMenuItem", true);
+            harness.SetStatusBarCustomizeMenuItemChecked("StatusBarSumMenuItem", true);
+            harness.InvalidateNavigationCaches();
+            harness.SelectRange(1, 1, 1, 2);
+            harness.RefreshStatusBar();
+
+            harness.StatusTextVisibility("StatusSumText").Should().Be(Visibility.Visible);
+
+            harness.OpenStatusBarCustomizeMenu();
+            harness.StatusBarCustomizeMenuItemIsChecked("StatusBarSumMenuItem").Should().BeTrue();
+            harness.SetStatusBarCustomizeMenuItemChecked("StatusBarSumMenuItem", false);
+
+            harness.StatusTextVisibility("StatusSumText").Should().Be(Visibility.Collapsed);
+            harness.StatusTextVisibility("StatusCountText").Should().Be(Visibility.Visible);
+
+            harness.SetStatusBarCustomizeMenuItemChecked("StatusBarSumMenuItem", true);
+
+            harness.StatusTextVisibility("StatusSumText").Should().Be(Visibility.Visible);
         });
     }
 
@@ -283,7 +356,7 @@ public sealed class StatusBarLayoutTests
             harness.CycleShellFocus(reverse: false);
 
             harness.CurrentShellFocusTarget.Should().BeOneOf(ShellFocusTarget.TaskPane, ShellFocusTarget.StatusBar, ShellFocusTarget.Worksheet);
-            harness.FocusedElementName.Should().BeOneOf("PivotFieldListSearchBox", "StatusZoomOutButton", "SheetGrid");
+            harness.FocusedElementName.Should().BeOneOf("PivotFieldListSearchBox", "StatusNormalViewButton", "StatusZoomOutButton", "SheetGrid");
         });
     }
 
@@ -303,7 +376,7 @@ public sealed class StatusBarLayoutTests
             harness.CycleShellFocus(reverse: false);
 
             harness.CurrentShellFocusTarget.Should().BeOneOf(ShellFocusTarget.TaskPane, ShellFocusTarget.StatusBar, ShellFocusTarget.Worksheet);
-            harness.FocusedElementName.Should().BeOneOf("SlicerTimelinePaneCloseBtn", "SlicerTimelinePane", "StatusZoomOutButton", "SheetGrid");
+            harness.FocusedElementName.Should().BeOneOf("SlicerTimelinePaneCloseBtn", "SlicerTimelinePane", "StatusNormalViewButton", "StatusZoomOutButton", "SheetGrid");
         });
     }
 
@@ -385,6 +458,42 @@ public sealed class StatusBarLayoutTests
 
         public string StatusText(string textBlockName) =>
             ((TextBlock)_window.FindName(textBlockName)).Text;
+
+        public Visibility StatusTextVisibility(string textBlockName) =>
+            ((TextBlock)_window.FindName(textBlockName)).Visibility;
+
+        public WorksheetViewMode ActiveSheetViewMode =>
+            ActiveWorkbook.GetSheet(CurrentSheetId)?.ViewMode ?? WorksheetViewMode.Normal;
+
+        public bool? StatusViewShortcutIsChecked(string buttonName) =>
+            ((ToggleButton)_window.FindName(buttonName)).IsChecked;
+
+        public void ClickStatusViewShortcut(string buttonName)
+        {
+            var button = (ToggleButton)_window.FindName(buttonName);
+            button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
+            _window.UpdateLayout();
+            PumpDispatcher();
+        }
+
+        public void OpenStatusBarCustomizeMenu()
+        {
+            var root = (FrameworkElement)_window.FindName("StatusBarRoot");
+            var menu = root.ContextMenu ?? throw new InvalidOperationException("Status bar context menu should exist.");
+            menu.RaiseEvent(new RoutedEventArgs(ContextMenu.OpenedEvent, menu));
+            PumpDispatcher();
+        }
+
+        public bool? StatusBarCustomizeMenuItemIsChecked(string itemName) =>
+            StatusBarCustomizeMenuItem(itemName).IsChecked;
+
+        public void SetStatusBarCustomizeMenuItemChecked(string itemName, bool isChecked)
+        {
+            var menuItem = StatusBarCustomizeMenuItem(itemName);
+            menuItem.IsChecked = isChecked;
+            menuItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, menuItem));
+            PumpDispatcher();
+        }
 
         public void SelectRange(uint startRow, uint startCol, uint endRow, uint endCol)
         {
@@ -515,6 +624,15 @@ public sealed class StatusBarLayoutTests
             var element = (FrameworkElement)_window.FindName(name);
             element.Visibility = visibility;
             _window.UpdateLayout();
+        }
+
+        private MenuItem StatusBarCustomizeMenuItem(string itemName)
+        {
+            var root = (FrameworkElement)_window.FindName("StatusBarRoot");
+            var menu = root.ContextMenu ?? throw new InvalidOperationException("Status bar context menu should exist.");
+            return menu.Items
+                .OfType<MenuItem>()
+                .Single(item => item.Name == itemName);
         }
     }
 

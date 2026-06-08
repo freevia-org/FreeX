@@ -115,6 +115,31 @@ public sealed class PivotAnalyzeCommandSourceTests
         chartSource.Should().Contain("new ConfigurePivotChartOptionsCommand(");
     }
 
+    [Fact]
+    public void PivotAnalyzeContextualHandlers_RequireSelectionInsidePivotTable()
+    {
+        var pivotSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotCommands.cs");
+        var getActiveStart = pivotSource.IndexOf("private bool TryGetActivePivotTable", StringComparison.Ordinal);
+        var getSelectedStart = pivotSource.IndexOf("private bool TryGetSelectedPivotTable", StringComparison.Ordinal);
+        var getActiveSource = pivotSource[getActiveStart..getSelectedStart];
+        var fieldListStart = pivotSource.IndexOf("private void PivotFieldListBtn_Click", StringComparison.Ordinal);
+        var insertSlicerStart = pivotSource.IndexOf("private void PivotInsertSlicerBtn_Click", StringComparison.Ordinal);
+        var contextualSource = pivotSource[fieldListStart..insertSlicerStart];
+
+        getActiveSource.Should().Contain(
+            "FindPivotTableContainingSelection(sheet, SheetGrid.SelectedRange)",
+            "Excel enables PivotTable Analyze/Design commands only while the selection is inside the PivotTable");
+        getActiveSource.Should().NotContain(
+            "FindPivotTableForSelection(sheet, SheetGrid.SelectedRange)",
+            "falling back to the first PivotTable would let contextual commands operate from ordinary cells");
+        contextualSource.Should().Contain(
+            "FindPivotTableContainingSelection(sheet, SheetGrid.SelectedRange)",
+            "Field List and Change Data Source are PivotTable contextual commands");
+        contextualSource.Should().NotContain(
+            "FindPivotTableForSelection(sheet, SheetGrid.SelectedRange)",
+            "these handlers should not use the non-contextual workbook fallback");
+    }
+
     private static string ReadPivotAnalyzeTabXaml()
     {
         var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();

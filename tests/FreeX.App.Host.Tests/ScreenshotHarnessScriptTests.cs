@@ -24,12 +24,21 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain($"OutputNaming = \"{namingPattern}\"");
         script.Should().Contain($"CatalogEvidenceTarget = \"docs/testing/ui-test-catalog.md\"");
         script.Should().Contain("WidthSource = \"RibbonScreenshotTourPlanner.DefaultWidths\"");
-        script.Should().Contain("PlannedCaptureCount = $tabNames.Count * $widths.Count");
+        script.Should().Contain("$plannedCaptureCount = $tabNames.Count * $widths.Count");
+        script.Should().Contain("PlannedCaptureCount = $plannedCaptureCount");
+        script.Should().Contain("ActualCaptureCount = $files.Count");
+        script.Should().Contain("CaptureStatus = \"complete\"");
+        script.Should().Contain("CaptureMethod = \"CopyFromScreen-window-rectangle-top-band\"");
+        script.Should().Contain("ForegroundGuard = [pscustomobject]");
+        script.Should().Contain("ExpectedProcessId = $expectedPid");
+        script.Should().Contain("ExpectedWindowTitle = $expectedTitle");
         script.Should().Contain("WindowBounds = [pscustomobject]");
         script.Should().Contain("CaptureLogicalHeight = $captureLogicalHeight");
         script.Should().Contain("CapturePhysicalHeight = $capturePhysicalHeight");
         script.Should().Contain("Widths = $widths");
         script.Should().Contain("Captures = $files");
+        script.Should().Contain("CaptureSequence = $script:capturedFiles.Count + 1");
+        script.Should().Contain("CaptureKey = \"ribbon:$($widthSpec.Label):$safe\"");
         script.Should().Contain($"$fileName = \"{filePattern}\"");
         script.Should().Contain("$path = Join-Path $outDir $fileName");
     }
@@ -46,7 +55,33 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain("foreach ($tabName in $tabNames)");
         script.Should().Contain("Transient popups, dropdowns, native dialogs, and context menus require separate guarded captures.");
         script.Should().Contain("Ribbon tab captures cover the top window band only.");
-        script.Should().Contain("Global input is blocked unless the expected process and window title own the foreground window.");
+        script.Should().Contain("Global input and screen capture are blocked unless the expected process and window title own the foreground window.");
+    }
+
+    [Theory]
+    [InlineData("screenshot_excel.ps1", "excel", "freex")]
+    [InlineData("screenshot_ribbon.ps1", "freex", "excel")]
+    public void ScreenshotScripts_EmitInteractiveCapturePlanForTransientSurfaces(
+        string scriptName,
+        string evidenceSubject,
+        string counterpartSubject)
+    {
+        var script = ReadScript(scriptName);
+
+        script.Should().Contain("$interactiveCapturePlan = @(");
+        script.Should().Contain("InteractiveCapturePlan = $interactiveCapturePlan");
+        script.Should().Contain("ScenarioId = \"popup:table-autofilter-dropdown\"");
+        script.Should().Contain("ScenarioId = \"dropdown:home-number-format\"");
+        script.Should().Contain("ScenarioId = \"context-menu:worksheet-cell\"");
+        script.Should().Contain("ScenarioId = \"native-dialog:open-workbook\"");
+        script.Should().Contain("ScenarioFileName = \"table_autofilter_dropdown\"");
+        script.Should().Contain($"EvidenceSubject = \"{evidenceSubject}\"");
+        script.Should().Contain($"CounterpartSubject = \"{counterpartSubject}\"");
+        script.Should().Contain("CaptureStatus = \"planned-separate-foreground-guarded-capture\"");
+        script.Should().Contain("CaptureOutputNaming = \"interactive_<ScenarioFileName>_<State>.png\"");
+        script.Should().Contain("PairKeyPattern = \"interactive:table-autofilter-dropdown:<State>\"");
+        script.Should().Contain("Capture the active popup/dialog/menu bounds, not the owner-window ribbon band.");
+        script.Should().Contain("ForegroundGuard = ");
     }
 
     [Theory]
@@ -84,8 +119,7 @@ public sealed class ScreenshotHarnessScriptTests
             RegexOptions.Singleline);
 
         missingTabBranch.Success.Should().BeTrue($"{scriptName} should make missing planned tabs a hard failure");
-        missingTabBranch.Groups["body"].Value.Should().Contain("Get-ChildItem $outDir -Filter \"*.png\"");
-        missingTabBranch.Groups["body"].Value.Should().Contain("Remove-Item -Force");
+        missingTabBranch.Groups["body"].Value.Should().Contain("Clear-ScreenshotEvidenceArtifacts");
         missingTabBranch.Groups["body"].Value.Should().Contain("throw \"Ribbon screenshot tab '$tabName' was not found");
         missingTabBranch.Groups["body"].Value.Should().NotContain("Write-Warning");
         missingTabBranch.Groups["body"].Value.Should().NotContain("return");
@@ -128,6 +162,7 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain($"CounterpartTool = \"{counterpartTool}\"");
         script.Should().Contain($"CounterpartOutputNaming = \"{counterpartOutputNaming}\"");
         script.Should().Contain("PairKey = \"ribbon:$($widthSpec.Label):$safe\"");
+        script.Should().Contain("CaptureKey = \"ribbon:$($widthSpec.Label):$safe\"");
         script.Should().Contain("TabFileName = $safe");
         script.Should().Contain("WidthLabel = $widthSpec.Label");
         script.Should().Contain("WindowLogicalWidth = $widthSpec.WindowLogicalWidth");
@@ -165,6 +200,48 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain("CopyFromScreen($wrect.Left, $wrect.Top, 0, 0");
         script.Should().Contain("Width = $w");
         script.Should().Contain("Height = $captureH");
+    }
+
+    [Theory]
+    [InlineData("screenshot_excel.ps1")]
+    [InlineData("screenshot_ribbon.ps1")]
+    public void ScreenshotScripts_ClearPngsAndManifestWhenEvidenceIsInvalidated(string scriptName)
+    {
+        var script = ReadScript(scriptName);
+
+        script.Should().Contain("function Clear-ScreenshotEvidenceArtifacts");
+        script.Should().Contain("Get-ChildItem $outDir -Filter \"*.png\" -ErrorAction SilentlyContinue");
+        script.Should().Contain("Remove-Item -LiteralPath (Join-Path $outDir \"screenshot_manifest.json\")");
+        Regex.Matches(script, "Clear-ScreenshotEvidenceArtifacts")
+            .Count
+            .Should()
+            .BeGreaterThanOrEqualTo(4, "run start, foreground failure, missing tabs, and incomplete matrix should discard stale evidence");
+    }
+
+    [Theory]
+    [InlineData("screenshot_excel.ps1")]
+    [InlineData("screenshot_ribbon.ps1")]
+    public void ScreenshotScripts_CheckForegroundOwnershipImmediatelyBeforeScreenCopy(string scriptName)
+    {
+        var lines = File.ReadAllLines(WorkspaceFileLocator.Find("tools", scriptName));
+        var copyLine = Array.FindIndex(lines, line => line.Contains("CopyFromScreen($wrect.Left", StringComparison.Ordinal));
+
+        copyLine.Should().BeGreaterThan(0);
+        var precedingCaptureBlock = string.Join(
+            Environment.NewLine,
+            lines.Skip(Math.Max(0, copyLine - 8)).Take(8));
+
+        precedingCaptureBlock.Should().Contain("Assert-ForegroundWindowOwnership");
+        precedingCaptureBlock.Should().Contain("\"screen capture\"");
+    }
+
+    [Fact]
+    public void FreeXScreenshotScript_ChecksForegroundOwnershipBeforeUiaTabSelection()
+    {
+        var script = ReadScript("screenshot_ribbon.ps1");
+
+        script.Should().Contain("Assert-ForegroundWindowOwnership $proc.Id $expectedTitle \"ribbon tab selection\"");
+        script.Should().Contain("if ($selPat -ne $null) { $selPat.Select() }");
     }
 
     [Fact]

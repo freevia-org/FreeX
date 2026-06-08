@@ -112,6 +112,16 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    private void SyncStatusViewShortcutState(WorksheetViewMode viewMode)
+    {
+        if (StatusNormalViewButton is not null)
+            StatusNormalViewButton.IsChecked = viewMode == WorksheetViewMode.Normal;
+        if (StatusPageLayoutViewButton is not null)
+            StatusPageLayoutViewButton.IsChecked = viewMode == WorksheetViewMode.PageLayout;
+        if (StatusPageBreakPreviewButton is not null)
+            StatusPageBreakPreviewButton.IsChecked = viewMode == WorksheetViewMode.PageBreakPreview;
+    }
+
     private void CustomViewsBtn_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new CustomViewsDialog(_workbook, _commandBus) { Owner = this };
@@ -254,7 +264,8 @@ public partial class MainWindow
 
     private void FreezePanesPickerBtn_Click(object sender, RoutedEventArgs e)
     {
-        FreezeAtSelectionMenuItem_Click(sender, e);
+        if (sender is Button btn && btn.ContextMenu is { } cm)
+            OpenRibbonContextMenu(btn, cm);
     }
     private void FreezeAtSelectionMenuItem_Click(object sender, RoutedEventArgs e)
     {

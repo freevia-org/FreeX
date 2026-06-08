@@ -46,8 +46,17 @@ public partial class MainWindow
         if (_lastStatusBarDisplayState == state && IsStatusBarDisplayStateApplied(state))
             return;
 
-        SetVisibilityIfChanged(StatusReadyText, state.ReadyVisibility);
-        SetVisibilityIfChanged(StatusStatsPanel, state.StatsVisibility);
+        SetVisibilityIfChanged(StatusReadyText, _options.StatusBarShowCellMode ? state.ReadyVisibility : Visibility.Collapsed);
+        SetVisibilityIfChanged(StatusPageNumberText, _options.StatusBarShowPageNumber && !string.IsNullOrEmpty(StatusPageNumberText.Text)
+            ? Visibility.Visible
+            : Visibility.Collapsed);
+        SetVisibilityIfChanged(StatusStatsPanel, HasVisibleStatusBarStatistic() ? state.StatsVisibility : Visibility.Collapsed);
+        SetVisibilityIfChanged(StatusAvgText, _options.StatusBarShowAverage ? Visibility.Visible : Visibility.Collapsed);
+        SetVisibilityIfChanged(StatusCountText, _options.StatusBarShowCount ? Visibility.Visible : Visibility.Collapsed);
+        SetVisibilityIfChanged(StatusNumericalCountText, _options.StatusBarShowNumericalCount ? Visibility.Visible : Visibility.Collapsed);
+        SetVisibilityIfChanged(StatusSumText, _options.StatusBarShowSum ? Visibility.Visible : Visibility.Collapsed);
+        SetVisibilityIfChanged(StatusMinText, _options.StatusBarShowMinimum ? Visibility.Visible : Visibility.Collapsed);
+        SetVisibilityIfChanged(StatusMaxText, _options.StatusBarShowMaximum ? Visibility.Visible : Visibility.Collapsed);
         SetTextIfChanged(StatusReadyText, state.ReadyText);
         SetTextIfChanged(StatusAvgText, state.AverageText);
         SetTextIfChanged(StatusCountText, state.CountText);
@@ -55,12 +64,25 @@ public partial class MainWindow
         SetTextIfChanged(StatusSumText, state.SumText);
         SetTextIfChanged(StatusMinText, state.MinText);
         SetTextIfChanged(StatusMaxText, state.MaxText);
+        ApplyStatusBarInteractiveDisplayState();
         _lastStatusBarDisplayState = state;
     }
 
     private bool IsStatusBarDisplayStateApplied(StatusBarDisplayState state) =>
-        StatusReadyText.Visibility == state.ReadyVisibility &&
-        StatusStatsPanel.Visibility == state.StatsVisibility &&
+        StatusReadyText.Visibility == (_options.StatusBarShowCellMode ? state.ReadyVisibility : Visibility.Collapsed) &&
+        StatusPageNumberText.Visibility == (_options.StatusBarShowPageNumber && !string.IsNullOrEmpty(StatusPageNumberText.Text)
+            ? Visibility.Visible
+            : Visibility.Collapsed) &&
+        StatusStatsPanel.Visibility == (HasVisibleStatusBarStatistic() ? state.StatsVisibility : Visibility.Collapsed) &&
+        StatusAvgText.Visibility == (_options.StatusBarShowAverage ? Visibility.Visible : Visibility.Collapsed) &&
+        StatusCountText.Visibility == (_options.StatusBarShowCount ? Visibility.Visible : Visibility.Collapsed) &&
+        StatusNumericalCountText.Visibility == (_options.StatusBarShowNumericalCount ? Visibility.Visible : Visibility.Collapsed) &&
+        StatusSumText.Visibility == (_options.StatusBarShowSum ? Visibility.Visible : Visibility.Collapsed) &&
+        StatusMinText.Visibility == (_options.StatusBarShowMinimum ? Visibility.Visible : Visibility.Collapsed) &&
+        StatusMaxText.Visibility == (_options.StatusBarShowMaximum ? Visibility.Visible : Visibility.Collapsed) &&
+        StatusViewShortcutControls.Visibility == (_options.StatusBarShowViewShortcuts ? Visibility.Visible : Visibility.Collapsed) &&
+        StatusZoomText.Visibility == (_options.StatusBarShowZoom ? Visibility.Visible : Visibility.Collapsed) &&
+        StatusZoomSliderControls.Visibility == (_options.StatusBarShowZoomSlider ? Visibility.Visible : Visibility.Collapsed) &&
         StatusReadyText.Text == state.ReadyText &&
         StatusAvgText.Text == state.AverageText &&
         StatusCountText.Text == state.CountText &&
@@ -68,6 +90,110 @@ public partial class MainWindow
         StatusSumText.Text == state.SumText &&
         StatusMinText.Text == state.MinText &&
         StatusMaxText.Text == state.MaxText;
+
+    private bool HasVisibleStatusBarStatistic() =>
+        _options.StatusBarShowAverage ||
+        _options.StatusBarShowCount ||
+        _options.StatusBarShowNumericalCount ||
+        _options.StatusBarShowSum ||
+        _options.StatusBarShowMinimum ||
+        _options.StatusBarShowMaximum;
+
+    private void ApplyStatusBarInteractiveDisplayState()
+    {
+        SetVisibilityIfChanged(StatusViewShortcutControls, _options.StatusBarShowViewShortcuts ? Visibility.Visible : Visibility.Collapsed);
+        SetVisibilityIfChanged(StatusZoomText, _options.StatusBarShowZoom ? Visibility.Visible : Visibility.Collapsed);
+        SetVisibilityIfChanged(StatusZoomSliderControls, _options.StatusBarShowZoomSlider ? Visibility.Visible : Visibility.Collapsed);
+        SetVisibilityIfChanged(StatusZoomControls, _options.StatusBarShowZoom || _options.StatusBarShowZoomSlider
+            ? Visibility.Visible
+            : Visibility.Collapsed);
+        SetVisibilityIfChanged(StatusInteractiveControls, _options.StatusBarShowViewShortcuts ||
+            _options.StatusBarShowZoom ||
+            _options.StatusBarShowZoomSlider
+                ? Visibility.Visible
+                : Visibility.Collapsed);
+    }
+
+    private void StatusBarCustomizeMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        StatusBarCellModeMenuItem.IsChecked = _options.StatusBarShowCellMode;
+        StatusBarEndModeMenuItem.IsChecked = _options.StatusBarShowEndMode;
+        StatusBarSelectionModeMenuItem.IsChecked = _options.StatusBarShowSelectionMode;
+        StatusBarPageNumberMenuItem.IsChecked = _options.StatusBarShowPageNumber;
+        StatusBarAverageMenuItem.IsChecked = _options.StatusBarShowAverage;
+        StatusBarCountMenuItem.IsChecked = _options.StatusBarShowCount;
+        StatusBarNumericalCountMenuItem.IsChecked = _options.StatusBarShowNumericalCount;
+        StatusBarMinimumMenuItem.IsChecked = _options.StatusBarShowMinimum;
+        StatusBarMaximumMenuItem.IsChecked = _options.StatusBarShowMaximum;
+        StatusBarSumMenuItem.IsChecked = _options.StatusBarShowSum;
+        StatusBarViewShortcutsMenuItem.IsChecked = _options.StatusBarShowViewShortcuts;
+        StatusBarZoomMenuItem.IsChecked = _options.StatusBarShowZoom;
+        StatusBarZoomSliderMenuItem.IsChecked = _options.StatusBarShowZoomSlider;
+    }
+
+    private void StatusBarCustomizeMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem menuItem || menuItem.Tag is not string option)
+            return;
+
+        var isChecked = menuItem.IsChecked;
+        switch (option)
+        {
+            case "CellMode":
+                _options.StatusBarShowCellMode = isChecked;
+                break;
+            case "EndMode":
+                _options.StatusBarShowEndMode = isChecked;
+                break;
+            case "SelectionMode":
+                _options.StatusBarShowSelectionMode = isChecked;
+                break;
+            case "PageNumber":
+                _options.StatusBarShowPageNumber = isChecked;
+                break;
+            case "Average":
+                _options.StatusBarShowAverage = isChecked;
+                break;
+            case "Count":
+                _options.StatusBarShowCount = isChecked;
+                break;
+            case "NumericalCount":
+                _options.StatusBarShowNumericalCount = isChecked;
+                break;
+            case "Minimum":
+                _options.StatusBarShowMinimum = isChecked;
+                break;
+            case "Maximum":
+                _options.StatusBarShowMaximum = isChecked;
+                break;
+            case "Sum":
+                _options.StatusBarShowSum = isChecked;
+                break;
+            case "ViewShortcuts":
+                _options.StatusBarShowViewShortcuts = isChecked;
+                break;
+            case "Zoom":
+                _options.StatusBarShowZoom = isChecked;
+                break;
+            case "ZoomSlider":
+                _options.StatusBarShowZoomSlider = isChecked;
+                break;
+            default:
+                return;
+        }
+
+        if (!_options.Save())
+        {
+            ShowOwnedMessage(
+                _options.LastPersistenceError ?? "Failed to save status bar customization.",
+                UiText.Get("StatusBar_CustomizeStatusBar"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+
+        _lastStatusBarDisplayState = null;
+        RefreshStatusBar();
+    }
 
     private static void SetVisibilityIfChanged(UIElement element, Visibility visibility)
     {
@@ -90,6 +216,11 @@ public partial class MainWindow
         return (col, col);
     }
 
+    private (uint start, uint end) GetColumnResizeRange(Sheet sheet, uint col) =>
+        sheet.HiddenCols.Contains(col)
+            ? GetContiguousHiddenColumnRange(sheet, col)
+            : GetSelectedColRange(col);
+
     private (uint start, uint end) GetSelectedRowRange(uint row)
     {
         var sel = SheetGrid.SelectedRange;
@@ -99,12 +230,17 @@ public partial class MainWindow
         return (row, row);
     }
 
+    private (uint start, uint end) GetRowResizeRange(Sheet sheet, uint row) =>
+        sheet.HiddenRows.Contains(row)
+            ? GetContiguousHiddenRowRange(sheet, row)
+            : GetSelectedRowRange(row);
+
     private void OnColumnResizing(uint col, double newWidthPx)
     {
         CancelPendingViewportResizeRefresh();
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet == null) return;
-        var (startCol, endCol) = GetSelectedColRange(col);
+        var (startCol, endCol) = GetColumnResizeRange(sheet, col);
         CaptureColumnResizeSnapshot(sheet, startCol, endCol);
     }
 
@@ -114,7 +250,7 @@ public partial class MainWindow
         if (sheet == null) return;
         var (startCol, endCol) = _columnResizeSnapshot is { } snap && snap.SheetId == sheet.Id
             ? (snap.StartCol, snap.EndCol)
-            : GetSelectedColRange(col);
+            : GetColumnResizeRange(sheet, col);
         _columnResizeSnapshot = null;
         if (!TryExecuteGroupedSheetCommand("Column Width", sheetId => new SetColumnWidthCommand(sheetId, startCol, endCol, newWidthPx / 8.0)))
             return;
@@ -139,7 +275,7 @@ public partial class MainWindow
         CancelPendingViewportResizeRefresh();
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet == null) return;
-        var (startRow, endRow) = GetSelectedRowRange(row);
+        var (startRow, endRow) = GetRowResizeRange(sheet, row);
         CaptureRowResizeSnapshot(sheet, startRow, endRow);
     }
 
@@ -162,7 +298,7 @@ public partial class MainWindow
         if (sheet == null) return;
         var (startRow, endRow) = _rowResizeSnapshot is { } snap && snap.SheetId == sheet.Id
             ? (snap.StartRow, snap.EndRow)
-            : GetSelectedRowRange(row);
+            : GetRowResizeRange(sheet, row);
         _rowResizeSnapshot = null;
         if (!TryExecuteGroupedSheetCommand("Row Height", sheetId => new SetRowHeightCommand(sheetId, startRow, endRow, newHeightPx)))
             return;
@@ -202,6 +338,32 @@ public partial class MainWindow
             return;
 
         _rowResizeSnapshot = new RowResizeSnapshot(sheet.Id, startRow, endRow);
+    }
+
+    private static (uint start, uint end) GetContiguousHiddenColumnRange(Sheet sheet, uint col)
+    {
+        var startCol = col;
+        while (startCol > 1 && sheet.HiddenCols.Contains(startCol - 1))
+            startCol--;
+
+        var endCol = col;
+        while (endCol < CellAddress.MaxCol && sheet.HiddenCols.Contains(endCol + 1))
+            endCol++;
+
+        return (startCol, endCol);
+    }
+
+    private static (uint start, uint end) GetContiguousHiddenRowRange(Sheet sheet, uint row)
+    {
+        var startRow = row;
+        while (startRow > 1 && sheet.HiddenRows.Contains(startRow - 1))
+            startRow--;
+
+        var endRow = row;
+        while (endRow < CellAddress.MaxRow && sheet.HiddenRows.Contains(endRow + 1))
+            endRow++;
+
+        return (startRow, endRow);
     }
 
 }

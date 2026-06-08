@@ -45,6 +45,17 @@ public sealed partial class RibbonScreenshotTourPlannerTests
             .Should()
             .OnlyContain(fileName => fileName.EndsWith(".png", StringComparison.Ordinal))
             .And.OnlyHaveUniqueItems();
+
+        plan.Captures
+            .Select(capture => $"{capture.CaptureKey}:{capture.PairKey}:{capture.CounterpartFileName}")
+            .Should()
+            .Equal(
+            [
+                "ribbon:max:Home:ribbon:max:Home:excel_max_Home.png",
+                "ribbon:max:Page_Layout:ribbon:max:Page_Layout:excel_max_Page_Layout.png",
+                "ribbon:750:Home:ribbon:750:Home:excel_750_Home.png",
+                "ribbon:750:Page_Layout:ribbon:750:Page_Layout:excel_750_Page_Layout.png"
+            ]);
     }
 
     [Fact]
@@ -67,6 +78,19 @@ public sealed partial class RibbonScreenshotTourPlannerTests
                 "900:Data:immediate:900_Data_immediate",
                 "900:Data:first-render:900_Data_first_render",
                 "900:Data:settled:900_Data_settled"
+            ]);
+
+        plan.Captures
+            .Select(capture => capture.CaptureKey)
+            .Should()
+            .Equal(
+            [
+                "ribbon:900:Home:immediate",
+                "ribbon:900:Home:first-render",
+                "ribbon:900:Home:settled",
+                "ribbon:900:Data:immediate",
+                "ribbon:900:Data:first-render",
+                "ribbon:900:Data:settled"
             ]);
     }
 

@@ -122,7 +122,8 @@ public sealed partial class MainWindowXamlKeyTipTests
         source.Should().Contain("var dlg = new OptionsDialog");
         source.Should().Contain("ShowOwnedDialog(dlg)");
         source.Should().Contain("ShowOwnedMessage(");
-        source.Should().Contain("AppInfo.AboutText");
+        source.Should().Contain("var dialog = new AboutDialog();");
+        source.Should().Contain("ShowOwnedDialog(dialog);");
         source.Should().Contain("var dialog = new LegalNoticesDialog();");
         source.Should().Contain("ShowOwnedDialog(dialog);");
         invokeButtonSource.Should().Contain("IInvokeProvider");

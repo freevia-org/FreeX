@@ -10,8 +10,8 @@ public sealed partial class AutoFilterDropdownPlannerTests
     {
         var sheet = new Sheet(SheetId, "Sheet1");
         sheet.SetCell(new CellAddress(SheetId, 1, 1), new TextValue("Fruit"));
-        sheet.SetCell(new CellAddress(SheetId, 2, 1), new TextValue("Apple"));
-        sheet.SetCell(new CellAddress(SheetId, 3, 1), new TextValue("Banana"));
+        sheet.SetCell(new CellAddress(SheetId, 2, 1), new TextValue("Banana"));
+        sheet.SetCell(new CellAddress(SheetId, 3, 1), new TextValue("Apple"));
         sheet.SetCell(new CellAddress(SheetId, 4, 1), new TextValue("apple"));
 
         var plan = new AutoFilterDropdownPlan(
@@ -46,7 +46,7 @@ public sealed partial class AutoFilterDropdownPlannerTests
 
         var items = AutoFilterDropdownPlanner.CreateChecklistItems(sheet, plan);
 
-        items.Select(item => item.Value).Should().Equal("Open", "Closed");
+        items.Select(item => item.Value).Should().Equal("Closed", "Open");
     }
 
     [Fact]
@@ -69,9 +69,34 @@ public sealed partial class AutoFilterDropdownPlannerTests
 
         items.Should().Equal(
             new AutoFilterChecklistItem("12.5", "12.5"),
-            new AutoFilterChecklistItem("TRUE", "TRUE"),
             new AutoFilterChecklistItem("2026-05-19", "2026-05-19"),
+            new AutoFilterChecklistItem("TRUE", "TRUE"),
             new AutoFilterChecklistItem("#DIV/0!", "#DIV/0!"),
+            new AutoFilterChecklistItem(UiText.Get("AutoFilter_BlankDisplayText"), ""));
+    }
+
+    [Fact]
+    public void CreateChecklistItems_SortsDisplayValuesAndPinsBlanksLast()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 1, 1), new TextValue("Customer"));
+        sheet.SetCell(new CellAddress(SheetId, 2, 1), new TextValue(""));
+        sheet.SetCell(new CellAddress(SheetId, 3, 1), new TextValue("Zenith"));
+        sheet.SetCell(new CellAddress(SheetId, 4, 1), new TextValue("ACME, Inc."));
+        sheet.SetCell(new CellAddress(SheetId, 5, 1), new TextValue("Beta"));
+
+        var plan = new AutoFilterDropdownPlan(
+            new GridRange(
+                new CellAddress(SheetId, 1, 1),
+                new CellAddress(SheetId, 5, 1)),
+            FilterColumnOffset: 0);
+
+        var items = AutoFilterDropdownPlanner.CreateChecklistItems(sheet, plan);
+
+        items.Should().Equal(
+            new AutoFilterChecklistItem("ACME, Inc.", "ACME, Inc."),
+            new AutoFilterChecklistItem("Beta", "Beta"),
+            new AutoFilterChecklistItem("Zenith", "Zenith"),
             new AutoFilterChecklistItem(UiText.Get("AutoFilter_BlankDisplayText"), ""));
     }
 }

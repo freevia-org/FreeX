@@ -38,6 +38,15 @@ public interface ICommandStackChangeNotifier
     event EventHandler<CommandStackChangedEventArgs>? StackChanged;
 }
 
+public sealed record CommandHistoryEntry(string Label);
+
+public interface ICommandHistoryProvider
+{
+    IReadOnlyList<CommandHistoryEntry> GetUndoHistory(WorkbookId workbookId, int maxCount);
+
+    IReadOnlyList<CommandHistoryEntry> GetRedoHistory(WorkbookId workbookId, int maxCount);
+}
+
 public sealed class CommandStackChangedEventArgs : EventArgs
 {
     public CommandStackChangedEventArgs(WorkbookId workbookId, bool canUndo, bool canRedo)

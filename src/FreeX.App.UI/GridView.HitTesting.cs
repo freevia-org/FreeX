@@ -5,21 +5,23 @@ namespace FreeX.App.UI;
 
 public partial class GridView
 {
-    private (ResizeTarget Target, uint Index, double CurrentSize) HitTestResize(Point pos)
+    private (ResizeTarget Target, uint Index, double CurrentSize, bool IsCollapsedBoundary) HitTestResize(Point pos)
     {
         var hit = GridResizeHitPlanner.HitTest(
             Viewport,
             pos,
             ActualRowHeaderWidth,
             EffectiveColHeaderHeight,
-            ResizeHitZone);
+            ResizeHitZone,
+            HiddenRows,
+            HiddenColumns);
         var target = hit.Target switch
         {
             GridResizeHitTarget.Column => ResizeTarget.Column,
             GridResizeHitTarget.Row => ResizeTarget.Row,
             _ => ResizeTarget.None
         };
-        return (target, hit.Index, hit.CurrentSize);
+        return (target, hit.Index, hit.CurrentSize, hit.IsCollapsedBoundary);
     }
 
     private bool IsOnAutofillHandle(Point pos)

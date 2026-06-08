@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreeX.Core.Model;
+using System.Windows.Automation;
 using System.Windows.Controls;
 
 namespace FreeX.App.Host.Tests;
@@ -100,12 +101,44 @@ public sealed partial class ScenarioManagerDialogTests
         var source = ReadScenarioManagerDialogSource();
         source.Should().Contain("AutomationProperties.SetName(button, GetActionAutomationName(action));");
         source.Should().Contain("AutomationProperties.SetAutomationId(button, $\"ScenarioManager{action}Button\");");
-        source.Should().Contain("ScenarioManagerAction.List => UiText.Get(\"ScenarioManager_ListScenariosAutomationName\")");
-        source.Should().Contain("ScenarioManagerAction.List => UiText.Get(\"ScenarioManager_ShowTheListOfWorkbookScenarios\")");
         source.Should().Contain("ScenarioManagerAction.Report => UiText.Get(\"ScenarioManager_ScenarioSummaryAutomationName\")");
         source.Should().Contain("ScenarioManagerAction.Report => UiText.Get(\"ScenarioManager_CreateAScenarioSummaryReport\")");
         source.Should().Contain("AutomationProperties.SetName(closeButton, UiText.Get(\"ScenarioManager_CloseAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(closeButton, \"ScenarioManagerCloseButton\");");
         source.Should().Contain("AutomationProperties.SetHelpText(closeButton, UiText.Get(\"ScenarioManager_CloseTheScenarioManagerDialog\"));");
+    }
+
+    [Fact]
+    public void DialogVisibleSideButtonsMatchExcelScenarioManager()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("test");
+            var sheet = workbook.AddSheet("Sheet1");
+            workbook.Scenarios.Add(new WorkbookScenario("Best Case", []));
+            var dialog = new ScenarioManagerDialog(workbook, sheet.Id, name => name == sheet.Name ? sheet.Id : null);
+            dialog.Show();
+            try
+            {
+                dialog.UpdateLayout();
+                var sideButtonIds = WpfTestTree.FindVisualDescendants<Button>(dialog)
+                    .Select(AutomationProperties.GetAutomationId)
+                    .Where(id => id.StartsWith("ScenarioManager", StringComparison.Ordinal) &&
+                        id != "ScenarioManagerCloseButton")
+                    .ToList();
+
+                sideButtonIds.Should().Equal(
+                    "ScenarioManagerAddButton",
+                    "ScenarioManagerEditButton",
+                    "ScenarioManagerDeleteButton",
+                    "ScenarioManagerShowButton",
+                    "ScenarioManagerReportButton");
+                sideButtonIds.Should().NotContain("ScenarioManagerListButton");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 }

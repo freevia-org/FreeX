@@ -154,7 +154,7 @@ public static partial class FormulaAuditingService
 
         foreach (var precedent in GetDirectPrecedents(workbook, formulaAddress))
         {
-            result.Add(new FormulaTraceArrow(precedent, formulaAddress));
+            result.Add(new FormulaTraceArrow(precedent, formulaAddress, FormulaTraceArrowKind.Precedent));
             CollectPrecedentTraceArrows(workbook, precedent, result, visited);
         }
     }
@@ -170,7 +170,7 @@ public static partial class FormulaAuditingService
 
         foreach (var dependent in GetDirectDependents(workbook, address))
         {
-            result.Add(new FormulaTraceArrow(address, dependent));
+            result.Add(new FormulaTraceArrow(address, dependent, FormulaTraceArrowKind.Dependent));
             CollectDependentTraceArrows(workbook, dependent, result, visited);
         }
     }

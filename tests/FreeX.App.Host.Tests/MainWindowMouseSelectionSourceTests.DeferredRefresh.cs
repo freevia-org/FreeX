@@ -130,14 +130,14 @@ public sealed partial class MainWindowMouseSelectionSourceTests
             selectionSource.IndexOf("private void SetCellAddressBoxSelectionText", StringComparison.Ordinal)..
             selectionSource.IndexOf("private CellAddress? HitTestCell", StringComparison.Ordinal)];
 
-        setActiveCell.Should().Contain("SetCellAddressBoxSelectionText(FormatCellReference(addr));");
+        setActiveCell.Should().Contain("SetCellAddressBoxSelectionText(FormatNameBoxSelectionText(selectionRange));");
         setActiveCell.Should().Contain("SetFormulaBarSelectionText(FormatFormulaBarText(cell, addr));");
         extendSelection.Should().Contain("SetCellAddressBoxSelectionText(FormatRangeReference(anchor, to));");
         addSelection.Should().Contain("SetCellAddressBoxSelectionText(FormatRangeReference(activeRange.Start, activeRange.End));");
         addSelection.Should().Contain("SetFormulaBarSelectionText(FormatFormulaBarText(sheet?.GetCell(target), target));");
         helper.Should().Contain("CellAddressBox.IsKeyboardFocusWithin");
-        helper.Should().Contain("CellAddressBox.IsUndoEnabled = false;");
-        helper.Should().Contain("CellAddressBox.IsUndoEnabled = true;");
+        helper.Should().Contain("CellAddressBox.SetEditableTextUndoEnabled(false);");
+        helper.Should().Contain("CellAddressBox.SetEditableTextUndoEnabled(true);");
         helper.Should().Contain("FormulaBar.IsKeyboardFocusWithin");
         helper.Should().Contain("FormulaBar.IsUndoEnabled = false;");
         helper.Should().Contain("FormulaBar.IsUndoEnabled = true;");

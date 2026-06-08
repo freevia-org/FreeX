@@ -48,6 +48,7 @@ public partial class GridView
         RenderGridLines(dc);
         RenderCells(dc);
         RenderSplitPaneCells(dc);
+        RenderAutoFilterButtons(dc);
         if (isLiveResizing)
             RenderLiveResizeContinuation(dc);
         if (!skipHeavyLayers)
@@ -66,6 +67,7 @@ public partial class GridView
         if (!skipHeavyLayers)
         {
             RenderFormulaTraceArrows(dc);
+            RenderValidationCircles(dc);
             RenderAutofillPreview(dc);
             RenderMarchingAnts(dc);
         }
@@ -93,6 +95,9 @@ public partial class GridView
                 }
             }
         }
+
+        RenderShapePlacementPreview(dc);
+        RenderTextBoxPlacementPreview(dc);
     }
 
     private bool HasPostSelectionLayerWork(bool skipHeavyLayers)
@@ -105,11 +110,14 @@ public partial class GridView
         }
 
         if (skipHeavyLayers)
-            return false;
+            return _shapePlacementDragging || _textBoxPlacementDragging;
 
         return FormulaTraceArrows is { Count: > 0 } ||
+            ValidationCircleCells is { Count: > 0 } ||
             (_autofillDragging && _autofillSourceRange.HasValue && _autofillTarget.HasValue) ||
             ClipboardRange is not null ||
+            _shapePlacementDragging ||
+            _textBoxPlacementDragging ||
             HasDrawingObjectLayerWork();
     }
 

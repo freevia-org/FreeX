@@ -33,6 +33,7 @@
                     <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Text="{local:Loc Key=DataValidation_ValidationCriteria}" FontWeight="SemiBold" Margin="0,0,0,10"/>
                     <Label Grid.Row="1" Grid.Column="0" Content="{local:Loc Key=DataValidation_Allow}" Target="{Binding ElementName=TypeCombo}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
                     <ComboBox x:Name="TypeCombo" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"
+                              AutomationProperties.AutomationId="DataValidationAllowTypeCombo"
                               SelectionChanged="TypeCombo_SelectionChanged">
                         <ComboBoxItem Content="{local:Loc Key=DataValidation_AnyValue}" Tag="Any"/>
                         <ComboBoxItem Content="{local:Loc Key=DataValidation_WholeNumber}" Tag="WholeNumber"/>
@@ -46,6 +47,7 @@
 
                     <Label x:Name="OperatorLabel" Grid.Row="2" Grid.Column="0" Content="{local:Loc Key=DataValidation_Data}" Target="{Binding ElementName=OperatorCombo}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
                     <ComboBox x:Name="OperatorCombo" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"
+                              AutomationProperties.AutomationId="DataValidationOperatorCombo"
                               SelectionChanged="OperatorCombo_SelectionChanged">
                         <ComboBoxItem Content="{local:Loc Key=DataValidation_Between}" Tag="Between"/>
                         <ComboBoxItem Content="{local:Loc Key=DataValidation_NotBetween}" Tag="NotBetween"/>
@@ -62,13 +64,16 @@
                         <Button x:Name="SourcePickerButton" DockPanel.Dock="Right"
                                 Content="..." Width="28" Margin="6,0,0,0"
                                 AutomationProperties.Name="{local:Loc Key=DataValidation_SelectSourceRange}"
+                                AutomationProperties.AutomationId="DataValidationSourcePickerButton"
                                 AutomationProperties.HelpText="{local:Loc Key=DataValidation_CollapseDialogAndSelectAWorksheetRangeForTheValidationSo}"
                                 ToolTip="{local:Loc Key=DataValidation_CollapseDialogAndSelectSourceRange}"
                                 Click="SourcePickerButton_Click"/>
                         <Button x:Name="UseSelectionButton" DockPanel.Dock="Right"
                                 Content="{local:Loc Key=DataValidation_UseSelection}" Width="104" Margin="6,0,0,0"
+                                AutomationProperties.AutomationId="DataValidationUseSelectionButton"
                                 Click="UseSelectionButton_Click"/>
-                        <TextBox x:Name="Formula1Box"/>
+                        <TextBox x:Name="Formula1Box"
+                                 AutomationProperties.AutomationId="DataValidationFormula1Box"/>
                     </DockPanel>
 
                     <Label x:Name="Formula2Label" Grid.Row="4" Grid.Column="0" Content="{local:Loc Key=DataValidation_Maximum}" Target="{Binding ElementName=Formula2Box}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
@@ -76,19 +81,25 @@
                         <Button x:Name="SourcePicker2Button" DockPanel.Dock="Right"
                                 Content="..." Width="28" Margin="6,0,0,0"
                                 AutomationProperties.Name="{local:Loc Key=DataValidation_SelectMaximumRange}"
+                                AutomationProperties.AutomationId="DataValidationSourcePicker2Button"
                                 AutomationProperties.HelpText="{local:Loc Key=DataValidation_CollapseDialogAndSelectAWorksheetRangeForTheValidationMa}"
                                 ToolTip="{local:Loc Key=DataValidation_CollapseDialogAndSelectMaximumRange}"
                                 Click="SourcePicker2Button_Click"/>
                         <Button x:Name="UseSelection2Button" DockPanel.Dock="Right"
                                 Content="{local:Loc Key=DataValidation_UseSelection2}" Width="104" Margin="6,0,0,0"
+                                AutomationProperties.AutomationId="DataValidationUseSelection2Button"
                                 Click="UseSelection2Button_Click"/>
-                        <TextBox x:Name="Formula2Box"/>
+                        <TextBox x:Name="Formula2Box"
+                                 AutomationProperties.AutomationId="DataValidationFormula2Box"/>
                     </DockPanel>
 
-                    <CheckBox x:Name="ShowDropdownBox" Grid.Row="5" Grid.Column="1" Content="{local:Loc Key=DataValidation_InCellDropdown}" IsChecked="True" Margin="0,0,0,8"/>
+                    <CheckBox x:Name="ShowDropdownBox" Grid.Row="5" Grid.Column="1" Content="{local:Loc Key=DataValidation_InCellDropdown}" IsChecked="True" Margin="0,0,0,8"
+                              AutomationProperties.AutomationId="DataValidationInCellDropdownCheckBox"/>
                     <StackPanel Grid.Row="6" Grid.Column="1">
-                        <CheckBox x:Name="AllowBlankBox" Content="{local:Loc Key=DataValidation_IgnoreBlank}" IsChecked="True" Margin="0,0,0,8"/>
-                        <CheckBox x:Name="SameSettingsBox" Content="{local:Loc Key=DataValidation_ApplyTheseChangesToAllOtherCellsWithTheSameSettings}" Margin="0,0,0,8"/>
+                        <CheckBox x:Name="AllowBlankBox" Content="{local:Loc Key=DataValidation_IgnoreBlank}" IsChecked="True" Margin="0,0,0,8"
+                                  AutomationProperties.AutomationId="DataValidationIgnoreBlankCheckBox"/>
+                        <CheckBox x:Name="SameSettingsBox" Content="{local:Loc Key=DataValidation_ApplyTheseChangesToAllOtherCellsWithTheSameSettings}" Margin="0,0,0,8"
+                                  AutomationProperties.AutomationId="DataValidationSameSettingsCheckBox"/>
                     </StackPanel>
                 </Grid>
             </TabItem>
@@ -106,15 +117,18 @@
                     </Grid.ColumnDefinitions>
 
                     <CheckBox x:Name="ShowInputMessageBox" Grid.Row="0" Grid.Column="1"
-                              Content="{local:Loc Key=DataValidation_ShowInputMessageWhenCellIsSelected}" IsChecked="True" Margin="0,0,0,4"/>
+                              Content="{local:Loc Key=DataValidation_ShowInputMessageWhenCellIsSelected}" IsChecked="True" Margin="0,0,0,4"
+                              AutomationProperties.AutomationId="DataValidationShowInputMessageCheckBox"/>
                     <TextBlock Grid.Row="0" Grid.Column="1" Text="{local:Loc Key=DataValidation_WhenSelectingCellShowThisInputMessage}"
                                Margin="22,24,0,12" Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"/>
 
                     <Label Grid.Row="1" Grid.Column="0" Content="{local:Loc Key=DataValidation_InputTitle}" Target="{Binding ElementName=PromptTitleBox}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
-                    <TextBox x:Name="PromptTitleBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"/>
+                    <TextBox x:Name="PromptTitleBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"
+                             AutomationProperties.AutomationId="DataValidationPromptTitleBox"/>
 
                     <Label Grid.Row="2" Grid.Column="0" Content="{local:Loc Key=DataValidation_InputMessage2}" Target="{Binding ElementName=PromptMessageBox}" VerticalAlignment="Top" Padding="0" Margin="0,3,8,8"/>
                     <TextBox x:Name="PromptMessageBox" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"
+                             AutomationProperties.AutomationId="DataValidationPromptMessageBox"
                              AcceptsReturn="True" TextWrapping="Wrap"/>
                 </Grid>
             </TabItem>
@@ -133,31 +147,38 @@
                     </Grid.ColumnDefinitions>
 
                     <CheckBox x:Name="ShowErrorMessageBox" Grid.Row="0" Grid.Column="1"
-                              Content="{local:Loc Key=DataValidation_ShowErrorAlertAfterInvalidDataIsEntered}" IsChecked="True" Margin="0,0,0,4"/>
+                              Content="{local:Loc Key=DataValidation_ShowErrorAlertAfterInvalidDataIsEntered}" IsChecked="True" Margin="0,0,0,4"
+                              AutomationProperties.AutomationId="DataValidationShowErrorMessageCheckBox"/>
                     <TextBlock Grid.Row="0" Grid.Column="1" Text="{local:Loc Key=DataValidation_WhenUserEntersInvalidDataShowThisErrorAlert}"
                                Margin="22,24,0,12" Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"/>
 
                     <Label Grid.Row="1" Grid.Column="0" Content="{local:Loc Key=DataValidation_AlertStyle}" Target="{Binding ElementName=AlertStyleCombo}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
-                    <ComboBox x:Name="AlertStyleCombo" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8">
+                    <ComboBox x:Name="AlertStyleCombo" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"
+                              AutomationProperties.AutomationId="DataValidationAlertStyleCombo">
                         <ComboBoxItem Content="{local:Loc Key=DataValidation_Stop}" Tag="Stop"/>
                         <ComboBoxItem Content="{local:Loc Key=DataValidation_Warning}" Tag="Warning"/>
                         <ComboBoxItem Content="{local:Loc Key=DataValidation_Information}" Tag="Information"/>
                     </ComboBox>
 
                     <Label Grid.Row="2" Grid.Column="0" Content="{local:Loc Key=DataValidation_ErrorTitle}" Target="{Binding ElementName=ErrorTitleBox}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
-                    <TextBox x:Name="ErrorTitleBox" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"/>
+                    <TextBox x:Name="ErrorTitleBox" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"
+                             AutomationProperties.AutomationId="DataValidationErrorTitleBox"/>
 
                     <Label Grid.Row="3" Grid.Column="0" Content="{local:Loc Key=DataValidation_ErrorMessage}" Target="{Binding ElementName=ErrorMessageBox}" VerticalAlignment="Top" Padding="0" Margin="0,3,8,8"/>
                     <TextBox x:Name="ErrorMessageBox" Grid.Row="3" Grid.Column="1" Margin="0,0,0,8"
+                             AutomationProperties.AutomationId="DataValidationErrorMessageBox"
                              AcceptsReturn="True" TextWrapping="Wrap"/>
                 </Grid>
             </TabItem>
         </TabControl>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Content="{local:Loc Key=DataValidation_ClearAll}" Width="78" Margin="0,0,16,0" Click="ClearAllButton_Click"/>
-            <Button Content="{local:Loc Key=Common_Ok}" Width="72" Margin="0,0,8,0" Click="OkButton_Click" IsDefault="True"/>
-            <Button Content="{local:Loc Key=Common_Cancel}" Width="72" IsCancel="True" Click="CancelButton_Click"/>
+            <Button Content="{local:Loc Key=DataValidation_ClearAll}" Width="78" Margin="0,0,16,0" Click="ClearAllButton_Click"
+                    AutomationProperties.AutomationId="DataValidationClearAllButton"/>
+            <Button Content="{local:Loc Key=Common_Ok}" Width="72" Margin="0,0,8,0" Click="OkButton_Click" IsDefault="True"
+                    AutomationProperties.AutomationId="DataValidationOkButton"/>
+            <Button Content="{local:Loc Key=Common_Cancel}" Width="72" IsCancel="True" Click="CancelButton_Click"
+                    AutomationProperties.AutomationId="DataValidationCancelButton"/>
         </StackPanel>
     </Grid>
 </Window>

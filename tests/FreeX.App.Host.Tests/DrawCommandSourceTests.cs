@@ -50,6 +50,30 @@ public sealed class DrawCommandSourceTests
     }
 
     [Theory]
+    [InlineData("Bring Forward", "DrawBringForwardButton", "Move the selected shape one step closer to the front.")]
+    [InlineData("Send Backward", "DrawSendBackwardButton", "Move the selected shape one step closer to the back.")]
+    [InlineData("Selection Pane", "DrawSelectionPaneButton", "List sheet objects and control visibility or stacking order.")]
+    [InlineData("Rotate Object", "DrawRotateObjectButton", "Rotate the selected or most recent drawing object.")]
+    [InlineData("Object Size", "DrawObjectSizeButton", "Resize the selected or most recent drawing object.")]
+    [InlineData("Shape Fill", "DrawShapeFillButton", "Change the fill color of the selected drawing object.")]
+    [InlineData("Object Outline", "DrawObjectOutlineButton", "Change the outline color of the selected drawing object.")]
+    [InlineData("Crop Picture", "DrawCropPictureButton", "Open crop controls for the selected or most recent inserted picture.")]
+    [InlineData("Shape Gradient", "DrawShapeGradientButton", "Open gradient fill controls for the selected shape.")]
+    [InlineData("Shape Effects", "DrawShapeEffectsButton", "Choose no effect, shadow, inner shadow, reflection, glow, soft edges, bevel, or 3-D rotation for the selected shape.")]
+    public void DrawArrangeAndFormatCommands_ExposeStableAutomationMetadata(
+        string title,
+        string automationId,
+        string helpText)
+    {
+        var button = LocalizedXamlTestSupport.ReadMainWindowXaml()
+            .ExtractElementByInvariantCommandName("Button", title);
+
+        button.ShouldContainLocalizedAttribute("AutomationProperties.Name", title);
+        button.Should().Contain($"AutomationProperties.AutomationId=\"{automationId}\"");
+        button.ShouldContainLocalizedAttribute("AutomationProperties.HelpText", helpText);
+    }
+
+    [Theory]
     [InlineData("Crop...", "C", "PictureCropDialogMenuItem_Click")]
     [InlineData("Reset Crop", "R", "PictureResetCropMenuItem_Click")]
     public void DrawCropMenu_ExposesExpectedHeadersKeyTipsAndHandlers(
@@ -81,6 +105,11 @@ public sealed class DrawCommandSourceTests
         source.Should().Contain("private void ObjectEffectsBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingShapeEffect();");
         source.Should().Contain("new MoveSelectionPaneObjectCommand(");
         source.Should().Contain("var target = GetTargetDrawingZOrderObject(sheetId, currentTarget.Kind);");
+        source.Should().Contain("private DrawingObjectTarget? GetTargetTransformDrawingObject(");
+        source.Should().Contain("includePictures: true");
+        source.Should().Contain("FreeX.App.UI.ObjectKind.Picture => DrawingObjectTargetKind.Picture");
+        source.Should().Contain("DrawingObjectTargetKind.Picture => new ResizePictureCommand(");
+        source.Should().Contain("DrawingObjectTargetKind.Picture => new RotatePictureCommand(");
         source.Should().Contain("new ObjectSizeDialog(target.Width, target.Height, UiText.Get(\"MainWindowMessage_ObjectSizeTitle\"))");
         source.Should().Contain("new RotationDialog(target.RotationDegrees, UiText.Get(\"MainWindowMessage_RotateObjectTitle\"))");
         source.Should().Contain("new SetDrawingShapeColorsCommand(");
@@ -94,7 +123,8 @@ public sealed class DrawCommandSourceTests
         source.Should().Contain("new PictureCropDialog(picture)");
         source.Should().Contain("private void PictureCropDialogMenuItem_Click(object sender, RoutedEventArgs e) =>");
         source.Should().Contain("new SetPictureCropCommand(");
-        source.Should().Contain("DrawingTargetResolver.GetTargetDrawingObject(sheet, SheetGrid.SelectedRange?.Start, preferredKind)");
+        source.Should().Contain("DrawingTargetResolver.GetTargetDrawingObject(");
+        source.Should().Contain("selectedObjectId");
     }
 
     [Fact]

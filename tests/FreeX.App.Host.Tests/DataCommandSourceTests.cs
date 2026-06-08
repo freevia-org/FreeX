@@ -9,8 +9,8 @@ public sealed class DataCommandSourceTests
     [InlineData("Sort A to Z", "SA", "SortAscButton_Click")]
     [InlineData("Sort Z to A", "SD", "SortDescButton_Click")]
     [InlineData("Filter", "T", "FilterButton_Click")]
-    [InlineData("Clear Filter", "C", "ClearFilterButton_Click")]
-    [InlineData("Advanced Filter", "A", "AdvancedFilterBtn_Click")]
+    [InlineData("Clear", "C", "ClearFilterButton_Click")]
+    [InlineData("Advanced", "A", "AdvancedFilterBtn_Click")]
     [InlineData("Reapply", "R", "FilterReapplyMenuItem_Click")]
     public void DataSortAndFilterCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
         string title,
@@ -29,14 +29,22 @@ public sealed class DataCommandSourceTests
     {
         var filterSource = ReadHostSourceFile("MainWindow.DataFilterCommands.cs");
         var dataSource = ReadHostSourceFile("MainWindow.DataCommands.cs");
+        var editingDropdownSource = ReadHostSourceFile("MainWindow.EditingDropdowns.cs");
 
         filterSource.Should().Contain("new SortCommand(_currentSheetId, currentRange, sortByColOffset: 0, ascending: true)");
         filterSource.Should().Contain("new SortCommand(_currentSheetId, currentRange, sortByColOffset: 0, ascending: false)");
         filterSource.Should().Contain("new SortDialog(");
-        filterSource.Should().Contain("AutoFilterDropdownPlanner.CreateMenuPlan(");
+        var filterButtonHandler = SourceMethodExtractor.ExtractMethodSource(filterSource, "private void FilterButton_Click(");
+        filterButtonHandler.Should().Contain("AutoFilterToggleRangePlanner.Create(sheet, selectedRange)");
+        filterButtonHandler.Should().Contain("new ToggleWorksheetAutoFilterCommand(_currentSheetId, plannedRange)");
+        filterButtonHandler.Should().NotContain("AutoFilterDialog");
+        filterButtonHandler.Should().NotContain("ApplyFilterPrompt");
+        filterSource.Should().NotContain("private void ApplyFilterPrompt(");
+        editingDropdownSource.Should().Contain("AutoFilterDropdownPlanner.CreateMenuPlan(");
         filterSource.Should().Contain("FilterPromptPlanner.TryPlan(value, out var promptPlan, out var promptError)");
         filterSource.Should().Contain("new FilterCommand(_currentSheetId, currentRange, filterColOffset, allowedValues: allowedValues)");
         filterSource.Should().Contain("private void ClearFilterButton_Click(object sender, RoutedEventArgs e)");
+        filterSource.Should().Contain("ClearFilterRangePlanner.Create(sheet, selectedRange)");
         filterSource.Should().Contain("ClearRememberedAutoFilterCommand();");
         filterSource.Should().Contain("private void ReapplyAutoFilter()");
 

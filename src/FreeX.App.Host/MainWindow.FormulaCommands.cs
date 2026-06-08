@@ -77,6 +77,8 @@ public partial class MainWindow
         BeginFormulaBarFormulaEdit("=" + dlg.SelectedFormula);
     }
 
+    private void FormulaRecentlyUsedBtn_Click(object sender, RoutedEventArgs e) => InsertFunctionBtn_Click(sender, e);
+
     private void DefineNameBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
@@ -169,19 +171,18 @@ public partial class MainWindow
 
     private void TracePrecedentsForCell(CellAddress activeCell, string title)
     {
-        var precedents = FormulaAuditingService.GetDirectPrecedents(_workbook, activeCell);
-        if (precedents.Count == 0)
+        var arrows = FormulaTraceArrowPlanner.GetNextPrecedentTraceArrows(_workbook, activeCell, _formulaTraceArrows);
+        if (arrows.Count == 0)
         {
-            _messageService.ShowInfo($"{FormulaAuditFormatter.FormatAddress(_workbook, activeCell)} has no direct precedents.", title);
+            var message = FormulaAuditingService.GetDirectPrecedents(_workbook, activeCell).Count == 0
+                ? $"{FormulaAuditFormatter.FormatAddress(_workbook, activeCell)} has no direct precedents."
+                : $"{FormulaAuditFormatter.FormatAddress(_workbook, activeCell)} has no more precedent cells to trace.";
+            _messageService.ShowInfo(message, title);
             return;
         }
 
-        _formulaTraceArrows.Clear();
-        _formulaTraceArrows.AddRange(FormulaAuditingService.GetPrecedentTraceArrows(_workbook, activeCell));
+        _formulaTraceArrows.AddRange(arrows);
         UpdateViewport();
-        _messageService.ShowInfo(
-            $"{FormulaAuditFormatter.FormatAddress(_workbook, activeCell)} directly references {precedents.Count} cell(s):\n{FormulaAuditFormatter.FormatAddresses(_workbook, precedents)}",
-            title);
     }
 
     private void TraceDependentsBtn_Click(object sender, RoutedEventArgs e)
@@ -189,30 +190,61 @@ public partial class MainWindow
         if (SheetGrid.SelectedRange is not { } range) return;
 
         var activeCell = range.Start;
-        var dependents = FormulaAuditingService.GetDirectDependents(_workbook, activeCell);
-        if (dependents.Count == 0)
+        var arrows = FormulaTraceArrowPlanner.GetNextDependentTraceArrows(_workbook, activeCell, _formulaTraceArrows);
+        if (arrows.Count == 0)
         {
-            _messageService.ShowInfo($"{FormulaAuditFormatter.FormatAddress(_workbook, activeCell)} has no direct dependents.", "Trace Dependents");
+            var message = FormulaAuditingService.GetDirectDependents(_workbook, activeCell).Count == 0
+                ? $"{FormulaAuditFormatter.FormatAddress(_workbook, activeCell)} has no direct dependents."
+                : $"{FormulaAuditFormatter.FormatAddress(_workbook, activeCell)} has no more dependent cells to trace.";
+            _messageService.ShowInfo(message, "Trace Dependents");
             return;
         }
 
-        _formulaTraceArrows.Clear();
-        _formulaTraceArrows.AddRange(FormulaAuditingService.GetDependentTraceArrows(_workbook, activeCell));
+        _formulaTraceArrows.AddRange(arrows);
         UpdateViewport();
-        _messageService.ShowInfo(
-            $"{FormulaAuditFormatter.FormatAddress(_workbook, activeCell)} is directly referenced by {dependents.Count} cell(s):\n{FormulaAuditFormatter.FormatAddresses(_workbook, dependents)}",
-            "Trace Dependents");
     }
 
     private void RemoveArrowsBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (_formulaTraceArrows.Count == 0)
+        if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
         {
-            _messageService.ShowInfo("No auditing arrows to remove.", "Remove Arrows");
+            OpenRibbonContextMenu(btn, cm);
             return;
         }
 
-        _formulaTraceArrows.Clear();
+        RemoveTraceArrows(kind: null, "Remove Arrows");
+    }
+
+    private void RemoveAllArrowsMenuItem_Click(object sender, RoutedEventArgs e) =>
+        RemoveTraceArrows(kind: null, "Remove Arrows");
+
+    private void RemovePrecedentArrowsMenuItem_Click(object sender, RoutedEventArgs e) =>
+        RemoveTraceArrows(FormulaTraceArrowKind.Precedent, "Remove Precedent Arrows");
+
+    private void RemoveDependentArrowsMenuItem_Click(object sender, RoutedEventArgs e) =>
+        RemoveTraceArrows(FormulaTraceArrowKind.Dependent, "Remove Dependent Arrows");
+
+    private void RemoveTraceArrows(FormulaTraceArrowKind? kind, string title)
+    {
+        if (_formulaTraceArrows.Count == 0)
+        {
+            _messageService.ShowInfo("No auditing arrows to remove.", title);
+            return;
+        }
+
+        var removed = kind is null
+            ? _formulaTraceArrows.Count
+            : _formulaTraceArrows.RemoveAll(arrow => arrow.Kind == kind.Value);
+
+        if (kind is null)
+            _formulaTraceArrows.Clear();
+
+        if (removed == 0)
+        {
+            _messageService.ShowInfo("No matching auditing arrows to remove.", title);
+            return;
+        }
+
         UpdateViewport();
     }
 
@@ -405,6 +437,23 @@ public partial class MainWindow
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
             OpenRibbonContextMenu(btn, cm);
     }
+
+    private void CalculationOptionsContextMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ContextMenu menu)
+            return;
+
+        foreach (var item in menu.Items.OfType<MenuItem>())
+        {
+            item.IsChecked = item.Name switch
+            {
+                _ when string.Equals(item.Header?.ToString(), UiText.Get("MainWindow_Header_Manual"), StringComparison.Ordinal) =>
+                    _workbook.CalculationMode == WorkbookCalculationMode.Manual,
+                _ => _workbook.CalculationMode == WorkbookCalculationMode.Automatic
+            };
+        }
+    }
+
     private void CalcAutoMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (!TryExecuteCommand(new SetCalculationModeCommand(WorkbookCalculationMode.Automatic), "Calculation Options"))
@@ -412,6 +461,9 @@ public partial class MainWindow
         RecalculateWorkbook();
         UpdateViewport();
     }
+
+    private void CalcAutoExceptDataTablesMenuItem_Click(object sender, RoutedEventArgs e) =>
+        CalcAutoMenuItem_Click(sender, e);
 
     private void CalcManualMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -447,6 +499,24 @@ public partial class MainWindow
     private void InsertFormulaFunction(string funcName)
     {
         if (SheetGrid.SelectedRange is null) return;
+        var normalizedName = funcName.Trim().ToUpperInvariant();
+        var function = InsertFunctionCatalogPlanner.BuildCatalog()
+            .FirstOrDefault(entry => string.Equals(entry.Name, normalizedName, StringComparison.OrdinalIgnoreCase));
+        if (function is null)
+        {
+            InsertRawFormulaFunction(normalizedName);
+            return;
+        }
+
+        var argumentsDialog = new FunctionArgumentsDialog(function) { Owner = this };
+        if (ShowOwnedDialog(argumentsDialog) != true || string.IsNullOrWhiteSpace(argumentsDialog.ResultFormula))
+            return;
+
+        BeginFormulaBarFormulaEdit("=" + argumentsDialog.ResultFormula);
+    }
+
+    private void InsertRawFormulaFunction(string funcName)
+    {
         BeginFormulaBarFormulaEdit($"={funcName}(");
     }
 

@@ -151,7 +151,7 @@ public sealed class EvaluateFormulaDialog : Window
             _valueText.Text = UiText.Format("EvaluateFormula_ValueText", _session.Summary.ValueText);
         }
 
-        _stepOutButton.IsEnabled = _session.CurrentStep is not null;
+        _stepOutButton.IsEnabled = _session.CanStepOut;
         _nextButton.IsEnabled = _session.CanMoveNext;
         _stepInButton.IsEnabled = _session.CanStepIn;
     }

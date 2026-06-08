@@ -210,7 +210,7 @@ public sealed class GoToDialogsTests
         source.Should().Contain("SelectGoToSpecialMatches(specialKind, dialog.SelectedSpecialOptions, showEmptyMessage: true)");
         source.Should().Contain("dialog.SelectedRange is { } selectedRange");
         source.Should().Contain("SheetGrid.SelectedRange = selectedRange");
-        source.Should().Contain("CellAddressBox.Text = FormatRangeReference(selectedRange.Start, selectedRange.End)");
+        source.Should().Contain("CellAddressBox.Text = FormatNameBoxSelectionText(selectedRange)");
     }
 
     [Fact]

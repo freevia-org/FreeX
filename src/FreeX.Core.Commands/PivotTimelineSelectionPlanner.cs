@@ -5,14 +5,23 @@ namespace FreeX.Core.Commands;
 internal static class PivotTimelineSelectionPlanner
 {
     public static DateOnly ParseTimelineDate(string? value, DateOnly fallback) =>
-        DateOnly.TryParseExact(
-            value,
+        TryParseTimelineDate(value, fallback, out var parsed) ? parsed : fallback;
+
+    public static bool TryParseTimelineDate(string? value, DateOnly fallback, out DateOnly parsed)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            parsed = fallback;
+            return true;
+        }
+
+        return DateOnly.TryParseExact(
+            value.Trim(),
             "yyyy-MM-dd",
             System.Globalization.CultureInfo.InvariantCulture,
             System.Globalization.DateTimeStyles.None,
-            out var parsed)
-            ? parsed
-            : fallback;
+            out parsed);
+    }
 
     public static IReadOnlyList<string> ReadSelectedItems(
         Sheet sheet,

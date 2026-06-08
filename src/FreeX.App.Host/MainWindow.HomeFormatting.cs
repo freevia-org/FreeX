@@ -57,6 +57,12 @@ public partial class MainWindow
         ApplyStyleDiff(CellStyleDiffPlanner.UnderlineDiff(enabled));
     }
 
+    private void UnderlineMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        SetToolbarToggleStates(underline: true, strike: false);
+        ApplyStyleDiff(CellStyleDiffPlanner.UnderlineDiff(true));
+    }
+
     private void StrikeButton_Click(object sender, RoutedEventArgs e)
     {
         if (_suppressToolbarSync) return;
@@ -146,6 +152,57 @@ public partial class MainWindow
                 range,
                 CreateMergeAndCenterCommand,
                 out _))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void MergeCenterMenuItem_Click(object sender, RoutedEventArgs e) => MergeCenterBtn_Click(sender, e);
+
+    private void MergeCellsMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Merge Cells",
+                sheetId => new MergeCellsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void MergeAcrossMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Merge Across",
+                sheetId =>
+                {
+                    var currentRange = GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId);
+                    var commands = new List<IWorkbookCommand>();
+                    for (var row = currentRange.Start.Row; row <= currentRange.End.Row; row++)
+                    {
+                        commands.Add(new MergeCellsCommand(
+                            sheetId,
+                            new GridRange(
+                                new CellAddress(sheetId, row, currentRange.Start.Col),
+                                new CellAddress(sheetId, row, currentRange.End.Col))));
+                    }
+
+                    return commands.Count == 1
+                        ? commands[0]
+                        : new CompositeWorkbookCommand("Merge Across", commands);
+                }))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void UnmergeCellsMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Unmerge Cells",
+                sheetId => new UnmergeCellsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))))
             return;
 
         UpdateViewport();
@@ -355,6 +412,12 @@ public partial class MainWindow
         if (isOn)
             SetToolbarToggleStates(underline: false, strike: false);
         ApplyStyleDiff(CellStyleDiffPlanner.DoubleUnderlineDiff(isOn));
+    }
+
+    private void DoubleUnderlineMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        SetToolbarToggleStates(underline: false, strike: false);
+        ApplyStyleDiff(CellStyleDiffPlanner.DoubleUnderlineDiff(true));
     }
 
     private void IncreaseFontSizeBtn_Click(object sender, RoutedEventArgs e)
@@ -685,9 +748,21 @@ public partial class MainWindow
 
     // ── Number group additions ───────────────────────────────────────────────
 
-    private void CurrencyBtn_Click(object sender, RoutedEventArgs e)    => ApplyStyleDiff(new StyleDiff(NumberFormat: "$#,##0.00"));
+    private void CurrencyBtn_Click(object sender, RoutedEventArgs e)    => ApplyStyleDiff(new StyleDiff(NumberFormat: HomeNumberFormatDropdownPlanner.AccountingNumberFormatCode));
     private void PercentBtn_Click(object sender, RoutedEventArgs e)     => ApplyStyleDiff(new StyleDiff(NumberFormat: "0%"));
-    private void CommaStyleBtn_Click(object sender, RoutedEventArgs e)  => ApplyStyleDiff(new StyleDiff(NumberFormat: "#,##0.00"));
+    private void CommaStyleBtn_Click(object sender, RoutedEventArgs e)  => ApplyStyleDiff(new StyleDiff(NumberFormat: HomeNumberFormatDropdownPlanner.CommaStyleNumberFormatCode));
+
+    private void AccountingSymbolMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var symbol = (sender as MenuItem)?.Tag?.ToString();
+        if (string.IsNullOrEmpty(symbol))
+            symbol = "$";
+
+        ApplyStyleDiff(new StyleDiff(NumberFormat: $"_({symbol}* #,##0.00_);_({symbol}* (#,##0.00);_({symbol}* \"-\"??_);_(@_)"));
+    }
+
+    private void MoreAccountingFormatsMenuItem_Click(object sender, RoutedEventArgs e) =>
+        OpenFormatCellsDialog(FormatCellsDialogTab.Number);
 
     private void IncDecimalBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -1156,12 +1231,16 @@ public partial class MainWindow
     private void ApplyTableFormat(int variant)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null) return;
+
+        var sourceRange = CreateTableSourceRangePlanner.PlanSourceRange(sheet, range);
         var tableStyle = TableStyleGalleryPlanner.GetOption(variant, _workbook.Theme);
         var tableStyleName = tableStyle.StyleName;
         CreateTableDialog? dialog = null;
         dialog = new CreateTableDialog(
             _currentSheetId,
-            FormatRangeReference(range.Start, range.End),
+            FormatRangeReference(sourceRange.Start, sourceRange.End),
             tableStyleName,
             request => ApplyCreateTableRangeSelection(dialog, request)) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null)

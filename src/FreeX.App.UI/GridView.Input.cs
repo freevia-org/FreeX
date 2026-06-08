@@ -17,6 +17,20 @@ public partial class GridView
 
         var pos = e.GetPosition(this);
 
+        if (_shapePlacementDragging)
+        {
+            UpdateShapePlacementPreview(pos);
+            e.Handled = true;
+            return;
+        }
+
+        if (_textBoxPlacementDragging)
+        {
+            UpdateTextBoxPlacementPreview(pos);
+            e.Handled = true;
+            return;
+        }
+
         if (_pictureCropDragHandle != PictureCropHandle.None)
         {
             _pictureCropCurrentCrop = GridPictureCropPlanner.CalculateCrop(
@@ -153,11 +167,20 @@ public partial class GridView
             var col = FindColMetric(Viewport.ColMetrics, _resizeIndex);
             if (col is null)
             {
+                var collapsedDelta = pos.X - _resizeDragStart;
+                if (_resizeCollapsedBoundary && collapsedDelta > 0)
+                {
+                    double collapsedWidth = GridResizeSizePlanner.ClampColumnSize(_resizeSizeStart + collapsedDelta);
+                    _resizeLinePos = _resizeDragStart + collapsedWidth;
+                    ColumnResizing?.Invoke(_resizeIndex, collapsedWidth);
+                    InvalidateVisual();
+                }
+
                 Cursor = Cursors.SizeWE;
                 e.Handled = true;
                 return;
             }
-            double newWidth = Math.Max(MinCellSize, _resizeSizeStart + (pos.X - _resizeDragStart));
+            double newWidth = GridResizeSizePlanner.ClampColumnSize(_resizeSizeStart + (pos.X - _resizeDragStart));
             _resizeLinePos = col.LeftOffset + newWidth + ActualRowHeaderWidth;
             ColumnResizing?.Invoke(_resizeIndex, newWidth);
             Cursor = Cursors.SizeWE;
@@ -177,11 +200,20 @@ public partial class GridView
             var row = FindRowMetric(Viewport.RowMetrics, _resizeIndex);
             if (row is null)
             {
+                var collapsedDelta = pos.Y - _resizeDragStart;
+                if (_resizeCollapsedBoundary && collapsedDelta > 0)
+                {
+                    double collapsedHeight = GridResizeSizePlanner.ClampRowSize(_resizeSizeStart + collapsedDelta);
+                    _resizeLinePos = _resizeDragStart + collapsedHeight;
+                    RowResizing?.Invoke(_resizeIndex, collapsedHeight);
+                    InvalidateVisual();
+                }
+
                 Cursor = Cursors.SizeNS;
                 e.Handled = true;
                 return;
             }
-            double newHeight = Math.Max(MinCellSize, _resizeSizeStart + (pos.Y - _resizeDragStart));
+            double newHeight = GridResizeSizePlanner.ClampRowSize(_resizeSizeStart + (pos.Y - _resizeDragStart));
             _resizeLinePos = row.TopOffset + newHeight + EffectiveColHeaderHeight;
             RowResizing?.Invoke(_resizeIndex, newHeight);
             Cursor = Cursors.SizeNS;
@@ -229,7 +261,7 @@ public partial class GridView
                 return;
             }
 
-            var (target, _, _) = HitTestResize(pos);
+            var (target, _, _, _) = HitTestResize(pos);
             if (target == ResizeTarget.Column)
             {
                 Cursor = Cursors.SizeWE;
@@ -298,6 +330,8 @@ public partial class GridView
         _splitPaneScrollbarDragging ||
         _autofillDragging ||
         _selectionMoveDragging ||
+        _shapePlacementDragging ||
+        _textBoxPlacementDragging ||
         _resizeTarget != ResizeTarget.None;
 
     private void CancelActiveCapturedGridDrag()
@@ -364,6 +398,9 @@ public partial class GridView
             InvalidateVisual();
         }
 
+        CancelCapturedShapePlacement();
+        CancelCapturedTextBoxPlacement();
+
         if (_resizeTarget != ResizeTarget.None)
         {
             _resizeTarget = ResizeTarget.None;
@@ -371,6 +408,7 @@ public partial class GridView
             _resizeDragStart = 0;
             _resizeSizeStart = 0;
             _resizeLinePos = 0;
+            _resizeCollapsedBoundary = false;
             Cursor = null;
             ResizeCanceled?.Invoke();
             InvalidateVisual();
@@ -386,6 +424,25 @@ public partial class GridView
         }
 
         var pos = e.GetPosition(this);
+
+        if (TryHitTestAutoFilterButton(pos, out var autoFilterHeaderCell))
+        {
+            AutoFilterDropdownRequested?.Invoke(autoFilterHeaderCell, pos);
+            e.Handled = true;
+            return;
+        }
+
+        if (TryBeginShapePlacement(pos))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        if (TryBeginTextBoxPlacement(pos))
+        {
+            e.Handled = true;
+            return;
+        }
 
         if (TryGetSelectedImagePicture(out var selectedPicture, out var selectedPictureRect))
         {
@@ -536,7 +593,7 @@ public partial class GridView
             return;
         }
 
-        var (target, index, size) = HitTestResize(pos);
+        var (target, index, size, isCollapsedBoundary) = HitTestResize(pos);
         if (target != ResizeTarget.None)
         {
             if (e.ClickCount >= 2)
@@ -554,17 +611,22 @@ public partial class GridView
             _resizeIndex     = index;
             _resizeSizeStart = size;
             _resizeDragStart = target == ResizeTarget.Column ? pos.X : pos.Y;
+            _resizeCollapsedBoundary = isCollapsedBoundary;
             Cursor = target == ResizeTarget.Column ? Cursors.SizeWE : Cursors.SizeNS;
 
             if (target == ResizeTarget.Column)
             {
-                var col = FindColMetric(Viewport!.ColMetrics, index)!;
-                _resizeLinePos = col.LeftOffset + col.Width + ActualRowHeaderWidth;
+                var col = FindColMetric(Viewport!.ColMetrics, index);
+                _resizeLinePos = col is null
+                    ? pos.X
+                    : col.LeftOffset + col.Width + ActualRowHeaderWidth;
             }
             else
             {
-                var row = FindRowMetric(Viewport!.RowMetrics, index)!;
-                _resizeLinePos = row.TopOffset + row.Height + EffectiveColHeaderHeight;
+                var row = FindRowMetric(Viewport!.RowMetrics, index);
+                _resizeLinePos = row is null
+                    ? pos.Y
+                    : row.TopOffset + row.Height + EffectiveColHeaderHeight;
             }
 
             CaptureMouse();
@@ -632,6 +694,20 @@ public partial class GridView
 
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
     {
+        if (_shapePlacementDragging)
+        {
+            CommitShapePlacement(e.GetPosition(this));
+            e.Handled = true;
+            return;
+        }
+
+        if (_textBoxPlacementDragging)
+        {
+            CommitTextBoxPlacement(e.GetPosition(this));
+            e.Handled = true;
+            return;
+        }
+
         if (_pictureCropDragHandle != PictureCropHandle.None)
         {
             var id = _pictureCropDragId;
@@ -821,18 +897,24 @@ public partial class GridView
             double delta = _resizeTarget == ResizeTarget.Column
                 ? pos.X - _resizeDragStart
                 : pos.Y - _resizeDragStart;
-            double newSize = Math.Max(MinCellSize, _resizeSizeStart + delta);
+            double newSize = _resizeTarget == ResizeTarget.Column
+                ? GridResizeSizePlanner.ClampColumnSize(_resizeSizeStart + delta)
+                : GridResizeSizePlanner.ClampRowSize(_resizeSizeStart + delta);
 
-            if (_resizeTarget == ResizeTarget.Column)
+            var shouldCommitResize = !_resizeCollapsedBoundary || delta > 0;
+            if (shouldCommitResize && _resizeTarget == ResizeTarget.Column)
                 ColumnResized?.Invoke(_resizeIndex, newSize);
-            else
+            else if (shouldCommitResize)
                 RowResized?.Invoke(_resizeIndex, newSize);
+            else
+                ResizeCanceled?.Invoke();
 
             _resizeTarget = ResizeTarget.None;
             _resizeIndex = 0;
             _resizeDragStart = 0;
             _resizeSizeStart = 0;
             _resizeLinePos = 0;
+            _resizeCollapsedBoundary = false;
             Cursor = null;
             ReleaseMouseCapture();
             InvalidateVisual();

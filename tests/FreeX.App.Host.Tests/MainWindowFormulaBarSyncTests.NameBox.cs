@@ -97,7 +97,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
             harness.PressCellAddressBoxKey(Key.Enter).Should().BeTrue();
 
             harness.SelectedRange.Should().Be(expectedRange);
-            harness.CellAddressBoxText.Should().Be("B2:C3");
+            harness.CellAddressBoxText.Should().Be("SalesData");
             harness.FormulaBarText.Should().Be("named range start");
             harness.SheetGridFocused.Should().BeTrue();
         });
@@ -121,7 +121,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
             harness.PressCellAddressBoxKey(Key.Enter).Should().BeTrue();
 
             harness.SelectedRange.Should().Be(expectedRange);
-            harness.CellAddressBoxText.Should().Be("B2:C3");
+            harness.CellAddressBoxText.Should().Be("SalesData");
             harness.FormulaBarText.Should().Be("case-insensitive name start");
             harness.SheetGridFocused.Should().BeTrue();
         });
@@ -145,9 +145,30 @@ public sealed partial class MainWindowFormulaBarSyncTests
             harness.PressCellAddressBoxKey(Key.Enter).Should().BeTrue();
 
             harness.SelectedRange.Should().Be(expectedRange);
-            harness.CellAddressBoxText.Should().Be("B2:C3");
+            harness.CellAddressBoxText.Should().Be("SalesData");
             harness.FormulaBarText.Should().Be("padded name start");
             harness.SheetGridFocused.Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public void SelectActiveCell_WithExactSingleCellDefinedName_DisplaysNameInNameBox()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var expectedRange = new GridRange(
+                new CellAddress(harness.CurrentSheetId, 4, 4),
+                new CellAddress(harness.CurrentSheetId, 4, 4));
+
+            harness.SetCellText(4, 4, "named cell");
+            harness.DefineNamedRange("InputCell", expectedRange);
+
+            harness.SelectActiveCell(4, 4);
+
+            harness.SelectedRange.Should().Be(expectedRange);
+            harness.CellAddressBoxText.Should().Be("InputCell");
+            harness.FormulaBarText.Should().Be("named cell");
         });
     }
 
@@ -235,6 +256,28 @@ public sealed partial class MainWindowFormulaBarSyncTests
 
             harness.SelectedRange.Should().Be(expectedRange);
             harness.CellAddressBoxText.Should().Be("B2:C3");
+            harness.SheetGridFocused.Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public void NameBoxEscape_WithExactDefinedNameSelection_RestoresName()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var expectedRange = new GridRange(
+                new CellAddress(harness.CurrentSheetId, 2, 2),
+                new CellAddress(harness.CurrentSheetId, 3, 3));
+
+            harness.DefineNamedRange("SalesData", expectedRange);
+            harness.SelectRange(2, 2, 3, 3);
+            harness.SetCellAddressBoxText("Z99");
+
+            harness.PressCellAddressBoxKey(Key.Escape).Should().BeTrue();
+
+            harness.SelectedRange.Should().Be(expectedRange);
+            harness.CellAddressBoxText.Should().Be("SalesData");
             harness.SheetGridFocused.Should().BeTrue();
         });
     }

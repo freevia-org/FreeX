@@ -20,7 +20,8 @@ public partial class MainWindow
             .Select(slicer => new SlicerPaneItem(
                 slicer.Name,
                 slicer.SourceFieldName ?? slicer.CacheName,
-                BuildSlicerTiles(slicer)))
+                BuildSlicerTiles(slicer),
+                SlicerTimelinePlanner.HasActiveSlicerFilter(slicer)))
             .ToList();
         var timelines = _workbook.Timelines
             .Where(timeline => !string.IsNullOrWhiteSpace(timeline.Name))

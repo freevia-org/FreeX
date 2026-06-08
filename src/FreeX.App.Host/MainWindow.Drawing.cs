@@ -44,7 +44,7 @@ public partial class MainWindow
         var contentType = DrawingInputParser.GetImageContentType(dialog.FileName);
         if (!TryExecuteGroupedSheetCommand(
                 "Insert Picture",
-                sheetId => new InsertPictureCommand(
+                sheetId => InsertObjectPlacementPlanner.CreateInsertPictureCommand(
                     sheetId,
                     new CellAddress(sheetId, range.Start.Row, range.Start.Col),
                     bytes,
@@ -308,7 +308,7 @@ public partial class MainWindow
 
     private void ResizeSelectedDrawingObject()
     {
-        var target = GetTargetDrawingObject(_currentSheetId);
+        var target = GetTargetTransformDrawingObject(_currentSheetId);
         if (target is null)
         {
             ShowOwnedMessage(
@@ -326,10 +326,13 @@ public partial class MainWindow
                 "Object Size",
                 sheetId =>
                 {
-                    var groupedTarget = GetTargetDrawingObject(sheetId, target.Kind);
-                    return target.Kind == DrawingObjectTargetKind.Shape
-                        ? new ResizeDrawingShapeCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Width, dialog.Result.Height)
-                        : new ResizeTextBoxCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Width, dialog.Result.Height);
+                    var groupedTarget = GetTargetTransformDrawingObject(sheetId, target.Kind);
+                    return target.Kind switch
+                    {
+                        DrawingObjectTargetKind.Picture => new ResizePictureCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Width, dialog.Result.Height),
+                        DrawingObjectTargetKind.Shape => new ResizeDrawingShapeCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Width, dialog.Result.Height),
+                        _ => new ResizeTextBoxCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Width, dialog.Result.Height)
+                    };
                 }))
             return;
 
@@ -340,7 +343,7 @@ public partial class MainWindow
 
     private void RotateSelectedDrawingObject()
     {
-        var target = GetTargetDrawingObject(_currentSheetId);
+        var target = GetTargetTransformDrawingObject(_currentSheetId);
         if (target is null)
         {
             ShowOwnedMessage(
@@ -358,10 +361,13 @@ public partial class MainWindow
                 "Rotate Object",
                 sheetId =>
                 {
-                    var groupedTarget = GetTargetDrawingObject(sheetId, target.Kind);
-                    return target.Kind == DrawingObjectTargetKind.Shape
-                        ? new RotateDrawingShapeCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Degrees)
-                        : new RotateTextBoxCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Degrees);
+                    var groupedTarget = GetTargetTransformDrawingObject(sheetId, target.Kind);
+                    return target.Kind switch
+                    {
+                        DrawingObjectTargetKind.Picture => new RotatePictureCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Degrees),
+                        DrawingObjectTargetKind.Shape => new RotateDrawingShapeCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Degrees),
+                        _ => new RotateTextBoxCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Degrees)
+                    };
                 }))
             return;
 
@@ -522,9 +528,40 @@ public partial class MainWindow
         SheetId sheetId,
         DrawingObjectTargetKind? preferredKind = null)
     {
-        var sheet = _workbook.GetSheet(sheetId);
-        return DrawingTargetResolver.GetTargetDrawingObject(sheet, SheetGrid.SelectedRange?.Start, preferredKind);
+        return GetTargetDrawingObject(sheetId, preferredKind, includePictures: false);
     }
+
+    private DrawingObjectTarget? GetTargetTransformDrawingObject(
+        SheetId sheetId,
+        DrawingObjectTargetKind? preferredKind = null)
+    {
+        return GetTargetDrawingObject(sheetId, preferredKind, includePictures: true);
+    }
+
+    private DrawingObjectTarget? GetTargetDrawingObject(
+        SheetId sheetId,
+        DrawingObjectTargetKind? preferredKind,
+        bool includePictures)
+    {
+        var sheet = _workbook.GetSheet(sheetId);
+        var selectedKind = preferredKind ?? GetSelectedDrawingObjectTargetKind();
+        var selectedObjectId = selectedKind is null ? Guid.Empty : SheetGrid.SelectedObjectId;
+        return DrawingTargetResolver.GetTargetDrawingObject(
+            sheet,
+            SheetGrid.SelectedRange?.Start,
+            selectedKind,
+            selectedObjectId,
+            includePictures);
+    }
+
+    private DrawingObjectTargetKind? GetSelectedDrawingObjectTargetKind() =>
+        SheetGrid.SelectedObjectKind switch
+        {
+            FreeX.App.UI.ObjectKind.Picture => DrawingObjectTargetKind.Picture,
+            FreeX.App.UI.ObjectKind.Shape => DrawingObjectTargetKind.Shape,
+            FreeX.App.UI.ObjectKind.TextBox => DrawingObjectTargetKind.TextBox,
+            _ => null
+        };
 
     private DrawingObjectZOrderTarget? GetTargetDrawingZOrderObject(
         SheetId sheetId,

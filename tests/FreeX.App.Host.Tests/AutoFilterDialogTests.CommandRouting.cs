@@ -17,6 +17,13 @@ public sealed partial class AutoFilterDialogTests
         source.Should().Contain("new CellFontColorFilterCommand");
         source.Should().Contain("FilterPromptPlanner.TryPlan");
         source.Should().Contain("promptPlan.CreateCommand");
+        source.Should().Contain("result.SelectedValues.Count > 0");
+        source.Should().Contain("? result.SelectedValues");
+        source.Should().Contain(": FilterInputParser.ParseAllowedValues(value)");
+
+        var filterButtonHandler = SourceMethodExtractor.ExtractMethodSource(source, "private void FilterButton_Click(");
+        filterButtonHandler.Should().Contain("new ToggleWorksheetAutoFilterCommand");
+        filterButtonHandler.Should().NotContain("new AutoFilterDialog");
     }
 
     [Fact]

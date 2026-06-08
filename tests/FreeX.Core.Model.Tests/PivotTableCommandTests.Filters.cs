@@ -371,6 +371,35 @@ public sealed partial class PivotTableCommandTests
         sheet.GetCell(Addr(sheet, "E7"))!.Value.Should().Be(new NumberValue(60));
     }
 
+    [Theory]
+    [InlineData("not-a-date", "2026-01-31")]
+    [InlineData("2026-01-01", "01/31/2026")]
+    public void SetTimelineRangeCommand_RejectsInvalidTimelineDateText(string? startDate, string? endDate)
+    {
+        var workbook = new Workbook("TimelineInvalidDateCommandTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedTimelineData(sheet);
+        workbook.Timelines.Add(new TimelineModel
+        {
+            Name = "Date Timeline",
+            CacheName = "Timeline_Date",
+            SourcePivotTableName = "PivotTable1",
+            SourceFieldName = "Date"
+        });
+        var pivot = CreateDateAmountPivot(sheet);
+        sheet.PivotTables.Add(pivot);
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+        var ctx = new TestCommandContext(workbook);
+
+        var outcome = new SetTimelineRangeCommand("Date Timeline", startDate, endDate).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Be("Timeline dates must use yyyy-MM-dd.");
+        workbook.Timelines[0].SelectedStartDate.Should().BeNull();
+        workbook.Timelines[0].SelectedEndDate.Should().BeNull();
+        pivot.RowFields.Should().ContainSingle().Which.SelectedItems.Should().BeNull();
+    }
+
     [Fact]
     public void AddTimelineCommand_CreatesConnectedTimelineWithDateBoundsAndUndoRemovesIt()
     {

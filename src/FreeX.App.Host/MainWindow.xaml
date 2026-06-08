@@ -166,19 +166,25 @@
                 <!-- Order in XAML (Right-docked) is right-to-left, so Close first -->
                 <Button x:Name="CloseSysBtn"    DockPanel.Dock="Right"
                         Style="{StaticResource CloseSysBtnStyle}" Click="CloseSysBtn_Click"
-                        AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_Close}">
+                        AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_Close}"
+                        AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationName_Close}"
+                        AutomationProperties.AutomationId="CloseSysBtn">
                     <local:RibbonIcon Kind="WindowClose" IconSize="18"
                                       Foreground="{StaticResource FreeXWhiteBrush}"/>
                 </Button>
                 <Button x:Name="MaxRestoreBtn"  DockPanel.Dock="Right"
                         Style="{StaticResource SysBtnStyle}"      Click="MaxRestoreBtn_Click"
-                        AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_MaximizeOrRestore}">
+                        AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_MaximizeOrRestore}"
+                        AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationName_MaximizeOrRestore}"
+                        AutomationProperties.AutomationId="MaxRestoreBtn">
                     <local:RibbonIcon x:Name="MaxRestoreIcon" Kind="WindowMaximize" IconSize="18"
                                       Foreground="{StaticResource FreeXWhiteBrush}"/>
                 </Button>
-                <Button                         DockPanel.Dock="Right"
+                <Button x:Name="MinimizeBtn"    DockPanel.Dock="Right"
                         Style="{StaticResource SysBtnStyle}"      Click="MinimizeBtn_Click"
-                        AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_Minimize}">
+                        AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_Minimize}"
+                        AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationName_Minimize}"
+                        AutomationProperties.AutomationId="MinimizeBtn">
                     <local:RibbonIcon Kind="WindowMinimize" IconSize="18"
                                       Foreground="{StaticResource FreeXWhiteBrush}"/>
                 </Button>
@@ -247,9 +253,24 @@
                                             <MenuItem Header="{local:Loc Key=MainWindow_Header_Formatting}" InputGestureText="R"
                                                       local:RibbonTooltip.KeyTip="R"
                                                       Click="PasteFormattingMenuItem_Click" local:RibbonMetadata.CommandName="Paste Formatting"/>
+                                            <MenuItem Header="{local:Loc Key=PasteSpecial_KeepSourceColumnWidths}" InputGestureText="W"
+                                                      local:RibbonTooltip.KeyTip="W"
+                                                      Click="PasteKeepSourceColumnWidthsMenuItem_Click" local:RibbonMetadata.CommandName="Keep Source Column Widths"/>
+                                            <MenuItem Header="{local:Loc Key=PasteSpecial_ValuesAndSourceFormatting}" InputGestureText="A"
+                                                      local:RibbonTooltip.KeyTip="A"
+                                                      Click="PasteValuesAndSourceFormattingMenuItem_Click" local:RibbonMetadata.CommandName="Values &amp; Source Formatting"/>
                                             <MenuItem Header="{local:Loc Key=MainWindow_Header_Transpose}" InputGestureText="T"
                                                       local:RibbonTooltip.KeyTip="T"
                                                       Click="PasteTransposeMenuItem_Click" local:RibbonMetadata.CommandName="Transpose Paste"/>
+                                            <MenuItem Header="{local:Loc Key=PasteSpecial_PasteLink}" InputGestureText="L"
+                                                      local:RibbonTooltip.KeyTip="L"
+                                                      Click="PasteLinkMenuItem_Click" local:RibbonMetadata.CommandName="Paste Link"/>
+                                            <MenuItem Header="{local:Loc Key=PasteSpecial_Picture}" InputGestureText="I"
+                                                      local:RibbonTooltip.KeyTip="I"
+                                                      Click="PastePictureMenuItem_Click" local:RibbonMetadata.CommandName="Picture"/>
+                                            <MenuItem Header="{local:Loc Key=PasteSpecial_LinkedPicture}" InputGestureText="K"
+                                                      local:RibbonTooltip.KeyTip="K"
+                                                      Click="PasteLinkedPictureMenuItem_Click" local:RibbonMetadata.CommandName="Linked Picture"/>
                                             <Separator/>
                                             <MenuItem Header="{local:Loc Key=MainWindow_Header_PasteSpecial}" InputGestureText="S"
                                                       local:RibbonTooltip.KeyTip="S"
@@ -363,6 +384,12 @@
                                                   local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Underline}"
                                                   local:RibbonTooltip.KeyTip="3"
                                                   local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_UnderlineTheSelectedTextCtrlU}" local:RibbonMetadata.CommandName="Underline">
+                                        <ToggleButton.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_TooltipTitle_Underline}" local:RibbonTooltip.KeyTip="U" Click="UnderlineMenuItem_Click" local:RibbonMetadata.CommandName="Underline"/>
+                                                <MenuItem Header="{local:Loc Key=FormatCells_DoubleUnderline}" local:RibbonTooltip.KeyTip="D" Click="DoubleUnderlineMenuItem_Click" local:RibbonMetadata.CommandName="Double Underline"/>
+                                            </ContextMenu>
+                                        </ToggleButton.ContextMenu>
                                         <Grid Width="20" Height="18" SnapsToDevicePixels="True">
                                             <TextBlock Text="U" FontFamily="Segoe UI" FontSize="17" FontWeight="SemiBold"
                                                        HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-2,0,0"/>
@@ -712,11 +739,19 @@
                                                   StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
                                         </Grid>
                                     </Button>
-                                    <Button Width="106" Height="22" Margin="2,0,0,0" Style="{StaticResource RibbonBtn}"
+                                    <Button Width="136" Height="22" Margin="2,0,0,0" Style="{StaticResource RibbonBtn}"
                                             Click="MergeCenterBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_MergeCenter}"
                                             local:RibbonTooltip.KeyTip="M"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_JoinTheSelectedCellsIntoOneLargerCellAndCenterTheContents}" local:RibbonMetadata.CommandName="Merge &amp; Center">
+                                        <Button.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Text_MergeCenter}" local:RibbonTooltip.KeyTip="C" Click="MergeCenterMenuItem_Click" local:RibbonMetadata.CommandName="Merge &amp; Center"/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_MergeAcross}" local:RibbonTooltip.KeyTip="A" Click="MergeAcrossMenuItem_Click" local:RibbonMetadata.CommandName="Merge Across"/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_MergeCells}" local:RibbonTooltip.KeyTip="M" Click="MergeCellsMenuItem_Click" local:RibbonMetadata.CommandName="Merge Cells"/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_UnmergeCells}" local:RibbonTooltip.KeyTip="U" Click="UnmergeCellsMenuItem_Click" local:RibbonMetadata.CommandName="Unmerge Cells"/>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                             <Grid Width="20" Height="14" Margin="0,0,4,0">
                                                 <Border BorderBrush="#111" BorderThickness="1"/>
@@ -725,6 +760,9 @@
                                                       Stroke="#111" StrokeThickness="1"/>
                                             </Grid>
                                             <TextBlock Text="{local:Loc Key=MainWindow_Text_MergeCenter}" local:RibbonMetadata.Role="CommandLabel" FontSize="12"/>
+                                            <Path Width="8" Height="5" Margin="4,1,0,0" VerticalAlignment="Center"
+                                                  Data="M 0 0 L 4 4 L 8 0 Z" Fill="#1F1F1F"
+                                                  Stretch="Fill" local:RibbonMetadata.Role="DropdownChevron"/>
                                         </StackPanel>
                                     </Button>
                                 </StackPanel>
@@ -755,6 +793,16 @@
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_AccountingNumberFormat}"
                                             local:RibbonTooltip.KeyTip="AN"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ChooseTheCurrencyFormatForSelectedCells}" local:RibbonMetadata.CommandName="Accounting Number Format">
+                                        <Button.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_AccountingUSD}" Tag="$" local:RibbonTooltip.KeyTip="D" Click="AccountingSymbolMenuItem_Click" local:RibbonMetadata.CommandName="Accounting Number Format"/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_AccountingEUR}" Tag="&#x20AC;" local:RibbonTooltip.KeyTip="E" Click="AccountingSymbolMenuItem_Click" local:RibbonMetadata.CommandName="Accounting Number Format"/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_AccountingGBP}" Tag="&#x00A3;" local:RibbonTooltip.KeyTip="P" Click="AccountingSymbolMenuItem_Click" local:RibbonMetadata.CommandName="Accounting Number Format"/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_AccountingJPY}" Tag="&#x00A5;" local:RibbonTooltip.KeyTip="Y" Click="AccountingSymbolMenuItem_Click" local:RibbonMetadata.CommandName="Accounting Number Format"/>
+                                                <Separator/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_MoreAccountingFormats}" local:RibbonTooltip.KeyTip="M" Click="MoreAccountingFormatsMenuItem_Click" local:RibbonMetadata.CommandName="More Accounting Formats"/>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
                                         <TextBlock Text="$" FontFamily="Segoe UI" FontSize="19" FontWeight="SemiBold"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Button>
@@ -1164,6 +1212,15 @@
                                                 <Separator/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_GoTo}"           local:RibbonTooltip.KeyTip="G" Click="FindGoToMenuItem_Click" local:RibbonMetadata.CommandName="Go To"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_GoToSpecial}"   local:RibbonTooltip.KeyTip="S" Click="FindGoToSpecialMenuItem_Click" local:RibbonMetadata.CommandName="Go To Special"/>
+                                                <Separator/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_Formulas}"      local:RibbonTooltip.KeyTip="O" Click="FindFormulasMenuItem_Click" local:RibbonMetadata.CommandName="Formulas"/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Text_Notes}"           local:RibbonTooltip.KeyTip="N" Click="FindNotesMenuItem_Click" local:RibbonMetadata.CommandName="Notes"/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_TooltipTitle_ConditionalFormatting}" local:RibbonTooltip.KeyTip="C" Click="FindConditionalFormattingMenuItem_Click" local:RibbonMetadata.CommandName="Conditional Formatting"/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_Constants}"     local:RibbonTooltip.KeyTip="T" Click="FindConstantsMenuItem_Click" local:RibbonMetadata.CommandName="Constants"/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Text_DataValidation}"  local:RibbonTooltip.KeyTip="V" Click="FindDataValidationMenuItem_Click" local:RibbonMetadata.CommandName="Data Validation"/>
+                                                <Separator/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_SelectObjects}" local:RibbonTooltip.KeyTip="J" Click="FindSelectObjectsMenuItem_Click" local:RibbonMetadata.CommandName="Select Objects"/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_SelectionPaneEllipsis}" local:RibbonTooltip.KeyTip="P" Click="FindSelectionPaneMenuItem_Click" local:RibbonMetadata.CommandName="Selection Pane"/>
                                             </ContextMenu>
                                         </Button.ContextMenu>
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
@@ -1223,11 +1280,26 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="InsertIllustrationsGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="{local:Loc Key=MainWindow_Content_Pictures}" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertPictureBtn_Click"
+                                <Button Content="{local:Loc Key=MainWindow_Content_Pictures}" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PicturesBtn_Click"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Pictures}"
                                         local:RibbonTooltip.KeyTip="IP"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_InsertAPictureFromALocalImageFile}" local:RibbonMetadata.CommandName="Pictures"/>
-                                <Button Content="{local:Loc Key=MainWindow_Content_Shapes}" Width="74" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DrawRectBtn_Click"
+                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_InsertAPictureFromALocalImageFile}" local:RibbonMetadata.CommandName="Pictures">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_PicturePlaceInCell}" local:RibbonTooltip.KeyTip="I" local:RibbonMetadata.CommandName="Place in Cell">
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_PictureThisDevice}" local:RibbonTooltip.KeyTip="D" IsEnabled="False" local:RibbonMetadata.CommandName="This Device Picture in Cell"/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_PictureStockImages}" local:RibbonTooltip.KeyTip="S" IsEnabled="False" local:RibbonMetadata.CommandName="Stock Images in Cell"/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_PictureOnlinePictures}" local:RibbonTooltip.KeyTip="O" IsEnabled="False" local:RibbonMetadata.CommandName="Online Pictures in Cell"/>
+                                            </MenuItem>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_PicturePlaceOverCells}" local:RibbonTooltip.KeyTip="V" local:RibbonMetadata.CommandName="Place over Cells">
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_PictureThisDevice}" local:RibbonTooltip.KeyTip="D" Click="InsertPictureBtn_Click" local:RibbonMetadata.CommandName="This Device Picture over Cells"/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_PictureStockImages}" local:RibbonTooltip.KeyTip="S" IsEnabled="False" local:RibbonMetadata.CommandName="Stock Images over Cells"/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_PictureOnlinePictures}" local:RibbonTooltip.KeyTip="O" IsEnabled="False" local:RibbonMetadata.CommandName="Online Pictures over Cells"/>
+                                            </MenuItem>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
+                                <Button Content="{local:Loc Key=MainWindow_Content_Shapes}" Width="74" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ShapesBtn_Click"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Shapes}"
                                         local:RibbonTooltip.KeyTip="SH"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_InsertADrawingShapeOnTheSheet}" local:RibbonMetadata.CommandName="Shapes">
@@ -1760,25 +1832,40 @@
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="{local:Loc Key=MainWindow_Content_BringForward}" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36"
                                         Style="{StaticResource RibbonBtn}" Click="BringForwardBtn_Click"
+                                        AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_BringForward}"
+                                        AutomationProperties.AutomationId="DrawBringForwardButton"
+                                        AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_MoveTheSelectedShapeOneStepCloserToTheFront}"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_BringForward}"
                                         local:RibbonTooltip.KeyTip="BF"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_MoveTheSelectedShapeOneStepCloserToTheFront}" local:RibbonMetadata.CommandName="Bring Forward"/>
                                 <Button Content="{local:Loc Key=MainWindow_Content_SendBackward}" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36"
                                         Style="{StaticResource RibbonBtn}" Click="SendBackwardBtn_Click"
+                                        AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_SendBackward}"
+                                        AutomationProperties.AutomationId="DrawSendBackwardButton"
+                                        AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_MoveTheSelectedShapeOneStepCloserToTheBack}"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SendBackward}"
                                         local:RibbonTooltip.KeyTip="SB"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_MoveTheSelectedShapeOneStepCloserToTheBack}" local:RibbonMetadata.CommandName="Send Backward"/>
                                 <Button Content="{local:Loc Key=MainWindow_Content_SelectionPane}" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36"
                                         Style="{StaticResource RibbonBtn}" Click="SelectionPaneBtn_Click"
+                                        AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_SelectionPane}"
+                                        AutomationProperties.AutomationId="DrawSelectionPaneButton"
+                                        AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ListSheetObjectsAndControlVisibilityOrStackingOrder}"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SelectionPane}"
                                         local:RibbonTooltip.KeyTip="SP"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ListSheetObjectsAndControlVisibilityOrStackingOrder}" local:RibbonMetadata.CommandName="Selection Pane"/>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="2,0">
                                     <Button Content="{local:Loc Key=MainWindow_Content_Rotate}" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36" Style="{StaticResource RibbonBtn}" Click="ObjectRotateBtn_Click"
+                                            AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_RotateObject}"
+                                            AutomationProperties.AutomationId="DrawRotateObjectButton"
+                                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_RotateTheSelectedOrMostRecentDrawingObject}"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_RotateObject}"
                                             local:RibbonTooltip.KeyTip="RO"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RotateTheSelectedOrMostRecentDrawingObject}" local:RibbonMetadata.CommandName="Rotate Object"/>
                                     <Button Content="{local:Loc Key=MainWindow_Content_Size}"   Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36" Style="{StaticResource RibbonBtn}" Click="ObjectSizeBtn_Click"
+                                            AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_ObjectSize}"
+                                            AutomationProperties.AutomationId="DrawObjectSizeButton"
+                                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ResizeTheSelectedOrMostRecentDrawingObject}"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ObjectSize}"
                                             local:RibbonTooltip.KeyTip="SZ"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ResizeTheSelectedOrMostRecentDrawingObject}" local:RibbonMetadata.CommandName="Object Size"/>
@@ -1794,10 +1881,16 @@
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel Margin="1,0">
                                     <Button Content="{local:Loc Key=MainWindow_Content_Fill}" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectFillBtn_Click"
+                                            AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_ShapeFill}"
+                                            AutomationProperties.AutomationId="DrawShapeFillButton"
+                                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ChangeTheFillColorOfTheSelectedDrawingObject}"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ShapeFill}"
                                             local:RibbonTooltip.KeyTip="OF"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ChangeTheFillColorOfTheSelectedDrawingObject}" local:RibbonMetadata.CommandName="Shape Fill"/>
                                     <Button Content="{local:Loc Key=MainWindow_Content_Outline}" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectOutlineBtn_Click"
+                                            AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_ObjectOutline}"
+                                            AutomationProperties.AutomationId="DrawObjectOutlineButton"
+                                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ChangeTheOutlineColorOfTheSelectedDrawingObject}"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ObjectOutline}"
                                             local:RibbonTooltip.KeyTip="OO"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ChangeTheOutlineColorOfTheSelectedDrawingObject}" local:RibbonMetadata.CommandName="Object Outline"/>
@@ -2011,8 +2104,15 @@
                                     <Button.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="{local:Loc Key=MainWindow_Header_Letter}"           local:RibbonTooltip.KeyTip="L" Click="SizeLetter_Click" local:RibbonMetadata.CommandName="Letter"/>
-                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_A4}"               local:RibbonTooltip.KeyTip="A" Click="SizeA4_Click" local:RibbonMetadata.CommandName="A4"/>
                                             <MenuItem Header="{local:Loc Key=MainWindow_Header_Legal}"            local:RibbonTooltip.KeyTip="G" Click="SizeLegal_Click" local:RibbonMetadata.CommandName="Legal"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_Executive}"        local:RibbonTooltip.KeyTip="E" Click="SizeExecutive_Click" local:RibbonMetadata.CommandName="Executive"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_Statement}"        local:RibbonTooltip.KeyTip="S" Click="SizeStatement_Click" local:RibbonMetadata.CommandName="Statement"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_Tabloid}"          local:RibbonTooltip.KeyTip="T" Click="SizeTabloid_Click" local:RibbonMetadata.CommandName="Tabloid"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_A4}"               local:RibbonTooltip.KeyTip="A" Click="SizeA4_Click" local:RibbonMetadata.CommandName="A4"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_A3}"               local:RibbonTooltip.KeyTip="3" Click="SizeA3_Click" local:RibbonMetadata.CommandName="A3"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_A5}"               local:RibbonTooltip.KeyTip="5" Click="SizeA5_Click" local:RibbonMetadata.CommandName="A5"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_B4}"               local:RibbonTooltip.KeyTip="B4" Click="SizeB4_Click" local:RibbonMetadata.CommandName="B4 (JIS)"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_B5}"               local:RibbonTooltip.KeyTip="B5" Click="SizeB5_Click" local:RibbonMetadata.CommandName="B5 (JIS)"/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
@@ -2023,6 +2123,7 @@
                                     <Button.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="{local:Loc Key=MainWindow_Header_SetPrintArea}"   local:RibbonTooltip.KeyTip="S" Click="PrintAreaSetMenuItem_Click" local:RibbonMetadata.CommandName="Set Print Area"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_AddToPrintArea}" local:RibbonTooltip.KeyTip="A" IsEnabled="False" local:RibbonMetadata.CommandName="Add to Print Area"/>
                                             <MenuItem Header="{local:Loc Key=MainWindow_Header_ClearPrintArea}" local:RibbonTooltip.KeyTip="C" Click="PrintAreaClearMenuItem_Click" local:RibbonMetadata.CommandName="Clear Print Area"/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
@@ -2055,6 +2156,15 @@
                                         local:RibbonTooltip.KeyTip="PT"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RepeatSelectedRowsOrColumnsOnEveryPrintedPage}" local:RibbonMetadata.CommandName="Print Titles"/>
                             </StackPanel>
+                            <Button x:Name="PageLayoutPageSetupDialogButton" Grid.Row="0" Width="24" Height="22" Margin="0,0,1,1"
+                                    HorizontalAlignment="Right" VerticalAlignment="Bottom" Style="{StaticResource RibbonBtn}" Click="PageSetupDialogBtn_Click"
+                                    AutomationProperties.Name="{local:Loc Key=PageSetup_PageSetup}"
+                                    AutomationProperties.HelpText="{local:Loc Key=PrintPreview_PageSetupHelpText}"
+                                    local:RibbonTooltip.Title="{local:Loc Key=PageSetup_PageSetup}"
+                                    local:RibbonTooltip.KeyTip="PS"
+                                    local:RibbonTooltip.Description="{local:Loc Key=PrintPreview_PageSetupHelpText}" local:RibbonMetadata.CommandName="Page Setup dialog">
+                                <TextBlock Text="..." FontSize="12"/>
+                            </Button>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_PageSetup}" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
@@ -2062,8 +2172,46 @@
                         <!-- ▌Scale to Fit ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PageLayoutScaleToFitGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="{local:Loc Key=MainWindow_Content_Scale}" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ScaleToFitBtn_Click"
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,1,2,0">
+                                <StackPanel VerticalAlignment="Center" Margin="0,0,4,0">
+                                    <TextBlock Text="{local:Loc Key=MainWindow_Text_Width}" FontSize="11" Margin="2,0,2,0" Foreground="#444"/>
+                                    <ComboBox x:Name="PageLayoutScaleWidthBox" Width="82" Height="22" Margin="1,0" Background="White" FontSize="12"
+                                              IsEditable="True" IsTextSearchEnabled="False"
+                                              SelectionChanged="PageLayoutScaleWidthBox_SelectionChanged"
+                                              KeyDown="PageLayoutScaleWidthBox_KeyDown" LostKeyboardFocus="PageLayoutScaleWidthBox_LostKeyboardFocus"
+                                              AutomationProperties.Name="{local:Loc Key=MainWindow_Text_Width}"
+                                              AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ScalePrintedOutputByPercentageOrFitItToAFixedPageCount}"
+                                              local:RibbonTooltip.Title="{local:Loc Key=MainWindow_Text_Width}"
+                                              local:RibbonTooltip.KeyTip="SW"
+                                              local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ScalePrintedOutputByPercentageOrFitItToAFixedPageCount}" local:RibbonMetadata.CommandName="Scale Width"/>
+                                </StackPanel>
+                                <StackPanel VerticalAlignment="Center" Margin="0,0,4,0">
+                                    <TextBlock Text="{local:Loc Key=MainWindow_Text_Height}" FontSize="11" Margin="2,0,2,0" Foreground="#444"/>
+                                    <ComboBox x:Name="PageLayoutScaleHeightBox" Width="82" Height="22" Margin="1,0" Background="White" FontSize="12"
+                                              IsEditable="True" IsTextSearchEnabled="False"
+                                              SelectionChanged="PageLayoutScaleHeightBox_SelectionChanged"
+                                              KeyDown="PageLayoutScaleHeightBox_KeyDown" LostKeyboardFocus="PageLayoutScaleHeightBox_LostKeyboardFocus"
+                                              AutomationProperties.Name="{local:Loc Key=MainWindow_Text_Height}"
+                                              AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ScalePrintedOutputByPercentageOrFitItToAFixedPageCount}"
+                                              local:RibbonTooltip.Title="{local:Loc Key=MainWindow_Text_Height}"
+                                              local:RibbonTooltip.KeyTip="SH"
+                                              local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ScalePrintedOutputByPercentageOrFitItToAFixedPageCount}" local:RibbonMetadata.CommandName="Scale Height"/>
+                                </StackPanel>
+                                <StackPanel VerticalAlignment="Center" Margin="0,0,3,0">
+                                    <TextBlock Text="{local:Loc Key=MainWindow_Content_Scale}" FontSize="11" Margin="2,0,2,0" Foreground="#444"/>
+                                    <ComboBox x:Name="PageLayoutScalePercentBox" Width="72" Height="22" Margin="1,0" Background="White" FontSize="12"
+                                              IsEditable="True" IsTextSearchEnabled="False"
+                                              SelectionChanged="PageLayoutScalePercentBox_SelectionChanged"
+                                              KeyDown="PageLayoutScalePercentBox_KeyDown" LostKeyboardFocus="PageLayoutScalePercentBox_LostKeyboardFocus"
+                                              AutomationProperties.Name="{local:Loc Key=MainWindow_Content_Scale}"
+                                              AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ScalePrintedOutputByPercentageOrFitItToAFixedPageCount}"
+                                              local:RibbonTooltip.Title="{local:Loc Key=MainWindow_Content_Scale}"
+                                              local:RibbonTooltip.KeyTip="SC"
+                                              local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ScalePrintedOutputByPercentageOrFitItToAFixedPageCount}" local:RibbonMetadata.CommandName="Scale Percent"/>
+                                </StackPanel>
+                                <Button x:Name="PageLayoutScaleToFitDialogButton" Content="..." Width="24" Height="22" Margin="1,14,1,0" Style="{StaticResource RibbonBtn}" Click="ScaleToFitBtn_Click"
+                                        AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_ScaleToFit}"
+                                        AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ScalePrintedOutputByPercentageOrFitItToAFixedPageCount}"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ScaleToFit}"
                                         local:RibbonTooltip.KeyTip="SF"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ScalePrintedOutputByPercentageOrFitItToAFixedPageCount}" local:RibbonMetadata.CommandName="Scale to Fit"/>
@@ -2181,7 +2329,8 @@
                                     </Button.ContextMenu>
                                 </Button>
                                 <StackPanel VerticalAlignment="Center">
-                                    <Button Content="{local:Loc Key=MainWindow_Content_RecentlyUsed}" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertFunctionBtn_Click"
+                                    <Button Content="{local:Loc Key=MainWindow_Content_RecentlyUsed}" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaRecentlyUsedBtn_Click"
+                                            local:RibbonMetadata.DropdownMenuButton="True"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_RecentlyUsed}"
                                             local:RibbonTooltip.KeyTip="RU"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_InsertAFunctionYouHaveUsedRecently}" local:RibbonMetadata.CommandName="Recently Used"/>
@@ -2269,15 +2418,24 @@
                                             local:RibbonTooltip.KeyTip="TD"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ShowArrowsPointingToTheCellsThatDependOnTheSelectedCell}" local:RibbonMetadata.CommandName="Trace Dependents"/>
                                     <Button Content="{local:Loc Key=MainWindow_Content_RemoveArrows}"     Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RemoveArrowsBtn_Click"
+                                            local:RibbonMetadata.DropdownMenuButton="True"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_RemoveArrows}"
                                             local:RibbonTooltip.KeyTip="RA"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RemoveTheTracerArrowsAddedByTracePrecedentsOrTraceDependents}" local:RibbonMetadata.CommandName="Remove Arrows"/>
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RemoveTheTracerArrowsAddedByTracePrecedentsOrTraceDependents}" local:RibbonMetadata.CommandName="Remove Arrows">
+                                        <Button.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_RemoveArrows}" local:RibbonTooltip.KeyTip="A" Click="RemoveAllArrowsMenuItem_Click" local:RibbonMetadata.CommandName="Remove Arrows"/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_RemovePrecedentArrows}" local:RibbonTooltip.KeyTip="P" Click="RemovePrecedentArrowsMenuItem_Click" local:RibbonMetadata.CommandName="Remove Precedent Arrows"/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_RemoveDependentArrows}" local:RibbonTooltip.KeyTip="D" Click="RemoveDependentArrowsMenuItem_Click" local:RibbonMetadata.CommandName="Remove Dependent Arrows"/>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                    </Button>
                                 </StackPanel>
                                 <StackPanel VerticalAlignment="Center">
-                                    <Button Content="{local:Loc Key=MainWindow_Content_ShowFormulas}"     Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ShowFormulasBtn_Click"
-                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ShowFormulas}"
-                                            local:RibbonTooltip.KeyTip="SF"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DisplayFormulasInAllCellsInsteadOfTheirCalculatedResults}" local:RibbonMetadata.CommandName="Show Formulas"/>
+                                    <ToggleButton x:Name="ShowFormulasButton" Content="{local:Loc Key=MainWindow_Content_ShowFormulas}" Height="22" Margin="1,1" Style="{StaticResource RibbonToggleBtn}" Click="ShowFormulasBtn_Click"
+                                                  local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ShowFormulas}"
+                                                  local:RibbonTooltip.KeyTip="SF"
+                                                  local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DisplayFormulasInAllCellsInsteadOfTheirCalculatedResults}" local:RibbonMetadata.CommandName="Show Formulas"/>
                                     <Button Content="{local:Loc Key=MainWindow_Content_ErrorChecking}"    Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ErrorCheckBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ErrorChecking}"
                                             local:RibbonTooltip.KeyTip="EC"
@@ -2299,14 +2457,6 @@
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_WatchWindow}"
                                             local:RibbonTooltip.KeyTip="W"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ShowWatchedCellsAndTheirCurrentValues}" local:RibbonMetadata.CommandName="Watch Window"/>
-                                    <Button Content="{local:Loc Key=MainWindow_Content_AddWatch}" Width="100" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="AddWatchBtn_Click"
-                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_AddWatch}"
-                                            local:RibbonTooltip.KeyTip="AW"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AddTheSelectedCellToTheWatchWindow}" local:RibbonMetadata.CommandName="Add Watch"/>
-                                    <Button Content="{local:Loc Key=MainWindow_Content_DelWatch}" Width="100" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeleteWatchBtn_Click"
-                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_DeleteWatch}"
-                                            local:RibbonTooltip.KeyTip="DW"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RemoveTheSelectedCellFromTheWatchWindow}" local:RibbonMetadata.CommandName="Delete Watch"/>
                                 </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_FormulaAuditing}" Style="{StaticResource GroupLbl}"/></Border>
@@ -2330,9 +2480,10 @@
                                         local:RibbonTooltip.KeyTip="O"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ChooseWhetherFormulasAreRecalculatedAutomaticallyOrManually}" local:RibbonMetadata.CommandName="Calculation Options">
                                     <Button.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_Automatic}" local:RibbonTooltip.KeyTip="A" Click="CalcAutoMenuItem_Click" local:RibbonMetadata.CommandName="Automatic"/>
-                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_Manual}"    local:RibbonTooltip.KeyTip="M" Click="CalcManualMenuItem_Click" local:RibbonMetadata.CommandName="Manual"/>
+                                        <ContextMenu Opened="CalculationOptionsContextMenu_Opened">
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_Automatic}" IsCheckable="True" local:RibbonTooltip.KeyTip="A" Click="CalcAutoMenuItem_Click" local:RibbonMetadata.CommandName="Automatic"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_AutomaticExceptDataTables}" IsCheckable="True" local:RibbonTooltip.KeyTip="E" Click="CalcAutoExceptDataTablesMenuItem_Click" local:RibbonMetadata.CommandName="Automatic Except Data Tables"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_Manual}"    IsCheckable="True" local:RibbonTooltip.KeyTip="M" Click="CalcManualMenuItem_Click" local:RibbonMetadata.CommandName="Manual"/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
@@ -2402,6 +2553,10 @@
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SortTheSelectedColumnFromLargestToSmallestZToA}" local:RibbonMetadata.CommandName="Sort Z to A">
                                         <local:RibbonIcon Kind="SortDescending" IconSize="16" HorizontalAlignment="Center"/>
                                     </Button>
+                                    <Button Content="{local:Loc Key=Sort_Title}" Width="76" Height="22" Margin="1,1" local:RibbonMetadata.CompactFullWidth="76" local:RibbonMetadata.CompactWidth="24" Style="{StaticResource RibbonBtn}" Click="SortCustomButton_Click"
+                                            local:RibbonTooltip.Title="{local:Loc Key=Sort_Title}"
+                                            local:RibbonTooltip.KeyTip="SO"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SortTheSelectedColumnFromSmallestToLargestAToZ}" local:RibbonMetadata.CommandName="Sort"/>
                                 </StackPanel>
                                 <StackPanel Orientation="Vertical">
                                     <Button Width="76" Height="22" Margin="1,1" local:RibbonMetadata.CompactFullWidth="76" local:RibbonMetadata.CompactWidth="24" Style="{StaticResource RibbonBtn}" Click="FilterButton_Click"
@@ -2411,9 +2566,9 @@
                                         <local:RibbonIcon Kind="Filter" IconSize="16" HorizontalAlignment="Center"/>
                                     </Button>
                                     <Button Width="76" Height="22" Margin="1,1" local:RibbonMetadata.CompactFullWidth="76" local:RibbonMetadata.CompactWidth="24" Style="{StaticResource RibbonBtn}" Click="ClearFilterButton_Click"
-                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ClearFilter}"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Clear}"
                                             local:RibbonTooltip.KeyTip="C"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RemoveAllActiveFiltersAndShowAllRowsInTheCurrentRange}" local:RibbonMetadata.CommandName="Clear Filter">
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RemoveAllActiveFiltersAndShowAllRowsInTheCurrentRange}" local:RibbonMetadata.CommandName="Clear">
                                         <local:RibbonIcon Kind="Clear" IconSize="16" HorizontalAlignment="Center"/>
                                     </Button>
                                 </StackPanel>
@@ -2421,14 +2576,14 @@
                                     <Button Width="76" Height="22" Margin="1,1" local:RibbonMetadata.CompactFullWidth="76" local:RibbonMetadata.CompactWidth="24" Style="{StaticResource RibbonBtn}" Click="AdvancedFilterBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_AdvancedFilter}"
                                             local:RibbonTooltip.KeyTip="A"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_FilterAListUsingAnExcelStyleCriteriaRangeOptionallyCopyingMatchingRowsEl_51BAA76A}" local:RibbonMetadata.CommandName="Advanced Filter">
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_FilterAListUsingAnExcelStyleCriteriaRangeOptionallyCopyingMatchingRowsEl_51BAA76A}" local:RibbonMetadata.CommandName="Advanced">
                                         <local:RibbonIcon Kind="Filter" IconSize="16" HorizontalAlignment="Center"/>
                                     </Button>
-                                    <Button Width="76" Height="22" Margin="1,1" local:RibbonMetadata.CompactFullWidth="76" local:RibbonMetadata.CompactWidth="24" Style="{StaticResource RibbonBtn}" Click="FilterReapplyMenuItem_Click"
+                                    <Button x:Name="DataReapplyButton" Width="76" Height="22" Margin="1,1" local:RibbonMetadata.CompactFullWidth="76" local:RibbonMetadata.CompactWidth="24" Style="{StaticResource RibbonBtn}" Click="FilterReapplyMenuItem_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Reapply}"
                                             local:RibbonTooltip.KeyTip="R"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ReapplyTheLastFilterOrSortOperationToTheCurrentRange}" local:RibbonMetadata.CommandName="Reapply">
-                                        <local:RibbonIcon Kind="Filter" IconSize="16" HorizontalAlignment="Center"/>
+                                        <local:RibbonIcon Kind="Refresh" IconSize="16" HorizontalAlignment="Center"/>
                                     </Button>
                                 </StackPanel>
                             </StackPanel>
@@ -2455,7 +2610,15 @@
                                 <Button Content="{local:Loc Key=MainWindow_Text_DataValidation}" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ValidationButton_Click"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_DataValidation}"
                                         local:RibbonTooltip.KeyTip="V"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ControlWhatDataCanBeEnteredInTheSelectedCells}" local:RibbonMetadata.CommandName="Data Validation"/>
+                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ControlWhatDataCanBeEnteredInTheSelectedCells}" local:RibbonMetadata.CommandName="Data Validation">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_DataValidationDialog}" local:RibbonTooltip.KeyTip="V" Click="ValidationButton_Click" local:RibbonMetadata.CommandName="Data Validation"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_CircleInvalidData}" local:RibbonTooltip.KeyTip="I" Click="CircleInvalidDataMenuItem_Click" local:RibbonMetadata.CommandName="Circle Invalid Data"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_ClearValidationCircles}" local:RibbonTooltip.KeyTip="C" Click="ClearValidationCirclesMenuItem_Click" local:RibbonMetadata.CommandName="Clear Validation Circles"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
                                 <Button Content="{local:Loc Key=MainWindow_Text_Consolidate}" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ConsolidateBtn_Click"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Consolidate}"
                                         local:RibbonTooltip.KeyTip="N"
@@ -2470,7 +2633,7 @@
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="{local:Loc Key=MainWindow_Content_WhatIfAnalysis}" Width="116" Height="22" Margin="1,1"
-                                        Style="{StaticResource RibbonBtn}" Click="GoalSeekBtn_Click"
+                                        Style="{StaticResource RibbonBtn}" Click="WhatIfAnalysisButton_Click"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_WhatIfAnalysis}"
                                         local:RibbonTooltip.KeyTip="W"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OpenGoalSeekScenarioManagerOrDataTableTools}" local:RibbonMetadata.CommandName="What-If Analysis">
@@ -2502,25 +2665,48 @@
                                     <Button Content="{local:Loc Key=MainWindow_Content_Group}" Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="GroupRowsBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Group}"
                                             local:RibbonTooltip.KeyTip="G"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_GroupTheSelectedRowsOrWholeSelectedColumnsAltShiftRightArrow}" local:RibbonMetadata.CommandName="Group"/>
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_GroupTheSelectedRowsOrWholeSelectedColumnsAltShiftRightArrow}" local:RibbonMetadata.CommandName="Group">
+                                        <Button.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Content_Group}" InputGestureText="G"
+                                                          local:RibbonTooltip.KeyTip="G"
+                                                          Click="GroupRowsMenuItem_Click" local:RibbonMetadata.CommandName="Group"/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_AutoOutline}" InputGestureText="A"
+                                                          local:RibbonTooltip.KeyTip="A"
+                                                          IsEnabled="False" local:RibbonMetadata.CommandName="Auto Outline"/>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                    </Button>
                                     <Button Content="{local:Loc Key=MainWindow_Content_Ungroup}" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="UngroupRowsBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Ungroup}"
                                             local:RibbonTooltip.KeyTip="U"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RemoveGroupingFromSelectedRowsOrWholeSelectedColumnsAltShiftLeftArrow}" local:RibbonMetadata.CommandName="Ungroup"/>
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RemoveGroupingFromSelectedRowsOrWholeSelectedColumnsAltShiftLeftArrow}" local:RibbonMetadata.CommandName="Ungroup">
+                                        <Button.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Content_Ungroup}" InputGestureText="U"
+                                                          local:RibbonTooltip.KeyTip="U"
+                                                          Click="UngroupRowsMenuItem_Click" local:RibbonMetadata.CommandName="Ungroup"/>
+                                                <Separator/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_ClearOutline}" InputGestureText="C"
+                                                          local:RibbonTooltip.KeyTip="C"
+                                                          Click="ClearOutlineMenuItem_Click" local:RibbonMetadata.CommandName="Clear Outline"/>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                    </Button>
                                     <Button Content="{local:Loc Key=MainWindow_Content_Subtotal}" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SubtotalBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Subtotal}"
                                             local:RibbonTooltip.KeyTip="B"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_InsertSubtotalRowsForGroupedDataInTheSelectedRange}" local:RibbonMetadata.CommandName="Subtotal"/>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal">
-                                    <Button Content="{local:Loc Key=MainWindow_Content_Collapse}" Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CollapseGroupBtn_Click"
-                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_CollapseGroup}"
+                                    <Button Content="{local:Loc Key=MainWindow_Content_HideDetail}" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CollapseGroupBtn_Click"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_HideDetail}"
                                             local:RibbonTooltip.KeyTip="H"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_HideAllRowsInTheCurrentOutlineGroup}" local:RibbonMetadata.CommandName="Collapse Group"/>
-                                    <Button Content="{local:Loc Key=MainWindow_Content_Expand}" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ExpandGroupBtn_Click"
-                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ExpandGroup}"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_HideAllRowsInTheCurrentOutlineGroup}" local:RibbonMetadata.CommandName="Hide Detail"/>
+                                    <Button Content="{local:Loc Key=MainWindow_Content_ShowDetail}" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ExpandGroupBtn_Click"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ShowDetail}"
                                             local:RibbonTooltip.KeyTip="J"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ShowAllRowsInTheCurrentOutlineGroup}" local:RibbonMetadata.CommandName="Expand Group"/>
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ShowAllRowsInTheCurrentOutlineGroup}" local:RibbonMetadata.CommandName="Show Detail"/>
                                 </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Outline}" Style="{StaticResource GroupLbl}"/></Border>
@@ -2547,6 +2733,8 @@
                                         Style="{StaticResource RibbonBtn}" FontSize="12"
                                         Margin="1,1"
                                         Click="SpellCheckBtn_Click"
+                                        AutomationProperties.AutomationId="ReviewSpellingButton"
+                                        AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_FindKnownMisspellingsInTextCellsOnTheActiveSheetWithReplaceReplaceAllAnd_D58B6767}"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Spelling}"
                                         local:RibbonTooltip.KeyTip="SP"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_FindKnownMisspellingsInTextCellsOnTheActiveSheetWithReplaceReplaceAllAnd_D58B6767}" local:RibbonMetadata.CommandName="Spelling"/>
@@ -2594,26 +2782,36 @@
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel VerticalAlignment="Center">
                                     <StackPanel Orientation="Horizontal">
-                                        <Button Content="{local:Loc Key=MainWindow_Content_NewComment}" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNewThreadedCommentBtn_Click"
+                                        <Button x:Name="ReviewNewThreadedCommentButton" Content="{local:Loc Key=MainWindow_Content_NewComment}" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNewThreadedCommentBtn_Click"
+                                                AutomationProperties.AutomationId="ReviewNewCommentButton"
+                                                AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_AddOrEditAThreadedCommentOnTheSelectedCellCtrlShiftF2}"
                                                 local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_NewComment}"
                                                 local:RibbonTooltip.KeyTip="CM"
                                                 local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AddOrEditAThreadedCommentOnTheSelectedCellCtrlShiftF2}" local:RibbonMetadata.CommandName="New Comment"/>
-                                        <Button Content="{local:Loc Key=MainWindow_Content_Delete}" Width="58" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewDeleteThreadedCommentBtn_Click"
+                                        <Button x:Name="ReviewDeleteThreadedCommentButton" Content="{local:Loc Key=MainWindow_Content_Delete}" Width="58" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewDeleteThreadedCommentBtn_Click"
+                                                AutomationProperties.AutomationId="ReviewDeleteCommentButton"
+                                                AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_DeleteTheThreadedCommentOnTheSelectedCell}"
                                                 local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_DeleteComment}"
                                                 local:RibbonTooltip.KeyTip="XC"
                                                 local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeleteTheThreadedCommentOnTheSelectedCell}" local:RibbonMetadata.CommandName="Delete Comment"/>
                                     </StackPanel>
                                     <StackPanel Orientation="Horizontal">
-                                        <Button Content="{local:Loc Key=MainWindow_Content_Prev}" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewPrevCommentBtn_Click"
+                                        <Button x:Name="ReviewPreviousThreadedCommentButton" Content="{local:Loc Key=MainWindow_Content_Prev}" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewPrevCommentBtn_Click"
+                                                AutomationProperties.AutomationId="ReviewPreviousCommentButton"
+                                                AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_NavigateToThePreviousCommentInTheSheet}"
                                                 local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_PreviousComment}"
                                                 local:RibbonTooltip.KeyTip="PC"
                                                 local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_NavigateToThePreviousCommentInTheSheet}" local:RibbonMetadata.CommandName="Previous Comment"/>
-                                        <Button Content="{local:Loc Key=MainWindow_Content_Next}" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNextCommentBtn_Click"
+                                        <Button x:Name="ReviewNextThreadedCommentButton" Content="{local:Loc Key=MainWindow_Content_Next}" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNextCommentBtn_Click"
+                                                AutomationProperties.AutomationId="ReviewNextCommentButton"
+                                                AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_NavigateToTheNextCommentInTheSheet}"
                                                 local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_NextComment}"
                                                 local:RibbonTooltip.KeyTip="JC"
                                                 local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_NavigateToTheNextCommentInTheSheet}" local:RibbonMetadata.CommandName="Next Comment"/>
                                     </StackPanel>
-                                    <Button Content="{local:Loc Key=MainWindow_Content_ShowComments}" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewShowCommentsBtn_Click"
+                                    <Button x:Name="ReviewShowCommentsButton" Content="{local:Loc Key=MainWindow_Content_ShowComments}" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewShowCommentsBtn_Click"
+                                            AutomationProperties.AutomationId="ReviewShowCommentsButton"
+                                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_OpenAListOfThreadedCommentsOnTheActiveSheet}"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ShowComments}"
                                             local:RibbonTooltip.KeyTip="SC"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OpenAListOfThreadedCommentsOnTheActiveSheet}" local:RibbonMetadata.CommandName="Show Comments"/>
@@ -2629,30 +2827,42 @@
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel VerticalAlignment="Center">
                                     <StackPanel Orientation="Horizontal">
-                                        <Button Content="{local:Loc Key=MainWindow_Content_New}" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNewCommentBtn_Click"
+                                        <Button x:Name="ReviewNewNoteButton" Content="{local:Loc Key=MainWindow_Content_New}" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNewCommentBtn_Click"
+                                                AutomationProperties.AutomationId="ReviewNewNoteButton"
+                                                AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_AddASimpleCellNoteToTheSelectedCell}"
                                                 local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_NewNote}"
                                                 local:RibbonTooltip.KeyTip="O"
                                                 local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AddASimpleCellNoteToTheSelectedCell}" local:RibbonMetadata.CommandName="New Note"/>
-                                        <Button Content="{local:Loc Key=MainWindow_Content_Edit}" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNewCommentBtn_Click"
+                                        <Button x:Name="ReviewEditNoteButton" Content="{local:Loc Key=MainWindow_Content_Edit}" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNewCommentBtn_Click"
+                                                AutomationProperties.AutomationId="ReviewEditNoteButton"
+                                                AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_EditTheSimpleCellNoteOnTheSelectedCell}"
                                                 local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_EditNote}"
                                                 local:RibbonTooltip.KeyTip="E"
                                                 local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_EditTheSimpleCellNoteOnTheSelectedCell}" local:RibbonMetadata.CommandName="Edit Note"/>
-                                        <Button Content="{local:Loc Key=MainWindow_Content_Delete}" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewDeleteCommentBtn_Click"
+                                        <Button x:Name="ReviewDeleteNoteButton" Content="{local:Loc Key=MainWindow_Content_Delete}" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewDeleteCommentBtn_Click"
+                                                AutomationProperties.AutomationId="ReviewDeleteNoteButton"
+                                                AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_RemoveTheSimpleCellNoteFromTheSelectedCell}"
                                                 local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_DeleteNote}"
                                                 local:RibbonTooltip.KeyTip="D"
                                                 local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RemoveTheSimpleCellNoteFromTheSelectedCell}" local:RibbonMetadata.CommandName="Delete Note"/>
                                     </StackPanel>
                                     <StackPanel Orientation="Horizontal">
-                                        <Button Content="{local:Loc Key=MainWindow_Content_Prev}" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewPrevNoteBtn_Click"
+                                        <Button x:Name="ReviewPreviousNoteButton" Content="{local:Loc Key=MainWindow_Content_Prev}" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewPrevNoteBtn_Click"
+                                                AutomationProperties.AutomationId="ReviewPreviousNoteButton"
+                                                AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_NavigateToThePreviousSimpleCellNoteInTheSheet}"
                                                 local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_PreviousNote}"
                                                 local:RibbonTooltip.KeyTip="PN"
                                                 local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_NavigateToThePreviousSimpleCellNoteInTheSheet}" local:RibbonMetadata.CommandName="Previous Note"/>
-                                        <Button Content="{local:Loc Key=MainWindow_Content_Next}" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNextNoteBtn_Click"
+                                        <Button x:Name="ReviewNextNoteButton" Content="{local:Loc Key=MainWindow_Content_Next}" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNextNoteBtn_Click"
+                                                AutomationProperties.AutomationId="ReviewNextNoteButton"
+                                                AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_NavigateToTheNextSimpleCellNoteInTheSheet}"
                                                 local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_NextNote}"
                                                 local:RibbonTooltip.KeyTip="N"
                                                 local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_NavigateToTheNextSimpleCellNoteInTheSheet}" local:RibbonMetadata.CommandName="Next Note"/>
                                     </StackPanel>
-                                    <Button Content="{local:Loc Key=MainWindow_Content_ShowNotes}" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewShowNotesBtn_Click"
+                                    <Button x:Name="ReviewShowNotesButton" Content="{local:Loc Key=MainWindow_Content_ShowNotes}" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewShowNotesBtn_Click"
+                                            AutomationProperties.AutomationId="ReviewShowNotesButton"
+                                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_OpenAListOfSimpleCellNotesOnTheActiveSheet}"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ShowNotes}"
                                             local:RibbonTooltip.KeyTip="H"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OpenAListOfSimpleCellNotesOnTheActiveSheet}" local:RibbonMetadata.CommandName="Show Notes"/>
@@ -2678,13 +2888,26 @@
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_AllowUsersToEditRanges}"
                                         local:RibbonTooltip.KeyTip="AR"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AddDeleteOrClearRangesThatRemainEditableWhenTheSheetIsProtected}" local:RibbonMetadata.CommandName="Allow Users to Edit Ranges"/>
-                                <Button Content="{local:Loc Key=MainWindow_Content_ShareWorkbook}" Width="76" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ShareWorkbookBtn_Click"
-                                        AutomationProperties.AutomationId="ReviewShareWorkbookButton"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ShareWorkbook}"
+                                <Button Content="{local:Loc Key=MainWindow_Text_Share}" Width="76" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ShareWorkbookBtn_Click"
+                                        AutomationProperties.AutomationId="ReviewShareButton"
+                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Share}"
                                         local:RibbonTooltip.KeyTip="SH"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SaveTheWorkbookIfNeededAndOpenWindowsShareForTheFile}" local:RibbonMetadata.CommandName="Share Workbook"/>
+                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SaveTheWorkbookIfNeededAndOpenWindowsShareForTheFile}" local:RibbonMetadata.CommandName="Share"/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Protect}" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
+                        <!-- Changes -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ReviewChangesGroup">
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button x:Name="ReviewShowChangesButton" Content="{local:Loc Key=MainWindow_Content_ShowChanges}" Width="108" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewShowChangesBtn_Click"
+                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_Content_ShowChanges}"
+                                        local:RibbonTooltip.KeyTip="SG"
+                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OpenWorkbookChangeHistoryPane}" local:RibbonMetadata.CommandName="Show Changes"/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Changes}" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
 
                     </StackPanel>
@@ -2704,19 +2927,19 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ViewWorkbookViewsGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="{local:Loc Key=MainWindow_Content_Normal}" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="NormalViewBtn_Click"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Normal}"
-                                        local:RibbonTooltip.KeyTip="L"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ShowTheWorksheetInTheStandardEditingView}" local:RibbonMetadata.CommandName="Normal"/>
-                                <Button Content="{local:Loc Key=MainWindow_Content_PageBreakPreview}" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageBreakPreviewBtn_Click"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_PageBreakPreview}"
-                                        local:RibbonTooltip.KeyTip="I"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ShowManualPageBreaksAndPrintAreaBoundariesWhileEditing}" local:RibbonMetadata.CommandName="Page Break Preview"/>
-                                <Button Content="{local:Loc Key=MainWindow_Content_PageLayout}" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageLayoutViewBtn_Click"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_PageLayout}"
-                                        local:RibbonTooltip.KeyTip="P"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ShowTheSheetWithPrintLayoutBoundaries}" local:RibbonMetadata.CommandName="Page Layout"/>
-                                <Button Content="{local:Loc Key=MainWindow_Content_CustomViews}" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CustomViewsBtn_Click"
+                                <ToggleButton x:Name="ViewNormalButton" Content="{local:Loc Key=MainWindow_Content_Normal}" Height="22" Margin="1,1" Style="{StaticResource RibbonToggleBtn}" Click="NormalViewBtn_Click"
+                                              local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Normal}"
+                                              local:RibbonTooltip.KeyTip="L"
+                                              local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ShowTheWorksheetInTheStandardEditingView}" local:RibbonMetadata.CommandName="Normal"/>
+                                <ToggleButton x:Name="ViewPageBreakPreviewButton" Content="{local:Loc Key=MainWindow_Content_PageBreakPreview}" Height="22" Margin="1,1" Style="{StaticResource RibbonToggleBtn}" Click="PageBreakPreviewBtn_Click"
+                                              local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_PageBreakPreview}"
+                                              local:RibbonTooltip.KeyTip="I"
+                                              local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ShowManualPageBreaksAndPrintAreaBoundariesWhileEditing}" local:RibbonMetadata.CommandName="Page Break Preview"/>
+                                <ToggleButton x:Name="ViewPageLayoutButton" Content="{local:Loc Key=MainWindow_Content_PageLayout}" Height="22" Margin="1,1" Style="{StaticResource RibbonToggleBtn}" Click="PageLayoutViewBtn_Click"
+                                              local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_PageLayout}"
+                                              local:RibbonTooltip.KeyTip="P"
+                                              local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ShowTheSheetWithPrintLayoutBoundaries}" local:RibbonMetadata.CommandName="Page Layout"/>
+                                <Button x:Name="CustomViewsBtn" Content="{local:Loc Key=MainWindow_Content_CustomViews}" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CustomViewsBtn_Click"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_CustomViews}"
                                         local:RibbonTooltip.KeyTip="C"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ViewAddShowAndDeleteSavedWorkbookViews}" local:RibbonMetadata.CommandName="Custom Views"/>
@@ -2837,7 +3060,11 @@
                                     <Button x:Name="ViewSwitchWindowsBtn" Content="{local:Loc Key=MainWindow_Content_SwitchWindows}" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewSwitchWindowsBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SwitchWindows}"
                                             local:RibbonTooltip.KeyTip="W"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SwitchToAnotherVisibleWorkbookWindow}" local:RibbonMetadata.CommandName="Switch Windows"/>
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SwitchToAnotherVisibleWorkbookWindow}" local:RibbonMetadata.CommandName="Switch Windows">
+                                        <Button.ContextMenu>
+                                            <ContextMenu Opened="SwitchWindowsContextMenu_Opened"/>
+                                        </Button.ContextMenu>
+                                    </Button>
                                     <Button x:Name="ViewHideWindowBtn" Content="{local:Loc Key=MainWindow_Content_HideWindow}" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewHideWindowBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_HideWindow}"
                                             local:RibbonTooltip.KeyTip="H"
@@ -2855,6 +3082,235 @@
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Window}" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
                     </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+
+            <!-- CHART DESIGN -->
+            <TabItem x:Name="ChartDesignTab" Header="{local:Loc Key=MainWindow_Header_ChartDesign}" Visibility="Collapsed" local:RibbonTooltip.KeyTip="JC" local:RibbonMetadata.CatalogId="ChartDesignTab">
+                <Border Background="{StaticResource FreeXRibbonSurfaceBrush}" Padding="6,4,6,0">
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
+                                  VerticalScrollBarVisibility="Disabled"
+                                  PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
+                        <StackPanel Orientation="Horizontal" MinHeight="88">
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ChartDesignLayoutsGroup">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <StackPanel>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_Titles}" Width="94" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTitlesBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ChartTitles}" local:RibbonTooltip.KeyTip="T"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_EditChartTitleAndAxisTitleText}" local:RibbonMetadata.CommandName="Chart Titles"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_DataLabels}" Width="94" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelsBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_DataLabels}" local:RibbonTooltip.KeyTip="D"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ShowOrHideValueLabelsOnTheCurrentChart}" local:RibbonMetadata.CommandName="Data Labels"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_LabelPos}" Width="94" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelPositionBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_DataLabelPosition}" local:RibbonTooltip.KeyTip="P"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CycleThroughCommonExcelDataLabelPositionsForTheCurrentChart}" local:RibbonMetadata.CommandName="Data Label Position"/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_Trendline}" Width="94" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Trendline}" local:RibbonTooltip.KeyTip="R"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ShowOrHideATrendlineOnTheCurrentColumnOrLineChart}" local:RibbonMetadata.CommandName="Trendline"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_ErrorBars}" Width="94" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartErrorBarsBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ErrorBars}" local:RibbonTooltip.KeyTip="E"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OpenExcelLikeErrorBarOptionsForTheCurrentChart}" local:RibbonMetadata.CommandName="Error Bars"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_2ndAxis}" Width="94" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSecondaryAxisBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SecondaryAxis}" local:RibbonTooltip.KeyTip="S"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_PlotAdditionalSeriesOnASecondaryValueAxisForTheCurrentColumnOrLineChart}" local:RibbonMetadata.CommandName="Secondary Axis"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_ChartLayouts}" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ChartDesignStylesGroup">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <Button Content="{local:Loc Key=MainWindow_Content_ChartStyles}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartStylesBtn_Click"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ChartStyles}" local:RibbonTooltip.KeyTip="Y"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ChooseASavedExcelChartStyleForTheCurrentChart}" local:RibbonMetadata.CommandName="Chart Styles"/>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_ChartStyles}" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ChartDesignDataGroup">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <Button Content="{local:Loc Key=MainWindow_Content_SelectData}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SelectChartDataSourceBtn_Click"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SelectDataSource}" local:RibbonTooltip.KeyTip="A"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ChangeTheCurrentChartDataRangeAndCategoryLabelColumn}" local:RibbonMetadata.CommandName="Select Data Source"/>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Data}" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ChartDesignTypeGroup">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <Button Content="{local:Loc Key=MainWindow_Content_ChangeChart}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChangeChartTypeBtn_Click"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ChangeChartType}" local:RibbonTooltip.KeyTip="CT"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ChangeTheCurrentChartToAnotherSupportedChartType}" local:RibbonMetadata.CommandName="Change Chart Type"/>
+                                    <Button Content="{local:Loc Key=MainWindow_Content_Combo}" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartComboBtn_Click"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ComboChart}" local:RibbonTooltip.KeyTip="CO"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RenderAdditionalColumnOrAreaChartSeriesAsLines}" local:RibbonMetadata.CommandName="Combo Chart"/>
+                                    <Button Content="{local:Loc Key=MainWindow_Content_ComboSeries}" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartComboSeriesBtn_Click"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ComboChartSeries}" local:RibbonTooltip.KeyTip="CS"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CycleWhichDataSeriesRendersAsTheComboChartLine}" local:RibbonMetadata.CommandName="Combo Chart Series"/>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Type}" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ChartDesignLocationGroup">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <Button Content="{local:Loc Key=MainWindow_Content_MoveChart}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="MoveChartBtn_Click"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_MoveChart}" local:RibbonTooltip.KeyTip="M"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_MoveTheCurrentChartToAnotherSheetOrANewChartSheet}" local:RibbonMetadata.CommandName="Move Chart"/>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Location}" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+
+            <!-- CHART FORMAT -->
+            <TabItem x:Name="ChartFormatTab" Header="{local:Loc Key=MainWindow_Text_Format}" Visibility="Collapsed" local:RibbonTooltip.KeyTip="JF" local:RibbonMetadata.CatalogId="ChartFormatTab">
+                <Border Background="{StaticResource FreeXRibbonSurfaceBrush}" Padding="6,4,6,0">
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
+                                  VerticalScrollBarVisibility="Disabled"
+                                  PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
+                        <StackPanel Orientation="Horizontal" MinHeight="88">
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ChartFormatCurrentSelectionGroup">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <StackPanel>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_FormatChart}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormatChartAreaBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_FormatChartArea}" local:RibbonTooltip.KeyTip="F"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OpenChartAreaPlotAreaAndLegendFormattingOptions}" local:RibbonMetadata.CommandName="Format Chart Area"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_BarFormat}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartBarFormatBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_FormatBarColumn}" local:RibbonTooltip.KeyTip="B"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SetGapWidthAndOverlapPercentageForBarAndColumnCharts}" local:RibbonMetadata.CommandName="Format Bar/Column"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_PieFormat}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPieFormatBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_FormatPieDoughnut}" local:RibbonTooltip.KeyTip="P"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SetFirstSliceAngleExplodedSliceAndDoughnutHoleSize}" local:RibbonMetadata.CommandName="Format Pie/Doughnut"/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_BubbleFmt}" Width="112" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartBubbleFormatBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_FormatBubbleChart}" local:RibbonTooltip.KeyTip="U"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SetBubbleScaleNegativeBubbleVisibilityAndSizeRepresentation}" local:RibbonMetadata.CommandName="Format Bubble Chart"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_StockFmt}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartStockFormatBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_FormatStockChart}" local:RibbonTooltip.KeyTip="S"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SetUpDownBarColorsAndHighLowLineStyleForStockCharts}" local:RibbonMetadata.CommandName="Format Stock Chart"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_CurrentSelection}" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ChartFormatShapeStylesGroup">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <StackPanel>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_ChartFill}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartAreaFillBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ChartAreaFill}" local:RibbonTooltip.KeyTip="AF"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CycleTheCurrentChartAreaFillColor}" local:RibbonMetadata.CommandName="Chart Area Fill"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_PlotFill}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPlotAreaFillBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_PlotAreaFill}" local:RibbonTooltip.KeyTip="V"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CycleTheCurrentChartPlotAreaFillColor}" local:RibbonMetadata.CommandName="Plot Area Fill"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_PlotBorder}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPlotAreaBorderBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_PlotAreaBorder}" local:RibbonTooltip.KeyTip="O"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CycleTheCurrentChartPlotAreaBorderColorAndWeight}" local:RibbonMetadata.CommandName="Plot Area Border"/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_SeriesColor}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSeriesColorBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SeriesColor}" local:RibbonTooltip.KeyTip="C"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CycleTheFirstChartSeriesFillOrLineColor}" local:RibbonMetadata.CommandName="Series Color"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_SeriesWidth}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSeriesWidthBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SeriesWidth}" local:RibbonTooltip.KeyTip="W"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CycleTheFirstChartSeriesOutlineOrLineWidth}" local:RibbonMetadata.CommandName="Series Width"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_SeriesDash}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSeriesDashBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SeriesDash}" local:RibbonTooltip.KeyTip="R"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CycleTheFirstChartSeriesLineDashStyle}" local:RibbonMetadata.CommandName="Series Dash"/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_Marker}" Width="88" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSeriesMarkerBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SeriesMarker}" local:RibbonTooltip.KeyTip="K"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CycleTheFirstChartSeriesMarkerStyle}" local:RibbonMetadata.CommandName="Series Marker"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_MarkerSize}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSeriesMarkerSizeBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_MarkerSize}" local:RibbonTooltip.KeyTip="Z"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CycleTheFirstChartSeriesMarkerSize}" local:RibbonMetadata.CommandName="Marker Size"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_ShapeStyles}" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ChartFormatTextGroup">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <StackPanel>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_TitleColor}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTitleColorBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ChartTitleColor}" local:RibbonTooltip.KeyTip="TC"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CycleTheCurrentChartTitleTextColor}" local:RibbonMetadata.CommandName="Chart Title Color"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_TitleSize}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTitleSizeBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ChartTitleSize}" local:RibbonTooltip.KeyTip="TS"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CycleTheCurrentChartTitleFontSize}" local:RibbonMetadata.CommandName="Chart Title Size"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_AxisTitle}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartAxisTitleColorBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_AxisTitleColor}" local:RibbonTooltip.KeyTip="AC"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CycleChartAxisTitleTextColor}" local:RibbonMetadata.CommandName="Axis Title Color"/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_AxisTtlSz}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartAxisTitleSizeBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_AxisTitleSize}" local:RibbonTooltip.KeyTip="AS"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CycleChartAxisTitleFontSize}" local:RibbonMetadata.CommandName="Axis Title Size"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_LegendText}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartLegendTextBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_LegendText}" local:RibbonTooltip.KeyTip="LT"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CycleTheCurrentChartLegendTextColor}" local:RibbonMetadata.CommandName="Legend Text"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_LegendSize}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartLegendSizeBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_LegendFontSize}" local:RibbonTooltip.KeyTip="LS"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CycleTheCurrentChartLegendFontSize}" local:RibbonMetadata.CommandName="Legend Font Size"/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_LabelText}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelTextBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_DataLabelText}" local:RibbonTooltip.KeyTip="DT"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CycleTheCurrentChartDataLabelTextColor}" local:RibbonMetadata.CommandName="Data Label Text"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_LabelFill}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelFillBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_DataLabelFill}" local:RibbonTooltip.KeyTip="DF"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CycleTheCurrentChartDataLabelFillColor}" local:RibbonMetadata.CommandName="Data Label Fill"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_LabelBorder}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelBorderBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_DataLabelBorder}" local:RibbonTooltip.KeyTip="DB"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CycleTheCurrentChartDataLabelBorderColorAndWeight}" local:RibbonMetadata.CommandName="Data Label Border"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Text}" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ChartFormatAxesGroup">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <StackPanel>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_XBounds}" Width="88" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisBoundsBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_XAxisBounds}" local:RibbonTooltip.KeyTip="XB"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ToggleAutomaticOrDataBasedXAxisBoundsForTheCurrentChart}" local:RibbonMetadata.CommandName="X Axis Bounds"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_YBounds}" Width="88" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisBoundsBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_YAxisBounds}" local:RibbonTooltip.KeyTip="YB"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ToggleAutomaticOrDataBasedYAxisBoundsForTheCurrentChart}" local:RibbonMetadata.CommandName="Y Axis Bounds"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_XGrid}" Width="88" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisGridlinesBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_XAxisGridlines}" local:RibbonTooltip.KeyTip="XG"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CycleXAxisGridlinesBetweenOffMajorAndMajorPlusMinor}" local:RibbonMetadata.CommandName="X Axis Gridlines"/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_YGrid}" Width="88" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisGridlinesBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_YAxisGridlines}" local:RibbonTooltip.KeyTip="YG"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CycleYAxisGridlinesBetweenOffMajorAndMajorPlusMinor}" local:RibbonMetadata.CommandName="Y Axis Gridlines"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_XLabels}" Width="88" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisLabelsBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_XAxisLabels}" local:RibbonTooltip.KeyTip="XA"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ShowOrHideXAxisLabelsOnTheCurrentChart}" local:RibbonMetadata.CommandName="X Axis Labels"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_YLabels}" Width="88" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisLabelsBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_YAxisLabels}" local:RibbonTooltip.KeyTip="YA"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ShowOrHideYAxisLabelsOnTheCurrentChart}" local:RibbonMetadata.CommandName="Y Axis Labels"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Axes}" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                        </StackPanel>
                     </ScrollViewer>
                 </Border>
             </TabItem>
@@ -3284,28 +3740,82 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <TextBox x:Name="CellAddressBox" Grid.Column="0" Text="A1"
-                         FontFamily="Consolas" FontSize="15"
-                         MinHeight="30"
-                         TextOptions.TextFormattingMode="Display"
-                         TextOptions.TextRenderingMode="ClearType"
-                         TextOptions.TextHintingMode="Fixed"
-                         VerticalContentAlignment="Center"
-                         BorderBrush="#C0C0C0" Padding="5,3"
-                         AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_NameBox}"
-                         AutomationProperties.AutomationId="CellAddressBox"
-                         AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_GoToACellOrNamedRange}"
-                         KeyDown="CellAddressBox_KeyDown"/>
+                <ComboBox x:Name="CellAddressBox" Grid.Column="0" Text="A1"
+                          IsEditable="True"
+                          IsTextSearchEnabled="True"
+                          StaysOpenOnEdit="True"
+                          MaxDropDownHeight="220"
+                          FontFamily="Consolas" FontSize="15"
+                          MinHeight="30"
+                          TextOptions.TextFormattingMode="Display"
+                          TextOptions.TextRenderingMode="ClearType"
+                          TextOptions.TextHintingMode="Fixed"
+                          VerticalContentAlignment="Center"
+                          BorderBrush="#C0C0C0" Padding="5,3"
+                          AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_NameBox}"
+                          AutomationProperties.AutomationId="CellAddressBox"
+                          AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_GoToACellOrNamedRange}"
+                          DropDownOpened="CellAddressBox_DropDownOpened"
+                          SelectionChanged="CellAddressBox_SelectionChanged"
+                          KeyDown="CellAddressBox_KeyDown"/>
 
-                <!-- fx button opens Insert Function dialog -->
-                <Button Grid.Column="1" Content="{local:Loc Key=MainWindow_Content_Fx}" FontWeight="Bold" Foreground="#444"
-                        Background="Transparent" BorderThickness="0"
-                        Padding="2,0" VerticalAlignment="Center" Margin="2,0" Cursor="Hand"
-                        FontSize="12" FontStyle="Italic"
-                        Click="InsertFunctionBtn_Click"
-                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_InsertFunction}"
-                        local:RibbonTooltip.KeyTip="FX"
-                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SearchForAndInsertAFunctionIntoTheSelectedCell}" local:RibbonMetadata.CommandName="Insert Function"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="3,0,2,0">
+                    <Button x:Name="FormulaBarCancelButton"
+                            Width="22" Height="22"
+                            Background="Transparent" BorderThickness="0"
+                            Padding="0" Margin="0,0,1,0" Cursor="Hand"
+                            Click="FormulaBarCancelButton_Click"
+                            AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_CancelFormulaBarEdit}"
+                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_CancelFormulaBarEdit}"
+                            AutomationProperties.AutomationId="FormulaBarCancelButton"
+                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_CancelFormulaBarEdit}"
+                            local:RibbonTooltip.KeyTip="FC"
+                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CancelFormulaBarEdit}"
+                            local:RibbonMetadata.CommandName="Cancel Formula Bar Edit">
+                        <Path Data="M4,4 L12,12 M12,4 L4,12"
+                              Width="16" Height="16"
+                              Stroke="#C00000"
+                              StrokeThickness="1.55"
+                              StrokeStartLineCap="Round"
+                              StrokeEndLineCap="Round"
+                              StrokeLineJoin="Round"
+                              Fill="Transparent"
+                              Stretch="Uniform"/>
+                    </Button>
+                    <Button x:Name="FormulaBarEnterButton"
+                            Width="22" Height="22"
+                            Background="Transparent" BorderThickness="0"
+                            Padding="0" Margin="0,0,3,0" Cursor="Hand"
+                            Click="FormulaBarEnterButton_Click"
+                            AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_EnterFormulaBarEdit}"
+                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_EnterFormulaBarEdit}"
+                            AutomationProperties.AutomationId="FormulaBarEnterButton"
+                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_EnterFormulaBarEdit}"
+                            local:RibbonTooltip.KeyTip="FE"
+                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_EnterFormulaBarEdit}"
+                            local:RibbonMetadata.CommandName="Enter Formula Bar Edit">
+                        <Path Data="M3,8 L6,11 L13,4"
+                              Width="16" Height="16"
+                              Stroke="#008000"
+                              StrokeThickness="1.65"
+                              StrokeStartLineCap="Round"
+                              StrokeEndLineCap="Round"
+                              StrokeLineJoin="Round"
+                              Fill="Transparent"
+                              Stretch="Uniform"/>
+                    </Button>
+
+                    <!-- fx button opens Insert Function dialog -->
+                    <Button x:Name="FormulaBarFxButton"
+                            Content="{local:Loc Key=MainWindow_Content_Fx}" FontWeight="Bold" Foreground="#444"
+                            Background="Transparent" BorderThickness="0"
+                            Padding="2,0" VerticalAlignment="Center" Margin="0" Cursor="Hand"
+                            FontSize="12" FontStyle="Italic"
+                            Click="InsertFunctionBtn_Click"
+                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_InsertFunction}"
+                            local:RibbonTooltip.KeyTip="FX"
+                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SearchForAndInsertAFunctionIntoTheSelectedCell}" local:RibbonMetadata.CommandName="Insert Function"/>
+                </StackPanel>
 
                 <Grid Grid.Column="2">
                     <TextBlock x:Name="FormulaBarReferenceOverlay"
@@ -3631,7 +4141,20 @@
                                       AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_WorkbookSlicers}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border BorderBrush="#D0D0D0" BorderThickness="1" Margin="0,0,0,10" Padding="8">
+                                    <Border Margin="0,0,0,10" Padding="8">
+                                        <Border.Style>
+                                            <Style TargetType="{x:Type Border}">
+                                                <Setter Property="Background" Value="#FFFFFF"/>
+                                                <Setter Property="BorderBrush" Value="#D0D0D0"/>
+                                                <Setter Property="BorderThickness" Value="1"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasActiveFilter}" Value="True">
+                                                        <Setter Property="Background" Value="#F7FBFF"/>
+                                                        <Setter Property="BorderBrush" Value="#5B9BD5"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
                                         <StackPanel>
                                             <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
                                             <TextBlock Text="{Binding FieldName}" FontSize="11" Foreground="#666" Margin="0,1,0,6"/>
@@ -3643,14 +4166,37 @@
                                                                 Click="SlicerTileButton_Click"
                                                                 MinHeight="24"
                                                                 Margin="0,1"
+                                                                Padding="6,2"
                                                                 HorizontalContentAlignment="Left"
-                                                                AutomationProperties.Name="{Binding Caption}"/>
+                                                                AutomationProperties.Name="{Binding Caption}">
+                                                            <Button.Style>
+                                                                <Style TargetType="{x:Type Button}">
+                                                                    <Setter Property="Background" Value="#5B9BD5"/>
+                                                                    <Setter Property="BorderBrush" Value="#4178B8"/>
+                                                                    <Setter Property="BorderThickness" Value="1"/>
+                                                                    <Setter Property="Foreground" Value="#FFFFFF"/>
+                                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsSelected}" Value="False">
+                                                                            <Setter Property="Background" Value="#F2F2F2"/>
+                                                                            <Setter Property="BorderBrush" Value="#C8C8C8"/>
+                                                                            <Setter Property="Foreground" Value="#666666"/>
+                                                                            <Setter Property="FontWeight" Value="Normal"/>
+                                                                        </DataTrigger>
+                                                                        <Trigger Property="IsKeyboardFocused" Value="True">
+                                                                            <Setter Property="BorderBrush" Value="#2B579A"/>
+                                                                        </Trigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Button.Style>
+                                                        </Button>
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
                                             <Button Content="{local:Loc Key=MainWindow_Content_ClearFilter}"
                                                     Tag="{Binding Name}"
                                                     Click="SlicerClearButton_Click"
+                                                    IsEnabled="{Binding HasActiveFilter}"
                                                     Margin="0,6,0,0"
                                                     MinHeight="24"
                                                     AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ClearSlicerFilter}" local:RibbonMetadata.CommandName="Clear Filter"/>
@@ -3664,7 +4210,20 @@
                                       AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_WorkbookTimelines}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border BorderBrush="#D0D0D0" BorderThickness="1" Margin="0,0,0,10" Padding="8">
+                                    <Border Margin="0,0,0,10" Padding="8">
+                                        <Border.Style>
+                                            <Style TargetType="{x:Type Border}">
+                                                <Setter Property="Background" Value="#FFFFFF"/>
+                                                <Setter Property="BorderBrush" Value="#D0D0D0"/>
+                                                <Setter Property="BorderThickness" Value="1"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasActiveFilter}" Value="True">
+                                                        <Setter Property="Background" Value="#F7FBFF"/>
+                                                        <Setter Property="BorderBrush" Value="#5B9BD5"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
                                         <StackPanel>
                                             <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
                                             <TextBlock Text="{Binding FieldName}" FontSize="11" Foreground="#666" Margin="0,1,0,6"/>
@@ -3673,10 +4232,11 @@
                                                 <TextBox x:Name="TimelineEndBox" Text="{Binding SelectedEndDate, UpdateSourceTrigger=PropertyChanged}" Margin="3,0,0,0"/>
                                             </UniformGrid>
                                             <UniformGrid Columns="2" Margin="0,6,0,0">
-                                            <Button Content="{local:Loc Key=MainWindow_Content_Apply}" Click="TimelineApplyButton_Click" MinHeight="24" Margin="0,0,3,0"
-                                                    AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ApplyTimelineFilter}" local:RibbonMetadata.CommandName="Apply"/>
-                                            <Button Content="{local:Loc Key=MainWindow_Content_Clear}" Click="TimelineClearButton_Click" MinHeight="24" Margin="3,0,0,0"
-                                                    AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ClearTimelineFilter}" local:RibbonMetadata.CommandName="Clear"/>
+                                                <Button Content="{local:Loc Key=MainWindow_Content_Apply}" Click="TimelineApplyButton_Click" MinHeight="24" Margin="0,0,3,0"
+                                                        AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ApplyTimelineFilter}" local:RibbonMetadata.CommandName="Apply"/>
+                                                <Button Content="{local:Loc Key=MainWindow_Content_Clear}" Click="TimelineClearButton_Click" MinHeight="24" Margin="3,0,0,0"
+                                                        IsEnabled="{Binding HasActiveFilter}"
+                                                        AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ClearTimelineFilter}" local:RibbonMetadata.CommandName="Clear"/>
                                             </UniformGrid>
                                         </StackPanel>
                                     </Border>
@@ -3732,7 +4292,7 @@
                 <Button x:Name="SheetNavLeftBtn" Grid.Column="0" Width="28" Height="26" Padding="0"
                         FontSize="13" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
                         Foreground="{StaticResource FreeXAccentDarkBrush}"
-                        Cursor="Hand" Click="SheetNavLeftBtn_Click" Visibility="Hidden" Margin="0,1,0,0"
+                        Cursor="Hand" Click="SheetNavLeftBtn_Click" MouseRightButtonDown="SheetNavButton_MouseRightButtonDown" Visibility="Hidden" Margin="0,1,0,0"
                         HorizontalAlignment="Center" HorizontalContentAlignment="Center"
                         VerticalAlignment="Top" VerticalContentAlignment="Center"
                         Panel.ZIndex="9"
@@ -3842,21 +4402,21 @@
                                             </Style>
                                         </Grid.Style>
                                         <Grid.ContextMenu>
-                                            <ContextMenu>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_Rename}"         local:RibbonTooltip.KeyTip="R" Click="SheetCtxRename_Click" local:RibbonMetadata.CommandName="Rename"/>
+                                            <ContextMenu Opened="SheetTabContextMenu_XamlOpened">
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_InsertSheet}"    local:RibbonTooltip.KeyTip="I" Click="SheetCtxInsert_Click" local:RibbonMetadata.CommandName="Insert Sheet"/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_Duplicate}"       local:RibbonTooltip.KeyTip="D" Click="SheetCtxDuplicate_Click" local:RibbonMetadata.CommandName="Duplicate"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_DeleteSheet}"    local:RibbonTooltip.KeyTip="E" Click="SheetCtxDelete_Click" local:RibbonMetadata.CommandName="Delete Sheet"/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_Rename}"         local:RibbonTooltip.KeyTip="R" Click="SheetCtxRename_Click" local:RibbonMetadata.CommandName="Rename"/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_MoveOrCopy}"      local:RibbonTooltip.KeyTip="M" Click="SheetCtxMoveOrCopy_Click" local:RibbonMetadata.CommandName="Move or Copy"/>
+                                                <Separator/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_ViewCode}"       local:RibbonTooltip.KeyTip="V" IsEnabled="False" local:RibbonMetadata.CommandName="View Code"/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_ProtectSheet}"   local:RibbonTooltip.KeyTip="P" Click="SheetCtxProtectSheet_Click" local:RibbonMetadata.CommandName="Protect Sheet"/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_TabColor}"      local:RibbonTooltip.KeyTip="T" SubmenuOpened="SheetCtxTabColor_SubmenuOpened" local:RibbonMetadata.CommandName="Tab Color"/>
                                                 <Separator/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_Hide}"            local:RibbonTooltip.KeyTip="H" Click="SheetCtxHide_Click" local:RibbonMetadata.CommandName="Hide"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_Unhide}"         local:RibbonTooltip.KeyTip="U" Click="SheetCtxUnhide_Click" local:RibbonMetadata.CommandName="Unhide"/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_TabColor_EDBDA613}"      local:RibbonTooltip.KeyTip="T" Click="SheetCtxTabColor_Click" local:RibbonMetadata.CommandName="Tab Color"/>
                                                 <Separator/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_SelectAllSheets}" local:RibbonTooltip.KeyTip="A" Click="SheetCtxSelectAllSheets_Click" local:RibbonMetadata.CommandName="Select All Sheets"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_UngroupSheets}"    local:RibbonTooltip.KeyTip="G" Click="SheetCtxUngroupSheets_Click" local:RibbonMetadata.CommandName="Ungroup Sheets"/>
-                                                <Separator/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_MoveLeft}"       local:RibbonTooltip.KeyTip="L" Click="SheetCtxMoveLeft_Click" local:RibbonMetadata.CommandName="Move Left"/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_MoveRight}"      local:RibbonTooltip.KeyTip="M" Click="SheetCtxMoveRight_Click" local:RibbonMetadata.CommandName="Move Right"/>
                                             </ContextMenu>
                                         </Grid.ContextMenu>
                                         <Border x:Name="TabBorder"
@@ -3984,7 +4544,7 @@
                         Width="28" Height="26" Padding="0"
                         FontSize="13" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
                         Foreground="{StaticResource FreeXAccentDarkBrush}"
-                        Cursor="Hand" Click="SheetNavRightBtn_Click" Visibility="Hidden" Margin="0,1,0,0"
+                        Cursor="Hand" Click="SheetNavRightBtn_Click" MouseRightButtonDown="SheetNavButton_MouseRightButtonDown" Visibility="Hidden" Margin="0,1,0,0"
                         HorizontalAlignment="Right" HorizontalContentAlignment="Center"
                         VerticalAlignment="Top" VerticalContentAlignment="Center"
                         Panel.ZIndex="9"
@@ -4038,6 +4598,110 @@
              ═══════════════════════════════════════════════════════════════ -->
         <Border x:Name="StatusBarRoot" Grid.Row="6" Panel.ZIndex="6" Background="{StaticResource FreeXStatusSurfaceBrush}" Padding="8,3"
                 ClipToBounds="True">
+            <Border.ContextMenu>
+                <ContextMenu x:Name="StatusBarCustomizeMenu"
+                             Opened="StatusBarCustomizeMenu_Opened"
+                             AutomationProperties.Name="{local:Loc Key=StatusBar_CustomizeStatusBar}">
+                    <MenuItem Header="{local:Loc Key=StatusBar_CustomizeStatusBar}"
+                              IsEnabled="False"
+                              local:RibbonTooltip.KeyTip="T"
+                              AutomationProperties.AutomationId="StatusBarCustomizeTitleMenuItem"/>
+                    <Separator/>
+                    <MenuItem x:Name="StatusBarCellModeMenuItem"
+                              Header="{local:Loc Key=StatusBar_CellMode}"
+                              local:RibbonTooltip.KeyTip="M"
+                              IsCheckable="True"
+                              Tag="CellMode"
+                              Click="StatusBarCustomizeMenuItem_Click"
+                              AutomationProperties.AutomationId="StatusBarCellModeMenuItem"/>
+                    <MenuItem x:Name="StatusBarEndModeMenuItem"
+                              Header="{local:Loc Key=StatusBar_EndMode}"
+                              local:RibbonTooltip.KeyTip="E"
+                              IsCheckable="True"
+                              Tag="EndMode"
+                              Click="StatusBarCustomizeMenuItem_Click"
+                              AutomationProperties.AutomationId="StatusBarEndModeMenuItem"/>
+                    <MenuItem x:Name="StatusBarSelectionModeMenuItem"
+                              Header="{local:Loc Key=StatusBar_SelectionMode}"
+                              local:RibbonTooltip.KeyTip="O"
+                              IsCheckable="True"
+                              Tag="SelectionMode"
+                              Click="StatusBarCustomizeMenuItem_Click"
+                              AutomationProperties.AutomationId="StatusBarSelectionModeMenuItem"/>
+                    <MenuItem x:Name="StatusBarPageNumberMenuItem"
+                              Header="{local:Loc Key=StatusBar_PageNumber}"
+                              local:RibbonTooltip.KeyTip="P"
+                              IsCheckable="True"
+                              Tag="PageNumber"
+                              Click="StatusBarCustomizeMenuItem_Click"
+                              AutomationProperties.AutomationId="StatusBarPageNumberMenuItem"/>
+                    <Separator/>
+                    <MenuItem x:Name="StatusBarAverageMenuItem"
+                              Header="{local:Loc Key=StatusBar_Average}"
+                              local:RibbonTooltip.KeyTip="A"
+                              IsCheckable="True"
+                              Tag="Average"
+                              Click="StatusBarCustomizeMenuItem_Click"
+                              AutomationProperties.AutomationId="StatusBarAverageMenuItem"/>
+                    <MenuItem x:Name="StatusBarCountMenuItem"
+                              Header="{local:Loc Key=StatusBar_Count}"
+                              local:RibbonTooltip.KeyTip="C"
+                              IsCheckable="True"
+                              Tag="Count"
+                              Click="StatusBarCustomizeMenuItem_Click"
+                              AutomationProperties.AutomationId="StatusBarCountMenuItem"/>
+                    <MenuItem x:Name="StatusBarNumericalCountMenuItem"
+                              Header="{local:Loc Key=StatusBar_NumericalCount}"
+                              local:RibbonTooltip.KeyTip="N"
+                              IsCheckable="True"
+                              Tag="NumericalCount"
+                              Click="StatusBarCustomizeMenuItem_Click"
+                              AutomationProperties.AutomationId="StatusBarNumericalCountMenuItem"/>
+                    <MenuItem x:Name="StatusBarMinimumMenuItem"
+                              Header="{local:Loc Key=StatusBar_Minimum}"
+                              local:RibbonTooltip.KeyTip="I"
+                              IsCheckable="True"
+                              Tag="Minimum"
+                              Click="StatusBarCustomizeMenuItem_Click"
+                              AutomationProperties.AutomationId="StatusBarMinimumMenuItem"/>
+                    <MenuItem x:Name="StatusBarMaximumMenuItem"
+                              Header="{local:Loc Key=StatusBar_Maximum}"
+                              local:RibbonTooltip.KeyTip="X"
+                              IsCheckable="True"
+                              Tag="Maximum"
+                              Click="StatusBarCustomizeMenuItem_Click"
+                              AutomationProperties.AutomationId="StatusBarMaximumMenuItem"/>
+                    <MenuItem x:Name="StatusBarSumMenuItem"
+                              Header="{local:Loc Key=StatusBar_Sum}"
+                              local:RibbonTooltip.KeyTip="S"
+                              IsCheckable="True"
+                              Tag="Sum"
+                              Click="StatusBarCustomizeMenuItem_Click"
+                              AutomationProperties.AutomationId="StatusBarSumMenuItem"/>
+                    <Separator/>
+                    <MenuItem x:Name="StatusBarViewShortcutsMenuItem"
+                              Header="{local:Loc Key=StatusBar_ViewShortcuts}"
+                              local:RibbonTooltip.KeyTip="V"
+                              IsCheckable="True"
+                              Tag="ViewShortcuts"
+                              Click="StatusBarCustomizeMenuItem_Click"
+                              AutomationProperties.AutomationId="StatusBarViewShortcutsMenuItem"/>
+                    <MenuItem x:Name="StatusBarZoomMenuItem"
+                              Header="{local:Loc Key=StatusBar_Zoom}"
+                              local:RibbonTooltip.KeyTip="Z"
+                              IsCheckable="True"
+                              Tag="Zoom"
+                              Click="StatusBarCustomizeMenuItem_Click"
+                              AutomationProperties.AutomationId="StatusBarZoomMenuItem"/>
+                    <MenuItem x:Name="StatusBarZoomSliderMenuItem"
+                              Header="{local:Loc Key=StatusBar_ZoomSlider}"
+                              local:RibbonTooltip.KeyTip="L"
+                              IsCheckable="True"
+                              Tag="ZoomSlider"
+                              Click="StatusBarCustomizeMenuItem_Click"
+                              AutomationProperties.AutomationId="StatusBarZoomSliderMenuItem"/>
+                </ContextMenu>
+            </Border.ContextMenu>
             <Grid x:Name="StatusBarGrid" ClipToBounds="True">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -4045,8 +4709,15 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <TextBlock x:Name="StatusReadyText" Grid.Column="0" Text="{local:Loc Key=MainWindow_Text_Ready}" Foreground="White"
-                           FontSize="12" VerticalAlignment="Center"/>
+                <StackPanel x:Name="StatusModePanel" Grid.Column="0"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <TextBlock x:Name="StatusReadyText" Text="{local:Loc Key=MainWindow_Text_Ready}" Foreground="White"
+                               FontSize="12" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="StatusPageNumberText" Text="" Foreground="White"
+                               FontSize="12" VerticalAlignment="Center" Margin="16,0,0,0"
+                               Visibility="Collapsed"/>
+                </StackPanel>
 
                 <Border x:Name="StatusStatsViewport" Grid.Column="1"
                         Margin="8,0,12,0"
@@ -4093,77 +4764,137 @@
                     </Grid>
                 </Border>
 
-                <!-- Zoom controls on the right -->
-                <Grid x:Name="StatusZoomControls" Grid.Column="2"
-                      HorizontalAlignment="Right" VerticalAlignment="Center"
-                      MinWidth="214" Height="24"
-                      Background="{StaticResource FreeXStatusSurfaceBrush}"
-                      Panel.ZIndex="1"
-                      KeyboardNavigation.TabNavigation="Cycle"
-                      KeyboardNavigation.ControlTabNavigation="Cycle"
-                      SnapsToDevicePixels="True"
-                      UseLayoutRounding="True">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="22"/>
-                        <ColumnDefinition Width="4"/>
-                        <ColumnDefinition Width="120"/>
-                        <ColumnDefinition Width="4"/>
-                        <ColumnDefinition Width="22"/>
-                        <ColumnDefinition Width="8"/>
-                        <ColumnDefinition Width="38"/>
-                    </Grid.ColumnDefinitions>
-                    <Button x:Name="StatusZoomOutButton" Grid.Column="0" Width="22" Height="22"
-                            Style="{StaticResource StatusBarZoomButtonStyle}"
-                            Foreground="White" FontSize="18" FontWeight="SemiBold" Padding="0"
-                            VerticalAlignment="Center" Cursor="Hand" Click="ZoomOutBtn_Click"
-                            AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ZoomOut}"
-                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_DecreaseWorksheetZoom}"
-                            AutomationProperties.AutomationId="StatusZoomOutButton"
-                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ZoomOut}"
-                            local:RibbonTooltip.KeyTip="SZ" local:RibbonMetadata.CommandName="Zoom Out">
-                        <Grid Width="14" Height="14" SnapsToDevicePixels="True">
-                            <Rectangle Width="12" Height="2"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"
-                                       Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                <!-- View shortcuts and zoom controls on the right -->
+                <StackPanel x:Name="StatusInteractiveControls" Grid.Column="2"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Right" VerticalAlignment="Center"
+                            Background="{StaticResource FreeXStatusSurfaceBrush}"
+                            Panel.ZIndex="1"
+                            KeyboardNavigation.TabNavigation="Cycle"
+                            KeyboardNavigation.ControlTabNavigation="Cycle"
+                            SnapsToDevicePixels="True"
+                            UseLayoutRounding="True">
+                    <StackPanel x:Name="StatusViewShortcutControls"
+                                Orientation="Horizontal"
+                                Height="24"
+                                Margin="0,0,10,0"
+                                VerticalAlignment="Center">
+                        <ToggleButton x:Name="StatusNormalViewButton" Width="22" Height="22"
+                                      Style="{StaticResource StatusBarViewToggleButtonStyle}"
+                                      VerticalAlignment="Center" Click="NormalViewBtn_Click"
+                                      ToolTip="{local:Loc Key=MainWindow_TooltipTitle_Normal}"
+                                      AutomationProperties.Name="{local:Loc Key=MainWindow_Content_Normal}"
+                                      AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ShowTheWorksheetInTheStandardEditingView}"
+                                      AutomationProperties.AutomationId="StatusNormalViewButton"
+                                      local:RibbonMetadata.CommandName="Normal">
+                            <local:RibbonIcon Kind="Grid" IconSize="15"
+                                              Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"/>
+                        </ToggleButton>
+                        <ToggleButton x:Name="StatusPageLayoutViewButton" Width="22" Height="22"
+                                      Margin="2,0,0,0"
+                                      Style="{StaticResource StatusBarViewToggleButtonStyle}"
+                                      VerticalAlignment="Center" Click="PageLayoutViewBtn_Click"
+                                      ToolTip="{local:Loc Key=MainWindow_TooltipTitle_PageLayout}"
+                                      AutomationProperties.Name="{local:Loc Key=MainWindow_Content_PageLayout}"
+                                      AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ShowTheSheetWithPrintLayoutBoundaries}"
+                                      AutomationProperties.AutomationId="StatusPageLayoutViewButton"
+                                      local:RibbonMetadata.CommandName="Page Layout">
+                            <local:RibbonIcon Kind="Page" IconSize="15"
+                                              Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"/>
+                        </ToggleButton>
+                        <ToggleButton x:Name="StatusPageBreakPreviewButton" Width="22" Height="22"
+                                      Margin="2,0,0,0"
+                                      Style="{StaticResource StatusBarViewToggleButtonStyle}"
+                                      VerticalAlignment="Center" Click="PageBreakPreviewBtn_Click"
+                                      ToolTip="{local:Loc Key=MainWindow_TooltipTitle_PageBreakPreview}"
+                                      AutomationProperties.Name="{local:Loc Key=MainWindow_Content_PageBreakPreview}"
+                                      AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ShowManualPageBreaksAndPrintAreaBoundariesWhileEditing}"
+                                      AutomationProperties.AutomationId="StatusPageBreakPreviewButton"
+                                      local:RibbonMetadata.CommandName="Page Break Preview">
+                            <local:RibbonIcon Kind="PageBreak" IconSize="15"
+                                              Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"/>
+                        </ToggleButton>
+                    </StackPanel>
+
+                    <Grid x:Name="StatusZoomControls"
+                          HorizontalAlignment="Right" VerticalAlignment="Center"
+                          MinWidth="38" Height="24"
+                          Background="{StaticResource FreeXStatusSurfaceBrush}"
+                          SnapsToDevicePixels="True"
+                          UseLayoutRounding="True">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid x:Name="StatusZoomSliderControls"
+                              Grid.Column="0"
+                              MinWidth="168"
+                              Height="24"
+                              VerticalAlignment="Center"
+                              SnapsToDevicePixels="True"
+                              UseLayoutRounding="True">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="22"/>
+                                <ColumnDefinition Width="4"/>
+                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="4"/>
+                                <ColumnDefinition Width="22"/>
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="StatusZoomOutButton" Grid.Column="0" Width="22" Height="22"
+                                    Style="{StaticResource StatusBarZoomButtonStyle}"
+                                    Foreground="White" FontSize="18" FontWeight="SemiBold" Padding="0"
+                                    VerticalAlignment="Center" Cursor="Hand" Click="ZoomOutBtn_Click"
+                                    AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ZoomOut}"
+                                    AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_DecreaseWorksheetZoom}"
+                                    AutomationProperties.AutomationId="StatusZoomOutButton"
+                                    local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ZoomOut}"
+                                    local:RibbonTooltip.KeyTip="SZ" local:RibbonMetadata.CommandName="Zoom Out">
+                                <Grid Width="14" Height="14" SnapsToDevicePixels="True">
+                                    <Rectangle Width="12" Height="2"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                                </Grid>
+                            </Button>
+                            <Slider x:Name="ZoomSlider" Grid.Column="2" Width="120" Height="22" Minimum="0" Maximum="200" Value="100"
+                                    VerticalAlignment="Center" Margin="0"
+                                    AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ZoomSlider}"
+                                    AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_AdjustWorksheetZoomFrom10To400}"
+                                    ToolTip="{local:Loc Key=MainWindow_ToolTip_Zoom}"
+                                    SmallChange="5" LargeChange="10"
+                                    TickPlacement="BottomRight" Ticks="100" IsSnapToTickEnabled="False"
+                                    ValueChanged="ZoomSlider_ValueChanged"/>
+                            <Button x:Name="StatusZoomInButton" Grid.Column="4" Width="22" Height="22"
+                                    Style="{StaticResource StatusBarZoomButtonStyle}"
+                                    Foreground="White" FontSize="18" FontWeight="SemiBold" Padding="0"
+                                    VerticalAlignment="Center" Cursor="Hand" Click="ZoomInBtn_Click"
+                                    AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ZoomIn}"
+                                    AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_IncreaseWorksheetZoom}"
+                                    AutomationProperties.AutomationId="StatusZoomInButton"
+                                    local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ZoomIn}"
+                                    local:RibbonTooltip.KeyTip="SX" local:RibbonMetadata.CommandName="Zoom In">
+                                <Grid Width="14" Height="14" SnapsToDevicePixels="True">
+                                    <Rectangle Width="12" Height="2"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                                    <Rectangle Width="2" Height="12"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                                </Grid>
+                            </Button>
                         </Grid>
-                    </Button>
-                    <Slider x:Name="ZoomSlider" Grid.Column="2" Width="120" Height="22" Minimum="0" Maximum="200" Value="100"
-                            VerticalAlignment="Center" Margin="0"
-                            AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ZoomSlider}"
-                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_AdjustWorksheetZoomFrom10To400}"
-                            ToolTip="{local:Loc Key=MainWindow_ToolTip_Zoom}"
-                            SmallChange="5" LargeChange="10"
-                            TickPlacement="BottomRight" Ticks="100" IsSnapToTickEnabled="False"
-                            ValueChanged="ZoomSlider_ValueChanged"/>
-                    <Button x:Name="StatusZoomInButton" Grid.Column="4" Width="22" Height="22"
-                            Style="{StaticResource StatusBarZoomButtonStyle}"
-                            Foreground="White" FontSize="18" FontWeight="SemiBold" Padding="0"
-                            VerticalAlignment="Center" Cursor="Hand" Click="ZoomInBtn_Click"
-                            AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ZoomIn}"
-                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_IncreaseWorksheetZoom}"
-                            AutomationProperties.AutomationId="StatusZoomInButton"
-                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ZoomIn}"
-                            local:RibbonTooltip.KeyTip="SX" local:RibbonMetadata.CommandName="Zoom In">
-                        <Grid Width="14" Height="14" SnapsToDevicePixels="True">
-                            <Rectangle Width="12" Height="2"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"
-                                       Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
-                            <Rectangle Width="2" Height="12"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"
-                                       Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
-                        </Grid>
-                    </Button>
-                    <TextBlock x:Name="StatusZoomText" Grid.Column="6" Text="100%" Foreground="White" FontSize="12"
-                               VerticalAlignment="Center" Width="38" Focusable="True" Cursor="Hand"
-                               ToolTip="{local:Loc Key=MainWindow_ToolTip_Zoom}"
-                               AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ZoomPercentage}"
-                               AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OpenTheZoomDialog}"
-                               MouseLeftButtonUp="StatusZoomText_OpenZoomDialog"
-                               PreviewKeyDown="StatusZoomText_PreviewKeyDown"/>
-                </Grid>
+                        <TextBlock x:Name="StatusZoomText" Grid.Column="1" Text="100%" Foreground="White" FontSize="12"
+                                   VerticalAlignment="Center" Width="38" Focusable="True" Cursor="Hand"
+                                   Margin="8,0,0,0"
+                                   ToolTip="{local:Loc Key=MainWindow_ToolTip_Zoom}"
+                                   AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ZoomPercentage}"
+                                   AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OpenTheZoomDialog}"
+                                   MouseLeftButtonUp="StatusZoomText_OpenZoomDialog"
+                                   PreviewKeyDown="StatusZoomText_PreviewKeyDown"/>
+                    </Grid>
+                </StackPanel>
             </Grid>
         </Border>
 
@@ -4377,7 +5108,7 @@
                             AutomationProperties.AutomationId="BackstagePrintButton"
                             AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_Print}"
                             AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OpenPrintPreviewWithWorksheetSettingsAndNativePrintAccess}"
-                            Click="PrintButton_Click"
+                            Click="SsPrintNavBtn_Click"
                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Print}"
                             local:RibbonTooltip.KeyTip="P"
                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OpenThePrintPreviewAndNativePrintDialogForTheRenderedWorksheet}" local:RibbonMetadata.CommandName="Print">
@@ -4874,6 +5605,59 @@
                         </Grid>
                     </ScrollViewer>
                 </Grid><!-- end SsInfoView -->
+
+                <!-- PRINT VIEW -->
+                <Grid x:Name="SsPrintView" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="{local:Loc Key=MainWindow_Text_Print}"
+                               FontSize="28" FontWeight="Light" Foreground="#1F1F1F"
+                               Margin="40,36,40,0"/>
+
+                    <Grid Grid.Row="1" Margin="40,24,40,24">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="280"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                            <Button x:Name="SsPrintPreviewButton"
+                                    Content="{local:Loc Key=PrintPreview_PrintButton}"
+                                    Width="220" Height="34"
+                                    HorizontalAlignment="Left"
+                                    Margin="0,0,0,10"
+                                    Click="PrintButton_Click"
+                                    AutomationProperties.AutomationId="BackstagePrintPreviewButton"
+                                    AutomationProperties.Name="{local:Loc Key=PrintPreview_PrintAutomationName}"
+                                    AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OpenPrintPreviewWithWorksheetSettingsAndNativePrintAccess}"
+                                    local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Print}"
+                                    local:RibbonTooltip.KeyTip="V"
+                                    local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OpenThePrintPreviewAndNativePrintDialogForTheRenderedWorksheet}"
+                                    local:RibbonMetadata.CommandName="Print Preview"/>
+                            <TextBlock Text="{local:Loc Key=MainWindow_TooltipDescription_OpenThePrintPreviewAndNativePrintDialogForTheRenderedWorksheet}"
+                                       FontSize="12" Foreground="#555" TextWrapping="Wrap"
+                                       Width="240"/>
+                        </StackPanel>
+
+                        <Border Grid.Column="1"
+                                BorderBrush="#E0E0E0" BorderThickness="1,0,0,0"
+                                Padding="24,0,0,0">
+                            <StackPanel>
+                                <TextBlock Text="{local:Loc Key=MainWindow_Text_Print}"
+                                           FontSize="13" FontWeight="SemiBold" Foreground="#555"
+                                           Margin="0,0,0,14"/>
+                                <TextBlock x:Name="SsPrintSettingsSummary"
+                                           FontSize="13" Foreground="#1F1F1F"
+                                           TextWrapping="Wrap" LineHeight="20"
+                                           AutomationProperties.Name="{local:Loc Key=PrintPreview_SettingsSummaryAutomationName}"
+                                           AutomationProperties.HelpText="{local:Loc Key=PrintPreview_SettingsSummaryHelpText}"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Grid><!-- end SsPrintView -->
 
             </Grid>
         </Grid>

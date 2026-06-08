@@ -26,7 +26,7 @@ public static class WorkbookProtectionWorkflow
         if (workbook.IsStructureProtected)
         {
             return new WorkbookProtectionAction(
-                new UnprotectWorkbookCommand(),
+                new UnprotectWorkbookCommand(password),
                 UiText.Get("Protection_UnprotectWorkbookTitle"),
                 UiText.Get("Protection_WorkbookUnprotectedMessage"));
         }

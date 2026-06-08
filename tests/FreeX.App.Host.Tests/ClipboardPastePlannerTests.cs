@@ -112,6 +112,18 @@ public sealed class ClipboardPastePlannerTests
             .Be(expected);
     }
 
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void ShouldPreserveClipboardVisualAfterPaste_KeepsCopyModeButClearsCutMode(
+        bool isCut,
+        bool expected)
+    {
+        ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(isCut)
+            .Should()
+            .Be(expected);
+    }
+
     [WindowsClipboardFact]
     public void ExternalPaste_UsesRealWindowsClipboardTextAndRejectsStaleInternalCopy()
     {

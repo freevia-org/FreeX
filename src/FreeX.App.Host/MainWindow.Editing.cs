@@ -616,6 +616,58 @@ public partial class MainWindow
         }
     }
 
+    private void FormulaBarCancelButton_Click(object sender, RoutedEventArgs e)
+    {
+        var addr = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
+        if (addr.HasValue)
+        {
+            var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr.Value);
+            FormulaBar.Text = FormatFormulaBarText(cell, addr.Value);
+        }
+
+        HideInlineEditor(commit: false);
+        ClearFormulaRangeEntryState();
+        ClearClipboardVisualState();
+        FocusSheetGridIfNeeded();
+    }
+
+    private void FormulaBarEnterButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (CommitEdit())
+        {
+            HideInlineEditor(commit: false);
+            ClearFormulaRangeEntryState();
+        }
+
+        FocusSheetGridIfNeeded();
+    }
+
+    private void CellAddressBox_DropDownOpened(object sender, EventArgs e)
+    {
+        var names = _workbook.NamedRanges.Keys
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        CellAddressBox.ItemsSource = names;
+    }
+
+    private void CellAddressBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not ComboBox { IsDropDownOpen: true, SelectedItem: string name })
+            return;
+
+        CellAddressBox.Text = name;
+        if (!GoToDialog.TryParseReferenceRange(name, _currentSheetId, _workbook.NamedRanges, out var selectedRange))
+            return;
+
+        _currentSheetId = selectedRange.Start.Sheet;
+        SetSelectionRange(selectedRange, selectedRange.Start);
+        EnsureCellVisible(selectedRange.Start);
+        UpdateViewport();
+        RefreshValidationDropdown();
+        FocusSheetGridIfNeeded();
+    }
+
     private void CellAddressBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (e.Key == Key.Escape && e.KeyboardDevice.Modifiers == ModifierKeys.None)
@@ -681,7 +733,7 @@ public partial class MainWindow
     private void RestoreCellAddressBoxText()
     {
         CellAddressBox.Text = SheetGrid.SelectedRange is { } range
-            ? FormatRangeReference(range.Start, range.End)
+            ? FormatNameBoxSelectionText(range)
             : "A1";
         CellAddressBox.SelectAll();
     }

@@ -32,6 +32,14 @@ internal sealed record RibbonScreenshotTourCapture(
         : $"{Width.Label}_{Tab.FileName}";
 
     public string OutputFileName => $"{FileName}.png";
+
+    public string PairKey => $"ribbon:{Width.Label}:{Tab.FileName}";
+
+    public string CaptureKey => Phase.FileNameSuffix is { Length: > 0 }
+        ? $"{PairKey}:{Phase.Label}"
+        : PairKey;
+
+    public string CounterpartFileName => $"excel_{Width.Label}_{Tab.FileName}.png";
 }
 
 internal sealed record RibbonScreenshotTourPlan(
