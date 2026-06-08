@@ -179,6 +179,11 @@ public sealed class XlsxSchemaValidationTests
         SchemaErrors(saved).Should().BeEmpty();
         ReadPackageEntryBytes(saved, "xl/charts/chart1.xml").Should().Equal(sourceChartPart);
         ReadPackageEntryBytes(saved, "xl/drawings/drawing1.xml").Should().Equal(sourceDrawingPart);
+
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        reloadedSheet.GetValue(6, 4).Should().Be(new TextValue("outside chart source"));
+        reloadedSheet.Charts.Should().ContainSingle().Which.Type.Should().Be(ChartType.Column);
     }
 
     [Fact]
@@ -220,6 +225,11 @@ public sealed class XlsxSchemaValidationTests
         using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
         var drawing = FindDrawingForChartExPart(savedArchive, chartPart);
         AssertChartExAlternateContent(drawing.Xml, drawing.RelId);
+
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        reloadedSheet.GetValue(6, 4).Should().Be(new TextValue("outside chartEx source"));
+        reloadedSheet.Charts.Should().ContainSingle().Which.Type.Should().Be(ChartType.Histogram);
     }
 
     [Fact]
@@ -258,6 +268,12 @@ public sealed class XlsxSchemaValidationTests
         SchemaErrors(saved).Should().BeEmpty();
         foreach (var part in sourceParts)
             ReadPackageEntryBytes(saved, part).Should().Equal(sourcePartBytes[part]);
+
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        reloadedSheet.GetValue(4, 4).Should().Be(new TextValue("outside pivot chart source"));
+        reloadedSheet.PivotTables.Should().ContainSingle();
+        reloadedSheet.Charts.Should().ContainSingle().Which.IsPivotChart.Should().BeTrue();
     }
 
     private static Workbook CreateWorkbookWithChart(ChartType chartType)
