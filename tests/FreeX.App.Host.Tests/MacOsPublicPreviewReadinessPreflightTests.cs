@@ -190,7 +190,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
             "release-assets wrapper directory",
             "freex-42-1-macos-release-assets",
             "freex-41-1-macos-release-assets",
-            "Remove split or stale release-assets");
+            "cleanup_action=remove_split_or_stale_release_assets");
     }
 
     [Fact]
@@ -595,7 +595,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         result.CombinedOutput.Should().Contain("mixed GitHub Actions runs");
         result.CombinedOutput.Should().Contain("osx-arm64 uses run 42");
         result.CombinedOutput.Should().Contain("osx-x64 uses run 41");
-        result.CombinedOutput.Should().Contain("Remove stale artifact");
+        result.CombinedOutput.Should().Contain("cleanup_action=remove_stale_artifact_folders");
     }
 
     private static PowerShellResult RunPreflight(string artifactRoot, string arguments = "")

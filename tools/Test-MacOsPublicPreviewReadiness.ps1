@@ -424,7 +424,7 @@ function Test-ArtifactIdentityConsistency {
     $first = $knownIdentities[0]
     foreach ($identity in $knownIdentities) {
         if ($identity.RunId -ne $first.RunId -or $identity.RunAttempt -ne $first.RunAttempt) {
-            Add-ValidationError "Downloaded macOS app artifacts are from mixed GitHub Actions runs: $($first.Runtime) uses run $($first.RunId) attempt $($first.RunAttempt) from '$($first.WrapperDirectory)', but $($identity.Runtime) uses run $($identity.RunId) attempt $($identity.RunAttempt) from '$($identity.WrapperDirectory)'. Remove stale artifact folders under $Root or pass -ArtifactRoot to a single downloaded run."
+            Add-ValidationError "Downloaded macOS app artifacts are from mixed GitHub Actions runs: $($first.Runtime) uses run $($first.RunId) attempt $($first.RunAttempt) from '$($first.WrapperDirectory)', but $($identity.Runtime) uses run $($identity.RunId) attempt $($identity.RunAttempt) from '$($identity.WrapperDirectory)'. cleanup_action=remove_stale_artifact_folders. Remove stale artifact folders under $Root or pass -ArtifactRoot to a single downloaded run."
         }
     }
 }
@@ -729,7 +729,7 @@ function Test-ReleasePublicationArtifact {
     $manifestDirectory = $manifestFiles[0].Directory.FullName
     $instructionsDirectory = $instructionsFiles[0].Directory.FullName
     if (-not [System.StringComparer]::OrdinalIgnoreCase.Equals($manifestDirectory, $instructionsDirectory)) {
-        Add-ValidationError "macOS release publication manifest and instructions must be in the same downloaded release-assets wrapper directory. Manifest: '$manifestDirectory'. Instructions: '$instructionsDirectory'. Remove split or stale release-assets artifact folders under $Root."
+        Add-ValidationError "macOS release publication manifest and instructions must be in the same downloaded release-assets wrapper directory. Manifest: '$manifestDirectory'. Instructions: '$instructionsDirectory'. cleanup_action=remove_split_or_stale_release_assets. Remove split or stale release-assets artifact folders under $Root."
         return
     }
 
