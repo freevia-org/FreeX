@@ -263,38 +263,36 @@ public sealed record WorkbookTheme(
             .Element(drawingNs + "camera") is not null;
 
     private static XElement? FindThemeShadow(XElement effectStyle, XNamespace drawingNs) =>
-        effectStyle
-            .Element(drawingNs + "effectLst")?
-            .Elements()
-            .FirstOrDefault(effect => IsThemeShadow(effect, drawingNs))
-        ?? effectStyle
-            .Element(drawingNs + "effectDag")?
-            .Descendants()
-            .FirstOrDefault(effect => IsThemeShadow(effect, drawingNs));
+        FindThemeEffect(effectStyle, drawingNs, effect => IsThemeShadow(effect, drawingNs));
 
     private static bool IsThemeShadow(XElement effect, XNamespace drawingNs) =>
         effect.Name == drawingNs + "outerShdw" ||
         effect.Name == drawingNs + "prstShdw";
 
     private static XElement? FindThemeGlow(XElement effectStyle, XNamespace drawingNs) =>
-        effectStyle
-            .Element(drawingNs + "effectLst")?
-            .Elements()
-            .FirstOrDefault(effect => effect.Name == drawingNs + "glow")
-        ?? effectStyle
-            .Element(drawingNs + "effectDag")?
-            .Descendants()
-            .FirstOrDefault(effect => effect.Name == drawingNs + "glow");
+        FindThemeEffectByName(effectStyle, drawingNs, "glow");
 
     private static XElement? FindThemeSoftEdge(XElement effectStyle, XNamespace drawingNs) =>
+        FindThemeEffectByName(effectStyle, drawingNs, "softEdge");
+
+    private static XElement? FindThemeEffectByName(
+        XElement effectStyle,
+        XNamespace drawingNs,
+        string localName) =>
+        FindThemeEffect(effectStyle, drawingNs, effect => effect.Name == drawingNs + localName);
+
+    private static XElement? FindThemeEffect(
+        XElement effectStyle,
+        XNamespace drawingNs,
+        Func<XElement, bool> matches) =>
         effectStyle
             .Element(drawingNs + "effectLst")?
             .Elements()
-            .FirstOrDefault(effect => effect.Name == drawingNs + "softEdge")
+            .FirstOrDefault(matches)
         ?? effectStyle
             .Element(drawingNs + "effectDag")?
             .Descendants()
-            .FirstOrDefault(effect => effect.Name == drawingNs + "softEdge");
+            .FirstOrDefault(matches);
 
     private static (double Opacity, double OffsetX, double OffsetY, double BlurRadius)? ReadThemeInnerShadow(
         XElement effectStyle,

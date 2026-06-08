@@ -41,6 +41,47 @@ public partial class MainWindow
     private string GenerateUniqueSheetName()
         => SheetTabListPlanner.GenerateUniqueSheetName(_workbook);
 
+    private int FindWorkbookSheetIndex(SheetId sheetId)
+    {
+        var sheets = _workbook.Sheets;
+        for (var index = 0; index < sheets.Count; index++)
+        {
+            if (sheets[index].Id == sheetId)
+                return index;
+        }
+
+        return -1;
+    }
+
+    private IReadOnlyList<SheetId> GetVisibleSheetIds()
+        => _workbook.Sheets.Where(sheet => !sheet.IsHidden).Select(sheet => sheet.Id).ToList();
+
+    private static int FindSheetTabIndex(IReadOnlyList<SheetTabViewModel> tabs, SheetId sheetId)
+    {
+        for (var index = 0; index < tabs.Count; index++)
+        {
+            if (tabs[index].Id == sheetId)
+                return index;
+        }
+
+        return -1;
+    }
+
+    private int FindCurrentSheetTabIndex(IReadOnlyList<SheetTabViewModel> tabs)
+        => FindSheetTabIndex(tabs, _currentSheetId);
+
+    private SheetTabViewModel? FindSheetTab(SheetId sheetId)
+        => _sheetTabs.FirstOrDefault(tab => tab.Id == sheetId);
+
+    private SheetTabViewModel? FindCurrentSheetTab()
+        => FindSheetTab(_currentSheetId);
+
+    private static MenuItem? FindFirstEnabledMenuItem(ContextMenu contextMenu)
+        => contextMenu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled);
+
+    private static Sheet? FindHiddenSheetByName(IReadOnlyList<Sheet> hiddenSheets, string sheetName)
+        => hiddenSheets.FirstOrDefault(sheet => sheet.Name.Equals(sheetName, StringComparison.OrdinalIgnoreCase));
+
     private void SelectSingleSheetTab(SheetId sheetId)
     {
         _currentSheetId = sheetId;
@@ -82,9 +123,8 @@ public partial class MainWindow
         if (target is null || target.Id == draggedId)
             return;
 
-        var sheets = _workbook.Sheets.ToList();
-        var fromIndex = sheets.FindIndex(s => s.Id == draggedId);
-        var toIndex = sheets.FindIndex(s => s.Id == target.Id);
+        var fromIndex = FindWorkbookSheetIndex(draggedId);
+        var toIndex = FindWorkbookSheetIndex(target.Id);
         if (fromIndex < 0 || toIndex < 0 || fromIndex == toIndex)
             return;
 
@@ -159,7 +199,7 @@ public partial class MainWindow
 
     private void UpdateGroupedSheetsForClick(SheetId clickedSheetId)
     {
-        var visibleSheetIds = _workbook.Sheets.Where(s => !s.IsHidden).Select(s => s.Id).ToList();
+        var visibleSheetIds = GetVisibleSheetIds();
         var modifiers = Keyboard.Modifiers;
         IReadOnlyList<SheetId> selected;
         if ((modifiers & ModifierKeys.Shift) != 0 && _sheetGroupAnchor.HasValue)
@@ -486,7 +526,7 @@ public partial class MainWindow
         SheetTabsOverlayLayer.Children.Clear();
         var tabClipGeometry = CreateVisibleSheetTabClipGeometry(addRect);
 
-        var activeTabIndex = visibleTabs.FindIndex(tab => tab.Id == _currentSheetId);
+        var activeTabIndex = FindCurrentSheetTabIndex(visibleTabs);
         var activeTab = activeTabIndex >= 0 ? visibleTabs[activeTabIndex] : null;
         Rect? activeRect = null;
         if (activeTabIndex >= 0)
@@ -983,7 +1023,7 @@ public partial class MainWindow
     private void BringCurrentSheetTabIntoView()
     {
         var visibleTabs = _sheetTabs.ToList();
-        var activeIndex = visibleTabs.FindIndex(tab => tab.Id == _currentSheetId);
+        var activeIndex = FindCurrentSheetTabIndex(visibleTabs);
         if (activeIndex < 0)
             return;
 
@@ -1054,7 +1094,7 @@ public partial class MainWindow
     private bool TryFocusCurrentSheetTab()
     {
         BringCurrentSheetTabIntoView();
-        var activeTab = _sheetTabs.FirstOrDefault(tab => tab.Id == _currentSheetId);
+        var activeTab = FindCurrentSheetTab();
         if (activeTab is null)
             return false;
 
@@ -1077,7 +1117,7 @@ public partial class MainWindow
         {
             var tabId = tab.Id;
             SelectSheetTabForKeyboardContextMenu(tabId);
-            var refreshedTab = _sheetTabs.FirstOrDefault(item => item.Id == tabId);
+            var refreshedTab = FindSheetTab(tabId);
             target = refreshedTab is null ? target : FindSheetTabContextMenuTarget(refreshedTab) ?? target;
             contextMenu = target.ContextMenu;
             if (contextMenu is null)
@@ -1098,7 +1138,7 @@ public partial class MainWindow
         if (sender is not ContextMenu contextMenu)
             return;
 
-        var firstEnabledItem = contextMenu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled);
+        var firstEnabledItem = FindFirstEnabledMenuItem(contextMenu);
         if (firstEnabledItem is null)
             return;
 
@@ -1324,7 +1364,7 @@ public partial class MainWindow
         if (!TryExecuteCommand(new DuplicateSheetCommand(tab.Id), "Duplicate Sheet"))
             return;
 
-        var sourceIndex = _workbook.Sheets.ToList().FindIndex(s => s.Id == tab.Id);
+        var sourceIndex = FindWorkbookSheetIndex(tab.Id);
         _currentSheetId = _workbook.Sheets[Math.Min(sourceIndex + 1, _workbook.Sheets.Count - 1)].Id;
         _groupedSheetIds.Clear();
         _groupedSheetIds.Add(_currentSheetId);
@@ -1384,7 +1424,7 @@ public partial class MainWindow
         var name = dialog.Result.SheetName;
         if (string.IsNullOrWhiteSpace(name)) return;
 
-        var sheet = hiddenSheets.FirstOrDefault(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        var sheet = FindHiddenSheetByName(hiddenSheets, name);
         if (sheet is null)
         {
             _messageService.ShowWarning(
@@ -1429,7 +1469,7 @@ public partial class MainWindow
 
     private void SheetCtxSelectAllSheets_Click(object sender, RoutedEventArgs e)
     {
-        var visibleSheetIds = _workbook.Sheets.Where(s => !s.IsHidden).Select(s => s.Id).ToList();
+        var visibleSheetIds = GetVisibleSheetIds();
         _groupedSheetIds.Clear();
         foreach (var id in SheetGroupSelectionService.SelectAll(visibleSheetIds))
             _groupedSheetIds.Add(id);
@@ -1460,7 +1500,7 @@ public partial class MainWindow
         var tab = GetContextMenuTab(sender);
         if (tab == null) return;
 
-        var fromIndex = _workbook.Sheets.ToList().FindIndex(s => s.Id == tab.Id);
+        var fromIndex = FindWorkbookSheetIndex(tab.Id);
         var toIndex = fromIndex + direction;
         var outcome = _commandBus.Execute(_workbook.Id, new MoveSheetCommand(fromIndex, toIndex));
         if (!outcome.Success)

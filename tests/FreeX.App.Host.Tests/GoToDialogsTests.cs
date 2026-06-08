@@ -328,8 +328,11 @@ public sealed class GoToDialogsTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_buttons.FirstOrDefault()?.Focus();");
+        source.Should().Contain("var firstButton = FirstButton();");
+        source.Should().Contain("firstButton?.Focus();");
         source.Should().Contain("Keyboard.Focus(firstButton);");
+        source.Should().Contain("private RadioButton? FirstButton() =>");
+        source.Should().Contain("_buttons.FirstOrDefault();");
     }
 
     [Fact]

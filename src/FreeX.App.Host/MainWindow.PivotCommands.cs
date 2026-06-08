@@ -229,8 +229,7 @@ public partial class MainWindow
             FormatWorkbookRange(destination),
             request => ApplyMovePivotTableRangeSelection(dialog, request),
             sheetId: sheet.Id,
-            resolveSheetId: sheetName => _workbook.Sheets.FirstOrDefault(item =>
-                string.Equals(item.Name, sheetName, StringComparison.CurrentCultureIgnoreCase))?.Id)
+            resolveSheetId: ResolveSheetIdByName)
         { Owner = this };
         if (dialog.ShowDialog() != true ||
             string.IsNullOrWhiteSpace(dialog.Result.DestinationRangeText) ||
@@ -317,7 +316,7 @@ public partial class MainWindow
                 out var outcome))
             return false;
 
-        if (outcome.AffectedCells?.FirstOrDefault() is { } detailAnchor)
+        if (FindAffectedCellAnchor(outcome) is { } detailAnchor)
             _currentSheetId = detailAnchor.Sheet;
         RefreshSheetTabs();
         UpdateViewport();
@@ -416,8 +415,7 @@ public partial class MainWindow
             FormatWorkbookRange(pivotTable.SourceRange),
             request => ApplyPivotTableDataSourceRangeSelection(dialog, request),
             sheetId: sheet.Id,
-            resolveSheetId: sheetName => _workbook.Sheets.FirstOrDefault(item =>
-                string.Equals(item.Name, sheetName, StringComparison.CurrentCultureIgnoreCase))?.Id)
+            resolveSheetId: ResolveSheetIdByName)
         { Owner = this };
         if (dialog.ShowDialog() != true ||
             string.IsNullOrWhiteSpace(dialog.Result.SourceRangeText) ||
@@ -463,9 +461,7 @@ public partial class MainWindow
             return;
 
         var headers = ReadPivotSourceHeaders(sheet, pivotTable);
-        var fieldName = GetSelectedPivotFieldListItem();
-        if (PivotUiPlanner.FindSourceFieldIndex(headers, fieldName) is null)
-            fieldName = headers.FirstOrDefault();
+        var fieldName = GetSelectedOrFirstPivotHeader(headers);
 
         if (string.IsNullOrWhiteSpace(fieldName))
             return;
@@ -490,9 +486,7 @@ public partial class MainWindow
             return;
 
         var headers = ReadPivotSourceHeaders(sheet, pivotTable);
-        var fieldName = GetSelectedPivotFieldListItem();
-        if (PivotUiPlanner.FindSourceFieldIndex(headers, fieldName) is null)
-            fieldName = headers.FirstOrDefault();
+        var fieldName = GetSelectedOrFirstPivotHeader(headers);
 
         if (string.IsNullOrWhiteSpace(fieldName))
             return;
@@ -627,10 +621,7 @@ public partial class MainWindow
         var pageFields = sourceIndex is null
             ? pivotTable.PageFields.ToList()
             : pivotTable.PageFields.Where(field => field.SourceFieldIndex != sourceIndex.Value).ToList();
-        var dataFields = pivotTable.DataFields
-            .Where(field => !string.Equals(field.Name, selected, StringComparison.CurrentCultureIgnoreCase) &&
-                            (sourceIndex is null || field.SourceFieldIndex != sourceIndex.Value))
-            .ToList();
+        var dataFields = ExcludeDataFieldsByCaptionOrSourceIndex(pivotTable.DataFields, selected, sourceIndex);
 
         ApplyPivotFieldListLayout(pivotTable, rowFields, columnFields, pageFields, dataFields);
     }
@@ -680,11 +671,7 @@ public partial class MainWindow
         if (sourceIndex is null)
             return;
 
-        var existingItems = pivotTable.RowFields
-            .Concat(pivotTable.ColumnFields)
-            .Concat(pivotTable.PageFields)
-            .FirstOrDefault(field => field.SourceFieldIndex == sourceIndex.Value)
-            ?.SelectedItems;
+        var existingItems = FindPivotLayoutFieldBySourceIndex(pivotTable, sourceIndex.Value)?.SelectedItems;
         var dialog = new PivotFieldFilterDialog(
             ReadPivotFieldItems(sheet, pivotTable, sourceIndex.Value),
             existingItems,
@@ -773,16 +760,9 @@ public partial class MainWindow
 
         var headers = ReadPivotSourceHeaders(sheet, pivotTable);
         var selected = GetSelectedPivotFieldListItem();
-        var dataFieldIndex = PivotUiPlanner.FindDataFieldIndex(pivotTable, selected);
+        var dataFieldIndex = FindDataFieldIndexByCaptionOrSourceIndex(pivotTable, headers, selected);
         if (dataFieldIndex is null)
-        {
-            var sourceIndex = PivotUiPlanner.FindSourceFieldIndex(headers, selected);
-            if (sourceIndex is null)
-                return;
-            dataFieldIndex = pivotTable.DataFields.FindIndex(field => field.SourceFieldIndex == sourceIndex.Value);
-            if (dataFieldIndex < 0)
-                return;
-        }
+            return;
 
         var current = pivotTable.DataFields[dataFieldIndex.Value];
         var dialog = new PivotValueFieldSettingsDialog(current, headers) { Owner = this };
@@ -854,18 +834,14 @@ public partial class MainWindow
 
         var headers = ReadPivotSourceHeaders(sheet, pivotTable);
         var sourceIndex = PivotUiPlanner.FindFieldSourceIndex(headers, pivotTable, caption);
-        var draggedDataField = pivotTable.DataFields.FirstOrDefault(field =>
-            string.Equals(field.Name, caption, StringComparison.CurrentCultureIgnoreCase));
+        var draggedDataField = FindDataFieldByCaption(pivotTable, caption);
         if (sourceIndex is null && draggedDataField is null)
             return;
 
         var rowFields = pivotTable.RowFields.Where(field => field.SourceFieldIndex != sourceIndex).ToList();
         var columnFields = pivotTable.ColumnFields.Where(field => field.SourceFieldIndex != sourceIndex).ToList();
         var pageFields = pivotTable.PageFields.Where(field => field.SourceFieldIndex != sourceIndex).ToList();
-        var dataFields = pivotTable.DataFields
-            .Where(field => !string.Equals(field.Name, caption, StringComparison.CurrentCultureIgnoreCase) &&
-                            field.SourceFieldIndex != sourceIndex)
-            .ToList();
+        var dataFields = ExcludeDataFieldsByCaptionOrSourceIndex(pivotTable.DataFields, caption, sourceIndex);
 
         if (targetZone == PivotFieldDropZone.Available)
         {
@@ -926,9 +902,7 @@ public partial class MainWindow
                 PivotSortTarget.Value,
                 direction,
                 DataFieldIndex: dataFieldIndex.Value,
-                FieldIndex: pivotTable.RowFields.LastOrDefault()?.SourceFieldIndex ??
-                            pivotTable.ColumnFields.LastOrDefault()?.SourceFieldIndex ??
-                            0));
+                FieldIndex: LastAxisFieldSourceIndexOrDefault(pivotTable)));
         }
         else
         {
@@ -994,7 +968,7 @@ public partial class MainWindow
         if (!string.IsNullOrWhiteSpace(_pivotChartContextFieldCaption))
             return _pivotChartContextFieldCaption;
 
-        foreach (var list in new[] { PivotAvailableFieldsList, PivotRowsList, PivotColumnsList, PivotValuesList, PivotFiltersList })
+        foreach (var list in PivotFieldLists())
         {
             if (PivotUiPlanner.GetFieldListCaption(list.SelectedItem) is { } value)
                 return value;
@@ -1002,6 +976,79 @@ public partial class MainWindow
 
         return null;
     }
+
+    private IEnumerable<ListBox> PivotFieldLists()
+    {
+        yield return PivotAvailableFieldsList;
+        yield return PivotRowsList;
+        yield return PivotColumnsList;
+        yield return PivotValuesList;
+        yield return PivotFiltersList;
+    }
+
+    private string? GetSelectedOrFirstPivotHeader(IReadOnlyList<string> headers)
+    {
+        var selected = GetSelectedPivotFieldListItem();
+        return PivotUiPlanner.FindSourceFieldIndex(headers, selected) is null
+            ? headers.FirstOrDefault()
+            : selected;
+    }
+
+    private static CellAddress? FindAffectedCellAnchor(CommandOutcome outcome) =>
+        outcome.AffectedCells?.FirstOrDefault();
+
+    private static int? FindDataFieldIndexByCaptionOrSourceIndex(
+        PivotTableModel pivotTable,
+        IReadOnlyList<string> headers,
+        string? caption)
+    {
+        var dataFieldIndex = PivotUiPlanner.FindDataFieldIndex(pivotTable, caption);
+        if (dataFieldIndex is not null)
+            return dataFieldIndex;
+
+        var sourceIndex = PivotUiPlanner.FindSourceFieldIndex(headers, caption);
+        return sourceIndex is null
+            ? null
+            : FindDataFieldIndexBySourceIndex(pivotTable, sourceIndex.Value);
+    }
+
+    private static int? FindDataFieldIndexBySourceIndex(PivotTableModel pivotTable, int sourceFieldIndex)
+    {
+        var index = pivotTable.DataFields.FindIndex(field => field.SourceFieldIndex == sourceFieldIndex);
+        return index < 0 ? null : index;
+    }
+
+    private static PivotDataFieldModel? FindDataFieldByCaption(PivotTableModel pivotTable, string caption) =>
+        pivotTable.DataFields.FirstOrDefault(field => DataFieldCaptionEquals(field, caption));
+
+    private static List<PivotDataFieldModel> ExcludeDataFieldsByCaptionOrSourceIndex(
+        IEnumerable<PivotDataFieldModel> dataFields,
+        string caption,
+        int? sourceIndex) =>
+        dataFields
+            .Where(field => !DataFieldMatchesCaptionOrSourceIndex(field, caption, sourceIndex))
+            .ToList();
+
+    private static bool DataFieldMatchesCaptionOrSourceIndex(
+        PivotDataFieldModel field,
+        string caption,
+        int? sourceIndex) =>
+        DataFieldCaptionEquals(field, caption) ||
+        (sourceIndex is not null && field.SourceFieldIndex == sourceIndex.Value);
+
+    private static bool DataFieldCaptionEquals(PivotDataFieldModel field, string caption) =>
+        string.Equals(field.Name, caption, StringComparison.CurrentCultureIgnoreCase);
+
+    private static PivotFieldModel? FindPivotLayoutFieldBySourceIndex(PivotTableModel pivotTable, int sourceFieldIndex) =>
+        PivotLayoutFields(pivotTable).FirstOrDefault(field => field.SourceFieldIndex == sourceFieldIndex);
+
+    private static IEnumerable<PivotFieldModel> PivotLayoutFields(PivotTableModel pivotTable) =>
+        pivotTable.RowFields.Concat(pivotTable.ColumnFields).Concat(pivotTable.PageFields);
+
+    private static int LastAxisFieldSourceIndexOrDefault(PivotTableModel pivotTable) =>
+        pivotTable.RowFields.LastOrDefault()?.SourceFieldIndex ??
+        pivotTable.ColumnFields.LastOrDefault()?.SourceFieldIndex ??
+        0;
 
     private Sheet GetPivotSourceSheet(Sheet fallbackSheet, PivotTableModel pivotTable) =>
         PivotUiPlanner.ResolvePivotSourceSheet(_workbook, fallbackSheet, pivotTable);
@@ -1038,8 +1085,7 @@ public partial class MainWindow
         => WorkbookRangeTextCodec.TryParse(
             defaultSheetId,
             input,
-            sheetName => _workbook.Sheets.FirstOrDefault(item =>
-                string.Equals(item.Name, sheetName, StringComparison.CurrentCultureIgnoreCase))?.Id,
+            ResolveSheetIdByName,
             out range);
 
     private string FormatWorkbookRange(GridRange range)
