@@ -777,7 +777,9 @@ if ($null -ne $finder) {
         "Double-click .fxl in Finder",
         "Confirm workbook identity",
         "Right-click .fxl > Open With > FreeX",
+        "Drag supported .fxl/.xlsx workbook onto FreeX.app or Dock icon",
         "Repeat while FreeX is already running",
+        "Drag supported workbook from Finder onto already-running FreeX window",
         "Optional spreadsheet file Open With"
     )
     Test-StatusTable -Table $finder -LabelColumn "Step" -StatusColumn "Status" -AllowedByLabelPattern @{
