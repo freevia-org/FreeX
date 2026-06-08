@@ -6,6 +6,47 @@ namespace FreeX.App.Services.Tests;
 public sealed class CellColorPalettePlannerTests
 {
     [Fact]
+    public void BuildMenuPlan_ExposesThemeStandardRecentAndCustomSpectrumSections()
+    {
+        var plan = CellColorPalettePlanner.BuildMenuPlan(
+            [
+                new CellColor(0x12, 0x34, 0x56),
+                new CellColor(0xAA, 0xBB, 0xCC),
+                new CellColor(0x12, 0x34, 0x56)
+            ]);
+
+        plan.Sections.Select(section => section.Kind).Should().Equal(
+            CellColorPaletteSectionKind.Theme,
+            CellColorPaletteSectionKind.Standard,
+            CellColorPaletteSectionKind.Recent,
+            CellColorPaletteSectionKind.CustomSpectrum);
+
+        var theme = plan.Sections[0];
+        theme.ThemeColumns.Should().HaveCount(10);
+        theme.Swatches.Should().HaveCount(60);
+
+        plan.Sections[1].Swatches.Select(swatch => swatch.Hex)
+            .Should()
+            .Equal(CellColorPalettePlanner.BuildStandardSwatches().Select(swatch => swatch.Hex));
+        plan.Sections[2].Swatches.Select(swatch => swatch.Hex)
+            .Should()
+            .Equal("#123456", "#AABBCC");
+        plan.Sections[3].Swatches.Select(swatch => swatch.Hex)
+            .Should()
+            .Equal(CellColorPalettePlanner.BuildCustomSpectrumSwatches().Select(swatch => swatch.Hex));
+    }
+
+    [Fact]
+    public void BuildMenuPlan_SkipsEmptyRecentSectionAndCanOmitCustomSpectrum()
+    {
+        var plan = CellColorPalettePlanner.BuildMenuPlan(includeCustomSpectrum: false);
+
+        plan.Sections.Select(section => section.Kind).Should().Equal(
+            CellColorPaletteSectionKind.Theme,
+            CellColorPaletteSectionKind.Standard);
+    }
+
+    [Fact]
     public void BuildDefaultSwatches_ReturnsDedupedThemeAndStandardColors()
     {
         var swatches = CellColorPalettePlanner.BuildDefaultSwatches();
@@ -58,6 +99,53 @@ public sealed class CellColorPalettePlannerTests
             "#0070C0",
             "#002060",
             "#7030A0");
+    }
+
+    [Fact]
+    public void BuildRecentSwatches_DedupesDisplayOrderAndCapsResults()
+    {
+        var swatches = CellColorPalettePlanner.BuildRecentSwatches(
+            [
+                new CellColor(0x01, 0x02, 0x03),
+                new CellColor(0xAA, 0xBB, 0xCC),
+                new CellColor(0x01, 0x02, 0x03),
+                new CellColor(0x11, 0x22, 0x33)
+            ],
+            capacity: 2);
+
+        swatches.Select(swatch => swatch.Hex).Should().Equal("#010203", "#AABBCC");
+        swatches.Select(swatch => swatch.Color).Should().Equal(
+            new CellColor(0x01, 0x02, 0x03),
+            new CellColor(0xAA, 0xBB, 0xCC));
+    }
+
+    [Fact]
+    public void BuildRecentSwatches_ReturnsEmptyWhenInputOrCapacityIsEmpty()
+    {
+        CellColorPalettePlanner.BuildRecentSwatches(null).Should().BeEmpty();
+        CellColorPalettePlanner.BuildRecentSwatches([CellColor.Black], capacity: 0).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void PromoteRecentColor_MovesSelectedColorToFrontDedupeAndCaps()
+    {
+        var colors = CellColorPalettePlanner.PromoteRecentColor(
+            [
+                new CellColor(0x10, 0x20, 0x30),
+                new CellColor(0xAA, 0xBB, 0xCC),
+                new CellColor(0x44, 0x55, 0x66)
+            ],
+            new CellColor(0xAA, 0xBB, 0xCC),
+            capacity: 3);
+
+        colors.Should().Equal(
+            new CellColor(0xAA, 0xBB, 0xCC),
+            new CellColor(0x10, 0x20, 0x30),
+            new CellColor(0x44, 0x55, 0x66));
+
+        CellColorPalettePlanner.PromoteRecentColor(colors, new CellColor(0xEE, 0xDD, 0xCC), capacity: 2)
+            .Should()
+            .Equal(new CellColor(0xEE, 0xDD, 0xCC), new CellColor(0xAA, 0xBB, 0xCC));
     }
 
     [Fact]
