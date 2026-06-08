@@ -1,6 +1,7 @@
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -20,6 +21,9 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         script.Should().Contain("notarization_status");
         script.Should().Contain("stapler_validated");
         script.Should().Contain("zip_sha256");
+        script.Should().Contain("RequireReleasePublicationArtifact");
+        script.Should().Contain("FreeX-latest-macos-distribution-candidate-manifest.json");
+        script.Should().Contain("default_open_launch_smoke_report");
         script.Should().Contain("format_cells_style_roundtrip_count");
         script.Should().Contain("live_command_key_smoke");
         script.Should().Contain("macos_launch_smoke");
@@ -65,6 +69,20 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
     }
 
     [Fact]
+    public void ReadinessPreflight_PassesForSyntheticDistributionCandidateBundlesWithReleasePublicationArtifact()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: true);
+        var x64 = CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: true);
+        CreateSyntheticReleasePublicationArtifact(temp.Path, arm64, x64);
+
+        var result = RunPreflight(temp.Path, "-DistributionCandidate -RequireReleasePublicationArtifact");
+
+        result.ExitCode.Should().Be(0, result.Error);
+        result.Output.Should().Contain("macOS public-preview evidence preflight passed");
+    }
+
+    [Fact]
     public void ReadinessPreflight_FailsWhenDistributionCandidateLacksSigningEvidence()
     {
         using var temp = new TestTemporaryDirectory();
@@ -80,6 +98,36 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         result.CombinedOutput.Should().Contain("codesign_mode=developer-id");
         result.CombinedOutput.Should().Contain("notarization_status=accepted");
         result.CombinedOutput.Should().Contain("stapler_validated=true");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenDistributionCandidateKeepsInternalPreviewInstructions()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: true, includeInternalPreviewTesterGuidance: true);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: true);
+
+        var result = RunPreflight(temp.Path, "-DistributionCandidate");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("must not include internal-preview-only");
+        result.CombinedOutput.Should().Contain("guidance");
+        result.CombinedOutput.Should().Contain("For artifact_channel=internal-preview");
+        result.CombinedOutput.Should().Contain("Control-click or right-click > Open");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenExpectedReleasePublicationArtifactIsMissing()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: true);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: true);
+
+        var result = RunPreflight(temp.Path, "-DistributionCandidate -RequireReleasePublicationArtifact");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("FreeX-latest-macos-distribution-candidate-manifest.json");
+        result.CombinedOutput.Should().Contain("FreeX-latest-macos-distribution-candidate-instructions.md");
     }
 
     [Fact]
@@ -131,7 +179,8 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         string root,
         string runtime,
         bool distributionCandidate,
-        bool includeDiagnosticsArtifact = false)
+        bool includeDiagnosticsArtifact = false,
+        bool includeInternalPreviewTesterGuidance = false)
     {
         var names = RuntimeArtifactNames.For(runtime);
         var bundleDirectory = Path.Combine(root, $"freex-42-1-{runtime}-macos-app");
@@ -154,24 +203,26 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         var notarizationStatus = distributionCandidate ? "accepted" : "skipped_missing_credentials";
         var staplerValidated = distributionCandidate ? "true" : "false";
 
+        var evidenceLines = new List<string>
+        {
+            $"runtime={runtime}",
+            $"artifact_channel={channel}",
+            $"distribution_candidate={candidate}",
+            $"distribution_contract={contract}",
+            $"distribution_readiness={readiness}",
+            $"zip_name={names.Zip}",
+            "codesign_verified=true",
+            $"codesign_mode={codesignMode}",
+            $"notarization_status={notarizationStatus}",
+            $"stapler_validated={staplerValidated}",
+            $"zip_sha256={zipHash}",
+            "format_cells_style_roundtrip=true",
+            "format_cells_style_roundtrip_count=2",
+            "smoke_status=passed"
+        };
+
         var evidencePath = Path.Combine(bundleDirectory, names.Evidence);
-        File.WriteAllText(
-            evidencePath,
-            Lines(
-                $"runtime={runtime}",
-                $"artifact_channel={channel}",
-                $"distribution_candidate={candidate}",
-                $"distribution_contract={contract}",
-                $"distribution_readiness={readiness}",
-                $"zip_name={names.Zip}",
-                "codesign_verified=true",
-                $"codesign_mode={codesignMode}",
-                $"notarization_status={notarizationStatus}",
-                $"stapler_validated={staplerValidated}",
-                $"zip_sha256={zipHash}",
-                "format_cells_style_roundtrip=true",
-                "format_cells_style_roundtrip_count=2",
-                "smoke_status=passed"));
+        File.WriteAllText(evidencePath, Lines(evidenceLines.ToArray()));
 
         var packagingSmokePath = Path.Combine(bundleDirectory, names.PackagingSmoke);
         File.WriteAllText(
@@ -245,21 +296,34 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
                     $"distribution_contract={contract}",
                     "notarization_status=skipped_missing_credentials"));
 
-        File.WriteAllText(
-            Path.Combine(bundleDirectory, names.TesterInstructions),
-            Lines(
-                $"# FreeX macOS App ({channel}, {runtime})",
-                "This artifact is a macOS port validation build. Internal-preview artifacts are not a public release channel.",
-                "For artifact_channel=internal-preview: This artifact is a preview build for macOS port validation. It is not a public release channel.",
-                $"Download {names.Zip}, {names.Checksum}, {names.Evidence}, {names.PackagingSmoke}, {names.LaunchSmoke}, {names.OpenWithSmoke}, {names.DefaultOpenSmoke}, {names.NotarizationLog}.",
-                $"Run shasum -a 256 -c {names.Checksum}.",
-                $"artifact_channel={channel}",
-                $"distribution_readiness={readiness}",
-                $"codesign_mode={codesignMode}",
-                $"notarization_status={notarizationStatus}",
-                $"stapler_validated={staplerValidated}",
-                $"zip_sha256={zipHash}",
-                "If artifact_channel=distribution-candidate, reject the artifact unless it has Developer ID signing, accepted notarization, and stapling evidence."));
+        var instructionLines = new List<string>
+        {
+            $"# FreeX macOS App ({channel}, {runtime})",
+            distributionCandidate
+                ? "This distribution-candidate artifact is for public-preview validation and must show Developer ID signing, accepted notarization, and stapling evidence."
+                : "This artifact is a macOS port validation build. Internal-preview artifacts are not a public release channel.",
+            $"Download {names.Zip}, {names.Checksum}, {names.Evidence}, {names.PackagingSmoke}, {names.LaunchSmoke}, {names.OpenWithSmoke}, {names.DefaultOpenSmoke}, {names.NotarizationLog}.",
+            $"Run shasum -a 256 -c {names.Checksum}.",
+            $"artifact_channel={channel}",
+            $"distribution_readiness={readiness}",
+            $"codesign_mode={codesignMode}",
+            $"notarization_status={notarizationStatus}",
+            $"stapler_validated={staplerValidated}",
+            $"zip_sha256={zipHash}"
+        };
+
+        if (distributionCandidate)
+        {
+            instructionLines.Add("If artifact_channel=distribution-candidate, reject the artifact unless it has Developer ID signing, accepted notarization, and stapling evidence.");
+        }
+
+        if (!distributionCandidate || includeInternalPreviewTesterGuidance)
+        {
+            instructionLines.Add("For artifact_channel=internal-preview: This artifact is a preview build for macOS port validation. It is not a public release channel.");
+            instructionLines.Add("For artifact_channel=internal-preview: Ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing.");
+        }
+
+        File.WriteAllText(Path.Combine(bundleDirectory, names.TesterInstructions), Lines(instructionLines.ToArray()));
 
         if (includeDiagnosticsArtifact)
         {
@@ -272,10 +336,99 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         }
 
         return new SyntheticBundle(
+            runtime,
             bundleDirectory,
             zipPath,
             evidencePath,
             packagingSmokePath);
+    }
+
+    private static void CreateSyntheticReleasePublicationArtifact(string root, params SyntheticBundle[] bundles)
+    {
+        var releaseDirectory = Path.Combine(root, "freex-42-1-macos-release-assets");
+        Directory.CreateDirectory(releaseDirectory);
+
+        var assets = new List<Dictionary<string, string>>();
+        foreach (var bundle in bundles)
+        {
+            var names = RuntimeArtifactNames.For(bundle.Runtime);
+            var assetLabel = bundle.Runtime == "osx-arm64" ? "macos-arm64" : "macos-x64";
+            var stableZip = bundle.Runtime == "osx-arm64"
+                ? "FreeX-latest-macos-arm64.zip"
+                : "FreeX-latest-macos-x64.zip";
+            var stableZipPath = Path.Combine(releaseDirectory, stableZip);
+            File.Copy(bundle.ZipPath, stableZipPath, overwrite: true);
+            var stableZipHash = ComputeSha256(stableZipPath);
+            File.WriteAllText(Path.Combine(releaseDirectory, $"{stableZip}.sha256"), $"{stableZipHash}  {stableZip}{Environment.NewLine}");
+
+            var stableEvidence = CopyReleaseAsset(bundle, names.Evidence, releaseDirectory, $"FreeX-latest-{assetLabel}-evidence.txt");
+            var stablePackagingSmoke = CopyReleaseAsset(bundle, names.PackagingSmoke, releaseDirectory, $"FreeX-latest-{assetLabel}-packaging-smoke.log");
+            var stableLaunchSmoke = CopyReleaseAsset(bundle, names.LaunchSmoke, releaseDirectory, $"FreeX-latest-{assetLabel}-launch-smoke.txt");
+            var stableOpenWithSmoke = CopyReleaseAsset(bundle, names.OpenWithSmoke, releaseDirectory, $"FreeX-latest-{assetLabel}-open-with-launch-smoke.txt");
+            var stableDefaultOpenSmoke = CopyReleaseAsset(bundle, names.DefaultOpenSmoke, releaseDirectory, $"FreeX-latest-{assetLabel}-default-open-launch-smoke.txt");
+            var stableNotarization = CopyReleaseAsset(bundle, names.NotarizationLog, releaseDirectory, $"FreeX-latest-{assetLabel}-notarization.log");
+            var stableInstructions = CopyReleaseAsset(bundle, names.TesterInstructions, releaseDirectory, $"FreeX-latest-{assetLabel}-tester-instructions.md");
+
+            assets.Add(new Dictionary<string, string>
+            {
+                ["runtime"] = bundle.Runtime,
+                ["asset_label"] = assetLabel,
+                ["original_zip"] = names.Zip,
+                ["stable_zip"] = stableZip,
+                ["stable_zip_checksum"] = $"{stableZip}.sha256",
+                ["sha256"] = stableZipHash,
+                ["evidence"] = stableEvidence,
+                ["packaging_smoke_log"] = stablePackagingSmoke,
+                ["launch_smoke_report"] = stableLaunchSmoke,
+                ["open_with_launch_smoke_report"] = stableOpenWithSmoke,
+                ["default_open_launch_smoke_report"] = stableDefaultOpenSmoke,
+                ["notarization_log"] = stableNotarization,
+                ["tester_instructions"] = stableInstructions
+            });
+        }
+
+        var manifest = new Dictionary<string, object?>
+        {
+            ["schema"] = "io.github.tony-xmelon.freex.macos-distribution-candidate.v1",
+            ["release_id"] = "macos-distribution-candidate-run42-attempt1-0123abcd",
+            ["tag"] = "macos-distribution-candidate-42-1-0123abcd",
+            ["repository"] = "tony-xmelon/FreeX",
+            ["workflow"] = "macOS App Preview",
+            ["run_id"] = "42",
+            ["run_attempt"] = "1",
+            ["commit"] = "0123abcdef0123456789abcdef0123456789abcd",
+            ["generated_at_utc"] = "2026-06-08T00:00:00.0000000Z",
+            ["source_artifact_pattern"] = "freex-42-1-*-macos-app",
+            ["distribution_candidate_required_markers"] = new[]
+            {
+                "artifact_channel=distribution-candidate",
+                "distribution_candidate=true",
+                "distribution_readiness=distribution_candidate_ready",
+                "codesign_mode=developer-id",
+                "notarization_status=accepted",
+                "stapler_validated=true"
+            },
+            ["assets"] = assets
+        };
+
+        File.WriteAllText(
+            Path.Combine(releaseDirectory, "FreeX-latest-macos-distribution-candidate-manifest.json"),
+            JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }));
+
+        File.WriteAllText(
+            Path.Combine(releaseDirectory, "FreeX-latest-macos-distribution-candidate-instructions.md"),
+            Lines(
+                "# FreeX macOS Distribution Candidate",
+                "Published release assets include FreeX-latest-macos-arm64.zip and FreeX-latest-macos-x64.zip.",
+                "Use FreeX-latest-macos-distribution-candidate-manifest.json to verify the release asset set.",
+                "Each runtime includes default-open launch smoke, evidence, notarization, and tester instruction assets.",
+                "Reject the distribution-candidate unless Developer ID signing, accepted notarization, and stapler validation are present."));
+    }
+
+    private static string CopyReleaseAsset(SyntheticBundle bundle, string sourceName, string releaseDirectory, string destinationName)
+    {
+        File.Copy(Path.Combine(bundle.BundleDirectory, sourceName), Path.Combine(releaseDirectory, destinationName), overwrite: true);
+        return destinationName;
     }
 
     private static string Lines(params string[] lines) =>
@@ -295,6 +448,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
     }
 
     private sealed record SyntheticBundle(
+        string Runtime,
         string BundleDirectory,
         string ZipPath,
         string EvidencePath,

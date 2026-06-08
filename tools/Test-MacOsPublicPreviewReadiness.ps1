@@ -2,7 +2,8 @@ param(
     [string]$ArtifactRoot = "artifacts",
     [string[]]$Runtimes = @("osx-arm64", "osx-x64"),
     [switch]$DistributionCandidate,
-    [switch]$RequireSeparateDiagnosticsArtifact
+    [switch]$RequireSeparateDiagnosticsArtifact,
+    [switch]$RequireReleasePublicationArtifact
 )
 
 $ErrorActionPreference = "Stop"
@@ -65,6 +66,18 @@ function Assert-ContainsText {
     )
 
     if ($Text.IndexOf($Needle, [System.StringComparison]::Ordinal) -lt 0) {
+        Add-ValidationError $Message
+    }
+}
+
+function Assert-DoesNotContainText {
+    param(
+        [Parameter(Mandatory = $true)][string]$Text,
+        [Parameter(Mandatory = $true)][string]$Needle,
+        [Parameter(Mandatory = $true)][string]$Message
+    )
+
+    if ($Text.IndexOf($Needle, [System.StringComparison]::Ordinal) -ge 0) {
         Add-ValidationError $Message
     }
 }
@@ -342,6 +355,193 @@ function Test-ChannelEvidence {
     return $isDistributionCandidateArtifact
 }
 
+function Get-JsonPropertyValue {
+    param(
+        [Parameter(Mandatory = $true)][object]$Object,
+        [Parameter(Mandatory = $true)][string]$PropertyName
+    )
+
+    $property = $Object.PSObject.Properties[$PropertyName]
+    if ($null -eq $property) {
+        return $null
+    }
+
+    return $property.Value
+}
+
+function Assert-JsonPropertyPresent {
+    param(
+        [Parameter(Mandatory = $true)][object]$Object,
+        [Parameter(Mandatory = $true)][string]$PropertyName,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    $value = Get-JsonPropertyValue -Object $Object -PropertyName $PropertyName
+    if ($null -eq $value -or ($value -is [string] -and [string]::IsNullOrWhiteSpace($value))) {
+        Add-ValidationError "$Label must include JSON property '$PropertyName'."
+    }
+}
+
+function Assert-JsonPropertyEquals {
+    param(
+        [Parameter(Mandatory = $true)][object]$Object,
+        [Parameter(Mandatory = $true)][string]$PropertyName,
+        [Parameter(Mandatory = $true)][string]$ExpectedValue,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    $value = Get-JsonPropertyValue -Object $Object -PropertyName $PropertyName
+    if ($null -eq $value) {
+        Add-ValidationError "$Label must include JSON property '$PropertyName=$ExpectedValue'."
+        return
+    }
+
+    $actualValue = [string]$value
+    if ($actualValue -ne $ExpectedValue) {
+        Add-ValidationError "$Label JSON property '$PropertyName' must be '$ExpectedValue', but was '$actualValue'."
+    }
+}
+
+function Test-ReleasePublicationArtifact {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string[]]$ExpectedRuntimes
+    )
+
+    $manifestName = "FreeX-latest-macos-distribution-candidate-manifest.json"
+    $instructionsName = "FreeX-latest-macos-distribution-candidate-instructions.md"
+    $manifestFiles = @(Get-ChildItem -LiteralPath $Root -Recurse -File -Filter $manifestName -ErrorAction SilentlyContinue)
+    $instructionsFiles = @(Get-ChildItem -LiteralPath $Root -Recurse -File -Filter $instructionsName -ErrorAction SilentlyContinue)
+    $hasPublicationArtifact = $manifestFiles.Count -gt 0 -or $instructionsFiles.Count -gt 0
+
+    if (-not $RequireReleasePublicationArtifact.IsPresent -and -not $hasPublicationArtifact) {
+        return
+    }
+
+    if ($manifestFiles.Count -eq 0) {
+        Add-ValidationError "macOS release publication artifact manifest was not found. Expected '$manifestName'."
+    }
+    elseif ($manifestFiles.Count -gt 1) {
+        Add-ValidationError "Expected exactly one macOS release publication artifact manifest named '$manifestName', but found $($manifestFiles.Count)."
+    }
+
+    if ($instructionsFiles.Count -eq 0) {
+        Add-ValidationError "macOS release publication instructions were not found. Expected '$instructionsName'."
+    }
+    elseif ($instructionsFiles.Count -gt 1) {
+        Add-ValidationError "Expected exactly one macOS release publication instructions file named '$instructionsName', but found $($instructionsFiles.Count)."
+    }
+
+    if ($manifestFiles.Count -ne 1 -or $instructionsFiles.Count -ne 1) {
+        return
+    }
+
+    $manifestPath = $manifestFiles[0].FullName
+    $releaseDirectory = $manifestFiles[0].Directory.FullName
+    try {
+        $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    }
+    catch {
+        Add-ValidationError "macOS release publication artifact manifest must be valid JSON: $($_.Exception.Message)"
+        return
+    }
+
+    Assert-JsonPropertyEquals -Object $manifest -PropertyName "schema" -ExpectedValue "io.github.tony-xmelon.freex.macos-distribution-candidate.v1" -Label "macOS release publication manifest"
+    foreach ($propertyName in @("release_id", "tag", "repository", "workflow", "run_id", "run_attempt", "commit", "generated_at_utc", "source_artifact_pattern")) {
+        Assert-JsonPropertyPresent -Object $manifest -PropertyName $propertyName -Label "macOS release publication manifest"
+    }
+
+    $sourceArtifactPattern = [string](Get-JsonPropertyValue -Object $manifest -PropertyName "source_artifact_pattern")
+    Assert-True -Condition ($sourceArtifactPattern.IndexOf("*-macos-app", [System.StringComparison]::Ordinal) -ge 0) -Message "macOS release publication manifest source_artifact_pattern must target downloaded macOS app artifacts."
+
+    $rawMarkers = Get-JsonPropertyValue -Object $manifest -PropertyName "distribution_candidate_required_markers"
+    if ($null -eq $rawMarkers) {
+        Add-ValidationError "macOS release publication manifest must include JSON property 'distribution_candidate_required_markers'."
+    }
+
+    $markers = @($rawMarkers | ForEach-Object { [string]$_ })
+    foreach ($marker in @(
+            "artifact_channel=distribution-candidate",
+            "distribution_candidate=true",
+            "distribution_readiness=distribution_candidate_ready",
+            "codesign_mode=developer-id",
+            "notarization_status=accepted",
+            "stapler_validated=true")) {
+        Assert-True -Condition ($markers -contains $marker) -Message "macOS release publication manifest must include distribution candidate marker '$marker'."
+    }
+
+    $rawAssets = Get-JsonPropertyValue -Object $manifest -PropertyName "assets"
+    if ($null -eq $rawAssets) {
+        Add-ValidationError "macOS release publication manifest must include JSON property 'assets'."
+        return
+    }
+
+    $assets = @($rawAssets)
+    foreach ($runtime in $ExpectedRuntimes) {
+        $assetMatches = @($assets | Where-Object { $null -ne $_ -and [string](Get-JsonPropertyValue -Object $_ -PropertyName "runtime") -eq $runtime })
+        if ($assetMatches.Count -ne 1) {
+            Add-ValidationError "macOS release publication manifest must contain exactly one asset entry for '$runtime'."
+            continue
+        }
+
+        $asset = $assetMatches[0]
+        $names = Get-ExpectedFileNames -Runtime $runtime
+        $assetLabel = if ($runtime -eq "osx-arm64") { "macos-arm64" } else { "macos-x64" }
+        $stableZip = if ($runtime -eq "osx-arm64") { "FreeX-latest-macos-arm64.zip" } else { "FreeX-latest-macos-x64.zip" }
+        $expectedAssetProperties = [ordered]@{
+            asset_label = $assetLabel
+            original_zip = $names.Zip
+            stable_zip = $stableZip
+            stable_zip_checksum = "$stableZip.sha256"
+            evidence = "FreeX-latest-$assetLabel-evidence.txt"
+            packaging_smoke_log = "FreeX-latest-$assetLabel-packaging-smoke.log"
+            launch_smoke_report = "FreeX-latest-$assetLabel-launch-smoke.txt"
+            open_with_launch_smoke_report = "FreeX-latest-$assetLabel-open-with-launch-smoke.txt"
+            default_open_launch_smoke_report = "FreeX-latest-$assetLabel-default-open-launch-smoke.txt"
+            notarization_log = "FreeX-latest-$assetLabel-notarization.log"
+            tester_instructions = "FreeX-latest-$assetLabel-tester-instructions.md"
+        }
+
+        foreach ($entry in $expectedAssetProperties.GetEnumerator()) {
+            Assert-JsonPropertyEquals -Object $asset -PropertyName $entry.Key -ExpectedValue $entry.Value -Label "$runtime release publication manifest asset"
+        }
+
+        $sha256 = [string](Get-JsonPropertyValue -Object $asset -PropertyName "sha256")
+        Assert-True -Condition ($sha256 -match "^[0-9a-fA-F]{64}$") -Message "$runtime release publication manifest asset sha256 must be a SHA-256 hash."
+
+        foreach ($propertyName in @("stable_zip", "stable_zip_checksum", "evidence", "packaging_smoke_log", "launch_smoke_report", "open_with_launch_smoke_report", "default_open_launch_smoke_report", "notarization_log", "tester_instructions")) {
+            $fileName = [string](Get-JsonPropertyValue -Object $asset -PropertyName $propertyName)
+            if ([string]::IsNullOrWhiteSpace($fileName)) {
+                Add-ValidationError "$runtime release publication manifest asset must include '$propertyName'."
+                continue
+            }
+
+            Assert-FileExists -Path (Join-Path $releaseDirectory $fileName) -Label "$runtime release publication asset $propertyName" | Out-Null
+        }
+
+        $checksumPath = Join-Path $releaseDirectory "$stableZip.sha256"
+        if (Test-Path -LiteralPath $checksumPath -PathType Leaf) {
+            $checksumText = Get-FileTextOrEmpty -Path $checksumPath
+            Assert-ContainsText -Text $checksumText -Needle $stableZip -Message "$runtime release publication checksum must name $stableZip."
+            Assert-ContainsText -Text $checksumText -Needle $sha256 -Message "$runtime release publication checksum must contain the manifest hash."
+        }
+    }
+
+    $releaseInstructions = Get-FileTextOrEmpty -Path $instructionsFiles[0].FullName
+    foreach ($needle in @(
+            "FreeX-latest-macos-arm64.zip",
+            "FreeX-latest-macos-x64.zip",
+            $manifestName,
+            "default-open launch smoke",
+            "distribution-candidate",
+            "Developer ID",
+            "notarization",
+            "stapler",
+            "Reject")) {
+        Assert-ContainsText -Text $releaseInstructions -Needle $needle -Message "macOS release publication instructions must mention '$needle'."
+    }
+}
+
 function Test-PackagingSmoke {
     param(
         [Parameter(Mandatory = $true)][string]$PackagingSmokePath,
@@ -479,6 +679,13 @@ function Test-TesterInstructions {
         Assert-ContainsText -Text $instructions -Needle "notarization" -Message "$Runtime distribution-candidate tester instructions must mention notarization."
         Assert-ContainsText -Text $instructions -Needle "stapling" -Message "$Runtime distribution-candidate tester instructions must mention stapling."
         Assert-ContainsText -Text $instructions -Needle "reject" -Message "$Runtime distribution-candidate tester instructions must tell testers to reject missing evidence."
+        foreach ($internalOnlyNeedle in @(
+                "For artifact_channel=internal-preview",
+                "ad-hoc signed or non-notarized previews may require",
+                "Control-click or right-click > Open",
+                "trusted internal testing")) {
+            Assert-DoesNotContainText -Text $instructions -Needle $internalOnlyNeedle -Message "$Runtime distribution-candidate tester instructions must not include internal-preview-only guidance ('$internalOnlyNeedle')."
+        }
     }
     else {
         Assert-ContainsText -Text $instructions -Needle "internal-preview" -Message "$Runtime internal-preview tester instructions must name the channel."
@@ -581,6 +788,8 @@ foreach ($runtime in $Runtimes) {
 
     Test-RuntimeBundle -Root $resolvedArtifactRoot -BundleDirectory $bundleDirectories[0] -Runtime $runtime
 }
+
+Test-ReleasePublicationArtifact -Root $resolvedArtifactRoot -ExpectedRuntimes $Runtimes
 
 if ($validationErrors.Count -gt 0) {
     throw "macOS public-preview evidence preflight failed with $($validationErrors.Count) issue(s)."
