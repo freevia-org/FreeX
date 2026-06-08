@@ -48,12 +48,20 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         source.Should().Contain("private struct XlsxPostProcessingFeaturePlan");
         source.Should().Contain("foreach (var sheet in workbook.Sheets)");
         source.Should().Contain("sheet.GetOccupiedCellMap()");
+        source.Should().Contain("if (!HasSupportedCharts)");
+        source.Should().Contain("if (!HasPivotCustomNumberFormats)");
         source.Should().NotContain(
             "workbook.Sheets.Any(",
             "XLSX save post-processing should batch sheet feature checks instead of rescanning every sheet for each optional writer");
         source.Should().NotContain(
             "sheet.EnumerateCells().Any",
             "ignored-error detection should avoid nested LINQ and cell-address iterator allocation");
+        source.Should().NotContain(
+            "HasSupportedCharts |= HasSupportedXlsxCharts(sheet);",
+            "chart support checks can stop after the first supported chart is found");
+        source.Should().NotContain(
+            "HasPivotCustomNumberFormats |= HasPivotCustomNumberFormats(sheet);",
+            "pivot custom-format scans can stop after the first custom format is found");
     }
 
     [Fact]

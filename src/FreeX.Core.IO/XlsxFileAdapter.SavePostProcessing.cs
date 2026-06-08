@@ -526,11 +526,13 @@ public sealed partial class XlsxFileAdapter
             IncludeCellFeatures(sheet);
             HasCustomProperties |= sheet.CustomProperties.Count > 0;
             HasWorksheetElementMetadata |= XlsxWorksheetPostProcessingMetadataBatchWriter.HasWorksheetElementMetadata(sheet);
-            HasSupportedCharts |= HasSupportedXlsxCharts(sheet);
+            if (!HasSupportedCharts)
+                HasSupportedCharts = HasSupportedXlsxCharts(sheet);
             HasSupportedDrawingObjects |= XlsxWorksheetDrawingObjectWriter.HasSupportedObjects(sheet);
             HasStructuredTables |= sheet.StructuredTables.Count > 0;
             HasPivotTables |= sheet.PivotTables.Count > 0;
-            HasPivotCustomNumberFormats |= HasPivotCustomNumberFormats(sheet);
+            if (!HasPivotCustomNumberFormats)
+                HasPivotCustomNumberFormats = HasPivotCustomNumberFormats(sheet);
             HasReplayMetadata |= XlsxWorksheetPostProcessingMetadataBatchWriter.HasReplayMetadata(sheet);
             HasSourceIndependentMetadata |= XlsxWorksheetSourceIndependentMetadataBatchWriter.HasMetadata(sheet);
             HasStyleOnlyCells |= sheet.HasStyleOnlyCells;
