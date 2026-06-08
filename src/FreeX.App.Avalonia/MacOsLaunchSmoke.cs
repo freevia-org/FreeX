@@ -444,6 +444,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeSaveMenuItem,
     bool HasNativeSaveAsMenuItem,
     bool HasNativeExportPdfMenuItem,
+    bool HasNativeShareWorkbookMenuItem,
     bool HasNativeWorkbookStatisticsMenuItem,
     bool HasNativeCloseWorkbookMenuItem,
     bool HasNativeNewSheetMenuItem,
@@ -638,6 +639,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeSaveMenuItem &&
         HasNativeSaveAsMenuItem &&
         HasNativeExportPdfMenuItem &&
+        HasNativeShareWorkbookMenuItem &&
         HasNativeWorkbookStatisticsMenuItem &&
         HasNativeCloseWorkbookMenuItem &&
         HasNativeNewSheetMenuItem &&
@@ -1166,6 +1168,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_save_menu_item={FormatBool(snapshot.HasNativeSaveMenuItem)}",
                 $"native_save_as_menu_item={FormatBool(snapshot.HasNativeSaveAsMenuItem)}",
                 $"native_export_pdf_menu_item={FormatBool(snapshot.HasNativeExportPdfMenuItem)}",
+                $"native_share_workbook_menu_item={FormatBool(snapshot.HasNativeShareWorkbookMenuItem)}",
                 $"native_workbook_statistics_menu_item={FormatBool(snapshot.HasNativeWorkbookStatisticsMenuItem)}",
                 $"native_close_workbook_menu_item={FormatBool(snapshot.HasNativeCloseWorkbookMenuItem)}",
                 $"native_new_sheet_menu_item={FormatBool(snapshot.HasNativeNewSheetMenuItem)}",

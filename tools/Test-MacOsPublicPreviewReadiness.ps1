@@ -670,6 +670,88 @@ function Get-Sha256FileHash {
     return [System.BitConverter]::ToString($hashBytes).Replace("-", "").ToLowerInvariant()
 }
 
+function ConvertTo-NormalizedZipEntryPath {
+    param([string]$Path)
+
+    if ($null -eq $Path) {
+        return ""
+    }
+
+    $normalized = $Path.Replace("\", "/").Trim()
+    while ($normalized.StartsWith("./", [System.StringComparison]::Ordinal)) {
+        $normalized = $normalized.Substring(2)
+    }
+
+    return $normalized.TrimStart([char[]]@('/'))
+}
+
+function Test-MacOsAppZipBundleLayout {
+    param(
+        [Parameter(Mandatory = $true)][string]$ZipPath,
+        [Parameter(Mandatory = $true)][string]$Runtime,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    $archive = $null
+    try {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
+        $resolvedPath = (Resolve-Path -LiteralPath $ZipPath).ProviderPath
+        $archive = [System.IO.Compression.ZipFile]::OpenRead($resolvedPath)
+        $entryPaths = @($archive.Entries | ForEach-Object {
+                ConvertTo-NormalizedZipEntryPath -Path $_.FullName
+            } | Where-Object {
+                -not [string]::IsNullOrWhiteSpace($_) -and -not $_.EndsWith("/", [System.StringComparison]::Ordinal)
+            })
+
+        $bundleRoots = New-Object System.Collections.Generic.List[string]
+        $bundleMarker = "FreeX.app/Contents/"
+        foreach ($entryPath in $entryPaths) {
+            $markerIndex = $entryPath.IndexOf($bundleMarker, [System.StringComparison]::Ordinal)
+            if ($markerIndex -lt 0) {
+                continue
+            }
+
+            if ($markerIndex -gt 0 -and $entryPath.Substring($markerIndex - 1, 1) -ne "/") {
+                continue
+            }
+
+            $bundleRoot = $entryPath.Substring(0, $markerIndex + "FreeX.app".Length)
+            if (-not $bundleRoots.Contains($bundleRoot)) {
+                $bundleRoots.Add($bundleRoot)
+            }
+        }
+
+        $requiredEntries = @(
+            "Contents/Info.plist",
+            "Contents/MacOS/FreeX",
+            "Contents/MacOS/FreeX.dll",
+            "Contents/Resources/FreeX.icns")
+
+        foreach ($bundleRoot in $bundleRoots) {
+            $missingEntries = @($requiredEntries | Where-Object { $entryPaths -cnotcontains "$bundleRoot/$_" })
+            if ($missingEntries.Count -eq 0) {
+                return
+            }
+        }
+
+        $requiredEntryDescription = @($requiredEntries | ForEach-Object { "FreeX.app/$_" }) -join ', '
+        if ($bundleRoots.Count -eq 0) {
+            Add-ValidationError "$Label must contain a FreeX.app bundle layout with required entries: $requiredEntryDescription."
+            return
+        }
+
+        Add-ValidationError "$Label must contain a plausible FreeX.app bundle layout under one bundle root. Required entries: $requiredEntryDescription."
+    }
+    catch {
+        Add-ValidationError "$Label must be a readable ZIP archive with a FreeX.app bundle layout: $ZipPath. $($_.Exception.Message)"
+    }
+    finally {
+        if ($null -ne $archive) {
+            $archive.Dispose()
+        }
+    }
+}
+
 function Test-ChecksumEvidence {
     param(
         [Parameter(Mandatory = $true)][string]$BundleDirectory,
@@ -695,6 +777,8 @@ function Test-ChecksumEvidence {
     if (-not [string]::IsNullOrWhiteSpace($checksumHash)) {
         Assert-True -Condition ($checksumHash -eq $actualHash) -Message "$Runtime checksum file hash must match $($names.Zip)."
     }
+
+    Test-MacOsAppZipBundleLayout -ZipPath $zipPath -Runtime $Runtime -Label "$Runtime app ZIP"
 
     Assert-KeyEquals -Map $Evidence -Key "zip_name" -ExpectedValue $names.Zip -Label "$Runtime evidence"
     Assert-KeyEquals -Map $Evidence -Key "zip_sha256" -ExpectedValue $actualHash -Label "$Runtime evidence"
@@ -1013,6 +1097,10 @@ function Test-ReleasePublicationArtifact {
             if (-not [string]::IsNullOrWhiteSpace($checksumHash) -and -not [string]::IsNullOrWhiteSpace($stableZipHash)) {
                 Assert-True -Condition ($checksumHash -eq $stableZipHash) -Message "$runtime release publication checksum hash must match stable ZIP $stableZipFileName."
             }
+        }
+
+        if ($stableZipExists) {
+            Test-MacOsAppZipBundleLayout -ZipPath $stableZipPath -Runtime $runtime -Label "$runtime release publication stable ZIP $stableZipFileName"
         }
 
         $releaseEvidenceName = [string](Get-JsonPropertyValue -Object $asset -PropertyName "evidence")

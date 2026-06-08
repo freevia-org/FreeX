@@ -12232,6 +12232,7 @@ public sealed class MainWindow : Window
             HasNativeSaveMenuItem: HasNativeMenuItem(_saveMenuItem, "Save"),
             HasNativeSaveAsMenuItem: HasNativeMenuItem(_saveAsMenuItem, "Save As..."),
             HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, "Export to PDF...", requireGesture: false),
+            HasNativeShareWorkbookMenuItem: HasEnabledNativeMenuItem(_shareWorkbookMenuItem, "Share Workbook...", requireGesture: false),
             HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, "Workbook Statistics..."),
             HasNativeCloseWorkbookMenuItem: HasNativeMenuItem(_closeWorkbookMenuItem, "Close Workbook"),
             HasNativeNewSheetMenuItem: HasNativeMenuItem(_newSheetMenuItem, "New Sheet"),
@@ -12378,6 +12379,10 @@ public sealed class MainWindow : Window
     private static bool HasNativeMenuItem(NativeMenuItem item, string expectedHeader, bool requireGesture = true) =>
         string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal) &&
         (!requireGesture || item.Gesture is not null);
+
+    private static bool HasEnabledNativeMenuItem(NativeMenuItem item, string expectedHeader, bool requireGesture = true) =>
+        item.IsEnabled &&
+        HasNativeMenuItem(item, expectedHeader, requireGesture);
 
     private bool HasSheetTabButton(Func<Button, bool> predicate) =>
         _sheetTabsHost.Content is StackPanel panel &&

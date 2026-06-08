@@ -1,4 +1,5 @@
 using System.IO;
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -49,6 +50,11 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         script.Should().Contain("ExpectedRunId");
         script.Should().Contain("freex-<run-id>-<run-attempt>-macos-release-assets");
         script.Should().Contain("multiple downloaded macOS app artifact bundles");
+        script.Should().Contain("System.IO.Compression.ZipFile");
+        script.Should().Contain("Contents/Info.plist");
+        script.Should().Contain("Contents/MacOS/FreeX");
+        script.Should().Contain("Contents/MacOS/FreeX.dll");
+        script.Should().Contain("Contents/Resources/FreeX.icns");
         script.Should().Contain("macOS public-preview evidence preflight passed");
 
         signingRunbook.Should().Contain("tools/Test-MacOsPublicPreviewReadiness.ps1");
@@ -672,6 +678,22 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
     }
 
     [Fact]
+    public void ReadinessPreflight_FailsWhenAppZipIsPlainTextEvenWhenChecksumMatches()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false);
+        ReplaceSyntheticZipWithPlainTextAndRefreshChecksum(arm64);
+
+        var result = RunPreflight(temp.Path);
+
+        AssertPreflightRejected(
+            result,
+            "osx-arm64 app ZIP must be a readable ZIP archive",
+            "FreeX.app bundle layout");
+    }
+
+    [Fact]
     public void ReadinessPreflight_FailsWhenBundleMetadataEvidenceIsMissingOrStale()
     {
         using var temp = new TestTemporaryDirectory();
@@ -800,7 +822,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         Directory.CreateDirectory(bundleDirectory);
 
         var zipPath = Path.Combine(bundleDirectory, names.Zip);
-        File.WriteAllText(zipPath, $"Synthetic FreeX.app zip for {runtime}.");
+        CreateSyntheticMacOsAppZip(zipPath);
         var zipHash = ComputeSha256(zipPath);
         File.WriteAllText(Path.Combine(bundleDirectory, names.Checksum), $"{zipHash}  {names.Zip}{Environment.NewLine}");
 
@@ -1013,6 +1035,39 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         }
 
         return diagnosticsDirectory;
+    }
+
+    private static void CreateSyntheticMacOsAppZip(string zipPath)
+    {
+        if (File.Exists(zipPath))
+        {
+            File.Delete(zipPath);
+        }
+
+        using var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create);
+        AddTextEntry(archive, "FreeX.app/Contents/Info.plist", "<plist version=\"1.0\"><dict /></plist>");
+        AddTextEntry(archive, "FreeX.app\\Contents\\MacOS\\FreeX", "#!/bin/sh\n");
+        AddTextEntry(archive, "FreeX.app/Contents/MacOS/FreeX.dll", "FreeX managed entry assembly");
+        AddTextEntry(archive, "FreeX.app\\Contents\\Resources\\FreeX.icns", "icns");
+    }
+
+    private static void AddTextEntry(ZipArchive archive, string entryName, string contents)
+    {
+        var entry = archive.CreateEntry(entryName);
+        using var writer = new StreamWriter(entry.Open(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        writer.Write(contents);
+    }
+
+    private static void ReplaceSyntheticZipWithPlainTextAndRefreshChecksum(SyntheticBundle bundle)
+    {
+        var oldHash = ComputeSha256(bundle.ZipPath);
+        File.WriteAllText(bundle.ZipPath, $"This is not a ZIP archive for {bundle.Runtime}.");
+        var newHash = ComputeSha256(bundle.ZipPath);
+        var names = RuntimeArtifactNames.For(bundle.Runtime);
+        File.WriteAllText(
+            Path.Combine(bundle.BundleDirectory, names.Checksum),
+            $"{newHash}  {names.Zip}{Environment.NewLine}");
+        ReplaceInFile(bundle.EvidencePath, $"zip_sha256={oldHash}", $"zip_sha256={newHash}");
     }
 
     private static void MoveWrapperContentsUnderArtifactsSubdirectory(string root)

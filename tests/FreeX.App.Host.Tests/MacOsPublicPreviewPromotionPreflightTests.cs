@@ -17,6 +17,7 @@ public sealed class MacOsPublicPreviewPromotionPreflightTests
         script.Should().Contain("Test-MacOsHumanValidationChecklist.ps1");
         script.Should().Contain("-DistributionCandidate");
         script.Should().Contain("-RequireSeparateDiagnosticsArtifact");
+        script.Should().Contain("-RequireAggregateReadinessArtifact");
         script.Should().Contain("-RequireReleasePublicationArtifact");
         script.Should().Contain("PrepareHumanValidationHandoff");
         script.Should().Contain("macOS public-preview human validation handoff");
@@ -57,6 +58,7 @@ public sealed class MacOsPublicPreviewPromotionPreflightTests
         result.Output.Should().Contain("evidence:42:1:osx-arm64,osx-x64");
         result.Output.Should().Contain("distribution=True");
         result.Output.Should().Contain("diagnostics=True");
+        result.Output.Should().Contain("aggregate=True");
         result.Output.Should().Contain("release=True");
         result.Output.Should().Contain("human:osx-arm64:42:1:completed-macos-public-preview-checklist-osx-arm64.md");
         result.Output.Should().Contain("human:osx-x64:42:1:completed-macos-public-preview-checklist-osx-x64.md");
@@ -85,6 +87,7 @@ public sealed class MacOsPublicPreviewPromotionPreflightTests
         result.Output.Should().Contain("evidence:42:1:osx-arm64,osx-x64");
         result.Output.Should().Contain("distribution=True");
         result.Output.Should().Contain("diagnostics=True");
+        result.Output.Should().Contain("aggregate=True");
         result.Output.Should().Contain("release=True");
         result.Output.Should().NotContain("human:");
         result.Output.Should().Contain("macOS public-preview human validation handoff");
@@ -191,6 +194,7 @@ public sealed class MacOsPublicPreviewPromotionPreflightTests
                 [string]$ExpectedRunAttempt,
                 [switch]$DistributionCandidate,
                 [switch]$RequireSeparateDiagnosticsArtifact,
+                [switch]$RequireAggregateReadinessArtifact,
                 [switch]$RequireReleasePublicationArtifact
             )
 
@@ -207,11 +211,15 @@ public sealed class MacOsPublicPreviewPromotionPreflightTests
                 throw "diagnostics flag missing"
             }
 
+            if (-not $RequireAggregateReadinessArtifact.IsPresent) {
+                throw "aggregate readiness flag missing"
+            }
+
             if (-not $RequireReleasePublicationArtifact.IsPresent) {
                 throw "release publication flag missing"
             }
 
-            Write-Host ("evidence:{0}:{1}:{2}:distribution={3}:diagnostics={4}:release={5}" -f $ExpectedRunId, $ExpectedRunAttempt, ($Runtimes -join ","), $DistributionCandidate.IsPresent, $RequireSeparateDiagnosticsArtifact.IsPresent, $RequireReleasePublicationArtifact.IsPresent)
+            Write-Host ("evidence:{0}:{1}:{2}:distribution={3}:diagnostics={4}:aggregate={5}:release={6}" -f $ExpectedRunId, $ExpectedRunAttempt, ($Runtimes -join ","), $DistributionCandidate.IsPresent, $RequireSeparateDiagnosticsArtifact.IsPresent, $RequireAggregateReadinessArtifact.IsPresent, $RequireReleasePublicationArtifact.IsPresent)
             """);
         return path;
     }
