@@ -102,6 +102,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-MacOsPublicPr
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-MacOsPublicPreviewReadiness.ps1 -ArtifactRoot artifacts/macos-preview -ExpectedRunId <run-id> -ExpectedRunAttempt <run-attempt> -DistributionCandidate -RequireSeparateDiagnosticsArtifact -RequireReleasePublicationArtifact
 ```
 
+When the hosted evidence is ready and both runtime-specific human checklists have been completed as `completed-macos-public-preview-checklist-osx-arm64.md` and `completed-macos-public-preview-checklist-osx-x64.md` beside the artifacts, run the combined promotion gate:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-MacOsPublicPreviewPromotion.ps1 -ArtifactRoot artifacts/macos-preview -ChecklistRoot artifacts/macos-preview -ExpectedRunId <run-id> -ExpectedRunAttempt <run-attempt>
+```
+
 ### macOS App Preview Tester Instructions
 
 This is a preview validation path, not a public release channel. Use `osx-arm64` for Apple Silicon Macs and `osx-x64` for Intel Macs. GitHub downloads the result as an Actions artifact wrapper; unzip that wrapper first, then use the files inside it:
