@@ -95,11 +95,20 @@ internal static class XlsxChartAxisReader
     private static string? ReadAxisTitle(XElement? axisElement) =>
         FirstNonBlankTitleText(AxisTitle(axisElement));
 
-    private static string? FirstNonBlankTitleText(XElement? titleElement) =>
-        titleElement?
-            .Descendants(DrawingNs + "t")
-            .Select(element => element.Value)
-            .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text));
+    private static string? FirstNonBlankTitleText(XElement? titleElement)
+    {
+        if (titleElement is null)
+            return null;
+
+        foreach (var textElement in titleElement.Descendants(DrawingNs + "t"))
+        {
+            var text = textElement.Value;
+            if (!string.IsNullOrWhiteSpace(text))
+                return text;
+        }
+
+        return null;
+    }
 
     private static void ApplyAxisTitleFormatting(XElement? axisElement, ChartModel chart)
     {
@@ -194,22 +203,35 @@ internal static class XlsxChartAxisReader
     }
 
     private static XElement? FirstRunProperties(XElement? element) =>
-        element?
-            .Descendants(DrawingNs + "rPr")
-            .FirstOrDefault();
+        FirstDescendant(element, DrawingNs + "rPr");
 
     private static XElement? FirstTextRunProperties(XElement? textProperties) =>
-        textProperties?
-            .Descendants(DrawingNs + "defRPr")
-            .Concat(textProperties.Descendants(DrawingNs + "rPr"))
-            .FirstOrDefault();
+        FirstDescendant(textProperties, DrawingNs + "defRPr")
+        ?? FirstDescendant(textProperties, DrawingNs + "rPr");
+
+    private static XElement? FirstDescendant(XElement? element, XName name)
+    {
+        if (element is null)
+            return null;
+
+        foreach (var descendant in element.Descendants(name))
+            return descendant;
+
+        return null;
+    }
 
     private static XElement? FindAxisById(IEnumerable<XElement> axes, string? axisId)
     {
         if (string.IsNullOrWhiteSpace(axisId))
             return null;
 
-        return axes.FirstOrDefault(axis => axis.Element(ChartNs + "axId")?.Attribute("val")?.Value == axisId);
+        foreach (var axis in axes)
+        {
+            if (axis.Element(ChartNs + "axId")?.Attribute("val")?.Value == axisId)
+                return axis;
+        }
+
+        return null;
     }
 
     private static void ApplyValueAxisProperties(XElement? axisElement, ChartModel chart, bool useXAxis)
