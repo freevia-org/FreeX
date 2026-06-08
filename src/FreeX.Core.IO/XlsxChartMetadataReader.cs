@@ -79,10 +79,7 @@ internal static class XlsxChartMetadataReader
 
     private static void ApplyPivotChartFieldButtonMetadata(XElement? chartElement, ChartModel chart)
     {
-        var pivotOptions = chartElement?
-            .Element(ChartNs + "extLst")?
-            .Descendants(Chart14Ns + "pivotOptions")
-            .FirstOrDefault();
+        var pivotOptions = FirstDescendant(chartElement?.Element(ChartNs + "extLst"), Chart14Ns + "pivotOptions");
         if (pivotOptions is null)
             return;
 
@@ -254,9 +251,7 @@ internal static class XlsxChartMetadataReader
 
     private static void ApplyDefaultTextProperties(XElement? textPropertiesRoot, ChartModel chart)
     {
-        var runProperties = textPropertiesRoot?
-            .Descendants(DrawingNs + "defRPr")
-            .FirstOrDefault();
+        var runProperties = FirstDescendant(textPropertiesRoot, DrawingNs + "defRPr");
         if (runProperties is null)
             return;
 
@@ -274,5 +269,16 @@ internal static class XlsxChartMetadataReader
             chart.ChartDefaultTextColor = color;
             chart.ChartDefaultTextThemeColor = null;
         }
+    }
+
+    private static XElement? FirstDescendant(XElement? element, XName name)
+    {
+        if (element is null)
+            return null;
+
+        foreach (var descendant in element.Descendants(name))
+            return descendant;
+
+        return null;
     }
 }
