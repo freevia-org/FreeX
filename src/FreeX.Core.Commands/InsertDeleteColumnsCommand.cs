@@ -45,7 +45,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         var (maxOccupied, movedSnapshot) = CaptureMovedCells(sheet);
         if (maxOccupied > 0 && maxOccupied + _count > Model.CellAddress.MaxCol)
             return new CommandOutcome(false,
-                ErrorMessage: $"Cannot insert {_count} column(s): data would be pushed past the last column ({Model.CellAddress.MaxCol}).");
+                ErrorMessage: CommandGuards.CannotInsertColumnsPastLastColumn(_count));
 
         _addressStateSnapshot = RowColumnShiftHelpers.CaptureAddressBearingState(ctx.Workbook, sheet);
 

@@ -10,6 +10,12 @@ public enum OutlineGroupingAxis
 
 public static class OutlineGroupingService
 {
+    public static void ValidateOutlineLevel(int level)
+    {
+        if (level is < 0 or > 8)
+            throw new ArgumentOutOfRangeException(nameof(level), "Outline level must be 0–8.");
+    }
+
     public static OutlineGroupingAxis GetGroupingAxis(GridRange range) =>
         SelectionRangeService.IsWholeColumnSelection(range)
             ? OutlineGroupingAxis.Columns

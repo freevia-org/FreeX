@@ -7,9 +7,6 @@ namespace FreeX.Core.IO;
 internal static class XlsxConnectionQueryTableSchemaNormalizer
 {
     private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-    private static readonly XNamespace RelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-    private static readonly XNamespace PackageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-    private const string QueryTableRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/queryTable";
 
     private static readonly string[] ConnectionUnsignedIntAttributes =
     [
@@ -141,92 +138,24 @@ internal static class XlsxConnectionQueryTableSchemaNormalizer
 
     private static void NormalizeWorksheetQueryTableParts(ZipArchive archive)
     {
-        foreach (var entry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
+        foreach (var entry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry).ToList())
         {
             var document = XlsxPackageXmlEditor.LoadXml(entry);
             var root = document.Root;
             if (root is null)
                 continue;
 
+            // Query table parts are preserved through worksheet relationships, not a worksheet child element.
             var changed = false;
-            var worksheetPath = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
-            var validRelationshipIds = GetValidQueryTableRelationshipIds(archive, worksheetPath);
             foreach (var queryTableParts in root.Elements(WorksheetNs + "queryTableParts").ToList())
-                changed |= NormalizeQueryTablePartsElement(queryTableParts, validRelationshipIds);
+            {
+                queryTableParts.Remove();
+                changed = true;
+            }
 
             if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(archive, entry.FullName, document);
         }
-    }
-
-    private static bool NormalizeQueryTablePartsElement(
-        XElement queryTableParts,
-        IReadOnlySet<string> validRelationshipIds)
-    {
-        var changed = false;
-        foreach (var queryTablePart in queryTableParts.Elements(WorksheetNs + "queryTablePart").ToList())
-        {
-            var relationshipId = queryTablePart.Attribute(RelNs + "id")?.Value;
-            if (string.IsNullOrWhiteSpace(relationshipId) ||
-                !validRelationshipIds.Contains(relationshipId))
-            {
-                queryTablePart.Remove();
-                changed = true;
-            }
-        }
-
-        var queryTablePartCount = queryTableParts
-            .Elements(WorksheetNs + "queryTablePart")
-            .Count();
-        if (queryTablePartCount == 0)
-        {
-            queryTableParts.Remove();
-            return true;
-        }
-
-        changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(
-            queryTableParts,
-            "count",
-            queryTablePartCount.ToString(CultureInfo.InvariantCulture));
-        return changed;
-    }
-
-    private static IReadOnlySet<string> GetValidQueryTableRelationshipIds(ZipArchive archive, string worksheetPath)
-    {
-        var relationshipsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(worksheetPath));
-        if (relationshipsEntry is null)
-            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        XDocument relationshipsXml;
-        try
-        {
-            relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
-        }
-        catch
-        {
-            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        }
-
-        var relationshipIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var relationship in relationshipsXml.Root?.Elements(PackageRelNs + "Relationship") ?? [])
-        {
-            var id = relationship.Attribute("Id")?.Value;
-            if (string.IsNullOrWhiteSpace(id) ||
-                !string.Equals(relationship.Attribute("Type")?.Value, QueryTableRelationshipType, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            var target = relationship.Attribute("Target")?.Value;
-            var targetPart = XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, target ?? "");
-            if (IsQueryTablePartPath(targetPart) &&
-                archive.GetEntry(targetPart) is not null)
-            {
-                relationshipIds.Add(id);
-            }
-        }
-
-        return relationshipIds;
     }
 
     private static bool NormalizeRequiredUnsignedIntAttribute(XElement element, string attributeName, int fallbackValue)
@@ -236,24 +165,7 @@ internal static class XlsxConnectionQueryTableSchemaNormalizer
         return XlsxXmlNormalizationHelpers.SetAttributeIfChanged(element, attributeName, normalized);
     }
 
-    private static bool IsQueryTableXmlEntry(ZipArchiveEntry entry)
-    {
-        var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
-        return path.StartsWith("xl/queryTables/", StringComparison.OrdinalIgnoreCase) &&
-               path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
-               !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool IsQueryTableXmlEntry(ZipArchiveEntry entry) =>
+        XlsxPackagePath.IsXmlEntryInDirectory(entry, "xl/queryTables/");
 
-    private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
-    {
-        var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
-        return path.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
-               path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
-               !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool IsQueryTablePartPath(string path) =>
-        path.StartsWith("xl/queryTables/", StringComparison.OrdinalIgnoreCase) &&
-        path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
-        !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
 }
