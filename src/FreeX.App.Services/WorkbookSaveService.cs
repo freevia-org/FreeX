@@ -1,9 +1,6 @@
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
-
-[assembly: InternalsVisibleTo("FreeX.App.Services.Tests")]
 
 namespace FreeX.App.Services;
 
