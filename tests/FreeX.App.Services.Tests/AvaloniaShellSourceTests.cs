@@ -1305,17 +1305,24 @@ public sealed class AvaloniaShellSourceTests
         sessionSource.Should().Contain("public bool CanSortSelectedRange => SelectedRange.RowCount > 1;");
         sessionSource.Should().Contain("public WorkbookCellEditResult SortSelectedRange(bool ascending)");
         sessionSource.Should().Contain("new SortCommand(sheetId, sheetRange, sortByColOffset: 0, ascending)");
+        sessionSource.Should().Contain("public WorkbookCellEditResult SortSelectedRange(IReadOnlyList<CoreSortKey> sortKeys, SortOptions options, bool hasHeaders)");
+        sessionSource.Should().Contain("SortDialogPlanner.ExcludeHeaderRow(range, hasHeaders)");
+        sessionSource.Should().Contain("new SortCommand(sheetId, sheetRange, sortKeys, options)");
         sessionSource.Should().Contain("\"Select at least two rows to sort.\"");
 
         source.Should().Contain("private readonly NativeMenuItem _sortAscendingMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _sortDescendingMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _customSortMenuItem = new();");
         source.Should().Contain("_sortAscendingMenuItem.Header = \"Sort A to Z\";");
         source.Should().Contain("_sortAscendingMenuItem.Click += (_, _) => SortSelectedRange(ascending: true);");
         source.Should().Contain("_sortDescendingMenuItem.Header = \"Sort Z to A\";");
         source.Should().Contain("_sortDescendingMenuItem.Click += (_, _) => SortSelectedRange(ascending: false);");
+        source.Should().Contain("_customSortMenuItem.Header = \"Sort...\";");
+        source.Should().Contain("_customSortMenuItem.Click += async (_, _) => await ShowSortDialogAsync();");
         source.Should().Contain("var dataMenu = new NativeMenu();");
         source.Should().Contain("dataMenu.Items.Add(_sortAscendingMenuItem);");
         source.Should().Contain("dataMenu.Items.Add(_sortDescendingMenuItem);");
+        source.Should().Contain("dataMenu.Items.Add(_customSortMenuItem);");
         source.Should().Contain("Header = \"Data\",");
         source.Should().Contain("Menu = dataMenu,");
         source.Should().Contain("var hasNativeDataMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>");
@@ -1323,10 +1330,28 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("HasNativeDataMenu: hasNativeDataMenu");
         source.Should().Contain("_sortAscendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;");
         source.Should().Contain("_sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;");
+        source.Should().Contain("_customSortMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;");
         source.Should().Contain("private void SortSelectedRange(bool ascending)");
         source.Should().Contain("var result = _session.SortSelectedRange(ascending);");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Sort failed.\");");
         source.Should().Contain("RefreshShell($\"Sorted {rangeReference} {(ascending ? \"A to Z\" : \"Z to A\")}\");");
+        source.Should().Contain("private async Task ShowSortDialogAsync()");
+        source.Should().Contain("var selection = await ShowSortInputDialogAsync();");
+        source.Should().Contain("var keys = SortDialogPlanner.BuildSortKeys(selection.Levels);");
+        source.Should().Contain("var options = new SortOptions(CaseSensitive: false, LeftToRight: false);");
+        source.Should().Contain("var result = _session.SortSelectedRange(keys, options, selection.HasHeaders);");
+        source.Should().Contain("private async Task<SortDialogResult?> ShowSortInputDialogAsync()");
+        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"SortCompactDialog\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(headersCheck, \"SortHeadersCheckBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(addLevelButton, \"SortAddLevelButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"SortOkButton\");");
+        source.Should().Contain("SortDialogPlanner.BuildColumnChoices(_session.ActiveSheet, range, hasHeaders: true)");
+        source.Should().Contain("SortDialogPlanner.BuildColumnChoices(_session.ActiveSheet, range, hasHeaders: false)");
+        source.Should().Contain("SortDialogPlanner.BuildOrderChoices(SortDialogPlannerText.Default.SortOnCellValues)");
+        source.Should().Contain("levels = SortDialogPlanner.AddLevel(levels).ToList();");
+        source.Should().Contain("levels = SortDialogPlanner.RemoveLevel(levels, removeIndex).ToList();");
+        source.Should().Contain("SortDialogPlanner.UpdateLevel(levels, levelIndex, columnChoice.Value.ColumnOffset, levels[levelIndex].Ascending)");
+        source.Should().Contain("macOS preview custom sort supports cell values by column; color, custom-list, case-sensitive, and left-to-right options remain WPF-only.");
         source.Should().Contain("HasNativeSortAscendingMenuItem: HasNativeMenuItem(_sortAscendingMenuItem, \"Sort A to Z\", requireGesture: false)");
         source.Should().Contain("HasNativeSortDescendingMenuItem: HasNativeMenuItem(_sortDescendingMenuItem, \"Sort Z to A\", requireGesture: false)");
         smokeSource.Should().Contain("HasNativeDataMenu &&");
@@ -1344,8 +1369,6 @@ public sealed class AvaloniaShellSourceTests
         formatMenuIndex.Should().BeGreaterThanOrEqualTo(0);
         editMenuIndex.Should().BeLessThan(dataMenuIndex);
         dataMenuIndex.Should().BeLessThan(formatMenuIndex);
-        source.Should().NotContain("SortDialog");
-        source.Should().NotContain("Custom Sort");
     }
 
     [Fact]

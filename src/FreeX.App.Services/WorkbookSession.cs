@@ -2,6 +2,7 @@ using System.Globalization;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using CoreSortKey = FreeX.Core.Commands.SortKey;
 
 namespace FreeX.App.Services;
 
@@ -1540,6 +1541,37 @@ public sealed class WorkbookSession
                 range,
                 "Sort",
                 (sheetId, sheetRange) => new SortCommand(sheetId, sheetRange, sortByColOffset: 0, ascending)));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
+    public WorkbookCellEditResult SortSelectedRange(IReadOnlyList<CoreSortKey> sortKeys, SortOptions options, bool hasHeaders)
+    {
+        ArgumentNullException.ThrowIfNull(sortKeys);
+        ArgumentNullException.ThrowIfNull(options);
+
+        if (!CanSortSelectedRange)
+        {
+            return new WorkbookCellEditResult(
+                false,
+                "Select at least two rows to sort.",
+                [],
+                RecalcReport: null);
+        }
+
+        var range = SelectedRange;
+        var sortRange = options.LeftToRight
+            ? range
+            : SortDialogPlanner.ExcludeHeaderRow(range, hasHeaders);
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            CreateRangeCommand(
+                sortRange,
+                "Sort",
+                (sheetId, sheetRange) => new SortCommand(sheetId, sheetRange, sortKeys, options)));
         if (!result.Success)
             return result;
 
