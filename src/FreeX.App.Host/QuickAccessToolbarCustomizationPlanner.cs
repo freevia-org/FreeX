@@ -50,7 +50,16 @@ internal static class QuickAccessToolbarCustomizationPlanner
         if (!QuickAccessToolbarCatalog.TryGet(commandId, out var command))
             return normalizedCommandIds;
 
-        var index = normalizedCommandIds.FindIndex(id => string.Equals(id, command.Id, StringComparison.OrdinalIgnoreCase));
+        var index = -1;
+        for (var i = 0; i < normalizedCommandIds.Count; i++)
+        {
+            if (!string.Equals(normalizedCommandIds[i], command.Id, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            index = i;
+            break;
+        }
+
         if (action == QuickAccessToolbarCustomizationAction.Add)
         {
             if (index < 0)

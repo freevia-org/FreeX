@@ -307,7 +307,16 @@ public partial class MainWindow
         if (!TryGetActivePivotTable(out _, out var pivotTable))
             return;
 
-        var cache = _workbook.PivotCaches.FirstOrDefault(item => item.CacheId == pivotTable.CacheId);
+        PivotCacheModel? cache = null;
+        foreach (var item in _workbook.PivotCaches)
+        {
+            if (item.CacheId != pivotTable.CacheId)
+                continue;
+
+            cache = item;
+            break;
+        }
+
         var dialog = new PivotTableOptionsDialog(pivotTable, cache) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;

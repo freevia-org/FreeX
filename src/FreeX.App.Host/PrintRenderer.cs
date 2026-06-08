@@ -466,7 +466,14 @@ public static partial class PrintRenderer
         return true;
     }
 
-    private static SheetId? ResolveSheetIdByName(Workbook workbook, string sheetName) =>
-        workbook.Sheets.FirstOrDefault(sheet =>
-            string.Equals(sheet.Name, sheetName, StringComparison.OrdinalIgnoreCase))?.Id;
+    private static SheetId? ResolveSheetIdByName(Workbook workbook, string sheetName)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (string.Equals(sheet.Name, sheetName, StringComparison.OrdinalIgnoreCase))
+                return sheet.Id;
+        }
+
+        return null;
+    }
 }

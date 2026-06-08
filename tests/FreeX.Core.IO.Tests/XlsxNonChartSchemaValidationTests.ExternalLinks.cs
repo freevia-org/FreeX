@@ -68,12 +68,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceExternalLinkRelationships.ToString(SaveOptions.DisableFormatting));
-
-        saved.Position = 0;
-        adapter.Load(saved).ExternalLinks.Should().ContainSingle(link =>
-            link.PackagePart == "xl/externalLinks/externalLink1.xml" &&
-            link.TargetUri == "linked-workbook.xlsx" &&
-            link.TargetMode == "External");
+        AssertReloadedExternalLinkModel(adapter, saved);
     }
 
     [Fact]
@@ -114,12 +109,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         externalReference.Attribute(relNs + "id")!.Value.Should().Be("rIdFreeXExternalLink");
         externalReference.Attribute("customExternalReferenceFlag").Should().BeNull();
         externalReference.Elements().Should().BeEmpty();
-
-        saved.Position = 0;
-        adapter.Load(saved).ExternalLinks.Should().ContainSingle(link =>
-            link.PackagePart == "xl/externalLinks/externalLink1.xml" &&
-            link.TargetUri == "linked-workbook.xlsx" &&
-            link.TargetMode == "External");
+        AssertReloadedExternalLinkModel(adapter, saved);
     }
 
     [Fact]
@@ -176,12 +166,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         definedName.Attribute("sheetId")!.Value.Should().Be("0");
         definedName.Attribute("customDefinedNameFlag").Should().BeNull();
         definedName.Elements().Should().BeEmpty();
-
-        saved.Position = 0;
-        adapter.Load(saved).ExternalLinks.Should().ContainSingle(link =>
-            link.PackagePart == "xl/externalLinks/externalLink1.xml" &&
-            link.TargetUri == "linked-workbook.xlsx" &&
-            link.TargetMode == "External");
+        AssertReloadedExternalLinkModel(adapter, saved);
     }
 
     private static MemoryStream CreateExternalLinkSourcePackage()
@@ -364,6 +349,18 @@ public sealed partial class XlsxNonChartSchemaValidationTests
                 relationship.Attribute("TargetMode")?.Value == "External")
             .Should()
             .ContainSingle();
+    }
+
+    private static void AssertReloadedExternalLinkModel(XlsxFileAdapter adapter, Stream stream)
+    {
+        stream.Position = 0;
+        var reloaded = adapter.Load(stream);
+
+        reloaded.GetSheetAt(0).GetCell(3, 3)!.Value.Should().Be(new NumberValue(42));
+        reloaded.ExternalLinks.Should().ContainSingle(link =>
+            link.PackagePart == "xl/externalLinks/externalLink1.xml" &&
+            link.TargetUri == "linked-workbook.xlsx" &&
+            link.TargetMode == "External");
     }
 
     private static void SetWorkbookExternalReferencesInvalidAttributes(MemoryStream stream)

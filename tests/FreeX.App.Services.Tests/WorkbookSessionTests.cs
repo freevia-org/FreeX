@@ -263,6 +263,62 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void OpenSelectedHyperlink_NavigatesDocumentReferenceWithoutDirtyingWorkbook()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var dataSheet = workbook.AddSheet("Data Sheet");
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var expectedRange = new GridRange(
+            new CellAddress(dataSheet.Id, 2, 2),
+            new CellAddress(dataSheet.Id, 4, 3));
+        sheet.Hyperlinks[source] = " 'Data Sheet'!B2:C4 ";
+        sheet.HyperlinkMetadata[source] = new HyperlinkMetadata(HyperlinkTargetKind.PlaceInThisDocument);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(source);
+        session.CanOpenSelectedHyperlink.Should().BeTrue();
+
+        var result = session.OpenSelectedHyperlink();
+
+        result.Success.Should().BeTrue();
+        result.SelectedRange.Should().Be(expectedRange);
+        session.ActiveSheet.Id.Should().Be(dataSheet.Id);
+        session.SelectedRange.Should().Be(expectedRange);
+        session.ActiveCell.Should().Be(expectedRange.Start);
+        session.FormulaEditAddress.Should().BeNull();
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public void OpenSelectedHyperlink_LeavesExternalUrlUnsupportedWithoutNavigation()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var source = new CellAddress(sheet.Id, 1, 1);
+        sheet.Hyperlinks[source] = "https://example.test/report";
+        sheet.HyperlinkMetadata[source] = new HyperlinkMetadata(HyperlinkTargetKind.ExistingFileOrWebPage);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(source);
+
+        var result = session.OpenSelectedHyperlink();
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be("External hyperlinks are not supported on this platform.");
+        session.ActiveSheet.Id.Should().Be(sheet.Id);
+        session.SelectedRange.Should().Be(new GridRange(source, source));
+        session.ActiveCell.Should().Be(source);
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
     public void GoToSpecial_SelectsBlanksWithoutDirtyingWorkbook()
     {
         var workbook = CreateWorkbook();

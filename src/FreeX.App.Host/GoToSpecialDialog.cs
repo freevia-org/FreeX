@@ -178,8 +178,13 @@ public sealed class GoToSpecialDialog : Window
         _errorsBox.IsEnabled = enabled;
     }
 
-    private RadioButton? FirstButton() =>
-        _buttons.FirstOrDefault();
+    private RadioButton? FirstButton()
+    {
+        foreach (var button in _buttons)
+            return button;
+
+        return null;
+    }
 
     private RadioButton? SelectedButton()
     {

@@ -63,9 +63,16 @@ public static class ProtectionDialogPlanner
             .Distinct()
             .ToList();
 
-    public static string FormatSheetPermission(SheetProtectionPermission permission) =>
-        SheetPermissionChoices.FirstOrDefault(choice => choice.Permission == permission).Label
-        ?? permission.ToString();
+    public static string FormatSheetPermission(SheetProtectionPermission permission)
+    {
+        foreach (var choice in SheetPermissionChoices)
+        {
+            if (choice.Permission == permission)
+                return choice.Label ?? permission.ToString();
+        }
+
+        return permission.ToString();
+    }
 
     public static bool PasswordsMatch(string? password, string? confirmation) =>
         string.Equals(password ?? "", confirmation ?? "", StringComparison.Ordinal);

@@ -139,8 +139,19 @@ public partial class MainWindow
 
     private CellAddress EnsureAutoFilterFlyoutTourContext()
     {
-        var sheet = _workbook.GetSheet(_currentSheetId) ?? _workbook.Sheets.FirstOrDefault()
-            ?? throw new InvalidOperationException("AutoFilter flyout tour requires an active worksheet.");
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+        {
+            foreach (var candidate in _workbook.Sheets)
+            {
+                sheet = candidate;
+                break;
+            }
+        }
+
+        if (sheet is null)
+            throw new InvalidOperationException("AutoFilter flyout tour requires an active worksheet.");
+
         _currentSheetId = sheet.Id;
 
         var headers = new[] { "score", "name", "date", "note" };

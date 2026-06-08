@@ -1,5 +1,4 @@
 using System.IO;
-using System.Linq;
 using System.Windows.Media.Imaging;
 
 namespace FreeX.App.Host;
@@ -34,7 +33,13 @@ public static class ImageDimensionDecoder
                 stream,
                 BitmapCreateOptions.PreservePixelFormat,
                 BitmapCacheOption.OnLoad);
-            var frame = decoder.Frames.FirstOrDefault();
+            BitmapFrame? frame = null;
+            foreach (var candidate in decoder.Frames)
+            {
+                frame = candidate;
+                break;
+            }
+
             if (frame is null || frame.PixelWidth <= 0 || frame.PixelHeight <= 0)
                 return false;
 

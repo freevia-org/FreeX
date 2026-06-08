@@ -17453,6 +17453,16 @@ internal static class ExcelOpenSmoke
                 ]
             };
         }
+        else if (string.Equals(row.Id, "generated-threaded-comments-001", StringComparison.OrdinalIgnoreCase))
+        {
+            expectations = EnsureExpectations() with
+            {
+                MinFreeXPreSaveComments = 1,
+                MinExcelOpenedComments = 1,
+                MinExcelReopenedComments = reopen,
+                MinFreeXReopenedComments = reopen
+            };
+        }
         else if (string.Equals(row.Id, "generated-header-footer-legacy-drawing-001", StringComparison.OrdinalIgnoreCase))
         {
             expectations = EnsureExpectations() with
@@ -17503,7 +17513,9 @@ internal static class ExcelOpenSmoke
                         "xl/worksheets/_rels/sheet1.xml.rels",
                         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing",
                         "xl/drawings/vmlDrawing1.vml")
-                ]
+                ],
+                MinExcelOpenedHeaderFooterSheets = 1,
+                MinExcelReopenedHeaderFooterSheets = reopen
             };
         }
         else if (string.Equals(row.Id, "generated-worksheet-legacy-drawing-001", StringComparison.OrdinalIgnoreCase))
@@ -17798,6 +17810,13 @@ internal static class ExcelOpenSmoke
                 ]
             };
         }
+        else if (string.Equals(row.Id, "generated-dv-count-package-003", StringComparison.OrdinalIgnoreCase))
+        {
+            expectations = EnsureExpectations() with
+            {
+                MinFreeXReopenedDataValidations = saveReopen ? 10 : 0
+            };
+        }
         else if (string.Equals(row.Id, "generated-table-ref-formulas-package-003", StringComparison.OrdinalIgnoreCase))
         {
             expectations = EnsureExpectations() with
@@ -17865,7 +17884,6 @@ internal static class ExcelOpenSmoke
         return
             tags.Contains("unsupported-chart-family") ||
             tags.Contains("embedded-objects") ||
-            tags.Contains("threaded-comments") ||
             tags.Contains("track-changes") ||
             tags.Contains("revision-history") ||
             tags.Contains("form-controls") ||

@@ -106,8 +106,8 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Be(sourceVmlRelationships.ToString(SaveOptions.DisableFormatting));
         ReadHeaderFooterImageBytes(saved, sourceVmlPath).Should().Equal(sourceImageBytes);
 
-        saved.Position = 0;
-        var reloadedSheet = new XlsxFileAdapter().Load(saved).GetSheetAt(0);
+        var reloadedSheet = AssertReloadedPageHeaderPictures(saved, expectedPictureCount: 1);
+        reloadedSheet.GetCell(3, 3)!.Value.Should().Be(new NumberValue(42));
         reloadedSheet.PageHeader.Should().Be(new WorksheetHeaderFooter("&[Picture]", "", ""));
         reloadedSheet.PageHeaderPictures.Left.Should().NotBeNull();
         reloadedSheet.PageHeaderPictures.Left!.ImageBytes.Should().Equal(sourceImageBytes);

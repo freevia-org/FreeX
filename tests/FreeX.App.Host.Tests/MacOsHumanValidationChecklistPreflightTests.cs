@@ -20,6 +20,9 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
         script.Should().Contain("ExpectedRunAttempt");
         script.Should().Contain("Public-Preview Decision");
         script.Should().Contain("Accessibility Known Issues");
+        script.Should().Contain("Future Native Share Sheet Readiness");
+        script.Should().Contain("Test-NativeShareSheetReadiness");
+        script.Should().Contain("Native AppKit share sheet implementation status");
         script.Should().Contain("Release owner accepts this runtime for public preview");
         script.Should().Contain("macOS human validation checklist passed");
 
@@ -27,6 +30,9 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
         checklist.Should().Contain("-ExpectedRuntime osx-arm64");
         checklist.Should().Contain("-ExpectedRunId <run-id>");
         checklist.Should().Contain("-ExpectedRunAttempt <run-attempt>");
+        checklist.Should().Contain("## Future Native Share Sheet Readiness");
+        checklist.Should().Contain("a native AppKit share sheet is not implemented yet");
+        checklist.Should().Contain("| Native AppKit share sheet implementation status |");
         checklist.Should().Contain("## Accessibility Known Issues");
     }
 
@@ -290,6 +296,47 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
     }
 
     [Fact]
+    public void HumanValidationChecklistPreflight_FailsWhenNativeShareSheetNotImplementedRowsAreMixed()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var checklistPath = Path.Combine(temp.Path, "mixed-native-share-sheet-macos-human-checklist.md");
+        var checklist = CreateCompletedChecklist()
+            .Replace(
+                "| Saved workbook opens native share sheet | saved workbook opens sheet | Not run because native AppKit share sheet is not implemented in this candidate | Not implemented | release notes |",
+                "| Saved workbook opens native share sheet | saved workbook opens sheet | tester marked a pass even though native AppKit share sheet is not implemented | Pass | release notes |");
+        File.WriteAllText(checklistPath, checklist);
+
+        var result = RunChecklistPreflight(
+            checklistPath,
+            "-ExpectedRuntime osx-arm64 -ExpectedRunId 42 -ExpectedRunAttempt 1");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("Future Native Share Sheet Readiness 'Saved workbook opens native share sheet' status must be one of: Not implemented. Actual value: 'Pass'.");
+        result.CombinedOutput.Should().Contain("macOS human validation checklist failed");
+    }
+
+    [Fact]
+    public void HumanValidationChecklistPreflight_FailsWhenImplementedNativeShareSheetRowsDoNotPass()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var checklistPath = Path.Combine(temp.Path, "partial-native-share-sheet-macos-human-checklist.md");
+        var checklist = CreateCompletedChecklist()
+            .Replace(
+                "| Native AppKit share sheet implementation status | native share sheet implementation | Native AppKit share sheet is not implemented in this candidate; existing share fallback is current route | Not implemented | release notes |",
+                "| Native AppKit share sheet implementation status | native share sheet implementation | Native AppKit share sheet is implemented in this candidate | Pass | implementation evidence |");
+        File.WriteAllText(checklistPath, checklist);
+
+        var result = RunChecklistPreflight(
+            checklistPath,
+            "-ExpectedRuntime osx-arm64 -ExpectedRunId 42 -ExpectedRunAttempt 1");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("Future Native Share Sheet Readiness 'Saved workbook opens native share sheet' status must be one of: Pass. Actual value: 'Not implemented'.");
+        result.CombinedOutput.Should().Contain("Future Native Share Sheet Readiness 'Existing share fallback still works' status must be one of: Pass. Actual value: 'Not implemented'.");
+        result.CombinedOutput.Should().Contain("macOS human validation checklist failed");
+    }
+
+    [Fact]
     public void HumanValidationChecklistPreflight_FailsWhenImportantTemplateRowsAreOmitted()
     {
         var missingRows = new (string Section, string Label)[]
@@ -300,6 +347,15 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
             ("Command-Key Menu Behavior", "Cmd+A"),
             ("Command-Key Menu Behavior", "Cmd+F and Find Next menu route"),
             ("Command-Key Menu Behavior", "Cmd+B, Cmd+I, Cmd+U"),
+            ("Finder And File Association", "Drag supported .fxl/.xlsx workbook onto FreeX.app or Dock icon"),
+            ("Finder And File Association", "Drag supported workbook from Finder onto already-running FreeX window"),
+            ("Future Native Share Sheet Readiness", "Native AppKit share sheet implementation status"),
+            ("Future Native Share Sheet Readiness", "Saved workbook opens native share sheet"),
+            ("Future Native Share Sheet Readiness", "Cancel leaves workbook and file unchanged"),
+            ("Future Native Share Sheet Readiness", "Share target receives workbook file"),
+            ("Future Native Share Sheet Readiness", "Existing share fallback still works"),
+            ("Future Native Share Sheet Readiness", "Keyboard focus after open and cancel"),
+            ("Future Native Share Sheet Readiness", "VoiceOver announcement and navigation"),
             ("Keyboard-Only Accessibility", "Formula box edits"),
             ("Keyboard-Only Accessibility", "Sheet tabs"),
             ("Keyboard-Only Accessibility", "Context menus"),
@@ -464,7 +520,9 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
             | Double-click .fxl in Finder | opens workbook | opened selected workbook | Pass | screenshot |
             | Confirm workbook identity | identity matches | expected sheet visible | Pass | screenshot |
             | Right-click .fxl > Open With > FreeX | opens file | opened through Open With | Pass | screenshot |
+            | Drag supported .fxl/.xlsx workbook onto FreeX.app or Dock icon | opens dropped workbook | opened dropped workbook through app icon | Pass | screenshot |
             | Repeat while FreeX is already running | opens in session | opened in existing session | Pass | screenshot |
+            | Drag supported workbook from Finder onto already-running FreeX window | accepts Finder drop | running window opened dropped workbook | Pass | screenshot |
             | Optional spreadsheet file Open With | opens representative spreadsheet when in scope | spreadsheet Open With was out of candidate scope | N/A | notes |
 
             ## Workbook Smoke
@@ -477,6 +535,18 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
             | Close dirty workbook | prompt choices clear | Save, Discard, and Cancel reachable | Pass | screenshot |
             | Reopen saved workbook | values survive | reopened expected values | Pass | screenshot |
             | Recent files | recent route updated | saved workbook appeared in recent files | Pass | screenshot |
+
+            ## Future Native Share Sheet Readiness
+
+            | Gate | Expected result when native AppKit share sheet is implemented | Actual result | Status | Evidence |
+            | --- | --- | --- | --- | --- |
+            | Native AppKit share sheet implementation status | native share sheet implementation | Native AppKit share sheet is not implemented in this candidate; existing share fallback is current route | Not implemented | release notes |
+            | Saved workbook opens native share sheet | saved workbook opens sheet | Not run because native AppKit share sheet is not implemented in this candidate | Not implemented | release notes |
+            | Cancel leaves workbook and file unchanged | cancel is non-destructive | Not run because native AppKit share sheet is not implemented in this candidate | Not implemented | release notes |
+            | Share target receives workbook file | target receives workbook file | Not run because native AppKit share sheet is not implemented in this candidate | Not implemented | release notes |
+            | Existing share fallback still works | fallback remains usable | Not run because native AppKit share sheet is not implemented in this candidate | Not implemented | release notes |
+            | Keyboard focus after open and cancel | focus sane | Not run because native AppKit share sheet is not implemented in this candidate | Not implemented | release notes |
+            | VoiceOver announcement and navigation | VoiceOver sane | Not run because native AppKit share sheet is not implemented in this candidate | Not implemented | release notes |
 
             ## Command-Key Menu Behavior
 

@@ -957,6 +957,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
         adapter.LastSaveDiagnostics.Reason.Should().Be("change_unsupported_model_delta");
         SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetCustomPropertiesReloadModel(saved);
     }
 
     [Fact]
@@ -1267,6 +1268,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetSmartTagsRemoved(saved);
+        AssertWorksheetSmartTagsReloadModel(saved);
     }
 
     [Fact]
@@ -1981,6 +1983,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Should()
             .Be(sourceVmlDrawing.ToString(SaveOptions.DisableFormatting));
         AssertLegacyCommentPackageGraph(saved, "xl/comments1.xml", "xl/drawings/vmlDrawing1.vml");
+        AssertLegacyCommentReloadModel(saved);
     }
 
     [Fact]
@@ -2068,6 +2071,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         protection.Attribute("saltValue").Should().BeNull();
         protection.Attribute("spinCount").Should().BeNull();
         protection.Attribute("password").Should().NotBeNull();
+        AssertSheetProtectionReloadModel(saved);
     }
 
     [Fact]

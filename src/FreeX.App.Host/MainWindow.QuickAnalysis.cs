@@ -114,7 +114,16 @@ public partial class MainWindow
         if (sender is not ContextMenu menu)
             return;
 
-        var firstEnabledItem = menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled);
+        MenuItem? firstEnabledItem = null;
+        foreach (var item in menu.Items)
+        {
+            if (item is not MenuItem menuItem || !menuItem.IsEnabled)
+                continue;
+
+            firstEnabledItem = menuItem;
+            break;
+        }
+
         if (firstEnabledItem is null)
             return;
 

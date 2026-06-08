@@ -107,9 +107,7 @@ public sealed partial class AutoFilterDialog : Window
     {
         Title = UiText.Format("AutoFilter_TitleWithHeader", menuPlan.HeaderText);
         _clearFilterButton.Content = UiText.Format("AutoFilter_ClearFilterFromHeader", menuPlan.HeaderText);
-        _clearFilterButton.IsEnabled = menuPlan.Entries
-            .FirstOrDefault(entry => entry.Kind == AutoFilterMenuEntryKind.ClearFilter)
-            ?.IsEnabled ?? true;
+        _clearFilterButton.IsEnabled = FindClearFilterEntry(menuPlan)?.IsEnabled ?? true;
         SetSortLabels(menuPlan.FilterKind);
         ShowFilterFamilyButton(menuPlan.FilterKind);
         var criteriaSuggestions = GetCriteriaSuggestions(menuPlan);
@@ -147,6 +145,17 @@ public sealed partial class AutoFilterDialog : Window
         var colorOptions = menuPlan.ColorOptions ?? [];
         if (colorOptions.Count > 0 && HasFilterByColorEntry(menuPlan))
             PopulateColorChoices(colorOptions);
+    }
+
+    private static AutoFilterMenuEntry? FindClearFilterEntry(AutoFilterMenuPlan menuPlan)
+    {
+        foreach (var entry in menuPlan.Entries)
+        {
+            if (entry.Kind == AutoFilterMenuEntryKind.ClearFilter)
+                return entry;
+        }
+
+        return null;
     }
 
     public AutoFilterDialog(IEnumerable<AutoFilterDialogItem> items)

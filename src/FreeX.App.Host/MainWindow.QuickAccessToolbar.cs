@@ -331,8 +331,13 @@ public partial class MainWindow
         if (!QuickAccessToolbarCatalog.TryGet(commandId, out var command))
             return null;
 
-        return _quickAccessToolbarButtons
-            .FirstOrDefault(button => string.Equals(button.Name, command.AutomationId, StringComparison.Ordinal));
+        foreach (var button in _quickAccessToolbarButtons)
+        {
+            if (string.Equals(button.Name, command.AutomationId, StringComparison.Ordinal))
+                return button;
+        }
+
+        return null;
     }
 
     private static bool IsQuickAccessHistoryCommand(string commandId) =>

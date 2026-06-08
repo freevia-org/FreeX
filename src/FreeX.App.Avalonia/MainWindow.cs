@@ -163,9 +163,37 @@ public sealed class MainWindow : Window
     {
         public override string ToString() => Label;
     }
+    private sealed record SortDialogSmokeProbe(
+        Window Dialog,
+        CheckBox HeadersCheckBox,
+        StackPanel LevelsPanel,
+        ComboBox SortOnBox,
+        ComboBox ColorBox,
+        Button AddLevelButton,
+        Button OkButton,
+        Button CancelButton);
     private sealed record DataValidationDialogResult(
         DataValidationDialogAction Action,
         DataValidation? Rule);
+    private sealed record DataValidationDialogSmokeProbe(
+        Window Dialog,
+        TextBlock SummaryText,
+        ComboBox TypeBox,
+        ComboBox OperatorBox,
+        TextBox Formula1Box,
+        TextBox Formula2Box,
+        CheckBox AllowBlankBox,
+        CheckBox ShowDropdownBox,
+        CheckBox ShowInputMessageBox,
+        TextBox PromptTitleBox,
+        TextBox PromptMessageBox,
+        CheckBox ShowErrorMessageBox,
+        ComboBox AlertStyleBox,
+        TextBox ErrorTitleBox,
+        TextBox ErrorMessageBox,
+        Button ApplyButton,
+        Button ClearButton,
+        Button CancelButton);
     private sealed record SubtotalDialogResult(
         SubtotalDialogAction Action,
         SubtotalInputOptions? Options);
@@ -376,6 +404,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _replaceMenuItem = new();
     private readonly NativeMenuItem _goToMenuItem = new();
     private readonly NativeMenuItem _goToSpecialMenuItem = new();
+    private readonly NativeMenuItem _openHyperlinkMenuItem = new();
     private readonly NativeMenuItem _insertHyperlinkMenuItem = new();
     private readonly NativeMenuItem _sortAscendingMenuItem = new();
     private readonly NativeMenuItem _sortDescendingMenuItem = new();
@@ -744,6 +773,9 @@ public sealed class MainWindow : Window
         _goToSpecialMenuItem.Header = "Go To Special...";
         _goToSpecialMenuItem.Click += async (_, _) => await ShowGoToSpecialDialogAsync();
 
+        _openHyperlinkMenuItem.Header = "Open Hyperlink";
+        _openHyperlinkMenuItem.Click += (_, _) => OpenSelectedHyperlink();
+
         _insertHyperlinkMenuItem.Header = "Hyperlink...";
         _insertHyperlinkMenuItem.Click += async (_, _) => await ShowInsertHyperlinkDialogAsync();
 
@@ -1090,6 +1122,7 @@ public sealed class MainWindow : Window
         editMenu.Items.Add(_replaceMenuItem);
         editMenu.Items.Add(_goToMenuItem);
         editMenu.Items.Add(_goToSpecialMenuItem);
+        editMenu.Items.Add(_openHyperlinkMenuItem);
         editMenu.Items.Add(_insertHyperlinkMenuItem);
         editMenu.Items.Add(new NativeMenuItemSeparator());
         editMenu.Items.Add(_autoSumMenuItem);
@@ -1858,6 +1891,7 @@ public sealed class MainWindow : Window
         _replaceMenuItem.IsEnabled = isIdle;
         _goToMenuItem.IsEnabled = isIdle;
         _goToSpecialMenuItem.IsEnabled = isIdle;
+        _openHyperlinkMenuItem.IsEnabled = isIdle && _session.CanOpenSelectedHyperlink;
         _insertHyperlinkMenuItem.IsEnabled = isIdle;
         _sortAscendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
@@ -4990,6 +5024,21 @@ public sealed class MainWindow : Window
         RefreshShell($"Selected {FormatRangeReference(result.SelectedRange!.Value)}");
     }
 
+    private void OpenSelectedHyperlink()
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var result = _session.OpenSelectedHyperlink();
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Open Hyperlink failed.");
+            return;
+        }
+
+        RefreshShell($"Selected {FormatRangeReference(result.SelectedRange!.Value)}");
+    }
+
     private async Task ShowGoToSpecialDialogAsync()
     {
         if (!TryCommitPendingFormulaEdit())
@@ -5243,8 +5292,16 @@ public sealed class MainWindow : Window
         HyperlinkDialogPlan? result = null;
         var prefill = _session.GetSelectedRangeHyperlinkDialogPrefill();
         var linkTypeChoices = CreateHyperlinkTypeChoices();
-        var selectedLinkType = linkTypeChoices.FirstOrDefault(choice => choice.Value == prefill.LinkType) ??
-            linkTypeChoices[0];
+        var selectedLinkType = linkTypeChoices[0];
+        foreach (var choice in linkTypeChoices)
+        {
+            if (choice.Value != prefill.LinkType)
+                continue;
+
+            selectedLinkType = choice;
+            break;
+        }
+
         var dialog = new Window
         {
             Title = "Insert Hyperlink",
@@ -7189,6 +7246,11 @@ public sealed class MainWindow : Window
 
     private async Task<SortDialogResult?> ShowSortInputDialogAsync()
     {
+        return await ShowSortInputDialogAsync(null);
+    }
+
+    private async Task<SortDialogResult?> ShowSortInputDialogAsync(Action<SortDialogSmokeProbe>? launchSmokeProbe)
+    {
         SortDialogResult? result = null;
         var range = _session.SelectedRange;
         var levels = SortDialogPlanner.NormalizeLevels(null).ToList();
@@ -7251,6 +7313,9 @@ public sealed class MainWindow : Window
             Padding = new Thickness(10, 4),
         };
         AutomationProperties.SetAutomationId(cancelButton, "SortCancelButton");
+
+        ComboBox? firstSortOnBox = null;
+        ComboBox? firstColorBox = null;
 
         IReadOnlyList<SortColumnChoice> CurrentColumnChoices()
         {
@@ -7367,6 +7432,8 @@ public sealed class MainWindow : Window
         {
             levels = SortDialogPlanner.NormalizeLevels(levels).ToList();
             levelsPanel.Children.Clear();
+            firstSortOnBox = null;
+            firstColorBox = null;
             var columnChoices = CreateColumnItems();
             var sortOnItems = CreateSortOnItems();
             for (var index = 0; index < levels.Count; index++)
@@ -7417,6 +7484,12 @@ public sealed class MainWindow : Window
                 AutomationProperties.SetName(colorBox, "Color");
                 AutomationProperties.SetAutomationId(colorBox, $"SortLevel{levelIndex + 1}ColorBox");
                 SelectColor(colorBox, colorChoices, level);
+
+                if (levelIndex == 0)
+                {
+                    firstSortOnBox = sortOnBox;
+                    firstColorBox = colorBox;
+                }
 
                 void RefreshSortOnDependentControls()
                 {
@@ -7557,6 +7630,23 @@ public sealed class MainWindow : Window
                 },
             },
         };
+        if (launchSmokeProbe is not null)
+        {
+            dialog.Opened += (_, _) =>
+            {
+                RunLaunchSmokeDialogProbe(
+                    dialog,
+                    () => launchSmokeProbe(new SortDialogSmokeProbe(
+                        dialog,
+                        headersCheck,
+                        levelsPanel,
+                        firstSortOnBox!,
+                        firstColorBox!,
+                        addLevelButton,
+                        okButton,
+                        cancelButton)));
+            };
+        }
 
         await dialog.ShowDialog(this);
         return result;
@@ -7643,7 +7733,9 @@ public sealed class MainWindow : Window
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
         };
+        AutomationProperties.SetName(errorText, "Goal Seek validation");
         AutomationProperties.SetAutomationId(errorText, "GoalSeekErrorText");
+        AutomationProperties.SetHelpText(errorText, "Shows Goal Seek input validation messages.");
 
         var okButton = new Button
         {
@@ -7651,7 +7743,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(okButton, "OK");
         AutomationProperties.SetAutomationId(okButton, "GoalSeekOkButton");
+        AutomationProperties.SetHelpText(okButton, "Run Goal Seek with these inputs.");
 
         var cancelButton = new Button
         {
@@ -7659,7 +7753,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(cancelButton, "Cancel");
         AutomationProperties.SetAutomationId(cancelButton, "GoalSeekCancelButton");
+        AutomationProperties.SetHelpText(cancelButton, "Close Goal Seek without running.");
 
         void Accept()
         {
@@ -7763,6 +7859,7 @@ public sealed class MainWindow : Window
         };
         AutomationProperties.SetName(summaryBlock, "Goal Seek Status");
         AutomationProperties.SetAutomationId(summaryBlock, "GoalSeekStatusText");
+        AutomationProperties.SetHelpText(summaryBlock, "Shows the Goal Seek result status.");
 
         var buttonRow = new StackPanel
         {
@@ -7782,6 +7879,7 @@ public sealed class MainWindow : Window
                 MinWidth = 150,
                 Padding = new Thickness(10, 4),
             };
+            AutomationProperties.SetName(restoreButton, "Restore Original Values");
             AutomationProperties.SetAutomationId(restoreButton, "GoalSeekRestoreOriginalValuesButton");
             AutomationProperties.SetHelpText(restoreButton, "Undo the Goal Seek result and restore the original changing cell value.");
 
@@ -7791,6 +7889,7 @@ public sealed class MainWindow : Window
                 MinWidth = 104,
                 Padding = new Thickness(10, 4),
             };
+            AutomationProperties.SetName(keepButton, "Keep Result");
             AutomationProperties.SetAutomationId(keepButton, "GoalSeekKeepResultButton");
             AutomationProperties.SetHelpText(keepButton, "Keep the applied Goal Seek result in the workbook.");
 
@@ -7816,7 +7915,9 @@ public sealed class MainWindow : Window
                 MinWidth = 84,
                 Padding = new Thickness(10, 4),
             };
+            AutomationProperties.SetName(okButton, "OK");
             AutomationProperties.SetAutomationId(okButton, "GoalSeekStatusOkButton");
+            AutomationProperties.SetHelpText(okButton, "Close the Goal Seek status dialog.");
             okButton.Click += (_, _) =>
             {
                 choice = GoalSeekStatusDialogChoice.Dismiss;
@@ -7989,14 +8090,18 @@ public sealed class MainWindow : Window
             GroupName = "AdvancedFilterOutputMode",
             IsChecked = true,
         };
+        AutomationProperties.SetName(inPlaceButton, "Filter in-place");
         AutomationProperties.SetAutomationId(inPlaceButton, "AdvancedFilterInPlaceButton");
+        AutomationProperties.SetHelpText(inPlaceButton, "Filter the list range without copying results.");
 
         var copyToAnotherLocationButton = new RadioButton
         {
             Content = "Copy to another location",
             GroupName = "AdvancedFilterOutputMode",
         };
+        AutomationProperties.SetName(copyToAnotherLocationButton, "Copy to another location");
         AutomationProperties.SetAutomationId(copyToAnotherLocationButton, "AdvancedFilterCopyToAnotherLocationButton");
+        AutomationProperties.SetHelpText(copyToAnotherLocationButton, "Copy filtered rows to the Copy to range.");
 
         var copyToBox = new TextBox
         {
@@ -8011,14 +8116,18 @@ public sealed class MainWindow : Window
         {
             Content = "Unique records only",
         };
+        AutomationProperties.SetName(uniqueBox, "Unique records only");
         AutomationProperties.SetAutomationId(uniqueBox, "AdvancedFilterUniqueRecordsOnlyBox");
+        AutomationProperties.SetHelpText(uniqueBox, "Return only unique matching records.");
 
         var errorText = new TextBlock
         {
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
         };
+        AutomationProperties.SetName(errorText, "Advanced Filter validation");
         AutomationProperties.SetAutomationId(errorText, "AdvancedFilterErrorText");
+        AutomationProperties.SetHelpText(errorText, "Shows Advanced Filter readiness and validation messages.");
 
         var okButton = new Button
         {
@@ -8026,7 +8135,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(okButton, "OK");
         AutomationProperties.SetAutomationId(okButton, "AdvancedFilterOkButton");
+        AutomationProperties.SetHelpText(okButton, "Run Advanced Filter.");
 
         var cancelButton = new Button
         {
@@ -8034,7 +8145,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(cancelButton, "Cancel");
         AutomationProperties.SetAutomationId(cancelButton, "AdvancedFilterCancelButton");
+        AutomationProperties.SetHelpText(cancelButton, "Close Advanced Filter without running.");
 
         AdvancedFilterPlanResult CreatePlan()
         {
@@ -8283,7 +8396,9 @@ public sealed class MainWindow : Window
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
         };
+        AutomationProperties.SetName(rangeText, "Subtotal range");
         AutomationProperties.SetAutomationId(rangeText, "SubtotalRangeSummaryText");
+        AutomationProperties.SetHelpText(rangeText, "Shows the selected range for subtotaling.");
 
         var groupColumnBox = new ComboBox
         {
@@ -8291,7 +8406,9 @@ public sealed class MainWindow : Window
             SelectedIndex = 0,
             MinWidth = 240,
         };
+        AutomationProperties.SetName(groupColumnBox, "At each change in");
         AutomationProperties.SetAutomationId(groupColumnBox, "SubtotalGroupColumnBox");
+        AutomationProperties.SetHelpText(groupColumnBox, "Choose the column used to group subtotal rows.");
 
         var functionBox = new ComboBox
         {
@@ -8299,13 +8416,17 @@ public sealed class MainWindow : Window
             SelectedIndex = 0,
             MinWidth = 240,
         };
+        AutomationProperties.SetName(functionBox, "Use function");
         AutomationProperties.SetAutomationId(functionBox, "SubtotalFunctionBox");
+        AutomationProperties.SetHelpText(functionBox, "Choose the subtotal calculation function.");
 
         var columnsPanel = new StackPanel
         {
             Spacing = 4,
         };
+        AutomationProperties.SetName(columnsPanel, "Add subtotal to");
         AutomationProperties.SetAutomationId(columnsPanel, "SubtotalColumnsPanel");
+        AutomationProperties.SetHelpText(columnsPanel, "Columns that receive subtotal calculations.");
 
         var columnBoxes = new List<CheckBox>();
         foreach (var column in columns)
@@ -8327,28 +8448,36 @@ public sealed class MainWindow : Window
             Content = "Replace current subtotals",
             IsChecked = true,
         };
+        AutomationProperties.SetName(replaceBox, "Replace current subtotals");
         AutomationProperties.SetAutomationId(replaceBox, "SubtotalReplaceCurrentBox");
+        AutomationProperties.SetHelpText(replaceBox, "Replace existing subtotals before applying new ones.");
 
         var pageBreakBox = new CheckBox
         {
             Content = "Page break between groups",
             IsChecked = false,
         };
+        AutomationProperties.SetName(pageBreakBox, "Page break between groups");
         AutomationProperties.SetAutomationId(pageBreakBox, "SubtotalPageBreakBox");
+        AutomationProperties.SetHelpText(pageBreakBox, "Insert a page break after each subtotal group.");
 
         var summaryBelowBox = new CheckBox
         {
             Content = "Summary below data",
             IsChecked = true,
         };
+        AutomationProperties.SetName(summaryBelowBox, "Summary below data");
         AutomationProperties.SetAutomationId(summaryBelowBox, "SubtotalSummaryBelowBox");
+        AutomationProperties.SetHelpText(summaryBelowBox, "Place summary rows below the grouped data.");
 
         var errorText = new TextBlock
         {
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
         };
+        AutomationProperties.SetName(errorText, "Subtotal validation");
         AutomationProperties.SetAutomationId(errorText, "SubtotalErrorText");
+        AutomationProperties.SetHelpText(errorText, "Shows Subtotal validation messages.");
 
         var okButton = new Button
         {
@@ -8356,7 +8485,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(okButton, "OK");
         AutomationProperties.SetAutomationId(okButton, "SubtotalOkButton");
+        AutomationProperties.SetHelpText(okButton, "Apply subtotal options.");
 
         var removeAllButton = new Button
         {
@@ -8364,7 +8495,9 @@ public sealed class MainWindow : Window
             MinWidth = 96,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(removeAllButton, "Remove All");
         AutomationProperties.SetAutomationId(removeAllButton, "SubtotalRemoveAllButton");
+        AutomationProperties.SetHelpText(removeAllButton, "Remove subtotals from the selected range.");
 
         var cancelButton = new Button
         {
@@ -8372,7 +8505,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(cancelButton, "Cancel");
         AutomationProperties.SetAutomationId(cancelButton, "SubtotalCancelButton");
+        AutomationProperties.SetHelpText(cancelButton, "Close Subtotal without applying changes.");
 
         void Accept()
         {
@@ -8583,20 +8718,26 @@ public sealed class MainWindow : Window
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
         };
+        AutomationProperties.SetName(rangeText, "Remove Duplicates range");
         AutomationProperties.SetAutomationId(rangeText, "RemoveDuplicatesRangeSummaryText");
+        AutomationProperties.SetHelpText(rangeText, "Shows the selected range checked for duplicates.");
 
         var hasHeadersBox = new CheckBox
         {
             Content = "My data has headers",
             IsChecked = hasHeaders,
         };
+        AutomationProperties.SetName(hasHeadersBox, "My data has headers");
         AutomationProperties.SetAutomationId(hasHeadersBox, "RemoveDuplicatesHasHeadersBox");
+        AutomationProperties.SetHelpText(hasHeadersBox, "Treat the first row as headers when comparing duplicates.");
 
         var columnsPanel = new StackPanel
         {
             Spacing = 4,
         };
+        AutomationProperties.SetName(columnsPanel, "Columns");
         AutomationProperties.SetAutomationId(columnsPanel, "RemoveDuplicatesColumnsPanel");
+        AutomationProperties.SetHelpText(columnsPanel, "Columns used to identify duplicate rows.");
 
         var columnBoxes = new List<CheckBox>();
 
@@ -8632,7 +8773,9 @@ public sealed class MainWindow : Window
             MinWidth = 92,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(selectAllButton, "Select All");
         AutomationProperties.SetAutomationId(selectAllButton, "RemoveDuplicatesSelectAllButton");
+        AutomationProperties.SetHelpText(selectAllButton, "Select all columns for duplicate comparison.");
 
         var unselectAllButton = new Button
         {
@@ -8640,14 +8783,18 @@ public sealed class MainWindow : Window
             MinWidth = 92,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(unselectAllButton, "Unselect All");
         AutomationProperties.SetAutomationId(unselectAllButton, "RemoveDuplicatesUnselectAllButton");
+        AutomationProperties.SetHelpText(unselectAllButton, "Clear all selected duplicate comparison columns.");
 
         var errorText = new TextBlock
         {
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
         };
+        AutomationProperties.SetName(errorText, "Remove Duplicates validation");
         AutomationProperties.SetAutomationId(errorText, "RemoveDuplicatesErrorText");
+        AutomationProperties.SetHelpText(errorText, "Shows Remove Duplicates validation messages.");
 
         var okButton = new Button
         {
@@ -8655,7 +8802,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(okButton, "OK");
         AutomationProperties.SetAutomationId(okButton, "RemoveDuplicatesOkButton");
+        AutomationProperties.SetHelpText(okButton, "Remove duplicate rows using the selected columns.");
 
         var cancelButton = new Button
         {
@@ -8663,7 +8812,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(cancelButton, "Cancel");
         AutomationProperties.SetAutomationId(cancelButton, "RemoveDuplicatesCancelButton");
+        AutomationProperties.SetHelpText(cancelButton, "Close Remove Duplicates without changes.");
 
         void RebuildColumnsForHeaderState()
         {
@@ -8841,12 +8992,16 @@ public sealed class MainWindow : Window
             TextWrapping = TextWrapping.Wrap,
             Foreground = HeaderForeground,
         };
+        AutomationProperties.SetName(statusText, "Scenario Manager status");
+        AutomationProperties.SetHelpText(statusText, "Shows Scenario Manager availability and status.");
 
         var selectionText = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
             Foreground = HeaderForeground,
         };
+        AutomationProperties.SetName(selectionText, "Scenario Manager selection");
+        AutomationProperties.SetHelpText(selectionText, "Shows the current selection saved into new scenarios.");
 
         var scenarioList = new ListBox
         {
@@ -8855,6 +9010,7 @@ public sealed class MainWindow : Window
         };
         AutomationProperties.SetName(scenarioList, "Scenarios");
         AutomationProperties.SetAutomationId(scenarioList, "ScenarioManagerScenarioList");
+        AutomationProperties.SetHelpText(scenarioList, "Select a saved scenario.");
 
         var scenarioDetailsText = new TextBlock
         {
@@ -8862,6 +9018,8 @@ public sealed class MainWindow : Window
             LineHeight = 20,
             MinHeight = 58,
         };
+        AutomationProperties.SetName(scenarioDetailsText, "Scenario details");
+        AutomationProperties.SetHelpText(scenarioDetailsText, "Shows details for the selected scenario.");
 
         var nameBox = new TextBox
         {
@@ -8885,7 +9043,9 @@ public sealed class MainWindow : Window
             TextWrapping = TextWrapping.Wrap,
             MinHeight = 22,
         };
+        AutomationProperties.SetName(errorText, "Scenario Manager validation");
         AutomationProperties.SetAutomationId(errorText, "ScenarioManagerErrorText");
+        AutomationProperties.SetHelpText(errorText, "Shows Scenario Manager validation and error messages.");
 
         var saveButton = new Button
         {
@@ -8893,7 +9053,9 @@ public sealed class MainWindow : Window
             MinWidth = 92,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(saveButton, "Save/Add");
         AutomationProperties.SetAutomationId(saveButton, "ScenarioManagerSaveButton");
+        AutomationProperties.SetHelpText(saveButton, "Save the selected cells as a new or updated scenario.");
 
         var showButton = new Button
         {
@@ -8901,7 +9063,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(showButton, "Show");
         AutomationProperties.SetAutomationId(showButton, "ScenarioManagerShowButton");
+        AutomationProperties.SetHelpText(showButton, "Apply the selected scenario values to the workbook.");
 
         var deleteButton = new Button
         {
@@ -8909,7 +9073,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(deleteButton, "Delete");
         AutomationProperties.SetAutomationId(deleteButton, "ScenarioManagerDeleteButton");
+        AutomationProperties.SetHelpText(deleteButton, "Delete the selected scenario.");
 
         var summaryButton = new Button
         {
@@ -8917,7 +9083,9 @@ public sealed class MainWindow : Window
             MinWidth = 128,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(summaryButton, "Summary Report");
         AutomationProperties.SetAutomationId(summaryButton, "ScenarioManagerSummaryButton");
+        AutomationProperties.SetHelpText(summaryButton, "Create a scenario summary report sheet.");
 
         var closeButton = new Button
         {
@@ -8925,7 +9093,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(closeButton, "Close");
         AutomationProperties.SetAutomationId(closeButton, "ScenarioManagerCloseButton");
+        AutomationProperties.SetHelpText(closeButton, "Close Scenario Manager.");
 
         string? CurrentScenarioName() =>
             scenarioList.SelectedItem is ScenarioManagerDialogScenarioItem item
@@ -9237,7 +9407,9 @@ public sealed class MainWindow : Window
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
         };
+        AutomationProperties.SetName(rangeText, "Data Table range");
         AutomationProperties.SetAutomationId(rangeText, "DataTableRangeSummaryText");
+        AutomationProperties.SetHelpText(rangeText, "Shows the selected range used for the Data Table.");
 
         var rowInputBox = new TextBox
         {
@@ -9260,7 +9432,9 @@ public sealed class MainWindow : Window
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
         };
+        AutomationProperties.SetName(errorText, "Data Table validation");
         AutomationProperties.SetAutomationId(errorText, "DataTableErrorText");
+        AutomationProperties.SetHelpText(errorText, "Shows Data Table readiness and validation messages.");
 
         var okButton = new Button
         {
@@ -9268,7 +9442,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(okButton, "OK");
         AutomationProperties.SetAutomationId(okButton, "DataTableOkButton");
+        AutomationProperties.SetHelpText(okButton, "Create the Data Table.");
 
         var cancelButton = new Button
         {
@@ -9276,7 +9452,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(cancelButton, "Cancel");
         AutomationProperties.SetAutomationId(cancelButton, "DataTableCancelButton");
+        AutomationProperties.SetHelpText(cancelButton, "Close Data Table without creating it.");
 
         DataTablePlanResult CreatePlan() =>
             DataTablePlanner.CreatePlan(
@@ -9456,7 +9634,9 @@ public sealed class MainWindow : Window
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
         };
+        AutomationProperties.SetName(sourceRangeText, "Forecast source range");
         AutomationProperties.SetAutomationId(sourceRangeText, "ForecastSheetSourceRangeSummaryText");
+        AutomationProperties.SetHelpText(sourceRangeText, "Shows the selected source range for the forecast.");
 
         var periodsBox = new TextBox
         {
@@ -9472,7 +9652,9 @@ public sealed class MainWindow : Window
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
         };
+        AutomationProperties.SetName(errorText, "Forecast Sheet validation");
         AutomationProperties.SetAutomationId(errorText, "ForecastSheetErrorText");
+        AutomationProperties.SetHelpText(errorText, "Shows Forecast Sheet readiness and validation messages.");
 
         var createButton = new Button
         {
@@ -9480,7 +9662,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(createButton, "Create");
         AutomationProperties.SetAutomationId(createButton, "ForecastSheetCreateButton");
+        AutomationProperties.SetHelpText(createButton, "Create the Forecast Sheet.");
 
         var cancelButton = new Button
         {
@@ -9488,7 +9672,9 @@ public sealed class MainWindow : Window
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
+        AutomationProperties.SetName(cancelButton, "Cancel");
         AutomationProperties.SetAutomationId(cancelButton, "ForecastSheetCancelButton");
+        AutomationProperties.SetHelpText(cancelButton, "Close Forecast Sheet without creating it.");
 
         ForecastSheetPlan CreatePlan() =>
             ForecastSheetPlanner.CreatePlan(
@@ -9652,6 +9838,11 @@ public sealed class MainWindow : Window
     }
 
     private async Task<DataValidationDialogResult?> ShowDataValidationInputDialogAsync()
+    {
+        return await ShowDataValidationInputDialogAsync(null);
+    }
+
+    private async Task<DataValidationDialogResult?> ShowDataValidationInputDialogAsync(Action<DataValidationDialogSmokeProbe>? launchSmokeProbe)
     {
         DataValidationDialogResult? result = null;
         var summary = DataValidationPresetPlanner.CreateSelectionSummary(
@@ -9872,6 +10063,14 @@ public sealed class MainWindow : Window
                 : showSecondFormula
                     ? "Minimum"
                     : "Value";
+            AutomationProperties.SetName(formula1Box, formula1Label.Text);
+            AutomationProperties.SetHelpText(
+                formula1Box,
+                isList
+                    ? "List source range or comma-separated values."
+                    : showSecondFormula
+                        ? "Minimum value for the validation rule."
+                        : "Value for the validation rule.");
             formula2Label.Text = "Maximum";
             operatorField.IsVisible = !isList;
             formula2Field.IsVisible = showSecondFormula;
@@ -10033,6 +10232,33 @@ public sealed class MainWindow : Window
             },
         };
         dialog.Opened += (_, _) => typeBox.Focus();
+        if (launchSmokeProbe is not null)
+        {
+            dialog.Opened += (_, _) =>
+            {
+                RunLaunchSmokeDialogProbe(
+                    dialog,
+                    () => launchSmokeProbe(new DataValidationDialogSmokeProbe(
+                        dialog,
+                        summaryText,
+                        typeBox,
+                        operatorBox,
+                        formula1Box,
+                        formula2Box,
+                        allowBlankBox,
+                        showDropdownBox,
+                        showInputMessageBox,
+                        promptTitleBox,
+                        promptMessageBox,
+                        showErrorMessageBox,
+                        alertStyleBox,
+                        errorTitleBox,
+                        errorMessageBox,
+                        applyButton,
+                        clearButton,
+                        cancelButton)));
+            };
+        }
 
         await dialog.ShowDialog(this);
         return result;
@@ -11568,6 +11794,87 @@ public sealed class MainWindow : Window
             hasFormatCellsDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 560, height: 560, minWidth: 480, minHeight: 500);
         });
 
+        var hasSortDialog = false;
+        var hasSortDialogSortOnControls = false;
+        var hasSortDialogColorControls = false;
+        var hasSortDialogActionButtons = false;
+        var hasSortDialogCompactLayout = false;
+        var sortDialogResult = await ShowSortInputDialogAsync(probe =>
+        {
+            hasSortDialog = HasLaunchSmokeDialog(probe.Dialog, "Sort");
+            hasSortDialogSortOnControls =
+                HasLaunchSmokeComboBox(probe.SortOnBox, "SortLevel1SortOnBox", "Sort On") &&
+                probe.SortOnBox.MinWidth >= 120 &&
+                string.Equals(probe.SortOnBox.SelectedItem?.ToString(), SortDialogPlannerText.Default.SortOnCellValues, StringComparison.Ordinal);
+            hasSortDialogColorControls =
+                HasLaunchSmokeComboBox(probe.ColorBox, "SortLevel1ColorBox", "Color") &&
+                probe.ColorBox.MinWidth >= 105 &&
+                !probe.ColorBox.IsEnabled &&
+                string.Equals(probe.ColorBox.SelectedItem?.ToString(), "None", StringComparison.Ordinal);
+            hasSortDialogActionButtons =
+                HasLaunchSmokeCheckBox(probe.HeadersCheckBox, "SortHeadersCheckBox", "My data has headers") &&
+                HasLaunchSmokeAutomationId(probe.LevelsPanel, "SortLevelsPanel") &&
+                HasLaunchSmokeButton(probe.AddLevelButton, "SortAddLevelButton", "Add Level") &&
+                HasLaunchSmokeButton(probe.OkButton, "SortOkButton", "OK") &&
+                HasLaunchSmokeButton(probe.CancelButton, "SortCancelButton", "Cancel");
+            hasSortDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 760, height: 430, minWidth: 700, minHeight: 360);
+        });
+
+        var dropdown = CreateDataValidationDropdown(new DataValidationDropdownPlan(
+            ["Yes", "No"],
+            "Yes",
+            new DataValidationDropdownBounds(12, 16, 48, 18)));
+        var hasDataValidationDropdownControl =
+            HasLaunchSmokeComboBox(dropdown, "WorksheetDataValidationDropdown", "Data validation list") &&
+            string.Equals(
+                AutomationProperties.GetHelpText(dropdown),
+                "Pick a permitted value for the active cell.",
+                StringComparison.Ordinal) &&
+            dropdown.Width == 48 &&
+            dropdown.Height == 18 &&
+            dropdown.MinWidth == DataValidationDropdownPlanner.MinimumWidth &&
+            dropdown.MinHeight == DataValidationDropdownPlanner.MinimumHeight;
+        var hasDataValidationDropdownItems =
+            dropdown.ItemsSource is IEnumerable<string> dropdownItems &&
+            dropdownItems.SequenceEqual(["Yes", "No"], StringComparer.Ordinal) &&
+            string.Equals(dropdown.SelectedItem?.ToString(), "Yes", StringComparison.Ordinal);
+
+        var hasDataValidationDialog = false;
+        var hasDataValidationDialogCriteriaControls = false;
+        var hasDataValidationDialogMessageControls = false;
+        var hasDataValidationDialogActionButtons = false;
+        var hasDataValidationDialogCompactLayout = false;
+        var dataValidationDialogResult = await ShowDataValidationInputDialogAsync(probe =>
+        {
+            hasDataValidationDialog = HasLaunchSmokeDialog(probe.Dialog, "Data Validation");
+            hasDataValidationDialogCriteriaControls =
+                HasLaunchSmokeAutomationId(probe.SummaryText, "DataValidationSelectionSummaryText") &&
+                HasLaunchSmokeComboBox(probe.TypeBox, "DataValidationTypeBox", "Allow") &&
+                HasLaunchSmokeComboBox(probe.OperatorBox, "DataValidationOperatorBox", "Data") &&
+                HasLaunchSmokeAutomationId(probe.Formula1Box, "DataValidationFormula1Box") &&
+                HasLaunchSmokeAutomationId(probe.Formula2Box, "DataValidationFormula2Box") &&
+                HasLaunchSmokeCheckBox(probe.AllowBlankBox, "DataValidationAllowBlankBox", "Allow blank") &&
+                HasLaunchSmokeCheckBox(probe.ShowDropdownBox, "DataValidationShowDropdownBox", "In-cell dropdown") &&
+                !probe.ShowDropdownBox.IsVisible &&
+                string.Equals(probe.TypeBox.SelectedItem?.ToString(), "Whole number", StringComparison.Ordinal) &&
+                string.Equals(probe.Formula1Box.Text, "1", StringComparison.Ordinal) &&
+                string.Equals(probe.Formula2Box.Text, "100", StringComparison.Ordinal);
+            hasDataValidationDialogMessageControls =
+                HasLaunchSmokeCheckBox(probe.ShowInputMessageBox, "DataValidationShowInputMessageBox", "Show input message") &&
+                HasLaunchSmokeAutomationId(probe.PromptTitleBox, "DataValidationPromptTitleBox") &&
+                HasLaunchSmokeAutomationId(probe.PromptMessageBox, "DataValidationPromptMessageBox") &&
+                HasLaunchSmokeCheckBox(probe.ShowErrorMessageBox, "DataValidationShowErrorMessageBox", "Show error alert") &&
+                HasLaunchSmokeComboBox(probe.AlertStyleBox, "DataValidationAlertStyleBox", "Style") &&
+                HasLaunchSmokeAutomationId(probe.ErrorTitleBox, "DataValidationErrorTitleBox") &&
+                HasLaunchSmokeAutomationId(probe.ErrorMessageBox, "DataValidationErrorMessageBox") &&
+                string.Equals(probe.AlertStyleBox.SelectedItem?.ToString(), "Stop", StringComparison.Ordinal);
+            hasDataValidationDialogActionButtons =
+                HasLaunchSmokeButton(probe.ApplyButton, "DataValidationApplyButton", "Apply") &&
+                HasLaunchSmokeButton(probe.ClearButton, "DataValidationClearButton", "Clear Validation") &&
+                HasLaunchSmokeButton(probe.CancelButton, "DataValidationCancelButton", "Cancel");
+            hasDataValidationDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 540, height: 560, minWidth: 460, minHeight: 440);
+        });
+
         _launchSmokeDialogEvidence = new MacOsLaunchSmokeDialogSnapshot(
             hasFindDialog,
             hasFindDialogTextBox,
@@ -11598,7 +11905,21 @@ public sealed class MainWindow : Window
             hasFormatCellsDialogNumberControls,
             hasFormatCellsDialogActionButtons,
             hasFormatCellsDialogCompactLayout,
-            formatCellsDialogResult is null);
+            formatCellsDialogResult is null,
+            hasSortDialog,
+            hasSortDialogSortOnControls,
+            hasSortDialogColorControls,
+            hasSortDialogActionButtons,
+            hasSortDialogCompactLayout,
+            sortDialogResult is null,
+            hasDataValidationDropdownControl,
+            hasDataValidationDropdownItems,
+            hasDataValidationDialog,
+            hasDataValidationDialogCriteriaControls,
+            hasDataValidationDialogMessageControls,
+            hasDataValidationDialogActionButtons,
+            hasDataValidationDialogCompactLayout,
+            dataValidationDialogResult is null);
         return _launchSmokeDialogEvidence;
     }
 
@@ -11636,6 +11957,10 @@ public sealed class MainWindow : Window
     private static bool HasLaunchSmokeCheckBox(CheckBox checkBox, string automationId, string content) =>
         HasLaunchSmokeAutomationId(checkBox, automationId) &&
         string.Equals(checkBox.Content?.ToString(), content, StringComparison.Ordinal);
+
+    private static bool HasLaunchSmokeComboBox(ComboBox comboBox, string automationId, string name) =>
+        HasLaunchSmokeAutomationId(comboBox, automationId) &&
+        string.Equals(AutomationProperties.GetName(comboBox), name, StringComparison.Ordinal);
 
     private static bool HasLaunchSmokeAutomationId(Control control, string automationId) =>
         string.Equals(AutomationProperties.GetAutomationId(control), automationId, StringComparison.Ordinal);
@@ -13657,6 +13982,8 @@ public sealed class MainWindow : Window
             Padding = new Thickness(10, 4),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
         };
+        AutomationProperties.SetName(closeButton, "Close");
+        AutomationProperties.SetHelpText(closeButton, $"Close {title}.");
         closeButton.Click += (_, _) => dialog.Close();
 
         var textBox = new TextBox
@@ -13669,6 +13996,8 @@ public sealed class MainWindow : Window
             Padding = new Thickness(8),
             MinHeight = 240,
         };
+        AutomationProperties.SetName(textBox, title);
+        AutomationProperties.SetHelpText(textBox, $"Read-only {title} text.");
 
         var root = new DockPanel
         {

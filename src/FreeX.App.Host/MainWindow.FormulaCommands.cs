@@ -500,8 +500,16 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is null) return;
         var normalizedName = funcName.Trim().ToUpperInvariant();
-        var function = InsertFunctionCatalogPlanner.BuildCatalog()
-            .FirstOrDefault(entry => string.Equals(entry.Name, normalizedName, StringComparison.OrdinalIgnoreCase));
+        InsertFunctionCatalogEntry? function = null;
+        foreach (var entry in InsertFunctionCatalogPlanner.BuildCatalog())
+        {
+            if (!string.Equals(entry.Name, normalizedName, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            function = entry;
+            break;
+        }
+
         if (function is null)
         {
             InsertRawFormulaFunction(normalizedName);

@@ -116,8 +116,16 @@ public sealed class ShapeEffectsDialog : Window
         return true;
     }
 
-    private ShapeEffectsDialogOption FindOption(DrawingShapeEffectPreset preset) =>
-        _options.FirstOrDefault(option => option.Preset == preset) ?? _options[0];
+    private ShapeEffectsDialogOption FindOption(DrawingShapeEffectPreset preset)
+    {
+        foreach (var option in _options)
+        {
+            if (option.Preset == preset)
+                return option;
+        }
+
+        return _options[0];
+    }
 
     private ShapeEffectsDialogOption SelectedOption =>
         _effectBox.SelectedItem as ShapeEffectsDialogOption ?? _options[0];

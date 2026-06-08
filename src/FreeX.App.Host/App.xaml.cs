@@ -69,8 +69,14 @@ public partial class App : Application
         // Show main window
         var mainWindow = Services.GetRequiredService<MainWindow>();
         mainWindow.Show();
-        if (e.Args.FirstOrDefault(File.Exists) is { } startupWorkbookPath)
+        foreach (var startupWorkbookPath in e.Args)
+        {
+            if (!File.Exists(startupWorkbookPath))
+                continue;
+
             _ = mainWindow.Dispatcher.BeginInvoke(async () => await mainWindow.OpenStartupFileAsync(startupWorkbookPath));
+            break;
+        }
 
         diagnostics.RecordEvent("app_ready");
         Log.Information("FreeX ready");

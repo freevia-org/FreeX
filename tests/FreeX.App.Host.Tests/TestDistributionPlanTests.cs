@@ -90,11 +90,20 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("[release/macos-signing-notarization.md](macos-signing-notarization.md)");
         source.Should().Contain("self-checks each SHA-256 file with `shasum -a 256 -c`");
         source.Should().Contain("records `zip_sha256` in evidence");
+        source.Should().Contain("separate diagnostics artifacts");
+        source.Should().Contain("post-matrix aggregate readiness artifact");
         source.Should().Contain("not a public release channel");
         source.Should().Contain("GitHub-hosted macOS runners can produce downloadable macOS app artifacts without local macOS hardware");
         source.Should().Contain("GitHub Actions > `macOS App Preview` > the completed run");
         source.Should().Contain("freex-<run-id>-<run-attempt>-osx-arm64-macos-app");
+        source.Should().Contain("freex-<run-id>-<run-attempt>-osx-arm64-macos-diagnostics");
         source.Should().Contain("freex-<run-id>-<run-attempt>-osx-x64-macos-app");
+        source.Should().Contain("freex-<run-id>-<run-attempt>-osx-x64-macos-diagnostics");
+        source.Should().Contain("freex-<run-id>-<run-attempt>-macos-preview-readiness");
+        source.Should().Contain("Actions artifact archive downloads require authentication");
+        source.Should().Contain("browser session signed in to GitHub");
+        source.Should().Contain("gh run download");
+        source.Should().Contain("GITHUB_TOKEN");
         source.Should().Contain("Internal-preview workflow outputs can also be bundled into the normal `Tester Release` GitHub Release when `include_macos_preview=true`");
         source.Should().Contain("FreeX-latest-macos-arm64.zip");
         source.Should().Contain("FreeX-latest-macos-x64.zip");
@@ -104,8 +113,15 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("Signed and internal ad-hoc outputs use the same artifact names");
         source.Should().Contain("Use `osx-arm64` for Apple Silicon Macs and `osx-x64` for Intel Macs");
         source.Should().Contain("Actions artifact wrapper");
-        source.Should().Contain("Preserve the `freex-<run-id>-<run-attempt>-<runtime>-macos-app` and `freex-<run-id>-<run-attempt>-macos-release-assets` wrapper directory names under the artifact root");
+        source.Should().Contain("Preserve the `freex-<run-id>-<run-attempt>-<runtime>-macos-app`, `freex-<run-id>-<run-attempt>-<runtime>-macos-diagnostics`, and `freex-<run-id>-<run-attempt>-macos-release-assets` wrapper directory names under the artifact root");
         source.Should().Contain("Do not flatten wrapper contents directly into the artifact root");
+        source.Should().Contain("the post-matrix `macos-preview-readiness` job downloads the current run's app and diagnostics artifact wrappers");
+        source.Should().Contain("tools/Test-MacOsPublicPreviewReadiness.ps1 -RequireSeparateDiagnosticsArtifact");
+        source.Should().Contain("macos-preview-readiness-manifest.json");
+        source.Should().Contain("macos-preview-readiness-summary.txt");
+        source.Should().Contain("app and diagnostics artifact names and digests");
+        source.Should().Contain("It is not a public distribution channel");
+        source.Should().Contain("Gatekeeper assessment and first-launch evidence");
         source.Should().Contain("-ExpectedRunId <run-id>");
         source.Should().Contain("-ExpectedRunAttempt <run-attempt>");
         source.Should().Contain("freex-<runtime>-macos-tester-instructions.md");
@@ -125,7 +141,7 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("Open Anyway");
         source.Should().Contain("Do not disable Gatekeeper globally");
         source.Should().Contain("Tester-facing warning for both platforms");
-        source.Should().Contain("Public distribution still requires Developer ID signing, accepted notarization, and stapling evidence.");
+        source.Should().Contain("Public distribution still requires Developer ID signing, accepted notarization, stapling, and Gatekeeper evidence.");
     }
 
     [Fact]

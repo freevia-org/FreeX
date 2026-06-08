@@ -72,12 +72,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceExtensionList.ToString(SaveOptions.DisableFormatting));
-
-        saved.Position = 0;
-        adapter.Load(saved).FileRecoveryProperties.Should().ContainSingle(properties =>
-            properties.AutoRecover == true &&
-            properties.CrashSave == true &&
-            properties.RepairLoad == false);
+        AssertWorkbookNativeMetadataModelReload(saved);
     }
 
     [Fact]
@@ -105,7 +100,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         oleSize.Attribute("ref")!.Value.Should().Be("A1:D12");
         oleSize.Attribute("customOleSizeFlag").Should().BeNull();
         oleSize.Element(oleSize.Name.Namespace + "nativeOleSizeChild").Should().BeNull();
-        AssertWorkbookNativeMetadataModelReload(adapter, saved);
+        AssertWorkbookNativeMetadataModelReload(saved);
     }
 
     [Fact]
@@ -136,7 +131,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         webPublishing.Attribute("codePage")!.Value.Should().Be("65001");
         webPublishing.Attribute("customWebPublishingFlag").Should().BeNull();
         webPublishing.Element(webPublishing.Name.Namespace + "nativeWebPublishingChild").Should().BeNull();
-        AssertWorkbookNativeMetadataModelReload(adapter, saved);
+        AssertWorkbookNativeMetadataModelReload(saved);
     }
 
     [Fact]
@@ -170,7 +165,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         webPublishObject.Attribute("destinationFile")!.Value.Should().Be("https://example.invalid/report.htm");
         webPublishObject.Attribute("customWebPublishObjectFlag").Should().BeNull();
         webPublishObject.Element(webPublishObject.Name.Namespace + "nativeWebPublishObjectChild").Should().BeNull();
-        AssertWorkbookNativeMetadataModelReload(adapter, saved);
+        AssertWorkbookNativeMetadataModelReload(saved);
     }
 
     [Fact]
@@ -201,7 +196,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         extension.Attribute("uri")!.Value.Should().Be("{00112233-4455-6677-8899-AABBCCDDEEFF}");
         extension.Attribute("customWorkbookExtFlag").Should().BeNull();
         extension.ToString(SaveOptions.DisableFormatting).Should().Contain("FreeXWorkbookNativeMetadata");
-        AssertWorkbookNativeMetadataModelReload(adapter, saved);
+        AssertWorkbookNativeMetadataModelReload(saved);
     }
 
     private static MemoryStream CreateWorkbookNativeMetadataSourcePackage()
@@ -365,10 +360,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Be("{00112233-4455-6677-8899-AABBCCDDEEFF}");
     }
 
-    private static void AssertWorkbookNativeMetadataModelReload(XlsxFileAdapter adapter, Stream stream)
+    private static void AssertWorkbookNativeMetadataModelReload(Stream stream)
     {
         stream.Position = 0;
-        var reloaded = adapter.Load(stream);
+        var reloaded = new XlsxFileAdapter().Load(stream);
         reloaded.FileRecoveryProperties.Should().ContainSingle(properties =>
             properties.AutoRecover == true &&
             properties.CrashSave == true &&

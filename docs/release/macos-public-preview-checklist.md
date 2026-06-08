@@ -99,7 +99,9 @@ Use a representative `.fxl` workbook with recognizable cell contents or sheet na
 | Double-click `.fxl` in Finder | FreeX launches or activates and opens the selected workbook, not a blank replacement workbook |  | Pass / Fail |  |
 | Confirm workbook identity | Window title, visible sheet, cell value, or recent-file entry matches the double-clicked `.fxl` file |  | Pass / Fail |  |
 | Right-click `.fxl` > Open With > FreeX | FreeX opens the file when it is not already running |  | Pass / Fail |  |
+| Drag supported `.fxl`/`.xlsx` workbook onto `FreeX.app` or Dock icon | FreeX launches or activates and opens the dropped workbook, not a blank replacement workbook |  | Pass / Fail |  |
 | Repeat while FreeX is already running | The selected file opens in the existing app session without losing unsaved work |  | Pass / Fail |  |
+| Drag supported workbook from Finder onto already-running FreeX window | The already-running FreeX window accepts the Finder drop and opens the workbook without losing unsaved work |  | Pass / Fail |  |
 | Optional spreadsheet file Open With | Representative `.xlsx` or `.csv` opens through Open With when included in the candidate scope |  | Pass / Fail / N/A |  |
 
 ## Workbook Smoke
@@ -112,6 +114,20 @@ Use a representative `.fxl` workbook with recognizable cell contents or sheet na
 | Close dirty workbook | Close prompt offers Save, Discard, and Cancel with clear labels |  | Pass / Fail |  |
 | Reopen saved workbook | Saved values, formulas, sheet names, and simple formatting survive reopen |  | Pass / Fail |  |
 | Recent files | Opened or saved workbook appears in the recent-file route when expected |  | Pass / Fail |  |
+
+## Future Native Share Sheet Readiness
+
+The current macOS public-preview candidate uses the existing share fallback; a native AppKit share sheet is not implemented yet. Do not claim native share-sheet parity until a build that implements the native sheet passes every row in this section. For builds before that implementation, record `Not implemented` for every row with evidence pointing to the release note or implementation decision.
+
+| Gate | Expected result when native AppKit share sheet is implemented | Actual result | Status | Evidence |
+| --- | --- | --- | --- | --- |
+| Native AppKit share sheet implementation status | Candidate contains a native AppKit share-sheet route; current public-preview builds record `Not implemented` because it is not implemented yet |  | Not implemented / Pass / Fail |  |
+| Saved workbook opens native share sheet | From a saved workbook, Share opens the native macOS share sheet for that workbook file, not only the fallback route |  | Not implemented / Pass / Fail |  |
+| Cancel leaves workbook and file unchanged | Cancel closes the sheet without changing workbook contents, saved file path, dirty state, or the saved workbook bytes |  | Not implemented / Pass / Fail |  |
+| Share target receives workbook file | At least one share target receives the saved workbook file with the expected file name and readable workbook contents |  | Not implemented / Pass / Fail |  |
+| Existing share fallback still works | The existing share fallback remains usable when the native share sheet is unavailable, canceled, or unsupported |  | Not implemented / Pass / Fail |  |
+| Keyboard focus after open and cancel | Keyboard focus lands predictably in the sheet and returns to a usable FreeX focus target after Cancel or completion |  | Not implemented / Pass / Fail |  |
+| VoiceOver announcement and navigation | VoiceOver identifies the sheet, target controls, Cancel action, and completion or cancel return state clearly enough to navigate safely |  | Not implemented / Pass / Fail |  |
 
 ## Command-Key Menu Behavior
 
@@ -215,6 +231,7 @@ Signing/notarization/stapler evidence:
 Finder .fxl default double-click:
 Gatekeeper first launch:
 Command-key menu behavior:
+Native share-sheet readiness:
 Keyboard-only accessibility:
 VoiceOver smoke:
 Diagnostics/log attachments:
