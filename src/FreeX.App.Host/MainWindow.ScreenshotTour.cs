@@ -8,6 +8,7 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -25,6 +26,8 @@ public partial class MainWindow
     private const string RibbonScreenshotTourManifestFileName = "ribbon_screenshot_tour_manifest.json";
     private const string AutoFilterFlyoutTourManifestFileName = "autofilter_flyout_tour_manifest.json";
     private const string AutoFilterFlyoutTourCaptureFileName = "freex_table_autofilter_dropdown";
+    private const string HomeNumberFormatDropdownTourManifestFileName = "home_number_format_dropdown_tour_manifest.json";
+    private const string HomeNumberFormatDropdownTourCaptureFileName = "freex_dropdown_home_number_format_opened";
 
     [DllImport("user32.dll")]
     private static extern bool SetCursorPos(int x, int y);
@@ -39,7 +42,8 @@ public partial class MainWindow
         var ribbonTour = ribbonBurstTour || Environment.GetEnvironmentVariable("FREEX_SS_TOUR") == "1";
         var backstageTour = Environment.GetEnvironmentVariable("FREEX_BACKSTAGE_TOUR") == "1";
         var autoFilterFlyoutTour = Environment.GetEnvironmentVariable("FREEX_AUTOFILTER_FLYOUT_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour)
+        var homeNumberFormatDropdownTour = Environment.GetEnvironmentVariable("FREEX_HOME_NUMBER_FORMAT_DROPDOWN_TOUR") == "1";
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -53,14 +57,15 @@ public partial class MainWindow
         var outputDir = Path.GetFullPath(
             Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "screenshots"));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour);
     }
 
     private async Task RunScreenshotTourAsync(
         string outputDir,
         RibbonScreenshotTourPlan? ribbonPlan,
         bool backstageTour,
-        bool autoFilterFlyoutTour)
+        bool autoFilterFlyoutTour,
+        bool homeNumberFormatDropdownTour)
     {
         if (ribbonPlan is not null)
             await CaptureRibbonTourAsync(outputDir, ribbonPlan);
@@ -70,6 +75,9 @@ public partial class MainWindow
 
         if (autoFilterFlyoutTour)
             await CaptureAutoFilterFlyoutTourAsync(Path.Combine(outputDir, "autofilter-flyout-tour"));
+
+        if (homeNumberFormatDropdownTour)
+            await CaptureHomeNumberFormatDropdownTourAsync(Path.Combine(outputDir, "home-number-format-dropdown-tour"));
 
         _suppressClosePrompt = true;
         Application.Current.Shutdown();
@@ -226,6 +234,86 @@ public partial class MainWindow
         var path = Path.Combine(outputDir, $"{AutoFilterFlyoutTourCaptureFileName}.png");
         if (!File.Exists(path))
             throw new InvalidOperationException("AutoFilter flyout tour did not create the planned FreeX dropdown capture.");
+    }
+
+    private async Task CaptureHomeNumberFormatDropdownTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteHomeNumberFormatDropdownTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1100;
+        Height = 768;
+        await Task.Delay(700);
+
+        var homeTab = RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Home");
+        SelectRibbonTourTab(homeTab);
+        NumberFormatBox.SelectedIndex = HomeNumberFormatDropdownPlanner.DefaultSelectionIndex;
+        NumberFormatBox.Focus();
+        NumberFormatBox.ApplyTemplate();
+        NumberFormatBox.IsDropDownOpen = true;
+        NumberFormatBox.UpdateLayout();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(350);
+        NumberFormatBox.UpdateLayout();
+
+        try
+        {
+            var popupChild = FindOpenPopupChild(NumberFormatBox)
+                ?? throw new InvalidOperationException("Home number format dropdown tour could not locate the open ComboBox popup.");
+
+            await CaptureElementAsync(popupChild, outputDir, HomeNumberFormatDropdownTourCaptureFileName);
+            ValidateHomeNumberFormatDropdownTourEvidence(outputDir);
+            await WriteHomeNumberFormatDropdownTourManifestAsync(outputDir, popupChild);
+        }
+        catch
+        {
+            DeleteHomeNumberFormatDropdownTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            NumberFormatBox.IsDropDownOpen = false;
+        }
+    }
+
+    private static FrameworkElement? FindOpenPopupChild(DependencyObject root)
+    {
+        if (root is Popup { IsOpen: true, Child: FrameworkElement child })
+            return child;
+
+        var childCount = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < childCount; i++)
+        {
+            var candidate = VisualTreeHelper.GetChild(root, i);
+            var match = FindOpenPopupChild(candidate);
+            if (match is not null)
+                return match;
+        }
+
+        return null;
+    }
+
+    private static void DeleteHomeNumberFormatDropdownTourEvidence(string outputDir)
+    {
+        foreach (var fileName in new[]
+        {
+            $"{HomeNumberFormatDropdownTourCaptureFileName}.png",
+            HomeNumberFormatDropdownTourManifestFileName
+        })
+        {
+            var path = Path.Combine(outputDir, fileName);
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    private static void ValidateHomeNumberFormatDropdownTourEvidence(string outputDir)
+    {
+        var path = Path.Combine(outputDir, $"{HomeNumberFormatDropdownTourCaptureFileName}.png");
+        if (!File.Exists(path))
+            throw new InvalidOperationException("Home number format dropdown tour did not create the planned FreeX dropdown capture.");
     }
 
     private async Task CaptureRibbonTourAsync(string outputDir, RibbonScreenshotTourPlan plan)
@@ -731,6 +819,51 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.AutoFilterFlyoutTourManifest);
     }
 
+    private static async Task WriteHomeNumberFormatDropdownTourManifestAsync(string outputDir, FrameworkElement popupChild)
+    {
+        var capture = new HomeNumberFormatDropdownTourManifestCapture(
+            CaptureKey: "interactive:home-number-format:opened",
+            PairKey: "interactive:home-number-format:opened",
+            ScenarioId: "dropdown:home-number-format",
+            State: "opened",
+            FileName: HomeNumberFormatDropdownTourCaptureFileName,
+            OutputFileName: $"{HomeNumberFormatDropdownTourCaptureFileName}.png",
+            CounterpartFileName: "interactive_home_number_format_opened.png",
+            CaptureLogicalWidth: popupChild.ActualWidth,
+            CaptureLogicalHeight: popupChild.ActualHeight);
+
+        var manifest = new HomeNumberFormatDropdownTourManifest(
+            Tool: "FREEX_HOME_NUMBER_FORMAT_DROPDOWN_TOUR",
+            EvidenceFamily: "dropdown",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "dropdown:home-number-format",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_dropdown_home_number_format_opened.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            SelectedCell: "A1",
+            SelectedFormat: HomeNumberFormatDropdownPlanner.Options[HomeNumberFormatDropdownPlanner.DefaultSelectionIndex].Label,
+            OptionLabels: HomeNumberFormatDropdownPlanner.Options.Select(option => option.Label).ToArray(),
+            CaptureStatus: "complete",
+            CaptureMethod: "RenderTargetBitmap-combobox-popup-child",
+            Pairing: new HomeNumberFormatDropdownTourManifestPairing(
+                "interactive:home-number-format:<State>",
+                "excel",
+                "screenshot_excel.ps1",
+                "interactive_home_number_format_opened.png"),
+            Captures: [capture],
+            Limitations:
+            [
+                "This in-app tour opens the production Home Number Format ComboBox and captures the open WPF popup child without global mouse or keyboard input.",
+                "The paired Microsoft Excel transient capture is declared by tools/screenshot_excel.ps1 and remains a separate foreground-guarded capture.",
+                "The scenario captures the opened dropdown with the default General format selected."
+            ]);
+
+        var path = Path.Combine(outputDir, HomeNumberFormatDropdownTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.HomeNumberFormatDropdownTourManifest);
+    }
+
     private sealed record RibbonScreenshotTourManifest(
         string Tool,
         string EvidenceFamily,
@@ -813,9 +946,45 @@ public partial class MainWindow
         double CaptureLogicalWidth,
         double CaptureLogicalHeight);
 
+    private sealed record HomeNumberFormatDropdownTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        string SelectedCell,
+        string SelectedFormat,
+        IReadOnlyList<string> OptionLabels,
+        string CaptureStatus,
+        string CaptureMethod,
+        HomeNumberFormatDropdownTourManifestPairing Pairing,
+        IReadOnlyList<HomeNumberFormatDropdownTourManifestCapture> Captures,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record HomeNumberFormatDropdownTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record HomeNumberFormatDropdownTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string FileName,
+        string OutputFileName,
+        string CounterpartFileName,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight);
+
     [JsonSourceGenerationOptions(WriteIndented = true)]
     [JsonSerializable(typeof(RibbonScreenshotTourManifest))]
     [JsonSerializable(typeof(AutoFilterFlyoutTourManifest))]
+    [JsonSerializable(typeof(HomeNumberFormatDropdownTourManifest))]
     private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
 
     // Activated by FREEX_ACCENT_BAR_TOUR=1 env var. Output lands in <repo-root>/screenshots/accent-bars-tour/.
