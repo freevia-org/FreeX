@@ -331,6 +331,75 @@ function Get-SummaryValue {
     return ""
 }
 
+function Get-WorkflowRunIdentity {
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][AllowNull()][string]$Value)
+
+    if ($Value -notmatch "^(?<RunId>[0-9]+)\s*/\s*(?<RunAttempt>[0-9]+)$") {
+        Add-ValidationError "Candidate Summary 'Workflow run id / attempt' must be '<numeric run id> / <numeric run attempt>', but was '$Value'."
+        return [pscustomobject]@{
+            RunId = ""
+            RunAttempt = ""
+        }
+    }
+
+    return [pscustomobject]@{
+        RunId = $Matches.RunId
+        RunAttempt = $Matches.RunAttempt
+    }
+}
+
+function Get-TableRowByLabel {
+    param(
+        [Parameter(Mandatory = $true)][object]$Table,
+        [Parameter(Mandatory = $true)][string]$LabelColumn,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    foreach ($row in $Table.Rows) {
+        $candidateLabel = Get-CellValue -Row $row -Column $LabelColumn
+        if ([string]::Equals($candidateLabel, $Label, [System.StringComparison]::OrdinalIgnoreCase)) {
+            return $row
+        }
+    }
+
+    return $null
+}
+
+function Get-RowEvidenceText {
+    param(
+        [Parameter(Mandatory = $true)][hashtable]$Row,
+        [Parameter(Mandatory = $true)][string[]]$Columns
+    )
+
+    $values = @()
+    foreach ($column in $Columns) {
+        $values += Get-CellValue -Row $Row -Column $column
+    }
+
+    return ($values -join " ")
+}
+
+function Assert-TextIncludesValue {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][AllowNull()][string]$Text,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][AllowNull()][string]$ExpectedValue,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ExpectedValue)) {
+        return
+    }
+
+    $normalizedText = ""
+    if ($null -ne $Text) {
+        $normalizedText = $Text
+    }
+
+    if ($normalizedText.IndexOf($ExpectedValue, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) {
+        Add-ValidationError "$Label must include '$ExpectedValue'."
+    }
+}
+
 function Test-CandidateSummary {
     param([Parameter(Mandatory = $true)][object]$SummaryTable)
 
@@ -368,34 +437,78 @@ function Test-CandidateSummary {
     }
 
     $workflowRun = Get-SummaryValue -SummaryTable $SummaryTable -Field "Workflow run id / attempt"
-    if (-not [string]::IsNullOrWhiteSpace($ExpectedRunId)) {
-        Assert-ValueMatches -Value $workflowRun -Pattern "(^|[^0-9])$([System.Text.RegularExpressions.Regex]::Escape($ExpectedRunId))([^0-9]|$)" -Label "Candidate Summary 'Workflow run id / attempt'"
+    $workflowIdentity = Get-WorkflowRunIdentity -Value $workflowRun
+    $workflowRunMatchesExpected = $true
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedRunId) -and $workflowIdentity.RunId -ne $ExpectedRunId) {
+        $workflowRunMatchesExpected = $false
     }
 
-    if (-not [string]::IsNullOrWhiteSpace($ExpectedRunAttempt)) {
-        Assert-ValueMatches -Value $workflowRun -Pattern "(^|[^0-9])$([System.Text.RegularExpressions.Regex]::Escape($ExpectedRunAttempt))([^0-9]|$)" -Label "Candidate Summary 'Workflow run id / attempt'"
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedRunAttempt) -and $workflowIdentity.RunAttempt -ne $ExpectedRunAttempt) {
+        $workflowRunMatchesExpected = $false
+    }
+
+    if (-not $workflowRunMatchesExpected) {
+        Add-ValidationError "Candidate Summary 'Workflow run id / attempt' has unexpected value '$workflowRun'."
     }
 
     $artifactWrapper = Get-SummaryValue -SummaryTable $SummaryTable -Field "Artifact wrapper name"
     $diagnosticsWrapper = Get-SummaryValue -SummaryTable $SummaryTable -Field "Diagnostics artifact name"
-    if (-not [string]::IsNullOrWhiteSpace($ExpectedRunId) -and -not [string]::IsNullOrWhiteSpace($ExpectedRunAttempt)) {
-        Assert-ValueEquals -Value $artifactWrapper -ExpectedValue "freex-$ExpectedRunId-$ExpectedRunAttempt-$runtime-macos-app" -Label "Candidate Summary 'Artifact wrapper name'"
-        Assert-ValueEquals -Value $diagnosticsWrapper -ExpectedValue "freex-$ExpectedRunId-$ExpectedRunAttempt-$runtime-macos-diagnostics" -Label "Candidate Summary 'Diagnostics artifact name'"
+    $artifactRunId = $workflowIdentity.RunId
+    $artifactRunAttempt = $workflowIdentity.RunAttempt
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedRunId)) {
+        $artifactRunId = $ExpectedRunId
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedRunAttempt)) {
+        $artifactRunAttempt = $ExpectedRunAttempt
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($artifactRunId) -and -not [string]::IsNullOrWhiteSpace($artifactRunAttempt)) {
+        Assert-ValueEquals -Value $artifactWrapper -ExpectedValue "freex-$artifactRunId-$artifactRunAttempt-$runtime-macos-app" -Label "Candidate Summary 'Artifact wrapper name'"
+        Assert-ValueEquals -Value $diagnosticsWrapper -ExpectedValue "freex-$artifactRunId-$artifactRunAttempt-$runtime-macos-diagnostics" -Label "Candidate Summary 'Diagnostics artifact name'"
     }
     else {
         Assert-ValueMatches -Value $artifactWrapper -Pattern "^freex-[0-9]+-[0-9]+-$runtime-macos-app$" -Label "Candidate Summary 'Artifact wrapper name'"
         Assert-ValueMatches -Value $diagnosticsWrapper -Pattern "^freex-[0-9]+-[0-9]+-$runtime-macos-diagnostics$" -Label "Candidate Summary 'Diagnostics artifact name'"
     }
 
-    Assert-ValueEquals -Value (Get-SummaryValue -SummaryTable $SummaryTable -Field "Inner app ZIP") -ExpectedValue "freex-$runtime-macos-app.zip" -Label "Candidate Summary 'Inner app ZIP'"
-    Assert-ValueEquals -Value (Get-SummaryValue -SummaryTable $SummaryTable -Field "Evidence file") -ExpectedValue "freex-$runtime-macos-evidence.txt" -Label "Candidate Summary 'Evidence file'"
-    Assert-ValueMatches -Value (Get-SummaryValue -SummaryTable $SummaryTable -Field "ZIP SHA-256") -Pattern "^[0-9a-fA-F]{64}$" -Label "Candidate Summary 'ZIP SHA-256'"
+    $innerAppZip = Get-SummaryValue -SummaryTable $SummaryTable -Field "Inner app ZIP"
+    $evidenceFile = Get-SummaryValue -SummaryTable $SummaryTable -Field "Evidence file"
+    $zipSha256 = Get-SummaryValue -SummaryTable $SummaryTable -Field "ZIP SHA-256"
+    Assert-ValueEquals -Value $innerAppZip -ExpectedValue "freex-$runtime-macos-app.zip" -Label "Candidate Summary 'Inner app ZIP'"
+    Assert-ValueEquals -Value $evidenceFile -ExpectedValue "freex-$runtime-macos-evidence.txt" -Label "Candidate Summary 'Evidence file'"
+    Assert-ValueMatches -Value $zipSha256 -Pattern "^[0-9a-fA-F]{64}$" -Label "Candidate Summary 'ZIP SHA-256'"
     Assert-ValueMatches -Value (Get-SummaryValue -SummaryTable $SummaryTable -Field "Signing mode") -Pattern "^(developer-id|developer id)$" -Label "Candidate Summary 'Signing mode'"
     Assert-ValueEquals -Value (Get-SummaryValue -SummaryTable $SummaryTable -Field "Notarization status") -ExpectedValue "accepted" -Label "Candidate Summary 'Notarization status'"
     Assert-ValueMatches -Value (Get-SummaryValue -SummaryTable $SummaryTable -Field "Stapler status") -Pattern "^(true|validated|valid|stapled)$" -Label "Candidate Summary 'Stapler status'"
     Assert-ValueEquals -Value (Get-SummaryValue -SummaryTable $SummaryTable -Field "Final decision") -ExpectedValue "Pass" -Label "Candidate Summary 'Final decision'"
 
-    return $runtime
+    return [pscustomobject]@{
+        Runtime = $runtime
+        RunId = $workflowIdentity.RunId
+        RunAttempt = $workflowIdentity.RunAttempt
+        ArtifactWrapper = $artifactWrapper
+        DiagnosticsWrapper = $diagnosticsWrapper
+        InnerAppZip = $innerAppZip
+        ZipSha256 = $zipSha256
+        EvidenceFile = $evidenceFile
+    }
+}
+
+function Test-HostedEvidenceCopyForwardConsistency {
+    param(
+        [Parameter(Mandatory = $true)][object]$Table,
+        [Parameter(Mandatory = $true)][object]$CandidateSummary
+    )
+
+    $checksumRow = Get-TableRowByLabel -Table $Table -LabelColumn "Required check" -Label "Checksum"
+    if ($null -eq $checksumRow) {
+        return
+    }
+
+    $checksumEvidence = Get-RowEvidenceText -Row $checksumRow -Columns @("Actual evidence", "Attachment")
+    Assert-TextIncludesValue -Text $checksumEvidence -ExpectedValue $CandidateSummary.InnerAppZip -Label "Hosted Evidence Copy-Forward 'Checksum' evidence"
+    Assert-TextIncludesValue -Text $checksumEvidence -ExpectedValue $CandidateSummary.ZipSha256 -Label "Hosted Evidence Copy-Forward 'Checksum' evidence"
 }
 
 function Test-LogAndArtifactCollection {
@@ -413,6 +526,38 @@ function Test-LogAndArtifactCollection {
             $required.StartsWith("Required", [System.StringComparison]::OrdinalIgnoreCase)) {
             Assert-AnyEvidenceValue -Row $row -Columns @("Collected path or attachment") -Label "Log And Artifact Collection '$artifact'"
         }
+    }
+}
+
+function Test-LogAndArtifactCollectionConsistency {
+    param(
+        [Parameter(Mandatory = $true)][object]$Table,
+        [Parameter(Mandatory = $true)][object]$CandidateSummary
+    )
+
+    $appWrapperRow = Get-TableRowByLabel -Table $Table -LabelColumn "Artifact" -Label "GitHub Actions app artifact wrapper"
+    if ($null -ne $appWrapperRow) {
+        $appWrapperEvidence = Get-RowEvidenceText -Row $appWrapperRow -Columns @("Collected path or attachment", "Notes")
+        Assert-TextIncludesValue -Text $appWrapperEvidence -ExpectedValue $CandidateSummary.ArtifactWrapper -Label "Log And Artifact Collection 'GitHub Actions app artifact wrapper'"
+    }
+
+    $innerZipRow = Get-TableRowByLabel -Table $Table -LabelColumn "Artifact" -Label "Inner app ZIP and .sha256 file"
+    if ($null -ne $innerZipRow) {
+        $innerZipEvidence = Get-RowEvidenceText -Row $innerZipRow -Columns @("Collected path or attachment", "Notes")
+        Assert-TextIncludesValue -Text $innerZipEvidence -ExpectedValue $CandidateSummary.InnerAppZip -Label "Log And Artifact Collection 'Inner app ZIP and .sha256 file'"
+        Assert-TextIncludesValue -Text $innerZipEvidence -ExpectedValue "$($CandidateSummary.InnerAppZip).sha256" -Label "Log And Artifact Collection 'Inner app ZIP and .sha256 file'"
+    }
+
+    $evidenceRow = Get-TableRowByLabel -Table $Table -LabelColumn "Artifact" -Label $CandidateSummary.EvidenceFile
+    if ($null -ne $evidenceRow) {
+        $evidenceFileEvidence = Get-RowEvidenceText -Row $evidenceRow -Columns @("Collected path or attachment", "Notes")
+        Assert-TextIncludesValue -Text $evidenceFileEvidence -ExpectedValue $CandidateSummary.EvidenceFile -Label "Log And Artifact Collection '$($CandidateSummary.EvidenceFile)'"
+    }
+
+    $diagnosticsRow = Get-TableRowByLabel -Table $Table -LabelColumn "Artifact" -Label "Diagnostics artifact"
+    if ($null -ne $diagnosticsRow) {
+        $diagnosticsEvidence = Get-RowEvidenceText -Row $diagnosticsRow -Columns @("Collected path or attachment", "Notes")
+        Assert-TextIncludesValue -Text $diagnosticsEvidence -ExpectedValue $CandidateSummary.DiagnosticsWrapper -Label "Log And Artifact Collection 'Diagnostics artifact'"
     }
 }
 
@@ -448,9 +593,11 @@ if (-not (Test-Path -LiteralPath $resolvedChecklistPath -PathType Leaf)) {
 
 $tables = Get-MarkdownTables -Path $resolvedChecklistPath
 $candidateSummary = Get-RequiredTable -Tables $tables -Section "Candidate Summary"
+$candidateSummaryDetails = $null
 $runtimeUnderTest = ""
 if ($null -ne $candidateSummary) {
-    $runtimeUnderTest = Test-CandidateSummary -SummaryTable $candidateSummary
+    $candidateSummaryDetails = Test-CandidateSummary -SummaryTable $candidateSummary
+    $runtimeUnderTest = $candidateSummaryDetails.Runtime
 }
 
 $hostedEvidence = Get-RequiredTable -Tables $tables -Section "Hosted Evidence Copy-Forward"
@@ -469,6 +616,9 @@ if ($null -ne $hostedEvidence) {
         "Diagnostics artifact"
     )
     Test-StatusTable -Table $hostedEvidence -LabelColumn "Required check" -StatusColumn "Status" -EvidenceColumns @("Actual evidence", "Attachment")
+    if ($null -ne $candidateSummaryDetails) {
+        Test-HostedEvidenceCopyForwardConsistency -Table $hostedEvidence -CandidateSummary $candidateSummaryDetails
+    }
 }
 
 $gatekeeper = Get-RequiredTable -Tables $tables -Section "Gatekeeper First Launch"
@@ -589,6 +739,9 @@ if ($null -ne $logCollection) {
         "Terminal transcript"
     )
     Test-LogAndArtifactCollection -Table $logCollection
+    if ($null -ne $candidateSummaryDetails) {
+        Test-LogAndArtifactCollectionConsistency -Table $logCollection -CandidateSummary $candidateSummaryDetails
+    }
 }
 
 $publicDecision = Get-RequiredTable -Tables $tables -Section "Public-Preview Decision"
