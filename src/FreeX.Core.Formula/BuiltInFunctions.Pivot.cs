@@ -47,8 +47,7 @@ public static partial class BuiltInFunctions
         var (pivotSheet, pivotTable) = locatedPivot.Value;
 
         var headers = ReadPivotSourceHeaders(ctx.CurrentWorkbook, pivotTable);
-        var dataFieldIndex = pivotTable.DataFields.FindIndex(field =>
-            string.Equals(field.Name, dataFieldCaption, StringComparison.CurrentCultureIgnoreCase));
+        var dataFieldIndex = FindPivotDataFieldIndex(pivotTable, dataFieldCaption);
         if (dataFieldIndex < 0)
             return ErrorValue.Ref;
         if (!GetPivotDataFilterFieldsAreVisible(pivotTable, headers, filters))
@@ -115,17 +114,18 @@ public static partial class BuiltInFunctions
         if (!string.IsNullOrWhiteSpace(reference.SheetName))
         {
             var sheet = ctx.CurrentWorkbook?.GetSheet(reference.SheetName);
-            var address = sheet is null ? (CellAddress?)null : new CellAddress(sheet.Id, row, col);
-            var pivot = address is null
-                ? null
-                : sheet!.PivotTables.FirstOrDefault(item => item.TargetRange.Contains(address.Value));
-            return pivot is null ? null : (sheet!, pivot);
+            if (sheet is null)
+                return null;
+
+            var address = new CellAddress(sheet.Id, row, col);
+            var pivot = FindPivotTableContaining(sheet, address);
+            return pivot is null ? null : (sheet, pivot);
         }
 
         if (ctx.CurrentSheet is not null)
         {
             var currentAddress = new CellAddress(ctx.CurrentSheet.Id, row, col);
-            var currentPivot = ctx.CurrentSheet.PivotTables.FirstOrDefault(pivot => pivot.TargetRange.Contains(currentAddress));
+            var currentPivot = FindPivotTableContaining(ctx.CurrentSheet, currentAddress);
             if (currentPivot is not null)
                 return (ctx.CurrentSheet, currentPivot);
         }
@@ -136,13 +136,20 @@ public static partial class BuiltInFunctions
         foreach (var sheet in ctx.CurrentWorkbook.Sheets)
         {
             var address = new CellAddress(sheet.Id, row, col);
-            var pivot = sheet.PivotTables.FirstOrDefault(item => item.TargetRange.Contains(address));
+            var pivot = FindPivotTableContaining(sheet, address);
             if (pivot is not null)
                 return (sheet, pivot);
         }
 
         return null;
     }
+
+    private static int FindPivotDataFieldIndex(PivotTableModel pivotTable, string caption) =>
+        pivotTable.DataFields.FindIndex(field =>
+            string.Equals(field.Name, caption, StringComparison.CurrentCultureIgnoreCase));
+
+    private static PivotTableModel? FindPivotTableContaining(Sheet sheet, CellAddress address) =>
+        sheet.PivotTables.FirstOrDefault(pivot => pivot.TargetRange.Contains(address));
 
     private static uint? ResolveGetPivotDataRow(
         Sheet sheet,
