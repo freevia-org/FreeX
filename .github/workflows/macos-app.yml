@@ -1146,16 +1146,32 @@ jobs:
         run: |
           set -euo pipefail
 
+          compile_items_path="artifacts/freex-${FREEX_MACOS_ARCH}-macos-tfm-compile-items-evidence.txt"
+
           dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj \
             --configuration Release \
             --framework "$FREEX_MACOS_TFM" \
             --runtime "$FREEX_RUNTIME" \
             -p:EnableMacOsTargetFramework=true
 
+          dotnet msbuild src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj \
+            -p:Configuration=Release \
+            -p:EnableMacOsTargetFramework=true \
+            -p:TargetFramework="$FREEX_MACOS_TFM" \
+            -p:RuntimeIdentifier="$FREEX_RUNTIME" \
+            -getItem:Compile \
+            > "$compile_items_path"
+
+          grep -q "MacOsWorkbookShareSheetService.cs" "$compile_items_path"
+
           {
             echo "macos_tfm_build=passed"
             echo "macos_tfm=$FREEX_MACOS_TFM"
             echo "runtime=$FREEX_RUNTIME"
+            echo "macos_tfm_source_boundary=src/FreeX.App.Avalonia/MacOs"
+            echo "macos_tfm_native_share_sheet_source=src/FreeX.App.Avalonia/MacOs/MacOsWorkbookShareSheetService.cs"
+            echo "macos_tfm_native_source_compiled=true"
+            echo "macos_tfm_compile_items_artifact=freex-${FREEX_MACOS_ARCH}-macos-tfm-compile-items-evidence.txt"
             echo "macos_tfm_artifact_channel=evidence-only"
           } | tee -a "$FREEX_MACOS_TFM_EVIDENCE"
 
@@ -1163,7 +1179,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: freex-${{ github.run_id }}-${{ github.run_attempt }}-macos-tfm-build-${{ matrix.arch }}-evidence
-          path: artifacts/freex-${{ matrix.arch }}-macos-tfm-build-evidence.txt
+          path: artifacts/freex-${{ matrix.arch }}-macos-tfm-*-evidence.txt
           if-no-files-found: error
           retention-days: 14
 

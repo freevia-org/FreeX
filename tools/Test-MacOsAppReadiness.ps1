@@ -157,6 +157,56 @@ function Get-ProjectProperty {
     return $null
 }
 
+function Get-ProjectPropertyNodes {
+    param(
+        [Parameter(Mandatory = $true)][xml]$Project,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    $nodes = @()
+    foreach ($group in @($Project.Project.PropertyGroup)) {
+        foreach ($child in @($group.ChildNodes)) {
+            if ($child.NodeType -eq [System.Xml.XmlNodeType]::Element -and $child.LocalName -eq $Name) {
+                $nodes += $child
+            }
+        }
+    }
+
+    return $nodes
+}
+
+function Get-ProjectItemNodes {
+    param(
+        [Parameter(Mandatory = $true)][xml]$Project,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    $nodes = @()
+    foreach ($group in @($Project.Project.ItemGroup)) {
+        foreach ($child in @($group.ChildNodes)) {
+            if ($child.NodeType -eq [System.Xml.XmlNodeType]::Element -and $child.LocalName -eq $Name) {
+                $nodes += $child
+            }
+        }
+    }
+
+    return $nodes
+}
+
+function Get-ProjectNodeCondition {
+    param([Parameter(Mandatory = $true)]$Node)
+
+    if ($Node.HasAttribute("Condition")) {
+        return [string]$Node.GetAttribute("Condition")
+    }
+
+    if ($Node.ParentNode -and $Node.ParentNode.HasAttribute("Condition")) {
+        return [string]$Node.ParentNode.GetAttribute("Condition")
+    }
+
+    return ""
+}
+
 function Get-ProjectItems {
     param(
         [Parameter(Mandatory = $true)][xml]$Project,
@@ -251,6 +301,13 @@ function Test-IsIgnoredSourcePath {
         $segments -contains ".claude"
 }
 
+function Test-IsMacOsConditionalSourcePath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $relative = Get-RepoRelativePath $Path
+    return $relative.StartsWith("src/FreeX.App.Avalonia/MacOs/", [System.StringComparison]::OrdinalIgnoreCase)
+}
+
 function Test-MacOsIcon {
     param([Parameter(Mandatory = $true)][string]$IconFilePath)
 
@@ -290,9 +347,30 @@ function Test-AvaloniaProject {
 
     [xml]$project = Get-Content -LiteralPath $ProjectPath -Raw
 
-    $targetFramework = Get-ProjectProperty -Project $project -Name "TargetFramework"
-    Assert-True -Condition ($targetFramework -eq "net10.0") -Message "Avalonia app TargetFramework must be net10.0, but was '$targetFramework'."
-    Assert-True -Condition ($targetFramework.IndexOf("-windows", [System.StringComparison]::OrdinalIgnoreCase) -lt 0) -Message "Avalonia app TargetFramework must not be Windows-specific."
+    $targetFrameworkNodes = @(Get-ProjectPropertyNodes -Project $project -Name "TargetFramework")
+    Assert-True -Condition ($targetFrameworkNodes.Count -gt 0) -Message "Avalonia app TargetFramework must be net10.0."
+
+    $targetFrameworkValues = @($targetFrameworkNodes | ForEach-Object { [string]$_.InnerText } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    Assert-True -Condition ($targetFrameworkValues -contains "net10.0") -Message "Avalonia app TargetFramework must be net10.0, but was '$($targetFrameworkValues -join ';')'."
+    foreach ($targetFrameworkValue in $targetFrameworkValues) {
+        Assert-True -Condition ($targetFrameworkValue.IndexOf("-windows", [System.StringComparison]::OrdinalIgnoreCase) -lt 0) -Message "Avalonia app TargetFramework must not be Windows-specific."
+    }
+
+    $targetFrameworksNodes = @(Get-ProjectPropertyNodes -Project $project -Name "TargetFrameworks")
+    Assert-True -Condition ($targetFrameworksNodes.Count -eq 1) -Message "Avalonia app TargetFrameworks must have a single opt-in macOS TFM property."
+    $macOsTargetFrameworksCondition = Get-ProjectNodeCondition $targetFrameworksNodes[0]
+    Assert-True -Condition ($macOsTargetFrameworksCondition -eq "'`$(EnableMacOsTargetFramework)' == 'true'") -Message "Avalonia app TargetFrameworks must be guarded by EnableMacOsTargetFramework."
+    $macOsTargetFrameworks = @([string]$targetFrameworksNodes[0].InnerText -split ";" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    Assert-ExactSet -Actual $macOsTargetFrameworks -Expected @("net10.0", "net10.0-macos") -Label "Avalonia app opt-in TargetFrameworks"
+
+    $defaultFrameworkNodes = @($targetFrameworkNodes | Where-Object { [string]$_.InnerText -eq "net10.0" })
+    Assert-True -Condition ($defaultFrameworkNodes.Count -eq 1) -Message "Avalonia app must keep exactly one default net10.0 TargetFramework."
+    Assert-True -Condition ((Get-ProjectNodeCondition $defaultFrameworkNodes[0]) -eq "'`$(EnableMacOsTargetFramework)' != 'true'") -Message "Avalonia app default TargetFramework must be used when EnableMacOsTargetFramework is not true."
+
+    $supportedOsVersionNodes = @(Get-ProjectPropertyNodes -Project $project -Name "SupportedOSPlatformVersion")
+    Assert-True -Condition ($supportedOsVersionNodes.Count -eq 1) -Message "Avalonia app must declare SupportedOSPlatformVersion for net10.0-macos."
+    Assert-True -Condition ([string]$supportedOsVersionNodes[0].InnerText -eq "12.0") -Message "Avalonia app SupportedOSPlatformVersion must be 12.0."
+    Assert-True -Condition ((Get-ProjectNodeCondition $supportedOsVersionNodes[0]) -eq "'`$(TargetFramework)' == 'net10.0-macos'") -Message "Avalonia app SupportedOSPlatformVersion must be scoped to net10.0-macos."
 
     $outputType = Get-ProjectProperty -Project $project -Name "OutputType"
     Assert-True -Condition ($outputType -eq "Exe") -Message "Avalonia app OutputType must be Exe."
@@ -317,6 +395,14 @@ function Test-AvaloniaProject {
 
     $contentItems = @(Get-ProjectItems -Project $project -Name "Content" | ForEach-Object { [string]$_.Include })
     Assert-True -Condition ($contentItems -contains "Packaging\macos\FreeX.icns") -Message "Avalonia app project must include the macOS app icon as content."
+
+    $macOsSourceRemoves = @(Get-ProjectItemNodes -Project $project -Name "Compile" | Where-Object { $_.GetAttribute("Remove") -eq "MacOs\**\*.cs" })
+    Assert-True -Condition ($macOsSourceRemoves.Count -eq 1) -Message "Avalonia app project must exclude MacOs source from non-macOS target frameworks."
+    Assert-True -Condition ((Get-ProjectNodeCondition $macOsSourceRemoves[0]) -eq "'`$(TargetFramework)' != 'net10.0-macos'") -Message "Avalonia app MacOs source exclusion must apply outside net10.0-macos."
+
+    $macOsDefineConstants = @(Get-ProjectPropertyNodes -Project $project -Name "DefineConstants" | Where-Object { [string]$_.InnerText -match "(^|;)FREEX_MACOS_SHARE_SHEET(;|$)" })
+    Assert-True -Condition ($macOsDefineConstants.Count -eq 1) -Message "Avalonia app project must define FREEX_MACOS_SHARE_SHEET for the native macOS share sheet."
+    Assert-True -Condition ((Get-ProjectNodeCondition $macOsDefineConstants[0]) -eq "'`$(TargetFramework)' == 'net10.0-macos'") -Message "Avalonia app FREEX_MACOS_SHARE_SHEET constant must be scoped to net10.0-macos."
 
     $allowedProjectReferences = @(
         "FreeX.App.Services",
@@ -2781,7 +2867,7 @@ function Test-SourceWiring {
 function Test-PortableSourceHygiene {
     param([Parameter(Mandatory = $true)][string[]]$SourceRoots)
 
-    $forbiddenTokens = @(
+    $alwaysForbiddenTokens = @(
         "System.Windows",
         "Microsoft.Win32",
         "Windows.ApplicationModel",
@@ -2794,7 +2880,9 @@ function Test-PortableSourceHygiene {
         "SharpVectors.Wpf",
         "UseWPF",
         "FreeX.App.Host",
-        "FreeX.App.UI",
+        "FreeX.App.UI"
+    )
+    $nativeMacOsTokens = @(
         "AppKit",
         "Foundation",
         "ObjCRuntime",
@@ -2823,9 +2911,19 @@ function Test-PortableSourceHygiene {
 
     foreach ($file in $sourceFiles) {
         $content = Get-Content -LiteralPath $file.FullName -Raw
-        foreach ($token in $forbiddenTokens) {
+        foreach ($token in $alwaysForbiddenTokens) {
             if ($content.IndexOf($token, [System.StringComparison]::Ordinal) -ge 0) {
                 throw "Portable macOS source contains forbidden token '$token' in $(Get-RepoRelativePath $file.FullName)."
+            }
+        }
+
+        if (Test-IsMacOsConditionalSourcePath $file.FullName) {
+            continue
+        }
+
+        foreach ($token in $nativeMacOsTokens) {
+            if ($content.IndexOf($token, [System.StringComparison]::Ordinal) -ge 0) {
+                throw "Portable macOS source contains native macOS token '$token' outside src/FreeX.App.Avalonia/MacOs in $(Get-RepoRelativePath $file.FullName)."
             }
         }
     }
