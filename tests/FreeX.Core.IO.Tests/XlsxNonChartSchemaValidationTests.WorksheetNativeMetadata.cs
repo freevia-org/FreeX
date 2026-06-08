@@ -101,6 +101,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetWebPublishItemsSanitized(saved);
+        AssertWorksheetNativeMetadataWorkbookReloads(saved, expectEditedCell: true);
     }
 
     [Fact]
@@ -156,6 +157,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetWebPublishItemsPackageMetadata(saved);
+        AssertWorksheetNativeMetadataWorkbookReloads(saved, expectEditedCell: true);
     }
 
     [Fact]
@@ -177,6 +179,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetOleControlsSanitized(saved);
+        AssertWorksheetNativeMetadataWorkbookReloads(saved, expectEditedCell: true);
     }
 
     [Fact]
@@ -218,6 +221,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         saved.Position = 0;
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetControlPropertiesRelationshipRebound(saved);
+        AssertWorksheetNativeMetadataWorkbookReloads(saved);
     }
 
     [Fact]
@@ -235,6 +239,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         saved.Position = 0;
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetOleObjectRelationshipRebound(saved);
+        AssertWorksheetNativeMetadataWorkbookReloads(saved);
     }
 
     [Fact]
@@ -252,6 +257,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         saved.Position = 0;
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetControlPropertiesDanglingControlPrRebound(saved);
+        AssertWorksheetNativeMetadataWorkbookReloads(saved);
     }
 
     [Fact]
@@ -269,6 +275,19 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         saved.Position = 0;
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetOleControlSidecarsPruned(saved);
+        AssertWorksheetNativeMetadataWorkbookReloads(saved);
+    }
+
+    private static void AssertWorksheetNativeMetadataWorkbookReloads(Stream stream, bool expectEditedCell = false)
+    {
+        stream.Position = 0;
+        var workbook = new XlsxFileAdapter().Load(stream);
+        var sheet = workbook.GetSheetAt(0);
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("Name"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new NumberValue(24));
+        if (expectEditedCell)
+            sheet.GetValue(new CellAddress(sheet.Id, 3, 3)).Should().Be(new NumberValue(42));
     }
 
     private static MemoryStream CreateWorksheetNativeMetadataSourcePackage()
