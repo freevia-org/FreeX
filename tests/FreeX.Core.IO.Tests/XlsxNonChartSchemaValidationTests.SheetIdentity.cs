@@ -28,6 +28,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
             .Should()
             .BeTrue(blockReason);
+        AssertSheetIdentityModel(workbook);
 
         var visibleSheet = workbook.GetSheet("Visible")!;
         visibleSheet.SetCell(new CellAddress(visibleSheet.Id, 4, 4), new NumberValue(42));
@@ -50,6 +51,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceVeryHiddenSheetProperties.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        AssertSheetIdentityModel(adapter.Load(saved));
     }
 
     private static Workbook CreateSheetIdentityMetadataSourceWorkbook()
@@ -70,6 +74,32 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         veryHidden.CodeName = "SheetInternal";
 
         return workbook;
+    }
+
+    private static void AssertSheetIdentityModel(Workbook workbook)
+    {
+        workbook.SheetCount.Should().Be(3);
+
+        var visible = workbook.GetSheetAt(0);
+        visible.Name.Should().Be("Visible");
+        visible.IsHidden.Should().BeFalse();
+        visible.IsVeryHidden.Should().BeFalse();
+        visible.TabColor.Should().BeNull();
+        visible.CodeName.Should().BeNull();
+
+        var hidden = workbook.GetSheetAt(1);
+        hidden.Name.Should().Be("Hidden");
+        hidden.IsHidden.Should().BeTrue();
+        hidden.IsVeryHidden.Should().BeFalse();
+        hidden.TabColor.Should().Be(new CellColor(255, 192, 0));
+        hidden.CodeName.Should().BeNull();
+
+        var internalSheet = workbook.GetSheetAt(2);
+        internalSheet.Name.Should().Be("Internal");
+        internalSheet.IsHidden.Should().BeTrue();
+        internalSheet.IsVeryHidden.Should().BeTrue();
+        internalSheet.TabColor.Should().BeNull();
+        internalSheet.CodeName.Should().Be("SheetInternal");
     }
 
     private static XElement ReadWorksheetChildElement(Stream stream, string entryName, string localName)
