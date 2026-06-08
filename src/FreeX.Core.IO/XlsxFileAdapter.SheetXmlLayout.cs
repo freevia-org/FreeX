@@ -254,10 +254,7 @@ public sealed partial class XlsxFileAdapter
         var allowEditRanges = XlsxAllowEditRangeMapper.Read(worksheetXml, worksheetNs);
         var mergedRegions = ReadMergedRegions(worksheetXml, worksheetNs);
 
-        var sheetView = worksheetXml.Root?
-            .Element(worksheetNs + "sheetViews")?
-            .Elements(worksheetNs + "sheetView")
-            .FirstOrDefault(IsPrimarySheetView);
+        var sheetView = FindPrimarySheetView(worksheetXml, worksheetNs);
         var sheetCalcPr = worksheetXml.Root?.Element(worksheetNs + "sheetCalcPr");
         var dimension = worksheetXml.Root?.Element(worksheetNs + "dimension");
         var sheetFormatPr = worksheetXml.Root?.Element(worksheetNs + "sheetFormatPr");
@@ -274,11 +271,7 @@ public sealed partial class XlsxFileAdapter
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         var pane = sheetView?.Element(worksheetNs + "pane");
         var viewTopLeft = ParseOptionalCellReference(sheetView?.Attribute("topLeftCell")?.Value);
-        var activeCell = ParseOptionalCellReference(
-            sheetView?
-                .Elements(worksheetNs + "selection")
-                .Select(selection => selection.Attribute("activeCell")?.Value)
-                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)));
+        var activeCell = ReadActiveSelectionCell(sheetView, worksheetNs);
         var background = XlsxWorksheetBackgroundReaderWriter.Read(archive, worksheetPath, worksheetXml);
         var headerFooterPictures = XlsxHeaderFooterPictureReaderWriter.Read(archive, worksheetPath, worksheetXml);
         var drawingParts = XlsxWorksheetDrawingPartReader.ReadParts(archive, worksheetPath, worksheetXml);
@@ -734,11 +727,7 @@ public sealed partial class XlsxFileAdapter
 
     private static int? ReadNormalStyleFontId(XElement stylesRoot, XNamespace ns)
     {
-        var normalStyle = stylesRoot.Element(ns + "cellStyles")?
-            .Elements(ns + "cellStyle")
-            .FirstOrDefault(style =>
-                string.Equals(style.Attribute("builtinId")?.Value, "0", StringComparison.Ordinal) ||
-                string.Equals(style.Attribute("name")?.Value, "Normal", StringComparison.OrdinalIgnoreCase));
+        var normalStyle = FindNormalCellStyle(stylesRoot, ns);
 
         if (ParseOptionalNonNegativeInt(normalStyle?.Attribute("xfId")?.Value) is { } normalXfId)
         {
@@ -749,11 +738,36 @@ public sealed partial class XlsxFileAdapter
                 return styleFontId;
         }
 
-        var defaultCellXf = stylesRoot.Element(ns + "cellXfs")?
-            .Elements(ns + "xf")
-            .FirstOrDefault();
+        var defaultCellXf = FindFirstDefaultCellXf(stylesRoot, ns);
         return ParseOptionalNonNegativeInt(defaultCellXf?.Attribute("fontId")?.Value);
     }
+
+    private static XElement? FindPrimarySheetView(XDocument worksheetXml, XNamespace worksheetNs) =>
+        worksheetXml.Root?
+            .Element(worksheetNs + "sheetViews")?
+            .Elements(worksheetNs + "sheetView")
+            .FirstOrDefault(IsPrimarySheetView);
+
+    private static CellAddress? ReadActiveSelectionCell(XElement? sheetView, XNamespace worksheetNs) =>
+        ParseOptionalCellReference(
+            sheetView?
+                .Elements(worksheetNs + "selection")
+                .Select(selection => selection.Attribute("activeCell")?.Value)
+                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)));
+
+    private static XElement? FindNormalCellStyle(XElement stylesRoot, XNamespace ns) =>
+        stylesRoot.Element(ns + "cellStyles")?
+            .Elements(ns + "cellStyle")
+            .FirstOrDefault(IsNormalCellStyle);
+
+    private static bool IsNormalCellStyle(XElement style) =>
+        string.Equals(style.Attribute("builtinId")?.Value, "0", StringComparison.Ordinal) ||
+        string.Equals(style.Attribute("name")?.Value, "Normal", StringComparison.OrdinalIgnoreCase);
+
+    private static XElement? FindFirstDefaultCellXf(XElement stylesRoot, XNamespace ns) =>
+        stylesRoot.Element(ns + "cellXfs")?
+            .Elements(ns + "xf")
+            .FirstOrDefault();
 
     private static int? ParseOptionalNonNegativeInt(string? value) =>
         int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) && parsed >= 0
