@@ -28,7 +28,7 @@ public sealed class SetWaterfallTotalPointCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
         var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
