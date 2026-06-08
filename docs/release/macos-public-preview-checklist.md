@@ -51,6 +51,7 @@ Do not mark a macOS artifact public-preview eligible unless every required secti
 - Unzip the artifact wrapper into a clean folder, then verify the inner app ZIP with its checksum file before extracting `FreeX.app` with Finder/Archive Utility or `ditto -x -k freex-<runtime>-macos-app.zip .`.
 - Keep the original artifact wrapper, inner ZIP, checksum, evidence file, packaging smoke log, launch smoke file, notarization log, tester instructions, and diagnostics artifact with the release record.
 - Use a real macOS user session. Hosted smoke logs are supporting evidence, not a replacement for Finder, Gatekeeper, keyboard-only, or VoiceOver observations.
+- Treat workbook file-access diagnostics as instrumentation/readiness evidence only. They may help confirm redacted event emission, but real security-scoped access still needs on-device open, save, Save As, and reopen validation.
 - Record screenshots or exact prompt text for Gatekeeper prompts, default-handler changes, failed opens, accessibility issues, and crash dialogs.
 - Review diagnostics files for private information before attaching them to an issue or release record.
 
@@ -79,6 +80,7 @@ xcrun stapler validate FreeX.app
 | LaunchServices/Open-With smoke | Evidence contains the hosted LaunchServices and Open-With smoke pass markers |  | Pass / Fail |  |
 | Command-key smoke | Evidence contains `command_key_smoke=passed` and required `cmd_*_menu_gesture=true` markers |  | Pass / Fail |  |
 | Diagnostics artifact | Matching `macos-diagnostics` artifact is present and retained |  | Pass / Fail |  |
+| File-access grant diagnostics | If present, `workbook_file_access_identity` and `workbook_file_access_scope` contain only redacted lifecycle metadata with `grantKind` and `payloadRedacted`; no file paths, filenames, workbook contents, formulas, or bookmark payloads are present. This is instrumentation/readiness evidence, not proof of real security-scoped access. |  | Pass / Fail / N/A |  |
 
 ## Gatekeeper First Launch
 
@@ -123,6 +125,8 @@ Use a representative `.fxl` workbook with recognizable cell contents or sheet na
 | Close dirty workbook | Close prompt offers Save, Discard, and Cancel with clear labels |  | Pass / Fail |  |
 | Reopen saved workbook | Saved values, formulas, sheet names, and simple formatting survive reopen |  | Pass / Fail |  |
 | Recent files | Opened or saved workbook appears in the recent-file route when expected |  | Pass / Fail |  |
+| On-device file grant persistence | Open a workbook through the picker, save or Save As, quit, relaunch, and reopen the workbook from Recent or Open With; hosted CI evidence is not sufficient for this row |  | Pass / Fail |  |
+| File-access grant diagnostics review | If `workbook_file_access_identity` or `workbook_file_access_scope` appears in local diagnostics, only `grantKind` and `payloadRedacted` are present; no file paths, filenames, workbook contents, formulas, or bookmark payloads appear |  | Pass / Fail / N/A |  |
 
 ## Future Native Share Sheet Readiness
 
