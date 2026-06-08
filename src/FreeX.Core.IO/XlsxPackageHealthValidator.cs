@@ -378,6 +378,20 @@ public static class XlsxPackageHealthValidator
         if (relationship.Elements().Any())
             issues.Add($"{relationshipLabel} must not contain child elements");
 
+        foreach (var attribute in relationship.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration)
+                continue;
+
+            if (attribute.Name.NamespaceName.Length == 0 &&
+                attribute.Name.LocalName is "Id" or "Type" or "Target" or "TargetMode")
+            {
+                continue;
+            }
+
+            issues.Add($"{relationshipLabel} has unexpected attribute '{attribute.Name}'");
+        }
+
         if (string.IsNullOrWhiteSpace(id))
             issues.Add($"{relationshipPart} has a Relationship without Id");
         else if (!string.Equals(id, id.Trim(), StringComparison.Ordinal))
