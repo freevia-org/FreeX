@@ -147,6 +147,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_shareWorkbookMenuItem.Click += async (_, _) => await ShareWorkbookAsync();");
         source.Should().Contain("fileMenu.Items.Add(_shareWorkbookMenuItem);");
         source.Should().Contain("_shareWorkbookMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("HasNativeShareWorkbookMenuItem: HasEnabledNativeMenuItem(_shareWorkbookMenuItem, \"Share Workbook...\", requireGesture: false)");
+        source.Should().Contain("private static bool HasEnabledNativeMenuItem(NativeMenuItem item, string expectedHeader, bool requireGesture = true)");
         source.Should().Contain("private async Task ShareWorkbookAsync()");
         source.Should().Contain("WorkbookShareActionPlanner.CreatePlan(");
         source.Should().Contain("_session.CurrentFilePath");
@@ -856,6 +858,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("external_image_clipboard_paste={FormatBool(imageClipboardPasteVerified)}");
         smokeSource.Should().Contain("external_image_clipboard_picture_count={snapshot.ExternalImageClipboardPictureCount}");
         smokeSource.Should().Contain("external_image_clipboard_picture_png_bytes={snapshot.ExternalImageClipboardPicturePngByteCount}");
+        smokeSource.Should().Contain("bool HasNativeShareWorkbookMenuItem,");
+        smokeSource.Should().Contain("HasNativeShareWorkbookMenuItem &&");
         smokeSource.Should().Contain("bool HasNativeWorkbookStatisticsMenuItem,");
         smokeSource.Should().Contain("HasNativeWorkbookStatisticsMenuItem &&");
         smokeSource.Should().Contain("HasNativePasteSpecialCommentsMenuItem &&");
@@ -910,6 +914,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_new_workbook_menu_item={FormatBool(snapshot.HasNativeNewWorkbookMenuItem)}");
         smokeSource.Should().Contain("native_open_recent_menu_item={FormatBool(snapshot.HasNativeOpenRecentMenuItem)}");
         smokeSource.Should().Contain("native_open_recent_item_count={snapshot.NativeOpenRecentItemCount}");
+        smokeSource.Should().Contain("native_share_workbook_menu_item={FormatBool(snapshot.HasNativeShareWorkbookMenuItem)}");
         smokeSource.Should().Contain("native_workbook_statistics_menu_item={FormatBool(snapshot.HasNativeWorkbookStatisticsMenuItem)}");
         smokeSource.Should().Contain("native_close_workbook_menu_item={FormatBool(snapshot.HasNativeCloseWorkbookMenuItem)}");
         smokeSource.Should().Contain("native_edit_menu={FormatBool(snapshot.HasNativeEditMenu)}");
