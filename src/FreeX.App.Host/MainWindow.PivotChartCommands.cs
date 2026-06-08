@@ -44,9 +44,7 @@ public partial class MainWindow
             return;
         }
 
-        var chart = sheet.Charts.FirstOrDefault(item =>
-            item.IsPivotChart &&
-            string.Equals(item.PivotTableName, pivotTable.Name, StringComparison.OrdinalIgnoreCase));
+        var chart = FindPivotChartForPivotTable(sheet, pivotTable);
         if (chart is null)
         {
             _messageService.ShowInfo(
@@ -108,10 +106,19 @@ public partial class MainWindow
         UpdateViewport();
     }
 
-    private static ChartModel? FindPivotChartForPivotTable(Sheet sheet, PivotTableModel pivotTable) =>
-        sheet.Charts.FirstOrDefault(item =>
-            item.IsPivotChart &&
-            string.Equals(item.PivotTableName, pivotTable.Name, StringComparison.OrdinalIgnoreCase));
+    private static ChartModel? FindPivotChartForPivotTable(Sheet sheet, PivotTableModel pivotTable)
+    {
+        foreach (var item in sheet.Charts)
+        {
+            if (item.IsPivotChart &&
+                string.Equals(item.PivotTableName, pivotTable.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                return item;
+            }
+        }
+
+        return null;
+    }
 
     private void OnPivotChartFieldButtonRequested(ChartModel chart, string fieldButton, System.Windows.Point position)
     {
@@ -119,8 +126,7 @@ public partial class MainWindow
         if (sheet is null || !chart.IsPivotChart || string.IsNullOrWhiteSpace(chart.PivotTableName))
             return;
 
-        var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
-            string.Equals(pivot.Name, chart.PivotTableName, StringComparison.OrdinalIgnoreCase));
+        var pivotTable = FindPivotTableByName(sheet, chart.PivotTableName);
         if (pivotTable is null)
             return;
 
@@ -139,6 +145,17 @@ public partial class MainWindow
         menu.HorizontalOffset = position.X;
         menu.VerticalOffset = position.Y;
         menu.IsOpen = true;
+    }
+
+    private static PivotTableModel? FindPivotTableByName(Sheet sheet, string name)
+    {
+        foreach (var pivot in sheet.PivotTables)
+        {
+            if (string.Equals(pivot.Name, name, StringComparison.OrdinalIgnoreCase))
+                return pivot;
+        }
+
+        return null;
     }
 
     private ContextMenu CreatePivotFieldContextMenu()
