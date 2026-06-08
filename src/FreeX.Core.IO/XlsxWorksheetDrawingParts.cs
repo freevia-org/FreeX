@@ -448,18 +448,31 @@ internal static partial class XlsxWorksheetDrawingPartReader
             : (FirstColor(colors), null, DrawingShapeGradientDirection.DiagonalDown);
     }
 
-    private static string? ReadRelationshipTarget(XElement? relationshipRoot, XNamespace packageRelNs, string relationshipId) =>
-        relationshipRoot?
-            .Elements(packageRelNs + "Relationship")
-            .FirstOrDefault(relationship => string.Equals(relationship.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal))?
-            .Attribute("Target")?
-            .Value;
+    private static string? ReadRelationshipTarget(XElement? relationshipRoot, XNamespace packageRelNs, string relationshipId)
+    {
+        if (relationshipRoot is null)
+            return null;
 
-    private static string? ReadFirstNonVisualAttribute(XElement element, XNamespace spreadsheetDrawingNs, string attributeName) =>
-        element
-            .Descendants(spreadsheetDrawingNs + "cNvPr")
-            .Select(item => item.Attribute(attributeName)?.Value)
-            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+        foreach (var relationship in relationshipRoot.Elements(packageRelNs + "Relationship"))
+        {
+            if (string.Equals(relationship.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal))
+                return relationship.Attribute("Target")?.Value;
+        }
+
+        return null;
+    }
+
+    private static string? ReadFirstNonVisualAttribute(XElement element, XNamespace spreadsheetDrawingNs, string attributeName)
+    {
+        foreach (var item in element.Descendants(spreadsheetDrawingNs + "cNvPr"))
+        {
+            var value = item.Attribute(attributeName)?.Value;
+            if (!string.IsNullOrWhiteSpace(value))
+                return value;
+        }
+
+        return null;
+    }
 
     private static CellColor? FirstColor(IReadOnlyList<CellColor?>? colors) =>
         colors is { Count: > 0 } ? colors[0] : null;

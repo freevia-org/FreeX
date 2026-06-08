@@ -200,10 +200,17 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
             }
         }
 
-        var insertionPoint = root.Elements()
-            .FirstOrDefault(element =>
-                element.Name.Namespace == WorksheetNs &&
-                LaterWorksheetElementNames.Contains(element.Name.LocalName));
+        XElement? insertionPoint = null;
+        foreach (var element in root.Elements())
+        {
+            if (element.Name.Namespace == WorksheetNs &&
+                LaterWorksheetElementNames.Contains(element.Name.LocalName))
+            {
+                insertionPoint = element;
+                break;
+            }
+        }
+
         if (insertionPoint is null)
             root.Add(pageBreaks);
         else

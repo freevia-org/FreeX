@@ -29,8 +29,16 @@ internal static class XlsxWorksheetDrawingPlacement
         root.Elements(worksheetNs + "drawing").Remove();
         var drawing = new XElement(worksheetNs + "drawing", new XAttribute(relNs + "id", drawingRelId));
 
-        var anchor = root.Elements()
-            .FirstOrDefault(element => ElementsAfterDrawing.Contains(element.Name.LocalName));
+        XElement? anchor = null;
+        foreach (var element in root.Elements())
+        {
+            if (ElementsAfterDrawing.Contains(element.Name.LocalName))
+            {
+                anchor = element;
+                break;
+            }
+        }
+
         if (anchor is not null)
             anchor.AddBeforeSelf(drawing);
         else

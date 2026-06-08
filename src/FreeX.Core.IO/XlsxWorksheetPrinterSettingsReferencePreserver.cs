@@ -250,12 +250,21 @@ internal static class XlsxWorksheetPrinterSettingsReferencePreserver
             return false;
 
         var relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
-        var relationship = relationshipsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .FirstOrDefault(candidate =>
-                string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal) &&
-                string.Equals(candidate.Attribute("Type")?.Value, PrinterSettingsRelationshipType, StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(candidate.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase));
+        XElement? relationship = null;
+        if (relationshipsXml.Root is not null)
+        {
+            foreach (var candidate in relationshipsXml.Root.Elements(packageRelNs + "Relationship"))
+            {
+                if (string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal) &&
+                    string.Equals(candidate.Attribute("Type")?.Value, PrinterSettingsRelationshipType, StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(candidate.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+                {
+                    relationship = candidate;
+                    break;
+                }
+            }
+        }
+
         var target = relationship?.Attribute("Target")?.Value;
         if (string.IsNullOrWhiteSpace(target))
             return false;

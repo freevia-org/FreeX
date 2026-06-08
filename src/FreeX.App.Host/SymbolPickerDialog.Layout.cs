@@ -258,11 +258,15 @@ public sealed partial class SymbolPickerDialog
 
     private static void FocusInitialKeyboardTarget(UniformGrid grid)
     {
-        if (grid.Children.OfType<Button>().FirstOrDefault() is not { } firstSymbol)
-            return;
-
-        firstSymbol.Focus();
-        Keyboard.Focus(firstSymbol);
+        foreach (var child in grid.Children)
+        {
+            if (child is Button firstSymbol)
+            {
+                firstSymbol.Focus();
+                Keyboard.Focus(firstSymbol);
+                return;
+            }
+        }
     }
 
     private void ShowInvalidCharacterCodeWarning(TextBox selectedCode)
@@ -278,7 +282,13 @@ public sealed partial class SymbolPickerDialog
         if (string.IsNullOrEmpty(value))
             return UiText.Get("SymbolPicker_SymbolAutomationName");
 
-        var rune = value.EnumerateRunes().FirstOrDefault();
+        var rune = default(Rune);
+        foreach (var candidate in value.EnumerateRunes())
+        {
+            rune = candidate;
+            break;
+        }
+
         return rune == default
             ? UiText.Get("SymbolPicker_SymbolAutomationName")
             : UiText.Format("SymbolPicker_SymbolCodeAutomationNameFormat", rune.Value);
