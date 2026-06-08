@@ -153,7 +153,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
             string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
         if (pivotTable is null)
-            return new CommandOutcome(false, "PivotTable was not found.");
+            return CommandGuards.RejectPivotTableNotFound();
 
         var cache = ctx.Workbook.PivotCaches.FirstOrDefault(item => item.CacheId == pivotTable.CacheId);
         _snapshot = PivotOptionsSnapshot.Capture(pivotTable, cache);
