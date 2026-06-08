@@ -33,6 +33,8 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         script.Should().Contain("freex-$Runtime-macos-open-with-launch-smoke.txt");
         script.Should().Contain("freex-$Runtime-macos-default-open-launch-smoke.txt");
         script.Should().Contain("launchservices_default_open_boundary");
+        script.Should().Contain("ExpectedRunId");
+        script.Should().Contain("multiple downloaded macOS app artifact bundles");
         script.Should().Contain("macOS public-preview evidence preflight passed");
 
         signingRunbook.Should().Contain("tools/Test-MacOsPublicPreviewReadiness.ps1");
@@ -55,6 +57,21 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         result.Output.Should().Contain("macOS public-preview evidence preflight passed");
         result.Output.Should().Contain("osx-arm64");
         result.Output.Should().Contain("osx-x64");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_PassesForSyntheticGitHubActionsArtifactWrappersWithExpectedRun()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false);
+
+        var result = RunPreflight(temp.Path, "-ExpectedRunId 42 -ExpectedRunAttempt 1");
+
+        result.ExitCode.Should().Be(0, result.Error);
+        result.Output.Should().Contain("macOS public-preview evidence preflight passed");
+        result.Output.Should().Contain("freex-42-1-osx-arm64-macos-app");
+        result.Output.Should().Contain("freex-42-1-osx-x64-macos-app");
     }
 
     [Fact]
@@ -201,6 +218,55 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         result.CombinedOutput.Should().Contain("zip_sha256");
     }
 
+    [Fact]
+    public void ReadinessPreflight_FailsWithClearMessageWhenEvidenceFileIsMissing()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false);
+        File.Delete(arm64.EvidencePath);
+
+        var result = RunPreflight(temp.Path);
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("osx-arm64 app artifact is incomplete");
+        result.CombinedOutput.Should().Contain("freex-osx-arm64-macos-evidence.txt");
+        result.CombinedOutput.Should().Contain("GitHub Actions artifact wrapper first");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenRuntimeHasStaleDuplicateDownloadedAppArtifacts()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false, runId: "41");
+        CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false);
+
+        var result = RunPreflight(temp.Path);
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("osx-arm64 has multiple downloaded macOS app artifact bundles");
+        result.CombinedOutput.Should().Contain("freex-41-1-osx-arm64-macos-app");
+        result.CombinedOutput.Should().Contain("freex-42-1-osx-arm64-macos-app");
+        result.CombinedOutput.Should().Contain("Remove stale artifact folders");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_FailsWhenRuntimeArtifactsComeFromMixedRuns()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false, runId: "41");
+
+        var result = RunPreflight(temp.Path);
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("mixed GitHub Actions runs");
+        result.CombinedOutput.Should().Contain("osx-arm64 uses run 42");
+        result.CombinedOutput.Should().Contain("osx-x64 uses run 41");
+        result.CombinedOutput.Should().Contain("Remove stale artifact");
+    }
+
     private static PowerShellResult RunPreflight(string artifactRoot, string arguments = "")
     {
         var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
@@ -215,10 +281,12 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         string runtime,
         bool distributionCandidate,
         bool includeDiagnosticsArtifact = false,
-        bool includeInternalPreviewTesterGuidance = false)
+        bool includeInternalPreviewTesterGuidance = false,
+        string runId = "42",
+        string runAttempt = "1")
     {
         var names = RuntimeArtifactNames.For(runtime);
-        var bundleDirectory = Path.Combine(root, $"freex-42-1-{runtime}-macos-app");
+        var bundleDirectory = Path.Combine(root, $"freex-{runId}-{runAttempt}-{runtime}-macos-app");
         Directory.CreateDirectory(bundleDirectory);
 
         var zipPath = Path.Combine(bundleDirectory, names.Zip);
@@ -245,6 +313,8 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         var evidenceLines = new List<string>
         {
             $"runtime={runtime}",
+            $"github_run_id={runId}",
+            $"github_run_attempt={runAttempt}",
             $"artifact_channel={channel}",
             $"distribution_candidate={candidate}",
             $"distribution_contract={contract}",
@@ -376,7 +446,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
 
         if (includeDiagnosticsArtifact)
         {
-            var diagnosticsDirectory = Path.Combine(root, $"freex-42-1-{runtime}-macos-diagnostics");
+            var diagnosticsDirectory = Path.Combine(root, $"freex-{runId}-{runAttempt}-{runtime}-macos-diagnostics");
             Directory.CreateDirectory(diagnosticsDirectory);
             foreach (var file in Directory.EnumerateFiles(bundleDirectory))
             {

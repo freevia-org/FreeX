@@ -1,6 +1,8 @@
 param(
     [string]$ArtifactRoot = "artifacts",
     [string[]]$Runtimes = @("osx-arm64", "osx-x64"),
+    [string]$ExpectedRunId,
+    [string]$ExpectedRunAttempt,
     [switch]$DistributionCandidate,
     [switch]$RequireSeparateDiagnosticsArtifact,
     [switch]$RequireReleasePublicationArtifact
@@ -221,6 +223,96 @@ function Assert-KeyPositiveInteger {
     }
 }
 
+function Get-ExpectedArtifactWrapperName {
+    param(
+        [Parameter(Mandatory = $true)][string]$Runtime,
+        [Parameter(Mandatory = $true)][string]$Kind
+    )
+
+    return "freex-<run-id>-<run-attempt>-$Runtime-macos-$Kind"
+}
+
+function Get-ArtifactDownloadIdentity {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string]$Directory
+    )
+
+    $rootInfo = Get-Item -LiteralPath $Root
+    $current = Get-Item -LiteralPath $Directory
+    while ($null -ne $current) {
+        if ($current.Name -match "^freex-(?<RunId>[0-9]+)-(?<RunAttempt>[0-9]+)-(?<Runtime>osx-(arm64|x64))-macos-(?<Kind>app|diagnostics)$") {
+            return [pscustomobject]@{
+                RunId = $Matches["RunId"]
+                RunAttempt = $Matches["RunAttempt"]
+                Runtime = $Matches["Runtime"]
+                Kind = $Matches["Kind"]
+                WrapperDirectory = $current.FullName
+            }
+        }
+
+        if ([System.StringComparer]::OrdinalIgnoreCase.Equals($current.FullName, $rootInfo.FullName)) {
+            break
+        }
+
+        $current = $current.Parent
+    }
+
+    return $null
+}
+
+function Test-ArtifactDownloadIdentity {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string]$Directory,
+        [Parameter(Mandatory = $true)][string]$Runtime,
+        [Parameter(Mandatory = $true)][string]$Kind,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    $identity = Get-ArtifactDownloadIdentity -Root $Root -Directory $Directory
+    if ($null -eq $identity) {
+        if (-not [string]::IsNullOrWhiteSpace($ExpectedRunId) -or -not [string]::IsNullOrWhiteSpace($ExpectedRunAttempt)) {
+            $expectedWrapper = Get-ExpectedArtifactWrapperName -Runtime $Runtime -Kind $Kind
+            Add-ValidationError "$Label does not preserve a GitHub Actions artifact wrapper directory named '$expectedWrapper'. Re-download the artifact or keep the unzipped files under that wrapper directory before using -ExpectedRunId or -ExpectedRunAttempt."
+        }
+
+        return $null
+    }
+
+    Assert-True -Condition ($identity.Runtime -eq $Runtime) -Message "$Label wrapper directory '$($identity.WrapperDirectory)' is for runtime '$($identity.Runtime)', expected '$Runtime'."
+    Assert-True -Condition ($identity.Kind -eq $Kind) -Message "$Label wrapper directory '$($identity.WrapperDirectory)' is a macOS '$($identity.Kind)' artifact, expected '$Kind'."
+
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedRunId)) {
+        Assert-True -Condition ($identity.RunId -eq $ExpectedRunId) -Message "$Label is from GitHub Actions run '$($identity.RunId)', expected run '$ExpectedRunId'."
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedRunAttempt)) {
+        Assert-True -Condition ($identity.RunAttempt -eq $ExpectedRunAttempt) -Message "$Label is from GitHub Actions run attempt '$($identity.RunAttempt)', expected attempt '$ExpectedRunAttempt'."
+    }
+
+    return $identity
+}
+
+function Test-ArtifactIdentityConsistency {
+    param(
+        [Parameter(Mandatory = $true)][object[]]$Identities,
+        [Parameter(Mandatory = $true)][string]$Root
+    )
+
+    $knownIdentities = @($Identities | Where-Object { $null -ne $_ })
+    if ($knownIdentities.Count -lt 2) {
+        return
+    }
+
+    $first = $knownIdentities[0]
+    foreach ($identity in $knownIdentities) {
+        if ($identity.RunId -ne $first.RunId -or $identity.RunAttempt -ne $first.RunAttempt) {
+            Add-ValidationError "Downloaded macOS app artifacts are from mixed GitHub Actions runs: $($first.Runtime) uses run $($first.RunId) attempt $($first.RunAttempt) from '$($first.WrapperDirectory)', but $($identity.Runtime) uses run $($identity.RunId) attempt $($identity.RunAttempt) from '$($identity.WrapperDirectory)'. Remove stale artifact folders under $Root or pass -ArtifactRoot to a single downloaded run."
+        }
+    }
+}
+
 function Find-RuntimeBundleDirectories {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
@@ -235,6 +327,10 @@ function Find-RuntimeBundleDirectories {
 
     foreach ($file in $candidateFiles) {
         if ($null -eq $file.Directory) {
+            continue
+        }
+
+        if ($file.Directory.FullName.IndexOf("macos-diagnostics", [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
             continue
         }
 
@@ -261,11 +357,17 @@ function Test-ArtifactFileSet {
     }
 
     $allPresent = $true
+    $missingNames = New-Object System.Collections.Generic.List[string]
     foreach ($key in $requiredKeys) {
         $path = Join-Path $Directory $names[$key]
         if (-not (Assert-FileExists -Path $path -Label "$Label $key")) {
             $allPresent = $false
+            $missingNames.Add($names[$key])
         }
+    }
+
+    if (-not $allPresent) {
+        Add-ValidationError "$Label is incomplete. Missing file(s): $($missingNames -join ', '). Unzip the GitHub Actions artifact wrapper first and point -ArtifactRoot at the folder containing the downloaded macOS app evidence bundles."
     }
 
     return $allPresent
@@ -310,6 +412,7 @@ function Test-ChecksumEvidence {
         Assert-True -Condition ($checksumHash -eq $actualHash) -Message "$Runtime checksum file hash must match $($names.Zip)."
     }
 
+    Assert-KeyEquals -Map $Evidence -Key "zip_name" -ExpectedValue $names.Zip -Label "$Runtime evidence"
     Assert-KeyEquals -Map $Evidence -Key "zip_sha256" -ExpectedValue $actualHash -Label "$Runtime evidence"
     Assert-KeyMatches -Map $Evidence -Key "zip_sha256" -Pattern "^[0-9a-fA-F]{64}$" -Label "$Runtime evidence"
 }
@@ -801,16 +904,31 @@ foreach ($runtime in $Runtimes) {
     Assert-True -Condition ($runtime -eq "osx-arm64" -or $runtime -eq "osx-x64") -Message "Unsupported macOS runtime '$runtime'. Expected osx-arm64 or osx-x64."
 }
 
+$artifactIdentities = New-Object System.Collections.Generic.List[object]
 foreach ($runtime in $Runtimes) {
     $bundleDirectories = @(Find-RuntimeBundleDirectories -Root $resolvedArtifactRoot -Runtime $runtime)
     if ($bundleDirectories.Count -eq 0) {
-        Add-ValidationError "$runtime artifact bundle was not found under $resolvedArtifactRoot."
+        $expectedWrapper = Get-ExpectedArtifactWrapperName -Runtime $runtime -Kind "app"
+        $names = Get-ExpectedFileNames -Runtime $runtime
+        Add-ValidationError "$runtime app artifact bundle was not found under $resolvedArtifactRoot. Expected a downloaded GitHub Actions artifact wrapper named '$expectedWrapper' containing $($names.Zip), $($names.Checksum), and $($names.Evidence)."
         continue
     }
 
-    Test-RuntimeBundle -Root $resolvedArtifactRoot -BundleDirectory $bundleDirectories[0] -Runtime $runtime
+    if ($bundleDirectories.Count -gt 1) {
+        Add-ValidationError "$runtime has multiple downloaded macOS app artifact bundles under $resolvedArtifactRoot. Remove stale artifact folders or pass -ArtifactRoot to a single downloaded run. Candidate directories: $($bundleDirectories -join '; ')."
+        continue
+    }
+
+    $bundleDirectory = $bundleDirectories[0]
+    $identity = Test-ArtifactDownloadIdentity -Root $resolvedArtifactRoot -Directory $bundleDirectory -Runtime $runtime -Kind "app" -Label "$runtime app artifact"
+    if ($null -ne $identity) {
+        $artifactIdentities.Add($identity)
+    }
+
+    Test-RuntimeBundle -Root $resolvedArtifactRoot -BundleDirectory $bundleDirectory -Runtime $runtime
 }
 
+Test-ArtifactIdentityConsistency -Identities $artifactIdentities.ToArray() -Root $resolvedArtifactRoot
 Test-ReleasePublicationArtifact -Root $resolvedArtifactRoot -ExpectedRuntimes $Runtimes
 
 if ($validationErrors.Count -gt 0) {
