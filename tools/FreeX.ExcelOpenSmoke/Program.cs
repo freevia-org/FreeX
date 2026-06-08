@@ -449,11 +449,9 @@ internal static class ExcelOpenSmoke
             {
                 var freeXSave = SaveThroughFreeX(input.SourcePath, freeXSavedDirectory);
                 AssertFreeXLoadWarnings(input, "FreeX source load", freeXSave.LoadWarnings);
-                AssertPackageEntriesCanonical(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertPackageHealth(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertNoExcelRecoveryLog(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertOpenXmlValid(freeXSave.SavedPath, "FreeX-saved workbook");
-                AssertPackageContentTypesComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
-                AssertPackageRelationshipsComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookPackageRoot(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertDocumentPropertiesPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookSheetRelationshipsComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -695,10 +693,8 @@ internal static class ExcelOpenSmoke
             ReleaseComObject(workbook);
             workbook = null;
             CollectComReferences();
-            AssertPackageEntriesCanonical(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertPackageHealth(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertOpenXmlValid(excelSavedPath, "Excel-saved workbook");
-            AssertPackageContentTypesComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
-            AssertPackageRelationshipsComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookPackageRoot(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertDocumentPropertiesPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookSheetRelationshipsComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -863,6 +859,22 @@ internal static class ExcelOpenSmoke
             throw new InvalidDataException(
                 $"{label} for '{sourcePath}' contains repair/recovery log parts: {string.Join(", ", recoveryLogs)}");
         }
+    }
+
+    private static void AssertPackageHealth(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = XlsxPackageHealthValidator.Validate(archive);
+        if (issues.Count == 0)
+            return;
+
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid package health: {sample}{suffix}");
     }
 
     private static void AssertPublicPackageTagExpectations(
