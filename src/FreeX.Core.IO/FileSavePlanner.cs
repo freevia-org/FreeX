@@ -18,6 +18,15 @@ public static class FileSavePlanner
         string? currentFilePath,
         string targetPath)
     {
+        return CanSkipCleanSave(workbookDirty, currentFilePath, targetPath, PathComparison);
+    }
+
+    internal static bool CanSkipCleanSave(
+        bool workbookDirty,
+        string? currentFilePath,
+        string targetPath,
+        StringComparison pathComparison)
+    {
         if (workbookDirty ||
             string.IsNullOrWhiteSpace(currentFilePath) ||
             string.IsNullOrWhiteSpace(targetPath))
@@ -27,7 +36,7 @@ public static class FileSavePlanner
 
         return TryNormalizePath(currentFilePath, out var current) &&
                TryNormalizePath(targetPath, out var target) &&
-               string.Equals(current, target, PathComparison);
+               string.Equals(current, target, pathComparison);
     }
 
     public static bool TryResolveExistingPath(
