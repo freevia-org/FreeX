@@ -48,9 +48,20 @@ public sealed class PivotStyleGalleryDialog : Window
     {
         var styleNames = PivotStyleCatalog.GetStyleNames(styleName);
         _styleGallery.ItemsSource = styleNames;
-        _styleGallery.SelectedItem = styleNames.FirstOrDefault(item =>
-            string.Equals(item, styleName, StringComparison.OrdinalIgnoreCase)) ?? PivotStyleCatalog.NormalizeStyleName(null);
+        _styleGallery.SelectedItem = FindStyleName(styleNames, styleName) ?? PivotStyleCatalog.NormalizeStyleName(null);
         _styleGallery.ScrollIntoView(_styleGallery.SelectedItem);
+    }
+
+    private static string? FindStyleName(IReadOnlyList<string> styleNames, string styleName)
+    {
+        for (var index = 0; index < styleNames.Count; index++)
+        {
+            var item = styleNames[index];
+            if (string.Equals(item, styleName, StringComparison.OrdinalIgnoreCase))
+                return item;
+        }
+
+        return null;
     }
 
     private void Accept()

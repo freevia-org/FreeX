@@ -265,8 +265,7 @@ public sealed partial class PivotTableOptionsDialog : Window
         _mergeLabelsBox.IsChecked = result.MergeAndCenterLabels;
         var styleNames = PivotStyleCatalog.GetStyleNames(result.StyleName);
         _styleBox.ItemsSource = styleNames;
-        _styleBox.SelectedItem = styleNames.FirstOrDefault(styleName =>
-            string.Equals(styleName, result.StyleName, StringComparison.OrdinalIgnoreCase)) ?? styleNames[0];
+        _styleBox.SelectedItem = FindStyleName(styleNames, result.StyleName) ?? styleNames[0];
         _rowHeadersBox.IsChecked = result.ShowRowHeaders;
         _columnHeadersBox.IsChecked = result.ShowColumnHeaders;
         _fieldHeadersBox.IsChecked = result.ShowFieldHeaders;
@@ -342,6 +341,18 @@ public sealed partial class PivotTableOptionsDialog : Window
             errorValueText: _errorValuesBox.Text,
             enableDrill: _enableShowDetailsBox.IsChecked == true);
         DialogResult = true;
+    }
+
+    private static string? FindStyleName(IReadOnlyList<string> styleNames, string styleName)
+    {
+        for (var index = 0; index < styleNames.Count; index++)
+        {
+            var item = styleNames[index];
+            if (string.Equals(item, styleName, StringComparison.OrdinalIgnoreCase))
+                return item;
+        }
+
+        return null;
     }
 
     private bool ValidateInputs()
