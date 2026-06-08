@@ -50,6 +50,22 @@ Signed, notarized, and internal ad-hoc outputs use the same artifact names. Unzi
 
 No local Mac is needed to produce the downloadable artifacts: hosted macOS runners build the bundle, run native-architecture package/launch smoke, exercise LaunchServices, verify checksums, and collect evidence. A human tester on macOS is still required for Finder open, Gatekeeper behavior, basic workbook workflows, and any candidate accessibility checks.
 
+## Windows Evidence Bundle Preflight
+
+After unzipping both runtime artifact wrappers on a Windows machine, run the evidence bundle validator from the repository root:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-MacOsPublicPreviewReadiness.ps1 -ArtifactRoot artifacts/macos-preview
+```
+
+For a public-preview distribution-candidate run, require the Developer ID, notarization, stapler, and separate diagnostics artifact evidence:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-MacOsPublicPreviewReadiness.ps1 -ArtifactRoot artifacts/macos-preview -DistributionCandidate -RequireSeparateDiagnosticsArtifact
+```
+
+`tools/Test-MacOsPublicPreviewReadiness.ps1` validates both `osx-arm64` and `osx-x64` bundles without macOS by checking the downloaded evidence files, smoke logs, tester instructions, app ZIP, and `.zip.sha256` checksum. It requires artifact channel/readiness keys, `zip_sha256`, signing and notarization status, stapler status for distribution candidates, startup smoke, LaunchServices launch smoke, Open-With smoke, `format_cells_style_roundtrip=true` with a count of at least two, command key smoke, checksum files, diagnostics artifact file sets, and tester instructions.
+
 ## Required Apple Inputs
 
 Developer ID signing and notarization require:

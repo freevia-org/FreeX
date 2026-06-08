@@ -73,7 +73,7 @@ The CI workflow also runs a macOS portable lane on GitHub-hosted macOS runners. 
 
 Success means the macOS Release build and non-UI test lane report zero failed tests. This lane does not build `FreeX.slnx`, `FreeX.UiTests.slnx`, `App.Host`, `App.UI`, WPF UI tests, Excel COM tools, tester-release artifacts, or macOS app packages. See [planning/multiplatform-macos-port.md](../planning/multiplatform-macos-port.md) for the macOS-first port plan.
 
-A separate `macOS App Preview` workflow builds and publishes `src/FreeX.App.Avalonia` on architecture-specific hosted macOS runners for `osx-arm64` and `osx-x64`, wraps the output in `FreeX.app` with `FreeX.icns`, verifies bundle metadata, ad-hoc signs by default, optionally Developer ID signs/notarizes when secrets are configured, self-checks each SHA-256 file with `shasum -a 256 -c`, records `zip_sha256` in evidence, and uploads zipped app artifacts, checksum files, tester instructions, and smoke evidence. The Windows-runnable `tools/Test-MacOsAppReadiness.ps1` preflight statically checks the app project, `Info.plist`, icon asset, workflow markers, source wiring, and portable-source hygiene; hosted macOS runner evidence remains required for runtime launch, LaunchServices activation, signing, notarization, and architecture checks.
+A separate `macOS App Preview` workflow builds and publishes `src/FreeX.App.Avalonia` on architecture-specific hosted macOS runners for `osx-arm64` and `osx-x64`, wraps the output in `FreeX.app` with `FreeX.icns`, verifies bundle metadata, ad-hoc signs by default, optionally Developer ID signs/notarizes when secrets are configured, self-checks each SHA-256 file with `shasum -a 256 -c`, records `zip_sha256` in evidence, and uploads zipped app artifacts, checksum files, tester instructions, and smoke evidence. The Windows-runnable `tools/Test-MacOsAppReadiness.ps1` preflight statically checks the app project, `Info.plist`, icon asset, workflow markers, source wiring, and portable-source hygiene. After hosted artifacts are downloaded and unzipped, the Windows-runnable `tools/Test-MacOsPublicPreviewReadiness.ps1` preflight validates both runtime evidence bundles, checksum files, LaunchServices/Open-With smoke, startup smoke, command key smoke, Format Cells roundtrip evidence, diagnostics artifact file sets, tester instructions, and distribution-candidate signing/notarization/stapler evidence.
 
 Use [release/macos-signing-notarization.md](macos-signing-notarization.md) to configure Developer ID signing secrets, run the non-PR hosted validation, and record the expected `codesign_mode=developer-id`, `notarization_status=accepted`, and `stapler_validated=true` evidence before treating a macOS artifact as externally distributable.
 
@@ -89,6 +89,14 @@ Each download is a GitHub Actions artifact wrapper. Unzip the wrapper first, the
 Signed and internal ad-hoc outputs use the same artifact names. Treat `codesign_mode=ad-hoc` or a skipped notarization status as internal preview evidence only. External distribution requires `codesign_mode=developer-id`, `notarization_status=accepted`, `stapler_validated=true`, and a release-asset publication path.
 
 Without local macOS hardware, Windows agents can run repository preflight and static macOS readiness checks, while hosted macOS runners can build the bundle, verify metadata and checksums, ad-hoc or Developer ID sign when configured, run native-architecture packaging and launch smoke, exercise LaunchServices, and capture evidence/logs. Human validation of Finder open, Gatekeeper prompts, basic workbook workflows, and candidate accessibility checks still needs a tester on macOS.
+
+Windows agents can also validate downloaded hosted evidence without a Mac:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-MacOsPublicPreviewReadiness.ps1 -ArtifactRoot artifacts/macos-preview
+```
+
+For public-preview candidates, run it with `-DistributionCandidate -RequireSeparateDiagnosticsArtifact` after downloading the matching `freex-<run-id>-<run-attempt>-<runtime>-macos-diagnostics` artifacts beside the app artifacts.
 
 ### macOS App Preview Tester Instructions
 
