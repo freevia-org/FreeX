@@ -1421,13 +1421,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-phonetic-properties-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetPhoneticPropertiesModel(sheet, "generated-worksheet-phonetic-properties-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-phonetic-properties-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-phonetic-properties-001");
         AssertWorksheetPhoneticProperties(saved, "generated-worksheet-phonetic-properties-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetPhoneticPropertiesModel(
+            reloaded.GetSheetAt(0),
+            "worksheet phonetic property model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -1904,6 +1912,13 @@ public partial class XlsxCorpusRunnerTests
         phoneticProperties.Attribute("type")!.Value.Should().Be("fullwidthKatakana", because);
         phoneticProperties.Attribute("alignment")!.Value.Should().Be("center", because);
         phoneticProperties.Attribute("nativeOnly").Should().BeNull(because);
+    }
+
+    private static void AssertWorksheetPhoneticPropertiesModel(Sheet sheet, string because)
+    {
+        sheet.PhoneticProperties.Should().BeEquivalentTo(
+            new WorksheetPhoneticProperties("1", "fullwidthKatakana", "center"),
+            because);
     }
 
     private static void AssertWorksheetCellWatches(Stream package, string because)
