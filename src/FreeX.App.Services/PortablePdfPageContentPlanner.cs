@@ -55,8 +55,16 @@ public static class PortablePdfPageContentPlanner
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(exportPlan);
 
-        var pageRequest = exportPlan.PageRequests.FirstOrDefault(request =>
-            request.ExportPageNumber == exportPageNumber);
+        PortablePdfExportPageRequest? pageRequest = null;
+        foreach (var request in exportPlan.PageRequests)
+        {
+            if (request.ExportPageNumber != exportPageNumber)
+                continue;
+
+            pageRequest = request;
+            break;
+        }
+
         return pageRequest is null
             ? PageRequestUnavailable(exportPageNumber)
             : CreatePlan(workbook, pageRequest);

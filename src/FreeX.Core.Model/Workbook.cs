@@ -366,8 +366,16 @@ public sealed class Workbook
         return true;
     }
 
-    private int FindSheetIndex(SheetId sheetId) =>
-        _sheets.FindIndex(sheet => sheet.Id == sheetId);
+    private int FindSheetIndex(SheetId sheetId)
+    {
+        for (var index = 0; index < _sheets.Count; index++)
+        {
+            if (_sheets[index].Id == sheetId)
+                return index;
+        }
+
+        return -1;
+    }
 
     private void RemoveNamedRangesForSheet(SheetId sheetId)
     {
