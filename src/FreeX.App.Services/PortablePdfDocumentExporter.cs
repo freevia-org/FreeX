@@ -21,6 +21,9 @@ public sealed record PortablePdfDocumentExportResult(
 public static class PortablePdfDocumentExporter
 {
     private static readonly Encoding PdfEncoding = Encoding.ASCII;
+    // Keep the non-WinAnsi guard until Unicode PDF output is backed by real font data and external PDF validation.
+    private const string DeferredUnicodePdfPathRequirements =
+        "Unicode PDF export requires a real licensed TrueType/OpenType font subset, Type0/Identity-H text, ToUnicode mappings, and parser, render, and text extraction validation.";
     private static readonly CellColor GridStrokeColor = new(196, 202, 210);
     private static readonly CellColor TitleFillColor = new(238, 242, 247);
     private static readonly CellColor HeaderTextColor = new(31, 41, 55);
@@ -389,7 +392,8 @@ public static class PortablePdfDocumentExporter
             '\u017E' => 0x9E,
             '\u0178' => 0x9F,
             _ => throw new InvalidOperationException(
-                "Portable PDF export currently supports ASCII and WinAnsi text only; characters outside the built-in Helvetica/WinAnsi set require the deferred embedded-font Unicode PDF path.")
+                "Portable PDF export currently supports ASCII and WinAnsi text only; " +
+                $"characters outside the built-in Helvetica/WinAnsi set require the deferred embedded-font Unicode PDF path. {DeferredUnicodePdfPathRequirements}")
         };
     }
 

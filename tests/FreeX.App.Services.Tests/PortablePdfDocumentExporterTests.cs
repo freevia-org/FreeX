@@ -242,9 +242,14 @@ public sealed class PortablePdfDocumentExporterTests
 
         var act = () => PortablePdfDocumentExporter.Save(workbook, exportPlan, stream);
 
-        act.Should()
+        var exception = act.Should()
             .Throw<InvalidOperationException>()
-            .WithMessage("Portable PDF export currently supports ASCII and WinAnsi text only;*");
+            .WithMessage("Portable PDF export currently supports ASCII and WinAnsi text only;*")
+            .Which;
+        exception.Message.Should().Contain("real licensed TrueType/OpenType font subset");
+        exception.Message.Should().Contain("Type0/Identity-H text");
+        exception.Message.Should().Contain("ToUnicode mappings");
+        exception.Message.Should().Contain("parser, render, and text extraction validation");
         stream.ToArray().Should().BeEmpty();
     }
 
