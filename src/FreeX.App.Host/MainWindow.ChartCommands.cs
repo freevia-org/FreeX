@@ -230,13 +230,28 @@ public partial class MainWindow
 
     private bool TryGetActiveNormalChart(string caption, out ChartModel chart)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        chart = sheet?.Charts.FirstOrDefault(item => !item.IsPivotChart) ?? null!;
+        chart = FindFirstNormalChart(_workbook.GetSheet(_currentSheetId)) ?? null!;
         if (chart is not null)
             return true;
 
         _messageService.ShowInfo(UiText.Get("MainWindowMessage_ChartSelectBeforeCommand"), caption);
         return false;
+    }
+
+    private static ChartModel? FindFirstNormalChart(Sheet? sheet)
+    {
+        if (sheet is null)
+            return null;
+
+        var charts = sheet.Charts;
+        for (var index = 0; index < charts.Count; index++)
+        {
+            var chart = charts[index];
+            if (!chart.IsPivotChart)
+                return chart;
+        }
+
+        return null;
     }
 
     private void ChartColumnMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Column);
@@ -554,7 +569,7 @@ public partial class MainWindow
                 chart =>
                 {
                     var formats = chart.PointDataLabelFormats.ToList();
-                    var existingIndex = formats.FindIndex(format => format.SeriesIndex == 0 && format.PointIndex == 0);
+                    var existingIndex = IndexOfPointDataLabelFormat(formats, 0, 0);
                     var current = existingIndex >= 0 ? formats[existingIndex] : new ChartPointDataLabelFormat(0, 0);
                     var updated = current with
                     {
@@ -575,6 +590,18 @@ public partial class MainWindow
             return;
 
         UpdateViewport();
+    }
+
+    private static int IndexOfPointDataLabelFormat(IReadOnlyList<ChartPointDataLabelFormat> formats, int seriesIndex, int pointIndex)
+    {
+        for (var index = 0; index < formats.Count; index++)
+        {
+            var format = formats[index];
+            if (format.SeriesIndex == seriesIndex && format.PointIndex == pointIndex)
+                return index;
+        }
+
+        return -1;
     }
 
     private void ChartAreaFillBtn_Click(object sender, RoutedEventArgs e)
@@ -977,7 +1004,7 @@ public partial class MainWindow
                 chart =>
                 {
                     var formats = chart.SeriesFormats.ToList();
-                    var existingIndex = formats.FindIndex(format => format.SeriesIndex == 0);
+                    var existingIndex = IndexOfSeriesFormat(formats, 0);
                     var current = existingIndex >= 0 ? formats[existingIndex] : new ChartSeriesFormat(0);
                     var updated = update(current);
                     if (existingIndex >= 0)
@@ -989,6 +1016,15 @@ public partial class MainWindow
             return;
 
         UpdateViewport();
+    }
+
+    private static int IndexOfSeriesFormat(IReadOnlyList<ChartSeriesFormat> formats, int seriesIndex)
+    {
+        for (var index = 0; index < formats.Count; index++)
+            if (formats[index].SeriesIndex == seriesIndex)
+                return index;
+
+        return -1;
     }
 
     private void InsertChartOfType(string type)
