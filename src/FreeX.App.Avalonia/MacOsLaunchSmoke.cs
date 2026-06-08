@@ -395,6 +395,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeSortAscendingMenuItem,
     bool HasNativeSortDescendingMenuItem,
     bool HasNativeAdvancedFilterMenuItem,
+    bool HasNativeDataValidationPreviewMenuItem,
     bool HasNativeDataValidationMenuItem,
     bool HasNativeWhatIfAnalysisMenuItem,
     bool HasNativeGoalSeekMenuItem,
@@ -580,6 +581,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeSortAscendingMenuItem &&
         HasNativeSortDescendingMenuItem &&
         HasNativeAdvancedFilterMenuItem &&
+        HasNativeDataValidationPreviewMenuItem &&
         HasNativeDataValidationMenuItem &&
         HasNativeWhatIfAnalysisMenuItem &&
         HasNativeGoalSeekMenuItem &&
@@ -1042,6 +1044,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_sort_ascending_menu_item={FormatBool(snapshot.HasNativeSortAscendingMenuItem)}",
                 $"native_sort_descending_menu_item={FormatBool(snapshot.HasNativeSortDescendingMenuItem)}",
                 $"native_advanced_filter_menu_item={FormatBool(snapshot.HasNativeAdvancedFilterMenuItem)}",
+                $"native_data_validation_preview_menu_item={FormatBool(snapshot.HasNativeDataValidationPreviewMenuItem)}",
                 $"native_data_validation_menu_item={FormatBool(snapshot.HasNativeDataValidationMenuItem)}",
                 $"native_what_if_analysis_menu_item={FormatBool(snapshot.HasNativeWhatIfAnalysisMenuItem)}",
                 $"native_goal_seek_menu_item={FormatBool(snapshot.HasNativeGoalSeekMenuItem)}",
