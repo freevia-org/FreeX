@@ -29,7 +29,7 @@ public sealed class ApplyConditionalFormatCommand : IWorkbookCommand
             return validationOutcome;
 
         // Replace an existing rule that shares the same Id (for edits), or just add.
-        var idx = sheet.ConditionalFormats.FindIndex(f => f.Id == _format.Id);
+        var idx = FindConditionalFormatIndex(sheet, _format.Id);
         if (idx >= 0)
         {
             _previous = sheet.ConditionalFormats[idx];
@@ -51,7 +51,7 @@ public sealed class ApplyConditionalFormatCommand : IWorkbookCommand
         if (_previous is not null)
         {
             // Restore the rule that was there before
-            var idx = sheet.ConditionalFormats.FindIndex(f => f.Id == _format.Id);
+            var idx = FindConditionalFormatIndex(sheet, _format.Id);
             if (idx >= 0)
                 sheet.ConditionalFormats[idx] = _previous;
         }
@@ -61,6 +61,9 @@ public sealed class ApplyConditionalFormatCommand : IWorkbookCommand
             sheet.ConditionalFormats.RemoveAll(f => f.Id == _format.Id);
         }
     }
+
+    private static int FindConditionalFormatIndex(Sheet sheet, Guid formatId) =>
+        sheet.ConditionalFormats.FindIndex(format => format.Id == formatId);
 }
 
 public sealed class ClearConditionalFormatsCommand : IWorkbookCommand
