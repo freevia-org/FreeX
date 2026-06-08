@@ -61,6 +61,8 @@ jobs:
           mkdir -p "$artifact_root"
           {
             echo "runtime=$runtime"
+            echo "github_run_id=${GITHUB_RUN_ID}"
+            echo "github_run_attempt=${GITHUB_RUN_ATTEMPT}"
             echo "runner_label=${{ matrix.runner }}"
             echo "runner_os=${RUNNER_OS:-unknown}"
             echo "runner_arch=${RUNNER_ARCH:-unknown}"
@@ -1016,6 +1018,8 @@ jobs:
               "artifact_channel=distribution-candidate",
               "distribution_candidate=true",
               "distribution_contract=distribution_candidate_requires_developer_id_notarization_stapling",
+              "github_run_id=$($env:GITHUB_RUN_ID)",
+              "github_run_attempt=$($env:GITHUB_RUN_ATTEMPT)",
               "distribution_readiness=distribution_candidate_ready",
               "codesign_verified=true",
               "codesign_mode=developer-id",
