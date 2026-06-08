@@ -84,6 +84,9 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         AssertDistributionCandidatePreflightCommandsRequireReleasePublicationArtifact(
             distributionPlan,
             "docs/release/test-distribution.md");
+        AssertDownloadedHostedPreflightCommandsRequireDiagnosticsAndAggregateArtifacts(
+            distributionPlan,
+            "docs/release/test-distribution.md");
         AssertDistributionCandidatePreflightCommandsRequireReleasePublicationArtifact(
             hostedRunnerPlan,
             "docs/planning/macos-hosted-runner-build-plan.md");
@@ -806,6 +809,28 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         commandLines.Should().OnlyContain(
             line => line.Contains("-RequireReleasePublicationArtifact", StringComparison.Ordinal),
             $"{documentName} must require release-publication artifact validation in distribution-candidate command examples");
+    }
+
+    private static void AssertDownloadedHostedPreflightCommandsRequireDiagnosticsAndAggregateArtifacts(
+        string document,
+        string documentName)
+    {
+        var commandLines = document
+            .Split(new[] { "\r\n", "\n" }, StringSplitOptions.None)
+            .Where(line =>
+                line.Contains("tools/Test-MacOsPublicPreviewReadiness.ps1", StringComparison.Ordinal) &&
+                line.Contains("-ArtifactRoot artifacts/macos-preview", StringComparison.Ordinal) &&
+                line.Contains("-ExpectedRunId <run-id>", StringComparison.Ordinal) &&
+                line.Contains("-ExpectedRunAttempt <run-attempt>", StringComparison.Ordinal))
+            .ToArray();
+
+        commandLines.Should().NotBeEmpty($"{documentName} should document downloaded hosted macOS preview evidence validation");
+        commandLines.Should().OnlyContain(
+            line => line.Contains("-RequireSeparateDiagnosticsArtifact", StringComparison.Ordinal),
+            $"{documentName} must require diagnostics artifact wrapper validation when validating downloaded hosted macOS preview evidence");
+        commandLines.Should().OnlyContain(
+            line => line.Contains("-RequireAggregateReadinessArtifact", StringComparison.Ordinal),
+            $"{documentName} must require aggregate readiness wrapper validation when validating downloaded hosted macOS preview evidence");
     }
 
     private static SyntheticBundle CreateSyntheticBundle(

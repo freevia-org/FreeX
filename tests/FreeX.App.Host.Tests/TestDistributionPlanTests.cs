@@ -117,6 +117,8 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("Do not flatten wrapper contents directly into the artifact root");
         source.Should().Contain("the post-matrix `macos-preview-readiness` job downloads the current run's app and diagnostics artifact wrappers");
         source.Should().Contain("tools/Test-MacOsPublicPreviewReadiness.ps1 -RequireSeparateDiagnosticsArtifact");
+        source.Should().Contain("Keep `-RequireSeparateDiagnosticsArtifact -RequireAggregateReadinessArtifact` on downloaded hosted evidence validation");
+        source.Should().Contain("-ExpectedRunAttempt <run-attempt> -RequireSeparateDiagnosticsArtifact -RequireAggregateReadinessArtifact");
         source.Should().Contain("macos-preview-readiness-manifest.json");
         source.Should().Contain("macos-preview-readiness-summary.txt");
         source.Should().Contain("app and diagnostics artifact names and digests");
@@ -156,7 +158,7 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("Quick retrieval checklist");
         source.Should().Contain("Pick `osx-arm64` for Apple Silicon Macs or `osx-x64` for Intel Macs.");
         source.Should().Contain("Download the matching Actions artifact wrapper from the completed workflow run.");
-        source.Should().Contain("Preserve each `freex-<run-id>-<run-attempt>-<runtime>-macos-app` wrapper directory under the artifact root");
+        source.Should().Contain("Preserve each `freex-<run-id>-<run-attempt>-<runtime>-macos-app`, `freex-<run-id>-<run-attempt>-<runtime>-macos-diagnostics`, and `freex-<run-id>-<run-attempt>-macos-preview-readiness` wrapper directory under the artifact root");
         source.Should().Contain("Keep those wrapper directory names intact under `artifacts/macos-preview`.");
         source.Should().Contain("-ExpectedRunId <run-id>");
         source.Should().Contain("-ExpectedRunAttempt <run-attempt>");
