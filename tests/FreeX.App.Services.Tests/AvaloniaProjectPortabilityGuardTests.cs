@@ -26,11 +26,16 @@ public sealed class AvaloniaProjectPortabilityGuardTests
         ("WindowsDesktop SDK", new(@"(?<![\w.])Microsoft\.NET\.Sdk\.WindowsDesktop(?![\w.])", DefaultRegexOptions)),
         ("Windows-targeted framework", new(@"(?<![\w.-])net\d+(?:\.\d+)?-windows(?:\d+(?:\.\d+)*)?(?![\w.-])", DefaultRegexOptions | RegexOptions.IgnoreCase)),
         ("Windows Forms project marker", new(@"(?<![\w])UseWindowsForms(?![\w])", DefaultRegexOptions | RegexOptions.IgnoreCase)),
-        ("WindowsDesktop framework reference", new(@"(?<![\w.])Microsoft\.WindowsDesktop\.App(?:\.(?:WPF|WindowsForms))?(?![\w.])", DefaultRegexOptions))
+        ("WindowsDesktop framework reference", new(@"(?<![\w.])Microsoft\.WindowsDesktop\.App(?:\.(?:WPF|WindowsForms))?(?![\w.])", DefaultRegexOptions)),
+        ("AppKit namespace", new(@"(?<![\w.])AppKit(?:\.[A-Za-z_]\w*)?(?![\w.])", DefaultRegexOptions)),
+        ("Foundation namespace", new(@"(?<![\w.])Foundation(?:\.[A-Za-z_]\w*)?(?![\w.])", DefaultRegexOptions)),
+        ("ObjCRuntime namespace", new(@"(?<![\w.])ObjCRuntime(?:\.[A-Za-z_]\w*)?(?![\w.])", DefaultRegexOptions)),
+        ("NSSharingService type", new(@"(?<![\w.])NSSharingService(?![\w.])", DefaultRegexOptions)),
+        ("NSSharingServicePicker type", new(@"(?<![\w.])NSSharingServicePicker(?![\w.])", DefaultRegexOptions))
     ];
 
     [Fact]
-    public void AvaloniaProjectSources_DoNotReferenceWindowsDesktopDependencies()
+    public void AvaloniaProjectSources_DoNotReferenceDesktopOrNativeMacOsDependenciesWithoutCompileStrategy()
     {
         var projectPath = RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "FreeX.App.Avalonia.csproj");
         var avaloniaRoot = Path.GetDirectoryName(projectPath)!;
@@ -45,13 +50,13 @@ public sealed class AvaloniaProjectPortabilityGuardTests
             .ToArray();
 
         violations.Should().BeEmpty(
-            "FreeX.App.Avalonia is the macOS-capable host and must not acquire WPF, WindowsDesktop, Windows Forms, or Windows-only host/UI dependencies");
+            "FreeX.App.Avalonia is currently a plain net10.0 Avalonia host; unconditionally compiled source must not acquire WPF, WindowsDesktop, Windows Forms, Windows-only host/UI, or direct AppKit/Foundation/ObjCRuntime/NSSharingService dependencies until an explicit macOS TFM/conditional compile strategy exists");
     }
 
     [Fact]
-    public void ForbiddenPatterns_DoNotMatchPlainWindowsOnlyProse()
+    public void ForbiddenPatterns_DoNotMatchPlainPlatformProse()
     {
-        const string prose = "This note says Windows-only behavior without declaring a Windows desktop dependency.";
+        const string prose = "This note says Windows-only and macOS-friendly behavior without declaring a desktop dependency or native Cocoa binding.";
 
         var matches = ForbiddenPatterns
             .Where(pattern => pattern.Pattern.IsMatch(prose))

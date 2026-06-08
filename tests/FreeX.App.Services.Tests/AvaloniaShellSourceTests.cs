@@ -119,7 +119,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().NotContain("ProcessStartInfo");
         source.Should().NotContain("System.Windows");
         serviceSource.Should().NotContain("AppKit");
+        serviceSource.Should().NotContain("Foundation");
+        serviceSource.Should().NotContain("ObjCRuntime");
         serviceSource.Should().NotContain("NSSharingService");
+        serviceSource.Should().NotContain("NSSharingServicePicker");
         serviceSource.Should().NotContain("DataTransferManager");
         serviceSource.Should().NotContain("WindowInteropHelper");
         serviceSource.Should().NotContain("Microsoft.Win32");
