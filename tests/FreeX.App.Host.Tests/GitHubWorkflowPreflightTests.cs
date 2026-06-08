@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using FluentAssertions;
 
@@ -70,7 +71,41 @@ public sealed class GitHubWorkflowPreflightTests
         script.Should().Contain("workflow YAML must use spaces for indentation");
         script.Should().Contain("$allowedActionMajors");
         script.Should().Contain("must use supported major");
+        script.Should().Contain("publish-distribution-candidate");
+        script.Should().Contain("distribution_candidate");
+        script.Should().Contain("macOS release publication job must be gated to workflow_dispatch distribution-candidate runs");
+        script.Should().Contain("macOS release publication job must declare actions: read");
+        script.Should().Contain("macOS release publication must be the only workflow scope requesting contents: write");
+        script.Should().Contain("cancel-in-progress: false");
+        script.Should().Contain("macOS release publication checkout must use actions/checkout@v6 with persist-credentials: false");
         script.Should().Contain("Validated $($workflows.Count) GitHub workflow file(s).");
+    }
+
+    [Fact]
+    public void MacOsAppWorkflow_ReleasePublicationIsDistributionCandidateDispatchOnly()
+    {
+        var workflow = ReadMacOsAppWorkflow();
+
+        var workflowDispatch = ExtractRequiredYamlBlock(workflow, "workflow_dispatch:");
+        var distributionCandidateInput = ExtractRequiredYamlBlock(workflowDispatch, "distribution_candidate:");
+        distributionCandidateInput.Should().Contain("type: boolean");
+        distributionCandidateInput.Should().Contain("default: false");
+
+        var releaseJob = ExtractRequiredYamlBlock(workflow, "publish-distribution-candidate:");
+        releaseJob.Should().Contain("needs: macos-app");
+        releaseJob.Should().Contain("if: ${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}");
+        releaseJob.Should().Contain("permissions:");
+        releaseJob.Should().Contain("actions: read");
+        releaseJob.Should().Contain("contents: write");
+        releaseJob.Should().NotContain("write-all");
+        releaseJob.Should().Contain("concurrency:");
+        releaseJob.Should().Contain("group: macos-distribution-candidate-release");
+        releaseJob.Should().Contain("cancel-in-progress: false");
+        releaseJob.Should().Contain("uses: actions/checkout@v6");
+        releaseJob.Should().Contain("persist-credentials: false");
+
+        workflow.Replace(releaseJob, string.Empty, StringComparison.Ordinal)
+            .Should().NotContain("contents: write");
     }
 
     [Fact]
@@ -426,4 +461,154 @@ public sealed class GitHubWorkflowPreflightTests
         result.CombinedOutput.Should().Contain("must use supported major v6");
     }
 
+    [Fact]
+    public void GitHubWorkflowPreflight_FailsWhenMacOsReleasePublicationIsNotDispatchCandidateOnly()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var brokenWorkflow = ReplaceRequiredText(
+            ReadMacOsAppWorkflow(),
+            "if: ${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}",
+            "if: ${{ github.event_name == 'workflow_dispatch' }}");
+
+        WriteMacOsWorkflow(temp, brokenWorkflow);
+
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("macOS release publication job must be gated to workflow_dispatch distribution-candidate runs");
+        result.CombinedOutput.Should().Contain("macos-app.yml");
+    }
+
+    [Fact]
+    public void GitHubWorkflowPreflight_FailsWhenMacOsReleasePublicationPermissionsAreWidened()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var brokenWorkflow = ReplaceRequiredText(
+            ReplaceRequiredText(
+                ReadMacOsAppWorkflow(),
+                "permissions:\n  contents: read",
+                "permissions:\n  contents: write"),
+            "      actions: read",
+            "      actions: write");
+
+        WriteMacOsWorkflow(temp, brokenWorkflow);
+
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("macOS release publication job must declare actions: read");
+        result.CombinedOutput.Should().Contain("macOS release publication must be the only workflow scope requesting contents: write");
+        result.CombinedOutput.Should().Contain("macos-app.yml");
+    }
+
+    [Fact]
+    public void GitHubWorkflowPreflight_FailsWhenMacOsReleasePublicationConcurrencyCanCancel()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var brokenWorkflow = ReplaceRequiredText(
+            ReadMacOsAppWorkflow(),
+            "      cancel-in-progress: false",
+            "      cancel-in-progress: true");
+
+        WriteMacOsWorkflow(temp, brokenWorkflow);
+
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("macOS release publication job must use non-canceling concurrency with cancel-in-progress: false");
+        result.CombinedOutput.Should().Contain("macos-app.yml");
+    }
+
+    [Fact]
+    public void GitHubWorkflowPreflight_FailsWhenMacOsReleasePublicationCheckoutPersistsCredentials()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var workflow = ReadMacOsAppWorkflow();
+        var releaseJob = ExtractRequiredYamlBlock(workflow, "publish-distribution-candidate:");
+        var brokenReleaseJob = ReplaceRequiredText(
+            releaseJob,
+            "          persist-credentials: false",
+            "          persist-credentials: true");
+        var brokenWorkflow = ReplaceRequiredText(workflow, releaseJob, brokenReleaseJob);
+
+        WriteMacOsWorkflow(temp, brokenWorkflow);
+
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("macOS release publication checkout must use actions/checkout@v6 with persist-credentials: false");
+        result.CombinedOutput.Should().Contain("actions/checkout steps must set persist-credentials: false");
+        result.CombinedOutput.Should().Contain("macos-app.yml");
+    }
+
+    private static string ReadMacOsAppWorkflow()
+    {
+        return NormalizeLineEndings(WorkspaceFileLocator.ReadAllText(".github", "workflows", "macos-app.yml"));
+    }
+
+    private static void WriteMacOsWorkflow(TestTemporaryDirectory temp, string workflow)
+    {
+        File.WriteAllText(Path.Combine(temp.Path, "macos-app.yml"), workflow);
+    }
+
+    private static string ExtractRequiredYamlBlock(string yaml, string key)
+    {
+        var lines = NormalizeLineEndings(yaml).Split('\n');
+        for (var lineIndex = 0; lineIndex < lines.Length; lineIndex++)
+        {
+            var line = lines[lineIndex].TrimEnd();
+            if (!string.Equals(line.TrimStart(' '), key, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var indentLength = line.Length - line.TrimStart(' ').Length;
+            var blockLines = new System.Collections.Generic.List<string> { lines[lineIndex] };
+            for (var nextLineIndex = lineIndex + 1; nextLineIndex < lines.Length; nextLineIndex++)
+            {
+                if (string.IsNullOrWhiteSpace(lines[nextLineIndex]))
+                {
+                    blockLines.Add(lines[nextLineIndex]);
+                    continue;
+                }
+
+                var nextIndentLength = lines[nextLineIndex].Length - lines[nextLineIndex].TrimStart(' ').Length;
+                if (nextIndentLength <= indentLength)
+                {
+                    break;
+                }
+
+                blockLines.Add(lines[nextLineIndex]);
+            }
+
+            return string.Join('\n', blockLines);
+        }
+
+        throw new InvalidOperationException($"YAML block was not found: {key}");
+    }
+
+    private static string ReplaceRequiredText(string text, string oldValue, string newValue)
+    {
+        var normalizedOldValue = NormalizeLineEndings(oldValue);
+        var updated = text.Replace(normalizedOldValue, NormalizeLineEndings(newValue), StringComparison.Ordinal);
+        if (string.Equals(updated, text, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"Required workflow text was not found: {normalizedOldValue}");
+        }
+
+        return updated;
+    }
+
+    private static string NormalizeLineEndings(string text)
+    {
+        return text.Replace("\r\n", "\n", StringComparison.Ordinal);
+    }
 }
