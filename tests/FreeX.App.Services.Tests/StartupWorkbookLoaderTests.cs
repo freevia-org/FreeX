@@ -35,6 +35,23 @@ public sealed class StartupWorkbookLoaderTests
     }
 
     [Fact]
+    public async Task Load_WithUnsupportedPathBeforeSupportedWorkbook_OpensSupportedWorkbook()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var notesPath = Path.Combine(temp.Path, "launch-notes.unsupported");
+        var workbookPath = Path.Combine(temp.Path, "OpenWith.csv");
+        await File.WriteAllTextAsync(notesPath, "not a workbook");
+        await File.WriteAllTextAsync(workbookPath, "Name,Amount\r\nFreeX,42\r\n");
+
+        var result = new StartupWorkbookLoader().Load([notesPath, workbookPath]);
+
+        result.IsFallback.Should().BeFalse();
+        result.SourcePath.Should().Be(workbookPath);
+        result.DisplayName.Should().Be(Path.GetFileName(workbookPath));
+        result.Workbook.Sheets.Single().Name.Should().Be("OpenWith");
+    }
+
+    [Fact]
     public async Task Load_WithTemplatePath_PreservesTemplateAndFeatureMetadata()
     {
         using var temp = new TestTemporaryDirectory();
@@ -78,6 +95,22 @@ public sealed class StartupWorkbookLoaderTests
         await File.WriteAllTextAsync(path, "not a workbook");
 
         var result = new StartupWorkbookLoader().Load([path]);
+
+        result.IsFallback.Should().BeTrue();
+        result.Status.Should().Contain("Unsupported file type: .unsupported");
+        result.Workbook.Sheets.Single().Name.Should().Be("Port Plan");
+    }
+
+    [Fact]
+    public async Task Load_WithOnlyUnsupportedExistingPaths_ReturnsFirstUnsupportedPreviewFallback()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var firstPath = Path.Combine(temp.Path, "notes.unsupported");
+        var secondPath = Path.Combine(temp.Path, "other.unknown");
+        await File.WriteAllTextAsync(firstPath, "not a workbook");
+        await File.WriteAllTextAsync(secondPath, "also not a workbook");
+
+        var result = new StartupWorkbookLoader().Load([firstPath, secondPath]);
 
         result.IsFallback.Should().BeTrue();
         result.Status.Should().Contain("Unsupported file type: .unsupported");
