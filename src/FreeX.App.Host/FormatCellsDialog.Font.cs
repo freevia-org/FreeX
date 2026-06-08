@@ -73,9 +73,7 @@ public partial class FormatCellsDialog
     {
         var normal = CellStyle.Default;
         EnsureFontNameAvailable(normal.FontName);
-        DlgFontNameBox.SelectedItem = DlgFontNameBox.Items
-            .OfType<string>()
-            .FirstOrDefault(font => string.Equals(font, normal.FontName, StringComparison.CurrentCultureIgnoreCase));
+        DlgFontNameBox.SelectedItem = FindFontNameItem(normal.FontName);
         DlgFontNameBox.Text = normal.FontName;
         DlgFontSizeBox.Text = normal.FontSize.ToString("0.#");
         DlgFontStyleList.SelectedItem = FontStyleLabel(normal.Bold, normal.Italic);
@@ -86,6 +84,17 @@ public partial class FormatCellsDialog
         DlgSubscriptCheck.IsChecked = normal.Subscript;
         DlgFontColorBox.Text = ColorInputParser.FormatRgbColor(normal.FontColor);
         UpdateFontPreview();
+    }
+
+    private string? FindFontNameItem(string fontName)
+    {
+        foreach (var item in DlgFontNameBox.Items)
+        {
+            if (item is string font && string.Equals(font, fontName, StringComparison.CurrentCultureIgnoreCase))
+                return font;
+        }
+
+        return null;
     }
 
     private void DlgSuperscriptCheck_Checked(object sender, RoutedEventArgs e)

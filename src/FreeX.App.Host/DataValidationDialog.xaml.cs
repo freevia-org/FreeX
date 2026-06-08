@@ -353,10 +353,17 @@ public partial class DataValidationDialog : Window
 
     private static void SelectComboItemByTag(ComboBox comboBox, string tag)
     {
-        comboBox.SelectedItem = comboBox.Items
-            .OfType<ComboBoxItem>()
-            .FirstOrDefault(item => string.Equals(item.Tag as string, tag, StringComparison.Ordinal))
-            ?? comboBox.Items[0];
+        foreach (var item in comboBox.Items)
+        {
+            if (item is ComboBoxItem comboBoxItem
+                && string.Equals(comboBoxItem.Tag as string, tag, StringComparison.Ordinal))
+            {
+                comboBox.SelectedItem = comboBoxItem;
+                return;
+            }
+        }
+
+        comboBox.SelectedItem = comboBox.Items[0];
     }
 
 }
