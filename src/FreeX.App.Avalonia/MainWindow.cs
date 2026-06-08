@@ -359,6 +359,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _sortDescendingMenuItem = new();
     private readonly NativeMenuItem _customSortMenuItem = new();
     private readonly NativeMenuItem _advancedFilterMenuItem = new();
+    private readonly NativeMenuItem _removeDuplicatesMenuItem = new();
     private readonly NativeMenuItem _dataValidationPreviewMenuItem = new();
     private readonly NativeMenuItem _dataValidationMenuItem = new();
     private readonly NativeMenuItem _whatIfAnalysisMenuItem = new();
@@ -714,6 +715,9 @@ public sealed class MainWindow : Window
         _advancedFilterMenuItem.Header = "Advanced Filter...";
         _advancedFilterMenuItem.Click += async (_, _) => await ShowAdvancedFilterDialogAsync();
 
+        _removeDuplicatesMenuItem.Header = "Remove Duplicates...";
+        _removeDuplicatesMenuItem.Click += async (_, _) => await ShowRemoveDuplicatesDialogAsync();
+
         _dataValidationPreviewMenuItem.Header = "Data Validation Preview...";
         _dataValidationPreviewMenuItem.Click += async (_, _) => await ShowDataValidationPreviewDialogAsync();
 
@@ -1027,6 +1031,7 @@ public sealed class MainWindow : Window
         dataMenu.Items.Add(_sortDescendingMenuItem);
         dataMenu.Items.Add(_customSortMenuItem);
         dataMenu.Items.Add(_advancedFilterMenuItem);
+        dataMenu.Items.Add(_removeDuplicatesMenuItem);
         dataMenu.Items.Add(new NativeMenuItemSeparator());
         dataMenu.Items.Add(_dataValidationPreviewMenuItem);
         dataMenu.Items.Add(_dataValidationMenuItem);
@@ -1773,6 +1778,7 @@ public sealed class MainWindow : Window
         _sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _customSortMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _advancedFilterMenuItem.IsEnabled = isIdle;
+        _removeDuplicatesMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1;
         _dataValidationPreviewMenuItem.IsEnabled = isIdle;
         _dataValidationMenuItem.IsEnabled = isIdle;
         _whatIfAnalysisMenuItem.IsEnabled = isIdle;
@@ -7585,6 +7591,269 @@ public sealed class MainWindow : Window
             },
         };
 
+    private async Task ShowRemoveDuplicatesDialogAsync()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var plan = await ShowRemoveDuplicatesInputDialogAsync();
+        if (plan is null)
+            return;
+
+        var result = _session.ExecuteRemoveDuplicatesPlan(plan);
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "Remove Duplicates failed.");
+            return;
+        }
+
+        var status = FormatRemoveDuplicatesStatus(plan, result);
+        RefreshShell(status);
+        await ShowTextDialogAsync("Remove Duplicates", status, 420, 220);
+    }
+
+    private async Task<RemoveDuplicatesPlan?> ShowRemoveDuplicatesInputDialogAsync()
+    {
+        RemoveDuplicatesPlan? result = null;
+        var range = _session.SelectedRange;
+        var hasHeaders = RemoveDuplicatesPlanner.GuessHasHeaders(_session.ActiveSheet, range);
+        IReadOnlyList<RemoveDuplicateColumnChoice> columns =
+            RemoveDuplicatesPlanner.BuildColumnChoices(_session.ActiveSheet, range, hasHeaders);
+
+        var dialog = new Window
+        {
+            Title = "Remove Duplicates",
+            Width = 440,
+            Height = 430,
+            MinWidth = 380,
+            MinHeight = 340,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "RemoveDuplicatesCompactDialog");
+
+        var rangeText = new TextBlock
+        {
+            Text = $"Range: {FormatRangeReference(range)}",
+            Foreground = HeaderForeground,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        AutomationProperties.SetAutomationId(rangeText, "RemoveDuplicatesRangeSummaryText");
+
+        var hasHeadersBox = new CheckBox
+        {
+            Content = "My data has headers",
+            IsChecked = hasHeaders,
+        };
+        AutomationProperties.SetAutomationId(hasHeadersBox, "RemoveDuplicatesHasHeadersBox");
+
+        var columnsPanel = new StackPanel
+        {
+            Spacing = 4,
+        };
+        AutomationProperties.SetAutomationId(columnsPanel, "RemoveDuplicatesColumnsPanel");
+
+        var columnBoxes = new List<CheckBox>();
+
+        IReadOnlyList<RemoveDuplicateColumnChoice> CaptureColumns() =>
+            columns.Select((column, index) =>
+                column with { IsSelected = columnBoxes.ElementAtOrDefault(index)?.IsChecked == true }).ToArray();
+
+        void RenderColumns(IReadOnlyList<RemoveDuplicateColumnChoice> nextColumns)
+        {
+            columns = nextColumns;
+            columnBoxes.Clear();
+            columnsPanel.Children.Clear();
+            foreach (var column in columns)
+            {
+                var box = new CheckBox
+                {
+                    Content = column.Label,
+                    IsChecked = column.IsSelected,
+                };
+                AutomationProperties.SetName(box, column.Label);
+                AutomationProperties.SetAutomationId(box, $"RemoveDuplicatesColumn{column.Offset}Box");
+                AutomationProperties.SetHelpText(box, "Include this column when comparing duplicate rows.");
+                columnBoxes.Add(box);
+                columnsPanel.Children.Add(box);
+            }
+        }
+
+        RenderColumns(columns);
+
+        var selectAllButton = new Button
+        {
+            Content = "Select All",
+            MinWidth = 92,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(selectAllButton, "RemoveDuplicatesSelectAllButton");
+
+        var unselectAllButton = new Button
+        {
+            Content = "Unselect All",
+            MinWidth = 92,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(unselectAllButton, "RemoveDuplicatesUnselectAllButton");
+
+        var errorText = new TextBlock
+        {
+            Foreground = Brush(143, 74, 18),
+            TextWrapping = TextWrapping.Wrap,
+        };
+        AutomationProperties.SetAutomationId(errorText, "RemoveDuplicatesErrorText");
+
+        var okButton = new Button
+        {
+            Content = "OK",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(okButton, "RemoveDuplicatesOkButton");
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(cancelButton, "RemoveDuplicatesCancelButton");
+
+        void RebuildColumnsForHeaderState()
+        {
+            var previous = CaptureColumns().ToDictionary(static column => column.Offset, static column => column.IsSelected);
+            var rebuilt = RemoveDuplicatesPlanner
+                .BuildColumnChoices(_session.ActiveSheet, range, hasHeadersBox.IsChecked == true)
+                .Select(column => column with
+                {
+                    IsSelected = previous.TryGetValue(column.Offset, out var selected)
+                        ? selected
+                        : column.IsSelected,
+                })
+                .ToArray();
+            RenderColumns(rebuilt);
+        }
+
+        void Accept()
+        {
+            var planResult = RemoveDuplicatesPlanner.CreatePlan(
+                range,
+                hasHeadersBox.IsChecked == true,
+                CaptureColumns());
+            if (!planResult.IsReady || planResult.Plan is null)
+            {
+                errorText.Text = planResult.StatusText;
+                (columnBoxes.FirstOrDefault() as Control ?? selectAllButton).Focus();
+                return;
+            }
+
+            result = planResult.Plan;
+            dialog.Close();
+        }
+
+        hasHeadersBox.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == ToggleButton.IsCheckedProperty)
+                RebuildColumnsForHeaderState();
+        };
+        selectAllButton.Click += (_, _) =>
+        {
+            errorText.Text = "";
+            RenderColumns(RemoveDuplicatesPlanner.SelectAll(CaptureColumns()));
+        };
+        unselectAllButton.Click += (_, _) =>
+        {
+            errorText.Text = "";
+            RenderColumns(RemoveDuplicatesPlanner.ClearAll(CaptureColumns()));
+        };
+        okButton.Click += (_, _) => Accept();
+        cancelButton.Click += (_, _) => dialog.Close();
+
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                Accept();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                dialog.Close();
+                e.Handled = true;
+            }
+        };
+
+        dialog.Content = new Border
+        {
+            Padding = new Thickness(16),
+            Child = new StackPanel
+            {
+                Spacing = 12,
+                Children =
+                {
+                    rangeText,
+                    hasHeadersBox,
+                    new TextBlock
+                    {
+                        Text = "Columns",
+                        FontWeight = FontWeight.SemiBold,
+                    },
+                    new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        Spacing = 8,
+                        Children =
+                        {
+                            selectAllButton,
+                            unselectAllButton,
+                        },
+                    },
+                    new Border
+                    {
+                        BorderBrush = ToolbarBorder,
+                        BorderThickness = new Thickness(1),
+                        Padding = new Thickness(8),
+                        Child = new ScrollViewer
+                        {
+                            MaxHeight = 170,
+                            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                            Content = columnsPanel,
+                        },
+                    },
+                    errorText,
+                    new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+                        Spacing = 8,
+                        Children =
+                        {
+                            okButton,
+                            cancelButton,
+                        },
+                    },
+                },
+            },
+        };
+        dialog.Opened += (_, _) => hasHeadersBox.Focus();
+
+        await dialog.ShowDialog(this);
+        return result;
+    }
+
+    private static string FormatRemoveDuplicatesStatus(
+        RemoveDuplicatesPlan plan,
+        WorkbookRemoveDuplicatesResult result)
+    {
+        var rowLabel = result.RemovedRowCount == 1 ? "row" : "rows";
+        return $"Removed {result.RemovedRowCount} duplicate {rowLabel} from {FormatRangeReference(plan.SourceRange)}";
+    }
+
     private async Task ShowScenarioManagerDialogAsync()
     {
         if (_isOpening || _isSaving)
@@ -10615,6 +10884,7 @@ public sealed class MainWindow : Window
             HasNativeSortAscendingMenuItem: HasNativeMenuItem(_sortAscendingMenuItem, "Sort A to Z", requireGesture: false),
             HasNativeSortDescendingMenuItem: HasNativeMenuItem(_sortDescendingMenuItem, "Sort Z to A", requireGesture: false),
             HasNativeAdvancedFilterMenuItem: HasNativeMenuItem(_advancedFilterMenuItem, "Advanced Filter...", requireGesture: false),
+            HasNativeRemoveDuplicatesMenuItem: HasNativeMenuItem(_removeDuplicatesMenuItem, "Remove Duplicates...", requireGesture: false),
             HasNativeDataValidationPreviewMenuItem: HasNativeMenuItem(_dataValidationPreviewMenuItem, "Data Validation Preview...", requireGesture: false),
             HasNativeDataValidationMenuItem: HasNativeMenuItem(_dataValidationMenuItem, "Data Validation...", requireGesture: false),
             HasNativeWhatIfAnalysisMenuItem: HasNativeMenuItem(_whatIfAnalysisMenuItem, "What-If Analysis", requireGesture: false),

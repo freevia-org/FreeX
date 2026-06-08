@@ -706,6 +706,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_go_to_menu_item={FormatBool(snapshot.HasNativeGoToMenuItem)}");
         smokeSource.Should().Contain("native_go_to_special_menu_item={FormatBool(snapshot.HasNativeGoToSpecialMenuItem)}");
         smokeSource.Should().Contain("native_advanced_filter_menu_item={FormatBool(snapshot.HasNativeAdvancedFilterMenuItem)}");
+        smokeSource.Should().Contain("native_remove_duplicates_menu_item={FormatBool(snapshot.HasNativeRemoveDuplicatesMenuItem)}");
         smokeSource.Should().Contain("native_data_validation_preview_menu_item={FormatBool(snapshot.HasNativeDataValidationPreviewMenuItem)}");
         smokeSource.Should().Contain("native_data_validation_menu_item={FormatBool(snapshot.HasNativeDataValidationMenuItem)}");
         smokeSource.Should().Contain("native_what_if_analysis_menu_item={FormatBool(snapshot.HasNativeWhatIfAnalysisMenuItem)}");
@@ -1378,6 +1379,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("HasNativeSortAscendingMenuItem &&");
         smokeSource.Should().Contain("HasNativeSortDescendingMenuItem &&");
         smokeSource.Should().Contain("HasNativeAdvancedFilterMenuItem &&");
+        smokeSource.Should().Contain("HasNativeRemoveDuplicatesMenuItem &&");
         smokeSource.Should().Contain("HasNativeDataValidationPreviewMenuItem &&");
         smokeSource.Should().Contain("HasNativeDataValidationMenuItem &&");
         smokeSource.Should().Contain("HasNativeWhatIfAnalysisMenuItem &&");
@@ -1396,6 +1398,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_sort_ascending_menu_item={FormatBool(snapshot.HasNativeSortAscendingMenuItem)}");
         smokeSource.Should().Contain("native_sort_descending_menu_item={FormatBool(snapshot.HasNativeSortDescendingMenuItem)}");
         smokeSource.Should().Contain("native_advanced_filter_menu_item={FormatBool(snapshot.HasNativeAdvancedFilterMenuItem)}");
+        smokeSource.Should().Contain("native_remove_duplicates_menu_item={FormatBool(snapshot.HasNativeRemoveDuplicatesMenuItem)}");
         smokeSource.Should().Contain("native_data_validation_preview_menu_item={FormatBool(snapshot.HasNativeDataValidationPreviewMenuItem)}");
         smokeSource.Should().Contain("native_data_validation_menu_item={FormatBool(snapshot.HasNativeDataValidationMenuItem)}");
         smokeSource.Should().Contain("native_what_if_analysis_menu_item={FormatBool(snapshot.HasNativeWhatIfAnalysisMenuItem)}");
@@ -1881,12 +1884,86 @@ public sealed class AvaloniaShellSourceTests
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowAdvancedFilterDialogAsync()", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);
-        var nextMethodIndex = normalizedSource.IndexOf("\n    private async Task ShowDataTableDialogAsync()", handlerIndex, StringComparison.Ordinal);
+        var nextMethodIndex = normalizedSource.IndexOf("\n    private async Task ShowRemoveDuplicatesDialogAsync()", handlerIndex, StringComparison.Ordinal);
         nextMethodIndex.Should().BeGreaterThan(handlerIndex);
         var routeSource = normalizedSource[handlerIndex..nextMethodIndex];
 
         routeSource.Should().NotContain("new AdvancedFilterCommand");
         routeSource.Should().NotContain("new AdvancedFilterDialog");
+        routeSource.Should().NotContain("FreeX.App.Host");
+        routeSource.Should().NotContain("DataTransferManager");
+        routeSource.Should().NotContain("WindowInteropHelper");
+        routeSource.Should().NotContain("Microsoft.Win32");
+        routeSource.Should().NotContain("System.Windows");
+    }
+
+    [Fact]
+    public void MainWindow_WiresNativeRemoveDuplicatesThroughSharedPlannerSessionAndCompactDialog()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "RemoveDuplicatesPlanner.cs"));
+        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        source.Should().Contain("private readonly NativeMenuItem _removeDuplicatesMenuItem = new();");
+        source.Should().Contain("_removeDuplicatesMenuItem.Header = \"Remove Duplicates...\";");
+        source.Should().Contain("_removeDuplicatesMenuItem.Click += async (_, _) => await ShowRemoveDuplicatesDialogAsync();");
+        source.Should().Contain("dataMenu.Items.Add(_removeDuplicatesMenuItem);");
+        source.Should().Contain("_removeDuplicatesMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1;");
+        source.Should().Contain("HasNativeRemoveDuplicatesMenuItem: HasNativeMenuItem(_removeDuplicatesMenuItem, \"Remove Duplicates...\", requireGesture: false)");
+
+        var advancedFilterMenuIndex = normalizedSource.IndexOf("dataMenu.Items.Add(_advancedFilterMenuItem);", StringComparison.Ordinal);
+        var removeDuplicatesMenuIndex = normalizedSource.IndexOf("dataMenu.Items.Add(_removeDuplicatesMenuItem);", StringComparison.Ordinal);
+        var dataValidationMenuIndex = normalizedSource.IndexOf("dataMenu.Items.Add(_dataValidationMenuItem);", StringComparison.Ordinal);
+        advancedFilterMenuIndex.Should().BeGreaterThanOrEqualTo(0);
+        removeDuplicatesMenuIndex.Should().BeGreaterThan(advancedFilterMenuIndex);
+        dataValidationMenuIndex.Should().BeGreaterThan(removeDuplicatesMenuIndex);
+
+        source.Should().Contain("private async Task ShowRemoveDuplicatesDialogAsync()");
+        source.Should().Contain("if (_isOpening || _isSaving)");
+        source.Should().Contain("if (!TryCommitPendingFormulaEdit())");
+        source.Should().Contain("var plan = await ShowRemoveDuplicatesInputDialogAsync();");
+        source.Should().Contain("var result = _session.ExecuteRemoveDuplicatesPlan(plan);");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Remove Duplicates failed.\");");
+        source.Should().Contain("RefreshShell(status);");
+        source.Should().Contain("ShowTextDialogAsync(\"Remove Duplicates\", status, 420, 220)");
+
+        source.Should().Contain("private async Task<RemoveDuplicatesPlan?> ShowRemoveDuplicatesInputDialogAsync()");
+        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"RemoveDuplicatesCompactDialog\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(rangeText, \"RemoveDuplicatesRangeSummaryText\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(hasHeadersBox, \"RemoveDuplicatesHasHeadersBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(columnsPanel, \"RemoveDuplicatesColumnsPanel\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(box, $\"RemoveDuplicatesColumn{column.Offset}Box\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(selectAllButton, \"RemoveDuplicatesSelectAllButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(unselectAllButton, \"RemoveDuplicatesUnselectAllButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(errorText, \"RemoveDuplicatesErrorText\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"RemoveDuplicatesOkButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"RemoveDuplicatesCancelButton\");");
+        source.Should().Contain("RemoveDuplicatesPlanner.GuessHasHeaders(_session.ActiveSheet, range)");
+        source.Should().Contain("RemoveDuplicatesPlanner.BuildColumnChoices(_session.ActiveSheet, range, hasHeaders)");
+        source.Should().Contain("RemoveDuplicatesPlanner.CreatePlan(");
+        source.Should().Contain("RenderColumns(RemoveDuplicatesPlanner.SelectAll(CaptureColumns()))");
+        source.Should().Contain("RenderColumns(RemoveDuplicatesPlanner.ClearAll(CaptureColumns()))");
+        source.Should().Contain("private static string FormatRemoveDuplicatesStatus(");
+
+        sessionSource.Should().Contain("public WorkbookRemoveDuplicatesResult ExecuteRemoveDuplicatesPlan(RemoveDuplicatesPlan plan)");
+        sessionSource.Should().Contain("CreateGroupedSheetCommand(");
+        sessionSource.Should().Contain("\"Remove Duplicates\"");
+        sessionSource.Should().Contain("var sheetRange = RemapRangeToSheet(plan.ActiveRange, sheetId);");
+        sessionSource.Should().Contain("plan.CreateCommand(sheetId, sheetRange)");
+        sessionSource.Should().Contain("ApplySuccessfulRangeEditResult(result, plan.SourceRange);");
+        plannerSource.Should().Contain("public static bool GuessHasHeaders(Sheet sheet, GridRange range)");
+        plannerSource.Should().Contain("public static GridRange ExcludeHeaderRow(GridRange range, bool hasHeaders)");
+        plannerSource.Should().Contain("public RemoveDuplicateRowsCommand CreateCommand(SheetId sheetId, GridRange activeRange)");
+
+        var handlerIndex = normalizedSource.IndexOf("private async Task ShowRemoveDuplicatesDialogAsync()", StringComparison.Ordinal);
+        handlerIndex.Should().BeGreaterThanOrEqualTo(0);
+        var nextMethodIndex = normalizedSource.IndexOf("\n    private async Task ShowScenarioManagerDialogAsync()", handlerIndex, StringComparison.Ordinal);
+        nextMethodIndex.Should().BeGreaterThan(handlerIndex);
+        var routeSource = normalizedSource[handlerIndex..nextMethodIndex];
+
+        routeSource.Should().NotContain("new RemoveDuplicateRowsCommand");
+        routeSource.Should().NotContain("new RemoveDuplicatesDialog");
         routeSource.Should().NotContain("FreeX.App.Host");
         routeSource.Should().NotContain("DataTransferManager");
         routeSource.Should().NotContain("WindowInteropHelper");

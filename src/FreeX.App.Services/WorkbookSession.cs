@@ -389,6 +389,49 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public WorkbookRemoveDuplicatesResult ExecuteRemoveDuplicatesPlan(RemoveDuplicatesPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        if (plan.SelectedColumnOffsets.Count == 0)
+        {
+            var invalidResult = new WorkbookCellEditResult(
+                false,
+                "Select at least one column.",
+                [],
+                RecalcReport: null);
+            return new WorkbookRemoveDuplicatesResult(
+                false,
+                invalidResult.ErrorMessage,
+                RemovedRowCount: 0,
+                invalidResult);
+        }
+
+        RemoveDuplicateRowsCommand? activeSheetCommand = null;
+        var command = CreateGroupedSheetCommand(
+            "Remove Duplicates",
+            sheetId =>
+            {
+                var sheetRange = RemapRangeToSheet(plan.ActiveRange, sheetId);
+                var removeCommand = plan.CreateCommand(sheetId, sheetRange);
+                if (sheetId == ActiveSheet.Id)
+                    activeSheetCommand = removeCommand;
+
+                return removeCommand;
+            });
+
+        var result = _cellEditService.ExecuteEditCommand(Workbook, command);
+        if (!result.Success)
+            return new WorkbookRemoveDuplicatesResult(false, result.ErrorMessage, RemovedRowCount: 0, result);
+
+        ApplySuccessfulRangeEditResult(result, plan.SourceRange);
+        return new WorkbookRemoveDuplicatesResult(
+            true,
+            null,
+            activeSheetCommand?.RemovedRowCount ?? 0,
+            result);
+    }
+
     public WorkbookCellEditResult ExecuteForecastSheetPlan(ForecastSheetPlan plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
