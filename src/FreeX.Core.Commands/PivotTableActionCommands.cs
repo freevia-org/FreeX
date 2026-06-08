@@ -32,7 +32,7 @@ public sealed class RenamePivotTableCommand : IWorkbookCommand
 
         var pivotTable = FindPivotTable(sheet, _pivotTableName);
         if (pivotTable is null)
-            return new CommandOutcome(false, "PivotTable was not found.");
+            return CommandGuards.RejectPivotTableNotFound();
         if (PivotTableNameExists(ctx.Workbook, pivotTable, _newName))
             return new CommandOutcome(false, "PivotTable name is already in use.");
 
@@ -137,7 +137,7 @@ public sealed class ClearPivotTableViewCommand : IWorkbookCommand
         var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
             string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
         if (pivotTable is null)
-            return new CommandOutcome(false, "PivotTable was not found.");
+            return CommandGuards.RejectPivotTableNotFound();
 
         _snapshot = PivotViewClearSnapshot.Capture(pivotTable);
         _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
@@ -252,7 +252,7 @@ public sealed class MovePivotTableCommand : IWorkbookCommand
         var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
             string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
         if (pivotTable is null)
-            return new CommandOutcome(false, "PivotTable was not found.");
+            return CommandGuards.RejectPivotTableNotFound();
         if (!TryCreateMovedTargetRange(pivotTable.TargetRange, _targetStart, out var movedRange))
             return new CommandOutcome(false, "PivotTable target range is outside the worksheet bounds.");
 

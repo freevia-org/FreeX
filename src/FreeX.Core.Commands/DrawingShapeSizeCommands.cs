@@ -31,9 +31,8 @@ public sealed class ResizeDrawingShapeCommand : IWorkbookCommand
         if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var shape = sheet.DrawingShapes.FirstOrDefault(item => item.Id == _shapeId);
-        if (shape is null)
-            return new CommandOutcome(false, "Drawing shape was not found.");
+        if (!DrawingShapeCommandGuards.TryFindShape(sheet, _shapeId, out var shape))
+            return DrawingShapeCommandGuards.DrawingShapeNotFound();
 
         _previousWidth = shape.Width;
         _previousHeight = shape.Height;
@@ -80,9 +79,8 @@ public sealed class RotateDrawingShapeCommand : IWorkbookCommand
         if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var shape = sheet.DrawingShapes.FirstOrDefault(item => item.Id == _shapeId);
-        if (shape is null)
-            return new CommandOutcome(false, "Drawing shape was not found.");
+        if (!DrawingShapeCommandGuards.TryFindShape(sheet, _shapeId, out var shape))
+            return DrawingShapeCommandGuards.DrawingShapeNotFound();
 
         _previousRotationDegrees = shape.RotationDegrees;
         shape.RotationDegrees = ObjectRotationNormalizer.NormalizeDegrees(_rotationDegrees);
