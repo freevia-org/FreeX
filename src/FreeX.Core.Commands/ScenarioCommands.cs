@@ -107,7 +107,7 @@ public sealed class ApplyScenarioCommand : IWorkbookCommand
         var scenario = ctx.Workbook.Scenarios.FirstOrDefault(s =>
             string.Equals(s.Name, _name, StringComparison.OrdinalIgnoreCase));
         if (scenario is null)
-            return new CommandOutcome(false, "Scenario was not found.");
+            return ScenarioCommandHelpers.ScenarioNotFound();
         if (ScenarioProtectionGuards.RejectIfChangingCellsProtected(ctx.Workbook, scenario.ChangingCells) is { } protectedOutcome)
             return protectedOutcome;
 
@@ -166,7 +166,7 @@ public sealed class DeleteScenarioCommand : IWorkbookCommand
         _removedIndex = ctx.Workbook.Scenarios.FindIndex(s =>
             string.Equals(s.Name, _name, StringComparison.OrdinalIgnoreCase));
         if (_removedIndex < 0)
-            return new CommandOutcome(false, "Scenario was not found.");
+            return ScenarioCommandHelpers.ScenarioNotFound();
 
         _removedScenario = ctx.Workbook.Scenarios[_removedIndex];
         if (ScenarioProtectionGuards.RejectIfChangingCellsProtected(ctx.Workbook, _removedScenario.ChangingCells) is { } protectedOutcome)
@@ -214,6 +214,11 @@ internal static class ScenarioProtectionGuards
 
 file static class ScenarioCommandHelpers
 {
+    private const string ScenarioNotFoundMessage = "Scenario was not found.";
+
+    public static CommandOutcome ScenarioNotFound() =>
+        new(false, ScenarioNotFoundMessage);
+
     public static List<CellAddress> BuildAffectedCells(IReadOnlyList<ScenarioCellValue> changingCells)
     {
         var affectedCells = new List<CellAddress>(changingCells.Count);
