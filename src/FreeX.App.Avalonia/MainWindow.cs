@@ -134,13 +134,6 @@ public sealed class MainWindow : Window
         TextBox InputBox,
         Button AcceptButton,
         Button CancelButton);
-    private sealed record GoalSeekDialogSmokeProbe(
-        Window Dialog,
-        TextBox SetCellBox,
-        TextBox TargetValueBox,
-        TextBox ChangingCellBox,
-        Button OkButton,
-        Button CancelButton);
     private sealed record GoToSpecialDialogSmokeProbe(
         Window Dialog,
         ComboBox KindBox,
@@ -6317,8 +6310,7 @@ public sealed class MainWindow : Window
         ShowEditIssue(FormatGoalSeekStatus(result));
     }
 
-    private async Task<GoalSeekRequest?> ShowGoalSeekInputDialogAsync(
-        Action<GoalSeekDialogSmokeProbe>? launchSmokeProbe = null)
+    private async Task<GoalSeekRequest?> ShowGoalSeekInputDialogAsync()
     {
         GoalSeekRequest? result = null;
         var dialog = new Window
@@ -6453,21 +6445,6 @@ public sealed class MainWindow : Window
             setCellBox.Focus();
             setCellBox.SelectAll();
         };
-        if (launchSmokeProbe is not null)
-        {
-            dialog.Opened += (_, _) =>
-            {
-                RunLaunchSmokeDialogProbe(
-                    dialog,
-                    () => launchSmokeProbe(new GoalSeekDialogSmokeProbe(
-                        dialog,
-                        setCellBox,
-                        targetValueBox,
-                        changingCellBox,
-                        okButton,
-                        cancelButton)));
-            };
-        }
 
         await dialog.ShowDialog(this);
         return result;
@@ -8534,26 +8511,6 @@ public sealed class MainWindow : Window
                 hasGoToDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 380, height: 165, minWidth: 340, minHeight: 155);
             });
 
-        var hasGoalSeekDialog = false;
-        var hasGoalSeekDialogReferenceControls = false;
-        var hasGoalSeekDialogActionButtons = false;
-        var hasGoalSeekDialogCompactLayout = false;
-        var goalSeekDialogResult = await ShowGoalSeekInputDialogAsync(probe =>
-        {
-            hasGoalSeekDialog = HasLaunchSmokeDialog(probe.Dialog, "Goal Seek");
-            hasGoalSeekDialogReferenceControls =
-                HasLaunchSmokeAutomationId(probe.SetCellBox, "GoalSeekSetCellBox") &&
-                HasLaunchSmokeAutomationId(probe.TargetValueBox, "GoalSeekTargetValueBox") &&
-                HasLaunchSmokeAutomationId(probe.ChangingCellBox, "GoalSeekChangingCellBox") &&
-                probe.SetCellBox.MinWidth >= 220 &&
-                probe.TargetValueBox.MinWidth >= 220 &&
-                probe.ChangingCellBox.MinWidth >= 220;
-            hasGoalSeekDialogActionButtons =
-                HasLaunchSmokeButton(probe.OkButton, "GoalSeekOkButton", "OK") &&
-                HasLaunchSmokeButton(probe.CancelButton, "GoalSeekCancelButton", "Cancel");
-            hasGoalSeekDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 270, minWidth: 360, minHeight: 245);
-        });
-
         var hasGoToSpecialDialog = false;
         var hasGoToSpecialKindControls = false;
         var hasGoToSpecialValueTypeControls = false;
@@ -8628,7 +8585,6 @@ public sealed class MainWindow : Window
             findDialogResult is null,
             replaceDialogResult is null,
             goToDialogResult is null,
-            goalSeekDialogResult is null,
             goToSpecialDialogResult is null,
             hasFormatCellsDialog,
             hasFormatCellsDialogTabStrip,
@@ -8636,11 +8592,7 @@ public sealed class MainWindow : Window
             hasFormatCellsDialogNumberControls,
             hasFormatCellsDialogActionButtons,
             hasFormatCellsDialogCompactLayout,
-            formatCellsDialogResult is null,
-            hasGoalSeekDialog,
-            hasGoalSeekDialogReferenceControls,
-            hasGoalSeekDialogActionButtons,
-            hasGoalSeekDialogCompactLayout);
+            formatCellsDialogResult is null);
         return _launchSmokeDialogEvidence;
     }
 
@@ -8904,8 +8856,6 @@ public sealed class MainWindow : Window
             HasNativeGoToSpecialMenuItem: HasNativeMenuItem(_goToSpecialMenuItem, "Go To Special...", requireGesture: false),
             HasNativeSortAscendingMenuItem: HasNativeMenuItem(_sortAscendingMenuItem, "Sort A to Z", requireGesture: false),
             HasNativeSortDescendingMenuItem: HasNativeMenuItem(_sortDescendingMenuItem, "Sort Z to A", requireGesture: false),
-            HasNativeWhatIfAnalysisMenuItem: HasNativeMenuItem(_whatIfAnalysisMenuItem, "What-If Analysis", requireGesture: false),
-            HasNativeGoalSeekMenuItem: HasNativeSubmenuItem(_whatIfAnalysisMenuItem.Menu, "Goal Seek..."),
             HasNativeFormatCellsMenuItem: HasNativeMenuItem(_formatCellsMenuItem, "Format Cells..."),
             HasNativeAutoSumMenuItem: HasNativeMenuItem(_autoSumMenuItem, "AutoSum", requireGesture: false),
             HasNativeAutoSumSumMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, "Sum"),

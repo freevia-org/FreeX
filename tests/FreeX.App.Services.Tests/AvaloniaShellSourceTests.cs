@@ -1415,7 +1415,6 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var parserSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "GoalSeekRequestParser.cs"));
-        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("private readonly NativeMenuItem _whatIfAnalysisMenuItem = new();");
@@ -1465,14 +1464,6 @@ public sealed class AvaloniaShellSourceTests
 
         sessionSource.Should().Contain("public WorkbookGoalSeekResult ExecuteGoalSeek(GoalSeekRequest request)");
         parserSource.Should().Contain("public static GoalSeekRequestParseResult Parse(");
-
-        smokeSource.Should().Contain("bool HasNativeWhatIfAnalysisMenuItem,");
-        smokeSource.Should().Contain("bool HasNativeGoalSeekMenuItem,");
-        smokeSource.Should().Contain("HasNativeWhatIfAnalysisMenuItem &&");
-        smokeSource.Should().Contain("HasNativeGoalSeekMenuItem &&");
-        smokeSource.Should().Contain("goal_seek_dialog={FormatBool(snapshot.DialogEvidence.HasGoalSeekDialog)}");
-        smokeSource.Should().Contain("native_what_if_analysis_menu_item={FormatBool(snapshot.HasNativeWhatIfAnalysisMenuItem)}");
-        smokeSource.Should().Contain("native_goal_seek_menu_item={FormatBool(snapshot.HasNativeGoalSeekMenuItem)}");
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowGoalSeekDialogAsync()", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);

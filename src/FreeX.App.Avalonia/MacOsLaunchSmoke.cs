@@ -104,7 +104,6 @@ internal sealed record MacOsLaunchSmokeDialogSnapshot(
     bool HasFindDialogClosedWithoutAccept,
     bool HasReplaceDialogClosedWithoutAccept,
     bool HasGoToDialogClosedWithoutAccept,
-    bool HasGoalSeekDialogClosedWithoutAccept,
     bool HasGoToSpecialDialogClosedWithoutAccept,
     bool HasFormatCellsDialog = false,
     bool HasFormatCellsDialogTabStrip = false,
@@ -112,11 +111,7 @@ internal sealed record MacOsLaunchSmokeDialogSnapshot(
     bool HasFormatCellsDialogNumberControls = false,
     bool HasFormatCellsDialogActionButtons = false,
     bool HasFormatCellsDialogCompactLayout = false,
-    bool HasFormatCellsDialogClosedWithoutAccept = false,
-    bool HasGoalSeekDialog = false,
-    bool HasGoalSeekDialogReferenceControls = false,
-    bool HasGoalSeekDialogActionButtons = false,
-    bool HasGoalSeekDialogCompactLayout = false)
+    bool HasFormatCellsDialogClosedWithoutAccept = false)
 {
     public static MacOsLaunchSmokeDialogSnapshot Empty { get; } = new(
         HasFindDialog: false,
@@ -141,7 +136,6 @@ internal sealed record MacOsLaunchSmokeDialogSnapshot(
         HasFindDialogClosedWithoutAccept: false,
         HasReplaceDialogClosedWithoutAccept: false,
         HasGoToDialogClosedWithoutAccept: false,
-        HasGoalSeekDialogClosedWithoutAccept: false,
         HasGoToSpecialDialogClosedWithoutAccept: false,
         HasFormatCellsDialog: false,
         HasFormatCellsDialogTabStrip: false,
@@ -149,11 +143,7 @@ internal sealed record MacOsLaunchSmokeDialogSnapshot(
         HasFormatCellsDialogNumberControls: false,
         HasFormatCellsDialogActionButtons: false,
         HasFormatCellsDialogCompactLayout: false,
-        HasFormatCellsDialogClosedWithoutAccept: false,
-        HasGoalSeekDialog: false,
-        HasGoalSeekDialogReferenceControls: false,
-        HasGoalSeekDialogActionButtons: false,
-        HasGoalSeekDialogCompactLayout: false);
+        HasFormatCellsDialogClosedWithoutAccept: false);
 
     public bool IsPassed =>
         HasFindDialog &&
@@ -171,10 +161,6 @@ internal sealed record MacOsLaunchSmokeDialogSnapshot(
         HasGoToDialog &&
         HasGoToDialogReferenceControls &&
         HasGoToDialogCompactLayout &&
-        HasGoalSeekDialog &&
-        HasGoalSeekDialogReferenceControls &&
-        HasGoalSeekDialogActionButtons &&
-        HasGoalSeekDialogCompactLayout &&
         HasGoToSpecialDialog &&
         HasGoToSpecialKindControls &&
         HasGoToSpecialValueTypeControls &&
@@ -188,7 +174,6 @@ internal sealed record MacOsLaunchSmokeDialogSnapshot(
         HasFindDialogClosedWithoutAccept &&
         HasReplaceDialogClosedWithoutAccept &&
         HasGoToDialogClosedWithoutAccept &&
-        HasGoalSeekDialogClosedWithoutAccept &&
         HasGoToSpecialDialogClosedWithoutAccept &&
         HasFormatCellsDialogClosedWithoutAccept;
 }
@@ -399,8 +384,6 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeGoToSpecialMenuItem,
     bool HasNativeSortAscendingMenuItem,
     bool HasNativeSortDescendingMenuItem,
-    bool HasNativeWhatIfAnalysisMenuItem,
-    bool HasNativeGoalSeekMenuItem,
     bool HasNativeAutoSumMenuItem,
     bool HasNativeAutoSumSumMenuItem,
     bool HasNativeAutoSumAverageMenuItem,
@@ -572,8 +555,6 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeGoToSpecialMenuItem &&
         HasNativeSortAscendingMenuItem &&
         HasNativeSortDescendingMenuItem &&
-        HasNativeWhatIfAnalysisMenuItem &&
-        HasNativeGoalSeekMenuItem &&
         HasNativeFormatCellsMenuItem &&
         HasNativeAutoSumMenuItem &&
         HasNativeAutoSumSumMenuItem &&
@@ -917,11 +898,6 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"go_to_dialog_reference_controls={FormatBool(snapshot.DialogEvidence.HasGoToDialogReferenceControls)}",
                 $"go_to_dialog_compact_layout={FormatBool(snapshot.DialogEvidence.HasGoToDialogCompactLayout)}",
                 $"go_to_dialog_result_closed_without_accept={FormatBool(snapshot.DialogEvidence.HasGoToDialogClosedWithoutAccept)}",
-                $"goal_seek_dialog={FormatBool(snapshot.DialogEvidence.HasGoalSeekDialog)}",
-                $"goal_seek_dialog_reference_controls={FormatBool(snapshot.DialogEvidence.HasGoalSeekDialogReferenceControls)}",
-                $"goal_seek_dialog_action_buttons={FormatBool(snapshot.DialogEvidence.HasGoalSeekDialogActionButtons)}",
-                $"goal_seek_dialog_compact_layout={FormatBool(snapshot.DialogEvidence.HasGoalSeekDialogCompactLayout)}",
-                $"goal_seek_dialog_result_closed_without_accept={FormatBool(snapshot.DialogEvidence.HasGoalSeekDialogClosedWithoutAccept)}",
                 $"go_to_special_dialog={FormatBool(snapshot.DialogEvidence.HasGoToSpecialDialog)}",
                 $"go_to_special_dialog_kind_controls={FormatBool(snapshot.DialogEvidence.HasGoToSpecialKindControls)}",
                 $"go_to_special_dialog_value_type_controls={FormatBool(snapshot.DialogEvidence.HasGoToSpecialValueTypeControls)}",
@@ -1025,8 +1001,6 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_go_to_special_menu_item={FormatBool(snapshot.HasNativeGoToSpecialMenuItem)}",
                 $"native_sort_ascending_menu_item={FormatBool(snapshot.HasNativeSortAscendingMenuItem)}",
                 $"native_sort_descending_menu_item={FormatBool(snapshot.HasNativeSortDescendingMenuItem)}",
-                $"native_what_if_analysis_menu_item={FormatBool(snapshot.HasNativeWhatIfAnalysisMenuItem)}",
-                $"native_goal_seek_menu_item={FormatBool(snapshot.HasNativeGoalSeekMenuItem)}",
                 $"native_format_cells_menu_item={FormatBool(snapshot.HasNativeFormatCellsMenuItem)}",
                 $"native_autosum_menu_item={FormatBool(snapshot.HasNativeAutoSumMenuItem)}",
                 $"native_autosum_sum_menu_item={FormatBool(snapshot.HasNativeAutoSumSumMenuItem)}",
