@@ -51,7 +51,7 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             foreach (var (addr, _) in _edits)
             {
                 if (!CommandGuards.CanEditCell(ctx.Workbook, sheet, addr))
-                    return new CommandOutcome(false, "The sheet is protected.");
+                    return CommandGuards.RejectSheetProtected();
             }
         }
 

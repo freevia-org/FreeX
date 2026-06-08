@@ -52,7 +52,7 @@ public sealed class ImportSheetCommand : IWorkbookCommand
         foreach (var (address, _) in targetCells)
         {
             if (!CommandGuards.CanEditCell(ctx.Workbook, targetSheet, address))
-                return new CommandOutcome(false, "The sheet is protected.");
+                return CommandGuards.RejectSheetProtected();
         }
 
         _snapshot = [];

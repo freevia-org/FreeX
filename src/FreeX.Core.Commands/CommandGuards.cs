@@ -17,6 +17,9 @@ internal static class CommandGuards
             : null;
     }
 
+    public static CommandOutcome RejectSheetProtected() =>
+        new(false, SheetProtectedMessage);
+
     public static CommandOutcome? RejectIfProtectedWithoutPermission(
         Sheet sheet,
         SheetProtectionPermission permission)

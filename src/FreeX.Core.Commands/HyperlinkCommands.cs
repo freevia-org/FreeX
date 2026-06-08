@@ -100,7 +100,7 @@ public sealed class ClearHyperlinksCommand : IWorkbookCommand
             .Where(p => _range.Contains(p.Key))
             .ToDictionary(p => p.Key, p => p.Value);
         if (_snapshot.Keys.Any(address => !CommandGuards.CanEditCell(ctx.Workbook, sheet, address)))
-            return new CommandOutcome(false, "The sheet is protected.");
+            return CommandGuards.RejectSheetProtected();
 
         foreach (var addr in _snapshot.Keys)
             sheet.Hyperlinks.Remove(addr);
@@ -153,7 +153,7 @@ public sealed class RemoveHyperlinksCommand : IWorkbookCommand
             .Where(p => _range.Contains(p.Key))
             .ToDictionary(p => p.Key, p => p.Value);
         if (_snapshot.Keys.Any(address => !CommandGuards.CanEditCell(ctx.Workbook, sheet, address)))
-            return new CommandOutcome(false, "The sheet is protected.");
+            return CommandGuards.RejectSheetProtected();
 
         _cellSnapshot = [];
         foreach (var addr in _snapshot.Keys)

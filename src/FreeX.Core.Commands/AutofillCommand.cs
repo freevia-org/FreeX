@@ -34,7 +34,7 @@ public sealed class AutofillCommand : IWorkbookCommand
             for (var col = _fillRange.Start.Col; col <= _fillRange.End.Col; col++)
             {
                 if (!CommandGuards.CanEditCell(ctx.Workbook, sheet, new CellAddress(_sheetId, row, col)))
-                    return new CommandOutcome(false, "The sheet is protected.");
+                    return CommandGuards.RejectSheetProtected();
             }
         }
 

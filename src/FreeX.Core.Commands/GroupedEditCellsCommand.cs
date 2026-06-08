@@ -36,7 +36,7 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand
             {
                 var address = RemapAddress(sourceAddress, sheetId);
                 if (!CommandGuards.CanEditCell(ctx.Workbook, sheet, address))
-                    return new CommandOutcome(false, "The sheet is protected.");
+                    return CommandGuards.RejectSheetProtected();
             }
         }
 
