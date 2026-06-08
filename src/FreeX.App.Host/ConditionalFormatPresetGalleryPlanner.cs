@@ -69,7 +69,7 @@ public static class ConditionalFormatPresetGalleryPlanner
 
     public static ConditionalFormat? CreateDataBarRule(string? style, GridRange range)
     {
-        var option = DataBarOptions.FirstOrDefault(option => string.Equals(option.Style, style, StringComparison.Ordinal));
+        var option = FindDataBarOption(style);
         if (option is null)
             return null;
 
@@ -85,7 +85,7 @@ public static class ConditionalFormatPresetGalleryPlanner
 
     public static ConditionalFormat? CreateColorScaleRule(string? style, GridRange range)
     {
-        var option = ColorScaleOptions.FirstOrDefault(option => string.Equals(option.Style, style, StringComparison.Ordinal));
+        var option = FindColorScaleOption(style);
         if (option is null)
             return null;
 
@@ -133,6 +133,28 @@ public static class ConditionalFormatPresetGalleryPlanner
             new RgbColor(minRed, minGreen, minBlue),
             midRed is null || midGreen is null || midBlue is null ? null : new RgbColor(midRed.Value, midGreen.Value, midBlue.Value),
             new RgbColor(maxRed, maxGreen, maxBlue));
+
+    private static ConditionalFormatDataBarPreset? FindDataBarOption(string? style)
+    {
+        foreach (var option in DataBarOptions)
+        {
+            if (string.Equals(option.Style, style, StringComparison.Ordinal))
+                return option;
+        }
+
+        return null;
+    }
+
+    private static ConditionalFormatColorScalePreset? FindColorScaleOption(string? style)
+    {
+        foreach (var option in ColorScaleOptions)
+        {
+            if (string.Equals(option.Style, style, StringComparison.Ordinal))
+                return option;
+        }
+
+        return null;
+    }
 
     private const string DataBarGradientCategory = "ConditionalFormatDataBar_Category_GradientFill";
     private const string DataBarSolidCategory = "ConditionalFormatDataBar_Category_SolidFill";
