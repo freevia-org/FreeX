@@ -121,27 +121,57 @@ internal static class XlsxPivotXmlReferencePreserver
             if (string.IsNullOrWhiteSpace(sourceRelId))
                 continue;
 
-            var sourceTarget = sourceWorkbookRels
-                .Where(relationship => IsRelationshipType(relationship, PivotCacheDefinitionRelationshipType))
-                .Where(relationship => string.Equals(relationship.Attribute("Id")?.Value, sourceRelId, StringComparison.Ordinal))
-                .Select(relationship => ResolveRelationshipTarget("xl/workbook.xml", relationship))
-                .FirstOrDefault();
+            var sourceTarget = FindPivotCacheDefinitionTarget(sourceWorkbookRels, sourceRelId);
             if (string.IsNullOrWhiteSpace(sourceTarget))
                 continue;
 
-            var targetRelId = targetWorkbookRels
-                .Where(relationship => IsRelationshipType(relationship, PivotCacheDefinitionRelationshipType))
-                .Where(relationship => string.Equals(
-                    ResolveRelationshipTarget("xl/workbook.xml", relationship),
-                    sourceTarget,
-                    StringComparison.OrdinalIgnoreCase))
-                .Select(relationship => relationship.Attribute("Id")?.Value)
-                .FirstOrDefault(id => !string.IsNullOrWhiteSpace(id));
+            var targetRelId = FindPivotCacheDefinitionRelationshipId(targetWorkbookRels, sourceTarget);
             if (!string.IsNullOrWhiteSpace(targetRelId))
                 pivotCache.SetAttributeValue(relNs + "id", targetRelId);
         }
 
         return pivotCaches;
+    }
+
+    private static string? FindPivotCacheDefinitionTarget(
+        IReadOnlyList<XElement> relationships,
+        string sourceRelId)
+    {
+        foreach (var relationship in relationships)
+        {
+            if (!IsRelationshipType(relationship, PivotCacheDefinitionRelationshipType))
+                continue;
+
+            if (string.Equals(relationship.Attribute("Id")?.Value, sourceRelId, StringComparison.Ordinal))
+                return ResolveRelationshipTarget("xl/workbook.xml", relationship);
+        }
+
+        return null;
+    }
+
+    private static string? FindPivotCacheDefinitionRelationshipId(
+        IReadOnlyList<XElement> relationships,
+        string sourceTarget)
+    {
+        foreach (var relationship in relationships)
+        {
+            if (!IsRelationshipType(relationship, PivotCacheDefinitionRelationshipType))
+                continue;
+
+            if (!string.Equals(
+                ResolveRelationshipTarget("xl/workbook.xml", relationship),
+                sourceTarget,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var relationshipId = relationship.Attribute("Id")?.Value;
+            if (!string.IsNullOrWhiteSpace(relationshipId))
+                return relationshipId;
+        }
+
+        return null;
     }
 
     private static List<XElement> LoadRelationshipElements(
