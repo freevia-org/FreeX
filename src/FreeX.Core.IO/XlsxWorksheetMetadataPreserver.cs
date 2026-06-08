@@ -779,12 +779,16 @@ internal static partial class XlsxWorksheetMetadataPreserver
             return null;
 
         var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
-        return relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .FirstOrDefault(relationship => string.Equals(
-                relationship.Attribute("Id")?.Value,
-                relationshipId,
-                StringComparison.Ordinal));
+        if (relsXml.Root is null)
+            return null;
+
+        foreach (var relationship in relsXml.Root.Elements(packageRelNs + "Relationship"))
+        {
+            if (string.Equals(relationship.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal))
+                return relationship;
+        }
+
+        return null;
     }
 
     private static XElement? FindMatchingRelationship(
@@ -809,12 +813,20 @@ internal static partial class XlsxWorksheetMetadataPreserver
             ? sourceTarget.Trim()
             : XlsxPackagePath.ResolveRelationshipTarget(sourceWorksheetPath, sourceTarget);
 
-        return relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .FirstOrDefault(relationship =>
-                string.Equals(relationship.Attribute("Type")?.Value, sourceType, StringComparison.OrdinalIgnoreCase) &&
+        if (relsXml.Root is null)
+            return null;
+
+        foreach (var relationship in relsXml.Root.Elements(packageRelNs + "Relationship"))
+        {
+            if (string.Equals(relationship.Attribute("Type")?.Value, sourceType, StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(relationship.Attribute("TargetMode")?.Value ?? "", sourceTargetMode ?? "", StringComparison.OrdinalIgnoreCase) &&
-                RelationshipTargetsMatch(targetWorksheetPath, relationship, sourceResolvedTarget));
+                RelationshipTargetsMatch(targetWorksheetPath, relationship, sourceResolvedTarget))
+            {
+                return relationship;
+            }
+        }
+
+        return null;
     }
 
     private static bool RelationshipTargetsMatch(
