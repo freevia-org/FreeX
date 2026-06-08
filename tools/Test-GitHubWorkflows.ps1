@@ -28,6 +28,7 @@ if ($workflows.Count -eq 0) {
 
 $allowedActionMajors = @{
     "actions/checkout" = "v6"
+    "actions/download-artifact" = "v7"
     "actions/setup-dotnet" = "v5"
     "actions/upload-artifact" = "v7"
 }
