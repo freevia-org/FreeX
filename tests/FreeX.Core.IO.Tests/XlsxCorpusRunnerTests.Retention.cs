@@ -1498,6 +1498,8 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
+        var beforeMetadata = CaptureWorkbookMetadataSummary(workbook);
+        beforeMetadata.Scenarios.Should().NotBeEmpty("generated-worksheet-scenarios-001 should load scenario metadata into the model");
         workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-worksheet-scenarios-edit"));
 
         using var saved = new MemoryStream();
@@ -1505,6 +1507,12 @@ public partial class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-scenarios-001");
         AssertWorksheetScenarios(saved, "generated-worksheet-scenarios-001 saved");
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        CaptureWorkbookMetadataSummary(reloaded).Scenarios.Should().BeEquivalentTo(
+            beforeMetadata.Scenarios,
+            options => options.WithStrictOrdering(),
+            "scenario model metadata should survive save and reload");
     }
 
     [Fact]
