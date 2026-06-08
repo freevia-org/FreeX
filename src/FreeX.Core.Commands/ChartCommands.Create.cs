@@ -191,9 +191,7 @@ public sealed class AddPivotChartCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } pivotProtectedOutcome)
             return pivotProtectedOutcome;
 
-        var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
-            string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
-        if (pivotTable is null)
+        if (!CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
             return CommandGuards.RejectPivotTableNotFound();
 
         PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
