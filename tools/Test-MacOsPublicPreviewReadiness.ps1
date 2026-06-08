@@ -538,6 +538,26 @@ function Get-FirstSha256HashFromText {
     return $null
 }
 
+function Get-Sha256FileHash {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if ($null -ne (Get-Command Get-FileHash -ErrorAction SilentlyContinue)) {
+        return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        $sha256 = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            return (($sha256.ComputeHash($stream) | ForEach-Object { $_.ToString("x2") }) -join "")
+        } finally {
+            $sha256.Dispose()
+        }
+    } finally {
+        $stream.Dispose()
+    }
+}
+
 function Test-ChecksumEvidence {
     param(
         [Parameter(Mandatory = $true)][string]$BundleDirectory,
@@ -553,7 +573,7 @@ function Test-ChecksumEvidence {
         return
     }
 
-    $actualHash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $actualHash = Get-Sha256FileHash -Path $zipPath
     $checksumText = Get-FileTextOrEmpty -Path $checksumPath
     Assert-ContainsText -Text $checksumText -Needle $names.Zip -Message "$Runtime checksum file must name $($names.Zip)."
 
@@ -852,7 +872,7 @@ function Test-ReleasePublicationArtifact {
 
         $stableZipHash = $null
         if ($stableZipExists) {
-            $stableZipHash = (Get-FileHash -LiteralPath $stableZipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            $stableZipHash = Get-Sha256FileHash -Path $stableZipPath
             if ($manifestHashLooksValid) {
                 Assert-True -Condition ($stableZipHash -eq $manifestHash) -Message "$runtime release publication manifest asset sha256 must match stable ZIP $stableZipFileName."
             }
