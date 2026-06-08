@@ -138,8 +138,7 @@ internal static class XlsxWorkbookMetadataWriter
                 root.Add(bookViews);
         }
 
-        var primaryView = bookViews.Elements(WorkbookNs + "workbookView").FirstOrDefault()
-            ?? new XElement(WorkbookNs + "workbookView");
+        var primaryView = FindFirstWorkbookView(bookViews) ?? new XElement(WorkbookNs + "workbookView");
         if (primaryView.Parent is null)
             bookViews.AddFirst(primaryView);
 
@@ -411,10 +410,7 @@ internal static class XlsxWorkbookMetadataWriter
             "sheets"
         ];
 
-        var insertionPoint = root.Elements()
-            .FirstOrDefault(element =>
-                element.Name.Namespace == WorkbookNs &&
-                laterWorkbookElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
+        var insertionPoint = FindFirstWorkbookChild(root, laterWorkbookElements);
         if (insertionPoint is null)
             root.Add(fileSharing);
         else
@@ -429,14 +425,36 @@ internal static class XlsxWorkbookMetadataWriter
             "sheets"
         ];
 
-        var insertionPoint = root.Elements()
-            .FirstOrDefault(element =>
-                element.Name.Namespace == WorkbookNs &&
-                laterWorkbookElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
+        var insertionPoint = FindFirstWorkbookChild(root, laterWorkbookElements);
         if (insertionPoint is null)
             root.Add(protection);
         else
             insertionPoint.AddBeforeSelf(protection);
+    }
+
+    private static XElement? FindFirstWorkbookView(XElement bookViews)
+    {
+        foreach (var element in bookViews.Elements(WorkbookNs + "workbookView"))
+            return element;
+
+        return null;
+    }
+
+    private static XElement? FindFirstWorkbookChild(XElement root, string[] localNames)
+    {
+        foreach (var element in root.Elements())
+        {
+            if (element.Name.Namespace != WorkbookNs)
+                continue;
+
+            foreach (var localName in localNames)
+            {
+                if (string.Equals(element.Name.LocalName, localName, StringComparison.Ordinal))
+                    return element;
+            }
+        }
+
+        return null;
     }
 
     public static void SaveCalculationProperties(Stream xlsxStream, Workbook workbook)
