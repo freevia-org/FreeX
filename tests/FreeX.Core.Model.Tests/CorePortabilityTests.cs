@@ -15,6 +15,8 @@ public sealed class CorePortabilityTests
         "System.Runtime.InteropServices.ComImport",
         "[ComImport",
         "[DllImport",
+        "using System.Drawing",
+        "System.Drawing.",
         "OxyPlot.Wpf",
         "PDFsharp-WPF",
         "SharpVectors.Wpf"
@@ -57,7 +59,7 @@ public sealed class CorePortabilityTests
             }
         }
 
-        matches.Should().BeEmpty("Core.* must stay buildable on macOS and other non-Windows platforms");
+        matches.Should().BeEmpty("Core.* must stay buildable on macOS and other non-Windows platforms without Windows drawing APIs");
     }
 
     private static void AddIfContains(List<string> matches, string relativePath, string source, string token)
