@@ -1,12 +1,26 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+
+[assembly: InternalsVisibleTo("FreeX.App.Services.Tests")]
 
 namespace FreeX.App.Services;
 
 public sealed class WorkbookSaveService
 {
     private const int BufferSize = 1024 * 128;
+    private readonly IWorkbookSaveFileOperations _fileOperations;
+
+    public WorkbookSaveService()
+        : this(DefaultWorkbookSaveFileOperations.Instance)
+    {
+    }
+
+    internal WorkbookSaveService(IWorkbookSaveFileOperations fileOperations)
+    {
+        _fileOperations = fileOperations ?? throw new ArgumentNullException(nameof(fileOperations));
+    }
 
     public async Task SaveAsync(
         string path,
@@ -19,10 +33,7 @@ public sealed class WorkbookSaveService
         ArgumentNullException.ThrowIfNull(workbook);
 
         ReportProgress(progress, WorkbookSavePhase.Preparing, TimeSpan.Zero, 1);
-        var directory = Path.GetDirectoryName(path);
-        var tempPath = Path.Combine(
-            string.IsNullOrWhiteSpace(directory) ? Path.GetTempPath() : directory,
-            $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
+        var tempPath = CreateTemporaryPath(path, ".tmp");
 
         try
         {
@@ -49,19 +60,95 @@ public sealed class WorkbookSaveService
         }
         finally
         {
-            if (File.Exists(tempPath))
-                File.Delete(tempPath);
+            if (_fileOperations.FileExists(tempPath))
+                _fileOperations.DeleteFile(tempPath);
         }
 
         ReportProgress(progress, WorkbookSavePhase.Completed, TimeSpan.Zero, 100);
     }
 
-    private static void ReplaceTargetFile(string tempPath, string path)
+    private void ReplaceTargetFile(string tempPath, string path)
     {
-        if (File.Exists(path))
-            File.Replace(tempPath, path, null, ignoreMetadataErrors: true);
+        if (_fileOperations.FileExists(path))
+        {
+            try
+            {
+                _fileOperations.ReplaceFile(tempPath, path);
+            }
+            catch (Exception ex) when (IsUnsupportedReplaceFailure(ex))
+            {
+                ReplaceExistingFileWithFallback(tempPath, path);
+            }
+        }
         else
-            File.Move(tempPath, path);
+        {
+            _fileOperations.MoveFile(tempPath, path, overwrite: false);
+        }
+    }
+
+    private void ReplaceExistingFileWithFallback(string tempPath, string path)
+    {
+        var backupPath = CreateTemporaryPath(path, ".bak");
+        var deleteBackup = false;
+        _fileOperations.CopyFile(path, backupPath, overwrite: false);
+
+        try
+        {
+            _fileOperations.MoveFile(tempPath, path, overwrite: true);
+            deleteBackup = true;
+        }
+        catch
+        {
+            try
+            {
+                deleteBackup = RestoreFallbackBackup(path, backupPath);
+            }
+            catch
+            {
+                deleteBackup = false;
+            }
+
+            throw;
+        }
+        finally
+        {
+            if (deleteBackup && _fileOperations.FileExists(backupPath))
+                _fileOperations.DeleteFile(backupPath);
+        }
+    }
+
+    private bool RestoreFallbackBackup(string path, string backupPath)
+    {
+        if (!_fileOperations.FileExists(backupPath))
+            return true;
+
+        if (_fileOperations.FileExists(path))
+            return true;
+
+        _fileOperations.MoveFile(backupPath, path, overwrite: false);
+        return true;
+    }
+
+    private static string CreateTemporaryPath(string path, string extension)
+    {
+        var directory = Path.GetDirectoryName(path);
+        return Path.Combine(
+            string.IsNullOrWhiteSpace(directory) ? Path.GetTempPath() : directory,
+            $".{Path.GetFileName(path)}.{Guid.NewGuid():N}{extension}");
+    }
+
+    private static bool IsUnsupportedReplaceFailure(Exception exception)
+    {
+        if (exception is PlatformNotSupportedException or NotSupportedException)
+            return true;
+
+        if (exception is IOException ioException)
+        {
+            var errorCode = ioException.HResult & 0xFFFF;
+            return errorCode is 38 or 45 or 50 or 95;
+        }
+
+        return false;
     }
 
     private static async Task<T> RunStageAsync<T>(
@@ -136,4 +223,44 @@ public sealed class WorkbookSaveService
         var ratio = Math.Clamp(elapsed.TotalMilliseconds / expectedDuration.TotalMilliseconds, 0, 0.92);
         return startPercent + ((endPercent - startPercent) * ratio);
     }
+
+    private sealed class DefaultWorkbookSaveFileOperations : IWorkbookSaveFileOperations
+    {
+        public static readonly DefaultWorkbookSaveFileOperations Instance = new();
+
+        private DefaultWorkbookSaveFileOperations()
+        {
+        }
+
+        public bool FileExists(string path) => File.Exists(path);
+
+        public void ReplaceFile(string sourcePath, string destinationPath) =>
+            File.Replace(sourcePath, destinationPath, null, ignoreMetadataErrors: true);
+
+        public void MoveFile(string sourcePath, string destinationPath, bool overwrite)
+        {
+            if (overwrite)
+                File.Move(sourcePath, destinationPath, overwrite: true);
+            else
+                File.Move(sourcePath, destinationPath);
+        }
+
+        public void CopyFile(string sourcePath, string destinationPath, bool overwrite) =>
+            File.Copy(sourcePath, destinationPath, overwrite);
+
+        public void DeleteFile(string path) => File.Delete(path);
+    }
+}
+
+internal interface IWorkbookSaveFileOperations
+{
+    bool FileExists(string path);
+
+    void ReplaceFile(string sourcePath, string destinationPath);
+
+    void MoveFile(string sourcePath, string destinationPath, bool overwrite);
+
+    void CopyFile(string sourcePath, string destinationPath, bool overwrite);
+
+    void DeleteFile(string path);
 }
