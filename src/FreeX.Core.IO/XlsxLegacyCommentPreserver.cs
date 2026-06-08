@@ -123,12 +123,9 @@ internal static class XlsxLegacyCommentPreserver
             return null;
 
         var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
-        var target = relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .FirstOrDefault(relationship =>
-                (relationship.Attribute("Type")?.Value ?? "").EndsWith("/comments", StringComparison.OrdinalIgnoreCase))
-            ?.Attribute("Target")
-            ?.Value;
+        var target = FindCommentsRelationship(relsXml.Root, packageRelNs)?
+            .Attribute("Target")?
+            .Value;
         return string.IsNullOrWhiteSpace(target)
             ? null
             : XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, target);
@@ -209,12 +206,7 @@ internal static class XlsxLegacyCommentPreserver
             return false;
 
         var relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
-        var relationship = relationshipsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .FirstOrDefault(candidate =>
-                string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal) &&
-                string.Equals(candidate.Attribute("Type")?.Value, relationshipType, StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(candidate.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase));
+        var relationship = FindInternalRelationship(relationshipsXml.Root, packageRelNs, relationshipId, relationshipType);
         var target = relationship?.Attribute("Target")?.Value;
         if (string.IsNullOrWhiteSpace(target))
             return false;
@@ -301,7 +293,7 @@ internal static class XlsxLegacyCommentPreserver
     {
         var markerName = workbookNs + "legacyDrawing";
         var existingMarkers = worksheetRoot.Elements(markerName).ToList();
-        var marker = existingMarkers.FirstOrDefault();
+        var marker = FirstLegacyDrawingMarker(existingMarkers);
         if (marker is null)
         {
             marker = new XElement(markerName);
@@ -319,15 +311,42 @@ internal static class XlsxLegacyCommentPreserver
     private static void InsertLegacyDrawingMarkerInWorksheetOrder(XElement worksheetRoot, XElement marker)
     {
         var laterElementNames = new[] { "legacyDrawingHF", "picture", "oleObjects", "controls", "webPublishItems", "tableParts", "extLst" };
-        var insertionPoint = worksheetRoot.Elements()
-            .FirstOrDefault(element =>
-                element.Name.Namespace == marker.Name.Namespace &&
-                laterElementNames.Contains(element.Name.LocalName, StringComparer.Ordinal));
+        var insertionPoint = FindLegacyDrawingInsertionPoint(worksheetRoot, marker.Name.Namespace, laterElementNames);
         if (insertionPoint is null)
             worksheetRoot.Add(marker);
         else
             insertionPoint.AddBeforeSelf(marker);
     }
+
+    private static XElement? FindCommentsRelationship(XElement? relationshipsRoot, XNamespace packageRelNs) =>
+        relationshipsRoot?
+            .Elements(packageRelNs + "Relationship")
+            .FirstOrDefault(relationship =>
+                (relationship.Attribute("Type")?.Value ?? "").EndsWith("/comments", StringComparison.OrdinalIgnoreCase));
+
+    private static XElement? FindInternalRelationship(
+        XElement? relationshipsRoot,
+        XNamespace packageRelNs,
+        string relationshipId,
+        string relationshipType) =>
+        relationshipsRoot?
+            .Elements(packageRelNs + "Relationship")
+            .FirstOrDefault(candidate =>
+                string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal) &&
+                string.Equals(candidate.Attribute("Type")?.Value, relationshipType, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(candidate.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase));
+
+    private static XElement? FirstLegacyDrawingMarker(IReadOnlyList<XElement> markers) =>
+        markers.Count == 0 ? null : markers[0];
+
+    private static XElement? FindLegacyDrawingInsertionPoint(
+        XElement worksheetRoot,
+        XNamespace worksheetNs,
+        IReadOnlyCollection<string> laterElementNames) =>
+        worksheetRoot.Elements()
+            .FirstOrDefault(element =>
+                element.Name.Namespace == worksheetNs &&
+                laterElementNames.Contains(element.Name.LocalName, StringComparer.Ordinal));
 
     private static void ReplacePackageXmlPart(ZipArchive archive, string path, XDocument xml)
     {
