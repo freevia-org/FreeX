@@ -97,4 +97,40 @@ public sealed class HyperlinkDialogPlannerTests
             "",
             ""));
     }
+
+    [Fact]
+    public void Prefill_FromCellUsesExistingHyperlinkMetadataAndDisplayText()
+    {
+        var sheetId = SheetId.New();
+        var address = new CellAddress(sheetId, 4, 2);
+        var sheet = new Sheet(sheetId, "Sheet1");
+        sheet.SetCell(address, new TextValue("Quarterly report"));
+        sheet.Hyperlinks[address] = " https://example.test/report ";
+        sheet.HyperlinkMetadata[address] = new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Open report",
+            "ReportBookmark");
+
+        HyperlinkDialogPrefill.FromCell(sheet, address).Should().Be(new HyperlinkDialogPrefill(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "https://example.test/report",
+            "Quarterly report",
+            "Open report",
+            "ReportBookmark"));
+    }
+
+    [Fact]
+    public void Prefill_FromBlankCellUsesDefaultWebTarget()
+    {
+        var sheetId = SheetId.New();
+        var address = new CellAddress(sheetId, 1, 1);
+        var sheet = new Sheet(sheetId, "Sheet1");
+
+        HyperlinkDialogPrefill.FromCell(sheet, address).Should().Be(new HyperlinkDialogPrefill(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "https://",
+            "",
+            "",
+            ""));
+    }
 }

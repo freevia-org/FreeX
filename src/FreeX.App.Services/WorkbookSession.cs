@@ -1872,6 +1872,25 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public HyperlinkDialogPrefill GetSelectedRangeHyperlinkDialogPrefill() =>
+        HyperlinkDialogPrefill.FromCell(ActiveSheet, SelectedRange.Start);
+
+    public WorkbookCellEditResult SetSelectedRangeHyperlink(HyperlinkDialogPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        var range = SelectedRange;
+        var metadata = new HyperlinkMetadata(plan.LinkType, plan.ScreenTip, plan.Bookmark);
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            CreateSetHyperlinkCommand(range, plan.Target, plan.DisplayText, metadata));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
     public bool CanFillSelectedRange(FillCellsDirection direction) =>
         direction switch
         {
@@ -2615,6 +2634,31 @@ public sealed class WorkbookSession
         }
 
         return ToCommand("Clear All", commands);
+    }
+
+    private IWorkbookCommand CreateSetHyperlinkCommand(
+        GridRange range,
+        string target,
+        string displayText,
+        HyperlinkMetadata metadata)
+    {
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        var commands = new List<IWorkbookCommand>();
+        foreach (var sheetId in targetSheetIds)
+        {
+            var sheetRange = RemapRangeToSheet(range, sheetId);
+            foreach (var address in sheetRange.AllCells())
+            {
+                commands.Add(new SetHyperlinkCommand(
+                    sheetId,
+                    address,
+                    target,
+                    displayText,
+                    metadata));
+            }
+        }
+
+        return ToCommand("Insert Hyperlink", commands);
     }
 
     private IReadOnlyList<IWorkbookCommand> CreateUnmergeCommands(GridRange range)

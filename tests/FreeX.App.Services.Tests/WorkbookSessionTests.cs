@@ -3601,6 +3601,104 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SetSelectedRangeHyperlink_AppliesPlanToSelectedRangeAndUndoRestores()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(a1, new TextValue("Old A"));
+        sheet.SetCell(b1, new TextValue("Old B"));
+        sheet.SetCell(c1, new TextValue("Outside"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b1));
+        var plan = HyperlinkDialogPlanner.Plan(
+            "review@example.test",
+            "Team mail",
+            HyperlinkTargetKind.EmailAddress,
+            "Email team",
+            "team@example.test");
+
+        var result = session.SetSelectedRangeHyperlink(plan);
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().Equal(a1, b1);
+        session.ActiveCell.Should().Be(a1);
+        session.SelectedRange.Should().Be(new GridRange(a1, b1));
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        sheet.GetValue(a1).Should().Be(new TextValue("Team mail"));
+        sheet.GetValue(b1).Should().Be(new TextValue("Team mail"));
+        sheet.GetValue(c1).Should().Be(new TextValue("Outside"));
+        sheet.Hyperlinks[a1].Should().Be("mailto:review@example.test");
+        sheet.Hyperlinks[b1].Should().Be("mailto:review@example.test");
+        sheet.HyperlinkMetadata[a1].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.EmailAddress,
+            "Email team",
+            "team@example.test"));
+        sheet.HyperlinkMetadata[b1].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.EmailAddress,
+            "Email team",
+            "team@example.test"));
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.GetValue(a1).Should().Be(new TextValue("Old A"));
+        sheet.GetValue(b1).Should().Be(new TextValue("Old B"));
+        sheet.Hyperlinks.Should().NotContainKey(a1);
+        sheet.Hyperlinks.Should().NotContainKey(b1);
+        sheet.HyperlinkMetadata.Should().NotContainKey(a1);
+        sheet.HyperlinkMetadata.Should().NotContainKey(b1);
+    }
+
+    [Fact]
+    public void SetSelectedRangeHyperlink_PropagatesAcrossGroupedSheets()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        var summaryA1 = new CellAddress(summary.Id, 1, 1);
+        var detailsA1 = new CellAddress(details.Id, 1, 1);
+        summary.SetCell(summaryA1, new TextValue("Summary"));
+        details.SetCell(detailsA1, new TextValue("Details"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectAllVisibleSheets();
+        session.SelectCell(summaryA1);
+        var plan = HyperlinkDialogPlanner.Plan(
+            "Sheet1!A1",
+            "Jump",
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Jump within workbook",
+            "SummaryTop");
+
+        var result = session.SetSelectedRangeHyperlink(plan);
+
+        result.Success.Should().BeTrue();
+        summary.Hyperlinks[summaryA1].Should().Be("Sheet1!A1");
+        details.Hyperlinks[detailsA1].Should().Be("Sheet1!A1");
+        summary.HyperlinkMetadata[summaryA1].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Jump within workbook",
+            "SummaryTop"));
+        details.HyperlinkMetadata[detailsA1].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Jump within workbook",
+            "SummaryTop"));
+        summary.GetValue(summaryA1).Should().Be(new TextValue("Jump"));
+        details.GetValue(detailsA1).Should().Be(new TextValue("Jump"));
+    }
+
+    [Fact]
     public void ClearSelectedRangeAll_ClearsContentsFormatsRulesCommentsHyperlinksSelectionAndUndo()
     {
         var workbook = CreateWorkbook();

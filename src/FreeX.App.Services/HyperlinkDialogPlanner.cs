@@ -1,3 +1,4 @@
+using System.Globalization;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -18,6 +19,55 @@ public sealed record HyperlinkDialogPlan(
     string DisplayText,
     string ScreenTip,
     string Bookmark);
+
+public sealed record HyperlinkDialogPrefill(
+    HyperlinkTargetKind LinkType,
+    string Target,
+    string DisplayText,
+    string ScreenTip,
+    string Bookmark)
+{
+    public static HyperlinkDialogPrefill FromCell(Sheet? sheet, CellAddress address)
+    {
+        const string DefaultTarget = "https://";
+
+        if (sheet is null)
+        {
+            return new HyperlinkDialogPrefill(
+                HyperlinkTargetKind.ExistingFileOrWebPage,
+                DefaultTarget,
+                "",
+                "",
+                "");
+        }
+
+        var target = sheet.Hyperlinks.TryGetValue(address, out var existingTarget) &&
+            !string.IsNullOrWhiteSpace(existingTarget)
+            ? existingTarget.Trim()
+            : DefaultTarget;
+        var metadata = sheet.HyperlinkMetadata.TryGetValue(address, out var existingMetadata)
+            ? existingMetadata
+            : new HyperlinkMetadata();
+
+        return new HyperlinkDialogPrefill(
+            metadata.LinkType,
+            target,
+            FormatDisplayText(sheet.GetCell(address)?.Value),
+            metadata.ScreenTip,
+            metadata.Bookmark);
+    }
+
+    private static string FormatDisplayText(ScalarValue? value) => value switch
+    {
+        null or BlankValue => "",
+        NumberValue number => number.Value.ToString(CultureInfo.InvariantCulture),
+        TextValue text => text.Value,
+        BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+        DateTimeValue dateTime => dateTime.ToDateTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        ErrorValue error => error.Code,
+        _ => ""
+    };
+}
 
 public static class HyperlinkDialogPlanner
 {
