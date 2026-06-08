@@ -68,6 +68,17 @@ function Get-IndentedYamlBlock {
     return $null
 }
 
+function Get-WorkflowStepBlock {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Workflow,
+        [Parameter(Mandatory = $true)][string]$StepName
+    )
+
+    return Get-IndentedYamlBlock `
+        -Lines ($Workflow -split "\r?\n") `
+        -Pattern "^(?<indent>\s*)-\s+name:\s+$([regex]::Escape($StepName))\s*(?:#.*)?$"
+}
+
 function Get-DotNetTestCommandBlocks {
     param(
         [Parameter(Mandatory = $true)][AllowEmptyString()][string[]]$Lines
@@ -269,6 +280,8 @@ foreach ($workflow in $workflows) {
         $requiredMacOsEvidenceMarkers = @(
             "- name: Capture runner toolchain evidence",
             'evidence_path="$artifact_root/freex-$runtime-macos-evidence.txt"',
+            'echo "github_run_id=${GITHUB_RUN_ID}"',
+            'echo "github_run_attempt=${GITHUB_RUN_ATTEMPT}"',
             'echo "runner_label=${{ matrix.runner }}"',
             'echo "runner_os=${RUNNER_OS:-unknown}"',
             'echo "runner_arch=${RUNNER_ARCH:-unknown}"',
@@ -349,6 +362,22 @@ foreach ($workflow in $workflows) {
             if ($releasePublicationJobBlock -notmatch "(?ms)^      - name:\s+Checkout\s*(?:#.*)?\r?\n        uses:\s+actions/checkout@v6\s*(?:#.*)?\r?\n        with:\s*(?:#.*)?\r?\n(?:          [^\r\n]*\r?\n)*?          persist-credentials:\s*false\s*(?:#.*)?(?:\r?\n|$)") {
                 $errors.Add("$($workflow.Name): macOS release publication checkout must use actions/checkout@v6 with persist-credentials: false.")
             }
+
+            $downloadMacOsAppArtifactsBlock = Get-WorkflowStepBlock -Workflow $releasePublicationJobBlock -StepName "Download macOS app artifacts"
+            if ([string]::IsNullOrWhiteSpace($downloadMacOsAppArtifactsBlock)) {
+                $errors.Add("$($workflow.Name): macOS release publication job must download macOS app artifacts.")
+            } elseif (-not $downloadMacOsAppArtifactsBlock.Contains('pattern: freex-${{ github.run_id }}-${{ github.run_attempt }}-*-macos-app')) {
+                $errors.Add("$($workflow.Name): macOS release publication must download app artifacts using the current run id and run attempt.")
+            }
+
+            if (-not $releasePublicationJobBlock.Contains('source_artifact_pattern = "freex-$($env:GITHUB_RUN_ID)-$($env:GITHUB_RUN_ATTEMPT)-*-macos-app"')) {
+                $errors.Add("$($workflow.Name): macOS release publication manifest must record the current run id/run attempt source artifact pattern.")
+            }
+
+            if (-not $releasePublicationJobBlock.Contains('"github_run_id=$($env:GITHUB_RUN_ID)"') -or
+                -not $releasePublicationJobBlock.Contains('"github_run_attempt=$($env:GITHUB_RUN_ATTEMPT)"')) {
+                $errors.Add("$($workflow.Name): macOS release publication must validate downloaded evidence run identity against the current run.")
+            }
         }
 
         $macOsAppJobBlock = Get-IndentedYamlBlock `
@@ -360,6 +389,33 @@ foreach ($workflow in $workflows) {
             $macOsAppTestCommands = @(Get-DotNetTestCommandBlocks -Lines ($macOsAppJobBlock -split "\r?\n"))
             if ($macOsAppTestCommands.Count -eq 0) {
                 $errors.Add("$($workflow.Name): macOS app job must run focused hosted dotnet test filters before packaging.")
+            }
+
+            $focusedTestStepMarker = "- name: Test portable PDF macOS route"
+            $focusedTestStepIndex = $macOsAppJobBlock.IndexOf($focusedTestStepMarker, [System.StringComparison]::Ordinal)
+            if ($focusedTestStepIndex -lt 0) {
+                $errors.Add("$($workflow.Name): macOS app job must run focused hosted dotnet test filters before packaging.")
+            } else {
+                foreach ($laterStepName in @("Build app project", "Publish app bundle", "Upload app artifact", "Upload app diagnostics")) {
+                    $laterStepIndex = $macOsAppJobBlock.IndexOf("- name: $laterStepName", [System.StringComparison]::Ordinal)
+                    if ($laterStepIndex -ge 0 -and $focusedTestStepIndex -gt $laterStepIndex) {
+                        $errors.Add("$($workflow.Name): macOS app workflow must run focused hosted tests before package/upload step '$laterStepName'.")
+                    }
+                }
+            }
+
+            $appArtifactUploadBlock = Get-WorkflowStepBlock -Workflow $macOsAppJobBlock -StepName "Upload app artifact"
+            if ([string]::IsNullOrWhiteSpace($appArtifactUploadBlock)) {
+                $errors.Add("$($workflow.Name): macOS app workflow must upload the macOS app artifact.")
+            } elseif (-not $appArtifactUploadBlock.Contains('name: freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-macos-app')) {
+                $errors.Add("$($workflow.Name): macOS app artifact upload name must include github.run_id, github.run_attempt, matrix runtime, and macos-app suffix.")
+            }
+
+            $appDiagnosticsUploadBlock = Get-WorkflowStepBlock -Workflow $macOsAppJobBlock -StepName "Upload app diagnostics"
+            if ([string]::IsNullOrWhiteSpace($appDiagnosticsUploadBlock)) {
+                $errors.Add("$($workflow.Name): macOS app workflow must upload macOS diagnostics.")
+            } elseif (-not $appDiagnosticsUploadBlock.Contains('name: freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-macos-diagnostics')) {
+                $errors.Add("$($workflow.Name): macOS diagnostics artifact upload name must include github.run_id, github.run_attempt, matrix runtime, and macos-diagnostics suffix.")
             }
 
             foreach ($command in $macOsAppTestCommands) {

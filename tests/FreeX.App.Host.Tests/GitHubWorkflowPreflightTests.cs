@@ -82,6 +82,13 @@ public sealed class GitHubWorkflowPreflightTests
         script.Should().Contain("macOS app workflow focused test filter is missing");
         script.Should().Contain("MacOsLaunchSmokeReportKeyDriftGuardTests");
         script.Should().Contain("macOS release publication job must not run dotnet test");
+        script.Should().Contain("github_run_id=${GITHUB_RUN_ID}");
+        script.Should().Contain("github_run_attempt=${GITHUB_RUN_ATTEMPT}");
+        script.Should().Contain("macOS app artifact upload name must include github.run_id");
+        script.Should().Contain("macOS diagnostics artifact upload name must include github.run_id");
+        script.Should().Contain("macOS release publication must download app artifacts using the current run id and run attempt");
+        script.Should().Contain("macOS release publication must validate downloaded evidence run identity against the current run");
+        script.Should().Contain("macOS app workflow must run focused hosted tests before package/upload step");
         script.Should().Contain("Validated $($workflows.Count) GitHub workflow file(s).");
     }
 
@@ -128,8 +135,45 @@ public sealed class GitHubWorkflowPreflightTests
         appJob.Should().NotContain("dotnet test FreeX.DefaultTests.slnx");
         appJob.Should().NotContain("dotnet test FreeX.UiTests.slnx");
 
+        var focusedTestIndex = appJob.IndexOf("- name: Test portable PDF macOS route", StringComparison.Ordinal);
+        focusedTestIndex.Should().BeGreaterThanOrEqualTo(0);
+        foreach (var laterStep in new[]
+        {
+            "- name: Build app project",
+            "- name: Publish app bundle",
+            "- name: Upload app artifact",
+            "- name: Upload app diagnostics"
+        })
+        {
+            focusedTestIndex.Should().BeLessThan(appJob.IndexOf(laterStep, StringComparison.Ordinal));
+        }
+
         var releaseJob = ExtractRequiredYamlBlock(workflow, "publish-distribution-candidate:");
         releaseJob.Should().NotContain("dotnet test");
+    }
+
+    [Fact]
+    public void MacOsAppWorkflow_WritesRunIdentityEvidenceAndUsesRunAttemptArtifactIdentity()
+    {
+        var workflow = ReadMacOsAppWorkflow();
+        var appJob = ExtractRequiredYamlBlock(workflow, "macos-app:");
+
+        var evidenceStep = ExtractRequiredYamlBlock(appJob, "- name: Capture runner toolchain evidence");
+        evidenceStep.Should().Contain("echo \"github_run_id=${GITHUB_RUN_ID}\"");
+        evidenceStep.Should().Contain("echo \"github_run_attempt=${GITHUB_RUN_ATTEMPT}\"");
+
+        var appArtifactUpload = ExtractRequiredYamlBlock(appJob, "- name: Upload app artifact");
+        appArtifactUpload.Should().Contain("name: freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-macos-app");
+
+        var diagnosticsUpload = ExtractRequiredYamlBlock(appJob, "- name: Upload app diagnostics");
+        diagnosticsUpload.Should().Contain("name: freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-macos-diagnostics");
+
+        var releaseJob = ExtractRequiredYamlBlock(workflow, "publish-distribution-candidate:");
+        var artifactDownload = ExtractRequiredYamlBlock(releaseJob, "- name: Download macOS app artifacts");
+        artifactDownload.Should().Contain("pattern: freex-${{ github.run_id }}-${{ github.run_attempt }}-*-macos-app");
+        releaseJob.Should().Contain("\"github_run_id=$($env:GITHUB_RUN_ID)\"");
+        releaseJob.Should().Contain("\"github_run_attempt=$($env:GITHUB_RUN_ATTEMPT)\"");
+        releaseJob.Should().Contain("source_artifact_pattern = \"freex-$($env:GITHUB_RUN_ID)-$($env:GITHUB_RUN_ATTEMPT)-*-macos-app\"");
     }
 
     [Fact]
@@ -638,6 +682,98 @@ public sealed class GitHubWorkflowPreflightTests
 
         result.ExitCode.Should().NotBe(0);
         result.CombinedOutput.Should().Contain("macOS release publication job must not run dotnet test");
+        result.CombinedOutput.Should().Contain("macos-app.yml");
+    }
+
+    [Fact]
+    public void GitHubWorkflowPreflight_FailsWhenMacOsEvidenceOmitsRunIdentity()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var brokenWorkflow = ReplaceRequiredText(
+            ReadMacOsAppWorkflow(),
+            "echo \"github_run_id=${GITHUB_RUN_ID}\"",
+            "echo \"github_run_identifier=${GITHUB_RUN_ID}\"");
+
+        WriteMacOsWorkflow(temp, brokenWorkflow);
+
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("macOS app workflow is missing hosted runner/toolchain evidence marker");
+        result.CombinedOutput.Should().Contain("github_run_id=${GITHUB_RUN_ID}");
+        result.CombinedOutput.Should().Contain("macos-app.yml");
+    }
+
+    [Fact]
+    public void GitHubWorkflowPreflight_FailsWhenMacOsArtifactIdentityDropsRunAttempt()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var brokenWorkflow = ReplaceRequiredText(
+            ReplaceRequiredText(
+                ReplaceRequiredText(
+                    ReadMacOsAppWorkflow(),
+                    "name: freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-macos-app",
+                    "name: freex-${{ github.run_id }}-${{ matrix.runtime }}-macos-app"),
+                "name: freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-macos-diagnostics",
+                "name: freex-${{ github.run_id }}-${{ matrix.runtime }}-macos-diagnostics"),
+            "pattern: freex-${{ github.run_id }}-${{ github.run_attempt }}-*-macos-app",
+            "pattern: freex-${{ github.run_id }}-*-macos-app");
+
+        WriteMacOsWorkflow(temp, brokenWorkflow);
+
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("macOS app artifact upload name must include github.run_id, github.run_attempt");
+        result.CombinedOutput.Should().Contain("macOS diagnostics artifact upload name must include github.run_id, github.run_attempt");
+        result.CombinedOutput.Should().Contain("macOS release publication must download app artifacts using the current run id and run attempt");
+        result.CombinedOutput.Should().Contain("macos-app.yml");
+    }
+
+    [Fact]
+    public void GitHubWorkflowPreflight_FailsWhenReleaseEvidenceIdentityValidationDrifts()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var brokenWorkflow = ReplaceRequiredText(
+            ReadMacOsAppWorkflow(),
+            "\"github_run_attempt=$($env:GITHUB_RUN_ATTEMPT)\"",
+            "\"github_run_attempt=stale-attempt\"");
+
+        WriteMacOsWorkflow(temp, brokenWorkflow);
+
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("macOS release publication must validate downloaded evidence run identity against the current run");
+        result.CombinedOutput.Should().Contain("macos-app.yml");
+    }
+
+    [Fact]
+    public void GitHubWorkflowPreflight_FailsWhenMacOsFocusedTestsMoveAfterPackaging()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var workflow = ReadMacOsAppWorkflow();
+        var appJob = ExtractRequiredYamlBlock(workflow, "macos-app:");
+        var focusedTestStep = ExtractRequiredYamlBlock(appJob, "- name: Test portable PDF macOS route");
+        var publishStep = ExtractRequiredYamlBlock(appJob, "- name: Publish app bundle");
+        var appJobWithoutFocusedTests = ReplaceRequiredText(appJob, focusedTestStep, string.Empty);
+        var brokenAppJob = ReplaceRequiredText(appJobWithoutFocusedTests, publishStep, publishStep + "\n\n" + focusedTestStep);
+        var brokenWorkflow = ReplaceRequiredText(workflow, appJob, brokenAppJob);
+
+        WriteMacOsWorkflow(temp, brokenWorkflow);
+
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("macOS app workflow must run focused hosted tests before package/upload step 'Publish app bundle'");
         result.CombinedOutput.Should().Contain("macos-app.yml");
     }
 
