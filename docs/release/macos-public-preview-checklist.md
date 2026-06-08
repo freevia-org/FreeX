@@ -42,7 +42,7 @@ Do not mark a macOS artifact public-preview eligible unless every required secti
 ## Prerequisites
 
 - Download the GitHub Actions artifact wrapper in a browser when Gatekeeper behavior is in scope, and do not clear quarantine attributes before the first Finder launch.
-- Unzip the artifact wrapper into a clean folder, then verify the inner app ZIP with its checksum file before unzipping `FreeX.app`.
+- Unzip the artifact wrapper into a clean folder, then verify the inner app ZIP with its checksum file before extracting `FreeX.app` with Finder/Archive Utility or `ditto -x -k freex-<runtime>-macos-app.zip .`.
 - Keep the original artifact wrapper, inner ZIP, checksum, evidence file, packaging smoke log, launch smoke file, notarization log, tester instructions, and diagnostics artifact with the release record.
 - Use a real macOS user session. Hosted smoke logs are supporting evidence, not a replacement for Finder, Gatekeeper, keyboard-only, or VoiceOver observations.
 - Record screenshots or exact prompt text for Gatekeeper prompts, default-handler changes, failed opens, accessibility issues, and crash dialogs.
