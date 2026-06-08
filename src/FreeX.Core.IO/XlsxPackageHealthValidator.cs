@@ -17,12 +17,16 @@ public static class XlsxPackageHealthValidator
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet";
     private const string SharedStringsRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
+    private const string StylesRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
     private const string WorksheetContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
     private const string ChartsheetContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml";
     private const string SharedStringsContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
+    private const string StylesContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
 
     private static readonly XNamespace PackageContentTypeNs =
         "http://schemas.openxmlformats.org/package/2006/content-types";
@@ -50,6 +54,7 @@ public static class XlsxPackageHealthValidator
         AddPackageRootWorkbookIssues(archive, issues);
         AddWorkbookSheetMapIssues(archive, issues);
         AddSharedStringTableIssues(archive, issues);
+        AddStylesPackageIssues(archive, issues);
         return issues;
     }
 
@@ -684,6 +689,186 @@ public static class XlsxPackageHealthValidator
         return cells;
     }
 
+    private static void AddStylesPackageIssues(ZipArchive archive, List<string> issues)
+    {
+        if (!TryLoadPackageXml(archive, "[Content_Types].xml", issues, out var contentTypesXml) ||
+            contentTypesXml.Root?.Name != PackageContentTypeNs + "Types")
+        {
+            return;
+        }
+
+        var entryNames = archive.Entries
+            .Where(entry => !string.IsNullOrEmpty(entry.Name))
+            .Select(entry => NormalizePackagePart(entry.FullName))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var styleReferences = FindStyleReferences(archive, issues);
+        var hasStylesPart = entryNames.Contains("xl/styles.xml");
+        if (styleReferences.Count == 0 && !hasStylesPart)
+            return;
+
+        if (!hasStylesPart)
+        {
+            issues.Add("missing xl/styles.xml for style references");
+            return;
+        }
+
+        var stylesContentType = GetEffectivePackageContentType(contentTypesXml, "xl/styles.xml");
+        if (!string.Equals(stylesContentType, StylesContentType, StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add(
+                $"xl/styles.xml has content type {stylesContentType ?? "(none)"}; expected {StylesContentType}");
+        }
+
+        ValidateWorkbookRelationshipToPart(archive, entryNames, StylesRelationshipType, "xl/styles.xml", issues);
+
+        if (!TryLoadPackageXml(archive, "xl/styles.xml", issues, out var stylesXml))
+            return;
+
+        if (stylesXml.Root?.Name != WorkbookNs + "styleSheet")
+        {
+            issues.Add("xl/styles.xml has an invalid stylesheet root element");
+            return;
+        }
+
+        var cellXfs = stylesXml.Root.Element(WorkbookNs + "cellXfs");
+        var cellFormatCount = cellXfs?.Elements(WorkbookNs + "xf").Count() ?? 0;
+        if (cellFormatCount == 0)
+            issues.Add("xl/styles.xml has no cellXfs xf entries");
+
+        AddStyleCountAttributeIssues(issues, "cellXfs", cellXfs, cellFormatCount);
+        foreach (var styleReference in styleReferences)
+        {
+            if (string.IsNullOrWhiteSpace(styleReference.ValueText))
+            {
+                issues.Add($"{styleReference.WorksheetPart} {styleReference.Description} has no style index");
+                continue;
+            }
+
+            if (!int.TryParse(styleReference.ValueText, NumberStyles.None, CultureInfo.InvariantCulture, out var styleIndex))
+            {
+                issues.Add($"{styleReference.WorksheetPart} {styleReference.Description} has invalid style index '{styleReference.ValueText}'");
+                continue;
+            }
+
+            if (styleIndex < 0 || styleIndex >= cellFormatCount)
+            {
+                issues.Add(
+                    $"{styleReference.WorksheetPart} {styleReference.Description} references style index {styleIndex}, but xl/styles.xml cellXfs contains {cellFormatCount} entries");
+            }
+        }
+    }
+
+    private static void ValidateWorkbookRelationshipToPart(
+        ZipArchive archive,
+        IReadOnlySet<string> entryNames,
+        string relationshipType,
+        string targetPart,
+        List<string> issues)
+    {
+        if (!TryFindWorkbookPart(archive, entryNames, out var workbookPart))
+            return;
+
+        var workbookRelsPart = GetRelationshipPartPath(workbookPart);
+        if (!TryLoadPackageXml(archive, workbookRelsPart, issues, out var workbookRelsXml) ||
+            workbookRelsXml.Root?.Name != PackageRelationshipNs + "Relationships")
+        {
+            return;
+        }
+
+        var hasRelationship = workbookRelsXml.Root
+            .Elements(PackageRelationshipNs + "Relationship")
+            .Any(relationship =>
+                string.Equals(relationship.Attribute("Type")?.Value, relationshipType, StringComparison.Ordinal) &&
+                !string.Equals(relationship.Attribute("TargetMode")?.Value?.Trim(), "External", StringComparison.OrdinalIgnoreCase) &&
+                TryResolvePackageRelationshipTarget(workbookRelsPart, relationship.Attribute("Target")?.Value?.Trim() ?? string.Empty, out var resolvedTarget, out _) &&
+                string.Equals(resolvedTarget, targetPart, StringComparison.OrdinalIgnoreCase));
+
+        if (!hasRelationship)
+            issues.Add($"{workbookRelsPart} has no workbook relationship to {targetPart}");
+    }
+
+    private static List<StyleReference> FindStyleReferences(ZipArchive archive, List<string> issues)
+    {
+        var styleReferences = new List<StyleReference>();
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            var worksheetPart = NormalizePackagePart(worksheetEntry.FullName);
+            XDocument worksheetXml;
+            try
+            {
+                worksheetXml = LoadPackageXml(worksheetEntry);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or XmlException)
+            {
+                issues.Add($"{worksheetPart} is not parseable XML: {ex.Message}");
+                continue;
+            }
+
+            foreach (var cell in worksheetXml.Descendants(WorkbookNs + "c"))
+            {
+                var styleIndex = cell.Attribute("s")?.Value;
+                if (styleIndex is null)
+                    continue;
+
+                styleReferences.Add(new StyleReference(
+                    worksheetPart,
+                    $"cell {cell.Attribute("r")?.Value ?? "(unknown ref)"}",
+                    styleIndex));
+            }
+
+            foreach (var row in worksheetXml.Descendants(WorkbookNs + "row"))
+            {
+                var styleIndex = row.Attribute("s")?.Value;
+                if (styleIndex is null)
+                    continue;
+
+                styleReferences.Add(new StyleReference(
+                    worksheetPart,
+                    $"row {row.Attribute("r")?.Value ?? "(unknown row)"}",
+                    styleIndex));
+            }
+
+            foreach (var column in worksheetXml.Descendants(WorkbookNs + "col"))
+            {
+                var styleIndex = column.Attribute("style")?.Value;
+                if (styleIndex is null)
+                    continue;
+
+                var min = column.Attribute("min")?.Value ?? "?";
+                var max = column.Attribute("max")?.Value ?? "?";
+                styleReferences.Add(new StyleReference(
+                    worksheetPart,
+                    $"column span {min}:{max}",
+                    styleIndex));
+            }
+        }
+
+        return styleReferences;
+    }
+
+    private static void AddStyleCountAttributeIssues(
+        List<string> issues,
+        string elementName,
+        XElement? element,
+        int actualCount)
+    {
+        var countText = element?.Attribute("count")?.Value;
+        if (string.IsNullOrWhiteSpace(countText))
+            return;
+
+        if (!int.TryParse(countText, NumberStyles.None, CultureInfo.InvariantCulture, out var declaredCount))
+        {
+            issues.Add($"xl/styles.xml {elementName} has invalid count '{countText}'");
+            return;
+        }
+
+        if (declaredCount != actualCount)
+            issues.Add($"xl/styles.xml {elementName} count is {declaredCount}, but contains {actualCount} child entries");
+    }
+
     private static bool TryFindWorkbookPart(
         ZipArchive archive,
         IReadOnlySet<string> entryNames,
@@ -1053,5 +1238,10 @@ public static class XlsxPackageHealthValidator
     private sealed record SharedStringCellReference(
         string WorksheetPart,
         string CellReference,
+        string? ValueText);
+
+    private sealed record StyleReference(
+        string WorksheetPart,
+        string Description,
         string? ValueText);
 }
