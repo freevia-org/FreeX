@@ -1105,6 +1105,7 @@ jobs:
             workflow = $env:GITHUB_WORKFLOW
             run_id = $env:GITHUB_RUN_ID
             run_attempt = $env:GITHUB_RUN_ATTEMPT
+            release_assets_artifact = "freex-$($env:GITHUB_RUN_ID)-$($env:GITHUB_RUN_ATTEMPT)-macos-release-assets"
             commit = $env:GITHUB_SHA
             generated_at_utc = (Get-Date).ToUniversalTime().ToString("o")
             source_artifact_pattern = "freex-$($env:GITHUB_RUN_ID)-$($env:GITHUB_RUN_ATTEMPT)-*-macos-app"
@@ -1134,6 +1135,7 @@ jobs:
           Commit: $($env:GITHUB_SHA)
           Run: $($env:GITHUB_RUN_ID)
           Attempt: $($env:GITHUB_RUN_ATTEMPT)
+          Actions artifact wrapper: freex-$($env:GITHUB_RUN_ID)-$($env:GITHUB_RUN_ATTEMPT)-macos-release-assets
 
           ## Stable Assets
 
@@ -1153,7 +1155,7 @@ jobs:
       - name: Upload release-channel prepared assets
         uses: actions/upload-artifact@v7
         with:
-          name: freex-${{ steps.candidate.outputs.release_id }}-macos-release-assets
+          name: freex-${{ github.run_id }}-${{ github.run_attempt }}-macos-release-assets
           path: artifacts/macos-release-assets/*
           if-no-files-found: error
 
