@@ -227,7 +227,8 @@ public static class ScenarioManagerPlanner
         if (CreateWorkbookUnavailablePlan(workbook, operation, [], out var unavailablePlan))
             return unavailablePlan;
 
-        var scenarios = BuildScenarioChoices(workbook!, scenarioName, out var selectedScenario);
+        var availableWorkbook = workbook!;
+        var scenarios = BuildScenarioChoices(availableWorkbook, scenarioName, out var selectedScenario);
         var name = NormalizeName(scenarioName);
         if (string.IsNullOrWhiteSpace(name))
             return CreatePlan(
@@ -239,8 +240,7 @@ public static class ScenarioManagerPlanner
                 [],
                 []);
 
-        var scenario = workbook!.Scenarios.FirstOrDefault(candidate =>
-            string.Equals(candidate.Name, name, StringComparison.OrdinalIgnoreCase));
+        var scenario = FindScenarioByName(availableWorkbook, name);
         if (scenario is null)
             return CreatePlan(
                 operation,
@@ -252,12 +252,12 @@ public static class ScenarioManagerPlanner
                 []);
 
         var affectedCells = NormalizeAddresses(scenario.ChangingCells.Select(cell => cell.Address));
-        if (HasProtectedScenarioCells(workbook, affectedCells))
+        if (HasProtectedScenarioCells(availableWorkbook, affectedCells))
             return CreatePlan(
                 operation,
                 ScenarioManagerPlanStatus.ProtectedChangingCells,
                 "Scenario changing cells are protected on at least one worksheet.",
-                BuildScenarioChoices(workbook, scenario.Name, out selectedScenario),
+                scenarios,
                 selectedScenario,
                 affectedCells,
                 []);
@@ -266,7 +266,7 @@ public static class ScenarioManagerPlanner
             operation,
             ScenarioManagerPlanStatus.Ready,
             FormatScenarioActionReadyStatus(operation, scenario.Name, affectedCells.Count),
-            BuildScenarioChoices(workbook, scenario.Name, out selectedScenario),
+            scenarios,
             selectedScenario,
             affectedCells,
             []);
@@ -313,17 +313,7 @@ public static class ScenarioManagerPlanner
         string? selectedScenarioName,
         out ScenarioManagerScenarioChoice? selectedScenario)
     {
-        var selectedName = NormalizeName(selectedScenarioName);
-        var selectedIndex = -1;
-        if (!string.IsNullOrWhiteSpace(selectedName))
-        {
-            selectedIndex = workbook.Scenarios.FindIndex(scenario =>
-                string.Equals(scenario.Name, selectedName, StringComparison.OrdinalIgnoreCase));
-        }
-
-        if (selectedIndex < 0 && workbook.Scenarios.Count > 0)
-            selectedIndex = 0;
-
+        var selectedIndex = FindSelectedScenarioIndex(workbook, selectedScenarioName);
         var choices = new List<ScenarioManagerScenarioChoice>(workbook.Scenarios.Count);
         for (var index = 0; index < workbook.Scenarios.Count; index++)
         {
@@ -338,7 +328,7 @@ public static class ScenarioManagerPlanner
             choices.Add(choice);
         }
 
-        selectedScenario = choices.FirstOrDefault(choice => choice.IsSelected);
+        selectedScenario = selectedIndex >= 0 ? choices[selectedIndex] : null;
         return choices;
     }
 
@@ -349,10 +339,36 @@ public static class ScenarioManagerPlanner
     {
         var replaceName = NormalizeName(replaceScenarioName);
         return workbook.Scenarios.FirstOrDefault(scenario =>
-            string.Equals(scenario.Name, name, StringComparison.OrdinalIgnoreCase) &&
-            (string.IsNullOrWhiteSpace(replaceName) ||
-             !string.Equals(scenario.Name, replaceName, StringComparison.OrdinalIgnoreCase)));
+            IsDuplicateScenarioName(scenario, name, replaceName));
     }
+
+    private static WorkbookScenario? FindScenarioByName(Workbook workbook, string name) =>
+        workbook.Scenarios.FirstOrDefault(scenario => ScenarioNameEquals(scenario, name));
+
+    private static int FindSelectedScenarioIndex(Workbook workbook, string? selectedScenarioName)
+    {
+        var selectedName = NormalizeName(selectedScenarioName);
+        var selectedIndex = !string.IsNullOrWhiteSpace(selectedName)
+            ? FindScenarioIndexByName(workbook, selectedName)
+            : -1;
+
+        return selectedIndex >= 0 || workbook.Scenarios.Count == 0
+            ? selectedIndex
+            : 0;
+    }
+
+    private static int FindScenarioIndexByName(Workbook workbook, string name) =>
+        workbook.Scenarios.FindIndex(scenario => ScenarioNameEquals(scenario, name));
+
+    private static bool IsDuplicateScenarioName(
+        WorkbookScenario scenario,
+        string name,
+        string replaceName) =>
+        ScenarioNameEquals(scenario, name) &&
+        (string.IsNullOrWhiteSpace(replaceName) || !ScenarioNameEquals(scenario, replaceName));
+
+    private static bool ScenarioNameEquals(WorkbookScenario scenario, string name) =>
+        string.Equals(scenario.Name, name, StringComparison.OrdinalIgnoreCase);
 
     private static bool AllScenarioCellsBelongToWorkbook(
         Workbook workbook,
