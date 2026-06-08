@@ -262,7 +262,8 @@ public sealed class GitHubWorkflowPreflightTests
 
         var downloadStep = ExtractRequiredYamlBlock(aggregateJob, "- name: Download macOS preview artifacts");
         downloadStep.Should().Contain("uses: actions/download-artifact@v7");
-        downloadStep.Should().Contain("pattern: \"freex-${{ github.run_id }}-${{ github.run_attempt }}-osx-*-macos-{app,diagnostics}\"");
+        downloadStep.Should().Contain("pattern: \"freex-${{ github.run_id }}-${{ github.run_attempt }}-osx-*-macos-*\"");
+        downloadStep.Should().NotContain("{app,diagnostics}");
         downloadStep.Should().Contain("path: artifacts/macos-preview-evidence");
         downloadStep.Should().Contain("merge-multiple: false");
 
@@ -286,8 +287,8 @@ public sealed class GitHubWorkflowPreflightTests
         manifestStep.Should().Contain("app_artifact_digest = $artifactDigestByName[$appArtifactName]");
         manifestStep.Should().Contain("diagnostics_artifact_digest = $artifactDigestByName[$diagnosticsArtifactName]");
         manifestStep.Should().Contain("schema = \"io.github.tony-xmelon.freex.macos-preview-readiness.v1\"");
-        manifestStep.Should().Contain("source_artifact_pattern = \"freex-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-osx-*-macos-{app,diagnostics}\"");
-        manifestStep.Should().Contain("\"source_artifact_pattern=freex-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-osx-*-macos-{app,diagnostics}\"");
+        manifestStep.Should().Contain("source_artifact_pattern = \"freex-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-osx-*-macos-*\"");
+        manifestStep.Should().Contain("\"source_artifact_pattern=freex-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-osx-*-macos-*\"");
         manifestStep.Should().Contain("\"artifact_channel\"");
         manifestStep.Should().Contain("\"distribution_readiness\"");
         manifestStep.Should().Contain("\"smoke_status\"");

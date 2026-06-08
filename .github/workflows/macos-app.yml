@@ -1053,7 +1053,7 @@ jobs:
       - name: Download macOS preview artifacts
         uses: actions/download-artifact@v7
         with:
-          pattern: "freex-${{ github.run_id }}-${{ github.run_attempt }}-osx-*-macos-{app,diagnostics}"
+          pattern: "freex-${{ github.run_id }}-${{ github.run_attempt }}-osx-*-macos-*"
           path: artifacts/macos-preview-evidence
           merge-multiple: false
 
@@ -1202,7 +1202,7 @@ jobs:
             run_attempt = $env:GITHUB_RUN_ATTEMPT
             commit = $env:GITHUB_SHA
             generated_at_utc = (Get-Date).ToUniversalTime().ToString("o")
-            source_artifact_pattern = "freex-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-osx-*-macos-{app,diagnostics}"
+            source_artifact_pattern = "freex-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-osx-*-macos-*"
             readiness_script = "tools/Test-MacOsPublicPreviewReadiness.ps1"
             require_separate_diagnostics_artifact = $true
             runtimes = $runtimeEntries
@@ -1215,7 +1215,7 @@ jobs:
             "macos_preview_readiness=passed",
             "run_id=$env:GITHUB_RUN_ID",
             "run_attempt=$env:GITHUB_RUN_ATTEMPT",
-            "source_artifact_pattern=freex-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-osx-*-macos-{app,diagnostics}"
+            "source_artifact_pattern=freex-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-osx-*-macos-*"
           )
           foreach ($entry in $runtimeEntries) {
             $summaryLines += "runtime=$($entry.runtime)"
