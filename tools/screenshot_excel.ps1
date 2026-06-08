@@ -2,7 +2,8 @@ param(
     [string]$Widths = $env:FREEX_SS_TOUR_WIDTHS,
     [string]$AutoFilterFlyoutTour = $env:FREEX_EXCEL_AUTOFILTER_FLYOUT_TOUR,
     [string]$NumberFormatDropdownTour = $env:FREEX_EXCEL_NUMBER_FORMAT_DROPDOWN_TOUR,
-    [string]$WorksheetContextMenuTour = $env:FREEX_EXCEL_WORKSHEET_CONTEXT_MENU_TOUR
+    [string]$WorksheetContextMenuTour = $env:FREEX_EXCEL_WORKSHEET_CONTEXT_MENU_TOUR,
+    [string]$OpenWorkbookDialogTour = $env:FREEX_EXCEL_OPEN_WORKBOOK_DIALOG_TOUR
 )
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -110,6 +111,7 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 $autoFilterFlyoutOutDir = Join-Path $outDir "autofilter-flyout-tour"
 $numberFormatDropdownOutDir = Join-Path $outDir "home-number-format-dropdown-tour"
 $worksheetContextMenuOutDir = Join-Path $outDir "worksheet-context-menu-tour"
+$openWorkbookDialogOutDir = Join-Path $outDir "open-workbook-dialog-tour"
 function Clear-ScreenshotEvidenceArtifacts {
     Get-ChildItem $outDir -Filter "*.png" -ErrorAction SilentlyContinue |
         Remove-Item -Force -ErrorAction SilentlyContinue
@@ -137,6 +139,14 @@ function Clear-WorksheetContextMenuEvidenceArtifacts {
         Get-ChildItem $worksheetContextMenuOutDir -Filter "*.png" -ErrorAction SilentlyContinue |
             Remove-Item -Force -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath (Join-Path $worksheetContextMenuOutDir "excel_worksheet_context_menu_tour_manifest.json") -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Clear-OpenWorkbookDialogEvidenceArtifacts {
+    if (Test-Path -LiteralPath $openWorkbookDialogOutDir -PathType Container) {
+        Get-ChildItem $openWorkbookDialogOutDir -Filter "*.png" -ErrorAction SilentlyContinue |
+            Remove-Item -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath (Join-Path $openWorkbookDialogOutDir "excel_open_workbook_dialog_tour_manifest.json") -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -385,6 +395,20 @@ function Find-ExcelAutoFilterPopupWindow($expectedPid, $ownerWindowHandle) {
     return Find-ExcelPopupWindow $expectedPid $ownerWindowHandle 120 80
 }
 
+function Find-ExcelOpenWorkbookDialogWindow($expectedPid, $ownerWindowHandle) {
+    $windows = [Win32e]::GetVisibleWindowsByProcess($expectedPid) |
+        Where-Object {
+            $_.Handle -ne $ownerWindowHandle -and
+            $_.ClassName -eq "#32770" -and
+            $_.Title -eq "Open" -and
+            ($_.Right - $_.Left) -gt 400 -and
+            ($_.Bottom - $_.Top) -gt 300
+        } |
+        Sort-Object @{ Expression = { ($_.Right - $_.Left) * ($_.Bottom - $_.Top) }; Descending = $true }
+
+    return $windows | Select-Object -First 1
+}
+
 function New-ExcelAutoFilterSampleWorkbook($excelApp) {
     $workbook = $excelApp.Workbooks.Add()
     $worksheet = $workbook.Worksheets.Item(1)
@@ -502,6 +526,11 @@ function Expand-ExcelNumberFormatDropdown($expectedPid, $excelElement, $expected
 function Open-ExcelWorksheetContextMenu($expectedPid, $expectedTitle) {
     Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel worksheet context menu keyboard input"
     [System.Windows.Forms.SendKeys]::SendWait("+{F10}")
+}
+
+function Open-ExcelNativeOpenDialog($expectedPid, $expectedTitle) {
+    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel native Open dialog keyboard input"
+    [System.Windows.Forms.SendKeys]::SendWait("^{F12}")
 }
 
 function Invoke-ExcelAutoFilterFlyoutTour {
@@ -922,6 +951,136 @@ function Invoke-ExcelWorksheetContextMenuTour {
     }
 }
 
+function Invoke-ExcelOpenWorkbookDialogTour {
+    New-Item -ItemType Directory -Force -Path $openWorkbookDialogOutDir | Out-Null
+    Clear-OpenWorkbookDialogEvidenceArtifacts
+
+    $excelApp = $null
+    $workbook = $null
+    $excelPid = 0
+    try {
+        $excelApp = New-Object -ComObject Excel.Application
+        $excelApp.Visible = $true
+        $excelApp.DisplayAlerts = $false
+        $excelApp.WindowState = -4143
+        $excelApp.Top = 0
+        $excelApp.Left = 0
+        $excelApp.Width = 900
+        $excelApp.Height = 720
+        $workbook = $excelApp.Workbooks.Add()
+        Start-Sleep -Milliseconds 700
+
+        $excelHwnd = [IntPtr]$excelApp.Hwnd
+        if ($excelHwnd -eq [IntPtr]::Zero) {
+            Clear-OpenWorkbookDialogEvidenceArtifacts
+            throw "Excel native Open dialog tour could not resolve the Excel window handle."
+        }
+
+        [Win32e]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
+        $excelTitle = Get-WindowTitle $excelHwnd
+        Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle "Excel native Open dialog setup"
+        Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel native Open dialog setup"
+
+        Open-ExcelNativeOpenDialog $excelPid $excelTitle
+        Start-Sleep -Milliseconds 1200
+        Assert-ForegroundProcessOwnership $excelPid "Excel native Open dialog capture"
+
+        $dialog = Find-ExcelOpenWorkbookDialogWindow $excelPid $excelHwnd
+        if ($null -eq $dialog) {
+            Clear-OpenWorkbookDialogEvidenceArtifacts
+            throw "Excel native Open dialog tour did not detect an Excel-owned '#32770' Open dialog after Ctrl+F12."
+        }
+
+        $captureSource = "native-dialog-window-rectangle"
+        $captureBounds = [pscustomobject]@{
+            Left = $dialog.Left
+            Top = $dialog.Top
+            Right = $dialog.Right
+            Bottom = $dialog.Bottom
+            Width = $dialog.Right - $dialog.Left
+            Height = $dialog.Bottom - $dialog.Top
+        }
+        $dialogBounds = [pscustomobject]@{
+            Handle = $dialog.Handle.ToString()
+            ClassName = $dialog.ClassName
+            Title = $dialog.Title
+            Left = $dialog.Left
+            Top = $dialog.Top
+            Right = $dialog.Right
+            Bottom = $dialog.Bottom
+            Width = $dialog.Right - $dialog.Left
+            Height = $dialog.Bottom - $dialog.Top
+        }
+
+        $fileName = "interactive_open_workbook_dialog_opened.png"
+        $path = Join-Path $openWorkbookDialogOutDir $fileName
+        Assert-ForegroundProcessOwnership $excelPid "Excel native Open dialog screen capture"
+        Capture-ScreenRectangle $captureBounds.Left $captureBounds.Top $captureBounds.Width $captureBounds.Height $path
+
+        $manifestPath = Join-Path $openWorkbookDialogOutDir "excel_open_workbook_dialog_tour_manifest.json"
+        [pscustomobject]@{
+            Tool = "FREEX_EXCEL_OPEN_WORKBOOK_DIALOG_TOUR"
+            EvidenceFamily = "native-dialog"
+            EvidenceSubject = "excel"
+            EvidenceApp = "Microsoft Excel"
+            OutputDirectory = $openWorkbookDialogOutDir
+            OutputNaming = "interactive_open_workbook_dialog_opened.png"
+            CatalogEvidenceTarget = "docs/testing/ui-test-catalog.md"
+            DialogTitle = "Open"
+            DialogClassName = "#32770"
+            EntryPath = "Ctrl+F12"
+            CaptureStatus = "complete"
+            CaptureMethod = $captureSource
+            ForegroundGuard = [pscustomobject]@{
+                Required = $true
+                ExpectedProcessId = $excelPid
+                ExpectedWindowTitle = $excelTitle
+                Policy = "Seed a blank Excel workbook, then abort and clear native Open dialog evidence unless Excel owns foreground immediately before Ctrl+F12 and before screen capture."
+            }
+            Pairing = [pscustomobject]@{
+                PairKeyPattern = "interactive:open-workbook-dialog:<State>"
+                PairKey = "interactive:open-workbook-dialog:opened"
+                CounterpartSubject = "freex"
+                CounterpartTool = "FREEX_OPEN_WORKBOOK_DIALOG_TOUR"
+                CounterpartFileName = "freex_open_workbook_dialog_opened.png"
+            }
+            Scenario = [pscustomobject]@{
+                ScenarioId = "native-dialog:open-workbook"
+                ScenarioFileName = "open_workbook_dialog"
+                State = "opened"
+                Trigger = "Excel COM starts a blank workbook and a foreground-guarded Ctrl+F12 opens the native Open dialog."
+            }
+            WindowBounds = $captureBounds
+            DialogBounds = $dialogBounds
+            Captures = @(
+                [pscustomobject]@{
+                    CaptureSequence = 1
+                    CaptureKey = "interactive:open-workbook-dialog:opened"
+                    PairKey = "interactive:open-workbook-dialog:opened"
+                    EvidenceSubject = "excel"
+                    CounterpartSubject = "freex"
+                    CounterpartFileName = "freex_open_workbook_dialog_opened.png"
+                    FileName = $fileName
+                    Path = $path
+                    Width = $captureBounds.Width
+                    Height = $captureBounds.Height
+                    CaptureMethod = $captureSource
+                    CaptureStatus = "complete"
+                }
+            )
+        } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+
+        Write-Host "Saved $path"
+        Write-Host "Saved $manifestPath"
+    }
+    finally {
+        if ($excelPid -gt 0) {
+            Get-Process -Id $excelPid -ErrorAction SilentlyContinue |
+                Stop-Process -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 if ($AutoFilterFlyoutTour -eq "1") {
     Invoke-ExcelAutoFilterFlyoutTour
     Write-Host "Done."
@@ -936,6 +1095,12 @@ if ($NumberFormatDropdownTour -eq "1") {
 
 if ($WorksheetContextMenuTour -eq "1") {
     Invoke-ExcelWorksheetContextMenuTour
+    Write-Host "Done."
+    exit 0
+}
+
+if ($OpenWorkbookDialogTour -eq "1") {
+    Invoke-ExcelOpenWorkbookDialogTour
     Write-Host "Done."
     exit 0
 }

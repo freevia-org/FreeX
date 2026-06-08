@@ -377,6 +377,34 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain("Assert-ForegroundProcessOwnership $excelPid \"Excel worksheet context menu screen capture\"");
     }
 
+    [Fact]
+    public void ExcelScreenshotScript_ProvidesOptInOpenWorkbookDialogTour()
+    {
+        var script = ReadScript("screenshot_excel.ps1");
+
+        script.Should().Contain("[string]$OpenWorkbookDialogTour = $env:FREEX_EXCEL_OPEN_WORKBOOK_DIALOG_TOUR");
+        script.Should().Contain("if ($OpenWorkbookDialogTour -eq \"1\")");
+        script.Should().Contain("function Invoke-ExcelOpenWorkbookDialogTour");
+        script.Should().Contain("function Find-ExcelOpenWorkbookDialogWindow");
+        script.Should().Contain("function Open-ExcelNativeOpenDialog");
+        script.Should().Contain("Join-Path $outDir \"open-workbook-dialog-tour\"");
+        script.Should().Contain("excel_open_workbook_dialog_tour_manifest.json");
+        script.Should().Contain("interactive_open_workbook_dialog_opened.png");
+        script.Should().Contain("Tool = \"FREEX_EXCEL_OPEN_WORKBOOK_DIALOG_TOUR\"");
+        script.Should().Contain("EvidenceFamily = \"native-dialog\"");
+        script.Should().Contain("ScenarioId = \"native-dialog:open-workbook\"");
+        script.Should().Contain("DialogTitle = \"Open\"");
+        script.Should().Contain("DialogClassName = \"#32770\"");
+        script.Should().Contain("EntryPath = \"Ctrl+F12\"");
+        script.Should().Contain("[System.Windows.Forms.SendKeys]::SendWait(\"^{F12}\")");
+        script.Should().Contain("Find-ExcelOpenWorkbookDialogWindow $excelPid $excelHwnd");
+        script.Should().Contain("PairKey = \"interactive:open-workbook-dialog:opened\"");
+        script.Should().Contain("CounterpartTool = \"FREEX_OPEN_WORKBOOK_DIALOG_TOUR\"");
+        script.Should().Contain("CounterpartFileName = \"freex_open_workbook_dialog_opened.png\"");
+        script.Should().Contain("Assert-ForegroundWindowOwnership $excelPid $excelTitle \"Excel native Open dialog setup\"");
+        script.Should().Contain("Assert-ForegroundProcessOwnership $excelPid \"Excel native Open dialog screen capture\"");
+    }
+
     private static string ReadScript(string scriptName) =>
         WorkspaceFileLocator.ReadAllText("tools", scriptName);
 }
