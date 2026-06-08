@@ -45,8 +45,7 @@ public sealed class ResizeDrawingShapeCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         if (!_applied) return;
-        var shape = ctx.GetSheet(_sheetId).DrawingShapes.FirstOrDefault(item => item.Id == _shapeId);
-        if (shape is null) return;
+        if (!DrawingShapeCommandGuards.TryFindShape(ctx.GetSheet(_sheetId), _shapeId, out var shape)) return;
         shape.Width = _previousWidth;
         shape.Height = _previousHeight;
         _applied = false;
@@ -91,8 +90,7 @@ public sealed class RotateDrawingShapeCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         if (!_applied) return;
-        var shape = ctx.GetSheet(_sheetId).DrawingShapes.FirstOrDefault(item => item.Id == _shapeId);
-        if (shape is null) return;
+        if (!DrawingShapeCommandGuards.TryFindShape(ctx.GetSheet(_sheetId), _shapeId, out var shape)) return;
         shape.RotationDegrees = _previousRotationDegrees;
         _applied = false;
     }
