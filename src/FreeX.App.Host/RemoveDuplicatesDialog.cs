@@ -115,12 +115,20 @@ public sealed partial class RemoveDuplicatesDialog : Window
 
     private void FocusFirstColumnChoice()
     {
-        var firstColumnBox = _boxes.FirstOrDefault();
+        var firstColumnBox = FindFirstColumnBox();
         if (firstColumnBox is null)
             return;
 
         firstColumnBox.Focus();
         Keyboard.Focus(firstColumnBox);
+    }
+
+    private CheckBox? FindFirstColumnBox()
+    {
+        foreach (var box in _boxes)
+            return box;
+
+        return null;
     }
 
     private void RefreshColumnLabels()
@@ -130,13 +138,24 @@ public sealed partial class RemoveDuplicatesDialog : Window
         {
             if (box.Tag is not uint offset)
                 continue;
-            var label = labels.FirstOrDefault(column => column.Offset == offset);
+            var label = FindColumnChoiceByOffset(labels, offset);
             if (label is not null)
             {
                 box.Content = label.Header;
                 AutomationProperties.SetName(box, UiText.Format("RemoveDuplicates_ColumnAutomationNameFormat", label.Header));
             }
         }
+    }
+
+    private static RemoveDuplicateColumnChoice? FindColumnChoiceByOffset(IReadOnlyList<RemoveDuplicateColumnChoice> columns, uint offset)
+    {
+        foreach (var column in columns)
+        {
+            if (column.Offset == offset)
+                return column;
+        }
+
+        return null;
     }
 
     private void SelectAllButton_Click(object sender, RoutedEventArgs e)
