@@ -189,7 +189,10 @@ internal sealed record MacOsLaunchSmokeCommandKeySnapshot(
     bool HasFindMenuGesture,
     bool HasBoldMenuGesture,
     bool HasItalicMenuGesture,
-    bool HasUnderlineMenuGesture)
+    bool HasUnderlineMenuGesture,
+    bool HasFindDirectRouteSourceGuard,
+    bool HasPageUpDirectRouteSourceGuard,
+    bool HasPageDownDirectRouteSourceGuard)
 {
     public static MacOsLaunchSmokeCommandKeySnapshot Empty { get; } = new(
         HasNewWorkbookMenuGesture: false,
@@ -202,7 +205,10 @@ internal sealed record MacOsLaunchSmokeCommandKeySnapshot(
         HasFindMenuGesture: false,
         HasBoldMenuGesture: false,
         HasItalicMenuGesture: false,
-        HasUnderlineMenuGesture: false);
+        HasUnderlineMenuGesture: false,
+        HasFindDirectRouteSourceGuard: false,
+        HasPageUpDirectRouteSourceGuard: false,
+        HasPageDownDirectRouteSourceGuard: false);
 
     public bool IsPassed =>
         HasNewWorkbookMenuGesture &&
@@ -215,7 +221,10 @@ internal sealed record MacOsLaunchSmokeCommandKeySnapshot(
         HasFindMenuGesture &&
         HasBoldMenuGesture &&
         HasItalicMenuGesture &&
-        HasUnderlineMenuGesture;
+        HasUnderlineMenuGesture &&
+        HasFindDirectRouteSourceGuard &&
+        HasPageUpDirectRouteSourceGuard &&
+        HasPageDownDirectRouteSourceGuard;
 }
 
 internal sealed record MacOsLaunchSmokeLiveCommandKeySnapshot(
@@ -855,7 +864,19 @@ internal static class MacOsLaunchSmokeCoordinator
             HasFindMenuGesture: HasNativeMenuItemGesture(mainWindow, "_findMenuItem", Key.F, KeyModifiers.Meta),
             HasBoldMenuGesture: HasNativeMenuItemGesture(mainWindow, "_boldMenuItem", Key.B, KeyModifiers.Meta),
             HasItalicMenuGesture: HasNativeMenuItemGesture(mainWindow, "_italicMenuItem", Key.I, KeyModifiers.Meta),
-            HasUnderlineMenuGesture: HasNativeMenuItemGesture(mainWindow, "_underlineMenuItem", Key.U, KeyModifiers.Meta));
+            HasUnderlineMenuGesture: HasNativeMenuItemGesture(mainWindow, "_underlineMenuItem", Key.U, KeyModifiers.Meta),
+            HasFindDirectRouteSourceGuard: HasMainWindowDirectCommandRouteSourceSupport(
+                "MainWindow_KeyDown",
+                "HasOnlyCommandModifier",
+                "ShowFindDialogAsync"),
+            HasPageUpDirectRouteSourceGuard: HasMainWindowDirectCommandRouteSourceSupport(
+                "MainWindow_KeyDown",
+                "HasOnlyCommandModifier",
+                "SelectAdjacentVisibleSheetFromKeyboard"),
+            HasPageDownDirectRouteSourceGuard: HasMainWindowDirectCommandRouteSourceSupport(
+                "MainWindow_KeyDown",
+                "HasOnlyCommandModifier",
+                "SelectAdjacentVisibleSheetFromKeyboard"));
 
     private static bool HasNativeMenuItemGesture(
         MainWindow mainWindow,
@@ -865,6 +886,12 @@ internal static class MacOsLaunchSmokeCoordinator
         typeof(MainWindow).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(mainWindow) is NativeMenuItem { Gesture: { } gesture } &&
         gesture.Key == expectedKey &&
         gesture.KeyModifiers == expectedModifiers;
+
+    private static bool HasMainWindowDirectCommandRouteSourceSupport(params string[] requiredMethodNames) =>
+        requiredMethodNames.All(HasMainWindowMethod);
+
+    private static bool HasMainWindowMethod(string methodName) =>
+        typeof(MainWindow).GetMethod(methodName, BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic) is not null;
 
     private static bool HasExternalImageClipboardPasteEvidence(
         MacOsLaunchSmokeSnapshot snapshot,
@@ -914,6 +941,9 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"cmd_quit_menu_gesture={FormatBool(commandKeyEvidence.HasQuitMenuGesture)}",
                 $"cmd_select_all_menu_gesture={FormatBool(commandKeyEvidence.HasSelectAllMenuGesture)}",
                 $"cmd_find_menu_gesture={FormatBool(commandKeyEvidence.HasFindMenuGesture)}",
+                $"cmd_find_direct_route_source_guard={FormatBool(commandKeyEvidence.HasFindDirectRouteSourceGuard)}",
+                $"cmd_page_up_direct_route_source_guard={FormatBool(commandKeyEvidence.HasPageUpDirectRouteSourceGuard)}",
+                $"cmd_page_down_direct_route_source_guard={FormatBool(commandKeyEvidence.HasPageDownDirectRouteSourceGuard)}",
                 $"cmd_bold_menu_gesture={FormatBool(commandKeyEvidence.HasBoldMenuGesture)}",
                 $"cmd_italic_menu_gesture={FormatBool(commandKeyEvidence.HasItalicMenuGesture)}",
                 $"cmd_underline_menu_gesture={FormatBool(commandKeyEvidence.HasUnderlineMenuGesture)}",

@@ -29,10 +29,13 @@ public sealed class MacOsLaunchSmokeReportKeyDriftGuardTests
     [
         "cmd_bold_menu_gesture",
         "cmd_close_workbook_menu_gesture",
+        "cmd_find_direct_route_source_guard",
         "cmd_find_menu_gesture",
         "cmd_italic_menu_gesture",
         "cmd_new_workbook_menu_gesture",
         "cmd_open_menu_gesture",
+        "cmd_page_down_direct_route_source_guard",
+        "cmd_page_up_direct_route_source_guard",
         "cmd_quit_menu_gesture",
         "cmd_save_as_menu_gesture",
         "cmd_save_menu_gesture",
@@ -113,6 +116,12 @@ public sealed class MacOsLaunchSmokeReportKeyDriftGuardTests
         smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_boldMenuItem\", Key.B, KeyModifiers.Meta)");
         smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_italicMenuItem\", Key.I, KeyModifiers.Meta)");
         smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_underlineMenuItem\", Key.U, KeyModifiers.Meta)");
+        smokeSource.Should().Contain("HasFindDirectRouteSourceGuard: HasMainWindowDirectCommandRouteSourceSupport(");
+        smokeSource.Should().Contain("HasPageUpDirectRouteSourceGuard: HasMainWindowDirectCommandRouteSourceSupport(");
+        smokeSource.Should().Contain("HasPageDownDirectRouteSourceGuard: HasMainWindowDirectCommandRouteSourceSupport(");
+        smokeSource.Should().Contain("cmd_find_direct_route_source_guard={FormatBool(commandKeyEvidence.HasFindDirectRouteSourceGuard)}");
+        smokeSource.Should().Contain("cmd_page_up_direct_route_source_guard={FormatBool(commandKeyEvidence.HasPageUpDirectRouteSourceGuard)}");
+        smokeSource.Should().Contain("cmd_page_down_direct_route_source_guard={FormatBool(commandKeyEvidence.HasPageDownDirectRouteSourceGuard)}");
     }
 
     private static string[] ExtractDistinctKeys(string text, Regex pattern) =>
