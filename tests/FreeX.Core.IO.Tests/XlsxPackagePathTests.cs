@@ -28,6 +28,7 @@ public sealed class XlsxPackagePathTests
     [InlineData("xl/worksheets/sheet1.xml", "../drawings/drawing1.xml", "xl/drawings/drawing1.xml")]
     [InlineData("xl/drawings/drawing1.xml", "../media/image1.png", "xl/media/image1.png")]
     [InlineData("xl/drawings/drawing1.xml", "../media/image%201.png", "xl/media/image 1.png")]
+    [InlineData("xl/drawings/drawing1.xml", "../media/image%231%3F.png", "xl/media/image#1?.png")]
     [InlineData("xl/drawings/drawing1.xml", "../media/image%2F1.png", "xl/media/image%2F1.png")]
     [InlineData("xl/drawings/drawing1.xml", "../media/image%5C1.png", "xl/media/image%5C1.png")]
     [InlineData("xl/drawings/drawing1.xml", "%2E/media/image.png", "xl/drawings/%2E/media/image.png")]
@@ -44,6 +45,7 @@ public sealed class XlsxPackagePathTests
     [InlineData("xl/worksheets/sheet1.xml", "xl/drawings/drawing1.xml", "../drawings/drawing1.xml")]
     [InlineData("xl/worksheets/sheet1.xml", "xl/media/image 1.png", "../media/image%201.png")]
     [InlineData("xl/drawings/drawing1.xml", "xl/charts/chart1.xml", "../charts/chart1.xml")]
+    [InlineData("xl/drawings/drawing1.xml", "xl/media/image#1?.png", "../media/image%231%3F.png")]
     [InlineData("xl/workbook.xml", "xl/sharedStrings.xml", "sharedStrings.xml")]
     public void GetRelationshipTarget_ReturnsExcelStyleRelativeTargets(string sourcePath, string targetPath, string expected)
     {
