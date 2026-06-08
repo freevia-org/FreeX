@@ -1410,6 +1410,77 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_WiresNativeGoalSeekThroughSharedParserSessionAndStatusDialog()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
+        var parserSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "GoalSeekRequestParser.cs"));
+        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        source.Should().Contain("private readonly NativeMenuItem _whatIfAnalysisMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _goalSeekMenuItem = new();");
+        source.Should().Contain("_goalSeekMenuItem.Header = \"Goal Seek...\";");
+        source.Should().Contain("_goalSeekMenuItem.Click += async (_, _) => await ShowGoalSeekDialogAsync();");
+        source.Should().Contain("_whatIfAnalysisMenuItem.Header = \"What-If Analysis\";");
+        source.Should().Contain("_whatIfAnalysisMenuItem.Menu = CreateNativeWhatIfAnalysisMenu();");
+        source.Should().Contain("dataMenu.Items.Add(_whatIfAnalysisMenuItem);");
+        source.Should().Contain("_whatIfAnalysisMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("_goalSeekMenuItem.IsEnabled = isIdle;");
+
+        source.Should().Contain("private async Task ShowGoalSeekDialogAsync()");
+        source.Should().Contain("if (!TryCommitPendingFormulaEdit())");
+        source.Should().Contain("var request = await ShowGoalSeekInputDialogAsync();");
+        source.Should().Contain("var result = _session.ExecuteGoalSeek(request);");
+        source.Should().Contain("var choice = await ShowGoalSeekStatusDialogAsync(result);");
+        source.Should().Contain("WorkbookGoalSeekStatus.Applied");
+        source.Should().Contain("choice == GoalSeekStatusDialogChoice.RestoreOriginalValues");
+        source.Should().Contain("var restoreResult = _session.UndoLastEdit();");
+        source.Should().Contain("RefreshShell(FormatGoalSeekStatus(result));");
+        source.Should().Contain("ShowEditIssue(FormatGoalSeekStatus(result));");
+
+        source.Should().Contain("private async Task<GoalSeekRequest?> ShowGoalSeekInputDialogAsync(");
+        source.Should().Contain("GoalSeekRequestParser.Parse(");
+        source.Should().Contain("_session.ActiveSheet.Id");
+        source.Should().Contain("setCellBox.Text");
+        source.Should().Contain("targetValueBox.Text");
+        source.Should().Contain("changingCellBox.Text");
+        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"GoalSeekCompactDialog\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(setCellBox, \"GoalSeekSetCellBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(targetValueBox, \"GoalSeekTargetValueBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(changingCellBox, \"GoalSeekChangingCellBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(errorText, \"GoalSeekErrorText\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"GoalSeekOkButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"GoalSeekCancelButton\");");
+        source.Should().Contain("FocusGoalSeekErrorField(parseResult.Error, setCellBox, targetValueBox, changingCellBox);");
+
+        source.Should().Contain("private async Task<GoalSeekStatusDialogChoice> ShowGoalSeekStatusDialogAsync(WorkbookGoalSeekResult result)");
+        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"GoalSeekStatusDialog\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(summaryBlock, \"GoalSeekStatusText\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(restoreButton, \"GoalSeekRestoreOriginalValuesButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(keepButton, \"GoalSeekKeepResultButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"GoalSeekStatusOkButton\");");
+        source.Should().Contain("private static string FormatGoalSeekParseError(GoalSeekRequestParseResult result)");
+        source.Should().Contain("private static string FormatGoalSeekStatus(WorkbookGoalSeekResult result)");
+
+        sessionSource.Should().Contain("public WorkbookGoalSeekResult ExecuteGoalSeek(GoalSeekRequest request)");
+        parserSource.Should().Contain("public static GoalSeekRequestParseResult Parse(");
+
+        var handlerIndex = normalizedSource.IndexOf("private async Task ShowGoalSeekDialogAsync()", StringComparison.Ordinal);
+        handlerIndex.Should().BeGreaterThanOrEqualTo(0);
+        var nextMethodIndex = normalizedSource.IndexOf("\n    private async Task ShowDataValidationDialogAsync()", handlerIndex, StringComparison.Ordinal);
+        nextMethodIndex.Should().BeGreaterThan(handlerIndex);
+        var routeSource = normalizedSource[handlerIndex..nextMethodIndex];
+
+        routeSource.Should().NotContain("GoalSeekService.Seek");
+        routeSource.Should().NotContain("new GoalSeekCommand");
+        routeSource.Should().NotContain("SetCell(");
+        routeSource.Should().NotContain("DataTransferManager");
+        routeSource.Should().NotContain("WindowInteropHelper");
+        routeSource.Should().NotContain("Microsoft.Win32");
+        routeSource.Should().NotContain("System.Windows");
+    }
+
+    [Fact]
     public void MainWindow_WiresFillMenuThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
