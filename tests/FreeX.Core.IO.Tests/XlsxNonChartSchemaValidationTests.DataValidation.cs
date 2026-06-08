@@ -197,6 +197,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .BeTrue(blockReason);
 
         var sheet = workbook.GetSheetAt(0);
+        AssertDataValidationModel(sheet);
         sheet.SetCell(new CellAddress(sheet.Id, 8, 8), new NumberValue(42));
 
         using var saved = new MemoryStream();
@@ -205,6 +206,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         AssertDataValidationInvalidExtensionListsRemoved(saved);
+
+        saved.Position = 0;
+        AssertDataValidationModel(adapter.Load(saved).GetSheetAt(0));
     }
 
     private static Workbook CreateDataValidationSourceWorkbook()
