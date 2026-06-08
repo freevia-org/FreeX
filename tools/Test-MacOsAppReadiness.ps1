@@ -546,6 +546,17 @@ function Test-MacOsWorkflow {
         'echo "format_cells_style_roundtrip_count=$format_cells_style_roundtrip_count"',
         "edited, saved, and reopened",
         "lsregister -f",
+        'app_diagnostics_dir="$artifact_root/freex-$runtime-macos-app-diagnostics"',
+        '--macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"',
+        "app_diagnostics_directory_configured=true",
+        'app_diagnostics_events_path="$app_diagnostics_dir/events.jsonl"',
+        "app_diagnostics_artifact=freex-`$runtime-macos-app-diagnostics",
+        "app_diagnostics_events_jsonl=true",
+        "app_diagnostics_crash_report_count=`$app_diagnostics_crash_count",
+        'test -f "$app_diagnostics_events_path"',
+        'grep -q ''"eventName":"app_start"'' "$app_diagnostics_events_path"',
+        'grep -q ''"eventName":"app_ready"'' "$app_diagnostics_events_path"',
+        'grep -q ''"eventName":"macos_launch_smoke"'' "$app_diagnostics_events_path"',
         "open -W -n -b io.github.tony-xmelon.freex",
         'open_with_report="$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt"',
         'open_with_smoke_file="$RUNNER_TEMP/freex-$runtime-open-with.csv"',
@@ -817,6 +828,8 @@ function Test-MacOsWorkflow {
         Assert-True -Condition ($appArtifactUpload.IndexOf($testResultPath, [System.StringComparison]::Ordinal) -lt 0) -Message "macOS app artifact upload must not include diagnostic test result $testResultPath."
     }
 
+    Assert-ContainsText -Text $diagnosticsUpload -Needle 'artifacts/freex-${{ matrix.runtime }}-macos-app-diagnostics/**' -Message "macOS diagnostics upload must include app diagnostics emitted by hosted launch smoke."
+    Assert-True -Condition ($appArtifactUpload.IndexOf('artifacts/freex-${{ matrix.runtime }}-macos-app-diagnostics/**', [System.StringComparison]::Ordinal) -lt 0) -Message "macOS app artifact upload must not include app diagnostics internals."
     Assert-ContainsText -Text $diagnosticsUpload -Needle "if: always()" -Message "macOS diagnostics upload must run even when earlier workflow steps fail."
     Assert-ContainsText -Text $diagnosticsUpload -Needle "if-no-files-found: warn" -Message "macOS diagnostics upload must warn, not fail, when optional diagnostics are missing."
 }
@@ -828,8 +841,14 @@ function Test-SourceWiring {
             Markers = @(
                 "PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode)",
                 "MacOsLaunchSmokeOptions.TryParse(",
+                "AvaloniaAppDiagnostics.Create(launchSmokeOptions?.DiagnosticsDirectory)",
+                "diagnostics.RegisterUnhandledExceptionHandlers();",
+                "diagnostics.RecordEvent(`"app_start`"",
                 "App.StartupArguments = startupArguments;",
                 "App.LaunchSmokeOptions = launchSmokeOptions;",
+                "App.Diagnostics = diagnostics;",
+                "diagnostics.RecordEvent(`"app_exit`"",
+                "diagnostics.RecordCrash(ex, `"avalonia_startup`")",
                 "BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments);"
             )
             OrderedPairs = @(
@@ -842,10 +861,28 @@ function Test-SourceWiring {
         @{
             Path = "src\FreeX.App.Avalonia\App.cs"
             Markers = @(
+                "internal static AvaloniaAppDiagnostics? Diagnostics { get; set; }",
+                "Diagnostics?.RecordEvent(`"app_ready`"",
                 "this.TryGetFeature<IActivatableLifetime>() is { } activatableLifetime",
                 "args is not FileActivatedEventArgs fileArgs",
                 "fileArgs.Kind != ActivationKind.File",
-                "await mainWindow.OpenActivatedFilesAsync(fileArgs.Files);"
+                "await mainWindow.OpenActivatedFilesAsync(fileArgs.Files);",
+                "MacOsLaunchSmokeCoordinator.Start(mainWindow, launchSmokeOptions, Diagnostics);"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "src\FreeX.App.Avalonia\AvaloniaAppDiagnostics.cs"
+            Markers = @(
+                "internal sealed class AvaloniaAppDiagnostics",
+                "AppDiagnosticsOptions.CreateDefault()",
+                "new AppDiagnosticsFileStore(options)",
+                "AppDiagnosticsMetadata.Create(",
+                "AppDomain.CurrentDomain.UnhandledException +=",
+                "TaskScheduler.UnobservedTaskException +=",
+                "RecordEvent(string eventName",
+                "RecordCrash(Exception exception, string source)",
+                "AppDiagnosticsFileStore.SanitizeProperties(properties)"
             )
             OrderedPairs = @()
         },
@@ -1795,12 +1832,18 @@ function Test-SourceWiring {
             Path = "src\FreeX.App.Avalonia\MacOsLaunchSmoke.cs"
             Markers = @(
                 "public const string Argument = `"--macos-launch-smoke`";",
+                "public const string DiagnosticsDirectoryArgument = `"--macos-launch-smoke-diagnostics-dir`";",
                 "public const string VerifyImageClipboardPasteArgument = `"--macos-launch-smoke-verify-image-clipboard`";",
                 "public const string VerifyLiveCommandKeysArgument = `"--macos-launch-smoke-verify-live-command-keys`";",
                 "startupArguments = filteredArguments.ToArray();",
                 "verifyImageClipboardPaste = true;",
                 "verifyLiveCommandKeys = true;",
-                "new MacOsLaunchSmokeOptions(reportPath, verifyImageClipboardPaste, verifyLiveCommandKeys)",
+                "diagnosticsDirectory = args[++index];",
+                "diagnosticsDirectory);",
+                "RunAsync(mainWindow, options, diagnostics)",
+                "diagnostics?.RecordEvent(`"macos_launch_smoke`"",
+                "diagnostics?.RecordCrash(ex, `"macos_launch_smoke`")",
+                "app_diagnostics_directory_configured={FormatBool(appDiagnosticsConfigured)}",
                 "await mainWindow.TryPasteLaunchSmokeClipboardImageAsync();",
                 "liveCommandKeyEvidence = mainWindow.BeginLaunchSmokeLiveCommandKeyProbe();",
                 "liveCommandKeyEvidence.IsPassed",
