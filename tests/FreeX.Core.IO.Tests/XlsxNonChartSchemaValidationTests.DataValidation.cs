@@ -142,8 +142,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
         adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
         SchemaErrors(saved).Should().BeEmpty();
-        AssertAdditionalDataValidationTypesAuthored(saved);
-        ReadDataValidationsElement(saved)
+        var savedDataValidations = ReadDataValidationsElement(saved);
+        savedDataValidations.Attribute("count")!.Value.Should().Be("2");
+        savedDataValidations
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceDataValidations.ToString(SaveOptions.DisableFormatting));
