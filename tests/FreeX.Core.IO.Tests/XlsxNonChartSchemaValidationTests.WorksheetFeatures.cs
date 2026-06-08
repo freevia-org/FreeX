@@ -1400,6 +1400,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceCalculationProperties.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        reloadedSheet.GetCell(3, 3)!.Value.Should().Be(new NumberValue(42));
+        reloadedSheet.FullCalculationOnLoad.Should().BeTrue();
     }
 
     [Fact]
@@ -1485,6 +1490,24 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceSheetViews.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        var reloadedSheet = reloaded.GetSheetAt(0);
+        reloadedSheet.GetCell(4, 4)!.Value.Should().Be(new NumberValue(42));
+        var reloadedCustomView = reloaded.CustomViews.Should().ContainSingle().Subject;
+        reloadedCustomView.Name.Should().Be("Review");
+        reloadedCustomView.Id.Should().Be("{33333333-3333-3333-3333-333333333333}");
+        var reloadedCustomSheet = reloadedCustomView.Sheets.Should().ContainSingle().Subject;
+        reloadedCustomSheet.SheetName.Should().Be("Data");
+        reloadedCustomSheet.ViewMode.Should().Be(WorksheetViewMode.PageLayout);
+        reloadedCustomSheet.FrozenRows.Should().Be(1);
+        reloadedCustomSheet.FrozenCols.Should().Be(1);
+        reloadedCustomSheet.ShowGridlines.Should().BeFalse();
+        reloadedCustomSheet.ShowHeadings.Should().BeFalse();
+        reloadedCustomSheet.ShowRulers.Should().BeFalse();
+        reloadedCustomSheet.ZoomPercent.Should().Be(125);
+        reloadedCustomSheet.ShowFormulas.Should().BeTrue();
     }
 
     [Fact]
@@ -1631,6 +1654,17 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceSheetViews.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        var reloadedSheet = reloaded.GetSheetAt(0);
+        reloadedSheet.GetCell(4, 4)!.Value.Should().Be(new NumberValue(42));
+        reloaded.AdditionalViews.Should().NotBeNull();
+        reloaded.AdditionalViews!.Views.Should().ContainSingle()
+            .Which.NativeXml.Should().Contain("workbookView");
+        reloadedSheet.AdditionalViews.Should().NotBeNull();
+        reloadedSheet.AdditionalViews!.Views.Should().ContainSingle()
+            .Which.WorkbookViewId.Should().Be("1");
     }
 
     [Fact]
