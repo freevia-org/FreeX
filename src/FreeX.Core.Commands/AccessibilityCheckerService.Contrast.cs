@@ -11957,7 +11957,7 @@ public static partial class AccessibilityCheckerService
             }
 
             var pivotAddress = new CellAddress(pivotReferenceSheet.Id, pivotReferenceRow, pivotReferenceCol);
-            var pivotTable = pivotReferenceSheet.PivotTables.FirstOrDefault(pivot => pivot.TargetRange.Contains(pivotAddress));
+            var pivotTable = FindFormulaPivotTableContainingAddress(pivotReferenceSheet.PivotTables, pivotAddress);
             if (pivotTable is null)
             {
                 value = ErrorValue.Ref;
@@ -11965,8 +11965,7 @@ public static partial class AccessibilityCheckerService
             }
 
             var headers = ReadFormulaPivotSourceHeaders(pivotTable);
-            var dataFieldIndex = pivotTable.DataFields.FindIndex(field =>
-                string.Equals(field.Name, dataFieldCaption, StringComparison.CurrentCultureIgnoreCase));
+            var dataFieldIndex = FindFormulaPivotDataFieldIndex(pivotTable, dataFieldCaption);
             if (dataFieldIndex < 0 ||
                 !FormulaGetPivotDataFilterFieldsAreVisible(pivotTable, headers, filters) ||
                 !FormulaPivotPageFieldFiltersMatch(pivotTable, headers, filters))
@@ -12006,6 +12005,35 @@ public static partial class AccessibilityCheckerService
 
             value = pivotReferenceSheet.GetCell(outputRow.Value, outputColumn.Value)?.Value ?? ErrorValue.Ref;
             return true;
+        }
+
+        private static PivotTableModel? FindFormulaPivotTableContainingAddress(
+            IEnumerable<PivotTableModel> pivotTables,
+            CellAddress pivotAddress)
+        {
+            foreach (var pivotTable in pivotTables)
+            {
+                if (pivotTable.TargetRange.Contains(pivotAddress))
+                    return pivotTable;
+            }
+
+            return null;
+        }
+
+        private static int FindFormulaPivotDataFieldIndex(PivotTableModel pivotTable, string dataFieldCaption)
+        {
+            for (var i = 0; i < pivotTable.DataFields.Count; i++)
+            {
+                if (string.Equals(
+                    pivotTable.DataFields[i].Name,
+                    dataFieldCaption,
+                    StringComparison.CurrentCultureIgnoreCase))
+                {
+                    return i;
+                }
+            }
+
+            return -1;
         }
 
         private bool TryResolveFormulaInfoScalarArgument(
