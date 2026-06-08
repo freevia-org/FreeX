@@ -1199,6 +1199,11 @@ function Test-SourceWiring {
                 "_openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);",
                 "fileMenu.Items.Add(_openRecentMenuItem);",
                 "RefreshNativeOpenRecentMenu(isIdle);",
+                "LocalFilePath.TryNormalize(candidate, out var normalizedCandidate)",
+                "Directory.Exists(normalizedCandidate)",
+                "File.Exists(normalizedCandidate)",
+                "_session.TryResolveOpenTarget(normalizedCandidate, out var target, out unsupportedMessage)",
+                "path = target!.Path;",
                 "_selectAllMenuItem.Header = `"Select All`";",
                 "_selectAllMenuItem.Gesture = new KeyGesture(Key.A, KeyModifiers.Meta);",
                 "_selectAllMenuItem.Click += (_, _) => SelectCurrentRegionOrAll();",
@@ -1503,14 +1508,15 @@ function Test-SourceWiring {
                 "OpenRecentWorkbookMenuPlanner.Create(",
                 "_recentFiles.Entries",
                 "File.Exists",
-                "path => _session.TryResolveOpenTarget(path, out _, out _)",
+                "path => _session.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null",
                 "plan.ItemCount == 0",
                 "foreach (var entry in plan.Items)",
                 "Header = entry.Header",
                 "private async Task OpenRecentWorkbookAsync(string path)",
+                "await OpenWorkbookPathAsync(target.Path);",
                 "private void RecordStartupRecentWorkbook(StartupWorkbookLoadResult source)",
                 "private void RecordRecentWorkbook(string path)",
-                "_recentFiles.AddOrUpdate(path);",
+                "_recentFiles.AddOrUpdate(target.Path);",
                 "RecordRecentWorkbook(target.Path);",
                 "_closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();",
                 "fileMenu.Items.Add(_newWorkbookMenuItem);",
@@ -2396,6 +2402,26 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
+            Path = "src\FreeX.App.Services\LocalFilePath.cs"
+            Markers = @(
+                "public static class LocalFilePath",
+                "public static bool TryNormalize(string? candidate, out string normalizedPath)",
+                "TryCreateExplicitUri(path, out var uri)",
+                "if (!uri.IsFile)",
+                "path = uri.LocalPath;",
+                "path.Contains('\0', StringComparison.Ordinal)",
+                "IsUnixAbsolutePath(path)",
+                "Path.GetFullPath(path)",
+                "private static bool TryCreateExplicitUri(string candidate, out Uri uri)",
+                "Uri.TryCreate(candidate, UriKind.Absolute, out var parsed)",
+                "IsWindowsDrivePath(candidate, parsed.Scheme)",
+                "private static bool IsWindowsDrivePath(string candidate, string scheme)",
+                "char.IsAsciiLetter(candidate[0])",
+                "private static bool IsUnixAbsolutePath(string path)"
+            )
+            OrderedPairs = @()
+        },
+        @{
             Path = "src\FreeX.App.Services\OpenRecentWorkbookMenuPlanner.cs"
             Markers = @(
                 "public sealed record OpenRecentWorkbookMenuItemPlan(",
@@ -2407,12 +2433,16 @@ function Test-SourceWiring {
                 "IEnumerable<RecentFileEntry> entries",
                 "Func<string, bool> fileExists",
                 "Func<string, bool> canOpenWorkbook",
+                "Func<string, string?> resolveOpenWorkbookPath",
                 "maximumItems < 1",
+                "PlatformPathIdentityComparer.Current",
                 ".Where(entry => !string.IsNullOrWhiteSpace(entry.Path))",
-                ".Where(entry => fileExists(entry.Path) && canOpenWorkbook(entry.Path))",
                 ".OrderByDescending(entry => entry.LastOpened)",
+                ".Select(entry => (Entry: entry, Path: resolveOpenWorkbookPath(entry.Path)))",
+                ".Where(item => !string.IsNullOrWhiteSpace(item.Path) && fileExists(item.Path))",
+                ".Where(item => seenPaths.Add(item.Path!))",
                 ".Take(maximumItems)",
-                "FormatHeader(entry.Path)",
+                "FormatHeader(item.Path!)",
                 "public static string FormatHeader(string path)",
                 "Path.GetFileName(path)",
                 "Path.GetDirectoryName(path)"

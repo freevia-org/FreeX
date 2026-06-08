@@ -88,7 +88,7 @@ public sealed class WorkbookSessionTests
         resolved.Should().BeTrue();
         message.Should().BeEmpty();
         target.Should().NotBeNull();
-        target!.Path.Should().Be("Book.XLSM");
+        target!.Path.Should().Be(Path.GetFullPath("Book.XLSM"));
         target.Adapter.Should().BeSameAs(adapter);
         target.Extension.Should().Be(".XLSM");
         target.Format.FormatName.Should().Be("XLSM Macro-Enabled Workbook");
@@ -113,7 +113,47 @@ public sealed class WorkbookSessionTests
         session.TryResolveOpenTarget("bad\0Book.xlsx", out var malformedTarget, out var malformedMessage)
             .Should().BeFalse();
         malformedTarget.Should().BeNull();
-        malformedMessage.Should().Be("Unsupported file type.");
+        malformedMessage.Should().Be("Open requires a local file path.");
+    }
+
+    [Theory]
+    [InlineData("/Users/quinn/Work/Budget.XLSX", "/Users/quinn/Work/Budget.XLSX")]
+    [InlineData("file:///Users/quinn/Work/Budget%202026.XLSX", "/Users/quinn/Work/Budget 2026.XLSX")]
+    public void TryResolveOpenTarget_NormalizesMacOsLocalFileIngress(string candidate, string expectedPath)
+    {
+        var adapter = new TestFileAdapter(formats: [
+            new FileFormatDescriptor(".xlsx", "Excel Workbook", CanOpen: true, CanSave: false)
+        ]);
+        var session = new WorkbookSessionFactory().Create(
+            new StartupWorkbookLoadResult(CreateWorkbook(), "Book.fxl", "Opened .fxl.", IsFallback: false),
+            viewportHeight: 240,
+            viewportWidth: 320,
+            adapters: [adapter]);
+
+        var resolved = session.TryResolveOpenTarget(candidate, out var target, out var message);
+
+        resolved.Should().BeTrue();
+        message.Should().BeEmpty();
+        target.Should().NotBeNull();
+        target!.Path.Should().Be(expectedPath);
+        target.Extension.Should().Be(".XLSX");
+        target.Adapter.Should().BeSameAs(adapter);
+    }
+
+    [Fact]
+    public void TryResolveOpenTarget_RejectsNonFileUri()
+    {
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            CreateWorkbook(),
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        session.TryResolveOpenTarget("https://example.test/Book.xlsx", out var target, out var message)
+            .Should().BeFalse();
+
+        target.Should().BeNull();
+        message.Should().Be("Open requires a local file path.");
     }
 
     [Fact]
