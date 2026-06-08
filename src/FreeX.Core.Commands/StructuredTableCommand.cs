@@ -244,8 +244,7 @@ public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var table = sheet.StructuredTables.FirstOrDefault(candidate => candidate.Id == _tableId);
-        if (table is null)
+        if (!CommandGuards.TryFindStructuredTable(sheet, _tableId, out var table))
             return CommandGuards.RejectStructuredTableNotFound();
 
         var showFirstColumn = _showFirstColumn ?? table.ShowFirstColumn;
@@ -427,8 +426,7 @@ public sealed class ReapplyStructuredTableStyleCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var table = sheet.StructuredTables.FirstOrDefault(candidate => candidate.Id == _tableId);
-        if (table is null)
+        if (!CommandGuards.TryFindStructuredTable(sheet, _tableId, out var table))
             return CommandGuards.RejectStructuredTableNotFound();
 
         _applyStyleCommand = new ApplyStructuredTableStyleCommand(
@@ -500,8 +498,7 @@ public sealed class ConfigureStructuredTableStyleOptionsCommand : IWorkbookComma
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var tableIndex = sheet.StructuredTables.FindIndex(table => table.Id == _tableId);
-        if (tableIndex < 0)
+        if (!CommandGuards.TryFindStructuredTableIndex(sheet, _tableId, out var tableIndex))
             return CommandGuards.RejectStructuredTableNotFound();
 
         _previousTable = sheet.StructuredTables[tableIndex];
@@ -525,8 +522,7 @@ public sealed class ConfigureStructuredTableStyleOptionsCommand : IWorkbookComma
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        var tableIndex = sheet.StructuredTables.FindIndex(table => table.Id == _tableId);
-        if (tableIndex >= 0)
+        if (CommandGuards.TryFindStructuredTableIndex(sheet, _tableId, out var tableIndex))
             sheet.StructuredTables[tableIndex] = _previousTable;
     }
 

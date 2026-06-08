@@ -22,8 +22,7 @@ public sealed class ApplyStructuredTableFiltersCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UseAutoFilter) is { } protectedOutcome)
             return protectedOutcome;
 
-        var table = sheet.StructuredTables.FirstOrDefault(candidate => candidate.Id == _tableId);
-        if (table is null)
+        if (!CommandGuards.TryFindStructuredTable(sheet, _tableId, out var table))
             return CommandGuards.RejectStructuredTableNotFound();
 
         var filters = BuildFilters(table);
