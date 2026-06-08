@@ -538,6 +538,8 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
             | Close dirty workbook | prompt choices clear | Save, Discard, and Cancel reachable | Pass | screenshot |
             | Reopen saved workbook | values survive | reopened expected values | Pass | screenshot |
             | Recent files | recent route updated | saved workbook appeared in recent files | Pass | screenshot |
+            | On-device file grant persistence | picker/recent/Open With survives relaunch | reopened from Recent after relaunch and Open With without reselecting the file | Pass | notes |
+            | File-access grant diagnostics review | diagnostics stay redacted | grant events contained only grant kind and redaction metadata; no path or bookmark payload fields | Pass | diagnostics review |
 
             ## Future Native Share Sheet Readiness
 

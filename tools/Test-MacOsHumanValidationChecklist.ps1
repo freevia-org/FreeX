@@ -853,7 +853,9 @@ if ($null -ne $workbook) {
         "Bookmark payload stays out of diagnostics and release evidence",
         "Close dirty workbook",
         "Reopen saved workbook",
-        "Recent files"
+        "Recent files",
+        "On-device file grant persistence",
+        "File-access grant diagnostics review"
     )
     Test-StatusTable -Table $workbook -LabelColumn "Step" -StatusColumn "Status" -EvidenceColumns @("Actual result", "Evidence")
 }
