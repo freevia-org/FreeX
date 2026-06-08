@@ -57,6 +57,41 @@ public sealed class FileSavePlannerTests
         skip.Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData(StringComparison.OrdinalIgnoreCase, true)]
+    [InlineData(StringComparison.Ordinal, false)]
+    public void CanSkipCleanSave_UsesPathComparisonForCaseOnlyTargetDifferences(
+        StringComparison pathComparison,
+        bool expected)
+    {
+        using var temp = new TestTemporaryDirectory();
+
+        var skip = FileSavePlanner.CanSkipCleanSave(
+            workbookDirty: false,
+            currentFilePath: Path.Combine(temp.Path, "Book.xlsx"),
+            targetPath: Path.Combine(temp.Path, "book.xlsx"),
+            pathComparison);
+
+        skip.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("bad\0Book.xlsx", "Book.xlsx", StringComparison.Ordinal)]
+    [InlineData("Book.xlsx", "bad\0Book.xlsx", StringComparison.OrdinalIgnoreCase)]
+    public void CanSkipCleanSave_PathComparisonOverloadReturnsFalseForMalformedPaths(
+        string currentFilePath,
+        string targetPath,
+        StringComparison pathComparison)
+    {
+        var skip = FileSavePlanner.CanSkipCleanSave(
+            workbookDirty: false,
+            currentFilePath,
+            targetPath,
+            pathComparison);
+
+        skip.Should().BeFalse();
+    }
+
     [Fact]
     public void TryResolveExistingPath_UsesOnlySaveCapableFormats()
     {
