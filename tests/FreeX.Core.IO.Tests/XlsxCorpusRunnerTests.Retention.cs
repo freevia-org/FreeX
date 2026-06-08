@@ -629,6 +629,8 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
+        var beforeMetadata = CaptureWorkbookMetadataSummary(workbook);
+        AssertSlicerTimelineMetadataLoaded(id, beforeMetadata);
         workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-floating-anchor-edit"));
 
         using var saved = new MemoryStream();
@@ -640,6 +642,32 @@ public partial class XlsxCorpusRunnerTests
         after.CriticalParts.Should().Contain(drawingPart, id);
         after.CriticalRelationshipTargets.Should().Contain(target =>
             target.EndsWith($"=>{drawingRelationshipTarget}", StringComparison.OrdinalIgnoreCase), id);
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        CaptureWorkbookMetadataSummary(reloaded).Should().BeEquivalentTo(
+            beforeMetadata,
+            options => options.WithStrictOrdering(),
+            $"{id} slicer/timeline model metadata should survive save and reload");
+    }
+
+    private static void AssertSlicerTimelineMetadataLoaded(string id, WorkbookMetadataSummary metadata)
+    {
+        if (id.Contains("slicers", StringComparison.OrdinalIgnoreCase))
+        {
+            metadata.Slicers.Should().NotBeEmpty(id);
+            metadata.Timelines.Should().BeEmpty(id);
+            return;
+        }
+
+        if (id.Contains("timelines", StringComparison.OrdinalIgnoreCase))
+        {
+            metadata.Timelines.Should().NotBeEmpty(id);
+            metadata.Slicers.Should().BeEmpty(id);
+            return;
+        }
+
+        throw new InvalidOperationException($"Unsupported slicer/timeline corpus id '{id}'.");
     }
 
     [Fact]
