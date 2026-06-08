@@ -21,11 +21,11 @@ public sealed class StartupWorkbookLoader
     public StartupWorkbookLoadResult Load(IReadOnlyList<string> startupArguments)
     {
         string? firstUnsupportedExtension = null;
-        foreach (var filePath in startupArguments.Where(argument =>
-                     !string.IsNullOrWhiteSpace(argument) &&
-                     File.Exists(argument)))
+        foreach (var filePath in startupArguments
+                     .Select(argument => LocalFilePath.TryNormalize(argument, out var path) ? path : null)
+                     .Where(path => path is not null && File.Exists(path)))
         {
-            var extension = Path.GetExtension(filePath);
+            var extension = Path.GetExtension(filePath!);
             var adapter = FileFormatResolver.FindOpenAdapter(_adapters, extension, out var format);
             if (adapter is null || format is null)
             {
@@ -33,7 +33,7 @@ public sealed class StartupWorkbookLoader
                 continue;
             }
 
-            return Load(filePath, extension, adapter, format);
+            return Load(filePath!, extension, adapter, format);
         }
 
         return firstUnsupportedExtension is null
