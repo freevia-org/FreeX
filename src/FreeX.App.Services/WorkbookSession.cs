@@ -417,23 +417,26 @@ public sealed class WorkbookSession
     }
 
     public bool CanOpenSelectedHyperlink =>
-        HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, SelectedRange.Start, out _);
+        HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, SelectedRange.Start, CurrentFilePath, out _);
 
     public bool TryGetSelectedHyperlinkPlan(out HyperlinkNavigationPlan? plan) =>
-        HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, SelectedRange.Start, out plan);
+        HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, SelectedRange.Start, CurrentFilePath, out plan);
 
     public WorkbookNavigationResult OpenSelectedHyperlink() =>
         OpenHyperlink(SelectedRange.Start);
 
     public WorkbookNavigationResult OpenHyperlink(CellAddress address)
     {
-        if (!HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, address, out var plan) || plan is null)
+        if (!HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, address, CurrentFilePath, out var plan) || plan is null)
             return WorkbookNavigationResult.Failed("Hyperlink target was not found.");
 
-        if (plan.Kind != HyperlinkNavigationKind.WorksheetCell)
-            return WorkbookNavigationResult.Failed("External hyperlinks are not supported on this platform.");
-
-        return GoToReference(plan.Target);
+        return plan.Kind switch
+        {
+            HyperlinkNavigationKind.WorksheetCell => GoToReference(plan.Target),
+            HyperlinkNavigationKind.LocalFile =>
+                WorkbookNavigationResult.Failed("Local file hyperlinks require a platform file-opening route."),
+            _ => WorkbookNavigationResult.Failed("External hyperlinks are not supported on this platform.")
+        };
     }
 
     public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
