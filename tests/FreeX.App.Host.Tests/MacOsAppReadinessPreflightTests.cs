@@ -63,6 +63,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("FreeX-latest-macos-distribution-candidate-manifest.json");
         script.Should().Contain("FreeX-latest-$assetLabel-default-open-launch-smoke.txt");
         script.Should().Contain("distribution_candidate_required_markers");
+        script.Should().Contain("smoke_status=passed");
+        script.Should().Contain("Assert-ContainsRequiredText -Text $smokeReportText -Needle \"macos_launch_smoke=passed\"");
         script.Should().Contain("default_open_launch_smoke_report");
         script.Should().Contain("gh release create");
         script.Should().Contain("gh release upload");
@@ -98,6 +100,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("run_bounded_launchservices_smoke \"default_open\" \"$default_open_report\"");
         script.Should().Contain("launchservices_smoke_cleanup_timeout=true");
         script.Should().Contain("macOS workflow must route all three hosted LaunchServices launch smoke paths through run_bounded_launchservices_smoke.");
+        script.Should().Contain("Require hosted smoke before app artifact upload");
+        script.Should().Contain("smoke_status=skipped_host_arch_mismatch");
+        script.Should().Contain("app_artifact_upload_blocked=host_arch_mismatch");
+        script.Should().Contain("Host/runtime architecture mismatch for $runtime on $host_arch cannot publish a macOS app artifact.");
+        script.Should().Contain("macOS workflow must require successful hosted smoke before uploading the app artifact.");
         script.Should().Contain("open_with_report=\"$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt\"");
         script.Should().Contain("open_with_smoke_file=\"$RUNNER_TEMP/freex-$runtime-open-with.csv\"");
         script.Should().Contain("app_path=\"$unzip_root/FreeX.app\"");
@@ -872,6 +879,27 @@ public sealed class MacOsAppReadinessPreflightTests
     }
 
     [Fact]
+    public void MacOsAppReadinessPreflight_FailsWhenHostedSmokeGateIsRemovedBeforeAppUpload()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateMinimalMacOsReadinessRepo(temp.Path);
+        var workflowPath = Path.Combine(temp.Path, ".github", "workflows", "macos-app.yml");
+        var workflow = File.ReadAllText(workflowPath);
+        File.WriteAllText(
+            workflowPath,
+            workflow.Replace(
+                "Require hosted smoke before app artifact upload",
+                "Upload app artifact without hosted smoke gate",
+                StringComparison.Ordinal));
+
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("macOS workflow is missing required readiness marker: Require hosted smoke before app artifact upload");
+    }
+
+    [Fact]
     public void MacOsAppReadinessPreflight_FailsWhenBundleLaunchServicesSmokeIsUnbounded()
     {
         using var temp = new TestTemporaryDirectory();
@@ -1093,6 +1121,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       artifact_root="$GITHUB_WORKSPACE/artifacts"
                       smoke_log="$artifact_root/smoke.log"
                       runtime="$FREEX_RUNTIME"
+                      evidence_path="$artifact_root/freex-$runtime-macos-evidence.txt"
                       zip_name="freex-$runtime-macos-app.zip"
                       zip_path="$artifact_root/$zip_name"
                       unzip_root="$RUNNER_TEMP/freex-$runtime-unzip"
@@ -1246,6 +1275,16 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q '"eventName":"app_start"' "$app_diagnostics_events_path"
                       grep -q '"eventName":"app_ready"' "$app_diagnostics_events_path"
                       grep -q '"eventName":"macos_launch_smoke"' "$app_diagnostics_events_path"
+                      echo "smoke_status=passed" >> "$evidence_path"
+                      host_arch="$(uname -m)"
+                      echo "smoke_status=skipped_host_arch_mismatch" >> "$evidence_path"
+                      echo "macos_launch_smoke=skipped_host_arch_mismatch" > "$launch_smoke_report"
+                      echo "macos_launch_smoke=skipped_host_arch_mismatch" > "$open_with_report"
+                      echo "macos_launch_smoke=skipped_host_arch_mismatch" > "$default_open_report"
+                      echo "app_artifact_upload_blocked=host_arch_mismatch" >> "$evidence_path"
+                      rm -f "$zip_path" "$zip_path.sha256"
+                      echo "Host/runtime architecture mismatch for $runtime on $host_arch cannot publish a macOS app artifact."
+                      exit 1
                       grep -q "external_image_clipboard_paste_required=false" "$artifact_root/launch.txt"
                       grep -q "live_command_key_smoke_required=false" "$artifact_root/launch.txt"
                       grep -q "live_command_key_smoke=not_required" "$artifact_root/launch.txt"
@@ -1469,6 +1508,25 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_legal_notices_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_quit_menu_item=true" "$artifact_root/launch.txt"
                       echo "bundle_icon=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app/Contents/Info.plist")"
+                  - name: Require hosted smoke before app artifact upload
+                    shell: bash
+                    env:
+                      FREEX_RUNTIME: ${"{{"} matrix.runtime {"}}"}
+                    run: |
+                      runtime="$FREEX_RUNTIME"
+                      artifact_root="$GITHUB_WORKSPACE/artifacts"
+                      evidence_path="$artifact_root/freex-$runtime-macos-evidence.txt"
+                      launch_smoke_report="$artifact_root/freex-$runtime-macos-launch-smoke.txt"
+                      open_with_report="$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt"
+                      default_open_report="$artifact_root/freex-$runtime-macos-default-open-launch-smoke.txt"
+                      if grep -q "^smoke_status=skipped_host_arch_mismatch$" "$evidence_path"; then
+                        echo "Host/runtime architecture mismatch for $runtime cannot publish a macOS app artifact."
+                        exit 1
+                      fi
+                      grep -q "^smoke_status=passed$" "$evidence_path"
+                      grep -q "^macos_launch_smoke=passed$" "$launch_smoke_report"
+                      grep -q "^macos_launch_smoke=passed$" "$open_with_report"
+                      grep -q "^macos_launch_smoke=passed$" "$default_open_report"
                   - name: Upload app artifact
                     uses: actions/upload-artifact@v7
                     with:
@@ -1517,6 +1575,9 @@ public sealed class MacOsAppReadinessPreflightTests
                       FreeX-latest-$assetLabel-default-open-launch-smoke.txt
                       source_artifact_pattern
                       distribution_candidate_required_markers
+                      smoke_status=passed
+                      $packagingSmokeText = Get-Content -LiteralPath $packagingSmokePath -Raw
+                      Assert-ContainsRequiredText -Text $smokeReportText -Needle "macos_launch_smoke=passed"
                       default_open_launch_smoke_report
                   - name: Upload release-channel prepared assets
                     uses: actions/upload-artifact@v7
