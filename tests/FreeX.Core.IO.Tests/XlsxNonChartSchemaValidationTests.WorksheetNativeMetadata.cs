@@ -125,6 +125,14 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetWebPublishItemsSanitized(saved);
+
+        saved.Position = 0;
+        adapter.Load(saved)
+            .GetSheetAt(0)
+            .GetCell(3, 3)!
+            .Value
+            .Should()
+            .Be(new NumberValue(42));
     }
 
     [Theory]
@@ -201,6 +209,14 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
         SchemaErrors(saved).Should().BeEmpty();
         AssertWorksheetOleControlsSanitized(saved);
+
+        saved.Position = 0;
+        adapter.Load(saved)
+            .GetSheetAt(0)
+            .GetCell(3, 3)!
+            .Value
+            .Should()
+            .Be(new NumberValue(42));
     }
 
     [Fact]
