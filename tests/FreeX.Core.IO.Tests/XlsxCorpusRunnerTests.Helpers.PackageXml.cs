@@ -1116,9 +1116,13 @@ public partial class XlsxCorpusRunnerTests
         path.StartsWith("xl/macroSheets/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/printerSettings/", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("xl/vbaProject.bin", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("xl/vbaProjectSignature.bin", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("xl/volatileDependencies.xml", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("docProps/core.xml", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("docProps/app.xml", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("docProps/custom.xml", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("docProps/thumbnail.png", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("docProps/thumbnail.jpeg", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/embeddings/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("customXml/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("customUI/", StringComparison.OrdinalIgnoreCase) ||
