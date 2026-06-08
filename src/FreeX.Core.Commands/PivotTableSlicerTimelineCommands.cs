@@ -2,6 +2,24 @@ using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
 
+file static class PivotTableTimelineCommandLookups
+{
+    public static TimelineModel? FindTimeline(Workbook workbook, string? timelineName) =>
+        workbook.Timelines.FirstOrDefault(timeline =>
+            string.Equals(timeline.Name, timelineName, StringComparison.OrdinalIgnoreCase));
+
+    public static int FindSourceFieldIndex(IReadOnlyList<string> headers, string? sourceFieldName, StringComparison comparison)
+    {
+        for (var index = 0; index < headers.Count; index++)
+        {
+            if (string.Equals(headers[index], sourceFieldName, comparison))
+                return index;
+        }
+
+        return -1;
+    }
+}
+
 public sealed class SetTimelineRangeCommand : IWorkbookCommand
 {
     private readonly string _timelineName;
@@ -21,8 +39,7 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
-        var timeline = ctx.Workbook.Timelines.FirstOrDefault(item =>
-            string.Equals(item.Name, _timelineName, StringComparison.OrdinalIgnoreCase));
+        var timeline = PivotTableTimelineCommandLookups.FindTimeline(ctx.Workbook, _timelineName);
         if (timeline is null)
             return new CommandOutcome(false, "Timeline was not found.");
         if (string.IsNullOrWhiteSpace(timeline.SourcePivotTableName) ||
@@ -46,8 +63,10 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
 
         var sourceSheet = ctx.Workbook.GetSheet(pivotTable.SourceRange.Start.Sheet) ?? sheet;
         var headers = PivotTableSlicerTimelineCommandHelpers.ReadPivotHeaders(sourceSheet, pivotTable);
-        var sourceFieldIndex = headers.FindIndex(header =>
-            string.Equals(header, timeline.SourceFieldName, StringComparison.OrdinalIgnoreCase));
+        var sourceFieldIndex = PivotTableTimelineCommandLookups.FindSourceFieldIndex(
+            headers,
+            timeline.SourceFieldName,
+            StringComparison.OrdinalIgnoreCase);
         if (sourceFieldIndex < 0)
             return PivotTableSlicerTimelineCommandGuards.ConnectedPivotTableFieldNotFound();
 
@@ -67,8 +86,7 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
 
     public void Revert(ICommandContext ctx)
     {
-        var timeline = ctx.Workbook.Timelines.FirstOrDefault(item =>
-            string.Equals(item.Name, _timelineName, StringComparison.OrdinalIgnoreCase));
+        var timeline = PivotTableTimelineCommandLookups.FindTimeline(ctx.Workbook, _timelineName);
         var target = timeline?.SourcePivotTableName is null ? null : PivotTableSlicerTimelineCommandHelpers.FindConnectedPivotTable(ctx.Workbook, timeline.SourcePivotTableName);
         if (timeline is not null && target is { } connected && _snapshot is not null)
         {
@@ -131,7 +149,7 @@ public sealed class AddTimelineCommand : IWorkbookCommand
             return new CommandOutcome(false, "Timeline name, PivotTable, and field are required.");
         }
 
-        if (ctx.Workbook.Timelines.Any(timeline => string.Equals(timeline.Name, _timelineName, StringComparison.OrdinalIgnoreCase)))
+        if (PivotTableTimelineCommandLookups.FindTimeline(ctx.Workbook, _timelineName) is not null)
             return new CommandOutcome(false, "A timeline with that name already exists.");
 
         var target = PivotTableSlicerTimelineCommandHelpers.FindConnectedPivotTable(ctx.Workbook, _pivotTableName);
@@ -144,7 +162,10 @@ public sealed class AddTimelineCommand : IWorkbookCommand
 
         var sourceSheet = ctx.Workbook.GetSheet(target.Value.PivotTable.SourceRange.Start.Sheet) ?? target.Value.Sheet;
         var headers = PivotTableSlicerTimelineCommandHelpers.ReadPivotHeaders(sourceSheet, target.Value.PivotTable);
-        var sourceFieldIndex = headers.FindIndex(header => string.Equals(header, _sourceFieldName, StringComparison.CurrentCultureIgnoreCase));
+        var sourceFieldIndex = PivotTableTimelineCommandLookups.FindSourceFieldIndex(
+            headers,
+            _sourceFieldName,
+            StringComparison.CurrentCultureIgnoreCase);
         if (sourceFieldIndex < 0)
             return PivotTableSlicerTimelineCommandGuards.ConnectedPivotTableFieldNotFound();
 
