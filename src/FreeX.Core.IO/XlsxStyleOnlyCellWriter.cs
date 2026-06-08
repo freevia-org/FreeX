@@ -411,12 +411,13 @@ internal static class XlsxStyleOnlyCellWriter
             if (!TryGetRowNumber(row, out var currentRow) || currentRow != rowNumber)
                 continue;
 
-            return row
-                .Elements(cellName)
-                .FirstOrDefault(cell => string.Equals(
-                    cell.Attribute("r")?.Value,
-                    reference,
-                    StringComparison.OrdinalIgnoreCase));
+            foreach (var cell in row.Elements(cellName))
+            {
+                if (string.Equals(cell.Attribute("r")?.Value, reference, StringComparison.OrdinalIgnoreCase))
+                    return cell;
+            }
+
+            return null;
         }
 
         return null;
