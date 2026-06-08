@@ -265,15 +265,12 @@ internal static class XlsxWorksheetDrawingPartMerger
             var resolvedTarget = string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase)
                 ? target
                 : XlsxPackagePath.ResolveRelationshipTarget(sourceDrawingPath, target);
-            var targetRelationship = targetRelationships.FirstOrDefault(rel =>
-                string.Equals(rel.Attribute("Type")?.Value, type, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(rel.Attribute("TargetMode")?.Value, targetMode, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(
-                    string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase)
-                        ? rel.Attribute("Target")?.Value
-                        : XlsxPackagePath.ResolveRelationshipTarget(targetDrawingPath, rel.Attribute("Target")?.Value ?? ""),
-                    resolvedTarget,
-                    StringComparison.OrdinalIgnoreCase));
+            var targetRelationship = FindMatchingRelationship(
+                targetRelationships,
+                targetDrawingPath,
+                type,
+                targetMode,
+                resolvedTarget);
             if (targetRelationship is not null)
             {
                 relIdMap[sourceId] = targetRelationship.Attribute("Id")!.Value;
@@ -312,6 +309,31 @@ internal static class XlsxWorksheetDrawingPartMerger
         return $"rIdPreserved{index}";
     }
 
+    private static XElement? FindMatchingRelationship(
+        IReadOnlyList<XElement> targetRelationships,
+        string targetDrawingPath,
+        string type,
+        string? targetMode,
+        string resolvedTarget)
+    {
+        foreach (var relationship in targetRelationships)
+        {
+            if (!string.Equals(relationship.Attribute("Type")?.Value, type, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(relationship.Attribute("TargetMode")?.Value, targetMode, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var relationshipTarget = string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase)
+                ? relationship.Attribute("Target")?.Value
+                : XlsxPackagePath.ResolveRelationshipTarget(targetDrawingPath, relationship.Attribute("Target")?.Value ?? "");
+            if (string.Equals(relationshipTarget, resolvedTarget, StringComparison.OrdinalIgnoreCase))
+                return relationship;
+        }
+
+        return null;
+    }
+
     private static void RemapRelationshipReferences(
         XElement element,
         XNamespace relNs,
@@ -330,13 +352,22 @@ internal static class XlsxWorksheetDrawingPartMerger
     private static string GetDrawingAnchorIdentity(XElement anchor)
     {
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
-        var objectName = anchor
-            .Descendants(spreadsheetDrawingNs + "cNvPr")
-            .Select(element => element.Attribute("name")?.Value)
-            .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name));
+        var objectName = ReadFirstNonVisualPropertyName(anchor, spreadsheetDrawingNs);
         return string.IsNullOrWhiteSpace(objectName)
             ? anchor.ToString(SaveOptions.DisableFormatting)
             : $"{anchor.Name.LocalName}:{objectName}";
+    }
+
+    private static string? ReadFirstNonVisualPropertyName(XElement anchor, XNamespace spreadsheetDrawingNs)
+    {
+        foreach (var element in anchor.Descendants(spreadsheetDrawingNs + "cNvPr"))
+        {
+            var name = element.Attribute("name")?.Value;
+            if (!string.IsNullOrWhiteSpace(name))
+                return name;
+        }
+
+        return null;
     }
 
     private static void EnsureUniqueDrawingObjectIds(XElement drawingRoot)
