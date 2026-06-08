@@ -694,6 +694,12 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("macos_launch_smoke={(IsPassedWithCommandKeyEvidence(snapshot, options, initialExternalImageClipboardPictureCount, commandKeyEvidence, liveCommandKeyEvidence) ? \"passed\" : \"failed\")}");
         smokeSource.Should().Contain("command_key_smoke={(commandKeyEvidence.IsPassed ? \"passed\" : \"failed\")}");
         smokeSource.Should().Contain("command_key_smoke_attempted={FormatBool(attemptedCommandKeyEvidence)}");
+        smokeSource.Should().Contain("HasFindDirectRouteSourceGuard: HasMainWindowDirectCommandRouteSourceSupport(");
+        smokeSource.Should().Contain("HasPageUpDirectRouteSourceGuard: HasMainWindowDirectCommandRouteSourceSupport(");
+        smokeSource.Should().Contain("HasPageDownDirectRouteSourceGuard: HasMainWindowDirectCommandRouteSourceSupport(");
+        smokeSource.Should().Contain("cmd_find_direct_route_source_guard={FormatBool(commandKeyEvidence.HasFindDirectRouteSourceGuard)}");
+        smokeSource.Should().Contain("cmd_page_up_direct_route_source_guard={FormatBool(commandKeyEvidence.HasPageUpDirectRouteSourceGuard)}");
+        smokeSource.Should().Contain("cmd_page_down_direct_route_source_guard={FormatBool(commandKeyEvidence.HasPageDownDirectRouteSourceGuard)}");
         smokeSource.Should().Contain("live_command_key_smoke_required={FormatBool(options.VerifyLiveCommandKeys)}");
         smokeSource.Should().Contain("live_command_key_smoke={liveCommandKeySmokeStatus}");
         smokeSource.Should().Contain("live_command_key_smoke_ready={FormatBool(liveCommandKeyEvidence.IsReady)}");
