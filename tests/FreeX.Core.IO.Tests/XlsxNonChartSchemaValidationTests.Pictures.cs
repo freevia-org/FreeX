@@ -120,6 +120,19 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         relationshipsById[pictureRelId].Attribute("Type")!.Value.Should().Be("http://schemas.openxmlformats.org/officeDocument/2006/relationships/image");
         relationshipsById[pictureRelId].Attribute("Target")!.Value.Should().Be("https://example.invalid/background.png");
         relationshipsById[pictureRelId].Attribute("TargetMode")!.Value.Should().Be("External");
+
+        archive.Dispose();
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        var reloadedPicture = reloadedSheet.Pictures.Should().ContainSingle().Subject;
+        reloadedPicture.Name.Should().Be("Authored picture");
+        reloadedPicture.Anchor.Should().Be(new CellAddress(reloadedSheet.Id, 2, 2));
+        reloadedPicture.Kind.Should().Be(PictureKind.Image);
+        reloadedPicture.ImageBytes.Should().Equal(MinimalPngBytes());
+        reloadedPicture.ContentType.Should().Be("image/png");
+        reloadedPicture.Width.Should().Be(96);
+        reloadedPicture.Height.Should().Be(64);
+        reloadedPicture.AltText.Should().Be("Authored picture");
     }
 
     private static Workbook CreateWorksheetPictureSourceWorkbook()
