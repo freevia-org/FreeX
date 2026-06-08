@@ -123,10 +123,8 @@ public static partial class FlashFillService
                 continue;
             }
 
-            var yearIndex = Array.FindIndex(parts, part => part.Length == 4);
-            if (yearIndex < 0 ||
-                Array.FindLastIndex(parts, part => part.Length == 4) != yearIndex ||
-                (yearIndex != 0 && yearIndex != 2))
+            var yearIndex = FindSingleFourDigitPartIndex(parts);
+            if (yearIndex < 0 || (yearIndex != 0 && yearIndex != 2))
             {
                 continue;
             }
@@ -403,10 +401,8 @@ public static partial class FlashFillService
         if (!TrySplitDateLikeText(source, out var parts, out var separator))
             return false;
 
-        var yearIndex = Array.FindIndex(parts, part => part.Length == 4);
-        if (yearIndex < 0 ||
-            Array.FindLastIndex(parts, part => part.Length == 4) != yearIndex ||
-            (yearIndex != 0 && yearIndex != 2))
+        var yearIndex = FindSingleFourDigitPartIndex(parts);
+        if (yearIndex < 0 || (yearIndex != 0 && yearIndex != 2))
         {
             return false;
         }
@@ -427,6 +423,23 @@ public static partial class FlashFillService
             parts[Array.IndexOf(order, DatePartKind.Month)].Length,
             parts[Array.IndexOf(order, DatePartKind.Day)].Length);
         return true;
+    }
+
+    private static int FindSingleFourDigitPartIndex(string[] parts)
+    {
+        var yearIndex = -1;
+        for (var i = 0; i < parts.Length; i++)
+        {
+            if (parts[i].Length != 4)
+                continue;
+
+            if (yearIndex >= 0)
+                return -1;
+
+            yearIndex = i;
+        }
+
+        return yearIndex;
     }
 
     private static bool TryParseMonthNameDateLikeValue(
