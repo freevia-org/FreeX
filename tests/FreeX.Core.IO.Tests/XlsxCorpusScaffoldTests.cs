@@ -121,7 +121,7 @@ public class XlsxCorpusScaffoldTests
         report.Should().Contain($"| Regression cached-result workbooks | {regressionCount} | {regressionCount} | 100% |");
         report.Should().Contain("| Feature bucket | Evidence | Pass rate |");
         report.Should().Contain("| PivotTables, pivot caches, and PivotChart binding |");
-        report.Should().Contain("| Slicers, timelines, external links, printer settings, calc chains, worksheet custom properties, worksheet scenarios, custom XML |");
+        report.Should().Contain("| Slicers, timelines, external links, printer settings, calc chains, volatile dependencies, document thumbnails, worksheet custom properties, worksheet scenarios, custom XML |");
     }
 
     [Fact]
@@ -441,6 +441,51 @@ public class XlsxCorpusScaffoldTests
             row.Path == "generated/vba-macros-001.xlsm" &&
             row.FeatureTags.Contains("macros", StringComparison.Ordinal));
         const string reportLine = "| VBA macro package references | Workbook VBA project relationships are exercised by generated known-gap retention coverage |";
+        report.Should().Contain(reportLine);
+        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
+    }
+
+    [Fact]
+    public void CorpusReport_StatesSignedVbaProjectSignaturePackageReferenceCoverage()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
+
+        manifestRows.Should().Contain(row =>
+            row.Path == "generated/vba-signature-001.xlsm" &&
+            row.FeatureTags.Contains("macros", StringComparison.Ordinal) &&
+            row.FeatureTags.Contains("vba-signatures", StringComparison.Ordinal));
+        const string reportLine = "| Signed VBA project signature package references | Source-patch ordinary edits retain the VBA project signature part, signature relationship, macro-enabled workbook content type, and VBA project relationship; rebuilt-save stale signature pruning remains covered by focused package graph tests |";
+        report.Should().Contain(reportLine);
+        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
+    }
+
+    [Fact]
+    public void CorpusReport_StatesVolatileDependencyPackageReferenceCoverage()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
+
+        manifestRows.Should().Contain(row =>
+            row.Path == "generated/volatile-dependencies-001.xlsx" &&
+            row.ExpectedStatus == "supported-metadata-pass" &&
+            row.FeatureTags.Contains("volatile-dependencies", StringComparison.Ordinal));
+        const string reportLine = "| Volatile dependency package references | Workbook volatile-dependency relationships and content-type overrides are exercised by generated metadata-pass retention coverage, with formula-edit repair-risk pruning covered by focused package graph tests |";
+        report.Should().Contain(reportLine);
+        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
+    }
+
+    [Fact]
+    public void CorpusReport_StatesDocumentThumbnailPackageReferenceCoverage()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
+
+        manifestRows.Should().Contain(row =>
+            row.Path == "generated/document-thumbnail-001.xlsx" &&
+            row.ExpectedStatus == "supported-metadata-pass" &&
+            row.FeatureTags.Contains("document-thumbnail", StringComparison.Ordinal));
+        const string reportLine = "| Document thumbnail package references | Package-root thumbnail relationships and image content types are exercised by generated metadata-pass retention coverage, with stale thumbnail graph repair covered by focused package graph tests |";
         report.Should().Contain(reportLine);
         report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
     }

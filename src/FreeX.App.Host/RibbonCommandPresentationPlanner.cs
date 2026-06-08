@@ -72,19 +72,31 @@ public static partial class RibbonCommandPresentationPlanner
         name is "column chart" or
                 "stacked column chart" or
                 "100% stacked column chart" or
+                "3d column chart" or
                 "line chart" or
+                "3d line chart" or
                 "pie chart" or
+                "3d pie chart" or
                 "doughnut chart" or
                 "bar chart" or
                 "stacked bar chart" or
                 "100% stacked bar chart" or
+                "3d bar chart" or
                 "scatter chart" or
                 "bubble chart" or
                 "area chart" or
+                "3d area chart" or
                 "radar chart" or
                 "stock chart" or
                 "surface chart" or
-                "3d surface chart";
+                "3d surface chart" or
+                "treemap chart" or
+                "sunburst chart" or
+                "histogram chart" or
+                "pareto chart" or
+                "box and whisker chart" or
+                "waterfall chart" or
+                "funnel chart";
 
     private static bool IsLargeRibbonCommand(string name) =>
         name == "paste" ||

@@ -31,6 +31,12 @@ internal static partial class XlsxCorpusFixtureFactory
             return;
         }
 
+        if (string.Equals(id, "generated-vba-signature-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyVbaProjectSignatureFixup(archive);
+            return;
+        }
+
         if (string.Equals(id, "generated-data-model-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyDataModelFixup(archive);
@@ -72,6 +78,18 @@ internal static partial class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-calc-chain-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyCalcChainReferenceFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-volatile-dependencies-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyVolatileDependenciesReferenceFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-document-thumbnail-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyDocumentThumbnailReferenceFixup(archive);
             return;
         }
 
@@ -544,6 +562,20 @@ internal static partial class XlsxCorpusFixtureFactory
             "http://schemas.microsoft.com/office/2006/relationships/vbaProject",
             "vbaProject.bin");
         ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
+    }
+
+    private static void ApplyVbaProjectSignatureFixup(ZipArchive archive)
+    {
+        ApplyVbaMacrosFixup(archive);
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is not null)
+        {
+            var contentTypes = LoadPackageXml(contentTypesEntry);
+            EnsureContentTypeOverride(contentTypes, "/xl/workbook.xml", "application/vnd.ms-excel.sheet.macroEnabled.main+xml");
+            EnsureContentTypeOverride(contentTypes, "/xl/vbaProjectSignature.bin", "application/vnd.ms-office.vbaProjectSignature");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+        }
     }
 
     private static void ApplyDataModelFixup(ZipArchive archive)
@@ -1119,6 +1151,57 @@ internal static partial class XlsxCorpusFixtureFactory
             "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain",
             "/xl/calcChain.xml");
         ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
+    }
+
+    private static void ApplyVolatileDependenciesReferenceFixup(ZipArchive archive)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is not null)
+        {
+            var contentTypes = LoadPackageXml(contentTypesEntry);
+            EnsureContentTypeOverride(
+                contentTypes,
+                "/xl/volatileDependencies.xml",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.volatileDependencies+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        var workbookRelsPath = "xl/_rels/workbook.xml.rels";
+        var workbookRelsXml = archive.GetEntry(workbookRelsPath) is { } workbookRelsEntry
+            ? LoadPackageXml(workbookRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            workbookRelsXml,
+            "rIdFreeXVolatileDependencies1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/volatileDependencies",
+            "volatileDependencies.xml");
+        ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
+    }
+
+    private static void ApplyDocumentThumbnailReferenceFixup(ZipArchive archive)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is not null)
+        {
+            var contentTypes = LoadPackageXml(contentTypesEntry);
+            EnsureContentTypeOverride(contentTypes, "/docProps/thumbnail.png", "image/png");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        var packageRelsPath = "_rels/.rels";
+        var packageRelsXml = archive.GetEntry(packageRelsPath) is { } packageRelsEntry
+            ? LoadPackageXml(packageRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            packageRelsXml,
+            "rIdFreeXDocumentThumbnail1",
+            "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail",
+            "docProps/thumbnail.png");
+        ReplacePackageXml(archive, packageRelsPath, packageRelsXml);
     }
 
     private static void ApplyCustomXmlReferenceFixup(ZipArchive archive)
