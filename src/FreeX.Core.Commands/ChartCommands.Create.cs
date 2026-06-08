@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -248,6 +249,15 @@ internal static class ChartCommandGuards
 
     public static CommandOutcome PivotChartNotFound() =>
         new(false, PivotChartNotFoundMessage);
+
+    public static bool TryFindChart(
+        Sheet sheet,
+        Guid chartId,
+        [NotNullWhen(true)] out ChartModel? chart)
+    {
+        chart = sheet.Charts.FirstOrDefault(item => item.Id == chartId);
+        return chart is not null;
+    }
 
     public static CommandOutcome SelectedChartIsPivotChart() =>
         new(false, SelectedChartIsPivotChartMessage);
