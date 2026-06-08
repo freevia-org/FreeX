@@ -189,7 +189,13 @@ public sealed partial class FunctionArgumentsDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        var firstArgument = _argumentBoxes.FirstOrDefault();
+        TextBox? firstArgument = null;
+        foreach (var argumentBox in _argumentBoxes)
+        {
+            firstArgument = argumentBox;
+            break;
+        }
+
         if (firstArgument is null)
             return;
 

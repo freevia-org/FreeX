@@ -221,7 +221,7 @@ public sealed partial class NamedRangeDialog : Window
         }
 
         RefreshList();
-        if (_items.FirstOrDefault(item => string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase)) is { } updated)
+        if (FindItemByName(name) is { } updated)
         {
             ApplyFilter();
             NamesList.SelectedItem = updated;
@@ -252,6 +252,17 @@ public sealed partial class NamedRangeDialog : Window
         }
         else
             RefreshList();
+    }
+
+    private NamedRangeViewModel? FindItemByName(string name)
+    {
+        foreach (var item in _items)
+        {
+            if (string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase))
+                return item;
+        }
+
+        return null;
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();

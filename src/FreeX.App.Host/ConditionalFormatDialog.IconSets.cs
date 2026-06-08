@@ -28,10 +28,20 @@ public partial class ConditionalFormatDialog
     {
         if (ovr is null) return UiText.Get("ConditionalFormatDialog_IconOverride_Default");
         if (string.Equals(ovr.IconSet, "NoIcons", StringComparison.OrdinalIgnoreCase)) return UiText.Get("ConditionalFormatDialog_IconOverride_NoIcon");
-        var option = ConditionalFormatIconSetPlanner.Options
-            .FirstOrDefault(o => string.Equals(o.Style, ovr.IconSet, StringComparison.Ordinal));
+        var option = FindIconSetOption(ovr.IconSet);
         if (option is null) return UiText.Get("ConditionalFormatDialog_IconOverride_Default");
         return $"{option.Label} {ovr.IconId + 1}|{option.Style}|{ovr.IconId}";
+    }
+
+    private static ConditionalFormatIconSetOption? FindIconSetOption(string iconSet)
+    {
+        foreach (var option in ConditionalFormatIconSetPlanner.Options)
+        {
+            if (string.Equals(option.Style, iconSet, StringComparison.Ordinal))
+                return option;
+        }
+
+        return null;
     }
 
     private static CfIconOverride? ChoiceToIconOverride(string? choice)
