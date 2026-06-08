@@ -11438,8 +11438,11 @@ public sealed class MainWindow : Window
     private NativeMenu CreateNativeOpenRecentMenu(bool isIdle)
     {
         var menu = new NativeMenu();
-        var entries = GetOpenableRecentWorkbookEntries();
-        if (entries.Count == 0)
+        var plan = OpenRecentWorkbookMenuPlanner.Create(
+            _recentFiles.Entries,
+            File.Exists,
+            path => _session.TryResolveOpenTarget(path, out _, out _));
+        if (plan.ItemCount == 0)
         {
             menu.Items.Add(new NativeMenuItem
             {
@@ -11449,12 +11452,12 @@ public sealed class MainWindow : Window
             return menu;
         }
 
-        foreach (var entry in entries)
+        foreach (var entry in plan.Items)
         {
             var path = entry.Path;
             var item = new NativeMenuItem
             {
-                Header = FormatRecentWorkbookMenuHeader(entry),
+                Header = entry.Header,
                 IsEnabled = isIdle,
             };
             item.Click += async (_, _) => await OpenRecentWorkbookAsync(path);
@@ -11462,40 +11465,6 @@ public sealed class MainWindow : Window
         }
 
         return menu;
-    }
-
-    private List<RecentFileEntry> GetOpenableRecentWorkbookEntries()
-    {
-        var entries = new List<RecentFileEntry>();
-        foreach (var entry in _recentFiles.Entries)
-        {
-            if (string.IsNullOrWhiteSpace(entry.Path) ||
-                !File.Exists(entry.Path) ||
-                !_session.TryResolveOpenTarget(entry.Path, out _, out _))
-            {
-                continue;
-            }
-
-            entries.Add(entry);
-        }
-
-        entries.Sort(static (left, right) => right.LastOpened.CompareTo(left.LastOpened));
-        if (entries.Count > 10)
-            entries.RemoveRange(10, entries.Count - 10);
-
-        return entries;
-    }
-
-    private static string FormatRecentWorkbookMenuHeader(RecentFileEntry entry)
-    {
-        var fileName = Path.GetFileName(entry.Path);
-        if (string.IsNullOrWhiteSpace(fileName))
-            return entry.Path;
-
-        var directory = Path.GetDirectoryName(entry.Path);
-        return string.IsNullOrWhiteSpace(directory)
-            ? fileName
-            : $"{fileName} - {directory}";
     }
 
     private async Task OpenRecentWorkbookAsync(string path)
