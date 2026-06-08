@@ -57,7 +57,10 @@ public sealed partial class RemainingDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("var checkedPreset = _presetButtons.FirstOrDefault(button => button.IsChecked == true);");
+        source.Should().Contain("RadioButton? checkedPreset = null;");
+        source.Should().Contain("foreach (var button in _presetButtons)");
+        source.Should().Contain("if (button.IsChecked != true)");
+        source.Should().Contain("checkedPreset = button;");
         source.Should().Contain("if (checkedPreset is not null)");
         source.Should().Contain("checkedPreset.Focus();");
         source.Should().Contain("Keyboard.Focus(checkedPreset);");

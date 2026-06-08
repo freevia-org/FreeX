@@ -28,8 +28,10 @@ public sealed class AppDiagnosticsStartupTests
         var appSource = DialogSourceTestSupport.ReadHostSources("App.xaml.cs");
         var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
-        appSource.Should().Contain("e.Args.FirstOrDefault(File.Exists)");
+        appSource.Should().Contain("foreach (var startupWorkbookPath in e.Args)");
+        appSource.Should().Contain("if (!File.Exists(startupWorkbookPath))");
         appSource.Should().Contain("OpenStartupFileAsync(startupWorkbookPath)");
+        appSource.Should().Contain("break;");
         backstageSource.Should().Contain("internal Task OpenStartupFileAsync(string path) => OpenFileAsync(path);");
     }
 }

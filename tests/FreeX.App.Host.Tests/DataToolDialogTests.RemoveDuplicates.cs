@@ -258,7 +258,7 @@ public sealed partial class DataToolDialogTests
 
         source.Should().Contain("FocusFirstColumnChoice();");
         source.Should().Contain("private void FocusFirstColumnChoice()");
-        source.Should().Contain("_boxes.FirstOrDefault()");
+        source.Should().Contain("_boxes.Count == 0 ? null : _boxes[0]");
         source.Should().Contain("firstColumnBox.Focus();");
         source.Should().Contain("Keyboard.Focus(firstColumnBox);");
     }

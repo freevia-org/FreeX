@@ -250,7 +250,9 @@ public sealed partial class MainWindowSourceHygieneTests
 
         backstageSource.Should().Contain("menu.Opened += BackstageContextMenu_Opened;");
         backstageSource.Should().Contain("private static void BackstageContextMenu_Opened(object sender, RoutedEventArgs e)");
-        backstageSource.Should().Contain("menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled)");
+        backstageSource.Should().Contain("foreach (var item in menu.Items)");
+        backstageSource.Should().Contain("if (item is not MenuItem menuItem || !menuItem.IsEnabled)");
+        backstageSource.Should().Contain("firstEnabledItem = menuItem;");
         backstageSource.Should().Contain("Keyboard.Focus(firstEnabledItem);");
     }
 
