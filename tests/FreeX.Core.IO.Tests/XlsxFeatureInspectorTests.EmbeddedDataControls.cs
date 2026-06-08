@@ -191,7 +191,7 @@ public partial class XlsxFeatureInspectorTests
 
 
     [Fact]
-    public void Inspect_ThreadedCommentsPackage_DetectsThreadedComments()
+    public void Inspect_ThreadedCommentsPackage_DoesNotReportUnsupportedThreadedComments()
     {
         using var package = CreatePackage(
             "xl/threadedComments/threadedComment1.xml",
@@ -199,7 +199,7 @@ public partial class XlsxFeatureInspectorTests
 
         var report = XlsxFeatureInspector.Inspect(package);
 
-        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.ThreadedComments);
+        report.Features.Select(f => f.Kind).Should().NotContain(XlsxUnsupportedFeatureKind.ThreadedComments);
     }
 
 

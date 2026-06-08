@@ -21,9 +21,6 @@ public partial class XlsxFeatureInspectorTests
               <Relationship Id="rIdQuery"
                             Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/queryTable"
                             Target="../queryTables/queryTable1.xml"/>
-              <Relationship Id="rIdThreadedComment"
-                            Type="http://schemas.microsoft.com/office/2017/10/relationships/threadedComment"
-                            Target="../threadedComments/threadedComment1.xml"/>
             </Relationships>
             """), ("_rels/.rels", """
             <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
@@ -41,7 +38,7 @@ public partial class XlsxFeatureInspectorTests
         report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.FormControls);
         report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.EmbeddedObjects);
         report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.PowerQuery);
-        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.ThreadedComments);
+        report.Features.Select(f => f.Kind).Should().NotContain(XlsxUnsupportedFeatureKind.ThreadedComments);
         report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.CustomRibbonUi);
         report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.OfficeAddIns);
     }
