@@ -319,6 +319,32 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void TryGetSelectedHyperlinkPlan_ExposesExternalTargetWithoutNavigation()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var source = new CellAddress(sheet.Id, 1, 1);
+        sheet.Hyperlinks[source] = " https://example.test/report ";
+        sheet.HyperlinkMetadata[source] = new HyperlinkMetadata(HyperlinkTargetKind.ExistingFileOrWebPage);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(source);
+
+        session.TryGetSelectedHyperlinkPlan(out var plan).Should().BeTrue();
+
+        plan.Should().Be(new HyperlinkNavigationPlan(
+            HyperlinkNavigationKind.External,
+            "https://example.test/report",
+            null));
+        session.ActiveSheet.Id.Should().Be(sheet.Id);
+        session.SelectedRange.Should().Be(new GridRange(source, source));
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
     public void GoToSpecial_SelectsBlanksWithoutDirtyingWorkbook()
     {
         var workbook = CreateWorkbook();

@@ -774,7 +774,7 @@ public sealed class MainWindow : Window
         _goToSpecialMenuItem.Click += async (_, _) => await ShowGoToSpecialDialogAsync();
 
         _openHyperlinkMenuItem.Header = "Open Hyperlink";
-        _openHyperlinkMenuItem.Click += (_, _) => OpenSelectedHyperlink();
+        _openHyperlinkMenuItem.Click += async (_, _) => await OpenSelectedHyperlinkAsync();
 
         _insertHyperlinkMenuItem.Header = "Hyperlink...";
         _insertHyperlinkMenuItem.Click += async (_, _) => await ShowInsertHyperlinkDialogAsync();
@@ -5004,10 +5004,22 @@ public sealed class MainWindow : Window
         RefreshShell($"Selected {FormatRangeReference(result.SelectedRange!.Value)}");
     }
 
-    private void OpenSelectedHyperlink()
+    private async Task OpenSelectedHyperlinkAsync()
     {
         if (!TryCommitPendingFormulaEdit())
             return;
+
+        if (!_session.TryGetSelectedHyperlinkPlan(out var plan) || plan is null)
+        {
+            ShowEditIssue("Hyperlink target was not found.");
+            return;
+        }
+
+        if (plan.Kind == HyperlinkNavigationKind.External)
+        {
+            await OpenExternalHyperlinkAsync(plan.Target);
+            return;
+        }
 
         var result = _session.OpenSelectedHyperlink();
         if (!result.Success)
@@ -5017,6 +5029,26 @@ public sealed class MainWindow : Window
         }
 
         RefreshShell($"Selected {FormatRangeReference(result.SelectedRange!.Value)}");
+    }
+
+    private async Task OpenExternalHyperlinkAsync(string target)
+    {
+        var result = await OpenExternalUriAsync(target);
+        switch (result)
+        {
+            case ExternalUriLaunchResult.Launched:
+                return;
+            case ExternalUriLaunchResult.BlockedScheme:
+                ShowEditIssue("Open Hyperlink blocked this link because its scheme is not supported.");
+                return;
+            case ExternalUriLaunchResult.LauncherUnavailable:
+                ShowEditIssue("Open Hyperlink cannot open external links on this platform.");
+                return;
+            case ExternalUriLaunchResult.LaunchFailed:
+            default:
+                ShowEditIssue("Open Hyperlink could not open the link.");
+                return;
+        }
     }
 
     private async Task ShowGoToSpecialDialogAsync()
@@ -13732,29 +13764,31 @@ public sealed class MainWindow : Window
 
     private async Task OpenExternalHelpLinkAsync(string url, string title)
     {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
-            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        var result = await OpenExternalUriAsync(url);
+        switch (result)
         {
-            ShowHelpIssue($"{title} link is blocked.");
-            return;
-        }
-
-        var launcher = TopLevel.GetTopLevel(this)?.Launcher;
-        if (launcher is null)
-        {
-            ShowHelpIssue($"{title} link cannot be opened on this platform.");
-            return;
-        }
-
-        try
-        {
-            if (!await launcher.LaunchUriAsync(uri))
+            case ExternalUriLaunchResult.Launched:
+                return;
+            case ExternalUriLaunchResult.BlockedScheme:
+                ShowHelpIssue($"{title} link is blocked.");
+                return;
+            case ExternalUriLaunchResult.LauncherUnavailable:
+                ShowHelpIssue($"{title} link cannot be opened on this platform.");
+                return;
+            case ExternalUriLaunchResult.LaunchFailed:
+            default:
                 ShowHelpIssue($"{title} link could not be opened.");
+                return;
         }
-        catch (Exception ex)
-        {
-            ShowHelpIssue($"{title} link could not be opened: {ex.Message}");
-        }
+    }
+
+    private async Task<ExternalUriLaunchResult> OpenExternalUriAsync(string target)
+    {
+        var launcher = TopLevel.GetTopLevel(this)?.Launcher;
+        Func<Uri, Task<bool>>? launchAsync = launcher is null
+            ? null
+            : async uri => await launcher.LaunchUriAsync(uri);
+        return await ExternalUriLauncher.OpenAsync(target, launchAsync);
     }
 
     private async Task ShowAboutDialogAsync()
