@@ -2,7 +2,10 @@ namespace FreeX.App.Services;
 
 public static class LocalFilePath
 {
-    public static bool TryNormalize(string? candidate, out string normalizedPath)
+    public static bool TryNormalize(string? candidate, out string normalizedPath) =>
+        TryNormalize(candidate, OperatingSystem.IsWindows(), out normalizedPath);
+
+    internal static bool TryNormalize(string? candidate, bool isWindows, out string normalizedPath)
     {
         normalizedPath = "";
         if (string.IsNullOrWhiteSpace(candidate))
@@ -14,6 +17,9 @@ public static class LocalFilePath
             if (!uri.IsFile)
                 return false;
 
+            if (IsForeignWindowsDriveFileUri(uri, isWindows))
+                return false;
+
             path = uri.LocalPath;
         }
 
@@ -21,6 +27,9 @@ public static class LocalFilePath
             return false;
 
         if (path.Contains('\0', StringComparison.Ordinal))
+            return false;
+
+        if (IsForeignWindowsDriveRootedPath(path, isWindows))
             return false;
 
         if (IsUnixAbsolutePath(path))
@@ -66,6 +75,26 @@ public static class LocalFilePath
         candidate.Length >= 2 &&
         candidate[1] == ':' &&
         char.IsAsciiLetter(candidate[0]);
+
+    private static bool IsForeignWindowsDriveRootedPath(string path, bool isWindows) =>
+        !isWindows && IsWindowsDriveRootedPath(path);
+
+    private static bool IsForeignWindowsDriveFileUri(Uri uri, bool isWindows) =>
+        !isWindows &&
+        uri.IsFile &&
+        IsWindowsDriveUriPath(Uri.UnescapeDataString(uri.AbsolutePath));
+
+    private static bool IsWindowsDriveUriPath(string path) =>
+        IsWindowsDriveRootedPath(path) ||
+        path.Length >= 4 &&
+        path[0] == '/' &&
+        IsWindowsDriveRootedPath(path[1..]);
+
+    private static bool IsWindowsDriveRootedPath(string path) =>
+        path.Length >= 3 &&
+        path[1] == ':' &&
+        path[2] is '\\' or '/' &&
+        char.IsAsciiLetter(path[0]);
 
     private static bool IsUnixAbsolutePath(string path) =>
         path.Length >= 2 &&
