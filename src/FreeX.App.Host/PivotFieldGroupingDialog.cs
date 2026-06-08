@@ -210,7 +210,7 @@ public sealed class PivotFieldGroupingDialog : Window
         var normalizedIndex = Math.Max(0, sourceFieldIndex);
         return normalizedIndex < fields.Count
             ? fields[normalizedIndex]
-            : fields.FirstOrDefault() ?? "";
+            : fields.Count > 0 ? fields[0] : "";
     }
 
     private static PivotSourceFieldOption? FindFieldBySourceIndexOrFirst(
@@ -218,14 +218,23 @@ public sealed class PivotFieldGroupingDialog : Window
         int sourceFieldIndex)
     {
         var normalizedIndex = Math.Max(0, sourceFieldIndex);
-        return fields.FirstOrDefault(field => field.Index == normalizedIndex)
-            ?? fields.FirstOrDefault();
+        foreach (var field in fields)
+            if (field.Index == normalizedIndex)
+                return field;
+
+        return fields.Count > 0 ? fields[0] : null;
     }
 
     private static PivotSourceFieldOption? FindFieldByName(
         IReadOnlyList<PivotSourceFieldOption> fields,
-        string fieldName) =>
-        fields.FirstOrDefault(field => string.Equals(field.Name, fieldName, StringComparison.OrdinalIgnoreCase));
+        string fieldName)
+    {
+        foreach (var field in fields)
+            if (string.Equals(field.Name, fieldName, StringComparison.OrdinalIgnoreCase))
+                return field;
+
+        return null;
+    }
 
     private static double? ParseOptionalDouble(string? value) =>
         double.TryParse(value?.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
