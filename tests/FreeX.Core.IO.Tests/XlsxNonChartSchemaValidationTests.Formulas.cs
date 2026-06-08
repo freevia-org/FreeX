@@ -129,6 +129,33 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void FormulaTextEdit_RemovesStaleCalcChainForExcelOpenability()
+    {
+        using var source = CreateAttributedFormulaWorkbook("""<f>1+1</f>""");
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should().BeTrue(blockReason);
+
+        var cell = workbook.GetSheetAt(0).GetCell(1, 1)!;
+        cell.FormulaText.Should().Be("1+1");
+        cell.FormulaText = "2+2";
+        cell.Value = new NumberValue(4);
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+
+        ReadFormulaElement(saved, "A1").Value.Should().Be("2+2");
+        AssertCalcChainRemoved(saved);
+
+        saved.Position = 0;
+        adapter.Load(saved).GetSheetAt(0).GetCell(1, 1)!.FormulaText.Should().Be("2+2");
+    }
+
+    [Fact]
     public void PatchedFormulaCachedValue_WithCellExtension_ProducesSchemaValidWorkbook()
     {
         using var source = CreateFormulaCellExtensionValuePatchWorkbook();
@@ -482,6 +509,41 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         cell.Element(worksheetNs + "f")!.Value.Should().Be(expectedFormulaText);
         cell.Element(worksheetNs + "v")!.Value.Should().Be(expectedCachedValue);
         cell.Element(worksheetNs + "is").Should().BeNull();
+    }
+
+    private static void AssertCalcChainRemoved(MemoryStream saved)
+    {
+        saved.Position = 0;
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace packageRelationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        archive.GetEntry("xl/calcChain.xml").Should().BeNull();
+
+        var contentTypes = LoadPackageXml(archive, "[Content_Types].xml");
+        contentTypes.Root!
+            .Elements(contentTypeNs + "Override")
+            .Any(element => string.Equals(
+                element.Attribute("PartName")?.Value,
+                "/xl/calcChain.xml",
+                StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .BeFalse();
+
+        var workbookRelationships = LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
+        workbookRelationships.Root!
+            .Elements(packageRelationshipNs + "Relationship")
+            .Any(element =>
+                string.Equals(
+                    element.Attribute("Type")?.Value,
+                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain",
+                    StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(
+                    element.Attribute("Target")?.Value,
+                    "calcChain.xml",
+                    StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .BeFalse();
     }
 
     private static void AssertReloadedFormulaCell(

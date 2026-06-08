@@ -147,7 +147,7 @@ Paste the base64 output into `MACOS_CODESIGN_CERTIFICATE_P12` exactly as generat
    - `stapler_validated=true`
    - `zip_sha256=<hash>`
 6. Verify `freex-<runtime>-macos-notarization.log` reports an accepted notary submission.
-7. Verify `freex-<runtime>-macos-launch-smoke.txt` contains `macos_launch_smoke=passed` for the native runner architecture, or records `smoke_status=skipped_host_arch_mismatch` only for the cross-architecture runtime.
+7. Verify `freex-<runtime>-macos-evidence.txt` contains `smoke_status=passed` and the launch, Open-With, and default-open smoke reports each contain `macos_launch_smoke=passed`. Older historical runs may record `skipped_host_arch_mismatch` when the hosted runner architecture was incompatible, but current CI blocks app artifact upload/readiness for that case.
 8. Run the checksum from the artifact directory:
 
 ```bash
