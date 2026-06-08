@@ -456,6 +456,15 @@ function Test-MacOsWorkflow {
         'test -x "$unzip_root/FreeX.app/Contents/MacOS/FreeX"',
         'test -f "$unzip_root/FreeX.app/Contents/MacOS/FreeX.dll"',
         'tester_instructions_path="$artifact_root/freex-$runtime-macos-tester-instructions.md"',
+        "Require hosted smoke before app artifact upload",
+        'smoke_status=skipped_host_arch_mismatch',
+        'echo "app_artifact_upload_blocked=host_arch_mismatch" >> "$evidence_path"',
+        'rm -f "$zip_path" "$zip_path.sha256"',
+        'Host/runtime architecture mismatch for $runtime on $host_arch cannot publish a macOS app artifact.',
+        'grep -q "^smoke_status=passed$" "$evidence_path"',
+        'grep -q "^macos_launch_smoke=passed$" "$launch_smoke_report"',
+        'grep -q "^macos_launch_smoke=passed$" "$open_with_report"',
+        'grep -q "^macos_launch_smoke=passed$" "$default_open_report"',
         "actions/upload-artifact@v7",
         "if-no-files-found: error",
         "Upload app diagnostics",
@@ -481,6 +490,8 @@ function Test-MacOsWorkflow {
         'FreeX-latest-$assetLabel-default-open-launch-smoke.txt',
         "source_artifact_pattern",
         "distribution_candidate_required_markers",
+        '$packagingSmokeText = Get-Content -LiteralPath $packagingSmokePath -Raw',
+        'Assert-ContainsRequiredText -Text $smokeReportText -Needle "macos_launch_smoke=passed"',
         "default_open_launch_smoke_report",
         "Upload release-channel prepared assets",
         "Create or update GitHub release",
@@ -522,6 +533,7 @@ function Test-MacOsWorkflow {
         "gatekeeper_assessment_source=Notarized Developer ID",
         "distribution_readiness=internal_preview_not_for_distribution",
         "distribution_readiness=distribution_candidate_ready",
+        "smoke_status=passed",
         'echo "artifact_channel=$artifact_channel"',
         'echo "distribution_candidate=$distribution_candidate"',
         'echo "distribution_readiness=$distribution_readiness"',
@@ -835,9 +847,19 @@ function Test-MacOsWorkflow {
     Assert-TextBefore -Text $workflow -First "Capture runner toolchain evidence" -Second "Test portable PDF macOS route" -Message "macOS workflow must capture hosted runner evidence before running the focused portable PDF/service tests."
     Assert-TextBefore -Text $workflow -First "Test portable PDF macOS route" -Second "dotnet build $projectPath --configuration Release" -Message "macOS workflow must run the focused portable PDF/service tests before building the Avalonia app project."
     Assert-TextBefore -Text $workflow -First "dotnet build $projectPath --configuration Release" -Second "dotnet publish $projectPath" -Message "macOS workflow must build the Avalonia app project before publishing the app bundle."
+    Assert-TextBefore -Text $workflow -First 'echo "smoke_status=skipped_host_arch_mismatch" >> "$evidence_path"' -Second 'Host/runtime architecture mismatch for $runtime on $host_arch cannot publish a macOS app artifact.' -Message "macOS workflow must record host/runtime mismatch evidence before failing app artifact publication."
+    Assert-TextBefore -Text $workflow -First 'rm -f "$zip_path" "$zip_path.sha256"' -Second 'Host/runtime architecture mismatch for $runtime on $host_arch cannot publish a macOS app artifact.' -Message "macOS workflow must remove a mismatched app zip before failing app artifact publication."
+    Assert-TextBefore -Text $workflow -First 'Host/runtime architecture mismatch for $runtime on $host_arch cannot publish a macOS app artifact.' -Second "Require hosted smoke before app artifact upload" -Message "macOS workflow must fail host/runtime mismatches before reaching the hosted smoke upload gate."
+    Assert-TextBefore -Text $workflow -First "Require hosted smoke before app artifact upload" -Second "Upload app artifact" -Message "macOS workflow must require successful hosted smoke before uploading the app artifact."
 
     $appArtifactUpload = Get-WorkflowStepBlock -Workflow $workflow -StepName "Upload app artifact"
+    $hostedSmokeGate = Get-WorkflowStepBlock -Workflow $workflow -StepName "Require hosted smoke before app artifact upload"
     $diagnosticsUpload = Get-WorkflowStepBlock -Workflow $workflow -StepName "Upload app diagnostics"
+    Assert-ContainsText -Text $hostedSmokeGate -Needle 'smoke_status=skipped_host_arch_mismatch' -Message "macOS hosted smoke gate must reject host/runtime architecture mismatch evidence before app artifact upload."
+    Assert-ContainsText -Text $hostedSmokeGate -Needle 'grep -q "^smoke_status=passed$" "$evidence_path"' -Message "macOS hosted smoke gate must require smoke_status=passed evidence before app artifact upload."
+    Assert-ContainsText -Text $hostedSmokeGate -Needle 'grep -q "^macos_launch_smoke=passed$" "$launch_smoke_report"' -Message "macOS hosted smoke gate must require bundle-id launch smoke before app artifact upload."
+    Assert-ContainsText -Text $hostedSmokeGate -Needle 'grep -q "^macos_launch_smoke=passed$" "$open_with_report"' -Message "macOS hosted smoke gate must require Open With launch smoke before app artifact upload."
+    Assert-ContainsText -Text $hostedSmokeGate -Needle 'grep -q "^macos_launch_smoke=passed$" "$default_open_report"' -Message "macOS hosted smoke gate must require default-open launch smoke before app artifact upload."
     $testResultPaths = @(
         'artifacts/freex-${{ matrix.runtime }}-portable-pdf-exporter-tests.trx',
         'artifacts/freex-${{ matrix.runtime }}-export-path-tests.trx'
