@@ -12,8 +12,12 @@ public sealed class XlsxPackageHealthValidatorTests
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
     private const string SharedStringsRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
+    private const string StylesRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
     private const string SharedStringsContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
+    private const string StylesContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
 
     [Fact]
     public void Validate_AcceptsMinimalWorkbookPackage()
@@ -97,6 +101,106 @@ public sealed class XlsxPackageHealthValidatorTests
         XlsxPackageHealthValidator.Validate(package)
             .Should()
             .Contain(issue => issue.Contains("references shared-string index 2, but xl/sharedStrings.xml contains 1 entries", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_AcceptsWorkbookWithStylesPackage()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            worksheetXml: StyledWorksheetXml("1"),
+            workbookRelationships:
+            [
+                Relationship("rId1", WorksheetRelationshipType, "worksheets/sheet1.xml"),
+                Relationship("rIdStyles", StylesRelationshipType, "styles.xml")
+            ],
+            extraEntries:
+            [
+                ("xl/styles.xml", StylesXml(cellFormatCount: 2))
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/styles.xml" ContentType="{StylesContentType}" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Validate_FlagsMissingStylesPackageForStyleReference()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            worksheetXml: StyledWorksheetXml("1"));
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("missing xl/styles.xml for style references", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsStylesPackageWithoutWorkbookRelationship()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            worksheetXml: StyledWorksheetXml("1"),
+            extraEntries:
+            [
+                ("xl/styles.xml", StylesXml(cellFormatCount: 2))
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/styles.xml" ContentType="{StylesContentType}" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("has no workbook relationship to xl/styles.xml", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsStyleReferenceOutsideCellFormats()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            worksheetXml: StyledWorksheetXml("3"),
+            workbookRelationships:
+            [
+                Relationship("rId1", WorksheetRelationshipType, "worksheets/sheet1.xml"),
+                Relationship("rIdStyles", StylesRelationshipType, "styles.xml")
+            ],
+            extraEntries:
+            [
+                ("xl/styles.xml", StylesXml(cellFormatCount: 2))
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/styles.xml" ContentType="{StylesContentType}" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("references style index 3, but xl/styles.xml cellXfs contains 2 entries", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsStylesCellXfsCountMismatch()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            worksheetXml: StyledWorksheetXml("1"),
+            workbookRelationships:
+            [
+                Relationship("rId1", WorksheetRelationshipType, "worksheets/sheet1.xml"),
+                Relationship("rIdStyles", StylesRelationshipType, "styles.xml")
+            ],
+            extraEntries:
+            [
+                ("xl/styles.xml", StylesXml(cellFormatCount: 2, declaredCellFormatCount: 3))
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/styles.xml" ContentType="{StylesContentType}" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("xl/styles.xml cellXfs count is 3, but contains 2 child entries", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -700,4 +804,35 @@ public sealed class XlsxPackageHealthValidatorTests
           {sharedStringItems}
         </sst>
         """;
+
+    private static string StyledWorksheetXml(string styleIndex) =>
+        $"""
+        <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+          <cols>
+            <col min="1" max="1" style="0" />
+          </cols>
+          <sheetData>
+            <row r="1" s="0" customFormat="1">
+              <c r="A1" s="{styleIndex}"><v>42</v></c>
+            </row>
+          </sheetData>
+        </worksheet>
+        """;
+
+    private static string StylesXml(int cellFormatCount, int? declaredCellFormatCount = null)
+    {
+        var cellFormats = string.Join(Environment.NewLine, Enumerable.Repeat("""<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" />""", cellFormatCount));
+        return $"""
+        <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+          <fonts count="1"><font /></fonts>
+          <fills count="1"><fill /></fills>
+          <borders count="1"><border /></borders>
+          <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" /></cellStyleXfs>
+          <cellXfs count="{declaredCellFormatCount ?? cellFormatCount}">
+            {cellFormats}
+          </cellXfs>
+          <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0" /></cellStyles>
+        </styleSheet>
+        """;
+    }
 }
