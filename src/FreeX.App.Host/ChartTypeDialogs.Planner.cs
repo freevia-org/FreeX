@@ -38,7 +38,14 @@ public static class ChartTypePickerPlanner
         new(ChartType.Radar, UiText.Get("ChartType_Radar")),
         new(ChartType.Stock, UiText.Get("ChartType_Stock")),
         new(ChartType.Surface, UiText.Get("ChartType_Surface")),
-        new(ChartType.ThreeDSurface, UiText.Get("ChartType_ThreeDSurface"))
+        new(ChartType.ThreeDSurface, UiText.Get("ChartType_ThreeDSurface")),
+        new(ChartType.Treemap, UiText.Get("MainWindow_Content_Treemap")),
+        new(ChartType.Sunburst, UiText.Get("MainWindow_Content_Sunburst")),
+        new(ChartType.Histogram, UiText.Get("MainWindow_Content_Histogram")),
+        new(ChartType.Pareto, UiText.Get("MainWindow_Content_Pareto")),
+        new(ChartType.BoxAndWhisker, UiText.Get("MainWindow_TooltipTitle_BoxAndWhiskerChart")),
+        new(ChartType.Waterfall, UiText.Get("MainWindow_Content_Waterfall")),
+        new(ChartType.Funnel, UiText.Get("MainWindow_Content_Funnel"))
     ];
 
     public static IReadOnlyList<ChartTypePickerOption> GetSupportedOptions() =>
@@ -70,7 +77,13 @@ public static class ChartTypePickerPlanner
                 (UiText.Get("ChartTypeCategory_Scatter"), [ChartType.Scatter, ChartType.Bubble]),
                 (UiText.Get("ChartTypeCategory_Stock"), [ChartType.Stock]),
                 (UiText.Get("ChartTypeCategory_Radar"), [ChartType.Radar]),
-                (UiText.Get("ChartTypeCategory_Surface"), [ChartType.Surface, ChartType.ThreeDSurface])
+                (UiText.Get("ChartTypeCategory_Surface"), [ChartType.Surface, ChartType.ThreeDSurface]),
+                (UiText.Get("MainWindow_Content_Treemap"), [ChartType.Treemap]),
+                (UiText.Get("MainWindow_Content_Sunburst"), [ChartType.Sunburst]),
+                (UiText.Get("MainWindow_Content_Histogram"), [ChartType.Histogram, ChartType.Pareto]),
+                (UiText.Get("MainWindow_TooltipTitle_BoxAndWhiskerChart"), [ChartType.BoxAndWhisker]),
+                (UiText.Get("MainWindow_Content_Waterfall"), [ChartType.Waterfall]),
+                (UiText.Get("MainWindow_Content_Funnel"), [ChartType.Funnel])
             }
             .Select(category => new ChartTypePickerCategory(
                 category.Name,

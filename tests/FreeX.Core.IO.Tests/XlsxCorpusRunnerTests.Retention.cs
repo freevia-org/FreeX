@@ -17,6 +17,7 @@ public partial class XlsxCorpusRunnerTests
             .Where(row => row.SourceType == "generated")
             .Where(row => row.ExpectedStatus == "supported-known-gap")
             .Where(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id))
+            .Where(row => row.Id != "generated-vba-signature-001")
             .ToArray();
 
         rows.Should().NotBeEmpty("known-gap retention packages catch XLSX package loss during ordinary model edits");
@@ -163,6 +164,28 @@ public partial class XlsxCorpusRunnerTests
                 relationship.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2006/relationships/vbaProject" &&
                 relationship.Attribute("Target")?.Value == "vbaProject.bin")
             .Should().ContainSingle();
+    }
+
+    [Fact]
+    public void GeneratedVbaSignatureRetentionPackage_PreservesSignatureGraphOnBytePreservingEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-vba-signature-001");
+        AssertVbaProjectSignaturePackageGraph(source, "generated-vba-signature-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-vba-signature-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-vba-signature-001");
+        AssertVbaProjectSignaturePackageGraph(saved, "generated-vba-signature-001 saved");
     }
 
     [Fact]
@@ -475,7 +498,7 @@ public partial class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(52, "the generated metadata-pass manifest currently declares fifty-two deterministic package-retention rows");
+        rows.Should().HaveCount(54, "the generated metadata-pass manifest currently declares fifty-four deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -692,6 +715,24 @@ public partial class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedVolatileDependenciesRow_RetainsWorkbookPackageGraphAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-volatile-dependencies-001");
+        AssertVolatileDependenciesPackageGraph(source, "generated-volatile-dependencies-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-volatile-dependencies-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-volatile-dependencies-001");
+        AssertVolatileDependenciesPackageGraph(saved, "generated-volatile-dependencies-001 saved");
+    }
+
+    [Fact]
     public void GeneratedDocumentPropertiesRow_RetainsStableDocumentPropertiesAfterModelEdit()
     {
         using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-document-properties-001");
@@ -707,6 +748,24 @@ public partial class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-document-properties-001");
         AssertStableDocumentProperties(saved, "generated-document-properties-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedDocumentThumbnailRow_RetainsPackageRootThumbnailAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-document-thumbnail-001");
+        AssertDocumentThumbnailPackageGraph(source, "generated-document-thumbnail-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-document-thumbnail-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-document-thumbnail-001");
+        AssertDocumentThumbnailPackageGraph(saved, "generated-document-thumbnail-001 saved");
     }
 
     [Fact]
@@ -2621,6 +2680,84 @@ public partial class XlsxCorpusRunnerTests
             .Where(rel =>
                 string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain", StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(rel.Attribute("Target")?.Value, "/xl/calcChain.xml", StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .ContainSingle(because);
+    }
+
+    private static void AssertVolatileDependenciesPackageGraph(Stream package, string because)
+    {
+        XNamespace spreadsheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var volatileDependencies = LoadPackageXml(archive, "xl/volatileDependencies.xml");
+        volatileDependencies.Root!.Name.Should().Be(spreadsheetNs + "volTypes", because);
+        volatileDependencies.Root.Elements(spreadsheetNs + "volType")
+            .Where(element => element.Attribute("type")?.Value == "realTimeData")
+            .Should()
+            .ContainSingle(because);
+        AssertContentTypeOverride(
+            archive,
+            "/xl/volatileDependencies.xml",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.volatileDependencies+xml",
+            because);
+
+        var workbookRelsXml = LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
+        workbookRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(rel =>
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/volatileDependencies", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "volatileDependencies.xml", StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .ContainSingle(because);
+    }
+
+    private static void AssertDocumentThumbnailPackageGraph(Stream package, string because)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        archive.GetEntry("docProps/thumbnail.png").Should().NotBeNull(because);
+        AssertContentTypeOverride(archive, "/docProps/thumbnail.png", "image/png", because);
+
+        var packageRelsXml = LoadPackageXml(archive, "_rels/.rels");
+        packageRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(rel =>
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "docProps/thumbnail.png", StringComparison.OrdinalIgnoreCase) &&
+                rel.Attribute("TargetMode") is null)
+            .Should()
+            .ContainSingle(because);
+    }
+
+    private static void AssertVbaProjectSignaturePackageGraph(Stream package, string because)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        archive.GetEntry("xl/vbaProject.bin").Should().NotBeNull(because);
+        archive.GetEntry("xl/vbaProjectSignature.bin").Should().NotBeNull(because);
+        archive.GetEntry("xl/_rels/vbaProject.bin.rels").Should().NotBeNull(because);
+        AssertContentTypeOverride(archive, "/xl/workbook.xml", "application/vnd.ms-excel.sheet.macroEnabled.main+xml", because);
+        AssertContentTypeOverride(archive, "/xl/vbaProject.bin", "application/vnd.ms-office.vbaProject", because);
+        AssertContentTypeOverride(archive, "/xl/vbaProjectSignature.bin", "application/vnd.ms-office.vbaProjectSignature", because);
+
+        var workbookRelsXml = LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
+        workbookRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(rel =>
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.microsoft.com/office/2006/relationships/vbaProject", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "vbaProject.bin", StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .ContainSingle(because);
+
+        var vbaProjectRelsXml = LoadPackageXml(archive, "xl/_rels/vbaProject.bin.rels");
+        vbaProjectRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(rel =>
+                string.Equals(rel.Attribute("Type")?.Value, "http://schemas.microsoft.com/office/2006/relationships/vbaProjectSignature", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("Target")?.Value, "vbaProjectSignature.bin", StringComparison.OrdinalIgnoreCase))
             .Should()
             .ContainSingle(because);
     }

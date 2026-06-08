@@ -38,6 +38,17 @@ public sealed partial class ChartDialogTests
             ChartType.Stock,
             ChartType.Surface,
             ChartType.ThreeDSurface);
+        options.Select(option => option.Type).Should().Contain(
+        [
+            ChartType.Treemap,
+            ChartType.Sunburst,
+            ChartType.Histogram,
+            ChartType.Pareto,
+            ChartType.BoxAndWhisker,
+            ChartType.Waterfall,
+            ChartType.Funnel
+        ]);
+        options.Should().NotContain(option => option.Type == ChartType.Map);
         options.Should().NotContain(option => !ChartAuthoringPlanner.CanAuthor(option.Type));
         options.Single(option => option.Type == ChartType.PercentStackedColumn).DisplayName
             .Should()
@@ -72,7 +83,13 @@ public sealed partial class ChartDialogTests
             "X Y (Scatter)",
             "Stock",
             "Radar",
-            "Surface");
+            "Surface",
+            "Treemap",
+            "Sunburst",
+            "Histogram",
+            "Box and Whisker Chart",
+            "Waterfall",
+            "Funnel");
         categories.Should().OnlyContain(category => category.Options.All(option => ChartAuthoringPlanner.CanAuthor(option.Type)));
         categories.Single(category => category.Name == "Column").Options.Select(option => option.Type).Should().ContainInOrder(
             ChartType.Column,
@@ -97,6 +114,14 @@ public sealed partial class ChartDialogTests
         categories.Single(category => category.Name == "Surface").Options.Select(option => option.Type).Should().ContainInOrder(
             ChartType.Surface,
             ChartType.ThreeDSurface);
+        categories.Single(category => category.Name == "Treemap").Options.Should().ContainSingle(option => option.Type == ChartType.Treemap);
+        categories.Single(category => category.Name == "Sunburst").Options.Should().ContainSingle(option => option.Type == ChartType.Sunburst);
+        categories.Single(category => category.Name == "Histogram").Options.Select(option => option.Type).Should().ContainInOrder(
+            ChartType.Histogram,
+            ChartType.Pareto);
+        categories.Single(category => category.Name == "Box and Whisker Chart").Options.Should().ContainSingle(option => option.Type == ChartType.BoxAndWhisker);
+        categories.Single(category => category.Name == "Waterfall").Options.Should().ContainSingle(option => option.Type == ChartType.Waterfall);
+        categories.Single(category => category.Name == "Funnel").Options.Should().ContainSingle(option => option.Type == ChartType.Funnel);
     }
 
     [Fact]
@@ -110,6 +135,23 @@ public sealed partial class ChartDialogTests
             "100% Stacked Bar");
         choices.Should().OnlyContain(choice => choice.CategoryName == "Bar");
         choices.Should().OnlyContain(choice => !string.IsNullOrWhiteSpace(choice.PreviewText));
+    }
+
+    [Fact]
+    public void ChartTypePickerPlanner_BuildsAdvancedFamilyGalleryChoices()
+    {
+        var histogramChoices = ChartTypePickerPlanner.GetGalleryChoices("Histogram");
+        var waterfallChoices = ChartTypePickerPlanner.GetGalleryChoices("Waterfall");
+        var funnelChoices = ChartTypePickerPlanner.GetGalleryChoices("Funnel");
+
+        histogramChoices.Select(choice => choice.Type).Should().ContainInOrder(
+            ChartType.Histogram,
+            ChartType.Pareto);
+        waterfallChoices.Should().ContainSingle(choice => choice.Type == ChartType.Waterfall);
+        funnelChoices.Should().ContainSingle(choice => choice.Type == ChartType.Funnel);
+        histogramChoices.Concat(waterfallChoices).Concat(funnelChoices)
+            .Should()
+            .OnlyContain(choice => ChartAuthoringPlanner.CanAuthor(choice.Type));
     }
 
     [Fact]

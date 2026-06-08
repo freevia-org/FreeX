@@ -260,7 +260,7 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand
         var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
             string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
         if (pivotTable is null)
-            return new CommandOutcome(false, "PivotTable was not found.");
+            return CommandGuards.RejectPivotTableNotFound();
 
         _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
         PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
