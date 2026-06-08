@@ -266,9 +266,16 @@ public partial class MainWindow
         }
 
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var existingRule = sheet is null
-            ? null
-            : DataValidationService.GetApplicable(sheet, range.Start).FirstOrDefault();
+        DataValidation? existingRule = null;
+        if (sheet is not null)
+        {
+            foreach (var rule in DataValidationService.GetApplicable(sheet, range.Start))
+            {
+                existingRule = rule;
+                break;
+            }
+        }
+
         DataValidationDialog? dlg = null;
         dlg = new DataValidationDialog(existingRule, request => ApplyDataValidationRangeSelection(dlg, request))
         {

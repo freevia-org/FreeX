@@ -115,10 +115,20 @@ public partial class MainWindow
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         var refreshedSelectionUi = false;
-        if (outcome.AffectedCells?.FirstOrDefault() is { } first)
+        CellAddress? first = null;
+        if (outcome.AffectedCells is not null)
         {
-            SetActiveCell(first);
-            EnsureCellVisible(first);
+            foreach (var cell in outcome.AffectedCells)
+            {
+                first = cell;
+                break;
+            }
+        }
+
+        if (first is { } firstCell)
+        {
+            SetActiveCell(firstCell);
+            EnsureCellVisible(firstCell);
             refreshedSelectionUi = true;
         }
 

@@ -302,9 +302,16 @@ public partial class MainWindow
             ResolveSheetIdByName,
             out range);
 
-    private SheetId? ResolveSheetIdByName(string sheetName) =>
-        _workbook.Sheets.FirstOrDefault(item =>
-            string.Equals(item.Name, sheetName, StringComparison.CurrentCultureIgnoreCase))?.Id;
+    private SheetId? ResolveSheetIdByName(string sheetName)
+    {
+        foreach (var item in _workbook.Sheets)
+        {
+            if (string.Equals(item.Name, sheetName, StringComparison.CurrentCultureIgnoreCase))
+                return item.Id;
+        }
+
+        return null;
+    }
 
     private void ConsolidateBtn_Click(object sender, RoutedEventArgs e)
     {

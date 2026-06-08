@@ -1422,7 +1422,16 @@ public partial class MainWindow
 
         if (dialog.Result.CreateCopy)
         {
-            var sourceIndex = _workbook.Sheets.ToList().FindIndex(sheet => sheet.Id == tab.Id);
+            var sourceIndex = -1;
+            for (var index = 0; index < _workbook.Sheets.Count; index++)
+            {
+                if (_workbook.Sheets[index].Id != tab.Id)
+                    continue;
+
+                sourceIndex = index;
+                break;
+            }
+
             if (!TryExecuteCommand(new DuplicateSheetCommand(tab.Id), "Duplicate Sheet"))
                 return;
 

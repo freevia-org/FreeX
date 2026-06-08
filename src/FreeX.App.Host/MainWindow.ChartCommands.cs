@@ -247,7 +247,19 @@ public partial class MainWindow
     private bool TryGetActiveNormalChart(string caption, out ChartModel chart)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        chart = sheet?.Charts.FirstOrDefault(IsChartContextualRibbonTarget) ?? null!;
+        chart = null!;
+        if (sheet is not null)
+        {
+            foreach (var candidate in sheet.Charts)
+            {
+                if (!IsChartContextualRibbonTarget(candidate))
+                    continue;
+
+                chart = candidate;
+                break;
+            }
+        }
+
         if (chart is not null)
             return true;
 

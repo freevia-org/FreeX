@@ -48,10 +48,20 @@ public partial class MainWindow
         if (sheet is null || SheetGrid.SelectedRange?.Start is not { } activeCell)
             return false;
 
-        table = sheet.StructuredTables
-            .Where(candidate => candidate.Range.Contains(activeCell))
-            .OrderBy(candidate => candidate.Range.RowCount * candidate.Range.ColCount)
-            .FirstOrDefault()!;
+        var smallestArea = uint.MaxValue;
+        foreach (var candidate in sheet.StructuredTables)
+        {
+            if (!candidate.Range.Contains(activeCell))
+                continue;
+
+            var area = candidate.Range.RowCount * candidate.Range.ColCount;
+            if (area >= smallestArea)
+                continue;
+
+            table = candidate;
+            smallestArea = area;
+        }
+
         return table is not null;
     }
 
