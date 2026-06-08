@@ -26,7 +26,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
         var source = ctx.GetSheet(_sourceSheetId);
         var sourceIndex = ctx.Workbook.Sheets.ToList().FindIndex(s => s.Id == _sourceSheetId);
         if (sourceIndex < 0)
-            return new CommandOutcome(false, "Source sheet was not found.");
+            return CommandGuards.RejectSourceSheetNotFound();
 
         var name = _requestedName ?? DuplicateSheetNameGenerator.GenerateCopyName(ctx.Workbook, source.Name);
         var validationError = ctx.Workbook.ValidateSheetName(name);
