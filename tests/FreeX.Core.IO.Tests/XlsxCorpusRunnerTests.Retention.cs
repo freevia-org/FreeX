@@ -1511,13 +1511,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-worksheet-custom-properties-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetCustomPropertiesModel(sheet, "generated-worksheet-custom-properties-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-worksheet-custom-properties-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-custom-properties-001");
         AssertWorksheetCustomProperties(saved, "generated-worksheet-custom-properties-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetCustomPropertiesModel(
+            reloaded.GetSheetAt(0),
+            "worksheet custom property model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -1749,6 +1757,13 @@ public partial class XlsxCorpusRunnerTests
             AssertWorksheetCustomPropertyRelationship(archive, relationshipId, "sheet1-1-FreeXNativeProperty.bin", because);
         }
         customProperty.Attribute("unsupportedAttr").Should().BeNull(because);
+    }
+
+    private static void AssertWorksheetCustomPropertiesModel(Sheet sheet, string because)
+    {
+        var property = sheet.CustomProperties.Should().ContainSingle(because).Subject;
+        property.Name.Should().Be("FreeXNativeProperty", because);
+        property.Id.Should().Be(1, because);
     }
 
     private static void AssertWorksheetCustomPropertyRelationship(
