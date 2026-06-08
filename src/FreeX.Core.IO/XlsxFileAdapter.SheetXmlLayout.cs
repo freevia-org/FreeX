@@ -742,32 +742,66 @@ public sealed partial class XlsxFileAdapter
         return ParseOptionalNonNegativeInt(defaultCellXf?.Attribute("fontId")?.Value);
     }
 
-    private static XElement? FindPrimarySheetView(XDocument worksheetXml, XNamespace worksheetNs) =>
-        worksheetXml.Root?
-            .Element(worksheetNs + "sheetViews")?
-            .Elements(worksheetNs + "sheetView")
-            .FirstOrDefault(IsPrimarySheetView);
+    private static XElement? FindPrimarySheetView(XDocument worksheetXml, XNamespace worksheetNs)
+    {
+        var sheetViews = worksheetXml.Root?.Element(worksheetNs + "sheetViews");
+        if (sheetViews is null)
+            return null;
 
-    private static CellAddress? ReadActiveSelectionCell(XElement? sheetView, XNamespace worksheetNs) =>
-        ParseOptionalCellReference(
-            sheetView?
-                .Elements(worksheetNs + "selection")
-                .Select(selection => selection.Attribute("activeCell")?.Value)
-                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)));
+        foreach (var sheetView in sheetViews.Elements(worksheetNs + "sheetView"))
+        {
+            if (IsPrimarySheetView(sheetView))
+                return sheetView;
+        }
 
-    private static XElement? FindNormalCellStyle(XElement stylesRoot, XNamespace ns) =>
-        stylesRoot.Element(ns + "cellStyles")?
-            .Elements(ns + "cellStyle")
-            .FirstOrDefault(IsNormalCellStyle);
+        return null;
+    }
+
+    private static CellAddress? ReadActiveSelectionCell(XElement? sheetView, XNamespace worksheetNs)
+    {
+        if (sheetView is null)
+            return null;
+
+        foreach (var selection in sheetView.Elements(worksheetNs + "selection"))
+        {
+            var activeCell = selection.Attribute("activeCell")?.Value;
+            if (!string.IsNullOrWhiteSpace(activeCell))
+                return ParseOptionalCellReference(activeCell);
+        }
+
+        return null;
+    }
+
+    private static XElement? FindNormalCellStyle(XElement stylesRoot, XNamespace ns)
+    {
+        var cellStyles = stylesRoot.Element(ns + "cellStyles");
+        if (cellStyles is null)
+            return null;
+
+        foreach (var cellStyle in cellStyles.Elements(ns + "cellStyle"))
+        {
+            if (IsNormalCellStyle(cellStyle))
+                return cellStyle;
+        }
+
+        return null;
+    }
 
     private static bool IsNormalCellStyle(XElement style) =>
         string.Equals(style.Attribute("builtinId")?.Value, "0", StringComparison.Ordinal) ||
         string.Equals(style.Attribute("name")?.Value, "Normal", StringComparison.OrdinalIgnoreCase);
 
-    private static XElement? FindFirstDefaultCellXf(XElement stylesRoot, XNamespace ns) =>
-        stylesRoot.Element(ns + "cellXfs")?
-            .Elements(ns + "xf")
-            .FirstOrDefault();
+    private static XElement? FindFirstDefaultCellXf(XElement stylesRoot, XNamespace ns)
+    {
+        var cellXfs = stylesRoot.Element(ns + "cellXfs");
+        if (cellXfs is null)
+            return null;
+
+        foreach (var cellXf in cellXfs.Elements(ns + "xf"))
+            return cellXf;
+
+        return null;
+    }
 
     private static int? ParseOptionalNonNegativeInt(string? value) =>
         int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) && parsed >= 0
