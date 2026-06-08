@@ -73,7 +73,7 @@ public sealed class OutlineGroupDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        var firstButton = _buttons.FirstOrDefault();
+        var firstButton = GetFirstButton();
         firstButton?.Focus();
         if (firstButton is not null)
             Keyboard.Focus(firstButton);
@@ -81,8 +81,27 @@ public sealed class OutlineGroupDialog : Window
 
     private void Accept()
     {
-        var selected = _buttons.FirstOrDefault(button => button.IsChecked == true);
+        var selected = GetSelectedButton();
         SelectedAxis = selected?.Tag is OutlineGroupingAxis axis ? axis : OutlineGroupingAxis.Rows;
         DialogResult = true;
+    }
+
+    private RadioButton? GetFirstButton()
+    {
+        foreach (var button in _buttons)
+            return button;
+
+        return null;
+    }
+
+    private RadioButton? GetSelectedButton()
+    {
+        foreach (var button in _buttons)
+        {
+            if (button.IsChecked == true)
+                return button;
+        }
+
+        return null;
     }
 }
