@@ -159,6 +159,29 @@ public sealed class GitHubWorkflowPreflightTests
     }
 
     [Fact]
+    public void MacOsAppWorkflow_BoundsHostedLaunchServicesSmokePaths()
+    {
+        var workflow = ReadMacOsAppWorkflow();
+
+        workflow.Should().Contain("launchservices_smoke_timeout_seconds=60");
+        workflow.Should().Contain("launchservices_cleanup_timeout_seconds=10");
+        workflow.Should().Contain("append_launchservices_failure_diagnostics");
+        workflow.Should().Contain("wait_for_bounded_launchservices_cleanup");
+        workflow.Should().Contain("run_bounded_launchservices_smoke \"bundle_id\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("run_bounded_launchservices_smoke \"open_with\" \"$open_with_report\"");
+        workflow.Should().Contain("run_bounded_launchservices_smoke \"default_open\" \"$default_open_report\"");
+        workflow.Should().Contain("kill \"$launchservices_pid\" 2>/dev/null || true");
+        workflow.Should().Contain("kill -9 \"$launchservices_pid\" 2>/dev/null || true");
+        workflow.Should().Contain("cat \"$report_path\" >> \"$evidence_path\"");
+        workflow.Should().NotContain("launch_pid=$!");
+        workflow.Should().NotContain("open_with_pid=$!");
+        workflow.Should().NotContain("default_open_pid=$!");
+
+        var boundedLaunchSmokeCount = workflow.Split("run_bounded_launchservices_smoke \"", StringSplitOptions.None).Length - 1;
+        boundedLaunchSmokeCount.Should().Be(3);
+    }
+
+    [Fact]
     public void MacOsAppWorkflow_WritesRunIdentityEvidenceAndUsesRunAttemptArtifactIdentity()
     {
         var workflow = ReadMacOsAppWorkflow();

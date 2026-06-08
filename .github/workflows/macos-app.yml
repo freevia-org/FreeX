@@ -442,24 +442,137 @@ jobs:
             } >> "$evidence_path"
             echo "smoke_status=passed" >> "$evidence_path"
 
+            launchservices_smoke_timeout_seconds=60
+            launchservices_cleanup_timeout_seconds=10
+            quit_launchservices_app() {
+              osascript -e 'tell application id "io.github.tony-xmelon.freex" to quit' || true
+            }
+            launchservices_process_is_active() {
+              local launchservices_pid="$1"
+              local process_state
+              process_state="$(ps -o stat= -p "$launchservices_pid" 2>/dev/null | tr -d ' ')"
+              [[ -n "$process_state" && "$process_state" != Z* ]]
+            }
+            append_launchservices_failure_diagnostics() {
+              local report_path="$1"
+              {
+                if [[ -d "$app_diagnostics_dir" ]]; then
+                  echo "app_diagnostics_directory_configured=true"
+                else
+                  echo "app_diagnostics_directory_configured=false"
+                fi
+                if [[ -f "$app_diagnostics_dir/events.jsonl" ]]; then
+                  echo "app_diagnostics_events_jsonl=true"
+                else
+                  echo "app_diagnostics_events_jsonl=false"
+                fi
+              } >> "$report_path"
+            }
+            append_launchservices_smoke_markers() {
+              local smoke_name="$1"
+              local report_path="$2"
+              if [[ "$smoke_name" == "default_open" ]]; then
+                {
+                  echo "launchservices_default_open_attempted=true"
+                  echo "launchservices_default_open_app_override=false"
+                  echo "launchservices_default_open_document_extension=fxl"
+                  echo "launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click"
+                } >> "$report_path"
+              fi
+            }
+            write_launchservices_missing_report() {
+              local smoke_name="$1"
+              local report_path="$2"
+              local timed_out="$3"
+              {
+                echo "macos_launch_smoke=missing_report"
+                echo "launchservices_smoke_name=$smoke_name"
+                echo "launchservices_smoke_timeout_seconds=$launchservices_smoke_timeout_seconds"
+                echo "launchservices_smoke_timed_out=$timed_out"
+              } > "$report_path"
+              append_launchservices_smoke_markers "$smoke_name" "$report_path"
+              append_launchservices_failure_diagnostics "$report_path"
+            }
+            wait_for_bounded_launchservices_cleanup() {
+              local launchservices_pid="$1"
+              local smoke_name="$2"
+              local report_path="$3"
+              local elapsed=0
+              while (( elapsed < launchservices_cleanup_timeout_seconds )); do
+                if ! launchservices_process_is_active "$launchservices_pid"; then
+                  local launchservices_status=0
+                  wait "$launchservices_pid" || launchservices_status=$?
+                  return "$launchservices_status"
+                fi
+                sleep 1
+                elapsed=$((elapsed + 1))
+              done
+              local forced_cleanup=false
+              if launchservices_process_is_active "$launchservices_pid"; then
+                forced_cleanup=true
+                kill "$launchservices_pid" 2>/dev/null || true
+                sleep 1
+                if launchservices_process_is_active "$launchservices_pid"; then
+                  kill -9 "$launchservices_pid" 2>/dev/null || true
+                fi
+              fi
+              local launchservices_status=0
+              wait "$launchservices_pid" || launchservices_status=$?
+              if [[ "$forced_cleanup" == "true" ]]; then
+                {
+                  echo "launchservices_smoke_cleanup_timeout=true"
+                  echo "launchservices_smoke_cleanup_timeout_seconds=$launchservices_cleanup_timeout_seconds"
+                  echo "launchservices_smoke_name=$smoke_name"
+                } >> "$report_path"
+                return 124
+              fi
+              return "$launchservices_status"
+            }
+            run_bounded_launchservices_smoke() {
+              local smoke_name="$1"
+              local report_path="$2"
+              shift 2
+              rm -f "$report_path"
+              "$@" &
+              local launchservices_pid=$!
+              local elapsed=0
+              local timed_out=false
+              while (( elapsed < launchservices_smoke_timeout_seconds )); do
+                if [[ -f "$report_path" ]]; then
+                  break
+                fi
+                if ! launchservices_process_is_active "$launchservices_pid"; then
+                  break
+                fi
+                sleep 1
+                elapsed=$((elapsed + 1))
+              done
+              if [[ ! -f "$report_path" && "$elapsed" -ge "$launchservices_smoke_timeout_seconds" ]] &&
+                 launchservices_process_is_active "$launchservices_pid"; then
+                timed_out=true
+              fi
+              if [[ ! -f "$report_path" ]]; then
+                write_launchservices_missing_report "$smoke_name" "$report_path" "$timed_out"
+                quit_launchservices_app
+                wait_for_bounded_launchservices_cleanup "$launchservices_pid" "$smoke_name" "$report_path" || true
+                cat "$report_path" >> "$evidence_path"
+                return 1
+              fi
+              quit_launchservices_app
+              local cleanup_status=0
+              wait_for_bounded_launchservices_cleanup "$launchservices_pid" "$smoke_name" "$report_path" || cleanup_status=$?
+              append_launchservices_smoke_markers "$smoke_name" "$report_path"
+              cat "$report_path" >> "$evidence_path"
+              if [[ "$cleanup_status" -ne 0 ]]; then
+                return "$cleanup_status"
+              fi
+            }
+
             launch_smoke_file="$RUNNER_TEMP/freex-$runtime-launch.csv"
             printf 'Name,Amount\nFreeX Launch,84\n' > "$launch_smoke_file"
-            rm -f "$launch_smoke_report"
             /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$unzip_root/FreeX.app"
-            open -W -n -b io.github.tony-xmelon.freex "$launch_smoke_file" --args --macos-launch-smoke "$launch_smoke_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir" &
-            launch_pid=$!
-            launch_status=0
-            wait "$launch_pid" || launch_status=$?
-            if [[ ! -f "$launch_smoke_report" ]]; then
-              echo "macos_launch_smoke=missing_report" > "$launch_smoke_report"
-              osascript -e 'tell application id "io.github.tony-xmelon.freex" to quit' || true
-              cat "$launch_smoke_report" >> "$evidence_path"
-              exit 1
-            fi
-            cat "$launch_smoke_report" >> "$evidence_path"
-            if [[ "$launch_status" -ne 0 ]]; then
-              exit "$launch_status"
-            fi
+            run_bounded_launchservices_smoke "bundle_id" "$launch_smoke_report" \
+              open -W -n -b io.github.tony-xmelon.freex "$launch_smoke_file" --args --macos-launch-smoke "$launch_smoke_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"
             grep -q "macos_launch_smoke=passed" "$launch_smoke_report"
             grep -q "app_diagnostics_directory_configured=true" "$launch_smoke_report"
             grep -q "window_shown=true" "$launch_smoke_report"
@@ -708,27 +821,8 @@ jobs:
 
             open_with_smoke_file="$RUNNER_TEMP/freex-$runtime-open-with.csv"
             printf 'Name,Amount\nFreeX Open With,126\n' > "$open_with_smoke_file"
-            rm -f "$open_with_report"
-            open -W -n -a "$app_path" "$open_with_smoke_file" --args --macos-launch-smoke "$open_with_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir" &
-            open_with_pid=$!
-            for _ in {1..60}; do
-              if [[ -f "$open_with_report" ]]; then
-                break
-              fi
-              if ! kill -0 "$open_with_pid" 2>/dev/null; then
-                break
-              fi
-              sleep 1
-            done
-            if [[ ! -f "$open_with_report" ]]; then
-              echo "macos_launch_smoke=missing_report" > "$open_with_report"
-              osascript -e 'tell application id "io.github.tony-xmelon.freex" to quit' || true
-              wait "$open_with_pid" || true
-              cat "$open_with_report" >> "$evidence_path"
-              exit 1
-            fi
-            wait "$open_with_pid" || true
-            cat "$open_with_report" >> "$evidence_path"
+            run_bounded_launchservices_smoke "open_with" "$open_with_report" \
+              open -W -n -a "$app_path" "$open_with_smoke_file" --args --macos-launch-smoke "$open_with_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"
             grep -q "macos_launch_smoke=passed" "$open_with_report"
             grep -q "app_diagnostics_directory_configured=true" "$open_with_report"
             grep -q "window_shown=true" "$open_with_report"
@@ -751,39 +845,8 @@ jobs:
               '    }' \
               '  ]' \
               '}' > "$default_open_smoke_file"
-            rm -f "$default_open_report"
-            open -W -n "$default_open_smoke_file" --args --macos-launch-smoke "$default_open_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir" &
-            default_open_pid=$!
-            for _ in {1..60}; do
-              if [[ -f "$default_open_report" ]]; then
-                break
-              fi
-              if ! kill -0 "$default_open_pid" 2>/dev/null; then
-                break
-              fi
-              sleep 1
-            done
-            if [[ ! -f "$default_open_report" ]]; then
-              {
-                echo "macos_launch_smoke=missing_report"
-                echo "launchservices_default_open_attempted=true"
-                echo "launchservices_default_open_app_override=false"
-                echo "launchservices_default_open_document_extension=fxl"
-                echo "launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click"
-              } > "$default_open_report"
-              osascript -e 'tell application id "io.github.tony-xmelon.freex" to quit' || true
-              wait "$default_open_pid" || true
-              cat "$default_open_report" >> "$evidence_path"
-              exit 1
-            fi
-            wait "$default_open_pid" || true
-            {
-              echo "launchservices_default_open_attempted=true"
-              echo "launchservices_default_open_app_override=false"
-              echo "launchservices_default_open_document_extension=fxl"
-              echo "launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click"
-            } >> "$default_open_report"
-            cat "$default_open_report" >> "$evidence_path"
+            run_bounded_launchservices_smoke "default_open" "$default_open_report" \
+              open -W -n "$default_open_smoke_file" --args --macos-launch-smoke "$default_open_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"
             grep -q "macos_launch_smoke=passed" "$default_open_report"
             grep -q "app_diagnostics_directory_configured=true" "$default_open_report"
             grep -q "window_shown=true" "$default_open_report"

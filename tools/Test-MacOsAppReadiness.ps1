@@ -560,15 +560,27 @@ function Test-MacOsWorkflow {
         'grep -q ''"eventName":"app_start"'' "$app_diagnostics_events_path"',
         'grep -q ''"eventName":"app_ready"'' "$app_diagnostics_events_path"',
         'grep -q ''"eventName":"macos_launch_smoke"'' "$app_diagnostics_events_path"',
+        "launchservices_smoke_timeout_seconds=60",
+        "launchservices_cleanup_timeout_seconds=10",
+        "append_launchservices_failure_diagnostics",
+        "wait_for_bounded_launchservices_cleanup",
+        'run_bounded_launchservices_smoke "bundle_id" "$launch_smoke_report"',
         "open -W -n -b io.github.tony-xmelon.freex",
         'open_with_report="$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt"',
         'open_with_smoke_file="$RUNNER_TEMP/freex-$runtime-open-with.csv"',
         'app_path="$unzip_root/FreeX.app"',
+        'run_bounded_launchservices_smoke "open_with" "$open_with_report"',
         'open -W -n -a "$app_path" "$open_with_smoke_file" --args --macos-launch-smoke "$open_with_report"',
         'default_open_report="$artifact_root/freex-$runtime-macos-default-open-launch-smoke.txt"',
         'default_open_smoke_file="$RUNNER_TEMP/freex-$runtime-default-open.fxl"',
         '"FileFormat": "FreeX.NativeJsonWorkbook"',
+        'run_bounded_launchservices_smoke "default_open" "$default_open_report"',
         'open -W -n "$default_open_smoke_file" --args --macos-launch-smoke "$default_open_report"',
+        'launchservices_smoke_timed_out=$timed_out',
+        "launchservices_smoke_cleanup_timeout=true",
+        'kill "$launchservices_pid" 2>/dev/null || true',
+        'kill -9 "$launchservices_pid" 2>/dev/null || true',
+        'cat "$report_path" >> "$evidence_path"',
         "launchservices_default_open_app_override=false",
         "launchservices_default_open_document_extension=fxl",
         "launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click",
@@ -815,6 +827,10 @@ function Test-MacOsWorkflow {
     foreach ($marker in $requiredWorkflowMarkers) {
         Assert-ContainsText -Text $workflow -Needle $marker -Message "macOS workflow is missing required readiness marker: $marker"
     }
+
+    $boundedLaunchSmokeCount = ([regex]::Matches($workflow, 'run_bounded_launchservices_smoke "')).Count
+    Assert-True -Condition ($boundedLaunchSmokeCount -eq 3) -Message "macOS workflow must route all three hosted LaunchServices launch smoke paths through run_bounded_launchservices_smoke."
+    Assert-TextBefore -Text $workflow -First "run_bounded_launchservices_smoke() {" -Second 'run_bounded_launchservices_smoke "bundle_id" "$launch_smoke_report"' -Message "macOS workflow must define the bounded LaunchServices smoke helper before the bundle-id launch smoke."
 
     Assert-TextBefore -Text $workflow -First "Capture runner toolchain evidence" -Second "Test portable PDF macOS route" -Message "macOS workflow must capture hosted runner evidence before running the focused portable PDF/service tests."
     Assert-TextBefore -Text $workflow -First "Test portable PDF macOS route" -Second "dotnet build $projectPath --configuration Release" -Message "macOS workflow must run the focused portable PDF/service tests before building the Avalonia app project."

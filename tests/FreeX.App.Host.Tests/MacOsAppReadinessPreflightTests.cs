@@ -91,6 +91,13 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_unmerge_cells_menu_item=true");
         script.Should().Contain("native_cell_styles_menu_item=true");
         script.Should().Contain("native_cell_styles_preset_count=33");
+        script.Should().Contain("launchservices_smoke_timeout_seconds=60");
+        script.Should().Contain("launchservices_cleanup_timeout_seconds=10");
+        script.Should().Contain("run_bounded_launchservices_smoke \"bundle_id\" \"$launch_smoke_report\"");
+        script.Should().Contain("run_bounded_launchservices_smoke \"open_with\" \"$open_with_report\"");
+        script.Should().Contain("run_bounded_launchservices_smoke \"default_open\" \"$default_open_report\"");
+        script.Should().Contain("launchservices_smoke_cleanup_timeout=true");
+        script.Should().Contain("macOS workflow must route all three hosted LaunchServices launch smoke paths through run_bounded_launchservices_smoke.");
         script.Should().Contain("open_with_report=\"$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt\"");
         script.Should().Contain("open_with_smoke_file=\"$RUNNER_TEMP/freex-$runtime-open-with.csv\"");
         script.Should().Contain("app_path=\"$unzip_root/FreeX.app\"");
@@ -865,6 +872,27 @@ public sealed class MacOsAppReadinessPreflightTests
     }
 
     [Fact]
+    public void MacOsAppReadinessPreflight_FailsWhenBundleLaunchServicesSmokeIsUnbounded()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateMinimalMacOsReadinessRepo(temp.Path);
+        var workflowPath = Path.Combine(temp.Path, ".github", "workflows", "macos-app.yml");
+        var workflow = File.ReadAllText(workflowPath);
+        File.WriteAllText(
+            workflowPath,
+            workflow.Replace(
+                "run_bounded_launchservices_smoke \"bundle_id\" \"$launch_smoke_report\"",
+                "run_unbounded_launchservices_smoke \"bundle_id\" \"$launch_smoke_report\"",
+                StringComparison.Ordinal));
+
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("macOS workflow is missing required readiness marker: run_bounded_launchservices_smoke \"bundle_id\"");
+    }
+
+    [Fact]
     public void MacOsAppReadinessPreflight_FailsForForbiddenPortableSourceToken()
     {
         using var temp = new TestTemporaryDirectory();
@@ -1069,6 +1097,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       zip_path="$artifact_root/$zip_name"
                       unzip_root="$RUNNER_TEMP/freex-$runtime-unzip"
                       app_path="$unzip_root/FreeX.app"
+                      launch_smoke_report="$artifact_root/launch.txt"
                       open_with_report="$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt"
                       default_open_report="$artifact_root/freex-$runtime-macos-default-open-launch-smoke.txt"
                       app_diagnostics_dir="$artifact_root/freex-$runtime-macos-app-diagnostics"
@@ -1155,11 +1184,32 @@ public sealed class MacOsAppReadinessPreflightTests
                       test "$format_cells_style_roundtrip_count" -ge 2
                       echo "format_cells_style_roundtrip=true"
                       echo "format_cells_style_roundtrip_count=$format_cells_style_roundtrip_count"
+                      launchservices_smoke_timeout_seconds=60
+                      launchservices_cleanup_timeout_seconds=10
+                      append_launchservices_failure_diagnostics() {"{"}
+                        echo "app_diagnostics_events_jsonl=true"
+                      {"}"}
+                      wait_for_bounded_launchservices_cleanup() {"{"}
+                        local launchservices_pid="$1"
+                        kill "$launchservices_pid" 2>/dev/null || true
+                        kill -9 "$launchservices_pid" 2>/dev/null || true
+                      {"}"}
+                      run_bounded_launchservices_smoke() {"{"}
+                        local smoke_name="$1"
+                        local report_path="$2"
+                        local timed_out=false
+                        echo "launchservices_smoke_timed_out=$timed_out"
+                        echo "launchservices_smoke_cleanup_timeout=true"
+                        echo "launchservices_smoke_name=$smoke_name"
+                        cat "$report_path" >> "$evidence_path"
+                      {"}"}
                       /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$unzip_root/FreeX.app"
-                      open -W -n -b io.github.tony-xmelon.freex "$RUNNER_TEMP/launch.csv" --args --macos-launch-smoke "$artifact_root/launch.txt" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"
+                      run_bounded_launchservices_smoke "bundle_id" "$launch_smoke_report" \
+                        open -W -n -b io.github.tony-xmelon.freex "$RUNNER_TEMP/launch.csv" --args --macos-launch-smoke "$launch_smoke_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"
                       osascript -e 'tell application id "io.github.tony-xmelon.freex" to quit' || true
                       open_with_smoke_file="$RUNNER_TEMP/freex-$runtime-open-with.csv"
-                      open -W -n -a "$app_path" "$open_with_smoke_file" --args --macos-launch-smoke "$open_with_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"
+                      run_bounded_launchservices_smoke "open_with" "$open_with_report" \
+                        open -W -n -a "$app_path" "$open_with_smoke_file" --args --macos-launch-smoke "$open_with_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"
                       grep -q "macos_launch_smoke=passed" "$open_with_report"
                       grep -q "app_diagnostics_directory_configured=true" "$open_with_report"
                       grep -q "window_shown=true" "$open_with_report"
@@ -1172,7 +1222,8 @@ public sealed class MacOsAppReadinessPreflightTests
                       cat > "$default_open_smoke_file" <<'JSON'
                       {"{"} "FileFormat": "FreeX.NativeJsonWorkbook" {"}"}
                       JSON
-                      open -W -n "$default_open_smoke_file" --args --macos-launch-smoke "$default_open_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"
+                      run_bounded_launchservices_smoke "default_open" "$default_open_report" \
+                        open -W -n "$default_open_smoke_file" --args --macos-launch-smoke "$default_open_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"
                       grep -q "app_diagnostics_directory_configured=true" "$default_open_report"
                       launchservices_default_open_app_override=false
                       launchservices_default_open_document_extension=fxl
