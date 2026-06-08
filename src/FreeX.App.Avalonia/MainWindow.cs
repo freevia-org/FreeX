@@ -85,6 +85,15 @@ public sealed class MainWindow : Window
         Dismiss
     }
 
+    private sealed record ScenarioManagerDialogScenarioItem(ScenarioManagerScenarioChoice Choice)
+    {
+        public override string ToString()
+        {
+            var cellLabel = Choice.ChangingCellCount == 1 ? "cell" : "cells";
+            return $"{Choice.Name} ({Choice.ChangingCellCount} {cellLabel})";
+        }
+    }
+
     private sealed record FindDialogResult(
         string FindText,
         FindDialogAction Action,
@@ -353,6 +362,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _dataValidationMenuItem = new();
     private readonly NativeMenuItem _whatIfAnalysisMenuItem = new();
     private readonly NativeMenuItem _goalSeekMenuItem = new();
+    private readonly NativeMenuItem _scenarioManagerMenuItem = new();
     private readonly NativeMenuItem _dataTableMenuItem = new();
     private readonly NativeMenuItem _reviewSummaryMenuItem = new();
     private readonly NativeMenuItem _checkAccessibilityMenuItem = new();
@@ -707,6 +717,9 @@ public sealed class MainWindow : Window
 
         _goalSeekMenuItem.Header = "Goal Seek...";
         _goalSeekMenuItem.Click += async (_, _) => await ShowGoalSeekDialogAsync();
+
+        _scenarioManagerMenuItem.Header = "Scenario Manager...";
+        _scenarioManagerMenuItem.Click += async (_, _) => await ShowScenarioManagerDialogAsync();
 
         _dataTableMenuItem.Header = "Data Table...";
         _dataTableMenuItem.Click += async (_, _) => await ShowDataTableDialogAsync();
@@ -1753,6 +1766,7 @@ public sealed class MainWindow : Window
         _dataValidationMenuItem.IsEnabled = isIdle;
         _whatIfAnalysisMenuItem.IsEnabled = isIdle;
         _goalSeekMenuItem.IsEnabled = isIdle;
+        _scenarioManagerMenuItem.IsEnabled = isIdle;
         _dataTableMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1 && _session.SelectedRange.ColCount > 1;
         _reviewSummaryMenuItem.IsEnabled = isIdle;
         _checkAccessibilityMenuItem.IsEnabled = isIdle;
@@ -3009,6 +3023,7 @@ public sealed class MainWindow : Window
     {
         var menu = new NativeMenu();
         menu.Items.Add(_goalSeekMenuItem);
+        menu.Items.Add(_scenarioManagerMenuItem);
         menu.Items.Add(_dataTableMenuItem);
         return menu;
     }
@@ -7548,6 +7563,386 @@ public sealed class MainWindow : Window
     }
 
     private static StackPanel CreateAdvancedFilterField(string label, Control control) =>
+        new()
+        {
+            Spacing = 4,
+            Children =
+            {
+                new TextBlock { Text = label },
+                control,
+            },
+        };
+
+    private async Task ShowScenarioManagerDialogAsync()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var initialPlan = ScenarioManagerPlanner.CreateDialogPlan(_session.Workbook);
+        if (!initialPlan.IsReady)
+        {
+            ShowEditIssue(initialPlan.StatusText ?? "Scenario Manager failed.");
+            return;
+        }
+
+        await ShowScenarioManagerCompactDialogAsync(initialPlan);
+    }
+
+    private async Task ShowScenarioManagerCompactDialogAsync(ScenarioManagerPlan initialPlan)
+    {
+        var plan = initialPlan;
+        string? selectedScenarioName = plan.SelectedScenario?.Name;
+        var dialog = new Window
+        {
+            Title = "Scenario Manager",
+            Width = 560,
+            Height = 500,
+            MinWidth = 460,
+            MinHeight = 430,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "ScenarioManagerCompactDialog");
+
+        var statusText = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = HeaderForeground,
+        };
+
+        var selectionText = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = HeaderForeground,
+        };
+
+        var scenarioList = new ListBox
+        {
+            MinHeight = 120,
+            MaxHeight = 150,
+        };
+        AutomationProperties.SetName(scenarioList, "Scenarios");
+        AutomationProperties.SetAutomationId(scenarioList, "ScenarioManagerScenarioList");
+
+        var scenarioDetailsText = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            LineHeight = 20,
+            MinHeight = 58,
+        };
+
+        var nameBox = new TextBox
+        {
+            MinWidth = 260,
+        };
+        AutomationProperties.SetName(nameBox, "Scenario name");
+        AutomationProperties.SetAutomationId(nameBox, "ScenarioManagerNameBox");
+        AutomationProperties.SetHelpText(nameBox, "Scenario name.");
+
+        var commentBox = new TextBox
+        {
+            MinWidth = 260,
+        };
+        AutomationProperties.SetName(commentBox, "Comment");
+        AutomationProperties.SetAutomationId(commentBox, "ScenarioManagerCommentBox");
+        AutomationProperties.SetHelpText(commentBox, "Scenario comment.");
+
+        var errorText = new TextBlock
+        {
+            Foreground = Brush(143, 74, 18),
+            TextWrapping = TextWrapping.Wrap,
+            MinHeight = 22,
+        };
+        AutomationProperties.SetAutomationId(errorText, "ScenarioManagerErrorText");
+
+        var saveButton = new Button
+        {
+            Content = "Save/Add",
+            MinWidth = 92,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(saveButton, "ScenarioManagerSaveButton");
+
+        var showButton = new Button
+        {
+            Content = "Show",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(showButton, "ScenarioManagerShowButton");
+
+        var deleteButton = new Button
+        {
+            Content = "Delete",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(deleteButton, "ScenarioManagerDeleteButton");
+
+        var summaryButton = new Button
+        {
+            Content = "Summary Report",
+            MinWidth = 128,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(summaryButton, "ScenarioManagerSummaryButton");
+
+        var closeButton = new Button
+        {
+            Content = "Close",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(closeButton, "ScenarioManagerCloseButton");
+
+        string? CurrentScenarioName() =>
+            scenarioList.SelectedItem is ScenarioManagerDialogScenarioItem item
+                ? item.Choice.Name
+                : selectedScenarioName;
+
+        void RefreshSelectionDetails()
+        {
+            var selected = scenarioList.SelectedItem is ScenarioManagerDialogScenarioItem item
+                ? item.Choice
+                : null;
+            selectedScenarioName = selected?.Name;
+            scenarioDetailsText.Text = FormatScenarioManagerScenarioDetails(selected);
+            showButton.IsEnabled = selected is not null;
+            deleteButton.IsEnabled = selected is not null;
+        }
+
+        void RefreshDialogPlan(string? preferredScenarioName = null)
+        {
+            plan = ScenarioManagerPlanner.CreateDialogPlan(_session.Workbook, preferredScenarioName ?? selectedScenarioName);
+            var items = plan.Scenarios
+                .Select(choice => new ScenarioManagerDialogScenarioItem(choice))
+                .ToArray();
+            scenarioList.ItemsSource = items;
+            scenarioList.SelectedItem = items.FirstOrDefault(item => item.Choice.IsSelected);
+            statusText.Text = plan.StatusText;
+            selectionText.Text = FormatScenarioManagerSelectionSummary(_session.SelectedRange);
+            summaryButton.IsEnabled = items.Length > 0;
+            RefreshSelectionDetails();
+        }
+
+        void ReportScenarioManagerFailure(WorkbookCellEditResult result)
+        {
+            var message = result.ErrorMessage ?? "Scenario Manager failed.";
+            errorText.Text = message;
+            ShowEditIssue(message);
+        }
+
+        bool ApplyScenarioManagerResult(WorkbookCellEditResult result, string status)
+        {
+            if (!result.Success)
+            {
+                ReportScenarioManagerFailure(result);
+                return false;
+            }
+
+            errorText.Text = "";
+            RefreshShell(status);
+            return true;
+        }
+
+        void SaveCurrentValues()
+        {
+            var changingCells = CaptureScenarioManagerChangingCells(_session.SelectedRange);
+            var request = new ScenarioManagerSaveRequest(
+                nameBox.Text ?? "",
+                changingCells,
+                Comment: commentBox.Text);
+            var savePlan = ScenarioManagerPlanner.CreateSavePlan(_session.Workbook, request);
+            var result = _session.ExecuteScenarioManagerSavePlan(savePlan, request);
+            if (!ApplyScenarioManagerResult(
+                    result,
+                    $"Saved scenario '{(nameBox.Text ?? "").Trim()}' ({changingCells.Count} {FormatCountLabel(changingCells.Count, "cell")})"))
+            {
+                nameBox.Focus();
+                nameBox.SelectAll();
+                return;
+            }
+
+            RefreshDialogPlan((nameBox.Text ?? "").Trim());
+            nameBox.Text = CreateScenarioManagerDefaultName(plan.Scenarios);
+            commentBox.Text = "";
+        }
+
+        void ShowSelectedScenario()
+        {
+            var scenarioName = CurrentScenarioName();
+            var showPlan = ScenarioManagerPlanner.CreateShowPlan(_session.Workbook, scenarioName);
+            var result = _session.ExecuteScenarioManagerShowPlan(showPlan);
+            if (!ApplyScenarioManagerResult(
+                    result,
+                    $"Showed scenario '{showPlan.SelectedScenario?.Name ?? scenarioName}'"))
+                return;
+
+            RefreshDialogPlan(showPlan.SelectedScenario?.Name ?? scenarioName);
+        }
+
+        void DeleteSelectedScenario()
+        {
+            var scenarioName = CurrentScenarioName();
+            var deletePlan = ScenarioManagerPlanner.CreateDeletePlan(_session.Workbook, scenarioName);
+            var deletedName = deletePlan.SelectedScenario?.Name ?? scenarioName ?? "scenario";
+            var result = _session.ExecuteScenarioManagerDeletePlan(deletePlan);
+            if (!ApplyScenarioManagerResult(result, $"Deleted scenario '{deletedName}'"))
+                return;
+
+            RefreshDialogPlan();
+            nameBox.Text = CreateScenarioManagerDefaultName(plan.Scenarios);
+        }
+
+        void CreateSummaryReport()
+        {
+            var summaryPlan = ScenarioManagerPlanner.CreateSummaryReportPlan(_session.Workbook);
+            var result = _session.ExecuteScenarioManagerSummaryReportPlan(summaryPlan);
+            if (!ApplyScenarioManagerResult(
+                    result,
+                    $"Created Scenario Summary for {summaryPlan.Scenarios.Count} {FormatCountLabel(summaryPlan.Scenarios.Count, "scenario")}"))
+                return;
+
+            RefreshDialogPlan(selectedScenarioName);
+        }
+
+        scenarioList.SelectionChanged += (_, _) => RefreshSelectionDetails();
+        saveButton.Click += (_, _) => SaveCurrentValues();
+        showButton.Click += (_, _) => ShowSelectedScenario();
+        deleteButton.Click += (_, _) => DeleteSelectedScenario();
+        summaryButton.Click += (_, _) => CreateSummaryReport();
+        closeButton.Click += (_, _) => dialog.Close();
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                dialog.Close();
+            }
+        };
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0),
+            Children =
+            {
+                closeButton,
+            },
+        };
+        DockPanel.SetDock(buttonRow, Dock.Bottom);
+
+        var actionRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Children =
+            {
+                saveButton,
+                showButton,
+                deleteButton,
+                summaryButton,
+            },
+        };
+
+        RefreshDialogPlan(selectedScenarioName);
+        nameBox.Text = CreateScenarioManagerDefaultName(plan.Scenarios);
+        dialog.Content = new DockPanel
+        {
+            Margin = new Thickness(16),
+            Children =
+            {
+                buttonRow,
+                new StackPanel
+                {
+                    Spacing = 10,
+                    Children =
+                    {
+                        statusText,
+                        selectionText,
+                        scenarioList,
+                        scenarioDetailsText,
+                        CreateScenarioManagerField("Name", nameBox),
+                        CreateScenarioManagerField("Comment", commentBox),
+                        actionRow,
+                        errorText,
+                    },
+                },
+            },
+        };
+        dialog.Opened += (_, _) =>
+        {
+            if (plan.Scenarios.Count > 0)
+                scenarioList.Focus();
+            else
+                nameBox.Focus();
+        };
+
+        await dialog.ShowDialog(this);
+    }
+
+    private IReadOnlyList<ScenarioCellValue> CaptureScenarioManagerChangingCells(GridRange range)
+    {
+        var sheet = _session.Workbook.GetSheet(range.Start.Sheet) ?? _session.ActiveSheet;
+        var values = new List<ScenarioCellValue>();
+        foreach (var address in range.AllCells())
+            values.Add(new ScenarioCellValue(address, sheet.GetValue(address)));
+
+        return values;
+    }
+
+    private static string FormatScenarioManagerSelectionSummary(GridRange range) =>
+        $"Current selection: {FormatRangeReference(range)} ({range.CellCount} {FormatCountLabel(range.CellCount, "cell")})";
+
+    private static string FormatScenarioManagerScenarioDetails(ScenarioManagerScenarioChoice? choice)
+    {
+        if (choice is null)
+            return "No scenario selected.";
+
+        var comment = string.IsNullOrWhiteSpace(choice.Comment)
+            ? "No comment."
+            : choice.Comment.Trim();
+        var flags = new List<string>();
+        if (choice.Hidden)
+            flags.Add("hidden");
+        if (choice.Locked)
+            flags.Add("locked");
+
+        var flagText = flags.Count == 0
+            ? "Visible, editable."
+            : string.Join(", ", flags.Select(flag => CultureInfo.CurrentCulture.TextInfo.ToTitleCase(flag))) + ".";
+        return string.Join(
+            Environment.NewLine,
+            $"{choice.Name}: {choice.ChangingCellCount} {FormatCountLabel(choice.ChangingCellCount, "changing cell")}.",
+            comment,
+            flagText);
+    }
+
+    private static string CreateScenarioManagerDefaultName(IReadOnlyList<ScenarioManagerScenarioChoice> scenarios)
+    {
+        var existingNames = new HashSet<string>(
+            scenarios.Select(scenario => scenario.Name),
+            StringComparer.OrdinalIgnoreCase);
+        var index = scenarios.Count + 1;
+        while (true)
+        {
+            var candidate = $"Scenario {index}";
+            if (!existingNames.Contains(candidate))
+                return candidate;
+
+            index++;
+        }
+    }
+
+    private static string FormatCountLabel(long count, string singular) =>
+        count == 1 ? singular : $"{singular}s";
+
+    private static StackPanel CreateScenarioManagerField(string label, Control control) =>
         new()
         {
             Spacing = 4,

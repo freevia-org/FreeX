@@ -1567,6 +1567,86 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_WiresNativeScenarioManagerThroughSharedPlannerSessionAndCompactDialog()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "ScenarioManagerPlanner.cs"));
+        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        source.Should().Contain("private readonly NativeMenuItem _scenarioManagerMenuItem = new();");
+        source.Should().Contain("_scenarioManagerMenuItem.Header = \"Scenario Manager...\";");
+        source.Should().Contain("_scenarioManagerMenuItem.Click += async (_, _) => await ShowScenarioManagerDialogAsync();");
+        source.Should().Contain("_scenarioManagerMenuItem.IsEnabled = isIdle;");
+        normalizedSource.Should().Contain(
+            "menu.Items.Add(_goalSeekMenuItem);\n" +
+            "        menu.Items.Add(_scenarioManagerMenuItem);\n" +
+            "        menu.Items.Add(_dataTableMenuItem);");
+
+        source.Should().Contain("private async Task ShowScenarioManagerDialogAsync()");
+        source.Should().Contain("if (_isOpening || _isSaving)");
+        source.Should().Contain("if (!TryCommitPendingFormulaEdit())");
+        source.Should().Contain("var initialPlan = ScenarioManagerPlanner.CreateDialogPlan(_session.Workbook);");
+        source.Should().Contain("await ShowScenarioManagerCompactDialogAsync(initialPlan);");
+
+        source.Should().Contain("private async Task ShowScenarioManagerCompactDialogAsync(ScenarioManagerPlan initialPlan)");
+        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"ScenarioManagerCompactDialog\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(scenarioList, \"ScenarioManagerScenarioList\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(nameBox, \"ScenarioManagerNameBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(commentBox, \"ScenarioManagerCommentBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(saveButton, \"ScenarioManagerSaveButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(showButton, \"ScenarioManagerShowButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(deleteButton, \"ScenarioManagerDeleteButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(summaryButton, \"ScenarioManagerSummaryButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(errorText, \"ScenarioManagerErrorText\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(closeButton, \"ScenarioManagerCloseButton\");");
+
+        source.Should().Contain("ScenarioManagerPlanner.CreateSavePlan(_session.Workbook, request);");
+        source.Should().Contain("_session.ExecuteScenarioManagerSavePlan(savePlan, request);");
+        source.Should().Contain("ScenarioManagerPlanner.CreateShowPlan(_session.Workbook, scenarioName);");
+        source.Should().Contain("_session.ExecuteScenarioManagerShowPlan(showPlan);");
+        source.Should().Contain("ScenarioManagerPlanner.CreateDeletePlan(_session.Workbook, scenarioName);");
+        source.Should().Contain("_session.ExecuteScenarioManagerDeletePlan(deletePlan);");
+        source.Should().Contain("ScenarioManagerPlanner.CreateSummaryReportPlan(_session.Workbook);");
+        source.Should().Contain("_session.ExecuteScenarioManagerSummaryReportPlan(summaryPlan);");
+        source.Should().Contain("CaptureScenarioManagerChangingCells(_session.SelectedRange);");
+        source.Should().Contain("new ScenarioManagerSaveRequest(");
+        source.Should().Contain("RefreshShell(status);");
+        source.Should().Contain("ShowEditIssue(message);");
+
+        sessionSource.Should().Contain("public WorkbookCellEditResult ExecuteScenarioManagerSavePlan(");
+        sessionSource.Should().Contain("public WorkbookCellEditResult ExecuteScenarioManagerShowPlan(ScenarioManagerPlan plan)");
+        sessionSource.Should().Contain("public WorkbookCellEditResult ExecuteScenarioManagerDeletePlan(ScenarioManagerPlan plan)");
+        sessionSource.Should().Contain("public WorkbookCellEditResult ExecuteScenarioManagerSummaryReportPlan(ScenarioManagerPlan plan)");
+        plannerSource.Should().Contain("public static ScenarioManagerPlan CreateDialogPlan(");
+        plannerSource.Should().Contain("public static ScenarioManagerPlan CreateSavePlan(");
+        plannerSource.Should().Contain("public static ScenarioManagerPlan CreateShowPlan(");
+        plannerSource.Should().Contain("public static ScenarioManagerPlan CreateDeletePlan(");
+        plannerSource.Should().Contain("public static ScenarioManagerPlan CreateSummaryReportPlan(");
+
+        var handlerIndex = normalizedSource.IndexOf("private async Task ShowScenarioManagerDialogAsync()", StringComparison.Ordinal);
+        handlerIndex.Should().BeGreaterThanOrEqualTo(0);
+        var nextMethodIndex = normalizedSource.IndexOf("\n    private async Task ShowDataTableDialogAsync()", handlerIndex, StringComparison.Ordinal);
+        nextMethodIndex.Should().BeGreaterThan(handlerIndex);
+        var routeSource = normalizedSource[handlerIndex..nextMethodIndex];
+
+        routeSource.Should().NotContain("_session.SaveScenario(");
+        routeSource.Should().NotContain("_session.ShowScenario(");
+        routeSource.Should().NotContain("_session.DeleteScenario(");
+        routeSource.Should().NotContain("_session.CreateScenarioSummaryReport(");
+        routeSource.Should().NotContain("new SaveScenarioCommand");
+        routeSource.Should().NotContain("new ApplyScenarioCommand");
+        routeSource.Should().NotContain("new DeleteScenarioCommand");
+        routeSource.Should().NotContain("new ScenarioSummaryReportCommand");
+        routeSource.Should().NotContain("new ScenarioManagerDialog(");
+        routeSource.Should().NotContain("FreeX.App.Host");
+        routeSource.Should().NotContain("DataTransferManager");
+        routeSource.Should().NotContain("WindowInteropHelper");
+        routeSource.Should().NotContain("Microsoft.Win32");
+        routeSource.Should().NotContain("System.Windows");
+    }
+
+    [Fact]
     public void MainWindow_WiresNativeAdvancedFilterThroughSharedPlannerSessionAndCompactDialog()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
