@@ -13,7 +13,7 @@ public static partial class PrintRenderer
         public WorkbookDocumentPaginator(IReadOnlyList<DocumentPaginator> paginators)
         {
             _paginators = paginators;
-            _pageSize = paginators.FirstOrDefault()?.PageSize ?? new Size(8.27 * 96.0, 11.69 * 96.0);
+            _pageSize = GetInitialPageSize(paginators);
         }
 
         public override bool IsPageCountValid => _paginators.All(paginator => paginator.IsPageCountValid);
@@ -43,6 +43,14 @@ public static partial class PrintRenderer
             }
 
             throw new ArgumentOutOfRangeException(nameof(pageNumber));
+        }
+
+        private static Size GetInitialPageSize(IReadOnlyList<DocumentPaginator> paginators)
+        {
+            foreach (var paginator in paginators)
+                return paginator.PageSize;
+
+            return new Size(8.27 * 96.0, 11.69 * 96.0);
         }
     }
 }
