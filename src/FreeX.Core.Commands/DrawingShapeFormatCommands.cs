@@ -36,9 +36,8 @@ public sealed class SetDrawingShapeColorsCommand : IWorkbookCommand
         if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var shape = sheet.DrawingShapes.FirstOrDefault(item => item.Id == _shapeId);
-        if (shape is null)
-            return new CommandOutcome(false, "Drawing shape was not found.");
+        if (!DrawingShapeCommandGuards.TryFindShape(sheet, _shapeId, out var shape))
+            return DrawingShapeCommandGuards.DrawingShapeNotFound();
 
         _previousFillColor = shape.FillColor;
         _previousOutlineColor = shape.OutlineColor;
@@ -111,9 +110,8 @@ public sealed class SetDrawingShapeGradientCommand : IWorkbookCommand
         if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var shape = sheet.DrawingShapes.FirstOrDefault(item => item.Id == _shapeId);
-        if (shape is null)
-            return new CommandOutcome(false, "Drawing shape was not found.");
+        if (!DrawingShapeCommandGuards.TryFindShape(sheet, _shapeId, out var shape))
+            return DrawingShapeCommandGuards.DrawingShapeNotFound();
         if (shape.Kind == DrawingShapeKind.Line)
             return new CommandOutcome(false, "Line shapes do not support gradient fills.");
 
@@ -177,9 +175,8 @@ public sealed class SetDrawingShapeEffectCommand : IWorkbookCommand
         if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var shape = sheet.DrawingShapes.FirstOrDefault(item => item.Id == _shapeId);
-        if (shape is null)
-            return new CommandOutcome(false, "Drawing shape was not found.");
+        if (!DrawingShapeCommandGuards.TryFindShape(sheet, _shapeId, out var shape))
+            return DrawingShapeCommandGuards.DrawingShapeNotFound();
 
         _previousHasShadowEffect = shape.HasShadowEffect;
         _previousEffectPreset = shape.EffectPreset;
