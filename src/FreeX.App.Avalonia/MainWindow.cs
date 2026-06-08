@@ -6139,9 +6139,17 @@ public sealed class MainWindow : Window
         T currentValue)
         where T : struct
     {
-        var selected = choices.FirstOrDefault(choice =>
-            choice.Value.HasValue &&
-            EqualityComparer<T>.Default.Equals(choice.Value.Value, currentValue)) ?? choices[0];
+        var selected = choices[0];
+        foreach (var choice in choices)
+        {
+            if (choice.Value.HasValue &&
+                EqualityComparer<T>.Default.Equals(choice.Value.Value, currentValue))
+            {
+                selected = choice;
+                break;
+            }
+        }
+
         var comboBox = new ComboBox
         {
             ItemsSource = choices,
@@ -6309,7 +6317,14 @@ public sealed class MainWindow : Window
         if (comboBox.ItemsSource is not IEnumerable<FormatCellsColorChoice> choices)
             return;
 
-        comboBox.SelectedItem = choices.FirstOrDefault(choice => choice.Color == color) ?? comboBox.SelectedItem;
+        foreach (var choice in choices)
+        {
+            if (choice.Color == color)
+            {
+                comboBox.SelectedItem = choice;
+                return;
+            }
+        }
     }
 
     private static T? ReadChangedFormatCellsValue<T>(T currentValue, ComboBox comboBox)
@@ -7025,26 +7040,62 @@ public sealed class MainWindow : Window
 
         void SelectColumn(ComboBox comboBox, IReadOnlyList<SortDialogComboItem<SortColumnChoice>> choices, SortDialogLevel level)
         {
-            comboBox.SelectedItem = choices.FirstOrDefault(choice => choice.Value.ColumnOffset == level.ColumnOffset) ??
-                choices.FirstOrDefault();
+            var selected = choices.Count > 0 ? choices[0] : null;
+            foreach (var choice in choices)
+            {
+                if (choice.Value.ColumnOffset == level.ColumnOffset)
+                {
+                    selected = choice;
+                    break;
+                }
+            }
+
+            comboBox.SelectedItem = selected;
         }
 
         void SelectSortOn(ComboBox comboBox, IReadOnlyList<SortDialogComboItem<SortOnChoice>> choices, SortDialogLevel level)
         {
-            comboBox.SelectedItem = choices.FirstOrDefault(choice => string.Equals(choice.Value.Label, level.SortOn, StringComparison.Ordinal)) ??
-                choices.FirstOrDefault();
+            var selected = choices.Count > 0 ? choices[0] : null;
+            foreach (var choice in choices)
+            {
+                if (string.Equals(choice.Value.Label, level.SortOn, StringComparison.Ordinal))
+                {
+                    selected = choice;
+                    break;
+                }
+            }
+
+            comboBox.SelectedItem = selected;
         }
 
         void SelectOrder(ComboBox comboBox, IReadOnlyList<SortDialogComboItem<SortDirectionChoice>> choices, SortDialogLevel level)
         {
-            comboBox.SelectedItem = choices.FirstOrDefault(choice => choice.Value.Ascending == level.Ascending) ??
-                choices.FirstOrDefault();
+            var selected = choices.Count > 0 ? choices[0] : null;
+            foreach (var choice in choices)
+            {
+                if (choice.Value.Ascending == level.Ascending)
+                {
+                    selected = choice;
+                    break;
+                }
+            }
+
+            comboBox.SelectedItem = selected;
         }
 
         void SelectColor(ComboBox comboBox, IReadOnlyList<SortDialogComboItem<SortColorChoice>> choices, SortDialogLevel level)
         {
-            comboBox.SelectedItem = choices.FirstOrDefault(choice => string.Equals(choice.Value.Label, level.TargetColor, StringComparison.OrdinalIgnoreCase)) ??
-                choices.FirstOrDefault();
+            var selected = choices.Count > 0 ? choices[0] : null;
+            foreach (var choice in choices)
+            {
+                if (string.Equals(choice.Value.Label, level.TargetColor, StringComparison.OrdinalIgnoreCase))
+                {
+                    selected = choice;
+                    break;
+                }
+            }
+
+            comboBox.SelectedItem = selected;
         }
 
         void ApplyColorChoices(SortDialogLevel level)
@@ -8099,7 +8150,14 @@ public sealed class MainWindow : Window
             if (selectedOffsets.Length == 0)
             {
                 errorText.Text = "Select at least one subtotal column.";
-                (columnBoxes.FirstOrDefault() as Control ?? okButton).Focus();
+                Control focusTarget = okButton;
+                foreach (var columnBox in columnBoxes)
+                {
+                    focusTarget = columnBox;
+                    break;
+                }
+
+                focusTarget.Focus();
                 return;
             }
 
@@ -8389,7 +8447,14 @@ public sealed class MainWindow : Window
             if (!planResult.IsReady || planResult.Plan is null)
             {
                 errorText.Text = planResult.StatusText;
-                (columnBoxes.FirstOrDefault() as Control ?? selectAllButton).Focus();
+                Control focusTarget = selectAllButton;
+                foreach (var columnBox in columnBoxes)
+                {
+                    focusTarget = columnBox;
+                    break;
+                }
+
+                focusTarget.Focus();
                 return;
             }
 
@@ -8643,7 +8708,17 @@ public sealed class MainWindow : Window
                 .Select(choice => new ScenarioManagerDialogScenarioItem(choice))
                 .ToArray();
             scenarioList.ItemsSource = items;
-            scenarioList.SelectedItem = items.FirstOrDefault(item => item.Choice.IsSelected);
+            ScenarioManagerDialogScenarioItem? selectedItem = null;
+            foreach (var item in items)
+            {
+                if (item.Choice.IsSelected)
+                {
+                    selectedItem = item;
+                    break;
+                }
+            }
+
+            scenarioList.SelectedItem = selectedItem;
             statusText.Text = plan.StatusText;
             selectionText.Text = FormatScenarioManagerSelectionSummary(_session.SelectedRange);
             summaryButton.IsEnabled = items.Length > 0;
@@ -9748,18 +9823,42 @@ public sealed class MainWindow : Window
 
     private static DataValidationTypeChoice? FindDataValidationTypeChoice(
         IReadOnlyList<DataValidationTypeChoice> choices,
-        DvType type) =>
-        choices.FirstOrDefault(choice => choice.Type == type);
+        DvType type)
+    {
+        foreach (var choice in choices)
+        {
+            if (choice.Type == type)
+                return choice;
+        }
+
+        return null;
+    }
 
     private static DataValidationOperatorChoice FindDataValidationOperatorChoice(
         IReadOnlyList<DataValidationOperatorChoice> choices,
-        DvOperator op) =>
-        choices.FirstOrDefault(choice => choice.Operator == op) ?? choices[0];
+        DvOperator op)
+    {
+        foreach (var choice in choices)
+        {
+            if (choice.Operator == op)
+                return choice;
+        }
+
+        return choices[0];
+    }
 
     private static DataValidationAlertStyleChoice FindDataValidationAlertStyleChoice(
         IReadOnlyList<DataValidationAlertStyleChoice> choices,
-        DvAlertStyle alertStyle) =>
-        choices.FirstOrDefault(choice => choice.AlertStyle == alertStyle) ?? choices[0];
+        DvAlertStyle alertStyle)
+    {
+        foreach (var choice in choices)
+        {
+            if (choice.AlertStyle == alertStyle)
+                return choice;
+        }
+
+        return choices[0];
+    }
 
     private static DataValidation CreateDefaultDataValidationRule(DvType type, GridRange selectedRange)
     {
@@ -12405,7 +12504,13 @@ public sealed class MainWindow : Window
             FileTypeFilter = fileTypes,
         });
 
-        var storageFile = storageFiles.FirstOrDefault();
+        IStorageFile? storageFile = null;
+        foreach (var file in storageFiles)
+        {
+            storageFile = file;
+            break;
+        }
+
         if (storageFile is null)
             return;
 
