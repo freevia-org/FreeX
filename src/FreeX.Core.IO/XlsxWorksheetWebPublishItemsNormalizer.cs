@@ -159,7 +159,7 @@ internal static class XlsxWorksheetWebPublishItemsNormalizer
 
     private static bool IsWebPublishItemsPartEntry(ZipArchiveEntry entry)
     {
-        var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+        var path = XlsxPackagePath.NormalizeEntryPath(entry);
         return path.Equals(WebPublishItemsPath, StringComparison.OrdinalIgnoreCase);
     }
 

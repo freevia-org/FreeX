@@ -117,9 +117,12 @@ public static class XlsxPackagePath
     public static bool IsWorksheetXmlEntry(ZipArchiveEntry entry) =>
         IsXmlEntryInDirectory(entry, "xl/worksheets/");
 
+    public static string NormalizeEntryPath(ZipArchiveEntry entry) =>
+        NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+
     public static bool IsXmlEntryInDirectory(ZipArchiveEntry entry, string directory)
     {
-        var path = NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+        var path = NormalizeEntryPath(entry);
         return path.StartsWith(directory, StringComparison.OrdinalIgnoreCase) &&
                path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
                !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);

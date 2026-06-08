@@ -33,7 +33,7 @@ internal static class XlsxLegacyCommentFontNormalizer
 
     private static bool IsLegacyCommentXmlEntry(ZipArchiveEntry entry)
     {
-        var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+        var path = XlsxPackagePath.NormalizeEntryPath(entry);
         return path.StartsWith("xl/comments", StringComparison.OrdinalIgnoreCase) &&
                path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
                !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
