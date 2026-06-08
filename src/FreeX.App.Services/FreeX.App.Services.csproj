@@ -15,6 +15,10 @@
     <EmbeddedResource Include="..\..\THIRD_PARTY_LICENSES.md" LogicalName="FreeX.Legal.ThirdPartyLicenses.md" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="FreeX.App.Services.Tests" />
+  </ItemGroup>
+
   <PropertyGroup>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
