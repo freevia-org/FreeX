@@ -121,6 +121,29 @@ public sealed class XlsxPackageHealthValidatorTests
     }
 
     [Fact]
+    public void Validate_FlagsRelationshipPartWithoutOwningPackagePart()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            extraEntries:
+            [
+                ("xl/drawings/_rels/drawing1.xml.rels", RelationshipsXml(
+                    Relationship(
+                        "rId1",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+                        "../media/image1.png"))),
+                ("xl/media/image1.png", "")
+            ],
+            contentTypeDefaults:
+            [
+                """<Default Extension="png" ContentType="image/png" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("xl/drawings/_rels/drawing1.xml.rels has no owning package part xl/drawings/drawing1.xml", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Validate_FlagsRelationshipContentTypeOnNonRelationshipPart()
     {
         using var package = CreateMinimalWorkbookPackage(
