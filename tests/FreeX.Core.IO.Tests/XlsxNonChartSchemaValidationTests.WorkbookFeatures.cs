@@ -230,6 +230,24 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void WorkbookFileRecoveryProperties_DoesNotMarkFreeXAuthoredWorkbookAsRepairLoaded()
+    {
+        using var saved = Save(CreateAuthoredWorkbookFileRecoveryRepairLoadSourceWorkbook());
+
+        SchemaErrors(saved).Should().BeEmpty();
+        var fileRecoveryPr = ReadWorkbookChildElement(saved, "fileRecoveryPr");
+        fileRecoveryPr.Attribute("autoRecover")!.Value.Should().Be("1");
+        fileRecoveryPr.Attribute("repairLoad").Should().BeNull();
+
+        var reloaded = ReloadWorkbook(saved);
+        reloaded.FileRecoveryProperties.Should().ContainSingle()
+            .Which.Should().BeEquivalentTo(new WorkbookFileRecoveryPropertiesModel
+            {
+                AutoRecover = true
+            });
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithWorkbookFileRecoveryProperties_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreateWorkbookFileRecoveryPropertiesSourceWorkbook());
@@ -1204,6 +1222,20 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         });
         var sheet = workbook.AddSheet("Data");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("recovery"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
+        return workbook;
+    }
+
+    private static Workbook CreateAuthoredWorkbookFileRecoveryRepairLoadSourceWorkbook()
+    {
+        var workbook = new Workbook("WorkbookFileRecoveryAuthoredRepairLoad");
+        workbook.FileRecoveryProperties.Add(new WorkbookFileRecoveryPropertiesModel
+        {
+            AutoRecover = true,
+            RepairLoad = true
+        });
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("repair marker"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
         return workbook;
     }
