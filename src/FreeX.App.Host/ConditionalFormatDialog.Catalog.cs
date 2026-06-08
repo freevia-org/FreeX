@@ -114,11 +114,31 @@ public partial class ConditionalFormatDialog
         _ => "Greater Than"
     };
 
-    private static string CellValueOperatorLabelForRuleType(string ruleType) =>
-        CellValueOperatorLabels.FirstOrDefault(item => item.RuleType == ruleType).Label ?? UiText.Get("ConditionalFormatDialog_CellValueOperator_GreaterThan");
+    private static string CellValueOperatorLabelForRuleType(string ruleType)
+    {
+        foreach (var item in CellValueOperatorLabels)
+        {
+            if (item.RuleType == ruleType)
+            {
+                return item.Label ?? UiText.Get("ConditionalFormatDialog_CellValueOperator_GreaterThan");
+            }
+        }
 
-    private static string SpecificTextOperatorLabelForRuleType(string ruleType) =>
-        SpecificTextOperatorLabels.FirstOrDefault(item => item.RuleType == ruleType).Label ?? UiText.Get("ConditionalFormatDialog_TextOperator_Containing");
+        return UiText.Get("ConditionalFormatDialog_CellValueOperator_GreaterThan");
+    }
+
+    private static string SpecificTextOperatorLabelForRuleType(string ruleType)
+    {
+        foreach (var item in SpecificTextOperatorLabels)
+        {
+            if (item.RuleType == ruleType)
+            {
+                return item.Label ?? UiText.Get("ConditionalFormatDialog_TextOperator_Containing");
+            }
+        }
+
+        return UiText.Get("ConditionalFormatDialog_TextOperator_Containing");
+    }
 
     protected static string RuleTypeDisplayName(string ruleType) => ruleType switch
     {
