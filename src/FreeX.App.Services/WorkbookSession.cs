@@ -377,6 +377,18 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public WorkbookCellEditResult ExecuteAdvancedFilterPlan(AdvancedFilterPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        var result = _cellEditService.ExecuteEditCommand(Workbook, plan.CreateCommand());
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, GetAdvancedFilterSelectedRange(plan));
+        return result;
+    }
+
     public WorkbookNavigationResult FindNext(
         string? searchText = null,
         FindOptions? options = null,
@@ -2582,6 +2594,15 @@ public sealed class WorkbookSession
 
     private static CellAddress RemapAddressToSheet(CellAddress address, SheetId sheetId) =>
         new(sheetId, address.Row, address.Col);
+
+    private static GridRange GetAdvancedFilterSelectedRange(AdvancedFilterPlan plan) =>
+        plan is
+        {
+            OutputMode: AdvancedFilterOutputMode.CopyToAnotherLocation,
+            CopyToRange: { } copyToRange
+        }
+            ? copyToRange
+            : plan.ListRange;
 
     private void ApplySuccessfulWorkbookStructureResult(SheetId preferredSheetId)
     {
