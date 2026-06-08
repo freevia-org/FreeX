@@ -151,6 +151,13 @@ public sealed class MainWindow : Window
     private sealed record DataValidationDialogResult(
         DataValidationDialogAction Action,
         DataValidation? Rule);
+    private sealed record SortDialogResult(
+        IReadOnlyList<SortDialogLevel> Levels,
+        bool HasHeaders);
+    private sealed record SortDialogComboItem<T>(string Label, T Value)
+    {
+        public override string ToString() => Label;
+    }
     private sealed record DataValidationTypeChoice(DvType Type, string Label)
     {
         public override string ToString() => Label;
@@ -341,6 +348,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _goToSpecialMenuItem = new();
     private readonly NativeMenuItem _sortAscendingMenuItem = new();
     private readonly NativeMenuItem _sortDescendingMenuItem = new();
+    private readonly NativeMenuItem _customSortMenuItem = new();
     private readonly NativeMenuItem _dataValidationMenuItem = new();
     private readonly NativeMenuItem _whatIfAnalysisMenuItem = new();
     private readonly NativeMenuItem _goalSeekMenuItem = new();
@@ -680,6 +688,9 @@ public sealed class MainWindow : Window
         _sortDescendingMenuItem.Header = "Sort Z to A";
         _sortDescendingMenuItem.Click += (_, _) => SortSelectedRange(ascending: false);
 
+        _customSortMenuItem.Header = "Sort...";
+        _customSortMenuItem.Click += async (_, _) => await ShowSortDialogAsync();
+
         _dataValidationMenuItem.Header = "Data Validation...";
         _dataValidationMenuItem.Click += async (_, _) => await ShowDataValidationDialogAsync();
 
@@ -961,6 +972,7 @@ public sealed class MainWindow : Window
         var dataMenu = new NativeMenu();
         dataMenu.Items.Add(_sortAscendingMenuItem);
         dataMenu.Items.Add(_sortDescendingMenuItem);
+        dataMenu.Items.Add(_customSortMenuItem);
         dataMenu.Items.Add(new NativeMenuItemSeparator());
         dataMenu.Items.Add(_dataValidationMenuItem);
         dataMenu.Items.Add(new NativeMenuItemSeparator());
@@ -1688,6 +1700,7 @@ public sealed class MainWindow : Window
         _goToSpecialMenuItem.IsEnabled = isIdle;
         _sortAscendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
+        _customSortMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _dataValidationMenuItem.IsEnabled = isIdle;
         _whatIfAnalysisMenuItem.IsEnabled = isIdle;
         _goalSeekMenuItem.IsEnabled = isIdle;
@@ -6272,6 +6285,275 @@ public sealed class MainWindow : Window
         }
 
         RefreshShell($"Sorted {rangeReference} {(ascending ? "A to Z" : "Z to A")}");
+    }
+
+    private async Task ShowSortDialogAsync()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var selection = await ShowSortInputDialogAsync();
+        if (selection is null)
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var keys = SortDialogPlanner.BuildSortKeys(selection.Levels);
+        var options = new SortOptions(CaseSensitive: false, LeftToRight: false);
+        var result = _session.SortSelectedRange(keys, options, selection.HasHeaders);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Sort failed.");
+            return;
+        }
+
+        RefreshShell($"Sorted {rangeReference}");
+    }
+
+    private async Task<SortDialogResult?> ShowSortInputDialogAsync()
+    {
+        SortDialogResult? result = null;
+        var range = _session.SelectedRange;
+        var levels = SortDialogPlanner.NormalizeLevels(null).ToList();
+        var orderChoices = SortDialogPlanner.BuildOrderChoices(SortDialogPlannerText.Default.SortOnCellValues);
+        var dialog = new Window
+        {
+            Title = "Sort",
+            Width = 560,
+            Height = 430,
+            MinWidth = 500,
+            MinHeight = 360,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "SortCompactDialog");
+        AutomationProperties.SetHelpText(
+            dialog,
+            "macOS preview custom sort supports cell values by column; color, custom-list, case-sensitive, and left-to-right options remain WPF-only.");
+
+        var headersCheck = new CheckBox
+        {
+            Content = "My data has headers",
+            IsChecked = true,
+        };
+        AutomationProperties.SetAutomationId(headersCheck, "SortHeadersCheckBox");
+
+        var levelsPanel = new StackPanel
+        {
+            Spacing = 8,
+        };
+        AutomationProperties.SetAutomationId(levelsPanel, "SortLevelsPanel");
+
+        var addLevelButton = new Button
+        {
+            Content = "Add Level",
+            MinWidth = 94,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(addLevelButton, "SortAddLevelButton");
+
+        var okButton = new Button
+        {
+            Content = "OK",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(okButton, "SortOkButton");
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(cancelButton, "SortCancelButton");
+
+        IReadOnlyList<SortColumnChoice> CurrentColumnChoices()
+        {
+            var hasHeaders = headersCheck.IsChecked == true;
+            var headerChoices = SortDialogPlanner.BuildColumnChoices(_session.ActiveSheet, range, hasHeaders: true);
+            var genericChoices = SortDialogPlanner.BuildColumnChoices(_session.ActiveSheet, range, hasHeaders: false);
+            return hasHeaders ? headerChoices : genericChoices;
+        }
+
+        IReadOnlyList<SortDialogComboItem<SortColumnChoice>> CreateColumnItems() =>
+            CurrentColumnChoices()
+                .Select(choice => new SortDialogComboItem<SortColumnChoice>(choice.Label, choice))
+                .ToList();
+
+        IReadOnlyList<SortDialogComboItem<SortDirectionChoice>> CreateOrderItems() =>
+            orderChoices
+                .Select(choice => new SortDialogComboItem<SortDirectionChoice>(choice.Label, choice))
+                .ToList();
+
+        void SelectColumn(ComboBox comboBox, IReadOnlyList<SortDialogComboItem<SortColumnChoice>> choices, SortDialogLevel level)
+        {
+            comboBox.SelectedItem = choices.FirstOrDefault(choice => choice.Value.ColumnOffset == level.ColumnOffset) ??
+                choices.FirstOrDefault();
+        }
+
+        void SelectOrder(ComboBox comboBox, IReadOnlyList<SortDialogComboItem<SortDirectionChoice>> choices, SortDialogLevel level)
+        {
+            comboBox.SelectedItem = choices.FirstOrDefault(choice => choice.Value.Ascending == level.Ascending) ??
+                choices.FirstOrDefault();
+        }
+
+        StackPanel CreateSortField(string label, Control control, double width) =>
+            new()
+            {
+                Width = width,
+                Spacing = 4,
+                Children =
+                {
+                    new TextBlock { Text = label },
+                    control,
+                },
+            };
+
+        void RebuildLevels()
+        {
+            levels = SortDialogPlanner.NormalizeLevels(levels).ToList();
+            levelsPanel.Children.Clear();
+            var columnChoices = CreateColumnItems();
+            var directionChoices = CreateOrderItems();
+            for (var index = 0; index < levels.Count; index++)
+            {
+                var levelIndex = index;
+                var level = levels[index];
+                var columnBox = new ComboBox
+                {
+                    ItemsSource = columnChoices,
+                    MinWidth = 210,
+                };
+                AutomationProperties.SetName(columnBox, "Sort by");
+                AutomationProperties.SetAutomationId(columnBox, $"SortLevel{levelIndex + 1}ColumnBox");
+                SelectColumn(columnBox, columnChoices, level);
+                columnBox.SelectionChanged += (_, _) =>
+                {
+                    if (columnBox.SelectedItem is SortDialogComboItem<SortColumnChoice> columnChoice)
+                        levels = SortDialogPlanner.UpdateLevel(levels, levelIndex, columnChoice.Value.ColumnOffset, levels[levelIndex].Ascending).ToList();
+                };
+
+                var orderBox = new ComboBox
+                {
+                    ItemsSource = directionChoices,
+                    MinWidth = 120,
+                };
+                AutomationProperties.SetName(orderBox, "Order");
+                AutomationProperties.SetAutomationId(orderBox, $"SortLevel{levelIndex + 1}OrderBox");
+                SelectOrder(orderBox, directionChoices, level);
+                orderBox.SelectionChanged += (_, _) =>
+                {
+                    if (orderBox.SelectedItem is SortDialogComboItem<SortDirectionChoice> directionChoice)
+                        levels = SortDialogPlanner.UpdateLevel(levels, levelIndex, levels[levelIndex].ColumnOffset, directionChoice.Value.Ascending).ToList();
+                };
+
+                var removeButton = new Button
+                {
+                    Content = "Remove",
+                    IsEnabled = levels.Count > 1,
+                    MinWidth = 82,
+                    Padding = new Thickness(10, 4),
+                    VerticalAlignment = AvaloniaVerticalAlignment.Bottom,
+                };
+                AutomationProperties.SetAutomationId(removeButton, $"SortLevel{levelIndex + 1}RemoveButton");
+                removeButton.Click += (_, _) =>
+                {
+                    var removeIndex = Math.Min(levelIndex, levels.Count - 1);
+                    levels = SortDialogPlanner.RemoveLevel(levels, removeIndex).ToList();
+                    RebuildLevels();
+                };
+
+                var row = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    Children =
+                    {
+                        CreateSortField("Sort by", columnBox, 250),
+                        CreateSortField("Order", orderBox, 140),
+                        removeButton,
+                    },
+                };
+                AutomationProperties.SetAutomationId(row, $"SortLevel{levelIndex + 1}Row");
+                levelsPanel.Children.Add(row);
+            }
+        }
+
+        void Accept()
+        {
+            result = new SortDialogResult(
+                SortDialogPlanner.NormalizeLevels(levels),
+                headersCheck.IsChecked == true);
+            dialog.Close();
+        }
+
+        addLevelButton.Click += (_, _) =>
+        {
+            levels = SortDialogPlanner.AddLevel(levels).ToList();
+            RebuildLevels();
+        };
+        headersCheck.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == ToggleButton.IsCheckedProperty)
+                RebuildLevels();
+        };
+        okButton.Click += (_, _) => Accept();
+        cancelButton.Click += (_, _) => dialog.Close();
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                Accept();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                dialog.Close();
+                e.Handled = true;
+            }
+        };
+
+        RebuildLevels();
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 12,
+            Children =
+            {
+                headersCheck,
+                new ScrollViewer
+                {
+                    MaxHeight = 240,
+                    Content = levelsPanel,
+                },
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    Children =
+                    {
+                        addLevelButton,
+                    },
+                },
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+                    Children =
+                    {
+                        cancelButton,
+                        okButton,
+                    },
+                },
+            },
+        };
+
+        await dialog.ShowDialog(this);
+        return result;
     }
 
     private async Task ShowGoalSeekDialogAsync()

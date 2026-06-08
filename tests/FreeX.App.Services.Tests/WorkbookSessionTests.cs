@@ -1551,6 +1551,51 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SortSelectedRange_CustomKeysExcludeHeaderRowAndPreserveSelection()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("Group"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Rank"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(2));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        var range = new GridRange(a1, new CellAddress(sheet.Id, 4, 2));
+        session.SelectRange(range);
+
+        var result = session.SortSelectedRange(
+            [
+                new SortKey(0, true),
+                new SortKey(1, false)
+            ],
+            new SortOptions(),
+            hasHeaders: true);
+
+        result.Success.Should().BeTrue();
+        session.SelectedRange.Should().Be(range);
+        session.ActiveCell.Should().Be(a1);
+        sheet.GetValue(1, 1).Should().Be(new TextValue("Group"));
+        sheet.GetValue(1, 2).Should().Be(new TextValue("Rank"));
+        sheet.GetValue(2, 1).Should().Be(new TextValue("A"));
+        sheet.GetValue(2, 2).Should().Be(new NumberValue(2));
+        sheet.GetValue(3, 1).Should().Be(new TextValue("A"));
+        sheet.GetValue(3, 2).Should().Be(new NumberValue(1));
+        sheet.GetValue(4, 1).Should().Be(new TextValue("B"));
+        sheet.GetValue(4, 2).Should().Be(new NumberValue(2));
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+    }
+
+    [Fact]
     public void CommitCellText_MarksDirtyAndRecalculatesDependents()
     {
         var workbook = CreateWorkbook();
