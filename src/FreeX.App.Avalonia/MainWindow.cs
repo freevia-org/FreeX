@@ -353,6 +353,12 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _whatIfAnalysisMenuItem = new();
     private readonly NativeMenuItem _goalSeekMenuItem = new();
     private readonly NativeMenuItem _dataTableMenuItem = new();
+    private readonly NativeMenuItem _reviewSummaryMenuItem = new();
+    private readonly NativeMenuItem _checkAccessibilityMenuItem = new();
+    private readonly NativeMenuItem _nextNoteMenuItem = new();
+    private readonly NativeMenuItem _previousNoteMenuItem = new();
+    private readonly NativeMenuItem _nextCommentMenuItem = new();
+    private readonly NativeMenuItem _previousCommentMenuItem = new();
     private readonly NativeMenuItem _autoSumMenuItem = new();
     private readonly NativeMenuItem _autoSumSumMenuItem = new();
     private readonly NativeMenuItem _autoSumAverageMenuItem = new();
@@ -704,6 +710,24 @@ public sealed class MainWindow : Window
         _whatIfAnalysisMenuItem.Header = "What-If Analysis";
         _whatIfAnalysisMenuItem.Menu = CreateNativeWhatIfAnalysisMenu();
 
+        _reviewSummaryMenuItem.Header = "Review Summary...";
+        _reviewSummaryMenuItem.Click += async (_, _) => await ShowReviewSummaryDialogAsync();
+
+        _checkAccessibilityMenuItem.Header = "Check Accessibility...";
+        _checkAccessibilityMenuItem.Click += async (_, _) => await ShowReviewSummaryDialogAsync(focusAccessibility: true);
+
+        _nextNoteMenuItem.Header = "Next Note";
+        _nextNoteMenuItem.Click += (_, _) => NavigateReviewNote(previous: false);
+
+        _previousNoteMenuItem.Header = "Previous Note";
+        _previousNoteMenuItem.Click += (_, _) => NavigateReviewNote(previous: true);
+
+        _nextCommentMenuItem.Header = "Next Comment";
+        _nextCommentMenuItem.Click += (_, _) => NavigateReviewThreadedComment(previous: false);
+
+        _previousCommentMenuItem.Header = "Previous Comment";
+        _previousCommentMenuItem.Click += (_, _) => NavigateReviewThreadedComment(previous: true);
+
         _autoSumMenuItem.Header = "AutoSum";
         _autoSumMenuItem.Menu = CreateNativeAutoSumMenu();
 
@@ -982,6 +1006,16 @@ public sealed class MainWindow : Window
         dataMenu.Items.Add(new NativeMenuItemSeparator());
         dataMenu.Items.Add(_whatIfAnalysisMenuItem);
 
+        var reviewMenu = new NativeMenu();
+        reviewMenu.Items.Add(_reviewSummaryMenuItem);
+        reviewMenu.Items.Add(_checkAccessibilityMenuItem);
+        reviewMenu.Items.Add(new NativeMenuItemSeparator());
+        reviewMenu.Items.Add(_nextNoteMenuItem);
+        reviewMenu.Items.Add(_previousNoteMenuItem);
+        reviewMenu.Items.Add(new NativeMenuItemSeparator());
+        reviewMenu.Items.Add(_nextCommentMenuItem);
+        reviewMenu.Items.Add(_previousCommentMenuItem);
+
         var formatMenu = new NativeMenu();
         formatMenu.Items.Add(_boldMenuItem);
         formatMenu.Items.Add(_italicMenuItem);
@@ -1076,6 +1110,11 @@ public sealed class MainWindow : Window
         {
             Header = "Data",
             Menu = dataMenu,
+        });
+        _nativeMenu.Items.Add(new NativeMenuItem
+        {
+            Header = "Review",
+            Menu = reviewMenu,
         });
         _nativeMenu.Items.Add(new NativeMenuItem
         {
@@ -1709,6 +1748,12 @@ public sealed class MainWindow : Window
         _whatIfAnalysisMenuItem.IsEnabled = isIdle;
         _goalSeekMenuItem.IsEnabled = isIdle;
         _dataTableMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1 && _session.SelectedRange.ColCount > 1;
+        _reviewSummaryMenuItem.IsEnabled = isIdle;
+        _checkAccessibilityMenuItem.IsEnabled = isIdle;
+        _nextNoteMenuItem.IsEnabled = isIdle;
+        _previousNoteMenuItem.IsEnabled = isIdle;
+        _nextCommentMenuItem.IsEnabled = isIdle;
+        _previousCommentMenuItem.IsEnabled = isIdle;
         _autoSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
         _autoSumSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
         _autoSumAverageMenuItem.IsEnabled = _autoSumButton.IsEnabled;
@@ -5011,6 +5056,281 @@ public sealed class MainWindow : Window
             $"Pictures: {statistics.PictureCount}",
             $"Shapes and text boxes: {statistics.ShapeCount}",
             $"Named ranges: {statistics.NamedRangeCount}");
+
+    private async Task ShowReviewSummaryDialogAsync(bool focusAccessibility = false)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var plan = _session.GetReviewWorkflowPlan();
+        var dialog = new Window
+        {
+            Title = focusAccessibility ? "Accessibility Check" : "Review Summary",
+            Width = 640,
+            Height = 520,
+            MinWidth = 520,
+            MinHeight = 420,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "ReviewSummaryDialog");
+
+        var summaryBlock = new TextBlock
+        {
+            Text = FormatReviewWorkflowSummary(plan),
+            TextWrapping = TextWrapping.Wrap,
+            LineHeight = 21,
+        };
+        AutomationProperties.SetName(summaryBlock, "Review Summary");
+        AutomationProperties.SetAutomationId(summaryBlock, "ReviewSummaryText");
+        AutomationProperties.SetHelpText(summaryBlock, "Summarizes workbook statistics and review item counts.");
+
+        var spellingList = CreateReviewPreviewList(
+            "Spelling issues",
+            "ReviewSpellingIssuesList",
+            FormatReviewSpellingIssues(plan.SpellingIssues));
+        var accessibilityList = CreateReviewPreviewList(
+            "Accessibility issues",
+            "ReviewAccessibilityIssuesList",
+            FormatReviewAccessibilityIssues(plan.AccessibilityIssues));
+        var notesList = CreateReviewPreviewList(
+            "Notes",
+            "ReviewNotesList",
+            FormatReviewCommentItems(plan.Notes, "No notes on the active sheet."));
+        var commentsList = CreateReviewPreviewList(
+            "Threaded comments",
+            "ReviewCommentsList",
+            FormatReviewCommentItems(plan.ThreadedComments, "No threaded comments on the active sheet."));
+
+        var closeButton = new Button
+        {
+            Content = "Close",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+        };
+        AutomationProperties.SetName(closeButton, "Close");
+        AutomationProperties.SetAutomationId(closeButton, "ReviewCloseButton");
+        AutomationProperties.SetHelpText(closeButton, "Close review summary.");
+        closeButton.Click += (_, _) => dialog.Close();
+
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key is Key.Enter or Key.Escape)
+            {
+                e.Handled = true;
+                dialog.Close();
+            }
+        };
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0),
+            Children =
+            {
+                closeButton,
+            },
+        };
+        DockPanel.SetDock(buttonRow, Dock.Bottom);
+
+        dialog.Content = new DockPanel
+        {
+            Margin = new Thickness(16),
+            Children =
+            {
+                buttonRow,
+                new ScrollViewer
+                {
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    Content = new StackPanel
+                    {
+                        Spacing = 10,
+                        Children =
+                        {
+                            summaryBlock,
+                            CreateReviewPreviewSection("Spelling", spellingList),
+                            CreateReviewPreviewSection("Accessibility", accessibilityList),
+                            CreateReviewPreviewSection("Notes", notesList),
+                            CreateReviewPreviewSection("Comments", commentsList),
+                        },
+                    },
+                },
+            },
+        };
+        dialog.Opened += (_, _) =>
+        {
+            if (focusAccessibility)
+                accessibilityList.Focus();
+            else
+                closeButton.Focus();
+        };
+
+        await dialog.ShowDialog(this);
+    }
+
+    private void NavigateReviewNote(bool previous) =>
+        NavigateReviewTarget(
+            () => _session.GoToNextNote(previous: previous),
+            previous ? "previous note" : "next note",
+            previous ? "Previous note was not found." : "Next note was not found.");
+
+    private void NavigateReviewThreadedComment(bool previous) =>
+        NavigateReviewTarget(
+            () => _session.GoToNextThreadedComment(previous: previous),
+            previous ? "previous comment" : "next comment",
+            previous ? "Previous threaded comment was not found." : "Next threaded comment was not found.");
+
+    private void NavigateReviewTarget(
+        Func<WorkbookNavigationResult> navigate,
+        string statusLabel,
+        string fallbackMessage)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        ClearSelectedDrawingObject();
+        var result = navigate();
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? fallbackMessage);
+            return;
+        }
+
+        if (result.SelectedRange is not { } selectedRange)
+        {
+            ShowEditIssue("Review target was not selected.");
+            return;
+        }
+
+        RefreshShell($"Selected {FormatRangeReference(selectedRange)} ({statusLabel})");
+    }
+
+    private static string FormatReviewWorkflowSummary(ReviewWorkflowPlan plan)
+    {
+        var statistics = plan.Statistics;
+        return string.Join(Environment.NewLine,
+            $"Sheets: {statistics.WorksheetCount}",
+            $"Cells with data: {statistics.CellCount}",
+            $"Formulas: {statistics.FormulaCount}",
+            $"Workbook comments: {statistics.CommentCount}",
+            $"Charts: {statistics.ChartCount}",
+            $"Pictures: {statistics.PictureCount}",
+            $"Shapes and text boxes: {statistics.ShapeCount}",
+            $"Named ranges: {statistics.NamedRangeCount}",
+            "",
+            $"Spelling issues: {plan.SpellingIssues.Count}",
+            $"Accessibility issues: {plan.AccessibilityIssues.Count}",
+            $"Notes on active sheet: {plan.Notes.Count}",
+            $"Threaded comments on active sheet: {plan.ThreadedComments.Count}");
+    }
+
+    private static StackPanel CreateReviewPreviewSection(string header, ListBox list) =>
+        new()
+        {
+            Spacing = 4,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = header,
+                    FontWeight = FontWeight.SemiBold,
+                },
+                list,
+            },
+        };
+
+    private static ListBox CreateReviewPreviewList(
+        string name,
+        string automationId,
+        IReadOnlyList<string> items)
+    {
+        var list = new ListBox
+        {
+            ItemsSource = items,
+            MinHeight = 56,
+            MaxHeight = 96,
+        };
+        AutomationProperties.SetName(list, name);
+        AutomationProperties.SetAutomationId(list, automationId);
+        return list;
+    }
+
+    private static IReadOnlyList<string> FormatReviewSpellingIssues(IReadOnlyList<SpellingIssue> issues) =>
+        CreateReviewPreviewItems(
+            issues,
+            issue =>
+            {
+                var suggestion = string.IsNullOrWhiteSpace(issue.Suggestion) ? "no suggestion" : issue.Suggestion;
+                return $"{FormatCellReference(issue.Address)}: {issue.Word} -> {suggestion} ({FormatSpellingIssueSource(issue.Source)})";
+            },
+            "No spelling issues.");
+
+    private static IReadOnlyList<string> FormatReviewAccessibilityIssues(IReadOnlyList<AccessibilityIssue> issues) =>
+        CreateReviewPreviewItems(
+            issues,
+            issue => $"{TrimReviewPreview(issue.SheetName)}!{TrimReviewPreview(issue.Location)}: {TrimReviewPreview(issue.Message)}",
+            "No accessibility issues.");
+
+    private static IReadOnlyList<string> FormatReviewCommentItems(
+        IReadOnlyList<ReviewCommentListItem> items,
+        string emptyMessage) =>
+        CreateReviewPreviewItems(
+            items,
+            item => $"{FormatCellReference(item.Address)}: {TrimReviewPreview(item.PreviewText)}",
+            emptyMessage);
+
+    private static IReadOnlyList<string> CreateReviewPreviewItems<T>(
+        IReadOnlyList<T> items,
+        Func<T, string> format,
+        string emptyMessage)
+    {
+        if (items.Count == 0)
+            return [emptyMessage];
+
+        const int previewLimit = 6;
+        var preview = items
+            .Take(previewLimit)
+            .Select(format)
+            .ToList();
+        if (items.Count > preview.Count)
+            preview.Add($"... and {items.Count - preview.Count} more");
+
+        return preview;
+    }
+
+    private static string FormatSpellingIssueSource(SpellingIssueSource source) =>
+        source switch
+        {
+            SpellingIssueSource.CellText => "cell text",
+            SpellingIssueSource.Note => "note",
+            SpellingIssueSource.ThreadedComment => "threaded comment",
+            SpellingIssueSource.ThreadedCommentReply => "threaded reply",
+            _ => "spelling"
+        };
+
+    private static string TrimReviewPreview(string text)
+    {
+        var normalized = string.Join(
+            " ",
+            text.Split(['\r', '\n', '\t'], StringSplitOptions.RemoveEmptyEntries)).Trim();
+        if (string.IsNullOrWhiteSpace(normalized))
+            return "(blank)";
+
+        const int maxLength = 96;
+        return normalized.Length <= maxLength
+            ? normalized
+            : normalized[..(maxLength - 3)] + "...";
+    }
 
     private async Task ShowFormatCellsDialogAsync()
     {
