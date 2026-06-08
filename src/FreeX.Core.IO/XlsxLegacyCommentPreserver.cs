@@ -318,23 +318,41 @@ internal static class XlsxLegacyCommentPreserver
             insertionPoint.AddBeforeSelf(marker);
     }
 
-    private static XElement? FindCommentsRelationship(XElement? relationshipsRoot, XNamespace packageRelNs) =>
-        relationshipsRoot?
-            .Elements(packageRelNs + "Relationship")
-            .FirstOrDefault(relationship =>
-                (relationship.Attribute("Type")?.Value ?? "").EndsWith("/comments", StringComparison.OrdinalIgnoreCase));
+    private static XElement? FindCommentsRelationship(XElement? relationshipsRoot, XNamespace packageRelNs)
+    {
+        if (relationshipsRoot is null)
+            return null;
+
+        foreach (var relationship in relationshipsRoot.Elements(packageRelNs + "Relationship"))
+        {
+            if ((relationship.Attribute("Type")?.Value ?? "").EndsWith("/comments", StringComparison.OrdinalIgnoreCase))
+                return relationship;
+        }
+
+        return null;
+    }
 
     private static XElement? FindInternalRelationship(
         XElement? relationshipsRoot,
         XNamespace packageRelNs,
         string relationshipId,
-        string relationshipType) =>
-        relationshipsRoot?
-            .Elements(packageRelNs + "Relationship")
-            .FirstOrDefault(candidate =>
-                string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal) &&
+        string relationshipType)
+    {
+        if (relationshipsRoot is null)
+            return null;
+
+        foreach (var candidate in relationshipsRoot.Elements(packageRelNs + "Relationship"))
+        {
+            if (string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal) &&
                 string.Equals(candidate.Attribute("Type")?.Value, relationshipType, StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(candidate.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase));
+                !string.Equals(candidate.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
 
     private static XElement? FirstLegacyDrawingMarker(IReadOnlyList<XElement> markers) =>
         markers.Count == 0 ? null : markers[0];
@@ -342,11 +360,30 @@ internal static class XlsxLegacyCommentPreserver
     private static XElement? FindLegacyDrawingInsertionPoint(
         XElement worksheetRoot,
         XNamespace worksheetNs,
-        IReadOnlyCollection<string> laterElementNames) =>
-        worksheetRoot.Elements()
-            .FirstOrDefault(element =>
-                element.Name.Namespace == worksheetNs &&
-                laterElementNames.Contains(element.Name.LocalName, StringComparer.Ordinal));
+        IReadOnlyCollection<string> laterElementNames)
+    {
+        foreach (var element in worksheetRoot.Elements())
+        {
+            if (element.Name.Namespace == worksheetNs &&
+                ContainsElementName(laterElementNames, element.Name.LocalName))
+            {
+                return element;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool ContainsElementName(IReadOnlyCollection<string> elementNames, string elementName)
+    {
+        foreach (var candidate in elementNames)
+        {
+            if (string.Equals(candidate, elementName, StringComparison.Ordinal))
+                return true;
+        }
+
+        return false;
+    }
 
     private static void ReplacePackageXmlPart(ZipArchive archive, string path, XDocument xml)
     {
