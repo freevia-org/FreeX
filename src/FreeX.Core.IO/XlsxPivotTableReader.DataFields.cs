@@ -23,7 +23,7 @@ internal static partial class XlsxPivotTableReader
                 var numberFormatId = XlsxXmlAttributeReader.ReadIntAttribute(field, "numFmtId");
                 var calculatedFieldName = field.Attribute("calculatedField")?.Value ??
                     (calculatedFieldNamesByIndex.TryGetValue(fieldIndex, out var indexedCalculatedFieldName) ? indexedCalculatedFieldName : null) ??
-                    calculatedFields.FirstOrDefault(calculated => string.Equals(calculated.Name, field.Attribute("name")?.Value, StringComparison.OrdinalIgnoreCase))?.Name;
+                    FindCalculatedFieldName(calculatedFields, field.Attribute("name")?.Value);
                 return new PivotDataFieldModel(
                     calculatedFieldName is null ? fieldIndex : -1,
                     field.Attribute("name")?.Value ?? "",
@@ -39,6 +39,19 @@ internal static partial class XlsxPivotTableReader
             })
             .Where(field => field.SourceFieldIndex >= 0 || field.CalculatedFieldName is not null)
             .ToList();
+    }
+
+    private static string? FindCalculatedFieldName(
+        IReadOnlyList<PivotCalculatedFieldModel> calculatedFields,
+        string? fieldName)
+    {
+        foreach (var calculatedField in calculatedFields)
+        {
+            if (string.Equals(calculatedField.Name, fieldName, StringComparison.OrdinalIgnoreCase))
+                return calculatedField.Name;
+        }
+
+        return null;
     }
 
     private static Dictionary<int, string> ReadPivotCalculatedFieldNamesByIndex(
