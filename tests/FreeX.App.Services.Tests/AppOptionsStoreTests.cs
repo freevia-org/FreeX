@@ -90,7 +90,7 @@ public sealed class AppOptionsStoreTests
         saved.Should().BeFalse();
         options.LastPersistenceError.Should().Contain("Failed to save options");
         options.LastPersistenceError.Should().Contain(blockedPath);
-        Directory.EnumerateFiles(temp.Path, ".blocked-options.*.tmp").Should().BeEmpty();
+        Directory.EnumerateFileSystemEntries(temp.Path, ".blocked-options.*.tmp").Should().BeEmpty();
     }
 
     [Fact]
@@ -118,7 +118,11 @@ public sealed class AppOptionsStoreTests
             .GetString()
             .Should()
             .Be(".fxl");
-        Directory.EnumerateFiles(Path.GetDirectoryName(path)!, "*.tmp").Should().BeEmpty();
+        Directory.EnumerateFileSystemEntries(Path.GetDirectoryName(path)!)
+            .Should()
+            .ContainSingle()
+            .Which.Should()
+            .Be(path);
 
         var reloaded = AppOptionsStore.LoadFromPath(path);
         reloaded.AppLanguage.Should().Be("uk-UA");
