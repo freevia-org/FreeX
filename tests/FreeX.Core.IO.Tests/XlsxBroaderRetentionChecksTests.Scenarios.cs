@@ -110,6 +110,11 @@ public sealed partial class XlsxBroaderRetentionChecksTests
         var worksheetRels = LoadXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
         worksheetRels.ToString(SaveOptions.DisableFormatting).Should().Contain("printerSettings/printerSettings1.bin");
         worksheetRels.ToString(SaveOptions.DisableFormatting).Should().Contain("/printerSettings");
+        AssertInternalRelationshipTargetWasRetained(
+            archive,
+            "xl/worksheets/_rels/sheet1.xml.rels",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings",
+            "../printerSettings/printerSettings1.bin");
         worksheetXml.Root.Element(MainNs + "pageSetup")!.Attribute(RelNs + "id").Should().NotBeNull();
         ReadEntryBytes(archive, "xl/printerSettings/printerSettings1.bin").Should().Equal(0x46, 0x58, 0x50, 0x52, 0x4E);
     }

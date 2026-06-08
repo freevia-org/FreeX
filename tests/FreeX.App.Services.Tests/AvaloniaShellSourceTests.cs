@@ -657,6 +657,33 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_KeepsHelpLinksHttpOnlyBeforeSharedExternalLauncher()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        var helpLinkSource = ExtractSourceBlock(
+            source,
+            "private async Task OpenExternalHelpLinkAsync(string url, string title)",
+            "private async Task<ExternalUriLaunchResult> OpenExternalUriAsync(string target)");
+        var workbookHyperlinkSource = ExtractSourceBlock(
+            source,
+            "private async Task OpenExternalHyperlinkAsync(string target)",
+            "private async Task ShowGoToSpecialDialogAsync()");
+
+        helpLinkSource.Should().Contain("if (!IsHttpOrHttpsHelpUrl(url))");
+        helpLinkSource.Should().Contain("ShowHelpIssue($\"{title} link is blocked.\");");
+        helpLinkSource.Should().Contain("private static bool IsHttpOrHttpsHelpUrl(string url)");
+        helpLinkSource.Should().Contain("Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri)");
+        helpLinkSource.Should().Contain("string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)");
+        helpLinkSource.Should().Contain("string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)");
+        helpLinkSource.IndexOf("if (!IsHttpOrHttpsHelpUrl(url))", StringComparison.Ordinal)
+            .Should().BeLessThan(helpLinkSource.IndexOf("var result = await OpenExternalUriAsync(url);", StringComparison.Ordinal));
+
+        workbookHyperlinkSource.Should().Contain("var result = await OpenExternalUriAsync(target);");
+        workbookHyperlinkSource.Should().NotContain("IsHttpOrHttpsHelpUrl");
+    }
+
+    [Fact]
     public void MainWindow_BuildsAvaloniaFilePickerTypesFromCoreIoDescriptors()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
@@ -2681,35 +2708,45 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
-    public void MainWindow_WiresOpenHyperlinkRouteThroughWorkbookSessionWithoutExternalLaunch()
+    public void MainWindow_WiresOpenHyperlinkRouteThroughWorkbookSessionAndExternalLauncher()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "HyperlinkNavigationPlanner.cs"));
+        var launcherSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "ExternalUriLauncher.cs"));
 
         plannerSource.Should().Contain("public enum HyperlinkNavigationKind");
         plannerSource.Should().Contain("HyperlinkTargetKind.PlaceInThisDocument");
         plannerSource.Should().Contain("HyperlinkNavigationKind.External");
+        plannerSource.Should().Contain("\"http\", \"https\", \"mailto\", \"ftp\"");
+        launcherSource.Should().Contain("public static class ExternalUriLauncher");
+        launcherSource.Should().Contain("Func<Uri, Task<bool>>? launchAsync");
+        launcherSource.Should().Contain("HyperlinkNavigationPlanner.IsAllowedScheme(normalizedTarget)");
 
         sessionSource.Should().Contain("public bool CanOpenSelectedHyperlink");
+        sessionSource.Should().Contain("public bool TryGetSelectedHyperlinkPlan(out HyperlinkNavigationPlan? plan)");
         sessionSource.Should().Contain("public WorkbookNavigationResult OpenSelectedHyperlink()");
         sessionSource.Should().Contain("return GoToReference(plan.Target);");
         sessionSource.Should().Contain("External hyperlinks are not supported on this platform.");
 
         source.Should().Contain("private readonly NativeMenuItem _openHyperlinkMenuItem = new();");
         source.Should().Contain("_openHyperlinkMenuItem.Header = \"Open Hyperlink\";");
-        source.Should().Contain("_openHyperlinkMenuItem.Click += (_, _) => OpenSelectedHyperlink();");
+        source.Should().Contain("_openHyperlinkMenuItem.Click += async (_, _) => await OpenSelectedHyperlinkAsync();");
         source.Should().Contain("editMenu.Items.Add(_openHyperlinkMenuItem);");
         source.Should().Contain("_openHyperlinkMenuItem.IsEnabled = isIdle && _session.CanOpenSelectedHyperlink;");
-        source.Should().Contain("private void OpenSelectedHyperlink()");
+        source.Should().Contain("private async Task OpenSelectedHyperlinkAsync()");
+        source.Should().Contain("if (!_session.TryGetSelectedHyperlinkPlan(out var plan) || plan is null)");
+        source.Should().Contain("await OpenExternalHyperlinkAsync(plan.Target);");
         source.Should().Contain("var result = _session.OpenSelectedHyperlink();");
+        source.Should().Contain("private async Task OpenExternalHyperlinkAsync(string target)");
+        source.Should().Contain("private async Task<ExternalUriLaunchResult> OpenExternalUriAsync(string target)");
+        source.Should().Contain("ExternalUriLauncher.OpenAsync(target, launchAsync)");
 
         var openHyperlinkSource = ExtractSourceBlock(
             source,
-            "private void OpenSelectedHyperlink()",
-            "private async Task ShowGoToSpecialDialogAsync()");
-        openHyperlinkSource.Should().NotContain("LaunchUriAsync");
-        openHyperlinkSource.Should().NotContain("Launcher");
+            "private async Task OpenSelectedHyperlinkAsync()",
+            "private async Task OpenExternalHyperlinkAsync(string target)");
+        openHyperlinkSource.Should().Contain("await OpenExternalHyperlinkAsync(plan.Target);");
         openHyperlinkSource.Should().NotContain("Process.Start");
     }
 
