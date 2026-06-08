@@ -16,6 +16,15 @@ on:
         description: Optional tester-facing release notes to append to the generated notes
         required: false
         type: string
+      include_macos_preview:
+        description: Attach matching macOS internal-preview artifacts from the macOS App Preview workflow
+        required: true
+        default: true
+        type: boolean
+      macos_preview_run_id:
+        description: Optional macOS App Preview run id to bundle; when omitted, the workflow finds the latest successful run for this commit
+        required: false
+        type: string
       public_preview_candidate:
         description: Promote this build as a public-preview candidate only when all accessibility gate inputs are true
         required: true
@@ -317,6 +326,9 @@ jobs:
         run: |
           $tag = "${{ steps.meta.outputs.tag }}"
           $title = "${{ steps.meta.outputs.release_name }}"
+          $releaseId = "${{ steps.meta.outputs.release_id }}"
+          $shortSha = "${{ steps.meta.outputs.short_sha }}"
+          $includeMacOsPreview = "${{ inputs.include_macos_preview }}" -eq "true"
           $publicPreviewCandidate = "${{ inputs.public_preview_candidate }}" -eq "true"
           $accessibilityGate = [ordered]@{
             "Keyboard-only smoke validation" = "${{ inputs.accessibility_keyboard_only }}" -eq "true"
@@ -330,6 +342,88 @@ jobs:
               if (-not $item.Value) { $item.Key }
             }
           )
+
+          function Copy-ReleaseAsset {
+            param(
+              [Parameter(Mandatory = $true)][string]$SourcePath,
+              [Parameter(Mandatory = $true)][string]$DestinationName
+            )
+
+            $destinationPath = Join-Path "artifacts/upload" $DestinationName
+            Copy-Item -LiteralPath $SourcePath -Destination $destinationPath -Force
+            return $destinationPath
+          }
+
+          function Write-Sha256File {
+            param([Parameter(Mandatory = $true)][string]$AssetPath)
+
+            $hash = Get-FileHash -LiteralPath $AssetPath -Algorithm SHA256
+            $assetName = Split-Path -Leaf $AssetPath
+            Set-Content -LiteralPath "$AssetPath.sha256" -Value "$($hash.Hash.ToLowerInvariant())  $assetName" -Encoding ASCII
+          }
+
+          $macOsNotes = @("macOS preview assets: not attached for this release.")
+          if ($includeMacOsPreview) {
+            $macOsRunInput = "${{ inputs.macos_preview_run_id }}".Trim()
+            $macOsRun = $null
+            if (-not [string]::IsNullOrWhiteSpace($macOsRunInput)) {
+              $macOsRun = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$macOsRunInput" | ConvertFrom-Json
+            } else {
+              $runs = gh api "repos/$env:GITHUB_REPOSITORY/actions/workflows/macos-app.yml/runs?branch=main&status=success&per_page=50" | ConvertFrom-Json
+              $macOsRun = $runs.workflow_runs |
+                Where-Object { $_.head_sha -eq $env:GITHUB_SHA -and $_.conclusion -eq "success" } |
+                Sort-Object created_at -Descending |
+                Select-Object -First 1
+            }
+
+            if ($null -eq $macOsRun) {
+              throw "include_macos_preview=true requires a successful macOS App Preview run for commit $env:GITHUB_SHA, or pass macos_preview_run_id."
+            }
+            if ($macOsRun.head_sha -ne $env:GITHUB_SHA) {
+              throw "macOS App Preview run $($macOsRun.id) targets $($macOsRun.head_sha), but this release targets $env:GITHUB_SHA."
+            }
+            if ($macOsRun.conclusion -ne "success") {
+              throw "macOS App Preview run $($macOsRun.id) must be completed successfully before bundling."
+            }
+
+            $macOsRunAttempt = [int]$macOsRun.run_attempt
+            $macOsRunUrl = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$($macOsRun.id)"
+            $macOsDownloadRoot = Join-Path $env:RUNNER_TEMP "freex-macos-preview"
+            New-Item -ItemType Directory -Force -Path $macOsDownloadRoot | Out-Null
+
+            $macOsNotes = @(
+              "macOS internal-preview assets are attached from macOS App Preview run $($macOsRun.id) attempt $macOsRunAttempt: $macOsRunUrl",
+              "These macOS builds are unsigned/ad-hoc internal previews until Developer ID signing and notarization are configured."
+            )
+
+            foreach ($runtime in @("osx-arm64", "osx-x64")) {
+              $assetLabel = if ($runtime -eq "osx-arm64") { "arm64" } else { "x64" }
+              $artifactName = "freex-$($macOsRun.id)-$macOsRunAttempt-$runtime-macos-app"
+              $runtimeRoot = Join-Path $macOsDownloadRoot $runtime
+              New-Item -ItemType Directory -Force -Path $runtimeRoot | Out-Null
+              gh run download $($macOsRun.id) --name $artifactName --dir $runtimeRoot
+              if ($LASTEXITCODE -ne 0) {
+                throw "Failed to download macOS artifact '$artifactName'."
+              }
+
+              $innerZip = Join-Path $runtimeRoot "freex-$runtime-macos-app.zip"
+              $instructions = Join-Path $runtimeRoot "freex-$runtime-macos-tester-instructions.md"
+              $evidence = Join-Path $runtimeRoot "freex-$runtime-macos-evidence.txt"
+              foreach ($requiredPath in @($innerZip, $instructions, $evidence)) {
+                if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
+                  throw "macOS artifact '$artifactName' is missing required file '$requiredPath'."
+                }
+              }
+
+              $versionedZip = Copy-ReleaseAsset -SourcePath $innerZip -DestinationName "freex-$releaseId-$shortSha-macos-$assetLabel.zip"
+              $latestZip = Copy-ReleaseAsset -SourcePath $innerZip -DestinationName "FreeX-latest-macos-$assetLabel.zip"
+              Write-Sha256File -AssetPath $versionedZip
+              Write-Sha256File -AssetPath $latestZip
+              Copy-ReleaseAsset -SourcePath $instructions -DestinationName "FreeX-latest-macos-$assetLabel-instructions.md" | Out-Null
+              Copy-ReleaseAsset -SourcePath $evidence -DestinationName "FreeX-latest-macos-$assetLabel-evidence.txt" | Out-Null
+            }
+          }
+
           if ($publicPreviewCandidate -and $missingAccessibilityGate.Count -gt 0) {
             throw "Public-preview promotion requires completed accessibility gate inputs: $($missingAccessibilityGate -join ', ')."
           }
@@ -349,6 +443,28 @@ jobs:
           } else {
             "This build is internal-only unless release notes separately document a completed public-preview accessibility gate."
           }
+          $macOsTesterSection = if ($includeMacOsPreview) {
+            @"
+          macOS tester downloads:
+          - Apple Silicon: FreeX-latest-macos-arm64.zip and FreeX-latest-macos-arm64.zip.sha256
+          - Intel Mac: FreeX-latest-macos-x64.zip and FreeX-latest-macos-x64.zip.sha256
+          - Per-runtime instructions and evidence files are attached when macOS preview bundling is enabled.
+
+          macOS tester steps:
+          1. Pick arm64 for Apple Silicon Macs or x64 for Intel Macs.
+          2. Verify the checksum from Terminal: shasum -a 256 -c FreeX-latest-macos-arm64.zip.sha256, or use the x64 checksum for Intel.
+          3. Extract the app with Finder/Archive Utility, or run: ditto -x -k FreeX-latest-macos-arm64.zip .
+          4. Open FreeX.app. If macOS blocks the unsigned/internal preview, use Control-click or right-click > Open. If needed, open System Settings > Privacy & Security and choose Open Anyway.
+          5. Do not disable Gatekeeper globally. These macOS builds are internal previews until Developer ID signing, notarization, and stapling evidence are attached.
+
+          $($macOsNotes -join "`n")
+          "@
+          } else {
+            @"
+          macOS tester downloads:
+          macOS preview assets are not attached to this release. Dispatch Tester Release with include_macos_preview=true after a successful same-commit macOS App Preview run to bundle macOS zips.
+          "@
+          }
 
           $notes = @"
           Tester build for FreeX.
@@ -361,6 +477,17 @@ jobs:
 
           This is a framework-dependent single-file Windows x64 build. It requires the Microsoft .NET Desktop Runtime if Windows prompts for it.
           The MSIX package is signed when the release certificate secret is configured; otherwise it is published unsigned for tester continuity until a certificate is available. Installer trust validation and Store submission remain release-gate tasks.
+
+          Windows tester steps:
+          1. Download FreeX-latest-win-x64.exe and FreeX-latest-win-x64.exe.sha256 from this release.
+          2. Verify the checksum with PowerShell: Get-FileHash .\FreeX-latest-win-x64.exe -Algorithm SHA256, then compare it with FreeX-latest-win-x64.exe.sha256.
+          3. Run FreeX-latest-win-x64.exe. If Windows SmartScreen warns about an unknown publisher, continue only if the checksum matches this GitHub release and you expected this internal tester build.
+          4. Prefer the .exe for normal testing. Use the MSIX only for package/install validation; unsigned MSIX packages may need trusted internal-test machine settings until signing is configured.
+
+          $macOsTesterSection
+
+          Tester message:
+          This is an internal preview while signing certificates are pending. macOS and Windows may warn that the publisher cannot be verified. Only open the build if you expected this test release from the FreeX team and the checksum matches the release asset.
 
           Public-preview accessibility gate:
           - Keyboard-only smoke validation: $keyboardOnlyStatus.
@@ -403,6 +530,14 @@ jobs:
             "artifacts/upload/*.msix",
             "artifacts/upload/*.msix.sha256"
           )
+          if ($includeMacOsPreview) {
+            $assetPaths += @(
+              "artifacts/upload/*.zip",
+              "artifacts/upload/*.zip.sha256",
+              "artifacts/upload/FreeX-latest-macos-*-instructions.md",
+              "artifacts/upload/FreeX-latest-macos-*-evidence.txt"
+            )
+          }
 
           if ($releaseExists) {
             gh release upload $tag @assetPaths --clobber
