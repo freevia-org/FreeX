@@ -416,6 +416,23 @@ public sealed class WorkbookSession
         return GoToRange(range);
     }
 
+    public bool CanOpenSelectedHyperlink =>
+        HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, SelectedRange.Start, out _);
+
+    public WorkbookNavigationResult OpenSelectedHyperlink() =>
+        OpenHyperlink(SelectedRange.Start);
+
+    public WorkbookNavigationResult OpenHyperlink(CellAddress address)
+    {
+        if (!HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, address, out var plan) || plan is null)
+            return WorkbookNavigationResult.Failed("Hyperlink target was not found.");
+
+        if (plan.Kind != HyperlinkNavigationKind.WorksheetCell)
+            return WorkbookNavigationResult.Failed("External hyperlinks are not supported on this platform.");
+
+        return GoToReference(plan.Target);
+    }
+
     public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
     {
         var matches = GoToSpecialService.Find(Workbook, ActiveSheet, SelectedRange, kind, ActiveCell, options);

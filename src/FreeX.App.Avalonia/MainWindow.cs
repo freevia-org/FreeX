@@ -404,6 +404,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _replaceMenuItem = new();
     private readonly NativeMenuItem _goToMenuItem = new();
     private readonly NativeMenuItem _goToSpecialMenuItem = new();
+    private readonly NativeMenuItem _openHyperlinkMenuItem = new();
     private readonly NativeMenuItem _insertHyperlinkMenuItem = new();
     private readonly NativeMenuItem _sortAscendingMenuItem = new();
     private readonly NativeMenuItem _sortDescendingMenuItem = new();
@@ -772,6 +773,9 @@ public sealed class MainWindow : Window
         _goToSpecialMenuItem.Header = "Go To Special...";
         _goToSpecialMenuItem.Click += async (_, _) => await ShowGoToSpecialDialogAsync();
 
+        _openHyperlinkMenuItem.Header = "Open Hyperlink";
+        _openHyperlinkMenuItem.Click += (_, _) => OpenSelectedHyperlink();
+
         _insertHyperlinkMenuItem.Header = "Hyperlink...";
         _insertHyperlinkMenuItem.Click += async (_, _) => await ShowInsertHyperlinkDialogAsync();
 
@@ -1118,6 +1122,7 @@ public sealed class MainWindow : Window
         editMenu.Items.Add(_replaceMenuItem);
         editMenu.Items.Add(_goToMenuItem);
         editMenu.Items.Add(_goToSpecialMenuItem);
+        editMenu.Items.Add(_openHyperlinkMenuItem);
         editMenu.Items.Add(_insertHyperlinkMenuItem);
         editMenu.Items.Add(new NativeMenuItemSeparator());
         editMenu.Items.Add(_autoSumMenuItem);
@@ -1886,6 +1891,7 @@ public sealed class MainWindow : Window
         _replaceMenuItem.IsEnabled = isIdle;
         _goToMenuItem.IsEnabled = isIdle;
         _goToSpecialMenuItem.IsEnabled = isIdle;
+        _openHyperlinkMenuItem.IsEnabled = isIdle && _session.CanOpenSelectedHyperlink;
         _insertHyperlinkMenuItem.IsEnabled = isIdle;
         _sortAscendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
@@ -5012,6 +5018,21 @@ public sealed class MainWindow : Window
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? "Go To failed.");
+            return;
+        }
+
+        RefreshShell($"Selected {FormatRangeReference(result.SelectedRange!.Value)}");
+    }
+
+    private void OpenSelectedHyperlink()
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var result = _session.OpenSelectedHyperlink();
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Open Hyperlink failed.");
             return;
         }
 

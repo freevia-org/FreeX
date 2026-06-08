@@ -300,6 +300,8 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
             ("Command-Key Menu Behavior", "Cmd+A"),
             ("Command-Key Menu Behavior", "Cmd+F and Find Next menu route"),
             ("Command-Key Menu Behavior", "Cmd+B, Cmd+I, Cmd+U"),
+            ("Finder And File Association", "Drag supported .fxl/.xlsx workbook onto FreeX.app or Dock icon"),
+            ("Finder And File Association", "Drag supported workbook from Finder onto already-running FreeX window"),
             ("Keyboard-Only Accessibility", "Formula box edits"),
             ("Keyboard-Only Accessibility", "Sheet tabs"),
             ("Keyboard-Only Accessibility", "Context menus"),
@@ -464,7 +466,9 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
             | Double-click .fxl in Finder | opens workbook | opened selected workbook | Pass | screenshot |
             | Confirm workbook identity | identity matches | expected sheet visible | Pass | screenshot |
             | Right-click .fxl > Open With > FreeX | opens file | opened through Open With | Pass | screenshot |
+            | Drag supported .fxl/.xlsx workbook onto FreeX.app or Dock icon | opens dropped workbook | opened dropped workbook through app icon | Pass | screenshot |
             | Repeat while FreeX is already running | opens in session | opened in existing session | Pass | screenshot |
+            | Drag supported workbook from Finder onto already-running FreeX window | accepts Finder drop | running window opened dropped workbook | Pass | screenshot |
             | Optional spreadsheet file Open With | opens representative spreadsheet when in scope | spreadsheet Open With was out of candidate scope | N/A | notes |
 
             ## Workbook Smoke
