@@ -33,6 +33,41 @@ $allowedActionMajors = @{
     "actions/upload-artifact" = "v7"
 }
 
+function Get-IndentedYamlBlock {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string[]]$Lines,
+        [Parameter(Mandatory = $true)][string]$Pattern
+    )
+
+    for ($lineIndex = 0; $lineIndex -lt $Lines.Count; $lineIndex++) {
+        $match = [regex]::Match($Lines[$lineIndex], $Pattern)
+        if (-not $match.Success -or -not $match.Groups["indent"].Success) {
+            continue
+        }
+
+        $indentLength = $match.Groups["indent"].Value.Length
+        $blockLines = [System.Collections.Generic.List[string]]::new()
+        $blockLines.Add($Lines[$lineIndex])
+        for ($nextLineIndex = $lineIndex + 1; $nextLineIndex -lt $Lines.Count; $nextLineIndex++) {
+            if ([string]::IsNullOrWhiteSpace($Lines[$nextLineIndex])) {
+                $blockLines.Add($Lines[$nextLineIndex])
+                continue
+            }
+
+            $indentMatch = [regex]::Match($Lines[$nextLineIndex], "^(\s*)\S")
+            if ($indentMatch.Success -and $indentMatch.Groups[1].Value.Length -le $indentLength) {
+                break
+            }
+
+            $blockLines.Add($Lines[$nextLineIndex])
+        }
+
+        return $blockLines -join "`n"
+    }
+
+    return $null
+}
+
 $errors = [System.Collections.Generic.List[string]]::new()
 foreach ($workflow in $workflows) {
     $content = Get-Content -LiteralPath $workflow.FullName -Raw
@@ -165,6 +200,64 @@ foreach ($workflow in $workflows) {
         foreach ($marker in $requiredMacOsEvidenceMarkers) {
             if (-not $content.Contains($marker)) {
                 $errors.Add("$($workflow.Name): macOS app workflow is missing hosted runner/toolchain evidence marker: $marker")
+            }
+        }
+
+        $workflowDispatchBlock = Get-IndentedYamlBlock `
+            -Lines $lines `
+            -Pattern "^(?<indent>\s*)workflow_dispatch\s*:\s*(?:#.*)?$"
+        $distributionCandidateInputBlock = $null
+        if (-not [string]::IsNullOrWhiteSpace($workflowDispatchBlock)) {
+            $distributionCandidateInputBlock = Get-IndentedYamlBlock `
+                -Lines ($workflowDispatchBlock -split "\r?\n") `
+                -Pattern "^(?<indent>\s*)distribution_candidate\s*:\s*(?:#.*)?$"
+        }
+
+        if ([string]::IsNullOrWhiteSpace($distributionCandidateInputBlock) -or
+            $distributionCandidateInputBlock -notmatch "(?m)^\s*type:\s*boolean\s*(?:#.*)?$" -or
+            $distributionCandidateInputBlock -notmatch "(?m)^\s*default:\s*false\s*(?:#.*)?$") {
+            $errors.Add("$($workflow.Name): macOS app workflow must declare a workflow_dispatch distribution_candidate boolean input defaulting to false.")
+        }
+
+        $releasePublicationJobBlock = Get-IndentedYamlBlock `
+            -Lines $lines `
+            -Pattern "^(?<indent>\s*)publish-distribution-candidate\s*:\s*(?:#.*)?$"
+        if ([string]::IsNullOrWhiteSpace($releasePublicationJobBlock)) {
+            $errors.Add("$($workflow.Name): macOS release publication job 'publish-distribution-candidate' is missing.")
+        } else {
+            if ($releasePublicationJobBlock -notmatch '(?m)^\s*if:\s*\$\{\{\s*github\.event_name\s*==\s*''workflow_dispatch''\s*&&\s*inputs\.distribution_candidate\s*==\s*true\s*\}\}\s*(?:#.*)?$') {
+                $errors.Add("$($workflow.Name): macOS release publication job must be gated to workflow_dispatch distribution-candidate runs.")
+            }
+
+            if ($releasePublicationJobBlock -notmatch "(?m)^\s*permissions:\s*(?:#.*)?$") {
+                $errors.Add("$($workflow.Name): macOS release publication job must declare job-level permissions.")
+            }
+
+            if ($releasePublicationJobBlock -match "(?m)^\s*permissions:\s*write-all\s*(?:#.*)?$") {
+                $errors.Add("$($workflow.Name): macOS release publication job must not request write-all permissions.")
+            }
+
+            if ($releasePublicationJobBlock -notmatch "(?m)^\s*actions:\s*read\s*(?:#.*)?$") {
+                $errors.Add("$($workflow.Name): macOS release publication job must declare actions: read.")
+            }
+
+            if ($releasePublicationJobBlock -notmatch "(?m)^\s*contents:\s*write\s*(?:#.*)?$") {
+                $errors.Add("$($workflow.Name): macOS release publication job must declare contents: write.")
+            }
+
+            $contentsWriteMatches = [regex]::Matches($content, "(?m)^\s*contents:\s*write\s*(?:#.*)?$")
+            if ($contentsWriteMatches.Count -ne 1 -or
+                $releasePublicationJobBlock -notmatch "(?m)^\s*contents:\s*write\s*(?:#.*)?$") {
+                $errors.Add("$($workflow.Name): macOS release publication must be the only workflow scope requesting contents: write.")
+            }
+
+            if ($releasePublicationJobBlock -notmatch "(?ms)^\s*concurrency:\s*(?:#.*)?\r?\n(?:^\s+.*\r?\n)*?^\s*group:\s*macos-distribution-candidate-release\s*(?:#.*)?$" -or
+                $releasePublicationJobBlock -notmatch "(?m)^\s*cancel-in-progress:\s*false\s*(?:#.*)?$") {
+                $errors.Add("$($workflow.Name): macOS release publication job must use non-canceling concurrency with cancel-in-progress: false.")
+            }
+
+            if ($releasePublicationJobBlock -notmatch "(?ms)^      - name:\s+Checkout\s*(?:#.*)?\r?\n        uses:\s+actions/checkout@v6\s*(?:#.*)?\r?\n        with:\s*(?:#.*)?\r?\n(?:          [^\r\n]*\r?\n)*?          persist-credentials:\s*false\s*(?:#.*)?(?:\r?\n|$)") {
+                $errors.Add("$($workflow.Name): macOS release publication checkout must use actions/checkout@v6 with persist-credentials: false.")
             }
         }
     }
