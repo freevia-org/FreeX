@@ -29,6 +29,8 @@ public static class XlsxPackageHealthValidator
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition";
     private const string PivotCacheRecordsRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords";
+    private const string PivotTableRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable";
     private const string WorksheetContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
     private const string ChartsheetContentType =
@@ -45,6 +47,8 @@ public static class XlsxPackageHealthValidator
         "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml";
     private const string PivotCacheRecordsContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml";
+    private const string PivotTableContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml";
 
     private static readonly XNamespace PackageContentTypeNs =
         "http://schemas.openxmlformats.org/package/2006/content-types";
@@ -82,6 +86,7 @@ public static class XlsxPackageHealthValidator
         AddExternalLinkPackageIssues(archive, issues);
         AddVbaProjectPackageIssues(archive, issues);
         AddPivotCachePackageIssues(archive, issues);
+        AddPivotTablePackageIssues(archive, issues);
         return issues;
     }
 
@@ -1334,6 +1339,178 @@ public static class XlsxPackageHealthValidator
             issues.Add($"{recordsPart} has an invalid pivot cache records root element");
     }
 
+    private static void AddPivotTablePackageIssues(ZipArchive archive, List<string> issues)
+    {
+        if (!TryLoadPackageXml(archive, "[Content_Types].xml", issues, out var contentTypesXml) ||
+            contentTypesXml.Root?.Name != PackageContentTypeNs + "Types")
+        {
+            return;
+        }
+
+        var entryNames = archive.Entries
+            .Where(entry => !string.IsNullOrEmpty(entry.Name))
+            .Select(entry => NormalizePackagePart(entry.FullName))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var workbookPivotCacheIds = FindWorkbookPivotCacheIds(archive, entryNames);
+        var worksheetParts = entryNames
+            .Where(part => part.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase))
+            .Where(part => part.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            .Where(part => !IsPackageRelationshipPart(part))
+            .OrderBy(part => part, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var worksheetPart in worksheetParts)
+            AddWorksheetPivotTablePackageIssues(archive, contentTypesXml, entryNames, workbookPivotCacheIds, worksheetPart, issues);
+    }
+
+    private static HashSet<int> FindWorkbookPivotCacheIds(ZipArchive archive, IReadOnlySet<string> entryNames)
+    {
+        var cacheIds = new HashSet<int>();
+        if (!TryFindWorkbookPart(archive, entryNames, out var workbookPart) ||
+            !TryLoadPackageXml(archive, workbookPart, [], out var workbookXml) ||
+            workbookXml.Root?.Name != WorkbookNs + "workbook")
+        {
+            return cacheIds;
+        }
+
+        foreach (var pivotCache in workbookXml.Root
+                     .Elements(WorkbookNs + "pivotCaches")
+                     .SelectMany(pivotCaches => pivotCaches.Elements(WorkbookNs + "pivotCache")))
+        {
+            var cacheIdText = pivotCache.Attribute("cacheId")?.Value;
+            if (int.TryParse(cacheIdText, NumberStyles.None, CultureInfo.InvariantCulture, out var cacheId) &&
+                cacheId >= 0)
+            {
+                cacheIds.Add(cacheId);
+            }
+        }
+
+        return cacheIds;
+    }
+
+    private static void AddWorksheetPivotTablePackageIssues(
+        ZipArchive archive,
+        XDocument contentTypesXml,
+        IReadOnlySet<string> entryNames,
+        IReadOnlySet<int> workbookPivotCacheIds,
+        string worksheetPart,
+        List<string> issues)
+    {
+        if (!TryLoadPackageXml(archive, worksheetPart, issues, out var worksheetXml) ||
+            worksheetXml.Root?.Name != WorkbookNs + "worksheet")
+        {
+            return;
+        }
+
+        var pivotTableReferences = worksheetXml.Root
+            .Elements(WorkbookNs + "pivotTableDefinition")
+            .Select((pivotTable, index) => new WorksheetPivotTableReference(
+                worksheetPart,
+                index + 1,
+                pivotTable.Attribute(OfficeRelationshipNs + "id")?.Value))
+            .ToArray();
+        if (pivotTableReferences.Length == 0)
+            return;
+
+        var worksheetRelsPart = GetRelationshipPartPath(worksheetPart);
+        if (!TryLoadPackageXml(archive, worksheetRelsPart, issues, out var worksheetRelsXml) ||
+            worksheetRelsXml.Root?.Name != PackageRelationshipNs + "Relationships")
+        {
+            foreach (var reference in pivotTableReferences.Where(reference => !string.IsNullOrWhiteSpace(reference.RelationshipId)))
+                issues.Add($"{worksheetPart} has no relationship part for pivotTableDefinition reference {reference.RelationshipId}");
+            return;
+        }
+
+        var worksheetRelationships = worksheetRelsXml.Root
+            .Elements(PackageRelationshipNs + "Relationship")
+            .Where(relationship => !string.IsNullOrWhiteSpace(relationship.Attribute("Id")?.Value))
+            .GroupBy(relationship => relationship.Attribute("Id")!.Value, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+
+        foreach (var reference in pivotTableReferences)
+            ValidateWorksheetPivotTableReference(archive, contentTypesXml, entryNames, workbookPivotCacheIds, worksheetRelsPart, reference, worksheetRelationships, issues);
+    }
+
+    private static void ValidateWorksheetPivotTableReference(
+        ZipArchive archive,
+        XDocument contentTypesXml,
+        IReadOnlySet<string> entryNames,
+        IReadOnlySet<int> workbookPivotCacheIds,
+        string worksheetRelsPart,
+        WorksheetPivotTableReference reference,
+        IReadOnlyDictionary<string, XElement> worksheetRelationships,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(reference.RelationshipId))
+        {
+            issues.Add($"{reference.WorksheetPart} pivotTableDefinition #{reference.Ordinal} has no relationship id");
+            return;
+        }
+
+        if (!worksheetRelationships.TryGetValue(reference.RelationshipId, out var relationship))
+        {
+            issues.Add($"{reference.WorksheetPart} pivotTableDefinition #{reference.Ordinal} references missing relationship {reference.RelationshipId}");
+            return;
+        }
+
+        var relationshipType = relationship.Attribute("Type")?.Value;
+        if (!string.Equals(relationshipType, PivotTableRelationshipType, StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{reference.WorksheetPart} pivotTableDefinition #{reference.Ordinal} relationship {reference.RelationshipId} has Type={relationshipType ?? "(none)"}; expected {PivotTableRelationshipType}");
+            return;
+        }
+
+        if (string.Equals(relationship.Attribute("TargetMode")?.Value?.Trim(), "External", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{reference.WorksheetPart} pivotTableDefinition #{reference.Ordinal} relationship {reference.RelationshipId} must target a pivot table package part internally");
+            return;
+        }
+
+        var target = relationship.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            issues.Add($"{reference.WorksheetPart} pivotTableDefinition #{reference.Ordinal} relationship {reference.RelationshipId} has no Target");
+            return;
+        }
+
+        if (!TryResolvePackageRelationshipTarget(worksheetRelsPart, target.Trim(), out var pivotTablePart, out var targetIssue))
+        {
+            issues.Add($"{reference.WorksheetPart} pivotTableDefinition #{reference.Ordinal} relationship {reference.RelationshipId} has invalid Target {target}: {targetIssue}");
+            return;
+        }
+
+        if (!entryNames.Contains(pivotTablePart))
+        {
+            issues.Add($"{reference.WorksheetPart} pivotTableDefinition #{reference.Ordinal} relationship {reference.RelationshipId} targets missing package part {pivotTablePart}");
+            return;
+        }
+
+        var contentType = GetEffectivePackageContentType(contentTypesXml, pivotTablePart);
+        if (!string.Equals(contentType, PivotTableContentType, StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{pivotTablePart} has content type {contentType ?? "(none)"}; expected {PivotTableContentType}");
+        }
+
+        if (!TryLoadPackageXml(archive, pivotTablePart, issues, out var pivotTableXml))
+            return;
+
+        if (pivotTableXml.Root?.Name != WorkbookNs + "pivotTableDefinition")
+        {
+            issues.Add($"{pivotTablePart} has an invalid pivot table definition root element");
+            return;
+        }
+
+        var cacheIdText = pivotTableXml.Root.Attribute("cacheId")?.Value;
+        if (!int.TryParse(cacheIdText, NumberStyles.None, CultureInfo.InvariantCulture, out var cacheId) ||
+            cacheId < 0)
+        {
+            issues.Add($"{pivotTablePart} has invalid cacheId '{cacheIdText}'");
+            return;
+        }
+
+        if (!workbookPivotCacheIds.Contains(cacheId))
+            issues.Add($"{pivotTablePart} references cacheId {cacheId}, but workbook has no matching pivotCache");
+    }
+
     private static bool TryFindWorkbookPart(
         ZipArchive archive,
         IReadOnlySet<string> entryNames,
@@ -1721,5 +1898,10 @@ public static class XlsxPackageHealthValidator
     private sealed record WorkbookPivotCacheReference(
         int Ordinal,
         string? CacheId,
+        string? RelationshipId);
+
+    private sealed record WorksheetPivotTableReference(
+        string WorksheetPart,
+        int Ordinal,
         string? RelationshipId);
 }

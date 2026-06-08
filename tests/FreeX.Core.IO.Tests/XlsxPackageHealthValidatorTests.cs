@@ -24,6 +24,8 @@ public sealed class XlsxPackageHealthValidatorTests
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition";
     private const string PivotCacheRecordsRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords";
+    private const string PivotTableRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable";
     private const string SharedStringsContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
     private const string StylesContentType =
@@ -40,6 +42,8 @@ public sealed class XlsxPackageHealthValidatorTests
         "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml";
     private const string PivotCacheRecordsContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml";
+    private const string PivotTableContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml";
 
     [Fact]
     public void Validate_AcceptsMinimalWorkbookPackage()
@@ -495,6 +499,116 @@ public sealed class XlsxPackageHealthValidatorTests
         XlsxPackageHealthValidator.Validate(package)
             .Should()
             .Contain(issue => issue.Contains("pivot cache records reference rIdMissingRecords targets missing relationship", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_AcceptsWorkbookWithPivotTablePackage()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookXml: WorkbookWithPivotCachesXml("""<pivotCache cacheId="0" r:id="rIdPivotCache1" />"""),
+            worksheetXml: WorksheetWithPivotTableXml("rIdPivotTable1"),
+            workbookRelationships:
+            [
+                Relationship("rId1", WorksheetRelationshipType, "worksheets/sheet1.xml"),
+                Relationship("rIdPivotCache1", PivotCacheDefinitionRelationshipType, "pivotCache/pivotCacheDefinition1.xml")
+            ],
+            extraEntries:
+            [
+                ("xl/pivotCache/pivotCacheDefinition1.xml", PivotCacheDefinitionXml()),
+                ("xl/worksheets/_rels/sheet1.xml.rels", RelationshipsXml(
+                    Relationship("rIdPivotTable1", PivotTableRelationshipType, "../pivotTables/pivotTable1.xml"))),
+                ("xl/pivotTables/pivotTable1.xml", PivotTableXml("0"))
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/pivotCache/pivotCacheDefinition1.xml" ContentType="{PivotCacheDefinitionContentType}" />""",
+                $"""<Override PartName="/xl/pivotTables/pivotTable1.xml" ContentType="{PivotTableContentType}" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Validate_FlagsWorksheetPivotTableMissingRelationship()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookXml: WorkbookWithPivotCachesXml("""<pivotCache cacheId="0" r:id="rIdPivotCache1" />"""),
+            worksheetXml: WorksheetWithPivotTableXml("rIdPivotTable1"),
+            workbookRelationships:
+            [
+                Relationship("rId1", WorksheetRelationshipType, "worksheets/sheet1.xml"),
+                Relationship("rIdPivotCache1", PivotCacheDefinitionRelationshipType, "pivotCache/pivotCacheDefinition1.xml")
+            ],
+            extraEntries:
+            [
+                ("xl/pivotCache/pivotCacheDefinition1.xml", PivotCacheDefinitionXml()),
+                ("xl/worksheets/_rels/sheet1.xml.rels", RelationshipsXml())
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/pivotCache/pivotCacheDefinition1.xml" ContentType="{PivotCacheDefinitionContentType}" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("xl/worksheets/sheet1.xml pivotTableDefinition #1 references missing relationship rIdPivotTable1", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsPivotTableWithWrongContentType()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookXml: WorkbookWithPivotCachesXml("""<pivotCache cacheId="0" r:id="rIdPivotCache1" />"""),
+            worksheetXml: WorksheetWithPivotTableXml("rIdPivotTable1"),
+            workbookRelationships:
+            [
+                Relationship("rId1", WorksheetRelationshipType, "worksheets/sheet1.xml"),
+                Relationship("rIdPivotCache1", PivotCacheDefinitionRelationshipType, "pivotCache/pivotCacheDefinition1.xml")
+            ],
+            extraEntries:
+            [
+                ("xl/pivotCache/pivotCacheDefinition1.xml", PivotCacheDefinitionXml()),
+                ("xl/worksheets/_rels/sheet1.xml.rels", RelationshipsXml(
+                    Relationship("rIdPivotTable1", PivotTableRelationshipType, "../pivotTables/pivotTable1.xml"))),
+                ("xl/pivotTables/pivotTable1.xml", PivotTableXml("0"))
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/pivotCache/pivotCacheDefinition1.xml" ContentType="{PivotCacheDefinitionContentType}" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains($"xl/pivotTables/pivotTable1.xml has content type application/xml; expected {PivotTableContentType}", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsPivotTableCacheIdWithoutWorkbookPivotCache()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookXml: WorkbookWithPivotCachesXml("""<pivotCache cacheId="0" r:id="rIdPivotCache1" />"""),
+            worksheetXml: WorksheetWithPivotTableXml("rIdPivotTable1"),
+            workbookRelationships:
+            [
+                Relationship("rId1", WorksheetRelationshipType, "worksheets/sheet1.xml"),
+                Relationship("rIdPivotCache1", PivotCacheDefinitionRelationshipType, "pivotCache/pivotCacheDefinition1.xml")
+            ],
+            extraEntries:
+            [
+                ("xl/pivotCache/pivotCacheDefinition1.xml", PivotCacheDefinitionXml()),
+                ("xl/worksheets/_rels/sheet1.xml.rels", RelationshipsXml(
+                    Relationship("rIdPivotTable1", PivotTableRelationshipType, "../pivotTables/pivotTable1.xml"))),
+                ("xl/pivotTables/pivotTable1.xml", PivotTableXml("9"))
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/pivotCache/pivotCacheDefinition1.xml" ContentType="{PivotCacheDefinitionContentType}" />""",
+                $"""<Override PartName="/xl/pivotTables/pivotTable1.xml" ContentType="{PivotTableContentType}" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("xl/pivotTables/pivotTable1.xml references cacheId 9, but workbook has no matching pivotCache", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -1127,6 +1241,18 @@ public sealed class XlsxPackageHealthValidatorTests
 
     private static string PivotCacheRecordsXml() =>
         """<pivotCacheRecords xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="0" />""";
+
+    private static string WorksheetWithPivotTableXml(string relationshipId) =>
+        $"""
+        <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                   xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <sheetData />
+          <pivotTableDefinition r:id="{relationshipId}" />
+        </worksheet>
+        """;
+
+    private static string PivotTableXml(string cacheId) =>
+        $"""<pivotTableDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" name="PivotTable1" cacheId="{cacheId}" />""";
 
     private static string SharedStringWorksheetXml(string sharedStringIndex) =>
         $"""
