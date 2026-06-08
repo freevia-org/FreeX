@@ -1170,13 +1170,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-single-xml-cells-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetSingleXmlCellsModel(sheet, "generated-worksheet-single-xml-cells-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-single-xml-cells-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-single-xml-cells-001");
         AssertWorksheetSingleXmlCells(saved, "generated-worksheet-single-xml-cells-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetSingleXmlCellsModel(
+            reloaded.GetSheetAt(0),
+            "single XML cell model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -1933,6 +1941,17 @@ public partial class XlsxCorpusRunnerTests
         xmlCellPr.Should().NotBeNull(because);
         xmlCellPr!.Attribute("id")!.Value.Should().Be("1", because);
         xmlCellPr.Element(worksheetNs + "xmlPr")!.Attribute("mapId")!.Value.Should().Be("1", because);
+    }
+
+    private static void AssertWorksheetSingleXmlCellsModel(Sheet sheet, string because)
+    {
+        var singleXmlCells = sheet.SingleXmlCells;
+        singleXmlCells.Should().NotBeNull(because);
+
+        var cell = singleXmlCells!.Cells.Should().ContainSingle(because).Subject;
+        cell.Id.Should().Be(1, because);
+        cell.Reference.Should().Be("A1", because);
+        cell.XmlCellPropertyId.Should().Be(1, because);
     }
 
     private static void AssertWorksheetCalculationProperties(Stream package, string because)
