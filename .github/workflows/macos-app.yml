@@ -1429,7 +1429,7 @@ jobs:
 
   publish-distribution-candidate:
     name: Publish macOS distribution candidate
-    needs: macos-app
+    needs: [macos-app, macos-preview-readiness]
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}
     runs-on: ubuntu-latest
     timeout-minutes: 30

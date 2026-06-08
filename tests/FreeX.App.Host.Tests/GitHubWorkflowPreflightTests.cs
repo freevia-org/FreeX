@@ -121,7 +121,7 @@ public sealed class GitHubWorkflowPreflightTests
         distributionCandidateInput.Should().Contain("default: false");
 
         var releaseJob = ExtractRequiredYamlBlock(workflow, "publish-distribution-candidate:");
-        releaseJob.Should().Contain("needs: macos-app");
+        releaseJob.Should().Contain("needs: [macos-app, macos-preview-readiness]");
         releaseJob.Should().Contain("if: ${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}");
         releaseJob.Should().Contain("permissions:");
         releaseJob.Should().Contain("actions: read");

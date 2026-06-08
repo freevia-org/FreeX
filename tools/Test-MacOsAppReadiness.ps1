@@ -574,7 +574,7 @@ function Test-MacOsWorkflow {
         "if-no-files-found: warn",
         "publish-distribution-candidate:",
         "Publish macOS distribution candidate",
-        "needs: macos-app",
+        "needs: [macos-app, macos-preview-readiness]",
         "if: `${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}",
         "permissions:",
         "actions: read",
@@ -965,6 +965,16 @@ function Test-MacOsWorkflow {
     foreach ($marker in $requiredWorkflowMarkers) {
         Assert-ContainsText -Text $workflow -Needle $marker -Message "macOS workflow is missing required readiness marker: $marker"
     }
+
+    $releasePublicationJobMatch = [System.Text.RegularExpressions.Regex]::Match(
+        $workflow,
+        "(?ms)^  publish-distribution-candidate:\s*(?:#.*)?\r?\n(?<block>.*?)(?=^  [A-Za-z0-9_-]+:\s*(?:#.*)?$|\z)")
+    Assert-True -Condition $releasePublicationJobMatch.Success -Message "macOS workflow must define the publish-distribution-candidate job."
+    $releasePublicationJobBlock = $releasePublicationJobMatch.Value
+    Assert-ContainsText `
+        -Text $releasePublicationJobBlock `
+        -Needle "needs: [macos-app, macos-preview-readiness]" `
+        -Message "macOS distribution-candidate publication must depend on aggregate preview readiness."
 
     $boundedLaunchSmokeCount = ([regex]::Matches($workflow, 'run_bounded_launchservices_smoke "')).Count
     Assert-True -Condition ($boundedLaunchSmokeCount -eq 3) -Message "macOS workflow must route all three hosted LaunchServices launch smoke paths through run_bounded_launchservices_smoke."

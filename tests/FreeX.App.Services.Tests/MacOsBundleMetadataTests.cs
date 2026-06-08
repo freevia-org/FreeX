@@ -433,6 +433,22 @@ public sealed class MacOsBundleMetadataTests
     }
 
     [Fact]
+    public void MacOsWorkflow_DistributionCandidatePublicationWaitsForAggregateReadiness()
+    {
+        var workflow = File.ReadAllText(RepositoryFileLocator.Find(".github", "workflows", "macos-app.yml"));
+        var aggregateJob = ExtractWorkflowJobBlock(workflow, "macos-preview-readiness");
+        var releaseJob = ExtractWorkflowJobBlock(workflow, "publish-distribution-candidate");
+
+        releaseJob.Should().Contain("needs: [macos-app, macos-preview-readiness]");
+        releaseJob.Should().Contain("if: ${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}");
+        releaseJob.Should().Contain("- name: Download macOS app artifacts");
+        releaseJob.Should().Contain("pattern: freex-${{ github.run_id }}-${{ github.run_attempt }}-*-macos-app");
+        workflow.IndexOf(aggregateJob, StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(workflow.IndexOf(releaseJob, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Program_RunsPackagingSmokeBeforeAvaloniaLifetime()
     {
         var program = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Program.cs"));
@@ -538,6 +554,19 @@ public sealed class MacOsBundleMetadataTests
             next = workflow.Length;
 
         return workflow[start..next];
+    }
+
+    private static string ExtractWorkflowJobBlock(string workflow, string jobName)
+    {
+        var marker = $"  {jobName}:";
+        var start = workflow.IndexOf(marker, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0, $"workflow should contain the {jobName} job");
+        var nextMatch = Regex.Match(workflow[(start + marker.Length)..], @"(?m)^  [A-Za-z0-9_-]+:\s*$");
+        var end = nextMatch.Success
+            ? start + marker.Length + nextMatch.Index
+            : workflow.Length;
+
+        return workflow[start..end];
     }
 
     private static IReadOnlyList<string> WorkflowRuntimeRunnerPairs(string workflow) =>
