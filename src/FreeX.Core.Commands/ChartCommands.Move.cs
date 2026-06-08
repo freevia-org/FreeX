@@ -33,8 +33,7 @@ public sealed class MoveChartCommand : IWorkbookCommand
         if (ChartCommandGuards.RejectIfEditObjectsBlocked(target) is { } targetProtectedOutcome)
             return targetProtectedOutcome;
 
-        var chart = source.Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is null)
+        if (!ChartCommandGuards.TryFindChart(source, _chartId, out var chart))
             return ChartCommandGuards.ChartNotFound();
         if (chart.IsPivotChart)
             return ChartCommandGuards.SelectedChartIsPivotChart();
@@ -97,8 +96,7 @@ public sealed class MoveChartToNewSheetCommand : IWorkbookCommand
         if (ChartCommandGuards.RejectIfEditObjectsBlocked(source) is { } sourceProtectedOutcome)
             return sourceProtectedOutcome;
 
-        var chart = source.Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is null)
+        if (!ChartCommandGuards.TryFindChart(source, _chartId, out var chart))
             return ChartCommandGuards.ChartNotFound();
         if (chart.IsPivotChart)
             return ChartCommandGuards.SelectedChartIsPivotChart();
