@@ -16,10 +16,8 @@ public sealed partial class XlsxFileAdapter
             {
                 var sourceSheet = string.IsNullOrWhiteSpace(chart.PivotSourceSheetName)
                     ? chartSheet
-                    : workbook.Sheets.FirstOrDefault(sheet =>
-                        string.Equals(sheet.Name, chart.PivotSourceSheetName, StringComparison.OrdinalIgnoreCase));
-                var pivot = sourceSheet?.PivotTables.FirstOrDefault(pivot =>
-                    string.Equals(pivot.Name, chart.PivotTableName, StringComparison.OrdinalIgnoreCase));
+                    : FindChartSourceSheet(workbook, chart.PivotSourceSheetName);
+                var pivot = sourceSheet is null ? null : FindChartPivotTable(sourceSheet, chart.PivotTableName);
                 if (pivot is not null)
                     chart.PivotCacheId = pivot.CacheId;
             }
@@ -32,12 +30,7 @@ public sealed partial class XlsxFileAdapter
             return;
 
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-        var relationship = chartPart.Relationships?.Root?
-            .Elements(packageRelNs + "Relationship")
-            .FirstOrDefault(element => string.Equals(
-                element.Attribute("Id")?.Value,
-                relationshipId,
-                StringComparison.Ordinal));
+        var relationship = FindChartRelationship(chartPart.Relationships?.Root, packageRelNs, relationshipId);
         if (relationship is null)
             return;
 
@@ -52,12 +45,7 @@ public sealed partial class XlsxFileAdapter
             return;
 
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-        var relationship = chartPart.Relationships?.Root?
-            .Elements(packageRelNs + "Relationship")
-            .FirstOrDefault(element => string.Equals(
-                element.Attribute("Id")?.Value,
-                relationshipId,
-                StringComparison.Ordinal));
+        var relationship = FindChartRelationship(chartPart.Relationships?.Root, packageRelNs, relationshipId);
         if (relationship is null)
             return;
 
@@ -66,4 +54,19 @@ public sealed partial class XlsxFileAdapter
         chart.UserShapes.TargetMode = relationship.Attribute("TargetMode")?.Value;
     }
 
+    private static Sheet? FindChartSourceSheet(Workbook workbook, string sheetName) =>
+        workbook.Sheets.FirstOrDefault(sheet =>
+            string.Equals(sheet.Name, sheetName, StringComparison.OrdinalIgnoreCase));
+
+    private static PivotTableModel? FindChartPivotTable(Sheet sheet, string? pivotTableName) =>
+        sheet.PivotTables.FirstOrDefault(pivot =>
+            string.Equals(pivot.Name, pivotTableName, StringComparison.OrdinalIgnoreCase));
+
+    private static XElement? FindChartRelationship(XElement? relationshipsRoot, XNamespace packageRelNs, string relationshipId) =>
+        relationshipsRoot?
+            .Elements(packageRelNs + "Relationship")
+            .FirstOrDefault(element => string.Equals(
+                element.Attribute("Id")?.Value,
+                relationshipId,
+                StringComparison.Ordinal));
 }
