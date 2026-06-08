@@ -151,6 +151,20 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceTableParts.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        reloadedSheet.GetCell(5, 5)!.Value.Should().Be(new NumberValue(42));
+        var reloadedTable = reloadedSheet.StructuredTables.Should().ContainSingle().Subject;
+        reloadedTable.Name.Should().Be("Table1");
+        reloadedTable.DisplayName.Should().Be("Table1");
+        reloadedTable.Range.ToString().Should().Be("A1:B3");
+        reloadedTable.HasAutoFilter.Should().BeTrue();
+        reloadedTable.StyleName.Should().Be("TableStyleMedium2");
+        reloadedTable.ShowRowStripes.Should().BeTrue();
+        reloadedTable.Columns.Select(column => (column.Id, column.Name))
+            .Should()
+            .Equal((1, "Name"), (2, "Value"));
     }
 
     [Fact]
@@ -497,6 +511,21 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceAutoFilter.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloadedSheet = adapter.Load(saved).GetSheetAt(0);
+        reloadedSheet.GetCell(5, 2)!.Value.Should().Be(new NumberValue(42));
+        reloadedSheet.AutoFilter.Should().NotBeNull();
+        var reloadedAutoFilter = reloadedSheet.AutoFilter!;
+        reloadedAutoFilter.Reference.Should().Be("A1:B5");
+        reloadedAutoFilter.FilterColumns.Should().HaveCount(2);
+        reloadedAutoFilter.FilterColumns[0].ColumnId.Should().Be(0);
+        reloadedAutoFilter.FilterColumns[0].Values.Should().Equal("North");
+        reloadedAutoFilter.FilterColumns[0].IncludeBlank.Should().BeTrue();
+        reloadedAutoFilter.FilterColumns[1].ColumnId.Should().Be(1);
+        reloadedAutoFilter.FilterColumns[1].CustomFilters.Should().ContainSingle()
+            .Which.Should().Be(new WorksheetAutoFilterCustomFilterModel("greaterThan", "10"));
+        reloadedAutoFilter.FilterColumns[1].CustomFiltersAnd.Should().BeFalse();
     }
 
     [Fact]
