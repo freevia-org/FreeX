@@ -49,7 +49,7 @@ public sealed class AddChartCommand : IWorkbookCommand
             return new CommandOutcome(false, "Chart data range must include at least one data point.");
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
         sheet.Charts.Add(_chart);
@@ -185,7 +185,7 @@ public sealed class AddPivotChartCommand : IWorkbookCommand
             return invalidSize;
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } pivotProtectedOutcome)
             return pivotProtectedOutcome;
@@ -234,7 +234,14 @@ public sealed class AddPivotChartCommand : IWorkbookCommand
 
 internal static class ChartCommandGuards
 {
+    private const string ChartNotFoundMessage = "Chart was not found.";
     private const string InvalidChartSizeMessage = "Chart size must be positive.";
+
+    public static CommandOutcome ChartNotFound() =>
+        new(false, ChartNotFoundMessage);
+
+    public static CommandOutcome? RejectIfEditObjectsBlocked(Sheet sheet) =>
+        CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects);
 
     public static CommandOutcome? RejectInvalidSize(double width, double height) =>
         double.IsFinite(width) && double.IsFinite(height) && width > 0 && height > 0

@@ -22,6 +22,7 @@ public sealed partial class MainWindowXamlKeyTipTests
             ["SsOptionsBtn_Click"] = "BackstageOptionsButton",
             ["HelpOnlineBtn_Click"] = "HelpOnlineButton",
             ["CheckForUpdatesBtn_Click"] = "HelpCheckForUpdatesButton",
+            ["CopyDiagnosticsBtn_Click"] = "HelpCopyDiagnosticsButton",
             ["SendFeedbackBtn_Click"] = "HelpFeedbackButton",
             ["AboutBtn_Click"] = "HelpAboutFreeXButton",
             ["LegalNoticesBtn_Click"] = "HelpLegalNoticesButton",
@@ -48,7 +49,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     }
 
     [Fact]
-    public void HelpExternalEntryPoints_ExposeStableAutomationAndHonestHelpText()
+    public void HelpCommandEntryPoints_ExposeStableAutomationAndHonestHelpText()
     {
         var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
@@ -63,6 +64,15 @@ public sealed partial class MainWindowXamlKeyTipTests
         var updates = document
             .Descendants()
             .Single(element => element.Attribute(x + "Name")?.Value == "HelpCheckForUpdatesButton");
+        var diagnostics = document
+            .Descendants()
+            .Single(element => element.Attribute(x + "Name")?.Value == "HelpCopyDiagnosticsButton");
+        var about = document
+            .Descendants()
+            .Single(element => element.Attribute(x + "Name")?.Value == "HelpAboutFreeXButton");
+        var legalNotices = document
+            .Descendants()
+            .Single(element => element.Attribute(x + "Name")?.Value == "HelpLegalNoticesButton");
 
         helpOnline.Attribute("Click")?.Value.Should().Be("HelpOnlineBtn_Click");
         helpOnline.ToString().Should().Contain("AutomationProperties.AutomationId=\"HelpOnlineButton\"");
@@ -78,6 +88,21 @@ public sealed partial class MainWindowXamlKeyTipTests
         feedback.ToString().Should().Contain("AutomationProperties.AutomationId=\"HelpFeedbackButton\"");
         LocalizedAttribute(feedback, "AutomationProperties.HelpText").Should().Be("Open a prefilled GitHub issue with safe app diagnostics.");
         feedback.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("FE");
+
+        diagnostics.Attribute("Click")?.Value.Should().Be("CopyDiagnosticsBtn_Click");
+        diagnostics.ToString().Should().Contain("AutomationProperties.AutomationId=\"HelpCopyDiagnosticsButton\"");
+        LocalizedAttribute(diagnostics, "AutomationProperties.HelpText").Should().Be("Copy safe app version, runtime, OS, and session diagnostics for tester reports.");
+        diagnostics.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("DG");
+
+        about.Attribute("Click")?.Value.Should().Be("AboutBtn_Click");
+        about.ToString().Should().Contain("AutomationProperties.AutomationId=\"HelpAboutFreeXButton\"");
+        LocalizedAttribute(about, "AutomationProperties.HelpText").Should().Be("View version and license information about FreeX.");
+        about.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("AB");
+
+        legalNotices.Attribute("Click")?.Value.Should().Be("LegalNoticesBtn_Click");
+        legalNotices.ToString().Should().Contain("AutomationProperties.AutomationId=\"HelpLegalNoticesButton\"");
+        LocalizedAttribute(legalNotices, "AutomationProperties.HelpText").Should().Be("Open legal, privacy, and third-party notices packaged with FreeX.");
+        legalNotices.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("LN");
     }
 
     [Fact]

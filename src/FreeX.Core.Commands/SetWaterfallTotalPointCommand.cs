@@ -28,12 +28,12 @@ public sealed class SetWaterfallTotalPointCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+        if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
         var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
         if (chart is null)
-            return new CommandOutcome(false, "Chart was not found.");
+            return ChartCommandGuards.ChartNotFound();
 
         if (chart.Type != ChartType.Waterfall)
             return new CommandOutcome(false, "Set as Total is only available for waterfall charts.");
