@@ -85,9 +85,7 @@ public static class PivotValueFieldSettingsInputParser
         if (string.IsNullOrWhiteSpace(label))
             return null;
 
-        return NumberFormatPresets
-            .FirstOrDefault(preset => string.Equals(preset.Label, label.Trim(), StringComparison.OrdinalIgnoreCase))
-            ?.NumberFormatId;
+        return FindNumberFormatPreset(label.Trim())?.NumberFormatId;
     }
 
     public static string? ResolvePresetNumberFormatCode(string? label)
@@ -95,9 +93,7 @@ public static class PivotValueFieldSettingsInputParser
         if (string.IsNullOrWhiteSpace(label))
             return null;
 
-        return NumberFormatPresets
-            .FirstOrDefault(preset => string.Equals(preset.Label, label.Trim(), StringComparison.OrdinalIgnoreCase))
-            ?.FormatCode;
+        return FindNumberFormatPreset(label.Trim())?.FormatCode;
     }
 
     public static int? ResolveBuiltInNumberFormatIdForCode(string? formatCode) =>
@@ -112,6 +108,17 @@ public static class PivotValueFieldSettingsInputParser
             return false;
 
         return BuiltInNumberFormatCatalog.TryResolveNumberFormatIdForCode(formatCode, out numberFormatId);
+    }
+
+    private static PivotValueNumberFormatPreset? FindNumberFormatPreset(string label)
+    {
+        foreach (var preset in NumberFormatPresets)
+        {
+            if (string.Equals(preset.Label, label, StringComparison.OrdinalIgnoreCase))
+                return preset;
+        }
+
+        return null;
     }
 
     private static string BuiltInFormat(int? numberFormatId) =>
