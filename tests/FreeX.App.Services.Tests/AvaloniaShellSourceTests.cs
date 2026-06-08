@@ -1567,6 +1567,84 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_WiresNativeAdvancedFilterThroughSharedPlannerSessionAndCompactDialog()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "AdvancedFilterPlanner.cs"));
+        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        source.Should().Contain("private readonly NativeMenuItem _advancedFilterMenuItem = new();");
+        source.Should().Contain("_advancedFilterMenuItem.Header = \"Advanced Filter...\";");
+        source.Should().Contain("_advancedFilterMenuItem.Click += async (_, _) => await ShowAdvancedFilterDialogAsync();");
+        source.Should().Contain("dataMenu.Items.Add(_advancedFilterMenuItem);");
+        source.Should().Contain("_advancedFilterMenuItem.IsEnabled = isIdle;");
+
+        var customSortMenuIndex = normalizedSource.IndexOf("dataMenu.Items.Add(_customSortMenuItem);", StringComparison.Ordinal);
+        var advancedFilterMenuIndex = normalizedSource.IndexOf("dataMenu.Items.Add(_advancedFilterMenuItem);", StringComparison.Ordinal);
+        var dataValidationMenuIndex = normalizedSource.IndexOf("dataMenu.Items.Add(_dataValidationMenuItem);", StringComparison.Ordinal);
+        customSortMenuIndex.Should().BeGreaterThanOrEqualTo(0);
+        advancedFilterMenuIndex.Should().BeGreaterThan(customSortMenuIndex);
+        dataValidationMenuIndex.Should().BeGreaterThan(advancedFilterMenuIndex);
+
+        source.Should().Contain("private async Task ShowAdvancedFilterDialogAsync()");
+        source.Should().Contain("if (_isOpening || _isSaving)");
+        source.Should().Contain("if (!TryCommitPendingFormulaEdit())");
+        source.Should().Contain("var plan = await ShowAdvancedFilterInputDialogAsync();");
+        source.Should().Contain("var result = _session.ExecuteAdvancedFilterPlan(plan);");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Advanced Filter failed.\");");
+        source.Should().Contain("RefreshShell(FormatAdvancedFilterStatus(plan));");
+
+        source.Should().Contain("private async Task<AdvancedFilterPlan?> ShowAdvancedFilterInputDialogAsync()");
+        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"AdvancedFilterCompactDialog\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(listRangeBox, \"AdvancedFilterListRangeBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(criteriaRangeBox, \"AdvancedFilterCriteriaRangeBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(inPlaceButton, \"AdvancedFilterInPlaceButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(copyToAnotherLocationButton, \"AdvancedFilterCopyToAnotherLocationButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(copyToBox, \"AdvancedFilterCopyToBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(uniqueBox, \"AdvancedFilterUniqueRecordsOnlyBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(errorText, \"AdvancedFilterErrorText\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"AdvancedFilterOkButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"AdvancedFilterCancelButton\");");
+        source.Should().Contain("Text = FormatRangeReference(_session.SelectedRange)");
+        source.Should().Contain("var selectedOutputMode = copyToAnotherLocationButton.IsChecked == true");
+        source.Should().Contain("AdvancedFilterOutputMode.CopyToAnotherLocation");
+        source.Should().Contain("AdvancedFilterOutputMode.FilterInPlace");
+        source.Should().Contain("AdvancedFilterPlanner.CreatePlan(");
+        source.Should().Contain("_session.ActiveSheet.Id");
+        source.Should().Contain("listRangeBox.Text");
+        source.Should().Contain("criteriaRangeBox.Text");
+        source.Should().Contain("copyToBox.Text");
+        source.Should().Contain("selectedOutputMode");
+        source.Should().Contain("uniqueBox.IsChecked == true");
+        source.Should().Contain("sheetName => _session.Workbook.GetSheet(sheetName)?.Id");
+        source.Should().Contain("FocusAdvancedFilterErrorField(planResult.Error, listRangeBox, criteriaRangeBox, copyToBox);");
+        source.Should().Contain("private static string FormatAdvancedFilterStatus(AdvancedFilterPlan plan)");
+        source.Should().Contain("private static string FormatAdvancedFilterPlanError(AdvancedFilterPlanResult result)");
+        source.Should().Contain("private static void FocusAdvancedFilterErrorField(");
+        source.Should().Contain("private static StackPanel CreateAdvancedFilterField(string label, Control control)");
+
+        sessionSource.Should().Contain("public WorkbookCellEditResult ExecuteAdvancedFilterPlan(AdvancedFilterPlan plan)");
+        sessionSource.Should().Contain("ApplySuccessfulRangeEditResult(result, GetAdvancedFilterSelectedRange(plan));");
+        plannerSource.Should().Contain("public static AdvancedFilterPlanResult CreatePlan(");
+        plannerSource.Should().Contain("public AdvancedFilterCommand CreateCommand()");
+
+        var handlerIndex = normalizedSource.IndexOf("private async Task ShowAdvancedFilterDialogAsync()", StringComparison.Ordinal);
+        handlerIndex.Should().BeGreaterThanOrEqualTo(0);
+        var nextMethodIndex = normalizedSource.IndexOf("\n    private async Task ShowDataTableDialogAsync()", handlerIndex, StringComparison.Ordinal);
+        nextMethodIndex.Should().BeGreaterThan(handlerIndex);
+        var routeSource = normalizedSource[handlerIndex..nextMethodIndex];
+
+        routeSource.Should().NotContain("new AdvancedFilterCommand");
+        routeSource.Should().NotContain("new AdvancedFilterDialog");
+        routeSource.Should().NotContain("FreeX.App.Host");
+        routeSource.Should().NotContain("DataTransferManager");
+        routeSource.Should().NotContain("WindowInteropHelper");
+        routeSource.Should().NotContain("Microsoft.Win32");
+        routeSource.Should().NotContain("System.Windows");
+    }
+
+    [Fact]
     public void MainWindow_WiresNativeReviewMenuThroughSharedWorkflowPlanAndNavigation()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));

@@ -349,6 +349,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _sortAscendingMenuItem = new();
     private readonly NativeMenuItem _sortDescendingMenuItem = new();
     private readonly NativeMenuItem _customSortMenuItem = new();
+    private readonly NativeMenuItem _advancedFilterMenuItem = new();
     private readonly NativeMenuItem _dataValidationMenuItem = new();
     private readonly NativeMenuItem _whatIfAnalysisMenuItem = new();
     private readonly NativeMenuItem _goalSeekMenuItem = new();
@@ -698,6 +699,9 @@ public sealed class MainWindow : Window
         _customSortMenuItem.Header = "Sort...";
         _customSortMenuItem.Click += async (_, _) => await ShowSortDialogAsync();
 
+        _advancedFilterMenuItem.Header = "Advanced Filter...";
+        _advancedFilterMenuItem.Click += async (_, _) => await ShowAdvancedFilterDialogAsync();
+
         _dataValidationMenuItem.Header = "Data Validation...";
         _dataValidationMenuItem.Click += async (_, _) => await ShowDataValidationDialogAsync();
 
@@ -1001,6 +1005,7 @@ public sealed class MainWindow : Window
         dataMenu.Items.Add(_sortAscendingMenuItem);
         dataMenu.Items.Add(_sortDescendingMenuItem);
         dataMenu.Items.Add(_customSortMenuItem);
+        dataMenu.Items.Add(_advancedFilterMenuItem);
         dataMenu.Items.Add(new NativeMenuItemSeparator());
         dataMenu.Items.Add(_dataValidationMenuItem);
         dataMenu.Items.Add(new NativeMenuItemSeparator());
@@ -1744,6 +1749,7 @@ public sealed class MainWindow : Window
         _sortAscendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _customSortMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
+        _advancedFilterMenuItem.IsEnabled = isIdle;
         _dataValidationMenuItem.IsEnabled = isIdle;
         _whatIfAnalysisMenuItem.IsEnabled = isIdle;
         _goalSeekMenuItem.IsEnabled = isIdle;
@@ -7238,6 +7244,310 @@ public sealed class MainWindow : Window
     }
 
     private static StackPanel CreateGoalSeekField(string label, Control control) =>
+        new()
+        {
+            Spacing = 4,
+            Children =
+            {
+                new TextBlock { Text = label },
+                control,
+            },
+        };
+
+    private async Task ShowAdvancedFilterDialogAsync()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var plan = await ShowAdvancedFilterInputDialogAsync();
+        if (plan is null)
+            return;
+
+        var result = _session.ExecuteAdvancedFilterPlan(plan);
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "Advanced Filter failed.");
+            return;
+        }
+
+        RefreshShell(FormatAdvancedFilterStatus(plan));
+    }
+
+    private async Task<AdvancedFilterPlan?> ShowAdvancedFilterInputDialogAsync()
+    {
+        AdvancedFilterPlan? result = null;
+        var dialog = new Window
+        {
+            Title = "Advanced Filter",
+            Width = 500,
+            Height = 390,
+            MinWidth = 420,
+            MinHeight = 350,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "AdvancedFilterCompactDialog");
+
+        var listRangeBox = new TextBox
+        {
+            Text = FormatRangeReference(_session.SelectedRange),
+            MinWidth = 280,
+        };
+        AutomationProperties.SetName(listRangeBox, "List range");
+        AutomationProperties.SetAutomationId(listRangeBox, "AdvancedFilterListRangeBox");
+        AutomationProperties.SetHelpText(listRangeBox, "Range containing list headers and records.");
+
+        var criteriaRangeBox = new TextBox
+        {
+            MinWidth = 280,
+        };
+        AutomationProperties.SetName(criteriaRangeBox, "Criteria range");
+        AutomationProperties.SetAutomationId(criteriaRangeBox, "AdvancedFilterCriteriaRangeBox");
+        AutomationProperties.SetHelpText(criteriaRangeBox, "Range containing criteria headers and criteria rows.");
+
+        var inPlaceButton = new RadioButton
+        {
+            Content = "Filter in-place",
+            GroupName = "AdvancedFilterOutputMode",
+            IsChecked = true,
+        };
+        AutomationProperties.SetAutomationId(inPlaceButton, "AdvancedFilterInPlaceButton");
+
+        var copyToAnotherLocationButton = new RadioButton
+        {
+            Content = "Copy to another location",
+            GroupName = "AdvancedFilterOutputMode",
+        };
+        AutomationProperties.SetAutomationId(copyToAnotherLocationButton, "AdvancedFilterCopyToAnotherLocationButton");
+
+        var copyToBox = new TextBox
+        {
+            IsEnabled = false,
+            MinWidth = 280,
+        };
+        AutomationProperties.SetName(copyToBox, "Copy to");
+        AutomationProperties.SetAutomationId(copyToBox, "AdvancedFilterCopyToBox");
+        AutomationProperties.SetHelpText(copyToBox, "Destination cell or one-row header range on the list sheet.");
+
+        var uniqueBox = new CheckBox
+        {
+            Content = "Unique records only",
+        };
+        AutomationProperties.SetAutomationId(uniqueBox, "AdvancedFilterUniqueRecordsOnlyBox");
+
+        var errorText = new TextBlock
+        {
+            Foreground = Brush(143, 74, 18),
+            TextWrapping = TextWrapping.Wrap,
+        };
+        AutomationProperties.SetAutomationId(errorText, "AdvancedFilterErrorText");
+
+        var okButton = new Button
+        {
+            Content = "OK",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(okButton, "AdvancedFilterOkButton");
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(cancelButton, "AdvancedFilterCancelButton");
+
+        AdvancedFilterPlanResult CreatePlan()
+        {
+            var selectedOutputMode = copyToAnotherLocationButton.IsChecked == true
+                ? AdvancedFilterOutputMode.CopyToAnotherLocation
+                : AdvancedFilterOutputMode.FilterInPlace;
+
+            return AdvancedFilterPlanner.CreatePlan(
+                _session.ActiveSheet.Id,
+                listRangeBox.Text,
+                criteriaRangeBox.Text,
+                copyToBox.Text,
+                selectedOutputMode,
+                uniqueBox.IsChecked == true,
+                sheetName => _session.Workbook.GetSheet(sheetName)?.Id);
+        }
+
+        void RefreshPlanStatus()
+        {
+            var planResult = CreatePlan();
+            errorText.Text = planResult.Success
+                ? "Ready to run Advanced Filter."
+                : FormatAdvancedFilterPlanError(planResult);
+        }
+
+        void RefreshCopyToState()
+        {
+            copyToBox.IsEnabled = copyToAnotherLocationButton.IsChecked == true;
+            RefreshPlanStatus();
+        }
+
+        void Accept()
+        {
+            var planResult = CreatePlan();
+            if (!planResult.Success || planResult.Plan is null)
+            {
+                errorText.Text = FormatAdvancedFilterPlanError(planResult);
+                FocusAdvancedFilterErrorField(planResult.Error, listRangeBox, criteriaRangeBox, copyToBox);
+                return;
+            }
+
+            result = planResult.Plan;
+            dialog.Close();
+        }
+
+        okButton.Click += (_, _) => Accept();
+        cancelButton.Click += (_, _) => dialog.Close();
+        listRangeBox.TextChanged += (_, _) => RefreshPlanStatus();
+        criteriaRangeBox.TextChanged += (_, _) => RefreshPlanStatus();
+        copyToBox.TextChanged += (_, _) => RefreshPlanStatus();
+        uniqueBox.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == ToggleButton.IsCheckedProperty)
+                RefreshPlanStatus();
+        };
+        inPlaceButton.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == ToggleButton.IsCheckedProperty)
+                RefreshCopyToState();
+        };
+        copyToAnotherLocationButton.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == ToggleButton.IsCheckedProperty)
+                RefreshCopyToState();
+        };
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                e.Handled = true;
+                Accept();
+            }
+            else if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                dialog.Close();
+            }
+        };
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 10, 0, 0),
+            Children =
+            {
+                cancelButton,
+                okButton,
+            },
+        };
+        DockPanel.SetDock(buttonRow, Dock.Bottom);
+
+        RefreshCopyToState();
+        dialog.Content = new DockPanel
+        {
+            Margin = new Thickness(16),
+            Children =
+            {
+                buttonRow,
+                new StackPanel
+                {
+                    Spacing = 10,
+                    Children =
+                    {
+                        CreateAdvancedFilterField("List range", listRangeBox),
+                        CreateAdvancedFilterField("Criteria range", criteriaRangeBox),
+                        new StackPanel
+                        {
+                            Spacing = 6,
+                            Children =
+                            {
+                                inPlaceButton,
+                                copyToAnotherLocationButton,
+                            },
+                        },
+                        CreateAdvancedFilterField("Copy to", copyToBox),
+                        uniqueBox,
+                        errorText,
+                    },
+                },
+            },
+        };
+        dialog.Opened += (_, _) =>
+        {
+            criteriaRangeBox.Focus();
+            criteriaRangeBox.SelectAll();
+        };
+
+        await dialog.ShowDialog(this);
+        return result;
+    }
+
+    private static string FormatAdvancedFilterStatus(AdvancedFilterPlan plan)
+    {
+        var listRange = FormatRangeReference(plan.ListRange);
+        return plan is
+        {
+            OutputMode: AdvancedFilterOutputMode.CopyToAnotherLocation,
+            CopyToRange: { } copyToRange
+        }
+            ? $"Advanced Filter copied {listRange} to {FormatRangeReference(copyToRange)}"
+            : $"Advanced Filter applied to {listRange}";
+    }
+
+    private static string FormatAdvancedFilterPlanError(AdvancedFilterPlanResult result)
+    {
+        var message = result.Error switch
+        {
+            AdvancedFilterPlanError.None => "Ready to run Advanced Filter.",
+            AdvancedFilterPlanError.InvalidListRange => "Enter a valid list range.",
+            AdvancedFilterPlanError.ListRangeRequiresDataRows => "List range must include headers and at least one data row.",
+            AdvancedFilterPlanError.InvalidCriteriaRange => "Enter a valid criteria range.",
+            AdvancedFilterPlanError.CriteriaRangeRequiresCriteriaRows => "Criteria range must include headers and at least one criteria row.",
+            AdvancedFilterPlanError.CopyDestinationRequired => "Enter a copy-to range.",
+            AdvancedFilterPlanError.InvalidCopyDestinationRange => "Enter a valid one-row copy-to range on the active sheet.",
+            AdvancedFilterPlanError.CopyDestinationMustBeOnListSheet => "Copy-to range must be on the list sheet.",
+            _ => "Advanced Filter request is invalid."
+        };
+
+        return string.IsNullOrWhiteSpace(result.InvalidText)
+            ? message
+            : $"{message} ({result.InvalidText})";
+    }
+
+    private static void FocusAdvancedFilterErrorField(
+        AdvancedFilterPlanError error,
+        TextBox listRangeBox,
+        TextBox criteriaRangeBox,
+        TextBox copyToBox)
+    {
+        var target = error switch
+        {
+            AdvancedFilterPlanError.InvalidListRange or
+            AdvancedFilterPlanError.ListRangeRequiresDataRows => listRangeBox,
+            AdvancedFilterPlanError.InvalidCriteriaRange or
+            AdvancedFilterPlanError.CriteriaRangeRequiresCriteriaRows => criteriaRangeBox,
+            AdvancedFilterPlanError.CopyDestinationRequired or
+            AdvancedFilterPlanError.InvalidCopyDestinationRange or
+            AdvancedFilterPlanError.CopyDestinationMustBeOnListSheet => copyToBox,
+            _ => criteriaRangeBox
+        };
+        target.Focus();
+        target.SelectAll();
+    }
+
+    private static StackPanel CreateAdvancedFilterField(string label, Control control) =>
         new()
         {
             Spacing = 4,
