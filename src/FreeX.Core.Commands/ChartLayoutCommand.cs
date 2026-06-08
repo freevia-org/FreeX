@@ -178,8 +178,7 @@ public sealed partial class SetChartLayoutCommand : IWorkbookCommand
         if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is null)
+        if (!ChartCommandGuards.TryFindChart(sheet, _chartId, out var chart))
             return ChartCommandGuards.ChartNotFound();
 
         _previous = Capture(chart);
@@ -192,9 +191,10 @@ public sealed partial class SetChartLayoutCommand : IWorkbookCommand
         if (_previous is null)
             return;
 
-        var chart = ctx.GetSheet(_sheetId).Charts.FirstOrDefault(item => item.Id == _chartId);
-        if (chart is not null)
-            RestoreLayout(chart, _previous);
+        if (!ChartCommandGuards.TryFindChart(ctx.GetSheet(_sheetId), _chartId, out var chart))
+            return;
+
+        RestoreLayout(chart, _previous);
     }
 
     private static ChartLayoutOptions Capture(ChartModel chart) =>
