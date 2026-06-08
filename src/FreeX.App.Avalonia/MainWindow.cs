@@ -11639,8 +11639,7 @@ public sealed class MainWindow : Window
         {
             if (!_formulaBox.IsFocused)
             {
-                e.Handled = true;
-                OpenActiveDataValidationDropdown();
+                e.Handled = OpenActiveDataValidationDropdown();
             }
 
             return;
@@ -11861,20 +11860,21 @@ public sealed class MainWindow : Window
         }
     }
 
-    private void OpenActiveDataValidationDropdown()
+    private bool OpenActiveDataValidationDropdown()
     {
         if (_isOpening || _isSaving)
-            return;
+            return true;
 
         if (!TryCommitPendingFormulaEdit())
-            return;
+            return true;
 
         RefreshShell("Ready");
         if (_activeDataValidationDropdown is null)
-            return;
+            return false;
 
         _activeDataValidationDropdown.Focus();
         _activeDataValidationDropdown.IsDropDownOpen = true;
+        return true;
     }
 
     private void DataValidationDropdown_SelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -11898,6 +11898,8 @@ public sealed class MainWindow : Window
         var result = _session.CommitCellText(selected);
         if (!result.Success)
         {
+            _session.CancelFormulaEdit();
+            _formulaBoxEditOriginalText = null;
             ShowEditIssue(result.ErrorMessage ?? "Data validation dropdown failed.");
             return;
         }

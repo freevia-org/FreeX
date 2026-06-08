@@ -1695,11 +1695,13 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("dropdown.SelectionChanged += DataValidationDropdown_SelectionChanged;");
         source.Should().Contain("private static bool IsOpenActiveDropdownShortcut(KeyEventArgs args)");
         source.Should().Contain("args.Key == Key.Down && args.KeyModifiers == KeyModifiers.Alt;");
-        source.Should().Contain("OpenActiveDataValidationDropdown();");
+        source.Should().Contain("e.Handled = OpenActiveDataValidationDropdown();");
         source.Should().Contain("_activeDataValidationDropdown.IsDropDownOpen = true;");
         source.Should().Contain("private void DataValidationDropdown_SelectionChanged(object? sender, SelectionChangedEventArgs e)");
         source.Should().Contain("CommitDataValidationDropdownSelection(selected);");
         source.Should().Contain("_session.CommitCellText(selected)");
+        source.Should().Contain("_session.CancelFormulaEdit();");
+        source.Should().Contain("_formulaBoxEditOriginalText = null;");
         source.Should().Contain("RefreshShell($\"Picked {selected} for {FormatCellReference(address)}\");");
 
         plannerSource.Should().Contain("DataValidationService.GetApplicable(sheet, activeCell)");
@@ -1712,7 +1714,7 @@ public sealed class AvaloniaShellSourceTests
         nextOverlayMethodIndex.Should().BeGreaterThan(overlayIndex);
         var overlaySource = normalizedSource[overlayIndex..nextOverlayMethodIndex];
 
-        var keyboardIndex = normalizedSource.IndexOf("private void OpenActiveDataValidationDropdown()", StringComparison.Ordinal);
+        var keyboardIndex = normalizedSource.IndexOf("private bool OpenActiveDataValidationDropdown()", StringComparison.Ordinal);
         keyboardIndex.Should().BeGreaterThanOrEqualTo(0);
         var nextKeyboardMethodIndex = normalizedSource.IndexOf("\n    private void CycleShellFocus(", keyboardIndex, StringComparison.Ordinal);
         nextKeyboardMethodIndex.Should().BeGreaterThan(keyboardIndex);
