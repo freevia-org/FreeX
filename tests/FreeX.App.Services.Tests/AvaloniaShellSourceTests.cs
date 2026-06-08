@@ -601,8 +601,13 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("RecordStartupRecentWorkbook(source);");
         source.Should().Contain("private NativeMenu CreateNativeOpenRecentMenu(bool isIdle)");
         source.Should().Contain("Header = \"(No Recent Workbooks)\"");
-        source.Should().Contain("private List<RecentFileEntry> GetOpenableRecentWorkbookEntries()");
-        source.Should().Contain("entries.Sort(static (left, right) => right.LastOpened.CompareTo(left.LastOpened));");
+        source.Should().Contain("OpenRecentWorkbookMenuPlanner.Create(");
+        source.Should().Contain("_recentFiles.Entries");
+        source.Should().Contain("File.Exists");
+        source.Should().Contain("path => _session.TryResolveOpenTarget(path, out _, out _)");
+        source.Should().Contain("plan.ItemCount == 0");
+        source.Should().Contain("foreach (var entry in plan.Items)");
+        source.Should().Contain("Header = entry.Header");
         source.Should().Contain("private async Task OpenRecentWorkbookAsync(string path)");
         source.Should().Contain("_recentFiles.Remove(path);");
         source.Should().Contain("await OpenWorkbookPathAsync(path);");

@@ -43,6 +43,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests");
+        script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests");
@@ -108,6 +109,9 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("public static (uint TopRow, uint LeftCol) CalculateViewportOrigin(");
         script.Should().Contain("WorkbookViewportScrollPlanner.Create(_session.ActiveSheet, _session.Viewport)");
         script.Should().Contain("WorkbookViewportScrollPlanner.CalculateViewportOrigin(");
+        script.Should().Contain("src\\FreeX.App.Services\\OpenRecentWorkbookMenuPlanner.cs");
+        script.Should().Contain("OpenRecentWorkbookMenuPlanner.Create(");
+        script.Should().Contain("public const int DefaultMaximumItems = 10;");
         script.Should().Contain("/Encoding /WinAnsiEncoding");
         script.Should().Contain("EncodeWinAnsiHexText(normalized)");
         script.Should().Contain("private static byte EncodeWinAnsiByte(char ch)");
@@ -1026,7 +1030,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     run: |
                       dotnet test tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj \
                         --configuration Release \
-                        --filter 'FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests|FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests' \
+                        --filter 'FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests|FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests' \
                         --logger "trx;LogFileName=freex-${"{{"} matrix.runtime {"}}"}-portable-pdf-exporter-tests.trx" \
                         --results-directory artifacts
                       dotnet test tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj \
@@ -2005,7 +2009,13 @@ public sealed class MacOsAppReadinessPreflightTests
                     else if (e.Key == Key.D && HasOnlyControlModifier(e.KeyModifiers)) { }
                     else if (e.Key == Key.R && HasOnlyControlModifier(e.KeyModifiers)) { }
                     Header = "(No Recent Workbooks)";
-                    entries.Sort(static (left, right) => right.LastOpened.CompareTo(left.LastOpened));
+                    OpenRecentWorkbookMenuPlanner.Create(
+                    _recentFiles.Entries
+                    File.Exists
+                    path => _session.TryResolveOpenTarget(path, out _, out _)
+                    plan.ItemCount == 0
+                    foreach (var entry in plan.Items)
+                    Header = entry.Header
                     _recentFiles.AddOrUpdate(path);
                     RecordRecentWorkbook(target.Path);
                     _closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();
@@ -2384,7 +2394,6 @@ public sealed class MacOsAppReadinessPreflightTests
                 {
                     var range = _session.SelectCurrentRegionOrAll();
                 }
-                private List<RecentFileEntry> GetOpenableRecentWorkbookEntries() => new();
                 private async Task OpenRecentWorkbookAsync(string path) => await Task.CompletedTask;
                 private void RecordStartupRecentWorkbook(StartupWorkbookLoadResult source) { }
                 private void RecordRecentWorkbook(string path) { }
@@ -3357,6 +3366,57 @@ public sealed class MacOsAppReadinessPreflightTests
                 {
                     containingFolderPath = "";
                     return false;
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Services/OpenRecentWorkbookMenuPlanner.cs",
+            """
+            namespace FreeX.App.Services;
+
+            public sealed record OpenRecentWorkbookMenuItemPlan(
+                string Path,
+                string Header,
+                DateTimeOffset LastOpened);
+
+            public sealed record OpenRecentWorkbookMenuPlan(IReadOnlyList<OpenRecentWorkbookMenuItemPlan> Items)
+            {
+                public int ItemCount => Items.Count;
+            }
+
+            public static class OpenRecentWorkbookMenuPlanner
+            {
+                public const int DefaultMaximumItems = 10;
+
+                public static OpenRecentWorkbookMenuPlan Create(
+                    IEnumerable<RecentFileEntry> entries,
+                    Func<string, bool> fileExists,
+                    Func<string, bool> canOpenWorkbook,
+                    int maximumItems = DefaultMaximumItems)
+                {
+                    if (maximumItems < 1)
+                        return new OpenRecentWorkbookMenuPlan([]);
+
+                    return new OpenRecentWorkbookMenuPlan(
+                        entries
+                            .Where(entry => !string.IsNullOrWhiteSpace(entry.Path))
+                            .Where(entry => fileExists(entry.Path) && canOpenWorkbook(entry.Path))
+                            .OrderByDescending(entry => entry.LastOpened)
+                            .Take(maximumItems)
+                            .Select(entry => new OpenRecentWorkbookMenuItemPlan(
+                                entry.Path,
+                                FormatHeader(entry.Path),
+                                entry.LastOpened))
+                            .ToList());
+                }
+
+                public static string FormatHeader(string path)
+                {
+                    Path.GetFileName(path);
+                    Path.GetDirectoryName(path);
+                    return path;
                 }
             }
             """);
