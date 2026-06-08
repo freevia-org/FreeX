@@ -2074,6 +2074,13 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceSheetViews.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloadedSheet = new XlsxFileAdapter().Load(saved).GetSheetAt(0);
+        reloadedSheet.FrozenRows.Should().Be(1);
+        reloadedSheet.FrozenCols.Should().Be(1);
+        reloadedSheet.SplitRow.Should().BeNull();
+        reloadedSheet.SplitColumn.Should().BeNull();
     }
 
     [Fact]
@@ -2160,6 +2167,15 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceSheetViews.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloadedSheet = new XlsxFileAdapter().Load(saved).GetSheetAt(0);
+        reloadedSheet.SplitRow.Should().Be(3);
+        reloadedSheet.SplitColumn.Should().Be(2);
+        reloadedSheet.ViewTopRow.Should().Be(1);
+        reloadedSheet.ViewLeftCol.Should().Be(1);
+        reloadedSheet.FrozenRows.Should().Be(0);
+        reloadedSheet.FrozenCols.Should().Be(0);
     }
 
 
@@ -2556,6 +2572,44 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceHeaderFooter.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloadedSheet = new XlsxFileAdapter().Load(saved).GetSheetAt(0);
+        reloadedSheet.PageOrientation.Should().Be(WorksheetPageOrientation.Landscape);
+        reloadedSheet.PaperSize.Should().Be(WorksheetPaperSize.Legal);
+        reloadedSheet.PageMargins.Left.Should().BeApproximately(0.7, 0.001);
+        reloadedSheet.PageMargins.Right.Should().BeApproximately(0.8, 0.001);
+        reloadedSheet.PageMargins.Top.Should().BeApproximately(0.9, 0.001);
+        reloadedSheet.PageMargins.Bottom.Should().BeApproximately(1.1, 0.001);
+        reloadedSheet.PrintGridlines.Should().BeTrue();
+        reloadedSheet.PrintHeadings.Should().BeTrue();
+        reloadedSheet.CenterHorizontallyOnPage.Should().BeTrue();
+        reloadedSheet.CenterVerticallyOnPage.Should().BeTrue();
+        reloadedSheet.PageOrder.Should().Be(WorksheetPageOrder.OverThenDown);
+        reloadedSheet.FirstPageNumber.Should().Be(3);
+        reloadedSheet.UsePrinterDefaults.Should().BeFalse();
+        reloadedSheet.PrintCopies.Should().Be(2);
+        reloadedSheet.PrintBlackAndWhite.Should().BeTrue();
+        reloadedSheet.PrintDraftQuality.Should().BeTrue();
+        reloadedSheet.PrintQualityDpi.Should().Be(600);
+        reloadedSheet.PrintQualityVerticalDpi.Should().Be(300);
+        reloadedSheet.PrintErrorValue.Should().Be(WorksheetPrintErrorValue.Dash);
+        reloadedSheet.PrintComments.Should().Be(WorksheetPrintComments.AtEnd);
+        reloadedSheet.ScaleToFit.Should().Be(new WorksheetScaleToFit(null, 1, 2));
+        reloadedSheet.FitToPage.Should().BeTrue();
+        reloadedSheet.AutoPageBreaks.Should().BeFalse();
+        reloadedSheet.HeaderMargin.Should().Be(0.25);
+        reloadedSheet.FooterMargin.Should().Be(0.35);
+        reloadedSheet.PageHeader.Should().Be(new WorksheetHeaderFooter("Left header", "Center header", "Right header"));
+        reloadedSheet.PageFooter.Should().Be(new WorksheetHeaderFooter("Left footer", "Page &[Page] of &[Pages]", "Right footer"));
+        reloadedSheet.FirstPageHeader.Should().Be(new WorksheetHeaderFooter("First header left", "First header center", "First header right"));
+        reloadedSheet.FirstPageFooter.Should().Be(new WorksheetHeaderFooter("First footer left", "First footer center", "First footer right"));
+        reloadedSheet.EvenPageHeader.Should().Be(new WorksheetHeaderFooter("Even header left", "Even header center", "Even header right"));
+        reloadedSheet.EvenPageFooter.Should().Be(new WorksheetHeaderFooter("Even footer left", "Even footer center", "Even footer right"));
+        reloadedSheet.DifferentFirstPageHeaderFooter.Should().BeTrue();
+        reloadedSheet.DifferentOddEvenHeaderFooter.Should().BeTrue();
+        reloadedSheet.HeaderFooterScaleWithDocument.Should().BeFalse();
+        reloadedSheet.HeaderFooterAlignWithMargins.Should().BeFalse();
     }
 
     [Fact]
@@ -2714,6 +2768,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceColumnBreaks.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloadedSheet = new XlsxFileAdapter().Load(saved).GetSheetAt(0);
+        reloadedSheet.RowPageBreaks.Should().Contain(20u);
+        reloadedSheet.ColumnPageBreaks.Should().Contain(4u);
     }
 
     [Fact]
