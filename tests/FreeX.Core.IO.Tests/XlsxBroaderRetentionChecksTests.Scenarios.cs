@@ -23,6 +23,8 @@ public sealed partial class XlsxBroaderRetentionChecksTests
             workbook.FileSharing!.UserName = "EditedUser";
         });
 
+        AssertPackageHasNoHealthIssues(saved);
+
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
         AssertDocumentPropertiesWereRetained(archive);
         AssertWorkbookMetadataWasRetainedWithoutOverridingModeledState(archive);

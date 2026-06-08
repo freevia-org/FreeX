@@ -9,6 +9,22 @@ namespace FreeX.Core.IO.Tests;
 
 public sealed partial class XlsxBroaderRetentionChecksTests
 {
+    private static void AssertPackageHasNoHealthIssues(MemoryStream package)
+    {
+        var position = package.Position;
+        package.Position = 0;
+        try
+        {
+            XlsxPackageHealthValidator.Validate(package)
+                .Should()
+                .BeEmpty("FreeX should not introduce package issues that can trigger Excel repair warnings");
+        }
+        finally
+        {
+            package.Position = position;
+        }
+    }
+
     private static void AssertDocumentPropertiesWereRetained(ZipArchive archive)
     {
         var coreXml = LoadXml(archive, "docProps/core.xml");
