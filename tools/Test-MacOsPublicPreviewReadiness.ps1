@@ -5,6 +5,7 @@ param(
     [string]$ExpectedRunAttempt,
     [switch]$DistributionCandidate,
     [switch]$RequireSeparateDiagnosticsArtifact,
+    [switch]$RequireAggregateReadinessArtifact,
     [switch]$RequireReleasePublicationArtifact
 )
 
@@ -294,6 +295,19 @@ function Get-ExpectedReleaseArtifactWrapperName {
     return "freex-$RunId-$RunAttempt-macos-release-assets"
 }
 
+function Get-ExpectedAggregateReadinessArtifactWrapperName {
+    param(
+        [string]$RunId = "<run-id>",
+        [string]$RunAttempt = "<run-attempt>"
+    )
+
+    if ($RunId -eq "<run-id>" -and $RunAttempt -eq "<run-attempt>") {
+        return "freex-<run-id>-<run-attempt>-macos-preview-readiness"
+    }
+
+    return "freex-$RunId-$RunAttempt-macos-preview-readiness"
+}
+
 function Get-ArtifactDownloadIdentity {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
@@ -352,6 +366,35 @@ function Get-ReleaseArtifactDownloadIdentity {
     return $null
 }
 
+function Get-AggregateReadinessArtifactDownloadIdentity {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string]$Directory
+    )
+
+    $rootInfo = Get-Item -LiteralPath $Root
+    $current = Get-Item -LiteralPath $Directory
+    while ($null -ne $current) {
+        if ($current.Name -match "^freex-(?<RunId>[0-9]+)-(?<RunAttempt>[0-9]+)-macos-preview-readiness$") {
+            return [pscustomobject]@{
+                RunId = $Matches["RunId"]
+                RunAttempt = $Matches["RunAttempt"]
+                Runtime = $null
+                Kind = "preview-readiness"
+                WrapperDirectory = $current.FullName
+            }
+        }
+
+        if ([System.StringComparer]::OrdinalIgnoreCase.Equals($current.FullName, $rootInfo.FullName)) {
+            break
+        }
+
+        $current = $current.Parent
+    }
+
+    return $null
+}
+
 function Test-ArtifactDownloadIdentity {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
@@ -373,6 +416,31 @@ function Test-ArtifactDownloadIdentity {
 
     Assert-True -Condition ($identity.Runtime -eq $Runtime) -Message "$Label wrapper directory '$($identity.WrapperDirectory)' is for runtime '$($identity.Runtime)', expected '$Runtime'."
     Assert-True -Condition ($identity.Kind -eq $Kind) -Message "$Label wrapper directory '$($identity.WrapperDirectory)' is a macOS '$($identity.Kind)' artifact, expected '$Kind'."
+
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedRunId)) {
+        Assert-True -Condition ($identity.RunId -eq $ExpectedRunId) -Message "$Label is from GitHub Actions run '$($identity.RunId)', expected run '$ExpectedRunId'."
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedRunAttempt)) {
+        Assert-True -Condition ($identity.RunAttempt -eq $ExpectedRunAttempt) -Message "$Label is from GitHub Actions run attempt '$($identity.RunAttempt)', expected attempt '$ExpectedRunAttempt'."
+    }
+
+    return $identity
+}
+
+function Test-AggregateReadinessArtifactDownloadIdentity {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string]$Directory,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    $identity = Get-AggregateReadinessArtifactDownloadIdentity -Root $Root -Directory $Directory
+    if ($null -eq $identity) {
+        $expectedWrapper = Get-ExpectedAggregateReadinessArtifactWrapperName
+        Add-ValidationError "$Label does not preserve a GitHub Actions artifact wrapper directory named '$expectedWrapper'. Do not flatten aggregate readiness files into the artifact root; re-download the artifact or keep the unzipped files under that wrapper directory."
+        return $null
+    }
 
     if (-not [string]::IsNullOrWhiteSpace($ExpectedRunId)) {
         Assert-True -Condition ($identity.RunId -eq $ExpectedRunId) -Message "$Label is from GitHub Actions run '$($identity.RunId)', expected run '$ExpectedRunId'."
@@ -929,6 +997,171 @@ function Test-ReleasePublicationArtifact {
     }
 }
 
+function Test-AggregateReadinessArtifact {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string[]]$ExpectedRuntimes,
+        [object[]]$ExpectedArtifactIdentities = @()
+    )
+
+    $manifestName = "macos-preview-readiness-manifest.json"
+    $summaryName = "macos-preview-readiness-summary.txt"
+    $manifestFiles = @(Get-ChildItem -LiteralPath $Root -Recurse -File -Filter $manifestName -ErrorAction SilentlyContinue)
+    $summaryFiles = @(Get-ChildItem -LiteralPath $Root -Recurse -File -Filter $summaryName -ErrorAction SilentlyContinue)
+    $hasAggregateArtifact = $manifestFiles.Count -gt 0 -or $summaryFiles.Count -gt 0
+
+    if (-not $RequireAggregateReadinessArtifact.IsPresent -and -not $hasAggregateArtifact) {
+        return
+    }
+
+    if ($manifestFiles.Count -eq 0) {
+        Add-ValidationError "macOS aggregate readiness artifact manifest was not found. Expected '$manifestName'."
+    }
+    elseif ($manifestFiles.Count -gt 1) {
+        Add-ValidationError "Expected exactly one macOS aggregate readiness artifact manifest named '$manifestName', but found $($manifestFiles.Count)."
+    }
+
+    if ($summaryFiles.Count -eq 0) {
+        Add-ValidationError "macOS aggregate readiness summary was not found. Expected '$summaryName'."
+    }
+    elseif ($summaryFiles.Count -gt 1) {
+        Add-ValidationError "Expected exactly one macOS aggregate readiness summary named '$summaryName', but found $($summaryFiles.Count)."
+    }
+
+    if ($manifestFiles.Count -ne 1 -or $summaryFiles.Count -ne 1) {
+        return
+    }
+
+    $manifestPath = $manifestFiles[0].FullName
+    $manifestDirectory = $manifestFiles[0].Directory.FullName
+    $summaryPath = $summaryFiles[0].FullName
+    $summaryDirectory = $summaryFiles[0].Directory.FullName
+    if (-not [System.StringComparer]::OrdinalIgnoreCase.Equals($manifestDirectory, $summaryDirectory)) {
+        Add-ValidationError "macOS aggregate readiness manifest and summary must be in the same downloaded preview-readiness wrapper directory. Manifest: '$manifestDirectory'. Summary: '$summaryDirectory'. Remove split or stale preview-readiness artifact folders under $Root."
+        return
+    }
+
+    $aggregateIdentity = Test-AggregateReadinessArtifactDownloadIdentity -Root $Root -Directory $manifestDirectory -Label "macOS aggregate readiness artifact"
+    if ($null -eq $aggregateIdentity) {
+        return
+    }
+
+    $aggregateDirectory = $aggregateIdentity.WrapperDirectory
+    Write-Host "Validating macOS aggregate readiness artifact in $aggregateDirectory..."
+
+    try {
+        $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    }
+    catch {
+        Add-ValidationError "macOS aggregate readiness artifact manifest must be valid JSON: $($_.Exception.Message)"
+        return
+    }
+
+    Assert-JsonPropertyEquals -Object $manifest -PropertyName "schema" -ExpectedValue "io.github.tony-xmelon.freex.macos-preview-readiness.v1" -Label "macOS aggregate readiness manifest"
+    foreach ($propertyName in @("repository", "workflow", "run_id", "run_attempt", "commit", "generated_at_utc", "source_artifact_pattern", "readiness_script", "require_separate_diagnostics_artifact", "runtimes")) {
+        Assert-JsonPropertyPresent -Object $manifest -PropertyName $propertyName -Label "macOS aggregate readiness manifest"
+    }
+
+    Assert-JsonPropertyEquals -Object $manifest -PropertyName "run_id" -ExpectedValue $aggregateIdentity.RunId -Label "macOS aggregate readiness manifest"
+    Assert-JsonPropertyEquals -Object $manifest -PropertyName "run_attempt" -ExpectedValue $aggregateIdentity.RunAttempt -Label "macOS aggregate readiness manifest"
+    Assert-JsonPropertyEquals -Object $manifest -PropertyName "readiness_script" -ExpectedValue "tools/Test-MacOsPublicPreviewReadiness.ps1" -Label "macOS aggregate readiness manifest"
+
+    $expectedSourceArtifactPattern = "freex-$($aggregateIdentity.RunId)-$($aggregateIdentity.RunAttempt)-osx-*-macos-{app,diagnostics}"
+    Assert-JsonPropertyEquals -Object $manifest -PropertyName "source_artifact_pattern" -ExpectedValue $expectedSourceArtifactPattern -Label "macOS aggregate readiness manifest"
+
+    $requiresSeparateDiagnostics = Get-JsonPropertyValue -Object $manifest -PropertyName "require_separate_diagnostics_artifact"
+    Assert-True -Condition ($requiresSeparateDiagnostics -eq $true) -Message "macOS aggregate readiness manifest JSON property 'require_separate_diagnostics_artifact' must be true."
+
+    $knownArtifactIdentities = @($ExpectedArtifactIdentities | Where-Object { $null -ne $_ })
+    if ($knownArtifactIdentities.Count -gt 0) {
+        Test-ArtifactIdentityMatches -Identity $aggregateIdentity -ExpectedIdentity $knownArtifactIdentities[0] -Label "macOS aggregate readiness artifact" -ExpectedLabel "downloaded macOS app artifacts"
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedRunId)) {
+        Assert-JsonPropertyEquals -Object $manifest -PropertyName "run_id" -ExpectedValue $ExpectedRunId -Label "macOS aggregate readiness manifest"
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedRunAttempt)) {
+        Assert-JsonPropertyEquals -Object $manifest -PropertyName "run_attempt" -ExpectedValue $ExpectedRunAttempt -Label "macOS aggregate readiness manifest"
+    }
+
+    $rawRuntimeEntries = Get-JsonPropertyValue -Object $manifest -PropertyName "runtimes"
+    if ($null -eq $rawRuntimeEntries) {
+        Add-ValidationError "macOS aggregate readiness manifest must include JSON property 'runtimes'."
+        return
+    }
+
+    $runtimeEntries = @($rawRuntimeEntries)
+    foreach ($runtime in $ExpectedRuntimes) {
+        $runtimeMatches = @($runtimeEntries | Where-Object { $null -ne $_ -and [string](Get-JsonPropertyValue -Object $_ -PropertyName "runtime") -eq $runtime })
+        if ($runtimeMatches.Count -ne 1) {
+            Add-ValidationError "macOS aggregate readiness manifest must contain exactly one runtime entry for '$runtime'."
+            continue
+        }
+
+        $entry = $runtimeMatches[0]
+        $expectedAppArtifactName = "freex-$($aggregateIdentity.RunId)-$($aggregateIdentity.RunAttempt)-$runtime-macos-app"
+        $expectedDiagnosticsArtifactName = "freex-$($aggregateIdentity.RunId)-$($aggregateIdentity.RunAttempt)-$runtime-macos-diagnostics"
+        $names = Get-ExpectedFileNames -Runtime $runtime
+        Assert-JsonPropertyEquals -Object $entry -PropertyName "app_artifact" -ExpectedValue $expectedAppArtifactName -Label "$runtime aggregate readiness manifest runtime"
+        Assert-JsonPropertyEquals -Object $entry -PropertyName "diagnostics_artifact" -ExpectedValue $expectedDiagnosticsArtifactName -Label "$runtime aggregate readiness manifest runtime"
+        Assert-JsonPropertyEquals -Object $entry -PropertyName "evidence_file" -ExpectedValue $names.Evidence -Label "$runtime aggregate readiness manifest runtime"
+
+        $sha256 = [string](Get-JsonPropertyValue -Object $entry -PropertyName "zip_sha256")
+        $manifestHashLooksValid = $sha256 -match "^[0-9a-fA-F]{64}$"
+        $manifestHash = $sha256.ToLowerInvariant()
+        Assert-True -Condition $manifestHashLooksValid -Message "$runtime aggregate readiness manifest zip_sha256 must be a SHA-256 hash."
+
+        $knownRuntimeIdentities = @($knownArtifactIdentities | Where-Object { $null -ne $_ -and $_.Runtime -eq $runtime })
+        if ($knownRuntimeIdentities.Count -gt 0) {
+            $zipPath = Join-Path $knownRuntimeIdentities[0].WrapperDirectory $names.Zip
+            if (Assert-FileExists -Path $zipPath -Label "$runtime aggregate readiness source app ZIP") {
+                $actualZipHash = Get-Sha256FileHash -Path $zipPath
+                if ($manifestHashLooksValid) {
+                    Assert-True -Condition ($actualZipHash -eq $manifestHash) -Message "$runtime aggregate readiness manifest zip_sha256 must match downloaded app ZIP $($names.Zip)."
+                }
+            }
+        }
+
+        $evidenceMarkers = Get-JsonPropertyValue -Object $entry -PropertyName "evidence_markers"
+        if ($null -eq $evidenceMarkers) {
+            Add-ValidationError "$runtime aggregate readiness manifest runtime must include JSON property 'evidence_markers'."
+            continue
+        }
+
+        Assert-JsonPropertyEquals -Object $evidenceMarkers -PropertyName "github_run_id" -ExpectedValue $aggregateIdentity.RunId -Label "$runtime aggregate readiness manifest evidence_markers"
+        Assert-JsonPropertyEquals -Object $evidenceMarkers -PropertyName "github_run_attempt" -ExpectedValue $aggregateIdentity.RunAttempt -Label "$runtime aggregate readiness manifest evidence_markers"
+        foreach ($propertyName in @("artifact_channel", "distribution_readiness", "smoke_status", "zip_sha256")) {
+            Assert-JsonPropertyPresent -Object $evidenceMarkers -PropertyName $propertyName -Label "$runtime aggregate readiness manifest evidence_markers"
+        }
+    }
+
+    $summary = Get-KeyValueMap -Path $summaryPath
+    Assert-KeyEquals -Map $summary -Key "macos_preview_readiness" -ExpectedValue "passed" -Label "macOS aggregate readiness summary"
+    Assert-KeyEquals -Map $summary -Key "run_id" -ExpectedValue $aggregateIdentity.RunId -Label "macOS aggregate readiness summary"
+    Assert-KeyEquals -Map $summary -Key "run_attempt" -ExpectedValue $aggregateIdentity.RunAttempt -Label "macOS aggregate readiness summary"
+    Assert-KeyEquals -Map $summary -Key "source_artifact_pattern" -ExpectedValue $expectedSourceArtifactPattern -Label "macOS aggregate readiness summary"
+
+    $summaryRuntimes = @(Get-KeyValues -Map $summary -Key "runtime")
+    $summaryAppArtifacts = @(Get-KeyValues -Map $summary -Key "app_artifact")
+    $summaryDiagnosticsArtifacts = @(Get-KeyValues -Map $summary -Key "diagnostics_artifact")
+    foreach ($runtime in $ExpectedRuntimes) {
+        $expectedAppArtifactName = "freex-$($aggregateIdentity.RunId)-$($aggregateIdentity.RunAttempt)-$runtime-macos-app"
+        $expectedDiagnosticsArtifactName = "freex-$($aggregateIdentity.RunId)-$($aggregateIdentity.RunAttempt)-$runtime-macos-diagnostics"
+        if ($summaryRuntimes -cnotcontains $runtime) {
+            Add-ValidationError "macOS aggregate readiness summary must include 'runtime=$runtime'. Actual value(s): $($summaryRuntimes -join ', ')."
+        }
+
+        if ($summaryAppArtifacts -cnotcontains $expectedAppArtifactName) {
+            Add-ValidationError "macOS aggregate readiness summary must include 'app_artifact=$expectedAppArtifactName'. Actual value(s): $($summaryAppArtifacts -join ', ')."
+        }
+
+        if ($summaryDiagnosticsArtifacts -cnotcontains $expectedDiagnosticsArtifactName) {
+            Add-ValidationError "macOS aggregate readiness summary must include 'diagnostics_artifact=$expectedDiagnosticsArtifactName'. Actual value(s): $($summaryDiagnosticsArtifacts -join ', ')."
+        }
+    }
+}
+
 function Test-PackagingSmoke {
     param(
         [Parameter(Mandatory = $true)][string]$PackagingSmokePath,
@@ -1236,6 +1469,7 @@ foreach ($runtime in $Runtimes) {
 }
 
 Test-ArtifactIdentityConsistency -Identities $artifactIdentities.ToArray() -Root $resolvedArtifactRoot
+Test-AggregateReadinessArtifact -Root $resolvedArtifactRoot -ExpectedRuntimes $Runtimes -ExpectedArtifactIdentities $artifactIdentities.ToArray()
 Test-ReleasePublicationArtifact -Root $resolvedArtifactRoot -ExpectedRuntimes $Runtimes -ExpectedArtifactIdentities $artifactIdentities.ToArray()
 
 if ($validationErrors.Count -gt 0) {
