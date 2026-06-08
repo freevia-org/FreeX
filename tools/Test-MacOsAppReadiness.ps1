@@ -413,6 +413,7 @@ function Test-MacOsWorkflow {
         "FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests",
@@ -1495,8 +1496,13 @@ function Test-SourceWiring {
                 "SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: false)",
                 "private NativeMenu CreateNativeOpenRecentMenu(bool isIdle)",
                 "Header = `"(No Recent Workbooks)`"",
-                "private List<RecentFileEntry> GetOpenableRecentWorkbookEntries()",
-                "entries.Sort(static (left, right) => right.LastOpened.CompareTo(left.LastOpened));",
+                "OpenRecentWorkbookMenuPlanner.Create(",
+                "_recentFiles.Entries",
+                "File.Exists",
+                "path => _session.TryResolveOpenTarget(path, out _, out _)",
+                "plan.ItemCount == 0",
+                "foreach (var entry in plan.Items)",
+                "Header = entry.Header",
                 "private async Task OpenRecentWorkbookAsync(string path)",
                 "private void RecordStartupRecentWorkbook(StartupWorkbookLoadResult source)",
                 "private void RecordRecentWorkbook(string path)",
@@ -2386,6 +2392,30 @@ function Test-SourceWiring {
                 "private static bool TryResolveReferenceSheet(",
                 "private static string? NormalizeAbsoluteA1Reference(string input)",
                 "private static bool TryParseAbsoluteR1C1CellReference(string input, SheetId sheetId, out CellAddress address)"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "src\FreeX.App.Services\OpenRecentWorkbookMenuPlanner.cs"
+            Markers = @(
+                "public sealed record OpenRecentWorkbookMenuItemPlan(",
+                "public sealed record OpenRecentWorkbookMenuPlan(",
+                "public int ItemCount => Items.Count;",
+                "public static class OpenRecentWorkbookMenuPlanner",
+                "public const int DefaultMaximumItems = 10;",
+                "public static OpenRecentWorkbookMenuPlan Create(",
+                "IEnumerable<RecentFileEntry> entries",
+                "Func<string, bool> fileExists",
+                "Func<string, bool> canOpenWorkbook",
+                "maximumItems < 1",
+                ".Where(entry => !string.IsNullOrWhiteSpace(entry.Path))",
+                ".Where(entry => fileExists(entry.Path) && canOpenWorkbook(entry.Path))",
+                ".OrderByDescending(entry => entry.LastOpened)",
+                ".Take(maximumItems)",
+                "FormatHeader(entry.Path)",
+                "public static string FormatHeader(string path)",
+                "Path.GetFileName(path)",
+                "Path.GetDirectoryName(path)"
             )
             OrderedPairs = @()
         },
