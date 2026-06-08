@@ -412,6 +412,7 @@ function Test-MacOsWorkflow {
         "FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests",
@@ -848,6 +849,19 @@ function Test-SourceWiring {
             Markers = @(
                 "private const string NativeWorkbookExtension = `".fxl`";",
                 "using FreeX.Core.Calc;",
+                "private readonly ScrollBar _verticalWorksheetScrollBar = new();",
+                "private readonly ScrollBar _horizontalWorksheetScrollBar = new();",
+                "private bool _isUpdatingWorksheetScrollBars;",
+                "root.Children.Add(BuildWorksheetViewportChrome());",
+                "_sheetScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;",
+                "_sheetScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;",
+                "_verticalWorksheetScrollBar.ValueChanged += WorksheetScrollBar_ValueChanged;",
+                "_horizontalWorksheetScrollBar.ValueChanged += WorksheetScrollBar_ValueChanged;",
+                "WorkbookViewportScrollPlanner.Create(_session.ActiveSheet, _session.Viewport)",
+                "ApplyWorksheetScrollAxis(_verticalWorksheetScrollBar, state.Vertical);",
+                "ApplyWorksheetScrollAxis(_horizontalWorksheetScrollBar, state.Horizontal);",
+                "WorkbookViewportScrollPlanner.CalculateViewportOrigin(",
+                "_session.SetViewportOrigin(topRow, leftCol)",
                 "public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files)",
                 "CreateColorPaletteFlyout(ColorPaletteTarget.Fill, includeClearFill: true)",
                 "_formatPainterButton.Content = `"Format Painter`";",
@@ -2392,6 +2406,26 @@ function Test-SourceWiring {
                 "WorkbookShareActionPlanKind.OpenContainingFolder",
                 "WorkbookShareActionUnavailableReason.ShareSheetUnavailable",
                 "TryGetContainingFolderPath(readiness.Path, out var containingFolderPath)"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "src\FreeX.App.Services\WorkbookViewportScrollPlanner.cs"
+            Markers = @(
+                "public readonly record struct WorkbookViewportScrollAxis(",
+                "public readonly record struct WorkbookViewportScrollState(",
+                "public static class WorkbookViewportScrollPlanner",
+                "public static WorkbookViewportScrollState Create(Sheet sheet, ViewportModel viewport)",
+                "CountScrollableRows(viewport.RowMetrics, sheet.FrozenRows)",
+                "CountScrollableColumns(viewport.ColMetrics, sheet.FrozenCols)",
+                "public static (uint TopRow, uint LeftCol) CalculateViewportOrigin(",
+                "ScrollbarValueToWorksheetIndex(verticalScrollValue, sheet.FrozenRows, CellAddress.MaxRow)",
+                "ScrollbarValueToWorksheetIndex(horizontalScrollValue, sheet.FrozenCols, CellAddress.MaxCol)",
+                "public static uint WorksheetIndexToScrollbarValue(uint worksheetIndex, uint frozenCount)",
+                "public static uint CalculateScrollableLimit(uint absoluteLimit, uint frozenCount)",
+                "public static uint CalculateMaximumViewportOrigin(uint absoluteLimit, uint visibleSpan)",
+                "SmallChange: 1",
+                "IsEnabled: maximum > MinimumScrollValue"
             )
             OrderedPairs = @()
         },
