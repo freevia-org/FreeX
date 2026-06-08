@@ -171,11 +171,24 @@ public static class DataValidationPresetPlanner
             : DataValidationSelectionState.Partial;
     }
 
-    private static DataValidationRuleTypeMetadata? FindRuleTypeMetadata(DvType type) =>
-        RuleTypeMetadata.FirstOrDefault(item => item.Type == type);
+    private static DataValidationRuleTypeMetadata? FindRuleTypeMetadata(DvType type)
+    {
+        foreach (var item in RuleTypeMetadata)
+        {
+            if (item.Type == type)
+                return item;
+        }
 
-    private static DataValidation? GetFirstApplicableRule(Sheet sheet, CellAddress address) =>
-        DataValidationService.GetApplicable(sheet, address).FirstOrDefault();
+        return null;
+    }
+
+    private static DataValidation? GetFirstApplicableRule(Sheet sheet, CellAddress address)
+    {
+        foreach (var rule in DataValidationService.GetApplicable(sheet, address))
+            return rule;
+
+        return null;
+    }
 
     private static string CreateSummaryText(
         DataValidationSelectionState state,
