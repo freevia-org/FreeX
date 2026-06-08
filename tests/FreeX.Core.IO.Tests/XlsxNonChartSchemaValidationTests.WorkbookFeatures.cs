@@ -603,6 +603,15 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceCalculationProperties.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        reloaded.CalculationMode.Should().Be(WorkbookCalculationMode.Manual);
+        reloaded.FullCalculationOnLoad.Should().BeTrue();
+        reloaded.ForceFullCalculation.Should().BeTrue();
+        reloaded.IterativeCalculation.Should().BeTrue();
+        reloaded.MaxCalculationIterations.Should().Be(123);
+        reloaded.MaxCalculationChange.Should().Be(0.001);
     }
 
     [Fact]
