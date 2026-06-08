@@ -78,6 +78,13 @@ public sealed class MainWindow : Window
         Clear
     }
 
+    private enum GoalSeekStatusDialogChoice
+    {
+        KeepResult,
+        RestoreOriginalValues,
+        Dismiss
+    }
+
     private sealed record FindDialogResult(
         string FindText,
         FindDialogAction Action,
@@ -126,6 +133,13 @@ public sealed class MainWindow : Window
         Window Dialog,
         TextBox InputBox,
         Button AcceptButton,
+        Button CancelButton);
+    private sealed record GoalSeekDialogSmokeProbe(
+        Window Dialog,
+        TextBox SetCellBox,
+        TextBox TargetValueBox,
+        TextBox ChangingCellBox,
+        Button OkButton,
         Button CancelButton);
     private sealed record GoToSpecialDialogSmokeProbe(
         Window Dialog,
@@ -335,6 +349,8 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _sortAscendingMenuItem = new();
     private readonly NativeMenuItem _sortDescendingMenuItem = new();
     private readonly NativeMenuItem _dataValidationMenuItem = new();
+    private readonly NativeMenuItem _whatIfAnalysisMenuItem = new();
+    private readonly NativeMenuItem _goalSeekMenuItem = new();
     private readonly NativeMenuItem _autoSumMenuItem = new();
     private readonly NativeMenuItem _autoSumSumMenuItem = new();
     private readonly NativeMenuItem _autoSumAverageMenuItem = new();
@@ -674,6 +690,12 @@ public sealed class MainWindow : Window
         _dataValidationMenuItem.Header = "Data Validation...";
         _dataValidationMenuItem.Click += async (_, _) => await ShowDataValidationDialogAsync();
 
+        _goalSeekMenuItem.Header = "Goal Seek...";
+        _goalSeekMenuItem.Click += async (_, _) => await ShowGoalSeekDialogAsync();
+
+        _whatIfAnalysisMenuItem.Header = "What-If Analysis";
+        _whatIfAnalysisMenuItem.Menu = CreateNativeWhatIfAnalysisMenu();
+
         _autoSumMenuItem.Header = "AutoSum";
         _autoSumMenuItem.Menu = CreateNativeAutoSumMenu();
 
@@ -948,6 +970,8 @@ public sealed class MainWindow : Window
         dataMenu.Items.Add(_sortDescendingMenuItem);
         dataMenu.Items.Add(new NativeMenuItemSeparator());
         dataMenu.Items.Add(_dataValidationMenuItem);
+        dataMenu.Items.Add(new NativeMenuItemSeparator());
+        dataMenu.Items.Add(_whatIfAnalysisMenuItem);
 
         var formatMenu = new NativeMenu();
         formatMenu.Items.Add(_boldMenuItem);
@@ -1672,6 +1696,8 @@ public sealed class MainWindow : Window
         _sortAscendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
         _dataValidationMenuItem.IsEnabled = isIdle;
+        _whatIfAnalysisMenuItem.IsEnabled = isIdle;
+        _goalSeekMenuItem.IsEnabled = isIdle;
         _autoSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
         _autoSumSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
         _autoSumAverageMenuItem.IsEnabled = _autoSumButton.IsEnabled;
@@ -2914,6 +2940,13 @@ public sealed class MainWindow : Window
         menu.Items.Add(_autoSumCountAllMenuItem);
         menu.Items.Add(_autoSumMaxMenuItem);
         menu.Items.Add(_autoSumMinMenuItem);
+        return menu;
+    }
+
+    private NativeMenu CreateNativeWhatIfAnalysisMenu()
+    {
+        var menu = new NativeMenu();
+        menu.Items.Add(_goalSeekMenuItem);
         return menu;
     }
 
@@ -6248,6 +6281,388 @@ public sealed class MainWindow : Window
         RefreshShell($"Sorted {rangeReference} {(ascending ? "A to Z" : "Z to A")}");
     }
 
+    private async Task ShowGoalSeekDialogAsync()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var request = await ShowGoalSeekInputDialogAsync();
+        if (request is null)
+            return;
+
+        var result = _session.ExecuteGoalSeek(request);
+        var choice = await ShowGoalSeekStatusDialogAsync(result);
+        if (result.Status == WorkbookGoalSeekStatus.Applied)
+        {
+            if (choice == GoalSeekStatusDialogChoice.RestoreOriginalValues)
+            {
+                var restoreResult = _session.UndoLastEdit();
+                if (!restoreResult.Success)
+                {
+                    ShowEditIssue(restoreResult.ErrorMessage ?? "Goal Seek restore failed.");
+                    return;
+                }
+
+                RefreshShell($"Restored original Goal Seek values for {FormatCellReference(result.Request.ChangingCell)}");
+                return;
+            }
+
+            RefreshShell(FormatGoalSeekStatus(result));
+            return;
+        }
+
+        ShowEditIssue(FormatGoalSeekStatus(result));
+    }
+
+    private async Task<GoalSeekRequest?> ShowGoalSeekInputDialogAsync(
+        Action<GoalSeekDialogSmokeProbe>? launchSmokeProbe = null)
+    {
+        GoalSeekRequest? result = null;
+        var dialog = new Window
+        {
+            Title = "Goal Seek",
+            Width = 420,
+            Height = 270,
+            MinWidth = 360,
+            MinHeight = 245,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "GoalSeekCompactDialog");
+
+        var setCellBox = new TextBox
+        {
+            Text = FormatCellReference(_session.ActiveCell),
+            MinWidth = 220,
+        };
+        AutomationProperties.SetName(setCellBox, "Set cell");
+        AutomationProperties.SetAutomationId(setCellBox, "GoalSeekSetCellBox");
+        AutomationProperties.SetHelpText(setCellBox, "Formula cell to solve.");
+
+        var targetValueBox = new TextBox
+        {
+            MinWidth = 220,
+        };
+        AutomationProperties.SetName(targetValueBox, "To value");
+        AutomationProperties.SetAutomationId(targetValueBox, "GoalSeekTargetValueBox");
+        AutomationProperties.SetHelpText(targetValueBox, "Target value for the set cell.");
+
+        var changingCellBox = new TextBox
+        {
+            MinWidth = 220,
+        };
+        AutomationProperties.SetName(changingCellBox, "By changing cell");
+        AutomationProperties.SetAutomationId(changingCellBox, "GoalSeekChangingCellBox");
+        AutomationProperties.SetHelpText(changingCellBox, "Input cell Goal Seek can change.");
+
+        var errorText = new TextBlock
+        {
+            Foreground = Brush(143, 74, 18),
+            TextWrapping = TextWrapping.Wrap,
+        };
+        AutomationProperties.SetAutomationId(errorText, "GoalSeekErrorText");
+
+        var okButton = new Button
+        {
+            Content = "OK",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(okButton, "GoalSeekOkButton");
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 84,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetAutomationId(cancelButton, "GoalSeekCancelButton");
+
+        void Accept()
+        {
+            var parseResult = GoalSeekRequestParser.Parse(
+                _session.ActiveSheet.Id,
+                setCellBox.Text,
+                targetValueBox.Text,
+                changingCellBox.Text);
+            if (!parseResult.Success)
+            {
+                errorText.Text = FormatGoalSeekParseError(parseResult);
+                FocusGoalSeekErrorField(parseResult.Error, setCellBox, targetValueBox, changingCellBox);
+                return;
+            }
+
+            result = parseResult.Request;
+            dialog.Close();
+        }
+
+        okButton.Click += (_, _) => Accept();
+        cancelButton.Click += (_, _) => dialog.Close();
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                e.Handled = true;
+                Accept();
+            }
+            else if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                dialog.Close();
+            }
+        };
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 10, 0, 0),
+            Children =
+            {
+                cancelButton,
+                okButton,
+            },
+        };
+        DockPanel.SetDock(buttonRow, Dock.Bottom);
+
+        dialog.Content = new DockPanel
+        {
+            Margin = new Thickness(16),
+            Children =
+            {
+                buttonRow,
+                new StackPanel
+                {
+                    Spacing = 10,
+                    Children =
+                    {
+                        CreateGoalSeekField("Set cell", setCellBox),
+                        CreateGoalSeekField("To value", targetValueBox),
+                        CreateGoalSeekField("By changing cell", changingCellBox),
+                        errorText,
+                    },
+                },
+            },
+        };
+        dialog.Opened += (_, _) =>
+        {
+            setCellBox.Focus();
+            setCellBox.SelectAll();
+        };
+        if (launchSmokeProbe is not null)
+        {
+            dialog.Opened += (_, _) =>
+            {
+                RunLaunchSmokeDialogProbe(
+                    dialog,
+                    () => launchSmokeProbe(new GoalSeekDialogSmokeProbe(
+                        dialog,
+                        setCellBox,
+                        targetValueBox,
+                        changingCellBox,
+                        okButton,
+                        cancelButton)));
+            };
+        }
+
+        await dialog.ShowDialog(this);
+        return result;
+    }
+
+    private async Task<GoalSeekStatusDialogChoice> ShowGoalSeekStatusDialogAsync(WorkbookGoalSeekResult result)
+    {
+        var choice = result.Status == WorkbookGoalSeekStatus.Applied
+            ? GoalSeekStatusDialogChoice.KeepResult
+            : GoalSeekStatusDialogChoice.Dismiss;
+        var dialog = new Window
+        {
+            Title = "Goal Seek Status",
+            Width = 420,
+            Height = 220,
+            MinWidth = 360,
+            MinHeight = 200,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "GoalSeekStatusDialog");
+
+        var summaryBlock = new TextBlock
+        {
+            Text = FormatGoalSeekStatus(result),
+            TextWrapping = TextWrapping.Wrap,
+            LineHeight = 21,
+        };
+        AutomationProperties.SetName(summaryBlock, "Goal Seek Status");
+        AutomationProperties.SetAutomationId(summaryBlock, "GoalSeekStatusText");
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0),
+        };
+        DockPanel.SetDock(buttonRow, Dock.Bottom);
+
+        Button defaultButton;
+        if (result.Status == WorkbookGoalSeekStatus.Applied)
+        {
+            var restoreButton = new Button
+            {
+                Content = "Restore Original Values",
+                MinWidth = 150,
+                Padding = new Thickness(10, 4),
+            };
+            AutomationProperties.SetAutomationId(restoreButton, "GoalSeekRestoreOriginalValuesButton");
+            AutomationProperties.SetHelpText(restoreButton, "Undo the Goal Seek result and restore the original changing cell value.");
+
+            var keepButton = new Button
+            {
+                Content = "Keep Result",
+                MinWidth = 104,
+                Padding = new Thickness(10, 4),
+            };
+            AutomationProperties.SetAutomationId(keepButton, "GoalSeekKeepResultButton");
+            AutomationProperties.SetHelpText(keepButton, "Keep the applied Goal Seek result in the workbook.");
+
+            restoreButton.Click += (_, _) =>
+            {
+                choice = GoalSeekStatusDialogChoice.RestoreOriginalValues;
+                dialog.Close();
+            };
+            keepButton.Click += (_, _) =>
+            {
+                choice = GoalSeekStatusDialogChoice.KeepResult;
+                dialog.Close();
+            };
+            buttonRow.Children.Add(restoreButton);
+            buttonRow.Children.Add(keepButton);
+            defaultButton = keepButton;
+        }
+        else
+        {
+            var okButton = new Button
+            {
+                Content = "OK",
+                MinWidth = 84,
+                Padding = new Thickness(10, 4),
+            };
+            AutomationProperties.SetAutomationId(okButton, "GoalSeekStatusOkButton");
+            okButton.Click += (_, _) =>
+            {
+                choice = GoalSeekStatusDialogChoice.Dismiss;
+                dialog.Close();
+            };
+            buttonRow.Children.Add(okButton);
+            defaultButton = okButton;
+        }
+
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key is Key.Enter or Key.Escape)
+            {
+                e.Handled = true;
+                dialog.Close();
+            }
+        };
+        dialog.Content = new DockPanel
+        {
+            Margin = new Thickness(16),
+            Children =
+            {
+                buttonRow,
+                new ScrollViewer
+                {
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    Content = summaryBlock,
+                },
+            },
+        };
+        dialog.Opened += (_, _) => defaultButton.Focus();
+
+        await dialog.ShowDialog(this);
+        return choice;
+    }
+
+    private static string FormatGoalSeekParseError(GoalSeekRequestParseResult result) =>
+        result.Error switch
+        {
+            GoalSeekRequestParseError.SetCellRequired => "Set cell is required.",
+            GoalSeekRequestParseError.InvalidSetCellAddress => $"Set cell '{result.InvalidText}' is not a valid cell reference.",
+            GoalSeekRequestParseError.InvalidTargetValue => "Target value must be a finite number.",
+            GoalSeekRequestParseError.ChangingCellRequired => "Changing cell is required.",
+            GoalSeekRequestParseError.InvalidChangingCellAddress => $"Changing cell '{result.InvalidText}' is not a valid cell reference.",
+            GoalSeekRequestParseError.CellsMustDiffer => "Set cell and changing cell must be different.",
+            _ => "Goal Seek request is invalid."
+        };
+
+    private static string FormatGoalSeekStatus(WorkbookGoalSeekResult result)
+    {
+        var setCell = FormatCellReference(result.Request.SetCell);
+        var changingCell = FormatCellReference(result.Request.ChangingCell);
+        return result.Status switch
+        {
+            WorkbookGoalSeekStatus.Applied when result.SeekResult is { } seekResult =>
+                string.Join(
+                    Environment.NewLine,
+                    "Goal Seek found a solution.",
+                    $"Target value: {FormatGoalSeekNumber(result.Request.TargetValue)}",
+                    $"Current value: {FormatGoalSeekNumber(seekResult.ActualResult)}",
+                    $"Changing cell {changingCell}: {FormatGoalSeekNumber(seekResult.FoundValue)}"),
+            WorkbookGoalSeekStatus.NotConverged when result.SeekResult is { } seekResult =>
+                string.Join(
+                    Environment.NewLine,
+                    "Goal Seek could not find a solution.",
+                    $"Target value: {FormatGoalSeekNumber(result.Request.TargetValue)}",
+                    $"Current value: {FormatGoalSeekNumber(seekResult.ActualResult)}",
+                    $"Changing cell {changingCell}: {FormatGoalSeekNumber(seekResult.FoundValue)}"),
+            WorkbookGoalSeekStatus.InvalidRequest =>
+                result.ErrorMessage ?? $"Goal Seek request for {setCell} is invalid.",
+            WorkbookGoalSeekStatus.ApplyFailed =>
+                result.ErrorMessage ?? $"Goal Seek result for {changingCell} could not be applied.",
+            _ => "Goal Seek could not complete."
+        };
+    }
+
+    private static string FormatGoalSeekNumber(double value) =>
+        value.ToString("G12", CultureInfo.CurrentCulture);
+
+    private static void FocusGoalSeekErrorField(
+        GoalSeekRequestParseError error,
+        TextBox setCellBox,
+        TextBox targetValueBox,
+        TextBox changingCellBox)
+    {
+        var target = error switch
+        {
+            GoalSeekRequestParseError.SetCellRequired or
+            GoalSeekRequestParseError.InvalidSetCellAddress => setCellBox,
+            GoalSeekRequestParseError.InvalidTargetValue => targetValueBox,
+            GoalSeekRequestParseError.ChangingCellRequired or
+            GoalSeekRequestParseError.InvalidChangingCellAddress or
+            GoalSeekRequestParseError.CellsMustDiffer => changingCellBox,
+            _ => setCellBox
+        };
+        target.Focus();
+        target.SelectAll();
+    }
+
+    private static StackPanel CreateGoalSeekField(string label, Control control) =>
+        new()
+        {
+            Spacing = 4,
+            Children =
+            {
+                new TextBlock { Text = label },
+                control,
+            },
+        };
+
     private async Task ShowDataValidationDialogAsync()
     {
         if (_isOpening || _isSaving)
@@ -8119,6 +8534,26 @@ public sealed class MainWindow : Window
                 hasGoToDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 380, height: 165, minWidth: 340, minHeight: 155);
             });
 
+        var hasGoalSeekDialog = false;
+        var hasGoalSeekDialogReferenceControls = false;
+        var hasGoalSeekDialogActionButtons = false;
+        var hasGoalSeekDialogCompactLayout = false;
+        var goalSeekDialogResult = await ShowGoalSeekInputDialogAsync(probe =>
+        {
+            hasGoalSeekDialog = HasLaunchSmokeDialog(probe.Dialog, "Goal Seek");
+            hasGoalSeekDialogReferenceControls =
+                HasLaunchSmokeAutomationId(probe.SetCellBox, "GoalSeekSetCellBox") &&
+                HasLaunchSmokeAutomationId(probe.TargetValueBox, "GoalSeekTargetValueBox") &&
+                HasLaunchSmokeAutomationId(probe.ChangingCellBox, "GoalSeekChangingCellBox") &&
+                probe.SetCellBox.MinWidth >= 220 &&
+                probe.TargetValueBox.MinWidth >= 220 &&
+                probe.ChangingCellBox.MinWidth >= 220;
+            hasGoalSeekDialogActionButtons =
+                HasLaunchSmokeButton(probe.OkButton, "GoalSeekOkButton", "OK") &&
+                HasLaunchSmokeButton(probe.CancelButton, "GoalSeekCancelButton", "Cancel");
+            hasGoalSeekDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 270, minWidth: 360, minHeight: 245);
+        });
+
         var hasGoToSpecialDialog = false;
         var hasGoToSpecialKindControls = false;
         var hasGoToSpecialValueTypeControls = false;
@@ -8193,6 +8628,7 @@ public sealed class MainWindow : Window
             findDialogResult is null,
             replaceDialogResult is null,
             goToDialogResult is null,
+            goalSeekDialogResult is null,
             goToSpecialDialogResult is null,
             hasFormatCellsDialog,
             hasFormatCellsDialogTabStrip,
@@ -8200,7 +8636,11 @@ public sealed class MainWindow : Window
             hasFormatCellsDialogNumberControls,
             hasFormatCellsDialogActionButtons,
             hasFormatCellsDialogCompactLayout,
-            formatCellsDialogResult is null);
+            formatCellsDialogResult is null,
+            hasGoalSeekDialog,
+            hasGoalSeekDialogReferenceControls,
+            hasGoalSeekDialogActionButtons,
+            hasGoalSeekDialogCompactLayout);
         return _launchSmokeDialogEvidence;
     }
 
@@ -8464,6 +8904,8 @@ public sealed class MainWindow : Window
             HasNativeGoToSpecialMenuItem: HasNativeMenuItem(_goToSpecialMenuItem, "Go To Special...", requireGesture: false),
             HasNativeSortAscendingMenuItem: HasNativeMenuItem(_sortAscendingMenuItem, "Sort A to Z", requireGesture: false),
             HasNativeSortDescendingMenuItem: HasNativeMenuItem(_sortDescendingMenuItem, "Sort Z to A", requireGesture: false),
+            HasNativeWhatIfAnalysisMenuItem: HasNativeMenuItem(_whatIfAnalysisMenuItem, "What-If Analysis", requireGesture: false),
+            HasNativeGoalSeekMenuItem: HasNativeSubmenuItem(_whatIfAnalysisMenuItem.Menu, "Goal Seek..."),
             HasNativeFormatCellsMenuItem: HasNativeMenuItem(_formatCellsMenuItem, "Format Cells..."),
             HasNativeAutoSumMenuItem: HasNativeMenuItem(_autoSumMenuItem, "AutoSum", requireGesture: false),
             HasNativeAutoSumSumMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, "Sum"),
