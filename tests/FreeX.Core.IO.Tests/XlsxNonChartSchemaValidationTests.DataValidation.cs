@@ -350,6 +350,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var decimalValidation = sheet.DataValidations.Single(validation => validation.Type == DvType.Decimal);
         decimalValidation.AppliesTo.ToString().Should().Be("C2:C5");
         decimalValidation.AdditionalRanges.Select(range => range.ToString()).Should().ContainSingle().Which.Should().Be("H2:H5");
+        decimalValidation.AppliesTo.Should().Be(Range(sheet, 2, 3, 5, 3));
+        decimalValidation.AdditionalRanges.Should().ContainSingle()
+            .Which.Should().Be(Range(sheet, 2, 8, 5, 8));
         decimalValidation.Operator.Should().Be(DvOperator.Between);
         decimalValidation.Formula1.Should().Be("0");
         decimalValidation.Formula2.Should().Be("1");
