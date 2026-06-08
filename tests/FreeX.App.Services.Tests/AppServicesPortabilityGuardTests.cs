@@ -23,7 +23,13 @@ public sealed class AppServicesPortabilityGuardTests
         ("WPF project marker", new(@"\bUseWPF\b|\bUseWpf\b", RegexOptions.Compiled)),
         ("Windows desktop SDK", new(@"\bMicrosoft\.NET\.Sdk\.WindowsDesktop\b", RegexOptions.Compiled)),
         ("Windows-targeted framework", new(@"\bnet\d+(?:\.\d+)?-windows\b", RegexOptions.Compiled | RegexOptions.IgnoreCase)),
-        ("Windows Forms project marker", new(@"\bUseWindowsForms\b", RegexOptions.Compiled))
+        ("Windows Forms project marker", new(@"\bUseWindowsForms\b", RegexOptions.Compiled)),
+        ("AppKit namespace", new(@"\bAppKit\b", RegexOptions.Compiled)),
+        ("Foundation namespace", new(@"\bFoundation\b", RegexOptions.Compiled)),
+        ("ObjCRuntime namespace", new(@"\bObjCRuntime\b", RegexOptions.Compiled)),
+        ("NSUrl native type", new(@"\bNSUrl\b", RegexOptions.Compiled)),
+        ("NSData native type", new(@"\bNSData\b", RegexOptions.Compiled)),
+        ("NSError native type", new(@"\bNSError\b", RegexOptions.Compiled))
     ];
 
     [Fact]
