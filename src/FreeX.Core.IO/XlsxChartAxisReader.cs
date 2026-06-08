@@ -18,18 +18,14 @@ internal static class XlsxChartAxisReader
             var plotChart = chart.Type == ChartType.Bubble
                 ? plotArea.Element(ChartNs + "bubbleChart")
                 : plotArea.Element(ChartNs + "scatterChart");
-            var axisIds = plotChart?
-                .Elements(ChartNs + "axId")
-                .Select(element => element.Attribute("val")?.Value)
-                .Where(value => !string.IsNullOrWhiteSpace(value))
-                .ToList() ?? [];
+            var axisIds = ReadAxisIds(plotChart);
             var valueAxes = plotArea.Elements(ChartNs + "valAx").ToList();
-            var xAxis = FindAxisById(valueAxes, axisIds.FirstOrDefault()) ?? valueAxes.FirstOrDefault();
-            var yAxis = FindAxisById(valueAxes, axisIds.Skip(1).FirstOrDefault()) ?? valueAxes.Skip(1).FirstOrDefault();
+            var xAxis = FindAxisByIdOrIndex(valueAxes, axisIds, 0);
+            var yAxis = FindAxisByIdOrIndex(valueAxes, axisIds, 1);
             chart.XAxisTitle = ReadAxisTitle(xAxis);
             chart.YAxisTitle = ReadAxisTitle(yAxis);
-            chart.XAxisTitleLayout = XlsxChartMetadataReader.ReadManualLayout(xAxis?.Element(ChartNs + "title")?.Element(ChartNs + "layout"));
-            chart.YAxisTitleLayout = XlsxChartMetadataReader.ReadManualLayout(yAxis?.Element(ChartNs + "title")?.Element(ChartNs + "layout"));
+            chart.XAxisTitleLayout = XlsxChartMetadataReader.ReadManualLayout(AxisTitleLayout(xAxis));
+            chart.YAxisTitleLayout = XlsxChartMetadataReader.ReadManualLayout(AxisTitleLayout(yAxis));
             chart.HideXAxis = ReadBool(xAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
             chart.HideYAxis = ReadBool(yAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
             chart.XAxisPosition = FromXlsxAxisPosition(xAxis?.Element(ChartNs + "axPos")?.Attribute("val")?.Value, ChartAxisPosition.Bottom);
@@ -46,7 +42,7 @@ internal static class XlsxChartAxisReader
         var categoryAxis = plotArea.Element(ChartNs + "dateAx") ?? plotArea.Element(ChartNs + "catAx");
         chart.XAxisIsDateAxis = categoryAxis?.Name == ChartNs + "dateAx";
         chart.XAxisTitle = ReadAxisTitle(categoryAxis);
-        chart.XAxisTitleLayout = XlsxChartMetadataReader.ReadManualLayout(categoryAxis?.Element(ChartNs + "title")?.Element(ChartNs + "layout"));
+        chart.XAxisTitleLayout = XlsxChartMetadataReader.ReadManualLayout(AxisTitleLayout(categoryAxis));
         chart.HideXAxis = ReadBool(categoryAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
         chart.XAxisPosition = FromXlsxAxisPosition(categoryAxis?.Element(ChartNs + "axPos")?.Attribute("val")?.Value, ChartAxisPosition.Bottom);
         ApplyAxisTitleFormatting(categoryAxis, chart);
@@ -54,7 +50,7 @@ internal static class XlsxChartAxisReader
         ApplyAxisLabelFormatting(categoryAxis, chart, useXAxis: true);
         var valueAxis = plotArea.Element(ChartNs + "valAx");
         chart.YAxisTitle = ReadAxisTitle(valueAxis);
-        chart.YAxisTitleLayout = XlsxChartMetadataReader.ReadManualLayout(valueAxis?.Element(ChartNs + "title")?.Element(ChartNs + "layout"));
+        chart.YAxisTitleLayout = XlsxChartMetadataReader.ReadManualLayout(AxisTitleLayout(valueAxis));
         chart.HideYAxis = ReadBool(valueAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
         chart.YAxisPosition = FromXlsxAxisPosition(valueAxis?.Element(ChartNs + "axPos")?.Attribute("val")?.Value, ChartAxisPosition.Left);
         ApplyAxisTitleFormatting(valueAxis, chart);
@@ -71,19 +67,37 @@ internal static class XlsxChartAxisReader
             _ => ChartDataLabelNumberFormat.General
         };
 
+    private static IReadOnlyList<string?> ReadAxisIds(XElement? chartElement) =>
+        chartElement?
+            .Elements(ChartNs + "axId")
+            .Select(element => element.Attribute("val")?.Value)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .ToList() ?? [];
+
+    private static XElement? FindAxisByIdOrIndex(IReadOnlyList<XElement> axes, IReadOnlyList<string?> axisIds, int index)
+    {
+        var axisId = axisIds.Skip(index).FirstOrDefault();
+        return FindAxisById(axes, axisId) ?? axes.Skip(index).FirstOrDefault();
+    }
+
+    private static XElement? AxisTitle(XElement? axisElement) =>
+        axisElement?.Element(ChartNs + "title");
+
+    private static XElement? AxisTitleLayout(XElement? axisElement) =>
+        AxisTitle(axisElement)?.Element(ChartNs + "layout");
+
     private static string? ReadAxisTitle(XElement? axisElement) =>
-        axisElement?
-            .Element(ChartNs + "title")?
+        FirstNonBlankTitleText(AxisTitle(axisElement));
+
+    private static string? FirstNonBlankTitleText(XElement? titleElement) =>
+        titleElement?
             .Descendants(DrawingNs + "t")
             .Select(element => element.Value)
             .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text));
 
     private static void ApplyAxisTitleFormatting(XElement? axisElement, ChartModel chart)
     {
-        var runProperties = axisElement?
-            .Element(ChartNs + "title")?
-            .Descendants(DrawingNs + "rPr")
-            .FirstOrDefault();
+        var runProperties = FirstRunProperties(AxisTitle(axisElement));
         if (runProperties is null)
             return;
 
@@ -109,10 +123,7 @@ internal static class XlsxChartAxisReader
         if (textProperties is null)
             return;
 
-        var runProperties = textProperties
-            .Descendants(DrawingNs + "defRPr")
-            .Concat(textProperties.Descendants(DrawingNs + "rPr"))
-            .FirstOrDefault();
+        var runProperties = FirstTextRunProperties(textProperties);
 
         var textColor = TryReadTextColor(runProperties);
         var textThemeColor = TryReadTextThemeColor(runProperties);
@@ -175,6 +186,17 @@ internal static class XlsxChartAxisReader
             ? themeColor
             : null;
     }
+
+    private static XElement? FirstRunProperties(XElement? element) =>
+        element?
+            .Descendants(DrawingNs + "rPr")
+            .FirstOrDefault();
+
+    private static XElement? FirstTextRunProperties(XElement? textProperties) =>
+        textProperties?
+            .Descendants(DrawingNs + "defRPr")
+            .Concat(textProperties.Descendants(DrawingNs + "rPr"))
+            .FirstOrDefault();
 
     private static XElement? FindAxisById(IEnumerable<XElement> axes, string? axisId)
     {
