@@ -244,22 +244,44 @@ internal static class XlsxStructuredTableModelMapper
     private static uint GetStripeSize(StructuredTableStyleElementModel? element) =>
         element?.Size is > 0 ? checked((uint)element.Size.Value) : 1;
 
-    private static StructuredTableStyleModel? FindTableStyle(Workbook workbook, string styleName) =>
-        workbook.StructuredTableStyles.FirstOrDefault(candidate =>
-            candidate.AppliesToTables &&
-            string.Equals(candidate.Name, styleName, StringComparison.OrdinalIgnoreCase));
+    private static StructuredTableStyleModel? FindTableStyle(Workbook workbook, string styleName)
+    {
+        foreach (var candidate in workbook.StructuredTableStyles)
+        {
+            if (candidate.AppliesToTables &&
+                string.Equals(candidate.Name, styleName, StringComparison.OrdinalIgnoreCase))
+            {
+                return candidate;
+            }
+        }
 
-    private static StructuredTableStyleElementModel? FindElement(StructuredTableStyleModel style, string type) =>
-        style.Elements
-            .FirstOrDefault(element =>
-                string.Equals(element.Type, type, StringComparison.OrdinalIgnoreCase));
+        return null;
+    }
 
-    private static StyleDiff? FindElementFormat(StructuredTableStyleModel style, string type) =>
-        style.Elements
-            .FirstOrDefault(element =>
-                string.Equals(element.Type, type, StringComparison.OrdinalIgnoreCase) &&
+    private static StructuredTableStyleElementModel? FindElement(StructuredTableStyleModel style, string type)
+    {
+        foreach (var element in style.Elements)
+        {
+            if (string.Equals(element.Type, type, StringComparison.OrdinalIgnoreCase))
+                return element;
+        }
+
+        return null;
+    }
+
+    private static StyleDiff? FindElementFormat(StructuredTableStyleModel style, string type)
+    {
+        foreach (var element in style.Elements)
+        {
+            if (string.Equals(element.Type, type, StringComparison.OrdinalIgnoreCase) &&
                 element.Format is not null)
-            ?.Format;
+            {
+                return element.Format;
+            }
+        }
+
+        return null;
+    }
 
     private static void ApplyStyleDiff(Workbook workbook, Sheet sheet, GridRange range, StyleDiff diff)
     {
