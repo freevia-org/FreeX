@@ -3900,6 +3900,49 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_ExposesFormulaAndStatusAccessibilityMetadataToLaunchSmoke()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+
+        source.Should().Contain("AutomationProperties.SetAutomationId(_formulaBox, \"FormulaBox\");");
+        source.Should().Contain("AutomationProperties.SetName(_formulaBox, \"Formula bar\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_formulaBox, \"Edit the active cell value or formula.\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_statusText, \"StatusText\");");
+        source.Should().Contain("AutomationProperties.SetName(_statusText, \"Status\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_statusText, \"Shows the current workbook status.\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_cellAddressText, \"CellAddressText\");");
+        source.Should().Contain("AutomationProperties.SetName(_cellAddressText, \"Cell address\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_cellAddressText, \"Shows the active cell address.\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_selectionStatsText, \"SelectionStatsText\");");
+        source.Should().Contain("AutomationProperties.SetName(_selectionStatsText, \"Selection statistics\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_selectionStatsText, \"Shows statistics for the current selection.\");");
+        source.Should().Contain("HasFormulaBoxAutomationName: string.Equals(AutomationProperties.GetName(_formulaBox), \"Formula bar\", StringComparison.Ordinal)");
+        source.Should().Contain("HasFormulaBoxAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_formulaBox), \"Edit the active cell value or formula.\", StringComparison.Ordinal)");
+        source.Should().Contain("HasFormulaBoxAutomationId: string.Equals(AutomationProperties.GetAutomationId(_formulaBox), \"FormulaBox\", StringComparison.Ordinal)");
+        source.Should().Contain("HasStatusTextAutomationName: string.Equals(AutomationProperties.GetName(_statusText), \"Status\", StringComparison.Ordinal)");
+        source.Should().Contain("HasStatusTextAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_statusText), \"Shows the current workbook status.\", StringComparison.Ordinal)");
+        source.Should().Contain("HasStatusTextAutomationId: string.Equals(AutomationProperties.GetAutomationId(_statusText), \"StatusText\", StringComparison.Ordinal)");
+        source.Should().Contain("HasStatusTextValue: !string.IsNullOrWhiteSpace(_statusText.Text)");
+        source.Should().Contain("HasCellAddressAutomationName: string.Equals(AutomationProperties.GetName(_cellAddressText), \"Cell address\", StringComparison.Ordinal)");
+        source.Should().Contain("HasCellAddressAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_cellAddressText), \"Shows the active cell address.\", StringComparison.Ordinal)");
+        source.Should().Contain("HasCellAddressAutomationId: string.Equals(AutomationProperties.GetAutomationId(_cellAddressText), \"CellAddressText\", StringComparison.Ordinal)");
+        source.Should().Contain("HasSelectionStatsAutomationName: string.Equals(AutomationProperties.GetName(_selectionStatsText), \"Selection statistics\", StringComparison.Ordinal)");
+        source.Should().Contain("HasSelectionStatsAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_selectionStatsText), \"Shows statistics for the current selection.\", StringComparison.Ordinal)");
+        source.Should().Contain("HasSelectionStatsAutomationId: string.Equals(AutomationProperties.GetAutomationId(_selectionStatsText), \"SelectionStatsText\", StringComparison.Ordinal)");
+
+        smokeSource.Should().Contain("public bool HasAccessibilitySmokeEvidence =>");
+        smokeSource.Should().Contain("HasAccessibilitySmokeEvidence &&");
+        smokeSource.Should().Contain("macos_accessibility_smoke={(snapshot.HasAccessibilitySmokeEvidence ? \"passed\" : \"failed\")}");
+        smokeSource.Should().Contain("a11y_formula_box_name={FormatBool(snapshot.HasFormulaBoxAutomationName)}");
+        smokeSource.Should().Contain("a11y_formula_box_help={FormatBool(snapshot.HasFormulaBoxAutomationHelp)}");
+        smokeSource.Should().Contain("a11y_status_text_name={FormatBool(snapshot.HasStatusTextAutomationName)}");
+        smokeSource.Should().Contain("a11y_status_text_value={FormatBool(snapshot.HasStatusTextValue)}");
+        smokeSource.Should().Contain("a11y_cell_address_name={FormatBool(snapshot.HasCellAddressAutomationName)}");
+        smokeSource.Should().Contain("a11y_selection_stats_name={FormatBool(snapshot.HasSelectionStatsAutomationName)}");
+    }
+
+    [Fact]
     public void MainWindow_WiresFindGoToThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));

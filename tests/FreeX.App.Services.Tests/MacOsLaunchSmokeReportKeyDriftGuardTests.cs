@@ -37,6 +37,18 @@ public sealed class MacOsLaunchSmokeReportKeyDriftGuardTests
         "\"(?<key>(?:macos_dialog|find_dialog|replace_dialog|go_to_dialog|go_to_special_dialog|format_cells_dialog|sort_dialog|data_validation_dropdown|data_validation_dialog)[a-z0-9_]*)=",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
+    private static readonly Regex AccessibilitySourceReportKeyPattern = new(
+        "\\$\"(?<key>(?:macos_accessibility_smoke|a11y_[a-z0-9_]+))=",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly Regex AccessibilityWorkflowGrepReportKeyPattern = new(
+        "grep -q \"(?<key>(?:macos_accessibility_smoke|a11y_[a-z0-9_]+))=",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly Regex AccessibilityReadinessReportKeyMarkerPattern = new(
+        "\"(?<key>(?:macos_accessibility_smoke|a11y_[a-z0-9_]+))=",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     private static readonly string[] ExpectedCommandKeyReportKeys =
     [
         "cmd_bold_menu_gesture",
@@ -141,6 +153,32 @@ public sealed class MacOsLaunchSmokeReportKeyDriftGuardTests
         FindSetDrift(sourceReportKeys, readinessMarkerKeys, "MacOsLaunchSmoke dialog report", "readiness report marker")
             .Should()
             .BeEmpty("the readiness dialog marker contract should match the dialog report keys emitted by MacOsLaunchSmoke");
+    }
+
+    [Fact]
+    public void MacOsLaunchSmoke_AccessibilityReportKeysMatchWorkflowGrepsAndReadinessMarkers()
+    {
+        var sourceReportKeys = ExtractDistinctKeys(
+            File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs")),
+            AccessibilitySourceReportKeyPattern);
+        var workflowGrepKeys = ExtractDistinctKeys(
+            File.ReadAllText(RepositoryFileLocator.Find(".github", "workflows", "macos-app.yml")),
+            AccessibilityWorkflowGrepReportKeyPattern);
+        var readinessMarkerKeys = ExtractDistinctKeys(
+            File.ReadAllText(RepositoryFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1")),
+            AccessibilityReadinessReportKeyMarkerPattern);
+
+        sourceReportKeys.Should().NotBeEmpty("MacOsLaunchSmoke should emit accessibility report keys");
+        workflowGrepKeys.Should().NotBeEmpty("the macOS workflow should grep accessibility report keys");
+        readinessMarkerKeys.Should().NotBeEmpty("the readiness preflight should track accessibility report keys");
+
+        FindSetDrift(sourceReportKeys, workflowGrepKeys, "MacOsLaunchSmoke accessibility report", "macOS workflow grep")
+            .Should()
+            .BeEmpty("the macOS workflow grep contract should match the accessibility report keys emitted by MacOsLaunchSmoke");
+
+        FindSetDrift(sourceReportKeys, readinessMarkerKeys, "MacOsLaunchSmoke accessibility report", "readiness report marker")
+            .Should()
+            .BeEmpty("the readiness accessibility marker contract should match the accessibility report keys emitted by MacOsLaunchSmoke");
     }
 
     [Fact]
