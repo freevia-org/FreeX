@@ -5,7 +5,8 @@ param(
     [string]$ExpectedRunId,
     [string]$ExpectedRunAttempt,
     [string]$EvidencePreflightScriptPath,
-    [string]$HumanChecklistScriptPath
+    [string]$HumanChecklistScriptPath,
+    [switch]$PrepareHumanValidationHandoff
 )
 
 $ErrorActionPreference = "Stop"
@@ -58,6 +59,69 @@ function Get-HumanChecklistPath {
     return Join-Path $Root "completed-macos-public-preview-checklist-$Runtime.md"
 }
 
+function Get-HumanChecklistTemplatePath {
+    return Join-Path $repoRoot "docs/release/macos-public-preview-checklist.md"
+}
+
+function Format-CommandArgument {
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Value)
+
+    if ($Value -match '^[A-Za-z0-9_.:/\\-]+$') {
+        return $Value
+    }
+
+    return '"' + $Value.Replace('"', '\"') + '"'
+}
+
+function Format-RuntimesArgument {
+    param([Parameter(Mandatory = $true)][string[]]$RuntimeValues)
+
+    return ($RuntimeValues | ForEach-Object { Format-CommandArgument -Value $_ }) -join ","
+}
+
+function Write-HumanValidationHandoff {
+    param(
+        [Parameter(Mandatory = $true)][string]$ArtifactRoot,
+        [Parameter(Mandatory = $true)][string]$ChecklistRoot,
+        [Parameter(Mandatory = $true)][string]$TemplatePath,
+        [Parameter(Mandatory = $true)][string[]]$RuntimeValues
+    )
+
+    Write-Host "macOS public-preview human validation handoff"
+    Write-Host "Hosted evidence passed for run $ExpectedRunId attempt $ExpectedRunAttempt."
+    Write-Host "Checklist template: $TemplatePath"
+    Write-Host "Release assets artifact: freex-$ExpectedRunId-$ExpectedRunAttempt-macos-release-assets"
+
+    foreach ($runtime in $RuntimeValues) {
+        $checklistPath = Get-HumanChecklistPath -Root $ChecklistRoot -Runtime $runtime
+        $appArtifactName = "freex-$ExpectedRunId-$ExpectedRunAttempt-$runtime-macos-app"
+        $diagnosticsArtifactName = "freex-$ExpectedRunId-$ExpectedRunAttempt-$runtime-macos-diagnostics"
+
+        Write-Host ""
+        Write-Host "Runtime: $runtime"
+        Write-Host "Expected completed checklist: $checklistPath"
+        Write-Host "Template path: $TemplatePath"
+        Write-Host "Expected app artifact wrapper: $appArtifactName"
+        Write-Host "Expected diagnostics artifact wrapper: $diagnosticsArtifactName"
+        Write-Host "Expected release-assets wrapper: freex-$ExpectedRunId-$ExpectedRunAttempt-macos-release-assets"
+        Write-Host ("Validate completed checklist: powershell.exe -NoProfile -ExecutionPolicy Bypass -File {0} -ChecklistPath {1} -ExpectedRuntime {2} -ExpectedRunId {3} -ExpectedRunAttempt {4}" -f
+            (Format-CommandArgument -Value $resolvedHumanChecklistScriptPath),
+            (Format-CommandArgument -Value $checklistPath),
+            (Format-CommandArgument -Value $runtime),
+            (Format-CommandArgument -Value $ExpectedRunId),
+            (Format-CommandArgument -Value $ExpectedRunAttempt))
+    }
+
+    Write-Host ""
+    Write-Host ("Final promotion command after all completed checklists pass: powershell.exe -NoProfile -ExecutionPolicy Bypass -File {0} -ArtifactRoot {1} -ChecklistRoot {2} -Runtimes {3} -ExpectedRunId {4} -ExpectedRunAttempt {5}" -f
+        (Format-CommandArgument -Value $PSCommandPath),
+        (Format-CommandArgument -Value $ArtifactRoot),
+        (Format-CommandArgument -Value $ChecklistRoot),
+        (Format-RuntimesArgument -RuntimeValues $RuntimeValues),
+        (Format-CommandArgument -Value $ExpectedRunId),
+        (Format-CommandArgument -Value $ExpectedRunAttempt))
+}
+
 Assert-RequiredValue -Value $ExpectedRunId -Name "ExpectedRunId"
 Assert-RequiredValue -Value $ExpectedRunAttempt -Name "ExpectedRunAttempt"
 
@@ -73,6 +137,7 @@ $resolvedArtifactRoot = Resolve-InputPath $ArtifactRoot
 $resolvedChecklistRoot = Resolve-InputPath $ChecklistRoot
 $resolvedEvidencePreflightScriptPath = Resolve-InputPath $EvidencePreflightScriptPath
 $resolvedHumanChecklistScriptPath = Resolve-InputPath $HumanChecklistScriptPath
+$resolvedHumanChecklistTemplatePath = Get-HumanChecklistTemplatePath
 
 if (-not (Test-Path -LiteralPath $resolvedArtifactRoot -PathType Container)) {
     throw "macOS public-preview artifact root was not found: $resolvedArtifactRoot"
@@ -84,6 +149,7 @@ if (-not (Test-Path -LiteralPath $resolvedChecklistRoot -PathType Container)) {
 
 Assert-ScriptExists -Path $resolvedEvidencePreflightScriptPath -Name "macOS public-preview evidence preflight script"
 Assert-ScriptExists -Path $resolvedHumanChecklistScriptPath -Name "macOS human validation checklist script"
+Assert-ScriptExists -Path $resolvedHumanChecklistTemplatePath -Name "macOS public-preview human validation checklist template"
 
 foreach ($runtime in $Runtimes) {
     if ($runtime -ne "osx-arm64" -and $runtime -ne "osx-x64") {
@@ -100,6 +166,15 @@ Write-Host "Running macOS public-preview hosted evidence validation..."
     -DistributionCandidate `
     -RequireSeparateDiagnosticsArtifact `
     -RequireReleasePublicationArtifact
+
+if ($PrepareHumanValidationHandoff) {
+    Write-HumanValidationHandoff `
+        -ArtifactRoot $ArtifactRoot `
+        -ChecklistRoot $resolvedChecklistRoot `
+        -TemplatePath $resolvedHumanChecklistTemplatePath `
+        -RuntimeValues $Runtimes
+    return
+}
 
 foreach ($runtime in $Runtimes) {
     $checklistPath = Get-HumanChecklistPath -Root $resolvedChecklistRoot -Runtime $runtime
