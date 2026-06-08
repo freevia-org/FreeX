@@ -5538,8 +5538,8 @@ public sealed class MainWindow : Window
         AutomationProperties.SetAutomationId(dialog, "FormatCellsCompactDialog");
 
         var numberChoices = CreateFormatCellsNumberFormatChoices(currentNumberFormat);
-        var currentNumberChoice = numberChoices.FirstOrDefault(choice =>
-            string.Equals(choice.FormatCode, currentNumberFormat, StringComparison.Ordinal)) ?? numberChoices[0];
+        var currentNumberChoice =
+            FindFormatCellsNumberFormatChoice(numberChoices, currentNumberFormat) ?? numberChoices[0];
         var numberCategoryList = new ListBox
         {
             ItemsSource = numberChoices.Select(choice => choice.Category).Distinct().ToArray(),
@@ -5569,14 +5569,12 @@ public sealed class MainWindow : Window
         void RefreshNumberChoices()
         {
             var category = numberCategoryList.SelectedItem?.ToString() ?? currentNumberChoice.Category;
-            var filteredChoices = numberChoices
-                .Where(choice => string.Equals(choice.Category, category, StringComparison.Ordinal))
-                .ToArray();
+            var filteredChoices = FilterFormatCellsNumberFormatChoices(numberChoices, category);
             numberFormatBox.ItemsSource = filteredChoices;
             if (numberFormatBox.SelectedItem is not FormatCellsNumberFormatChoice selected ||
-                !filteredChoices.Contains(selected))
+                !ContainsFormatCellsNumberFormatChoice(filteredChoices, selected))
             {
-                numberFormatBox.SelectedItem = filteredChoices.FirstOrDefault() ?? currentNumberChoice;
+                numberFormatBox.SelectedItem = filteredChoices.Count > 0 ? filteredChoices[0] : currentNumberChoice;
             }
         }
 
@@ -6084,10 +6082,50 @@ public sealed class MainWindow : Window
             new("Date", "m/d/yyyy", "1/1/2026"),
             new("Time", "h:mm AM/PM", "9:30 AM"),
         };
-        if (!choices.Any(choice => string.Equals(choice.FormatCode, currentNumberFormat, StringComparison.Ordinal)))
+        if (FindFormatCellsNumberFormatChoice(choices, currentNumberFormat) is null)
             choices.Add(new FormatCellsNumberFormatChoice("Custom", currentNumberFormat, "Custom"));
 
         return choices;
+    }
+
+    private static FormatCellsNumberFormatChoice? FindFormatCellsNumberFormatChoice(
+        IEnumerable<FormatCellsNumberFormatChoice> choices,
+        string formatCode)
+    {
+        foreach (var choice in choices)
+        {
+            if (string.Equals(choice.FormatCode, formatCode, StringComparison.Ordinal))
+                return choice;
+        }
+
+        return null;
+    }
+
+    private static IReadOnlyList<FormatCellsNumberFormatChoice> FilterFormatCellsNumberFormatChoices(
+        IEnumerable<FormatCellsNumberFormatChoice> choices,
+        string category)
+    {
+        var matchingChoices = new List<FormatCellsNumberFormatChoice>();
+        foreach (var choice in choices)
+        {
+            if (string.Equals(choice.Category, category, StringComparison.Ordinal))
+                matchingChoices.Add(choice);
+        }
+
+        return matchingChoices;
+    }
+
+    private static bool ContainsFormatCellsNumberFormatChoice(
+        IEnumerable<FormatCellsNumberFormatChoice> choices,
+        FormatCellsNumberFormatChoice selected)
+    {
+        foreach (var choice in choices)
+        {
+            if (EqualityComparer<FormatCellsNumberFormatChoice>.Default.Equals(choice, selected))
+                return true;
+        }
+
+        return false;
     }
 
     private static IReadOnlyList<FormatCellsNullableChoice<CellHAlign>> CreateFormatCellsHorizontalAlignmentChoices() =>
