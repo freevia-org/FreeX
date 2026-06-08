@@ -18,12 +18,20 @@ public sealed class XlsxPackageHealthValidatorTests
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink";
     private const string ExternalLinkPathRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath";
+    private const string VbaProjectRelationshipType =
+        "http://schemas.microsoft.com/office/2006/relationships/vbaProject";
     private const string SharedStringsContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
     private const string StylesContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
     private const string ExternalLinkContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml";
+    private const string VbaProjectContentType =
+        "application/vnd.ms-office.vbaProject";
+    private const string WorkbookContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml";
+    private const string MacroEnabledWorkbookContentType =
+        "application/vnd.ms-excel.sheet.macroEnabled.main+xml";
 
     [Fact]
     public void Validate_AcceptsMinimalWorkbookPackage()
@@ -290,6 +298,90 @@ public sealed class XlsxPackageHealthValidatorTests
         XlsxPackageHealthValidator.Validate(package)
             .Should()
             .Contain(issue => issue.Contains("xl/externalLinks/externalLink1.xml externalBook #1 relationship rIdExternalBook1 is not external", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_AcceptsWorkbookWithVbaProjectPackage()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookContentType: MacroEnabledWorkbookContentType,
+            workbookRelationships:
+            [
+                Relationship("rId1", WorksheetRelationshipType, "worksheets/sheet1.xml"),
+                Relationship("rIdVbaProject", VbaProjectRelationshipType, "vbaProject.bin")
+            ],
+            extraEntries:
+            [
+                ("xl/vbaProject.bin", "macro")
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/vbaProject.bin" ContentType="{VbaProjectContentType}" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Validate_FlagsVbaProjectWithoutWorkbookRelationship()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookContentType: MacroEnabledWorkbookContentType,
+            extraEntries:
+            [
+                ("xl/vbaProject.bin", "macro")
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/vbaProject.bin" ContentType="{VbaProjectContentType}" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("has no workbook relationship to xl/vbaProject.bin", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsVbaProjectWithoutVbaContentType()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookContentType: MacroEnabledWorkbookContentType,
+            workbookRelationships:
+            [
+                Relationship("rId1", WorksheetRelationshipType, "worksheets/sheet1.xml"),
+                Relationship("rIdVbaProject", VbaProjectRelationshipType, "vbaProject.bin")
+            ],
+            extraEntries:
+            [
+                ("xl/vbaProject.bin", "macro")
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains($"xl/vbaProject.bin has content type (none); expected {VbaProjectContentType}", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsVbaProjectInNonMacroWorkbook()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            workbookRelationships:
+            [
+                Relationship("rId1", WorksheetRelationshipType, "worksheets/sheet1.xml"),
+                Relationship("rIdVbaProject", VbaProjectRelationshipType, "vbaProject.bin")
+            ],
+            extraEntries:
+            [
+                ("xl/vbaProject.bin", "macro")
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/vbaProject.bin" ContentType="{VbaProjectContentType}" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains($"xl/workbook.xml has content type {WorkbookContentType} but contains xl/vbaProject.bin", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -802,11 +894,12 @@ public sealed class XlsxPackageHealthValidatorTests
         IReadOnlyList<string>? contentTypeOverrides = null,
         IReadOnlyList<string>? contentTypeDefaults = null,
         IReadOnlyList<(string Path, string Content)>? extraEntries = null,
+        string workbookContentType = WorkbookContentType,
         bool omitRootRelationships = false)
     {
         var entries = new List<(string Path, string Content)>
         {
-            ("[Content_Types].xml", ContentTypesXml(contentTypeOverrides, contentTypeDefaults)),
+            ("[Content_Types].xml", ContentTypesXml(contentTypeOverrides, contentTypeDefaults, workbookContentType)),
             ("xl/workbook.xml", workbookXml ?? """
                 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
                           xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
@@ -844,7 +937,8 @@ public sealed class XlsxPackageHealthValidatorTests
 
     private static string ContentTypesXml(
         IReadOnlyList<string>? overrides,
-        IReadOnlyList<string>? defaults)
+        IReadOnlyList<string>? defaults,
+        string workbookContentType)
     {
         var defaultDeclarations = new[]
         {
@@ -854,7 +948,7 @@ public sealed class XlsxPackageHealthValidatorTests
 
         var overrideDeclarations = new[]
         {
-            """<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml" />""",
+            $"""<Override PartName="/xl/workbook.xml" ContentType="{workbookContentType}" />""",
             """<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml" />"""
         }.Concat(overrides ?? []);
 
