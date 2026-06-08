@@ -124,7 +124,7 @@ Before opening the app, testers should run this from the directory containing th
 shasum -a 256 -c freex-<runtime>-macos-app.zip.sha256
 ```
 
-The expected result is `<zip-name>: OK`. After the checksum passes, unzip the inner app ZIP and open `FreeX.app`. If macOS Gatekeeper blocks the preview, testers should inspect `codesign_mode`, `notarization_status`, `stapler_validated`, and `zip_sha256` in the evidence file. Ad-hoc signed or non-notarized previews are internal validation artifacts and may require Control-click or right-click > Open on trusted test machines. Public distribution still requires Developer ID signing, accepted notarization, and stapling evidence.
+The expected result is `<zip-name>: OK`. After the checksum passes, extract the inner app ZIP with Finder/Archive Utility, or run `ditto -x -k freex-<runtime>-macos-app.zip .` from Terminal, then open `FreeX.app`. This preserves macOS signing metadata from the bundle ZIP. If macOS Gatekeeper blocks the preview, testers should inspect `codesign_mode`, `notarization_status`, `stapler_validated`, and `zip_sha256` in the evidence file. Ad-hoc signed or non-notarized previews are internal validation artifacts and may require Control-click or right-click > Open on trusted test machines. Public distribution still requires Developer ID signing, accepted notarization, and stapling evidence.
 
 ## Conservative Rerun Fallback
 

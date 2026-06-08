@@ -150,6 +150,34 @@ function Get-LatestKeyValue {
     return $values[$values.Count - 1]
 }
 
+function Assert-KeyHasNoConflictingDuplicateValues {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$Values,
+        [Parameter(Mandatory = $true)][string]$Key,
+        [Parameter(Mandatory = $true)][string]$Label,
+        [string]$ExpectedDescription
+    )
+
+    $uniqueValues = New-Object System.Collections.Generic.List[string]
+    foreach ($value in $Values) {
+        if (-not $uniqueValues.Contains($value)) {
+            $uniqueValues.Add($value)
+        }
+    }
+
+    if ($uniqueValues.Count -le 1) {
+        return $true
+    }
+
+    $message = "$Label has conflicting duplicate '$Key' values."
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedDescription)) {
+        $message = "$message $ExpectedDescription"
+    }
+
+    Add-ValidationError "$message Actual value(s): $($Values -join ', '). Remove stale or contradictory entries before using this evidence."
+    return $false
+}
+
 function Assert-KeyPresent {
     param(
         [Parameter(Mandatory = $true)][hashtable]$Map,
@@ -157,8 +185,19 @@ function Assert-KeyPresent {
         [Parameter(Mandatory = $true)][string]$Label
     )
 
-    $value = Get-LatestKeyValue -Map $Map -Key $Key
-    Assert-True -Condition (-not [string]::IsNullOrWhiteSpace($value)) -Message "$Label must include '$Key'."
+    $values = @(Get-KeyValues -Map $Map -Key $Key)
+    if ($values.Count -eq 0) {
+        Add-ValidationError "$Label must include '$Key'."
+        return
+    }
+
+    Assert-KeyHasNoConflictingDuplicateValues -Values $values -Key $Key -Label $Label | Out-Null
+    foreach ($value in $values) {
+        if ([string]::IsNullOrWhiteSpace($value)) {
+            Add-ValidationError "$Label must include a non-empty '$Key' value. Actual value(s): $($values -join ', ')."
+            return
+        }
+    }
 }
 
 function Assert-KeyEquals {
@@ -175,6 +214,7 @@ function Assert-KeyEquals {
         return
     }
 
+    Assert-KeyHasNoConflictingDuplicateValues -Values $values -Key $Key -Label $Label -ExpectedDescription "Expected '$Key=$ExpectedValue'." | Out-Null
     if ($values -notcontains $ExpectedValue) {
         Add-ValidationError "$Label must include '$Key=$ExpectedValue'. Actual value(s): $($values -join ', ')."
     }
@@ -194,6 +234,7 @@ function Assert-KeyMatches {
         return
     }
 
+    Assert-KeyHasNoConflictingDuplicateValues -Values $values -Key $Key -Label $Label -ExpectedDescription "Every value must match /$Pattern/." | Out-Null
     foreach ($value in $values) {
         if ($value -match $Pattern) {
             return
@@ -211,15 +252,23 @@ function Assert-KeyPositiveInteger {
         [Parameter(Mandatory = $true)][string]$Label
     )
 
-    $value = Get-LatestKeyValue -Map $Map -Key $Key
-    if ([string]::IsNullOrWhiteSpace($value)) {
+    $values = @(Get-KeyValues -Map $Map -Key $Key)
+    if ($values.Count -eq 0) {
         Add-ValidationError "$Label must include '$Key'."
         return
     }
 
-    $parsed = 0
-    if (-not [int]::TryParse($value, [ref]$parsed) -or $parsed -lt $Minimum) {
-        Add-ValidationError "$Label '$Key' must be at least $Minimum, but was '$value'."
+    Assert-KeyHasNoConflictingDuplicateValues -Values $values -Key $Key -Label $Label -ExpectedDescription "Every value must be at least $Minimum." | Out-Null
+    foreach ($value in $values) {
+        if ([string]::IsNullOrWhiteSpace($value)) {
+            Add-ValidationError "$Label must include a non-empty '$Key' value. Actual value(s): $($values -join ', ')."
+            return
+        }
+
+        $parsed = 0
+        if (-not [int]::TryParse($value, [ref]$parsed) -or $parsed -lt $Minimum) {
+            Add-ValidationError "$Label '$Key' must be at least $Minimum, but was '$value'."
+        }
     }
 }
 
