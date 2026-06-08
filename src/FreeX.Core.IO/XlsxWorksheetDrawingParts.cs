@@ -339,11 +339,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
             return null;
 
         var worksheetRelsXml = XlsxPackageXmlEditor.LoadXml(worksheetRelsEntry);
-        var drawingTarget = worksheetRelsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .FirstOrDefault(e => string.Equals(e.Attribute("Id")?.Value, drawingRelId, StringComparison.Ordinal))?
-            .Attribute("Target")?
-            .Value;
+        var drawingTarget = ReadRelationshipTarget(worksheetRelsXml.Root, packageRelNs, drawingRelId);
         if (string.IsNullOrWhiteSpace(drawingTarget))
             return null;
 
@@ -357,10 +353,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
     private static string? ReadNonVisualName(XElement element)
     {
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
-        var name = element
-            .Descendants(spreadsheetDrawingNs + "cNvPr")
-            .Select(item => item.Attribute("name")?.Value)
-            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+        var name = ReadFirstNonVisualAttribute(element, spreadsheetDrawingNs, "name");
         return string.IsNullOrWhiteSpace(name) ? null : name;
     }
 
@@ -384,19 +377,13 @@ internal static partial class XlsxWorksheetDrawingPartReader
     private static string? ReadNonVisualDescription(XElement element)
     {
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
-        return element
-            .Descendants(spreadsheetDrawingNs + "cNvPr")
-            .Select(item => item.Attribute("descr")?.Value)
-            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+        return ReadFirstNonVisualAttribute(element, spreadsheetDrawingNs, "descr");
     }
 
     private static string? ReadNonVisualTitle(XElement element)
     {
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
-        return element
-            .Descendants(spreadsheetDrawingNs + "cNvPr")
-            .Select(item => item.Attribute("title")?.Value)
-            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+        return ReadFirstNonVisualAttribute(element, spreadsheetDrawingNs, "title");
     }
 
     private static double ReadSourceRectangleRatio(XElement? sourceRectangle, string attributeName)
@@ -458,8 +445,24 @@ internal static partial class XlsxWorksheetDrawingPartReader
 
         return colors is { Count: >= 2 }
             ? (colors[0], colors[^1], ReadDrawingGradientFillDirection(gradientFill, drawingNs))
-            : (colors?.FirstOrDefault(), null, DrawingShapeGradientDirection.DiagonalDown);
+            : (FirstColor(colors), null, DrawingShapeGradientDirection.DiagonalDown);
     }
+
+    private static string? ReadRelationshipTarget(XElement? relationshipRoot, XNamespace packageRelNs, string relationshipId) =>
+        relationshipRoot?
+            .Elements(packageRelNs + "Relationship")
+            .FirstOrDefault(relationship => string.Equals(relationship.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal))?
+            .Attribute("Target")?
+            .Value;
+
+    private static string? ReadFirstNonVisualAttribute(XElement element, XNamespace spreadsheetDrawingNs, string attributeName) =>
+        element
+            .Descendants(spreadsheetDrawingNs + "cNvPr")
+            .Select(item => item.Attribute(attributeName)?.Value)
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+    private static CellColor? FirstColor(IReadOnlyList<CellColor?>? colors) =>
+        colors is { Count: > 0 } ? colors[0] : null;
 
     private static DrawingShapeGradientDirection ReadDrawingGradientFillDirection(
         XElement? gradientFill,
