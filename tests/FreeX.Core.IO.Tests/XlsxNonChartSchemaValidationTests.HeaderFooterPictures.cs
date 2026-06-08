@@ -19,6 +19,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         SchemaErrors(saved).Should().BeEmpty();
         AssertHeaderFooterPicturePackage(saved);
+        AssertReloadedPageHeaderPictures(saved, expectedPictureCount: 1);
     }
 
     [Fact]
@@ -60,6 +61,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var imageTargets = ReadHeaderFooterImageRelationshipTargets(saved, vmlPath);
         imageTargets.Should().HaveCount(2);
         imageTargets.Distinct(StringComparer.OrdinalIgnoreCase).Should().HaveCount(2);
+        AssertReloadedPageHeaderPictures(saved, expectedPictureCount: 2);
     }
 
     [Fact]
@@ -138,6 +140,8 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Select(element => element.Attribute("Id")?.Value)
             .Should()
             .Equal("rIdImage1");
+        var reloadedSheet = AssertReloadedPageHeaderPictures(saved, expectedPictureCount: 1);
+        reloadedSheet.GetCell(3, 3)!.Value.Should().Be(new NumberValue(42));
     }
 
     [Fact]
@@ -179,6 +183,8 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SchemaErrors(saved).Should().BeEmpty();
         AssertHeaderFooterLegacyDrawingMarkerSanitized(saved);
         AssertHeaderFooterPicturePackage(saved);
+        var reloadedSheet = AssertReloadedPageHeaderPictures(saved, expectedPictureCount: 1);
+        reloadedSheet.GetCell(3, 3)!.Value.Should().Be(new NumberValue(42));
     }
 
     private static Workbook CreateHeaderFooterPictureSourceWorkbook()
@@ -366,6 +372,28 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         ReadPackageRootElement(stream, vmlPath).Elements().Should().NotBeEmpty();
         ReadPackageRootElement(stream, vmlRelationshipsPath).Elements().Should().NotBeEmpty();
         ReadHeaderFooterImageBytes(stream, vmlPath).Should().Equal(MinimalPngBytes());
+    }
+
+    private static Sheet AssertReloadedPageHeaderPictures(Stream stream, int expectedPictureCount)
+    {
+        stream.Position = 0;
+        var sheet = new XlsxFileAdapter().Load(stream).GetSheetAt(0);
+        var pictures = new[]
+            {
+                sheet.PageHeaderPictures.Left,
+                sheet.PageHeaderPictures.Center,
+                sheet.PageHeaderPictures.Right
+            }
+            .OfType<WorksheetHeaderFooterPicture>()
+            .ToList();
+
+        pictures.Should().HaveCount(expectedPictureCount);
+        pictures.Should().AllSatisfy(picture =>
+        {
+            picture.ImageBytes.Should().Equal(MinimalPngBytes());
+            picture.ContentType.Should().Be("image/png");
+        });
+        return sheet;
     }
 
     private static string ReadHeaderFooterVmlPath(Stream stream)
