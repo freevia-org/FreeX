@@ -124,10 +124,49 @@ public sealed class XlsxPackagePathTests
 
     [Theory]
     [InlineData("background", 2, ".png", "background.png")]
+    [InlineData("background image", 2, ".png", "background image.png")]
     [InlineData("background.jpg", 2, ".png", "background.jpg")]
-    [InlineData(null, 2, ".png", "freexBackground2.png")]
-    public void GetWorksheetBackgroundMediaFileName_UsesSafeNamesOrFallback(string? fileName, int index, string extension, string expected)
+    [InlineData("folder/background", 2, ".png", "background.png")]
+    [InlineData("folder\\background.jpg", 2, ".png", "background.jpg")]
+    [InlineData("C:\\images\\background.bmp", 2, ".png", "background.bmp")]
+    public void GetWorksheetBackgroundMediaFileName_UsesSafePackageNames(string? fileName, int index, string extension, string expected)
     {
         XlsxPackagePath.GetWorksheetBackgroundMediaFileName(fileName, index, extension).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("\t")]
+    [InlineData("folder/")]
+    [InlineData("folder\\")]
+    [InlineData(".")]
+    [InlineData("..")]
+    [InlineData("background:1.png")]
+    [InlineData("background?.png")]
+    [InlineData("background*.png")]
+    [InlineData("background\"quote.png")]
+    [InlineData("background<1.png")]
+    [InlineData("background>1.png")]
+    [InlineData("background|1.png")]
+    [InlineData("background\u0001.png")]
+    public void GetWorksheetBackgroundMediaFileName_UsesFallbackForUnsafePackageNames(string? fileName)
+    {
+        XlsxPackagePath.GetWorksheetBackgroundMediaFileName(fileName, 7, ".png").Should().Be("freexBackground7.png");
+    }
+
+    [Fact]
+    public void WorksheetBackgroundMediaFileName_UsesExplicitPackageRules()
+    {
+        var source = TestWorkspaceFiles.ReadCoreIoSource("XlsxPackagePath.cs");
+        var mediaFileNameHelpers = source[
+            source.IndexOf("public static string GetWorksheetBackgroundMediaFileName", StringComparison.Ordinal)..
+            source.IndexOf("private static string UnescapePathSegments", StringComparison.Ordinal)];
+
+        mediaFileNameHelpers.Should().Contain("IsUnsafePackageMediaFileNameCharacter");
+        mediaFileNameHelpers.Should().NotContain("Path.GetInvalidFileNameChars");
+        mediaFileNameHelpers.Should().NotContain("Path.GetFileName(");
+        mediaFileNameHelpers.Should().NotContain("Path.HasExtension(");
     }
 }
