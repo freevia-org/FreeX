@@ -102,7 +102,7 @@ public sealed partial class MainWindowSourceHygieneTests
         dropdownSource.Should().Contain("private void RefreshValidationDropdown(");
         dropdownSource.Should().Contain("private void OpenActiveDropdown(");
         dropdownSource.Should().Contain("AutoFilterDropdownPlanner");
-        dropdownSource.Should().Contain("DataValidationService");
+        dropdownSource.Should().Contain("DataValidationDropdownPlanner");
     }
 
     [Fact]
