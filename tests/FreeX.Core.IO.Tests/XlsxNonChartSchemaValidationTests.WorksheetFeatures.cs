@@ -654,6 +654,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
             .Should()
             .BeTrue(blockReason);
+        AssertWorksheetSortStateAndDataConsolidationModel(workbook.GetSheetAt(0));
 
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(42));
@@ -672,6 +673,10 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceDataConsolidate.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        AssertWorksheetSortStateAndDataConsolidationModel(reloaded.GetSheetAt(0));
     }
 
     [Fact]
@@ -3537,6 +3542,26 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             ]
         };
         return workbook;
+    }
+
+    private static void AssertWorksheetSortStateAndDataConsolidationModel(Sheet sheet)
+    {
+        sheet.SortState.Should().NotBeNull();
+        sheet.SortState!.Reference.Should().Be("A1:B5");
+        sheet.SortState.CaseSensitive.Should().BeTrue();
+        sheet.SortState.SortMethod.Should().Be("stroke");
+        var sortCondition = sheet.SortState.Conditions.Should().ContainSingle().Subject;
+        sortCondition.Reference.Should().Be("A2:A5");
+        sortCondition.Descending.Should().BeTrue();
+
+        sheet.DataConsolidation.Should().NotBeNull();
+        sheet.DataConsolidation!.Function.Should().Be("sum");
+        sheet.DataConsolidation.LeftLabels.Should().BeTrue();
+        sheet.DataConsolidation.TopLabels.Should().BeTrue();
+        sheet.DataConsolidation.Link.Should().BeTrue();
+        var dataReference = sheet.DataConsolidation.References.Should().ContainSingle().Subject;
+        dataReference.Reference.Should().Be("A1:B5");
+        dataReference.Sheet.Should().Be("Data");
     }
 
     private static void SetStructuredTableAutoFilterInvalidAttributes(MemoryStream stream)
