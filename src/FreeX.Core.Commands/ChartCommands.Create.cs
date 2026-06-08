@@ -193,7 +193,7 @@ public sealed class AddPivotChartCommand : IWorkbookCommand
         var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
             string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
         if (pivotTable is null)
-            return new CommandOutcome(false, "PivotTable was not found.");
+            return CommandGuards.RejectPivotTableNotFound();
 
         PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
         var dataRange = PivotTableRefreshService.GetMaterializedOutputRange(sheet, pivotTable);
@@ -235,10 +235,14 @@ public sealed class AddPivotChartCommand : IWorkbookCommand
 internal static class ChartCommandGuards
 {
     private const string ChartNotFoundMessage = "Chart was not found.";
+    private const string PivotChartNotFoundMessage = "PivotChart was not found.";
     private const string InvalidChartSizeMessage = "Chart size must be positive.";
 
     public static CommandOutcome ChartNotFound() =>
         new(false, ChartNotFoundMessage);
+
+    public static CommandOutcome PivotChartNotFound() =>
+        new(false, PivotChartNotFoundMessage);
 
     public static CommandOutcome? RejectIfEditObjectsBlocked(Sheet sheet) =>
         CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects);

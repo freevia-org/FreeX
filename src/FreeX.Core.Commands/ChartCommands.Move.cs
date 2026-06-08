@@ -24,13 +24,13 @@ public sealed class MoveChartCommand : IWorkbookCommand
         var source = ctx.Workbook.GetSheet(_sourceSheetId);
         if (source is null)
             return new CommandOutcome(false, "Source sheet was not found.");
-        if (CommandGuards.RejectIfProtectedWithoutPermission(source, SheetProtectionPermission.EditObjects) is { } sourceProtectedOutcome)
+        if (ChartCommandGuards.RejectIfEditObjectsBlocked(source) is { } sourceProtectedOutcome)
             return sourceProtectedOutcome;
 
         var target = ctx.Workbook.GetSheet(_targetSheetId);
         if (target is null)
             return new CommandOutcome(false, "Target sheet was not found.");
-        if (CommandGuards.RejectIfProtectedWithoutPermission(target, SheetProtectionPermission.EditObjects) is { } targetProtectedOutcome)
+        if (ChartCommandGuards.RejectIfEditObjectsBlocked(target) is { } targetProtectedOutcome)
             return targetProtectedOutcome;
 
         var chart = source.Charts.FirstOrDefault(item => item.Id == _chartId);
@@ -94,7 +94,7 @@ public sealed class MoveChartToNewSheetCommand : IWorkbookCommand
         var source = ctx.Workbook.GetSheet(_sourceSheetId);
         if (source is null)
             return new CommandOutcome(false, "Source sheet was not found.");
-        if (CommandGuards.RejectIfProtectedWithoutPermission(source, SheetProtectionPermission.EditObjects) is { } sourceProtectedOutcome)
+        if (ChartCommandGuards.RejectIfEditObjectsBlocked(source) is { } sourceProtectedOutcome)
             return sourceProtectedOutcome;
 
         var chart = source.Charts.FirstOrDefault(item => item.Id == _chartId);
