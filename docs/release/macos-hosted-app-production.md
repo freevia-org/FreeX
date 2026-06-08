@@ -65,22 +65,22 @@ If either runtime fails, inspect the runtime diagnostics artifact from that same
 
 ## Optional macOS TFM Compile Validation
 
-When the opt-in macOS TFM validation input is enabled in `.github/workflows/macos-app.yml`, a maintainer may run it manually as a companion check for the future `net10.0-macos` compile path. Copy the exact input key from the workflow file or the GitHub Actions UI at the release commit; do not infer a name from this runbook.
+When `validate_macos_tfm=true` is enabled in `.github/workflows/macos-app.yml`, a maintainer may run it manually as a companion check for the future `net10.0-macos` compile path.
 
-This validation is not the app artifact lane. It is useful for answering whether hosted macOS can install or restore the macOS workload/reference packs and compile the macOS-specific target, but it does not replace the current `net10.0` publish that produces the `osx-arm64` and `osx-x64` bundles.
+This validation is not the app artifact lane. It is useful for answering whether hosted macOS 26 arm64 and Intel runners can install the pinned macOS workload set and compile the macOS-specific target, but it does not replace the current `net10.0` publish that produces the `osx-arm64` and `osx-x64` bundles.
 
 From the GitHub UI:
 
 1. Open GitHub > FreeX > Actions > `macOS App Preview`.
 2. Select `Run workflow`.
 3. Choose the ref to validate.
-4. Enable the opt-in macOS TFM validation input.
+4. Enable `validate_macos_tfm`.
 5. Start the workflow and record the run id, run attempt, run number, ref, and commit SHA.
 
-From GitHub CLI, pass the exact input key exposed by `workflow_dispatch`:
+From GitHub CLI:
 
 ```powershell
-gh workflow run macos-app.yml --ref main -f <opt-in-macos-tfm-validation-input>=true
+gh workflow run macos-app.yml --ref main -f validate_macos_tfm=true
 gh run list --workflow macos-app.yml --branch main --limit 5
 ```
 
@@ -102,6 +102,8 @@ Download artifacts from the completed run summary under `Artifacts`, or use `gh 
 | `freex-<run-id>-<run-attempt>-osx-arm64-macos-diagnostics` | Always uploaded when available | Runtime diagnostics files, including evidence collected before failures |
 | `freex-<run-id>-<run-attempt>-osx-x64-macos-app` | Every completed `osx-x64` runtime job | `freex-osx-x64-macos-app.zip`, `.zip.sha256`, evidence, packaging smoke, LaunchServices smoke, Open-With smoke, default-open smoke, notarization log, tester instructions |
 | `freex-<run-id>-<run-attempt>-osx-x64-macos-diagnostics` | Always uploaded when available | Runtime diagnostics files, including evidence collected before failures |
+| `freex-<run-id>-<run-attempt>-macos-tfm-build-arm64-evidence` | Manual dispatch with `validate_macos_tfm=true` | Evidence-only `freex-arm64-macos-tfm-build-evidence.txt` with runner, workload, Xcode, and `net10.0-macos` compile markers |
+| `freex-<run-id>-<run-attempt>-macos-tfm-build-x64-evidence` | Manual dispatch with `validate_macos_tfm=true` | Evidence-only `freex-x64-macos-tfm-build-evidence.txt` with runner, workload, Xcode, and `net10.0-macos` compile markers |
 | `freex-<run-id>-<run-attempt>-macos-preview-readiness` | After both runtime jobs | `macos-preview-readiness-manifest.json` and `macos-preview-readiness-summary.txt`, tying both runtime artifacts, diagnostics artifacts, digests, hashes, and evidence markers to one run |
 | `freex-<run-id>-<run-attempt>-macos-release-assets` | `distribution_candidate=true` only | Stable production-candidate assets such as `FreeX-latest-macos-arm64.zip`, `FreeX-latest-macos-x64.zip`, checksums, evidence/log/instruction files, `FreeX-latest-macos-distribution-candidate-manifest.json`, and candidate instructions |
 

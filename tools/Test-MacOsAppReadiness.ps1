@@ -139,8 +139,18 @@ function Get-ProjectProperty {
 
     foreach ($group in @($Project.Project.PropertyGroup)) {
         $value = $group.$Name
-        if (-not [string]::IsNullOrWhiteSpace($value)) {
-            return [string]$value
+        if ($null -eq $value) {
+            continue
+        }
+
+        if ($value -is [System.Xml.XmlElement]) {
+            $text = [string]$value.InnerText
+        } else {
+            $text = [string]$value
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($text)) {
+            return $text
         }
     }
 
