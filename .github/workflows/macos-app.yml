@@ -424,15 +424,19 @@ jobs:
             launch_clipboard_script="$RUNNER_TEMP/freex-$runtime-clipboard.swift"
             printf '%s\n' \
               'import AppKit' \
+              'import Foundation' \
               '' \
               'let imagePath = CommandLine.arguments[1]' \
-              'guard let image = NSImage(contentsOfFile: imagePath) else {' \
-              '    fatalError("Could not load launch smoke clipboard image.")' \
+              'let imageUrl = URL(fileURLWithPath: imagePath)' \
+              'guard let pngData = try? Data(contentsOf: imageUrl) else {' \
+              '    fatalError("Could not load launch smoke clipboard PNG data.")' \
               '}' \
+              'let item = NSPasteboardItem()' \
+              'item.setData(pngData, forType: .png)' \
               '' \
               'let pasteboard = NSPasteboard.general' \
               'pasteboard.clearContents()' \
-              'guard pasteboard.writeObjects([image]) else {' \
+              'guard pasteboard.writeObjects([item]) else {' \
               '    fatalError("Could not write launch smoke image to pasteboard.")' \
               '}' > "$launch_clipboard_script"
             /usr/bin/swift "$launch_clipboard_script" "$launch_clipboard_image"
