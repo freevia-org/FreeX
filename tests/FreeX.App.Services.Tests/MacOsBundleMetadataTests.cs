@@ -234,6 +234,13 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"external_image_clipboard_paste_required=false\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"live_command_key_smoke_required=false\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"live_command_key_smoke=not_required\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"macos_accessibility_smoke=passed\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"a11y_formula_box_name=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"a11y_formula_box_help=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"a11y_status_text_name=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"a11y_status_text_value=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"a11y_cell_address_name=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"a11y_selection_stats_name=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"new_sheet_button=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"toolbar_format_painter_button=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"toolbar_fill_cells_button=true\" \"$launch_smoke_report\"");

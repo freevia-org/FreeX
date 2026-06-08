@@ -1323,12 +1323,18 @@ public sealed class MainWindow : Window
         _statusText.MaxWidth = 180;
         _statusText.TextTrimming = TextTrimming.CharacterEllipsis;
         _statusText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        AutomationProperties.SetAutomationId(_statusText, "StatusText");
+        AutomationProperties.SetName(_statusText, "Status");
+        AutomationProperties.SetHelpText(_statusText, "Shows the current workbook status.");
 
         _selectionStatsText.FontSize = 12;
         _selectionStatsText.Foreground = Brush(73, 80, 93);
         _selectionStatsText.MaxWidth = 420;
         _selectionStatsText.TextTrimming = TextTrimming.CharacterEllipsis;
         _selectionStatsText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        AutomationProperties.SetAutomationId(_selectionStatsText, "SelectionStatsText");
+        AutomationProperties.SetName(_selectionStatsText, "Selection statistics");
+        AutomationProperties.SetHelpText(_selectionStatsText, "Shows statistics for the current selection.");
 
         _zoomText.FontSize = 12;
         _zoomText.FontWeight = FontWeight.SemiBold;
@@ -1652,6 +1658,9 @@ public sealed class MainWindow : Window
         _cellAddressText.Foreground = Brush(28, 38, 48);
         _cellAddressText.TextAlignment = TextAlignment.Center;
         _cellAddressText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        AutomationProperties.SetAutomationId(_cellAddressText, "CellAddressText");
+        AutomationProperties.SetName(_cellAddressText, "Cell address");
+        AutomationProperties.SetHelpText(_cellAddressText, "Shows the active cell address.");
 
         _formulaBox.MinWidth = 320;
         _formulaBox.FontSize = 12;
@@ -1659,6 +1668,9 @@ public sealed class MainWindow : Window
         _formulaBox.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _formulaBox.GotFocus += FormulaBox_GotFocus;
         _formulaBox.KeyDown += FormulaBox_KeyDown;
+        AutomationProperties.SetAutomationId(_formulaBox, "FormulaBox");
+        AutomationProperties.SetName(_formulaBox, "Formula bar");
+        AutomationProperties.SetHelpText(_formulaBox, "Edit the active cell value or formula.");
 
         return new Border
         {
@@ -12202,6 +12214,19 @@ public sealed class MainWindow : Window
             HasMergeAndCenterButton: _mergeAndCenterButton.Content?.ToString() == "Merge & Center" &&
                 string.Equals(AutomationProperties.GetAutomationId(_mergeAndCenterButton), "HomeMergeAndCenterButton", StringComparison.Ordinal) &&
                 string.Equals(AutomationProperties.GetHelpText(_mergeAndCenterButton), "Merge and center the selected cells.", StringComparison.Ordinal),
+            HasFormulaBoxAutomationName: string.Equals(AutomationProperties.GetName(_formulaBox), "Formula bar", StringComparison.Ordinal),
+            HasFormulaBoxAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_formulaBox), "Edit the active cell value or formula.", StringComparison.Ordinal),
+            HasFormulaBoxAutomationId: string.Equals(AutomationProperties.GetAutomationId(_formulaBox), "FormulaBox", StringComparison.Ordinal),
+            HasStatusTextAutomationName: string.Equals(AutomationProperties.GetName(_statusText), "Status", StringComparison.Ordinal),
+            HasStatusTextAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_statusText), "Shows the current workbook status.", StringComparison.Ordinal),
+            HasStatusTextAutomationId: string.Equals(AutomationProperties.GetAutomationId(_statusText), "StatusText", StringComparison.Ordinal),
+            HasStatusTextValue: !string.IsNullOrWhiteSpace(_statusText.Text),
+            HasCellAddressAutomationName: string.Equals(AutomationProperties.GetName(_cellAddressText), "Cell address", StringComparison.Ordinal),
+            HasCellAddressAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_cellAddressText), "Shows the active cell address.", StringComparison.Ordinal),
+            HasCellAddressAutomationId: string.Equals(AutomationProperties.GetAutomationId(_cellAddressText), "CellAddressText", StringComparison.Ordinal),
+            HasSelectionStatsAutomationName: string.Equals(AutomationProperties.GetName(_selectionStatsText), "Selection statistics", StringComparison.Ordinal),
+            HasSelectionStatsAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_selectionStatsText), "Shows statistics for the current selection.", StringComparison.Ordinal),
+            HasSelectionStatsAutomationId: string.Equals(AutomationProperties.GetAutomationId(_selectionStatsText), "SelectionStatsText", StringComparison.Ordinal),
             HasFocusableSheetTab: HasSheetTabButton(button => button.Focusable),
             HasFocusableActiveSheetTab: FindSheetTabButton(_session.ActiveSheet.Id)?.Focusable == true,
             HasShellFocusCycleTargets: _sheetGridHost.Focusable &&
