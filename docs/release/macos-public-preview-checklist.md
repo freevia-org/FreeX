@@ -2,6 +2,12 @@
 
 Use this checklist for each `macOS App Preview` public-preview candidate after hosted evidence has been downloaded and the Windows-runnable public-preview preflight has passed. It complements [test-distribution.md](test-distribution.md), [macos-signing-notarization.md](macos-signing-notarization.md), and [../planning/macos-accessibility-evidence.md](../planning/macos-accessibility-evidence.md).
 
+After filling a release-specific copy, validate it from Windows before promotion:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-MacOsHumanValidationChecklist.ps1 -ChecklistPath artifacts/macos-preview/completed-macos-public-preview-checklist.md -ExpectedRuntime osx-arm64 -ExpectedRunId <run-id> -ExpectedRunAttempt <run-attempt>
+```
+
 Do not mark a macOS artifact public-preview eligible unless every required section below is `Pass`, or the release owner explicitly accepts a non-blocking issue in the final decision. If Developer ID signing, accepted notarization, stapling, Gatekeeper launch, Finder `.fxl` open, keyboard-only validation, or VoiceOver validation is missing, mark the build `Internal-only`.
 
 ## Candidate Summary

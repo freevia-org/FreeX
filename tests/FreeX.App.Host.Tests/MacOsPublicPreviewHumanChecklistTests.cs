@@ -12,6 +12,10 @@ public sealed class MacOsPublicPreviewHumanChecklistTests
         source.Should().Contain("# macOS Public Preview Human Validation Checklist");
         source.Should().Contain("Use a real macOS user session.");
         source.Should().Contain("Hosted smoke logs are supporting evidence, not a replacement for Finder, Gatekeeper, keyboard-only, or VoiceOver observations.");
+        source.Should().Contain("tools/Test-MacOsHumanValidationChecklist.ps1");
+        source.Should().Contain("-ExpectedRuntime osx-arm64");
+        source.Should().Contain("-ExpectedRunId <run-id>");
+        source.Should().Contain("-ExpectedRunAttempt <run-attempt>");
         source.Should().Contain("If Developer ID signing, accepted notarization, stapling, Gatekeeper launch, Finder `.fxl` open, keyboard-only validation, or VoiceOver validation is missing, mark the build `Internal-only`.");
 
         source.Should().Contain("## Candidate Summary");
