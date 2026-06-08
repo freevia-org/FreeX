@@ -58,14 +58,11 @@ public sealed partial class InsertChartDialog
             subtypeGallery.SelectedIndex = 0;
         };
 
-        var selectedCategory = categories.FirstOrDefault(category =>
-            selectedType is not null && category.Options.Any(option => option.Type == selectedType.Value))
-            ?? categories.FirstOrDefault();
+        var selectedCategory = SelectInitialCategory(categories, selectedType);
         categoryList.SelectedItem = selectedCategory;
         if (selectedType is not null && subtypeGallery.ItemsSource is IEnumerable<ChartTypeGalleryChoice> choices)
         {
-            subtypeGallery.SelectedItem = choices.FirstOrDefault(choice => choice.Type == selectedType.Value)
-                ?? choices.FirstOrDefault();
+            subtypeGallery.SelectedItem = SelectInitialGalleryChoice(choices, selectedType.Value);
         }
 
         var heading = new StackPanel();
@@ -87,6 +84,35 @@ public sealed partial class InsertChartDialog
         Grid.SetRowSpan(preview, 2);
         grid.Children.Add(preview);
         return grid;
+    }
+
+    private static ChartTypePickerCategory? SelectInitialCategory(
+        IReadOnlyList<ChartTypePickerCategory> categories,
+        ChartType? selectedType)
+    {
+        if (selectedType is not null)
+        {
+            foreach (var category in categories)
+                if (category.Options.Any(option => option.Type == selectedType.Value))
+                    return category;
+        }
+
+        return categories.Count > 0 ? categories[0] : null;
+    }
+
+    private static ChartTypeGalleryChoice? SelectInitialGalleryChoice(
+        IEnumerable<ChartTypeGalleryChoice> choices,
+        ChartType selectedType)
+    {
+        ChartTypeGalleryChoice? fallback = null;
+        foreach (var choice in choices)
+        {
+            fallback ??= choice;
+            if (choice.Type == selectedType)
+                return choice;
+        }
+
+        return fallback;
     }
 
     private static Grid CreatePickerGrid()
