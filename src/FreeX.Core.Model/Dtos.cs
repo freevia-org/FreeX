@@ -68,7 +68,8 @@ public sealed record ViewportModel(
     FrozenPaneState? FrozenPanes = null,
     IReadOnlyList<OverlayPrimitive> Overlays = null!,
     SplitPaneState? SplitPanes = null,
-    IReadOnlyList<ChartDataCell> ChartDataCells = null!);
+    IReadOnlyList<ChartDataCell> ChartDataCells = null!,
+    IReadOnlyList<DrawingObjectBounds> DrawingObjects = null!);
 
 public sealed record ChartDataCell(
     SheetId SheetId,
@@ -76,6 +77,63 @@ public sealed record ChartDataCell(
     uint Col,
     string DisplayText,
     ScalarValue? RawValue = null);
+
+public sealed record DrawingObjectBounds(
+    SelectionPaneObjectKind Kind,
+    Guid Id,
+    string DisplayName,
+    uint AnchorRow,
+    uint AnchorCol,
+    double Left,
+    double Top,
+    double Width,
+    double Height,
+    double RotationDegrees = 0,
+    DrawingShapeKind? ShapeKind = null,
+    PictureKind? PictureKind = null,
+    string? Text = null,
+    CellColor? FillColor = null,
+    CellColor? OutlineColor = null,
+    byte[]? ImageBytes = null,
+    string? ImageContentType = null,
+    double CropLeft = 0,
+    double CropTop = 0,
+    double CropRight = 0,
+    double CropBottom = 0,
+    uint SourceRowCount = 0,
+    uint SourceColumnCount = 0,
+    IReadOnlyList<PictureCellSnapshot> PictureCells = null!);
+
+public enum DrawingObjectRenderPrimitiveKind
+{
+    BoundsFallback,
+    Shape,
+    Image,
+    CroppedImage,
+    CellRangeSnapshot,
+    TextBox
+}
+
+public sealed record DrawingObjectRenderPlan(
+    DrawingObjectBounds Bounds,
+    DrawingObjectRenderPrimitiveKind PrimitiveKind,
+    DrawingPictureCrop? Crop = null,
+    DrawingPictureGrid? PictureGrid = null,
+    string? FallbackReason = null)
+{
+    public bool IsReady => FallbackReason is null;
+}
+
+public sealed record DrawingPictureCrop(
+    double Left,
+    double Top,
+    double Right,
+    double Bottom);
+
+public sealed record DrawingPictureGrid(
+    uint RowCount,
+    uint ColumnCount,
+    IReadOnlyList<PictureCellSnapshot> Cells);
 
 public sealed record RowMetric(uint Row, double Height, double TopOffset);
 public sealed record ColMetric(uint Col, double Width, double LeftOffset);

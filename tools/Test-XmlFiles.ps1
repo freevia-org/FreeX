@@ -1,6 +1,6 @@
 param(
     [string[]]$XmlRoots = @("Directory.Build.props", "FreeX.slnx", "FreeX.DefaultTests.slnx", "FreeX.UiTests.slnx", "src", "tests"),
-    [string[]]$XmlExtensions = @(".xml", ".xaml", ".slnx", ".csproj", ".props", ".targets", ".resx", ".config", ".ruleset")
+    [string[]]$XmlExtensions = @(".xml", ".xaml", ".slnx", ".csproj", ".props", ".targets", ".resx", ".config", ".ruleset", ".plist")
 )
 
 $ErrorActionPreference = "Stop"
@@ -67,10 +67,12 @@ if ($xmlFiles.Count -eq 0) {
 }
 
 $failedFiles = New-Object System.Collections.Generic.List[string]
+$readerSettings = [System.Xml.XmlReaderSettings]::new()
+$readerSettings.DtdProcessing = [System.Xml.DtdProcessing]::Ignore
 foreach ($xmlFile in $xmlFiles) {
     $reader = $null
     try {
-        $reader = [System.Xml.XmlReader]::Create($xmlFile.FullName)
+        $reader = [System.Xml.XmlReader]::Create($xmlFile.FullName, $readerSettings)
         while ($reader.Read()) {
         }
     }

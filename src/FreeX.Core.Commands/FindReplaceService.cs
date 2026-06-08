@@ -3,8 +3,21 @@ using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
 
-/// <summary>Represents a cell that matched a search.</summary>
-public sealed record FindResult(CellAddress Address, string MatchedText);
+/// <summary>Identifies which cell-owned text surface matched a search.</summary>
+public enum FindResultTarget
+{
+    Cell,
+    Note,
+    ThreadedComment,
+    ThreadedCommentReply
+}
+
+/// <summary>Represents a cell-owned text surface that matched a search.</summary>
+public sealed record FindResult(
+    CellAddress Address,
+    string MatchedText,
+    FindResultTarget Target = FindResultTarget.Cell,
+    int? ReplyIndex = null);
 
 public enum FindWithin
 {
@@ -69,14 +82,20 @@ public static class FindReplaceService
         {
             var sheetResults = new List<FindResult>();
 
-            foreach (var (addr, text) in FindReplaceSearchPlanner.EnumerateSearchTexts(sheet, options.LookIn))
+            foreach (var candidate in FindReplaceSearchPlanner.EnumerateSearchTexts(sheet, options.LookIn))
             {
                 bool isMatch = matchEntireCell
-                    ? text.Equals(searchText, comparison)
-                    : text.Contains(searchText, comparison);
+                    ? candidate.Text.Equals(searchText, comparison)
+                    : candidate.Text.Contains(searchText, comparison);
 
-                if (isMatch && FindReplaceSearchPlanner.MatchesRequiredFormat(workbook, sheet, addr, options.RequiredFormat))
-                    sheetResults.Add(new FindResult(addr, text));
+                if (isMatch && FindReplaceSearchPlanner.MatchesRequiredFormat(workbook, sheet, candidate.Address, options.RequiredFormat))
+                {
+                    sheetResults.Add(new FindResult(
+                        candidate.Address,
+                        candidate.Text,
+                        candidate.Target,
+                        candidate.ReplyIndex));
+                }
             }
 
             FindReplaceSearchPlanner.SortResults(sheetResults, options.SearchOrder);

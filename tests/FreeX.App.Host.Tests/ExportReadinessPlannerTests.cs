@@ -6,44 +6,25 @@ namespace FreeX.App.Host.Tests;
 public sealed class ExportReadinessPlannerTests
 {
     [Fact]
-    public void Create_ReportsLocalPdfXpsReadinessWithSelectionScope()
+    public void Create_DelegatesToWorkbookExportReadinessPlanner()
     {
         var workbook = new Workbook("Budget");
         workbook.AddSheet("Sheet1");
 
         var plan = ExportReadinessPlanner.Create(workbook, hasSelection: true);
+        var sharedPlan = WorkbookExportReadinessPlanner.Create(workbook, hasSelection: true);
 
-        plan.IsReady.Should().BeTrue();
-        plan.StatusText.Should().Contain("Ready for local PDF/XPS export");
-        plan.StatusText.Should().Contain("selected range");
-        plan.StatusText.Should().Contain("XPS routing");
-        plan.StatusText.Should().Contain("PDF-only choices called out");
-        plan.StatusText.Should().Contain("PDF/A and tagged PDF are exposed as unsupported and rejected");
-        plan.StatusText.Should().Contain("No Microsoft account or cloud service is required.");
+        plan.IsReady.Should().Be(sharedPlan.IsReady);
+        plan.StatusText.Should().Be(sharedPlan.StatusText);
     }
 
     [Fact]
-    public void Create_ExplainsSelectionScopeRequiresASelectedRange()
+    public void CreateForAvailableWorkbook_DelegatesToWorkbookExportReadinessPlanner()
     {
-        var workbook = new Workbook("Budget");
-        workbook.AddSheet("Sheet1");
+        var plan = ExportReadinessPlanner.CreateForAvailableWorkbook(hasSelection: true);
+        var sharedPlan = WorkbookExportReadinessPlanner.CreateForAvailableWorkbook(hasSelection: true);
 
-        var plan = ExportReadinessPlanner.Create(workbook);
-
-        plan.IsReady.Should().BeTrue();
-        plan.StatusText.Should().Contain("select a range to enable selected-range export");
-    }
-
-    [Fact]
-    public void Create_ReportsNoVisibleWorksheetsAsNotReady()
-    {
-        var workbook = new Workbook("Hidden");
-        var sheet = workbook.AddSheet("Sheet1");
-        sheet.IsHidden = true;
-
-        var plan = ExportReadinessPlanner.Create(workbook, hasSelection: true);
-
-        plan.IsReady.Should().BeFalse();
-        plan.StatusText.Should().Be("No visible worksheets are available for local PDF/XPS export.");
+        plan.IsReady.Should().Be(sharedPlan.IsReady);
+        plan.StatusText.Should().Be(sharedPlan.StatusText);
     }
 }

@@ -1,0 +1,243 @@
+using FluentAssertions;
+using FreeX.Core.Commands;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Services.Tests;
+
+public sealed class AdvancedFilterPlannerTests
+{
+    private static readonly SheetId SheetId = SheetId.New();
+
+    [Fact]
+    public void CreatePlan_BuildsCopyToPlanAndCommandForHeaderRange()
+    {
+        var criteriaSheetId = SheetId.New();
+
+        var result = AdvancedFilterPlanner.CreatePlan(
+            SheetId,
+            listRangeText: "A1:D20",
+            criteriaRangeText: "Criteria!F1:G2",
+            copyToRangeText: "J1:L1",
+            outputMode: AdvancedFilterOutputMode.CopyToAnotherLocation,
+            uniqueRecordsOnly: true,
+            resolveSheetId: sheetName => sheetName == "Criteria" ? criteriaSheetId : null);
+
+        result.Success.Should().BeTrue();
+        result.Error.Should().Be(AdvancedFilterPlanError.None);
+        result.InvalidText.Should().BeEmpty();
+
+        result.Plan.Should().NotBeNull();
+        var plan = result.Plan!;
+        plan.ListRange.Should().Be(new GridRange(new CellAddress(SheetId, 1, 1), new CellAddress(SheetId, 20, 4)));
+        plan.CriteriaRange.Should().Be(new GridRange(new CellAddress(criteriaSheetId, 1, 6), new CellAddress(criteriaSheetId, 2, 7)));
+        plan.OutputMode.Should().Be(AdvancedFilterOutputMode.CopyToAnotherLocation);
+        plan.UniqueRecordsOnly.Should().BeTrue();
+        plan.HasCopyDestination.Should().BeTrue();
+        plan.CopyToCell.Should().Be(new CellAddress(SheetId, 1, 10));
+        plan.CopyToRange.Should().Be(new GridRange(new CellAddress(SheetId, 1, 10), new CellAddress(SheetId, 1, 12)));
+        plan.CreateCommand().Should().BeOfType<AdvancedFilterCommand>().Which.Label.Should().Be("Advanced Filter");
+    }
+
+    [Fact]
+    public void CreatePlan_ParsesQuotedSheetQualifiedRanges()
+    {
+        var dataSheetId = SheetId.New();
+
+        var result = AdvancedFilterPlanner.CreatePlan(
+            SheetId,
+            listRangeText: "'Q1 Sales'!$A$1:$B$4",
+            criteriaRangeText: "C1:D2",
+            copyToRangeText: null,
+            outputMode: AdvancedFilterOutputMode.FilterInPlace,
+            uniqueRecordsOnly: false,
+            resolveSheetId: sheetName => sheetName == "Q1 Sales" ? dataSheetId : null);
+
+        result.Plan.Should().NotBeNull();
+        result.Plan!.ListRange.Should().Be(new GridRange(
+            new CellAddress(dataSheetId, 1, 1),
+            new CellAddress(dataSheetId, 4, 2)));
+    }
+
+    [Theory]
+    [InlineData("", "F1:G2", AdvancedFilterPlanError.InvalidListRange, "")]
+    [InlineData("   ", "F1:G2", AdvancedFilterPlanError.InvalidListRange, "")]
+    [InlineData("bad", "F1:G2", AdvancedFilterPlanError.InvalidListRange, "bad")]
+    [InlineData("A1:C5", "", AdvancedFilterPlanError.InvalidCriteriaRange, "")]
+    [InlineData("A1:C5", "   ", AdvancedFilterPlanError.InvalidCriteriaRange, "")]
+    [InlineData("A1:C5", "bad", AdvancedFilterPlanError.InvalidCriteriaRange, "bad")]
+    public void CreatePlan_RejectsMissingOrInvalidRequiredRanges(
+        string listRangeText,
+        string criteriaRangeText,
+        AdvancedFilterPlanError expectedError,
+        string expectedInvalidText)
+    {
+        var result = AdvancedFilterPlanner.CreatePlan(
+            SheetId,
+            listRangeText,
+            criteriaRangeText,
+            copyToRangeText: "",
+            outputMode: AdvancedFilterOutputMode.FilterInPlace,
+            uniqueRecordsOnly: false);
+
+        result.Success.Should().BeFalse();
+        result.Plan.Should().BeNull();
+        result.Error.Should().Be(expectedError);
+        result.InvalidText.Should().Be(expectedInvalidText);
+    }
+
+    [Theory]
+    [InlineData("A1", "F1:G2", AdvancedFilterPlanError.ListRangeRequiresDataRows, "A1")]
+    [InlineData("A1:C5", "F1:G1", AdvancedFilterPlanError.CriteriaRangeRequiresCriteriaRows, "F1:G1")]
+    public void CreatePlan_RequiresHeaderAndDataRowsForListAndCriteriaRanges(
+        string listRangeText,
+        string criteriaRangeText,
+        AdvancedFilterPlanError expectedError,
+        string expectedInvalidText)
+    {
+        var result = AdvancedFilterPlanner.CreatePlan(
+            SheetId,
+            listRangeText,
+            criteriaRangeText,
+            copyToRangeText: "",
+            outputMode: AdvancedFilterOutputMode.FilterInPlace,
+            uniqueRecordsOnly: false);
+
+        result.Success.Should().BeFalse();
+        result.Error.Should().Be(expectedError);
+        result.InvalidText.Should().Be(expectedInvalidText);
+    }
+
+    [Fact]
+    public void CreatePlan_FilterInPlaceIgnoresCopyToText()
+    {
+        var result = AdvancedFilterPlanner.CreatePlan(
+            SheetId,
+            listRangeText: "A1:D20",
+            criteriaRangeText: "F1:G2",
+            copyToRangeText: "NotACell",
+            outputMode: AdvancedFilterOutputMode.FilterInPlace,
+            uniqueRecordsOnly: false);
+
+        result.Success.Should().BeTrue();
+        result.Plan!.OutputMode.Should().Be(AdvancedFilterOutputMode.FilterInPlace);
+        result.Plan.CopyToCell.Should().BeNull();
+        result.Plan.CopyToRange.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("", AdvancedFilterPlanError.CopyDestinationRequired, "")]
+    [InlineData("   ", AdvancedFilterPlanError.CopyDestinationRequired, "")]
+    [InlineData("A8:C9", AdvancedFilterPlanError.InvalidCopyDestinationRange, "A8:C9")]
+    [InlineData("Other!A1", AdvancedFilterPlanError.InvalidCopyDestinationRange, "Other!A1")]
+    public void CreatePlan_CopyModeRequiresCurrentSheetSingleRowDestination(
+        string copyToRangeText,
+        AdvancedFilterPlanError expectedError,
+        string expectedInvalidText)
+    {
+        var result = AdvancedFilterPlanner.CreatePlan(
+            SheetId,
+            listRangeText: "A1:D20",
+            criteriaRangeText: "F1:G2",
+            copyToRangeText: copyToRangeText,
+            outputMode: AdvancedFilterOutputMode.CopyToAnotherLocation,
+            uniqueRecordsOnly: false);
+
+        result.Success.Should().BeFalse();
+        result.Error.Should().Be(expectedError);
+        result.InvalidText.Should().Be(expectedInvalidText);
+    }
+
+    [Fact]
+    public void CreatePlan_RejectsCopyDestinationOnDifferentSheetThanListRange()
+    {
+        var currentSheetId = SheetId.New();
+        var dataSheetId = SheetId.New();
+
+        var result = AdvancedFilterPlanner.CreatePlan(
+            currentSheetId,
+            listRangeText: "Data!A1:D20",
+            criteriaRangeText: "F1:G2",
+            copyToRangeText: "J1",
+            outputMode: AdvancedFilterOutputMode.CopyToAnotherLocation,
+            uniqueRecordsOnly: false,
+            resolveSheetId: sheetName => sheetName == "Data" ? dataSheetId : null);
+
+        result.Success.Should().BeFalse();
+        result.Error.Should().Be(AdvancedFilterPlanError.CopyDestinationMustBeOnListSheet);
+        result.InvalidText.Should().Be("J1");
+    }
+
+    [Fact]
+    public void TryCreatePlan_ReturnsPlanAndParseResult()
+    {
+        AdvancedFilterPlanner.TryCreatePlan(
+                SheetId,
+                listRangeText: "A1:D20",
+                criteriaRangeText: "F1:G2",
+                copyToRangeText: "J1",
+                outputMode: AdvancedFilterOutputMode.CopyToAnotherLocation,
+                uniqueRecordsOnly: true,
+                out var plan,
+                out var result)
+            .Should()
+            .BeTrue();
+
+        result.Success.Should().BeTrue();
+        plan.Should().Be(result.Plan);
+        plan.CopyToCell.Should().Be(new CellAddress(SheetId, 1, 10));
+    }
+
+    [Theory]
+    [InlineData("", true, null)]
+    [InlineData("   ", true, null)]
+    [InlineData("$D$4", true, "D4")]
+    [InlineData("R4C4", true, "D4")]
+    [InlineData("D4:F4", true, "D4:F4")]
+    [InlineData("D4:F5", false, null)]
+    [InlineData("Other!D4", false, null)]
+    public void TryParseCopyDestinationRange_AllowsBlankCellOrSingleRowHeaderRangeOnly(
+        string input,
+        bool expected,
+        string? expectedReference)
+    {
+        var parsed = AdvancedFilterPlanner.TryParseCopyDestinationRange(input, SheetId, out var range);
+
+        parsed.Should().Be(expected);
+        if (expectedReference is null)
+        {
+            range.Should().BeNull();
+        }
+        else
+        {
+            range.Should().NotBeNull();
+            range!.Value.ToString().Should().Be(expectedReference.Contains(':', StringComparison.Ordinal)
+                ? expectedReference
+                : $"{expectedReference}:{expectedReference}");
+        }
+    }
+
+    [Theory]
+    [InlineData("yes", true)]
+    [InlineData("Y", true)]
+    [InlineData("true", true)]
+    [InlineData("no", false)]
+    [InlineData("false", false)]
+    [InlineData("", false)]
+    public void ParseUniqueRecordsOnly_MatchesExcelStyleAffirmativePromptAliases(string input, bool expected)
+    {
+        AdvancedFilterPlanner.ParseUniqueRecordsOnly(input).Should().Be(expected);
+    }
+
+    [Fact]
+    public void CreateRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    {
+        AdvancedFilterPlanner.CreateRangeSelectionRequest(
+                AdvancedFilterRangeSelectionTarget.CriteriaRange,
+                " E1:F4 ")
+            .Should()
+            .Be(new AdvancedFilterRangeSelectionRequest(
+                AdvancedFilterRangeSelectionTarget.CriteriaRange,
+                "E1:F4",
+                CollapseDialog: true));
+    }
+}

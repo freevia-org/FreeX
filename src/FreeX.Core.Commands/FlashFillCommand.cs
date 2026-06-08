@@ -91,6 +91,14 @@ public sealed class FlashFillCommand : IWorkbookCommand
         if (rowsToFill.Count == 0)
             return new CommandOutcome(true); // Nothing to fill — already complete
 
+        if (rowsToFill.Any(row => !CommandGuards.CanEditCell(
+                ctx.Workbook,
+                sheet,
+                new CellAddress(_sheetId, row, _fillColIndex))))
+        {
+            return new CommandOutcome(false, "The sheet is protected.");
+        }
+
         // 2. Detect pattern and compute filled values
         var filled = TryFillFromImmediateLeftColumns(sheet, exampleRows, exampleOutputs, rowsToFill)
             ?? FlashFillService.Fill(examplePairs, sourcesToFill);

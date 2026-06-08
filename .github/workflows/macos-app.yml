@@ -1,0 +1,1233 @@
+name: macOS App Preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      distribution_candidate:
+        description: Require Developer ID signing, accepted notarization, stapled ticket, and Gatekeeper assessment evidence.
+        required: false
+        type: boolean
+        default: false
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  macos-app:
+    name: macOS app bundle (${{ matrix.runtime }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runtime: osx-arm64
+            runner: macos-15
+          - runtime: osx-x64
+            runner: macos-15-intel
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Capture runner toolchain evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          runtime="${{ matrix.runtime }}"
+          artifact_root="$GITHUB_WORKSPACE/artifacts"
+          evidence_path="$artifact_root/freex-$runtime-macos-evidence.txt"
+
+          mkdir -p "$artifact_root"
+          {
+            echo "runtime=$runtime"
+            echo "runner_label=${{ matrix.runner }}"
+            echo "runner_os=${RUNNER_OS:-unknown}"
+            echo "runner_arch=${RUNNER_ARCH:-unknown}"
+            echo "image_os=${ImageOS:-unknown}"
+            echo "image_version=${ImageVersion:-unknown}"
+            echo "[sw_vers]"
+            sw_vers
+            echo "[uname -m]"
+            uname -m
+            echo "[dotnet --info]"
+            dotnet --info
+            echo "[xcodebuild -version]"
+            xcodebuild -version
+          } | tee "$evidence_path"
+
+      - name: Test portable PDF macOS route
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          dotnet test tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj \
+            --configuration Release \
+            --filter 'FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests|FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests' \
+            --logger "trx;LogFileName=freex-${{ matrix.runtime }}-portable-pdf-exporter-tests.trx" \
+            --results-directory artifacts
+
+          dotnet test tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj \
+            --configuration Release \
+            --filter 'FullyQualifiedName~FreeX.Core.Model.Tests.ExportPathPlannerTests' \
+            --logger "trx;LogFileName=freex-${{ matrix.runtime }}-export-path-tests.trx" \
+            --results-directory artifacts
+
+      - name: Build app project
+        shell: pwsh
+        run: dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release
+
+      - name: Publish app bundle
+        shell: bash
+        env:
+          MACOS_CODESIGN_CERTIFICATE_P12: ${{ secrets.MACOS_CODESIGN_CERTIFICATE_P12 }}
+          MACOS_CODESIGN_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CODESIGN_CERTIFICATE_PASSWORD }}
+          MACOS_DEVELOPER_ID_APPLICATION: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION }}
+          MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+          MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          runtime="${{ matrix.runtime }}"
+          output_root="$RUNNER_TEMP/freex-$runtime"
+          app="$output_root/FreeX.app"
+          artifact_root="$GITHUB_WORKSPACE/artifacts"
+          zip_name="freex-$runtime-macos-app.zip"
+          zip_path="$artifact_root/$zip_name"
+          evidence_path="$artifact_root/freex-$runtime-macos-evidence.txt"
+          smoke_log="$artifact_root/freex-$runtime-macos-packaging-smoke.log"
+          launch_smoke_report="$artifact_root/freex-$runtime-macos-launch-smoke.txt"
+          open_with_report="$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt"
+          default_open_report="$artifact_root/freex-$runtime-macos-default-open-launch-smoke.txt"
+          notary_log="$artifact_root/freex-$runtime-macos-notarization.log"
+          tester_instructions_path="$artifact_root/freex-$runtime-macos-tester-instructions.md"
+          distribution_candidate="${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}"
+          artifact_channel="internal-preview"
+          distribution_contract="internal_preview_not_for_distribution_notarization_optional"
+          if [[ "$distribution_candidate" == "true" ]]; then
+            artifact_channel="distribution-candidate"
+            distribution_contract="distribution_candidate_requires_developer_id_notarization_stapling"
+          fi
+          signing_mode="ad-hoc"
+          notarization_status="skipped_not_developer_id_signed"
+          stapler_validated="false"
+          keychain_path=""
+          certificate_path=""
+          cleanup_signing_keychain() {
+            if [[ -n "$keychain_path" ]]; then
+              security delete-keychain "$keychain_path" >/dev/null 2>&1 || true
+            fi
+            if [[ -n "$certificate_path" ]]; then
+              rm -f "$certificate_path"
+            fi
+          }
+          trap cleanup_signing_keychain EXIT
+
+          rm -rf "$output_root"
+          mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$artifact_root"
+          : > "$notary_log"
+          {
+            echo ""
+            echo "[artifact-channel]"
+            echo "artifact_channel=$artifact_channel"
+            echo "distribution_candidate=$distribution_candidate"
+            echo "distribution_contract=$distribution_contract"
+          } >> "$evidence_path"
+          {
+            echo "artifact_channel=$artifact_channel"
+            echo "distribution_candidate=$distribution_candidate"
+            echo "distribution_contract=$distribution_contract"
+          } >> "$notary_log"
+
+          has_any_signing_secret=false
+          for signing_secret in \
+            "$MACOS_CODESIGN_CERTIFICATE_P12" \
+            "$MACOS_CODESIGN_CERTIFICATE_PASSWORD" \
+            "$MACOS_DEVELOPER_ID_APPLICATION"; do
+            if [[ -n "$signing_secret" ]]; then
+              has_any_signing_secret=true
+            fi
+          done
+          if [[ "$distribution_candidate" == "true" ]]; then
+            if [[ -z "$MACOS_CODESIGN_CERTIFICATE_P12" ||
+                  -z "$MACOS_CODESIGN_CERTIFICATE_PASSWORD" ||
+                  -z "$MACOS_DEVELOPER_ID_APPLICATION" ]]; then
+              echo "Distribution-candidate macOS app runs require Developer ID signing secrets: MACOS_CODESIGN_CERTIFICATE_P12, MACOS_CODESIGN_CERTIFICATE_PASSWORD, and MACOS_DEVELOPER_ID_APPLICATION." | tee -a "$notary_log" >&2
+              exit 1
+            fi
+          fi
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" && "$has_any_signing_secret" == "true" ]]; then
+            echo "Developer ID signing is disabled for pull_request events; using ad-hoc signing."
+          elif [[ "$has_any_signing_secret" == "true" ]]; then
+            if [[ -z "$MACOS_CODESIGN_CERTIFICATE_P12" ||
+                  -z "$MACOS_CODESIGN_CERTIFICATE_PASSWORD" ||
+                  -z "$MACOS_DEVELOPER_ID_APPLICATION" ]]; then
+              echo "Developer ID signing requires MACOS_CODESIGN_CERTIFICATE_P12, MACOS_CODESIGN_CERTIFICATE_PASSWORD, and MACOS_DEVELOPER_ID_APPLICATION." >&2
+              exit 1
+            fi
+
+            signing_mode="developer-id"
+            keychain_password="$(uuidgen)"
+            keychain_path="$RUNNER_TEMP/freex-$runtime-signing.keychain-db"
+            certificate_path="$RUNNER_TEMP/freex-$runtime-developer-id.p12"
+            printf '%s' "$MACOS_CODESIGN_CERTIFICATE_P12" | base64 -D > "$certificate_path"
+            security create-keychain -p "$keychain_password" "$keychain_path"
+            security set-keychain-settings -lut 21600 "$keychain_path"
+            security unlock-keychain -p "$keychain_password" "$keychain_path"
+            security import "$certificate_path" -P "$MACOS_CODESIGN_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain_path"
+            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain_path"
+            security list-keychains -d user -s "$keychain_path" $(security list-keychains -d user | tr -d '"')
+            security find-identity -v -p codesigning "$keychain_path" | grep -F "$MACOS_DEVELOPER_ID_APPLICATION"
+          fi
+
+          dotnet publish src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj \
+            --configuration Release \
+            --framework net10.0 \
+            --runtime "$runtime" \
+            --self-contained true \
+            -p:UseAppHost=true \
+            -p:PublishReadyToRun=false \
+            -p:PublishSingleFile=false \
+            --output "$app/Contents/MacOS"
+
+          cp src/FreeX.App.Avalonia/Packaging/macos/Info.plist "$app/Contents/Info.plist"
+          cp src/FreeX.App.Avalonia/Packaging/macos/FreeX.icns "$app/Contents/Resources/FreeX.icns"
+          plutil -lint "$app/Contents/Info.plist"
+          chmod +x "$app/Contents/MacOS/FreeX"
+          test -f "$app/Contents/MacOS/FreeX"
+          test -x "$app/Contents/MacOS/FreeX"
+          test -f "$app/Contents/MacOS/FreeX.dll"
+          test -f "$app/Contents/Resources/FreeX.icns"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")" = "FreeX"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app/Contents/Info.plist")" = "FreeX.icns"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeName' "$app/Contents/Info.plist")" = "FreeX Workbook"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeExtensions:0' "$app/Contents/Info.plist")" = "fxl"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:LSHandlerRank' "$app/Contents/Info.plist")" = "Owner"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeName' "$app/Contents/Info.plist")" = "Spreadsheet Workbooks"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeExtensions:0' "$app/Contents/Info.plist")" = "xlsx"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:LSHandlerRank' "$app/Contents/Info.plist")" = "Alternate"
+          binary_archs="$(lipo -archs "$app/Contents/MacOS/FreeX")"
+          if [[ "$runtime" == "osx-arm64" ]]; then
+            echo "$binary_archs" | grep -qw arm64
+          else
+            echo "$binary_archs" | grep -qw x86_64
+          fi
+          if [[ "$signing_mode" == "developer-id" ]]; then
+            codesign --force --deep --options runtime --timestamp --sign "$MACOS_DEVELOPER_ID_APPLICATION" "$app"
+          else
+            codesign --force --deep --sign - "$app"
+          fi
+          codesign --verify --deep --strict "$app"
+          ditto -c -k --sequesterRsrc --keepParent "$app" "$zip_path"
+          has_any_notary_secret=false
+          for notary_secret in \
+            "$MACOS_NOTARY_APPLE_ID" \
+            "$MACOS_NOTARY_TEAM_ID" \
+            "$MACOS_NOTARY_PASSWORD"; do
+            if [[ -n "$notary_secret" ]]; then
+              has_any_notary_secret=true
+            fi
+          done
+          if [[ "$distribution_candidate" == "true" ]]; then
+            if [[ -z "$MACOS_NOTARY_APPLE_ID" ||
+                  -z "$MACOS_NOTARY_TEAM_ID" ||
+                  -z "$MACOS_NOTARY_PASSWORD" ]]; then
+              echo "Distribution-candidate macOS app runs require notarization secrets: MACOS_NOTARY_APPLE_ID, MACOS_NOTARY_TEAM_ID, and MACOS_NOTARY_PASSWORD." | tee -a "$notary_log" >&2
+              exit 1
+            fi
+          fi
+          if [[ "$has_any_notary_secret" == "true" ]]; then
+            if [[ "$signing_mode" != "developer-id" ]]; then
+              notarization_status="skipped_missing_developer_id_signature"
+              echo "notarization_status=skipped_missing_developer_id_signature" | tee -a "$notary_log"
+            elif [[ -z "$MACOS_NOTARY_APPLE_ID" ||
+                    -z "$MACOS_NOTARY_TEAM_ID" ||
+                    -z "$MACOS_NOTARY_PASSWORD" ]]; then
+              echo "Notarization requires MACOS_NOTARY_APPLE_ID, MACOS_NOTARY_TEAM_ID, and MACOS_NOTARY_PASSWORD." >&2
+              exit 1
+            else
+              xcrun notarytool submit "$zip_path" \
+                --apple-id "$MACOS_NOTARY_APPLE_ID" \
+                --team-id "$MACOS_NOTARY_TEAM_ID" \
+                --password "$MACOS_NOTARY_PASSWORD" \
+                --wait \
+                --output-format json | tee "$notary_log"
+              grep -q '"status": *"Accepted"' "$notary_log"
+              {
+                echo "artifact_channel=$artifact_channel"
+                echo "distribution_candidate=$distribution_candidate"
+                echo "distribution_contract=$distribution_contract"
+              } >> "$notary_log"
+              xcrun stapler staple "$app" | tee -a "$notary_log"
+              xcrun stapler validate "$app" | tee -a "$notary_log"
+              stapler_validated="true"
+              ditto -c -k --sequesterRsrc --keepParent "$app" "$zip_path"
+              notarization_status="accepted"
+            fi
+          else
+            notarization_status="skipped_missing_credentials"
+            echo "notarization_status=skipped_missing_credentials" | tee -a "$notary_log"
+          fi
+          if [[ "$distribution_candidate" == "true" ]]; then
+            if [[ "$signing_mode" != "developer-id" ||
+                  "$notarization_status" != "accepted" ||
+                  "$stapler_validated" != "true" ]]; then
+              distribution_readiness=distribution_candidate_blocked_missing_required_evidence
+              {
+                echo "distribution_readiness=$distribution_readiness"
+                echo "codesign_mode=$signing_mode"
+                echo "notarization_status=$notarization_status"
+                echo "stapler_validated=$stapler_validated"
+              } >> "$evidence_path"
+              echo "Distribution-candidate run requires codesign_mode=developer-id, notarization_status=accepted, and stapler_validated=true." | tee -a "$notary_log" >&2
+              exit 1
+            fi
+            distribution_readiness=distribution_candidate_ready
+          else
+            distribution_readiness=internal_preview_not_for_distribution
+          fi
+          (cd "$artifact_root" && shasum -a 256 "$zip_name" > "$zip_name.sha256")
+          (cd "$artifact_root" && shasum -a 256 -c "$zip_name.sha256")
+          zip_sha256="$(cut -d ' ' -f 1 "$artifact_root/$zip_name.sha256")"
+          unzip_root="$RUNNER_TEMP/freex-$runtime-unzip"
+          app_path="$unzip_root/FreeX.app"
+          rm -rf "$unzip_root"
+          mkdir -p "$unzip_root"
+          unzip -q "$zip_path" -d "$unzip_root"
+          test -x "$unzip_root/FreeX.app/Contents/MacOS/FreeX"
+          test -f "$unzip_root/FreeX.app/Contents/MacOS/FreeX.dll"
+          codesign --verify --deep --strict "$unzip_root/FreeX.app"
+          gatekeeper_assessment_required="$distribution_candidate"
+          set +e
+          gatekeeper_assessment_output="$(/usr/sbin/spctl --assess --type execute --verbose=4 "$app_path" 2>&1)"
+          gatekeeper_assessment_exit_code=$?
+          set -e
+          if [[ "$gatekeeper_assessment_exit_code" -eq 0 ]]; then
+            gatekeeper_assessment_status="accepted"
+          else
+            gatekeeper_assessment_status="rejected"
+          fi
+          gatekeeper_assessment_source="$(awk '/^source=/{print substr($0, 8); exit}' <<< "$gatekeeper_assessment_output")"
+          if [[ -z "$gatekeeper_assessment_source" ]]; then
+            gatekeeper_assessment_source="unavailable"
+          fi
+          {
+            echo ""
+            echo "[gatekeeper-assessment]"
+            echo "gatekeeper_assessment_attempted=true"
+            echo "gatekeeper_assessment_required=$gatekeeper_assessment_required"
+            echo "gatekeeper_assessment_subject=unzipped_app_bundle"
+            echo "gatekeeper_assessment_type=execute"
+            echo "gatekeeper_assessment_exit_code=$gatekeeper_assessment_exit_code"
+            echo "gatekeeper_assessment_status=$gatekeeper_assessment_status"
+            echo "gatekeeper_assessment_source=$gatekeeper_assessment_source"
+            if [[ -z "$gatekeeper_assessment_output" ]]; then
+              echo "gatekeeper_assessment_output=<empty>"
+            else
+              while IFS= read -r gatekeeper_line; do
+                echo "gatekeeper_assessment_output=$gatekeeper_line"
+              done <<< "$gatekeeper_assessment_output"
+            fi
+          } >> "$evidence_path"
+          if [[ "$distribution_candidate" == "true" ]]; then
+            if [[ "$gatekeeper_assessment_exit_code" -ne 0 ||
+                  "$gatekeeper_assessment_status" != "accepted" ||
+                  "$gatekeeper_assessment_source" != "Notarized Developer ID" ]]; then
+              distribution_readiness=distribution_candidate_blocked_gatekeeper_assessment
+              echo "distribution_readiness=$distribution_readiness" >> "$evidence_path"
+              echo "Distribution-candidate run requires accepted Gatekeeper assessment from Notarized Developer ID." | tee -a "$notary_log" >&2
+              exit 1
+            fi
+          fi
+          host_arch="$(uname -m)"
+          {
+            echo ""
+            echo "[bundle]"
+            echo "runtime=$runtime"
+            echo "artifact_channel=$artifact_channel"
+            echo "distribution_candidate=$distribution_candidate"
+            echo "distribution_contract=$distribution_contract"
+            echo "distribution_readiness=$distribution_readiness"
+            echo "host_arch=$host_arch"
+            echo "binary_archs=$binary_archs"
+            echo "zip_name=$zip_name"
+            echo "bundle_executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")"
+            echo "bundle_icon=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app/Contents/Info.plist")"
+            echo "native_document_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeName' "$app/Contents/Info.plist")"
+            echo "native_document_extension=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeExtensions:0' "$app/Contents/Info.plist")"
+            echo "native_document_handler_rank=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:LSHandlerRank' "$app/Contents/Info.plist")"
+            echo "imported_document_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeName' "$app/Contents/Info.plist")"
+            echo "imported_document_extension=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeExtensions:0' "$app/Contents/Info.plist")"
+            echo "imported_document_handler_rank=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:LSHandlerRank' "$app/Contents/Info.plist")"
+            echo "codesign_verified=true"
+            echo "codesign_mode=$signing_mode"
+            echo "notarization_status=$notarization_status"
+            echo "stapler_validated=$stapler_validated"
+            echo "gatekeeper_assessment_attempted=true"
+            echo "gatekeeper_assessment_required=$gatekeeper_assessment_required"
+            echo "gatekeeper_assessment_subject=unzipped_app_bundle"
+            echo "gatekeeper_assessment_type=execute"
+            echo "gatekeeper_assessment_exit_code=$gatekeeper_assessment_exit_code"
+            echo "gatekeeper_assessment_status=$gatekeeper_assessment_status"
+            echo "gatekeeper_assessment_source=$gatekeeper_assessment_source"
+            echo "zip_sha256=$zip_sha256"
+          } >> "$evidence_path"
+          if [[ ("$runtime" == "osx-arm64" && "$host_arch" == "arm64") || ("$runtime" == "osx-x64" && "$host_arch" == "x86_64") ]]; then
+            "$unzip_root/FreeX.app/Contents/MacOS/FreeX" --packaging-smoke | tee "$smoke_log"
+            grep -q "Packaging smoke opened" "$smoke_log"
+            grep -q "macOS Preview Workbook" "$smoke_log"
+            grep -q "drawing_object_previews=3" "$smoke_log"
+            grep -q "roundtrip_drawing_object_previews=3" "$smoke_log"
+            grep -q "format_cells_style_roundtrip=true" "$smoke_log"
+            grep -q "edited, saved, and reopened" "$smoke_log"
+
+            smoke_file="$RUNNER_TEMP/freex-$runtime-smoke.csv"
+            printf 'Name,Amount\nFreeX,42\n' > "$smoke_file"
+            "$unzip_root/FreeX.app/Contents/MacOS/FreeX" --packaging-smoke "$smoke_file" | tee -a "$smoke_log"
+            grep -q "Packaging smoke opened" "$smoke_log"
+            grep -q "edited, saved, and reopened" "$smoke_log"
+            format_cells_style_roundtrip_count="$(grep -c "format_cells_style_roundtrip=true" "$smoke_log")"
+            test "$format_cells_style_roundtrip_count" -ge 2
+            {
+              echo "format_cells_style_roundtrip=true"
+              echo "format_cells_style_roundtrip_count=$format_cells_style_roundtrip_count"
+            } >> "$evidence_path"
+            echo "smoke_status=passed" >> "$evidence_path"
+
+            launch_smoke_file="$RUNNER_TEMP/freex-$runtime-launch.csv"
+            printf 'Name,Amount\nFreeX Launch,84\n' > "$launch_smoke_file"
+            launch_clipboard_image="$RUNNER_TEMP/freex-$runtime-clipboard.png"
+            base64 -D > "$launch_clipboard_image" <<'EOF'
+            iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=
+            EOF
+            /usr/bin/swift - "$launch_clipboard_image" <<'SWIFT'
+            import AppKit
+
+            let imagePath = CommandLine.arguments[1]
+            guard let image = NSImage(contentsOfFile: imagePath) else {
+                fatalError("Could not load launch smoke clipboard image.")
+            }
+
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            guard pasteboard.writeObjects([image]) else {
+                fatalError("Could not write launch smoke image to pasteboard.")
+            }
+            SWIFT
+            rm -f "$launch_smoke_report"
+            /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$unzip_root/FreeX.app"
+            open -W -n -b io.github.tony-xmelon.freex "$launch_smoke_file" --args --macos-launch-smoke "$launch_smoke_report" --macos-launch-smoke-verify-image-clipboard --macos-launch-smoke-verify-live-command-keys &
+            launch_pid=$!
+            live_command_key_ready=false
+            for _ in {1..90}; do
+              if [[ -f "$launch_smoke_report" ]] && grep -q "live_command_key_smoke_ready=true" "$launch_smoke_report"; then
+                live_command_key_ready=true
+                break
+              fi
+              if ! kill -0 "$launch_pid" 2>/dev/null; then
+                break
+              fi
+              sleep 1
+            done
+            if [[ ! -f "$launch_smoke_report" ]]; then
+              echo "macos_launch_smoke=missing_report" > "$launch_smoke_report"
+              osascript -e 'tell application id "io.github.tony-xmelon.freex" to quit' || true
+              wait "$launch_pid" || true
+              cat "$launch_smoke_report" >> "$evidence_path"
+              exit 1
+            fi
+            if [[ "$live_command_key_ready" != "true" ]]; then
+              wait "$launch_pid" || true
+              cat "$launch_smoke_report" >> "$evidence_path"
+              exit 1
+            fi
+            live_command_key_system_events_result=attempted
+            if ! osascript <<'APPLESCRIPT'
+            tell application id "io.github.tony-xmelon.freex" to activate
+            delay 0.5
+            tell application "System Events"
+              tell process "FreeX"
+                set frontmost to true
+              end tell
+              keystroke "a" using {command down}
+              delay 0.2
+              keystroke "b" using {command down}
+              delay 0.2
+              keystroke "i" using {command down}
+              delay 0.2
+              keystroke "u" using {command down}
+            end tell
+            APPLESCRIPT
+            then
+              live_command_key_system_events_result=blocked_or_failed
+            fi
+            {
+              echo "live_command_key_system_events_attempted=true"
+              echo "live_command_key_system_events_result=$live_command_key_system_events_result"
+            } >> "$evidence_path"
+            wait "$launch_pid" || true
+            cat "$launch_smoke_report" >> "$evidence_path"
+            grep -q "macos_launch_smoke=passed" "$launch_smoke_report"
+            grep -q "window_shown=true" "$launch_smoke_report"
+            grep -q "opened_source_path=.*freex-$runtime-launch.csv" "$launch_smoke_report"
+            grep -q "viewport_rows=[1-9]" "$launch_smoke_report"
+            grep -q "viewport_columns=[1-9]" "$launch_smoke_report"
+            grep -q "command_key_smoke=passed" "$launch_smoke_report"
+            grep -q "command_key_smoke_attempted=true" "$launch_smoke_report"
+            grep -q "cmd_new_workbook_menu_gesture=true" "$launch_smoke_report"
+            grep -q "cmd_open_menu_gesture=true" "$launch_smoke_report"
+            grep -q "cmd_save_menu_gesture=true" "$launch_smoke_report"
+            grep -q "cmd_save_as_menu_gesture=true" "$launch_smoke_report"
+            grep -q "cmd_close_workbook_menu_gesture=true" "$launch_smoke_report"
+            grep -q "cmd_quit_menu_gesture=true" "$launch_smoke_report"
+            grep -q "cmd_select_all_menu_gesture=true" "$launch_smoke_report"
+            grep -q "cmd_find_menu_gesture=true" "$launch_smoke_report"
+            grep -q "cmd_find_direct_route_source_guard=true" "$launch_smoke_report"
+            grep -q "cmd_page_up_direct_route_source_guard=true" "$launch_smoke_report"
+            grep -q "cmd_page_down_direct_route_source_guard=true" "$launch_smoke_report"
+            grep -q "cmd_bold_menu_gesture=true" "$launch_smoke_report"
+            grep -q "cmd_italic_menu_gesture=true" "$launch_smoke_report"
+            grep -q "cmd_underline_menu_gesture=true" "$launch_smoke_report"
+            grep -q "live_command_key_smoke_required=true" "$launch_smoke_report"
+            grep -q "live_command_key_smoke=passed" "$launch_smoke_report"
+            grep -q "live_command_key_smoke_attempted=true" "$launch_smoke_report"
+            grep -q "live_command_key_smoke_ready=true" "$launch_smoke_report"
+            grep -q "live_cmd_select_all_received=true" "$launch_smoke_report"
+            grep -q "live_cmd_select_all_state_changed=true" "$launch_smoke_report"
+            grep -q "live_cmd_bold_received=true" "$launch_smoke_report"
+            grep -q "live_cmd_bold_state_changed=true" "$launch_smoke_report"
+            grep -q "live_cmd_italic_received=true" "$launch_smoke_report"
+            grep -q "live_cmd_italic_state_changed=true" "$launch_smoke_report"
+            grep -q "live_cmd_underline_received=true" "$launch_smoke_report"
+            grep -q "live_cmd_underline_state_changed=true" "$launch_smoke_report"
+            grep -q "external_image_clipboard_paste_required=true" "$launch_smoke_report"
+            grep -q "external_image_clipboard_paste=true" "$launch_smoke_report"
+            grep -q "external_image_clipboard_picture_count=[1-9]" "$launch_smoke_report"
+            grep -q "external_image_clipboard_picture_png_bytes=[1-9]" "$launch_smoke_report"
+            grep -q "new_sheet_button=true" "$launch_smoke_report"
+            grep -q "toolbar_format_painter_button=true" "$launch_smoke_report"
+            grep -q "toolbar_autosum_button=true" "$launch_smoke_report"
+            grep -q "toolbar_autosum_sum_menu_item=true" "$launch_smoke_report"
+            grep -q "toolbar_autosum_average_menu_item=true" "$launch_smoke_report"
+            grep -q "toolbar_autosum_count_numbers_menu_item=true" "$launch_smoke_report"
+            grep -q "toolbar_autosum_count_all_menu_item=true" "$launch_smoke_report"
+            grep -q "toolbar_autosum_max_menu_item=true" "$launch_smoke_report"
+            grep -q "toolbar_autosum_min_menu_item=true" "$launch_smoke_report"
+            grep -q "toolbar_fill_cells_button=true" "$launch_smoke_report"
+            grep -q "toolbar_fill_down_menu_item=true" "$launch_smoke_report"
+            grep -q "toolbar_fill_right_menu_item=true" "$launch_smoke_report"
+            grep -q "toolbar_fill_up_menu_item=true" "$launch_smoke_report"
+            grep -q "toolbar_fill_left_menu_item=true" "$launch_smoke_report"
+            grep -q "toolbar_clear_button=true" "$launch_smoke_report"
+            grep -q "toolbar_clear_all_menu_item=true" "$launch_smoke_report"
+            grep -q "toolbar_clear_formats_menu_item=true" "$launch_smoke_report"
+            grep -q "toolbar_clear_contents_menu_item=true" "$launch_smoke_report"
+            grep -q "toolbar_clear_comments_menu_item=true" "$launch_smoke_report"
+            grep -q "toolbar_clear_hyperlinks_menu_item=true" "$launch_smoke_report"
+            grep -q "toolbar_borders_button=true" "$launch_smoke_report"
+            grep -q "toolbar_merge_and_center_button=true" "$launch_smoke_report"
+            grep -q "focusable_sheet_tab=true" "$launch_smoke_report"
+            grep -q "focusable_active_sheet_tab=true" "$launch_smoke_report"
+            grep -q "shell_focus_cycle_targets=true" "$launch_smoke_report"
+            grep -q "sheet_tab_context_keyboard_help=true" "$launch_smoke_report"
+            grep -q "sheet_tab_context_rename_menu_item=true" "$launch_smoke_report"
+            grep -q "sheet_tab_context_tab_color_menu_item=true" "$launch_smoke_report"
+            grep -q "sheet_tab_context_no_color_menu_item=true" "$launch_smoke_report"
+            grep -q "sheet_tab_context_select_all_sheets_menu_item=true" "$launch_smoke_report"
+            grep -q "sheet_tab_context_ungroup_sheets_menu_item=true" "$launch_smoke_report"
+            grep -q "native_file_menu=true" "$launch_smoke_report"
+            grep -q "native_new_workbook_menu_item=true" "$launch_smoke_report"
+            grep -q "native_open_menu_item=true" "$launch_smoke_report"
+            grep -q "native_open_recent_menu_item=true" "$launch_smoke_report"
+            grep -q "native_open_recent_item_count=[1-9]" "$launch_smoke_report"
+            grep -q "native_save_menu_item=true" "$launch_smoke_report"
+            grep -q "native_save_as_menu_item=true" "$launch_smoke_report"
+            grep -q "native_export_pdf_menu_item=true" "$launch_smoke_report"
+            grep -q "native_workbook_statistics_menu_item=true" "$launch_smoke_report"
+            grep -q "native_close_workbook_menu_item=true" "$launch_smoke_report"
+            grep -q "native_edit_menu=true" "$launch_smoke_report"
+            grep -q "native_data_menu=true" "$launch_smoke_report"
+            grep -q "native_review_menu=true" "$launch_smoke_report"
+            grep -q "native_format_menu=true" "$launch_smoke_report"
+            grep -q "native_view_menu=true" "$launch_smoke_report"
+            grep -q "native_sheet_menu=true" "$launch_smoke_report"
+            grep -q "native_window_menu=true" "$launch_smoke_report"
+            grep -q "native_help_menu=true" "$launch_smoke_report"
+            grep -q "native_new_sheet_menu_item=true" "$launch_smoke_report"
+            grep -q "native_rename_sheet_menu_item=true" "$launch_smoke_report"
+            grep -q "native_duplicate_sheet_menu_item=true" "$launch_smoke_report"
+            grep -q "native_move_sheet_left_menu_item=true" "$launch_smoke_report"
+            grep -q "native_move_sheet_right_menu_item=true" "$launch_smoke_report"
+            grep -q "native_tab_color_menu_item=true" "$launch_smoke_report"
+            grep -q "native_tab_color_clear_item=true" "$launch_smoke_report"
+            grep -q "native_tab_color_swatch_count=69" "$launch_smoke_report"
+            grep -q "native_select_all_sheets_menu_item=true" "$launch_smoke_report"
+            grep -q "native_ungroup_sheets_menu_item=true" "$launch_smoke_report"
+            grep -q "native_hide_sheet_menu_item=true" "$launch_smoke_report"
+            grep -q "native_unhide_sheet_menu_item=true" "$launch_smoke_report"
+            grep -q "native_delete_sheet_menu_item=true" "$launch_smoke_report"
+            grep -q "native_undo_menu_item=true" "$launch_smoke_report"
+            grep -q "native_redo_menu_item=true" "$launch_smoke_report"
+            grep -q "native_cut_menu_item=true" "$launch_smoke_report"
+            grep -q "native_copy_menu_item=true" "$launch_smoke_report"
+            grep -q "native_paste_menu_item=true" "$launch_smoke_report"
+            grep -q "native_paste_special_menu_item=true" "$launch_smoke_report"
+            grep -q "native_format_painter_menu_item=true" "$launch_smoke_report"
+            grep -q "native_paste_special_comments_menu_item=true" "$launch_smoke_report"
+            grep -q "native_paste_special_validation_menu_item=true" "$launch_smoke_report"
+            grep -q "native_paste_special_all_except_borders_menu_item=true" "$launch_smoke_report"
+            grep -q "native_paste_special_all_merging_conditional_formats_menu_item=true" "$launch_smoke_report"
+            grep -q "native_paste_special_column_widths_menu_item=true" "$launch_smoke_report"
+            grep -q "native_paste_special_formulas_and_number_formats_menu_item=true" "$launch_smoke_report"
+            grep -q "native_paste_special_values_and_number_formats_menu_item=true" "$launch_smoke_report"
+            grep -q "native_paste_special_values_and_source_formatting_menu_item=true" "$launch_smoke_report"
+            grep -q "native_paste_special_keep_source_column_widths_menu_item=true" "$launch_smoke_report"
+            grep -q "native_paste_special_paste_link_menu_item=true" "$launch_smoke_report"
+            grep -q "native_paste_special_text_menu_item=true" "$launch_smoke_report"
+            grep -q "native_paste_special_unicode_text_menu_item=true" "$launch_smoke_report"
+            grep -q "native_paste_special_picture_menu_item=true" "$launch_smoke_report"
+            grep -q "native_paste_special_linked_picture_menu_item=true" "$launch_smoke_report"
+            grep -q "native_select_all_menu_item=true" "$launch_smoke_report"
+            grep -q "native_find_menu_item=true" "$launch_smoke_report"
+            grep -q "native_find_next_menu_item=true" "$launch_smoke_report"
+            grep -q "native_replace_menu_item=true" "$launch_smoke_report"
+            grep -q "native_go_to_menu_item=true" "$launch_smoke_report"
+            grep -q "native_go_to_special_menu_item=true" "$launch_smoke_report"
+            grep -q "native_sort_ascending_menu_item=true" "$launch_smoke_report"
+            grep -q "native_sort_descending_menu_item=true" "$launch_smoke_report"
+            grep -q "native_flash_fill_menu_item=true" "$launch_smoke_report"
+            grep -q "native_advanced_filter_menu_item=true" "$launch_smoke_report"
+            grep -q "native_remove_duplicates_menu_item=true" "$launch_smoke_report"
+            grep -q "native_subtotal_menu_item=true" "$launch_smoke_report"
+            grep -q "native_data_validation_preview_menu_item=true" "$launch_smoke_report"
+            grep -q "native_data_validation_menu_item=true" "$launch_smoke_report"
+            grep -q "native_what_if_analysis_menu_item=true" "$launch_smoke_report"
+            grep -q "native_goal_seek_menu_item=true" "$launch_smoke_report"
+            grep -q "native_data_table_menu_item=true" "$launch_smoke_report"
+            grep -q "native_scenario_manager_menu_item=true" "$launch_smoke_report"
+            grep -q "native_forecast_sheet_menu_item=true" "$launch_smoke_report"
+            grep -q "native_review_summary_menu_item=true" "$launch_smoke_report"
+            grep -q "native_check_accessibility_menu_item=true" "$launch_smoke_report"
+            grep -q "native_next_note_menu_item=true" "$launch_smoke_report"
+            grep -q "native_previous_note_menu_item=true" "$launch_smoke_report"
+            grep -q "native_next_comment_menu_item=true" "$launch_smoke_report"
+            grep -q "native_previous_comment_menu_item=true" "$launch_smoke_report"
+            grep -q "native_format_cells_menu_item=true" "$launch_smoke_report"
+            grep -q "macos_dialog_smoke=passed" "$launch_smoke_report"
+            grep -q "macos_dialog_smoke_attempted=true" "$launch_smoke_report"
+            grep -q "macos_dialog_smoke_status=passed" "$launch_smoke_report"
+            grep -q "macos_dialog_activation_completed=true" "$launch_smoke_report"
+            grep -q "find_dialog=true" "$launch_smoke_report"
+            grep -q "find_dialog_text_box=true" "$launch_smoke_report"
+            grep -q "find_dialog_action_buttons=true" "$launch_smoke_report"
+            grep -q "find_dialog_options=true" "$launch_smoke_report"
+            grep -q "find_dialog_format_controls=true" "$launch_smoke_report"
+            grep -q "find_dialog_compact_layout=true" "$launch_smoke_report"
+            grep -q "find_dialog_result_closed_without_accept=true" "$launch_smoke_report"
+            grep -q "replace_dialog=true" "$launch_smoke_report"
+            grep -q "replace_dialog_text_boxes=true" "$launch_smoke_report"
+            grep -q "replace_dialog_action_buttons=true" "$launch_smoke_report"
+            grep -q "replace_dialog_options=true" "$launch_smoke_report"
+            grep -q "replace_dialog_format_controls=true" "$launch_smoke_report"
+            grep -q "replace_dialog_compact_layout=true" "$launch_smoke_report"
+            grep -q "replace_dialog_result_closed_without_accept=true" "$launch_smoke_report"
+            grep -q "go_to_dialog=true" "$launch_smoke_report"
+            grep -q "go_to_dialog_reference_controls=true" "$launch_smoke_report"
+            grep -q "go_to_dialog_compact_layout=true" "$launch_smoke_report"
+            grep -q "go_to_dialog_result_closed_without_accept=true" "$launch_smoke_report"
+            grep -q "go_to_special_dialog=true" "$launch_smoke_report"
+            grep -q "go_to_special_dialog_kind_controls=true" "$launch_smoke_report"
+            grep -q "go_to_special_dialog_value_type_controls=true" "$launch_smoke_report"
+            grep -q "go_to_special_dialog_compact_layout=true" "$launch_smoke_report"
+            grep -q "go_to_special_dialog_result_closed_without_accept=true" "$launch_smoke_report"
+            grep -q "format_cells_dialog=true" "$launch_smoke_report"
+            grep -q "format_cells_dialog_tab_strip=true" "$launch_smoke_report"
+            grep -q "format_cells_dialog_default_number_tab=true" "$launch_smoke_report"
+            grep -q "format_cells_dialog_number_controls=true" "$launch_smoke_report"
+            grep -q "format_cells_dialog_action_buttons=true" "$launch_smoke_report"
+            grep -q "format_cells_dialog_compact_layout=true" "$launch_smoke_report"
+            grep -q "format_cells_dialog_result_closed_without_accept=true" "$launch_smoke_report"
+            grep -q "native_autosum_menu_item=true" "$launch_smoke_report"
+            grep -q "native_autosum_sum_menu_item=true" "$launch_smoke_report"
+            grep -q "native_autosum_average_menu_item=true" "$launch_smoke_report"
+            grep -q "native_autosum_count_numbers_menu_item=true" "$launch_smoke_report"
+            grep -q "native_autosum_count_all_menu_item=true" "$launch_smoke_report"
+            grep -q "native_autosum_max_menu_item=true" "$launch_smoke_report"
+            grep -q "native_autosum_min_menu_item=true" "$launch_smoke_report"
+            grep -q "native_fill_cells_menu_item=true" "$launch_smoke_report"
+            grep -q "native_fill_down_menu_item=true" "$launch_smoke_report"
+            grep -q "native_fill_right_menu_item=true" "$launch_smoke_report"
+            grep -q "native_fill_up_menu_item=true" "$launch_smoke_report"
+            grep -q "native_fill_left_menu_item=true" "$launch_smoke_report"
+            grep -q "native_clear_menu_item=true" "$launch_smoke_report"
+            grep -q "native_clear_all_menu_item=true" "$launch_smoke_report"
+            grep -q "native_clear_formats_menu_item=true" "$launch_smoke_report"
+            grep -q "native_clear_contents_menu_item=true" "$launch_smoke_report"
+            grep -q "native_clear_comments_menu_item=true" "$launch_smoke_report"
+            grep -q "native_clear_hyperlinks_menu_item=true" "$launch_smoke_report"
+            grep -q "native_bold_menu_item=true" "$launch_smoke_report"
+            grep -q "native_italic_menu_item=true" "$launch_smoke_report"
+            grep -q "native_underline_menu_item=true" "$launch_smoke_report"
+            grep -q "native_double_underline_menu_item=true" "$launch_smoke_report"
+            grep -q "native_strikethrough_menu_item=true" "$launch_smoke_report"
+            grep -q "native_increase_font_size_menu_item=true" "$launch_smoke_report"
+            grep -q "native_decrease_font_size_menu_item=true" "$launch_smoke_report"
+            grep -q "native_fill_color_menu_item=true" "$launch_smoke_report"
+            grep -q "native_clear_fill_menu_item=true" "$launch_smoke_report"
+            grep -q "native_font_color_menu_item=true" "$launch_smoke_report"
+            grep -q "native_fill_color_swatch_count=69" "$launch_smoke_report"
+            grep -q "native_font_color_swatch_count=69" "$launch_smoke_report"
+            grep -q "native_borders_menu_item=true" "$launch_smoke_report"
+            grep -q "native_borders_preset_count=8" "$launch_smoke_report"
+            grep -q "native_cell_styles_menu_item=true" "$launch_smoke_report"
+            grep -q "native_cell_styles_preset_count=33" "$launch_smoke_report"
+            grep -q "native_horizontal_text_menu_item=true" "$launch_smoke_report"
+            grep -q "native_angle_counterclockwise_menu_item=true" "$launch_smoke_report"
+            grep -q "native_angle_clockwise_menu_item=true" "$launch_smoke_report"
+            grep -q "native_vertical_text_menu_item=true" "$launch_smoke_report"
+            grep -q "native_rotate_text_up_menu_item=true" "$launch_smoke_report"
+            grep -q "native_rotate_text_down_menu_item=true" "$launch_smoke_report"
+            grep -q "native_currency_format_menu_item=true" "$launch_smoke_report"
+            grep -q "native_percent_format_menu_item=true" "$launch_smoke_report"
+            grep -q "native_comma_style_menu_item=true" "$launch_smoke_report"
+            grep -q "native_increase_decimal_menu_item=true" "$launch_smoke_report"
+            grep -q "native_decrease_decimal_menu_item=true" "$launch_smoke_report"
+            grep -q "native_align_top_menu_item=true" "$launch_smoke_report"
+            grep -q "native_align_middle_menu_item=true" "$launch_smoke_report"
+            grep -q "native_align_bottom_menu_item=true" "$launch_smoke_report"
+            grep -q "toolbar_wrap_text_button=true" "$launch_smoke_report"
+            grep -q "native_wrap_text_menu_item=true" "$launch_smoke_report"
+            grep -q "native_merge_and_center_menu_item=true" "$launch_smoke_report"
+            grep -q "native_unmerge_cells_menu_item=true" "$launch_smoke_report"
+            grep -q "native_decrease_indent_menu_item=true" "$launch_smoke_report"
+            grep -q "native_increase_indent_menu_item=true" "$launch_smoke_report"
+            grep -q "native_align_left_menu_item=true" "$launch_smoke_report"
+            grep -q "native_align_center_menu_item=true" "$launch_smoke_report"
+            grep -q "native_align_right_menu_item=true" "$launch_smoke_report"
+            grep -q "native_show_gridlines_menu_item=true" "$launch_smoke_report"
+            grep -q "native_show_headings_menu_item=true" "$launch_smoke_report"
+            grep -q "native_zoom_in_menu_item=true" "$launch_smoke_report"
+            grep -q "native_zoom_out_menu_item=true" "$launch_smoke_report"
+            grep -q "native_zoom_100_menu_item=true" "$launch_smoke_report"
+            grep -q "native_zoom_to_selection_menu_item=true" "$launch_smoke_report"
+            grep -q "native_freeze_panes_menu_item=true" "$launch_smoke_report"
+            grep -q "native_freeze_top_row_menu_item=true" "$launch_smoke_report"
+            grep -q "native_freeze_first_column_menu_item=true" "$launch_smoke_report"
+            grep -q "native_unfreeze_panes_menu_item=true" "$launch_smoke_report"
+            grep -q "native_show_formulas_menu_item=true" "$launch_smoke_report"
+            grep -q "native_minimize_window_menu_item=true" "$launch_smoke_report"
+            grep -q "native_zoom_window_menu_item=true" "$launch_smoke_report"
+            grep -q "native_bring_all_to_front_menu_item=true" "$launch_smoke_report"
+            grep -q "native_help_online_menu_item=true" "$launch_smoke_report"
+            grep -q "native_send_feedback_menu_item=true" "$launch_smoke_report"
+            grep -q "native_check_for_updates_menu_item=true" "$launch_smoke_report"
+            grep -q "native_about_menu_item=true" "$launch_smoke_report"
+            grep -q "native_legal_notices_menu_item=true" "$launch_smoke_report"
+            grep -q "native_quit_menu_item=true" "$launch_smoke_report"
+
+            open_with_smoke_file="$RUNNER_TEMP/freex-$runtime-open-with.csv"
+            printf 'Name,Amount\nFreeX Open With,126\n' > "$open_with_smoke_file"
+            rm -f "$open_with_report"
+            open -W -n -a "$app_path" "$open_with_smoke_file" --args --macos-launch-smoke "$open_with_report" &
+            open_with_pid=$!
+            for _ in {1..60}; do
+              if [[ -f "$open_with_report" ]]; then
+                break
+              fi
+              if ! kill -0 "$open_with_pid" 2>/dev/null; then
+                break
+              fi
+              sleep 1
+            done
+            if [[ ! -f "$open_with_report" ]]; then
+              echo "macos_launch_smoke=missing_report" > "$open_with_report"
+              osascript -e 'tell application id "io.github.tony-xmelon.freex" to quit' || true
+              wait "$open_with_pid" || true
+              cat "$open_with_report" >> "$evidence_path"
+              exit 1
+            fi
+            wait "$open_with_pid" || true
+            cat "$open_with_report" >> "$evidence_path"
+            grep -q "macos_launch_smoke=passed" "$open_with_report"
+            grep -q "window_shown=true" "$open_with_report"
+            grep -q "opened_source_path=.*freex-$runtime-open-with.csv" "$open_with_report"
+            grep -q "viewport_rows=[1-9]" "$open_with_report"
+            grep -q "viewport_columns=[1-9]" "$open_with_report"
+            grep -q "native_open_recent_menu_item=true" "$open_with_report"
+            grep -q "native_open_recent_item_count=[1-9]" "$open_with_report"
+
+            default_open_smoke_file="$RUNNER_TEMP/freex-$runtime-default-open.fxl"
+            printf '%s\n' \
+              '{' \
+              '  "FileFormat": "FreeX.NativeJsonWorkbook",' \
+              '  "SchemaVersion": 1,' \
+              '  "MinimumReaderVersion": 1,' \
+              '  "Name": "macOS Default Open Smoke",' \
+              '  "Sheets": [' \
+              '    {' \
+              '      "Name": "Default Open"' \
+              '    }' \
+              '  ]' \
+              '}' > "$default_open_smoke_file"
+            rm -f "$default_open_report"
+            open -W -n "$default_open_smoke_file" --args --macos-launch-smoke "$default_open_report" &
+            default_open_pid=$!
+            for _ in {1..60}; do
+              if [[ -f "$default_open_report" ]]; then
+                break
+              fi
+              if ! kill -0 "$default_open_pid" 2>/dev/null; then
+                break
+              fi
+              sleep 1
+            done
+            if [[ ! -f "$default_open_report" ]]; then
+              {
+                echo "macos_launch_smoke=missing_report"
+                echo "launchservices_default_open_attempted=true"
+                echo "launchservices_default_open_app_override=false"
+                echo "launchservices_default_open_document_extension=fxl"
+                echo "launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click"
+              } > "$default_open_report"
+              osascript -e 'tell application id "io.github.tony-xmelon.freex" to quit' || true
+              wait "$default_open_pid" || true
+              cat "$default_open_report" >> "$evidence_path"
+              exit 1
+            fi
+            wait "$default_open_pid" || true
+            {
+              echo "launchservices_default_open_attempted=true"
+              echo "launchservices_default_open_app_override=false"
+              echo "launchservices_default_open_document_extension=fxl"
+              echo "launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click"
+            } >> "$default_open_report"
+            cat "$default_open_report" >> "$evidence_path"
+            grep -q "macos_launch_smoke=passed" "$default_open_report"
+            grep -q "window_shown=true" "$default_open_report"
+            grep -q "opened_source_path=.*freex-$runtime-default-open.fxl" "$default_open_report"
+            grep -q "viewport_rows=[1-9]" "$default_open_report"
+            grep -q "viewport_columns=[1-9]" "$default_open_report"
+            grep -q "native_open_recent_menu_item=true" "$default_open_report"
+            grep -q "native_open_recent_item_count=[1-9]" "$default_open_report"
+            grep -q "launchservices_default_open_attempted=true" "$default_open_report"
+            grep -q "launchservices_default_open_app_override=false" "$default_open_report"
+            grep -q "launchservices_default_open_document_extension=fxl" "$default_open_report"
+            grep -q "launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click" "$default_open_report"
+          else
+            echo "Skipping launch smoke for $runtime on $host_arch host." | tee "$smoke_log"
+            echo "smoke_status=skipped_host_arch_mismatch" >> "$evidence_path"
+            echo "macos_launch_smoke=skipped_host_arch_mismatch" > "$launch_smoke_report"
+            echo "macos_launch_smoke=skipped_host_arch_mismatch" > "$open_with_report"
+            echo "macos_launch_smoke=skipped_host_arch_mismatch" > "$default_open_report"
+          fi
+
+          tester_channel_summary="This artifact is a macOS port validation build. Internal-preview artifacts are not a public release channel; distribution-candidate artifacts must show Developer ID signing, accepted notarization, stapler validation, and accepted Gatekeeper assessment in evidence."
+          tester_internal_preview_summary=""
+          tester_open_guidance="If artifact_channel=distribution-candidate, reject the artifact unless it has Developer ID signing, accepted notarization, stapling evidence, and gatekeeper_assessment_status=accepted from gatekeeper_assessment_source=Notarized Developer ID."
+          tester_internal_preview_open_guidance=""
+          if [[ "$distribution_candidate" != "true" ]]; then
+            tester_internal_preview_summary="For artifact_channel=internal-preview: This artifact is a preview build for macOS port validation. It is not a public release channel."
+            tester_open_guidance="If artifact_channel=internal-preview, ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing."
+            tester_internal_preview_open_guidance="For artifact_channel=internal-preview: Ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing."
+          fi
+
+          cat > "$tester_instructions_path" <<EOF
+          # FreeX macOS App ($artifact_channel, $runtime)
+
+          $tester_channel_summary
+          $tester_internal_preview_summary
+
+          Use osx-arm64 for Apple Silicon Macs and osx-x64 for Intel Macs. Unzip the GitHub Actions artifact wrapper first; these files are inside it.
+
+          ## Download
+
+          Download these files from the same GitHub Actions artifact:
+
+          - $zip_name
+          - $zip_name.sha256
+          - freex-$runtime-macos-evidence.txt
+          - freex-$runtime-macos-packaging-smoke.log
+          - freex-$runtime-macos-launch-smoke.txt
+          - freex-$runtime-macos-open-with-launch-smoke.txt
+          - freex-$runtime-macos-default-open-launch-smoke.txt
+          - freex-$runtime-macos-notarization.log
+
+          ## Verify
+
+          Run this in Terminal from the directory containing the downloaded files:
+
+          \`\`\`bash
+          shasum -a 256 -c $zip_name.sha256
+          \`\`\`
+
+          Expected result:
+
+          \`\`\`text
+          $zip_name: OK
+          \`\`\`
+
+          ## Open
+
+          Unzip $zip_name, then open FreeX.app. If macOS Gatekeeper blocks the preview, check freex-$runtime-macos-evidence.txt first:
+
+          - artifact_channel=$artifact_channel
+          - distribution_candidate=$distribution_candidate
+          - distribution_readiness=$distribution_readiness
+          - codesign_mode=$signing_mode
+          - notarization_status=$notarization_status
+          - stapler_validated=$stapler_validated
+          - gatekeeper_assessment_attempted=true
+          - gatekeeper_assessment_required=$gatekeeper_assessment_required
+          - gatekeeper_assessment_status=$gatekeeper_assessment_status
+          - gatekeeper_assessment_source=$gatekeeper_assessment_source
+          - zip_sha256=$zip_sha256
+
+          $tester_open_guidance
+          $tester_internal_preview_open_guidance
+
+          ## Report
+
+          When filing feedback, include the runtime ($runtime), the GitHub Actions run, freex-$runtime-macos-evidence.txt, and the smoke logs when relevant.
+          EOF
+
+      - name: Upload app artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-macos-app
+          path: |
+            artifacts/freex-${{ matrix.runtime }}-macos-app.zip
+            artifacts/freex-${{ matrix.runtime }}-macos-app.zip.sha256
+            artifacts/freex-${{ matrix.runtime }}-macos-evidence.txt
+            artifacts/freex-${{ matrix.runtime }}-macos-packaging-smoke.log
+            artifacts/freex-${{ matrix.runtime }}-macos-launch-smoke.txt
+            artifacts/freex-${{ matrix.runtime }}-macos-open-with-launch-smoke.txt
+            artifacts/freex-${{ matrix.runtime }}-macos-default-open-launch-smoke.txt
+            artifacts/freex-${{ matrix.runtime }}-macos-notarization.log
+            artifacts/freex-${{ matrix.runtime }}-macos-tester-instructions.md
+          if-no-files-found: error
+
+      - name: Upload app diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-macos-diagnostics
+          path: |
+            artifacts/freex-${{ matrix.runtime }}-macos-evidence.txt
+            artifacts/freex-${{ matrix.runtime }}-macos-packaging-smoke.log
+            artifacts/freex-${{ matrix.runtime }}-macos-launch-smoke.txt
+            artifacts/freex-${{ matrix.runtime }}-macos-open-with-launch-smoke.txt
+            artifacts/freex-${{ matrix.runtime }}-macos-default-open-launch-smoke.txt
+            artifacts/freex-${{ matrix.runtime }}-macos-notarization.log
+            artifacts/freex-${{ matrix.runtime }}-macos-tester-instructions.md
+            artifacts/freex-${{ matrix.runtime }}-portable-pdf-exporter-tests.trx
+            artifacts/freex-${{ matrix.runtime }}-export-path-tests.trx
+            artifacts/freex-${{ matrix.runtime }}-macos-app.zip
+            artifacts/freex-${{ matrix.runtime }}-macos-app.zip.sha256
+          if-no-files-found: warn
+
+  publish-distribution-candidate:
+    name: Publish macOS distribution candidate
+    needs: macos-app
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.distribution_candidate == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      actions: read
+      contents: write
+
+    concurrency:
+      group: macos-distribution-candidate-release
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download macOS app artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: freex-${{ github.run_id }}-${{ github.run_attempt }}-*-macos-app
+          path: artifacts/macos-distribution-candidate
+          merge-multiple: true
+
+      - name: Prepare release-channel assets
+        id: candidate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Set-StrictMode -Version Latest
+
+          $inputRoot = Join-Path $env:GITHUB_WORKSPACE "artifacts/macos-distribution-candidate"
+          $releaseRoot = Join-Path $env:GITHUB_WORKSPACE "artifacts/macos-release-assets"
+          if (-not (Test-Path -LiteralPath $inputRoot -PathType Container)) {
+            throw "Downloaded macOS distribution-candidate artifact directory was not found: $inputRoot"
+          }
+
+          Remove-Item -LiteralPath $releaseRoot -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $releaseRoot | Out-Null
+
+          function Find-RequiredCandidateFile {
+            param(
+              [Parameter(Mandatory = $true)][string]$Root,
+              [Parameter(Mandatory = $true)][string]$FileName
+            )
+
+            $matches = @(Get-ChildItem -LiteralPath $Root -Recurse -File -Filter $FileName)
+            if ($matches.Count -ne 1) {
+              throw "Expected exactly one downloaded candidate file named '$FileName', but found $($matches.Count)."
+            }
+
+            return $matches[0].FullName
+          }
+
+          function Assert-ContainsRequiredText {
+            param(
+              [Parameter(Mandatory = $true)][string]$Text,
+              [Parameter(Mandatory = $true)][string]$Needle,
+              [Parameter(Mandatory = $true)][string]$Label
+            )
+
+            if ($Text.IndexOf($Needle, [System.StringComparison]::Ordinal) -lt 0) {
+              throw "$Label is missing required distribution-candidate marker: $Needle"
+            }
+          }
+
+          $shortSha = (git rev-parse --short=8 HEAD).Trim()
+          $releaseId = "macos-distribution-candidate-run$($env:GITHUB_RUN_NUMBER)-attempt$($env:GITHUB_RUN_ATTEMPT)-$shortSha"
+          $tag = "macos-distribution-candidate-$($env:GITHUB_RUN_NUMBER)-$($env:GITHUB_RUN_ATTEMPT)-$shortSha"
+          $releaseName = "FreeX macOS Distribution Candidate Run $($env:GITHUB_RUN_NUMBER) Attempt $($env:GITHUB_RUN_ATTEMPT) ($shortSha)"
+
+          "release_id=$releaseId" >> $env:GITHUB_OUTPUT
+          "short_sha=$shortSha" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "release_name=$releaseName" >> $env:GITHUB_OUTPUT
+
+          $runtimePlans = @(
+            [ordered]@{
+              Runtime = "osx-arm64"
+              AssetLabel = "macos-arm64"
+              StableZip = "FreeX-latest-macos-arm64.zip"
+            },
+            [ordered]@{
+              Runtime = "osx-x64"
+              AssetLabel = "macos-x64"
+              StableZip = "FreeX-latest-macos-x64.zip"
+            }
+          )
+
+          $manifestAssets = @()
+          foreach ($plan in $runtimePlans) {
+            $runtime = [string]$plan.Runtime
+            $assetLabel = [string]$plan.AssetLabel
+            $stableZipName = [string]$plan.StableZip
+
+            $zipPath = Find-RequiredCandidateFile -Root $inputRoot -FileName "freex-$runtime-macos-app.zip"
+            $checksumPath = Find-RequiredCandidateFile -Root $inputRoot -FileName "freex-$runtime-macos-app.zip.sha256"
+            $evidencePath = Find-RequiredCandidateFile -Root $inputRoot -FileName "freex-$runtime-macos-evidence.txt"
+            $packagingSmokePath = Find-RequiredCandidateFile -Root $inputRoot -FileName "freex-$runtime-macos-packaging-smoke.log"
+            $launchSmokePath = Find-RequiredCandidateFile -Root $inputRoot -FileName "freex-$runtime-macos-launch-smoke.txt"
+            $openWithSmokePath = Find-RequiredCandidateFile -Root $inputRoot -FileName "freex-$runtime-macos-open-with-launch-smoke.txt"
+            $defaultOpenSmokePath = Find-RequiredCandidateFile -Root $inputRoot -FileName "freex-$runtime-macos-default-open-launch-smoke.txt"
+            $notarizationLogPath = Find-RequiredCandidateFile -Root $inputRoot -FileName "freex-$runtime-macos-notarization.log"
+            $testerInstructionsPath = Find-RequiredCandidateFile -Root $inputRoot -FileName "freex-$runtime-macos-tester-instructions.md"
+
+            $evidenceText = Get-Content -LiteralPath $evidencePath -Raw
+            foreach ($marker in @(
+              "artifact_channel=distribution-candidate",
+              "distribution_candidate=true",
+              "distribution_contract=distribution_candidate_requires_developer_id_notarization_stapling",
+              "distribution_readiness=distribution_candidate_ready",
+              "codesign_verified=true",
+              "codesign_mode=developer-id",
+              "notarization_status=accepted",
+              "stapler_validated=true",
+              "gatekeeper_assessment_attempted=true",
+              "gatekeeper_assessment_required=true",
+              "gatekeeper_assessment_subject=unzipped_app_bundle",
+              "gatekeeper_assessment_type=execute",
+              "gatekeeper_assessment_exit_code=0",
+              "gatekeeper_assessment_status=accepted",
+              "gatekeeper_assessment_source=Notarized Developer ID",
+              "zip_sha256="
+            )) {
+              Assert-ContainsRequiredText -Text $evidenceText -Needle $marker -Label "$runtime evidence"
+            }
+
+            $notarizationText = Get-Content -LiteralPath $notarizationLogPath -Raw
+            foreach ($marker in @(
+              "artifact_channel=distribution-candidate",
+              "distribution_contract=distribution_candidate_requires_developer_id_notarization_stapling",
+              "`"status`"",
+              "Accepted",
+              "stapler"
+            )) {
+              Assert-ContainsRequiredText -Text $notarizationText -Needle $marker -Label "$runtime notarization log"
+            }
+
+            $instructionsText = Get-Content -LiteralPath $testerInstructionsPath -Raw
+            foreach ($marker in @("distribution-candidate", "Developer ID", "notarization", "stapling", "reject")) {
+              Assert-ContainsRequiredText -Text $instructionsText -Needle $marker -Label "$runtime tester instructions"
+            }
+
+            $actualHash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            $checksumText = Get-Content -LiteralPath $checksumPath -Raw
+            if ($checksumText.IndexOf($actualHash, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) {
+              throw "$runtime checksum file does not match the downloaded signed/notarized app zip."
+            }
+
+            $stableZipPath = Join-Path $releaseRoot $stableZipName
+            Copy-Item -LiteralPath $zipPath -Destination $stableZipPath -Force
+            Set-Content -LiteralPath "$stableZipPath.sha256" -Value "$actualHash  $stableZipName" -Encoding ascii
+
+            $stableEvidenceName = "FreeX-latest-$assetLabel-evidence.txt"
+            $stablePackagingSmokeName = "FreeX-latest-$assetLabel-packaging-smoke.log"
+            $stableLaunchSmokeName = "FreeX-latest-$assetLabel-launch-smoke.txt"
+            $stableOpenWithSmokeName = "FreeX-latest-$assetLabel-open-with-launch-smoke.txt"
+            $stableDefaultOpenSmokeName = "FreeX-latest-$assetLabel-default-open-launch-smoke.txt"
+            $stableNotarizationName = "FreeX-latest-$assetLabel-notarization.log"
+            $stableInstructionsName = "FreeX-latest-$assetLabel-tester-instructions.md"
+
+            Copy-Item -LiteralPath $evidencePath -Destination (Join-Path $releaseRoot $stableEvidenceName) -Force
+            Copy-Item -LiteralPath $packagingSmokePath -Destination (Join-Path $releaseRoot $stablePackagingSmokeName) -Force
+            Copy-Item -LiteralPath $launchSmokePath -Destination (Join-Path $releaseRoot $stableLaunchSmokeName) -Force
+            Copy-Item -LiteralPath $openWithSmokePath -Destination (Join-Path $releaseRoot $stableOpenWithSmokeName) -Force
+            Copy-Item -LiteralPath $defaultOpenSmokePath -Destination (Join-Path $releaseRoot $stableDefaultOpenSmokeName) -Force
+            Copy-Item -LiteralPath $notarizationLogPath -Destination (Join-Path $releaseRoot $stableNotarizationName) -Force
+            Copy-Item -LiteralPath $testerInstructionsPath -Destination (Join-Path $releaseRoot $stableInstructionsName) -Force
+
+            $manifestAssets += [ordered]@{
+              runtime = $runtime
+              asset_label = $assetLabel
+              original_zip = "freex-$runtime-macos-app.zip"
+              stable_zip = $stableZipName
+              stable_zip_checksum = "$stableZipName.sha256"
+              sha256 = $actualHash
+              evidence = $stableEvidenceName
+              packaging_smoke_log = $stablePackagingSmokeName
+              launch_smoke_report = $stableLaunchSmokeName
+              open_with_launch_smoke_report = $stableOpenWithSmokeName
+              default_open_launch_smoke_report = $stableDefaultOpenSmokeName
+              notarization_log = $stableNotarizationName
+              tester_instructions = $stableInstructionsName
+            }
+          }
+
+          $manifestPath = Join-Path $releaseRoot "FreeX-latest-macos-distribution-candidate-manifest.json"
+          $manifest = [ordered]@{
+            schema = "io.github.tony-xmelon.freex.macos-distribution-candidate.v1"
+            release_id = $releaseId
+            tag = $tag
+            repository = $env:GITHUB_REPOSITORY
+            workflow = $env:GITHUB_WORKFLOW
+            run_id = $env:GITHUB_RUN_ID
+            run_attempt = $env:GITHUB_RUN_ATTEMPT
+            commit = $env:GITHUB_SHA
+            generated_at_utc = (Get-Date).ToUniversalTime().ToString("o")
+            source_artifact_pattern = "freex-$($env:GITHUB_RUN_ID)-$($env:GITHUB_RUN_ATTEMPT)-*-macos-app"
+            distribution_candidate_required_markers = @(
+              "artifact_channel=distribution-candidate",
+              "distribution_candidate=true",
+              "distribution_readiness=distribution_candidate_ready",
+              "codesign_mode=developer-id",
+              "notarization_status=accepted",
+              "stapler_validated=true",
+              "gatekeeper_assessment_attempted=true",
+              "gatekeeper_assessment_required=true",
+              "gatekeeper_assessment_exit_code=0",
+              "gatekeeper_assessment_status=accepted",
+              "gatekeeper_assessment_source=Notarized Developer ID"
+            )
+            assets = $manifestAssets
+          }
+          $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding ascii
+
+          $instructionsPath = Join-Path $releaseRoot "FreeX-latest-macos-distribution-candidate-instructions.md"
+          Set-Content -LiteralPath $instructionsPath -Encoding ascii -Value @"
+          # FreeX macOS Distribution Candidate
+
+          This release was published only after both hosted runtime artifacts completed and this publication job revalidated distribution-candidate evidence for Developer ID signing, accepted notarization, stapler validation, and accepted Gatekeeper assessment.
+
+          Commit: $($env:GITHUB_SHA)
+          Run: $($env:GITHUB_RUN_ID)
+          Attempt: $($env:GITHUB_RUN_ATTEMPT)
+
+          ## Stable Assets
+
+          - FreeX-latest-macos-arm64.zip for Apple Silicon Macs
+          - FreeX-latest-macos-arm64.zip.sha256
+          - FreeX-latest-macos-x64.zip for Intel Macs
+          - FreeX-latest-macos-x64.zip.sha256
+          - FreeX-latest-macos-distribution-candidate-manifest.json
+
+          Each runtime also publishes stable evidence, packaging smoke, launch smoke, Open With launch smoke, default-open launch smoke, notarization log, and tester-instruction assets. Reject the candidate if the evidence does not show artifact_channel=distribution-candidate, distribution_readiness=distribution_candidate_ready, codesign_mode=developer-id, notarization_status=accepted, stapler_validated=true, gatekeeper_assessment_status=accepted, and gatekeeper_assessment_source=Notarized Developer ID.
+
+          ## Verify
+
+          Run shasum -a 256 -c against the checksum file next to the downloaded zip before opening FreeX.app.
+          "@
+
+      - name: Upload release-channel prepared assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: freex-${{ steps.candidate.outputs.release_id }}-macos-release-assets
+          path: artifacts/macos-release-assets/*
+          if-no-files-found: error
+
+      - name: Create or update GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          Set-StrictMode -Version Latest
+
+          $tag = "${{ steps.candidate.outputs.tag }}"
+          $title = "${{ steps.candidate.outputs.release_name }}"
+          $notesPath = "artifacts/macos-release-assets/FreeX-latest-macos-distribution-candidate-instructions.md"
+          $assetPaths = @(
+            Get-ChildItem -LiteralPath "artifacts/macos-release-assets" -File |
+              Sort-Object Name |
+              ForEach-Object { $_.FullName }
+          )
+          if ($assetPaths.Count -eq 0) {
+            throw "No macOS distribution-candidate release assets were prepared."
+          }
+
+          $releaseExists = $false
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            $releaseExists = $true
+          }
+
+          if ($releaseExists) {
+            gh release upload $tag @assetPaths --clobber
+            gh release edit $tag --title $title --notes-file $notesPath --prerelease
+          } else {
+            gh release create $tag @assetPaths --target $env:GITHUB_SHA --title $title --notes-file $notesPath --draft --prerelease
+            gh release edit $tag --draft=false --prerelease
+          }

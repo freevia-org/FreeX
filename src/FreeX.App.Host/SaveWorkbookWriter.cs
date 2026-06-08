@@ -1,5 +1,5 @@
-using System.Diagnostics;
 using System.IO;
+using FreeX.App.Services;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 
@@ -7,7 +7,7 @@ namespace FreeX.App.Host;
 
 public sealed class SaveWorkbookWriter
 {
-    private const int BufferSize = 1024 * 128;
+    private readonly WorkbookSaveService _saveService = new();
 
     public async Task SaveAsync(
         string path,
@@ -15,99 +15,29 @@ public sealed class SaveWorkbookWriter
         Workbook workbook,
         IProgress<SaveProgressUpdate> progress)
     {
-        progress.Report(new SaveProgressUpdate(ProgressTitle(), FormatSavingFileDetail("serializing", TimeSpan.Zero), 1));
-        var directory = Path.GetDirectoryName(path);
-        var tempPath = Path.Combine(
-            string.IsNullOrWhiteSpace(directory) ? Path.GetTempPath() : directory,
-            $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
-
-        try
-        {
-            await RunStageAsync(
-                progress,
-                "writing",
-                1,
-                99,
-                TimeSpan.FromSeconds(30),
-                () =>
-                {
-                    using var file = new FileStream(
-                        tempPath,
-                        FileMode.Create,
-                        FileAccess.ReadWrite,
-                        FileShare.None,
-                        BufferSize,
-                        FileOptions.Asynchronous | FileOptions.SequentialScan);
-                    adapter.Save(workbook, file);
-                    return true;
-                });
-
-            ReplaceTargetFile(tempPath, path);
-        }
-        finally
-        {
-            if (File.Exists(tempPath))
-                File.Delete(tempPath);
-        }
-
-        progress.Report(new SaveProgressUpdate(ProgressTitle(), FormatSavingFileDetail("done", TimeSpan.Zero), 100));
+        ArgumentNullException.ThrowIfNull(progress);
+        await _saveService.SaveAsync(
+            path,
+            adapter,
+            workbook,
+            new Progress<WorkbookSaveProgressUpdate>(
+                update => progress.Report(ToHostProgressUpdate(update))));
     }
 
-    private static void ReplaceTargetFile(string tempPath, string path)
-    {
-        if (File.Exists(path))
-            File.Replace(tempPath, path, null, ignoreMetadataErrors: true);
-        else
-            File.Move(tempPath, path);
-    }
+    private static SaveProgressUpdate ToHostProgressUpdate(WorkbookSaveProgressUpdate update) =>
+        new(
+            ProgressTitle(),
+            FormatSavingFileDetail(PhaseDetail(update.Phase), update.Elapsed),
+            update.Percent);
 
-    private static async Task<T> RunStageAsync<T>(
-        IProgress<SaveProgressUpdate> progress,
-        string detail,
-        double startPercent,
-        double endPercent,
-        TimeSpan expectedDuration,
-        Func<T> work)
-    {
-        progress.Report(new SaveProgressUpdate(ProgressTitle(), FormatSavingFileDetail(detail, TimeSpan.Zero), startPercent));
-        using var cancellation = new CancellationTokenSource();
-        var progressTask = ReportStageProgressAsync(
-            progress,
-            detail,
-            startPercent,
-            endPercent,
-            expectedDuration,
-            cancellation.Token);
-
-        try
+    private static string PhaseDetail(WorkbookSavePhase phase) =>
+        phase switch
         {
-            return await Task.Run(work);
-        }
-        finally
-        {
-            cancellation.Cancel();
-            try { await progressTask; }
-            catch (OperationCanceledException) { }
-            progress.Report(new SaveProgressUpdate(ProgressTitle(), FormatSavingFileDetail(detail, TimeSpan.Zero), endPercent));
-        }
-    }
-
-    private static async Task ReportStageProgressAsync(
-        IProgress<SaveProgressUpdate> progress,
-        string detail,
-        double startPercent,
-        double endPercent,
-        TimeSpan expectedDuration,
-        CancellationToken cancellationToken)
-    {
-        var stopwatch = Stopwatch.StartNew();
-        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(250));
-        while (await timer.WaitForNextTickAsync(cancellationToken))
-        {
-            var percent = OpenWorkbookProgressPlanner.CalculateStageProgress(startPercent, endPercent, stopwatch.Elapsed, expectedDuration);
-            progress.Report(new SaveProgressUpdate(ProgressTitle(), FormatSavingFileDetail(detail, stopwatch.Elapsed), percent));
-        }
-    }
+            WorkbookSavePhase.Preparing => "serializing",
+            WorkbookSavePhase.Writing => "writing",
+            WorkbookSavePhase.Completed => "done",
+            _ => phase.ToString().ToLowerInvariant()
+        };
 
     private static string ProgressTitle() => UiText.Get("Progress_SavingWorkbook");
 
