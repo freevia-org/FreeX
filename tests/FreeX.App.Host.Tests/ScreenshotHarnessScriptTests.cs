@@ -406,6 +406,33 @@ public sealed class ScreenshotHarnessScriptTests
     }
 
     [Fact]
+    public void ExcelScreenshotScript_ProvidesOptInHomeBordersDropdownTour()
+    {
+        var script = ReadScript("screenshot_excel.ps1");
+
+        script.Should().Contain("[string]$HomeBordersDropdownTour = $env:FREEX_EXCEL_HOME_BORDERS_DROPDOWN_TOUR");
+        script.Should().Contain("if ($HomeBordersDropdownTour -eq \"1\")");
+        script.Should().Contain("function Invoke-ExcelHomeBordersDropdownTour");
+        script.Should().Contain("function Open-ExcelHomeBordersDropdown");
+        script.Should().Contain("Join-Path $outDir \"home-borders-dropdown-tour\"");
+        script.Should().Contain("excel_home_borders_dropdown_tour_manifest.json");
+        script.Should().Contain("interactive_home_borders_opened.png");
+        script.Should().Contain("Tool = \"FREEX_EXCEL_HOME_BORDERS_DROPDOWN_TOUR\"");
+        script.Should().Contain("EvidenceFamily = \"dropdown\"");
+        script.Should().Contain("ScenarioId = \"dropdown:home-borders\"");
+        script.Should().Contain("EntryPath = \"Alt,H,B\"");
+        script.Should().Contain("[System.Windows.Forms.SendKeys]::SendWait(\"%h\")");
+        script.Should().Contain("[System.Windows.Forms.SendKeys]::SendWait(\"b\")");
+        script.Should().Contain("Find-ExcelPopupWindow $excelPid $excelHwnd 120 160");
+        script.Should().Contain("detected an oversized candidate window");
+        script.Should().Contain("PairKey = \"interactive:home-borders:opened\"");
+        script.Should().Contain("CounterpartTool = \"FREEX_HOME_BORDERS_DROPDOWN_TOUR\"");
+        script.Should().Contain("CounterpartFileName = \"freex_dropdown_home_borders_opened.png\"");
+        script.Should().Contain("Assert-ForegroundWindowOwnership $excelPid $excelTitle \"Excel Home Borders dropdown setup\"");
+        script.Should().Contain("Assert-ForegroundProcessOwnership $excelPid \"Excel Home Borders dropdown screen capture\"");
+    }
+
+    [Fact]
     public void ExcelScreenshotScript_ProvidesOptInWorksheetContextMenuTour()
     {
         var script = ReadScript("screenshot_excel.ps1");

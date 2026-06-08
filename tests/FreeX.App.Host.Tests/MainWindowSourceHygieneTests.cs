@@ -104,6 +104,24 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ScreenshotTour_ProvidesHomeBordersDropdownEvidenceHook()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+        var xaml = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "MainWindow.xaml");
+
+        xaml.Should().Contain("x:Name=\"BordersMenuButton\"");
+        source.Should().Contain("FREEX_HOME_BORDERS_DROPDOWN_TOUR");
+        source.Should().Contain("CaptureHomeBordersDropdownTourAsync");
+        source.Should().Contain("home-borders-dropdown-tour");
+        source.Should().Contain("BordersMenuButton.ContextMenu");
+        source.Should().Contain("HomeBordersDropdownTourManifest");
+        source.Should().Contain("interactive:home-borders:opened");
+        source.Should().Contain("RenderTargetBitmap-context-menu");
+        source.Should().Contain("interactive_home_borders_opened.png");
+        source.Should().Contain("The scenario captures the top-level Borders menu");
+    }
+
+    [Fact]
     public void ScreenshotTour_ProvidesWorksheetContextMenuEvidenceHook()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");

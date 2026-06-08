@@ -166,9 +166,23 @@ $interactiveCapturePlan = @(
         CounterpartSubject = "excel"
     },
     [pscustomobject]@{
+        ScenarioId = "dropdown:home-borders"
+        ScenarioFileName = "home_borders"
+        Priority = 3
+        EvidenceFamily = "dropdown"
+        EvidenceSubject = "freex"
+        CaptureStatus = "planned-separate-foreground-guarded-capture"
+        CaptureOutputNaming = "interactive_<ScenarioFileName>_<State>.png"
+        PairKeyPattern = "interactive:home-borders:<State>"
+        Trigger = "Select Home, open the Borders dropdown, and capture the opened menu."
+        CaptureRequirement = "Capture the active popup/dialog/menu bounds, not the owner-window ribbon band."
+        ForegroundGuard = "Re-check FreeX foreground ownership before opening the dropdown and before the screenshot."
+        CounterpartSubject = "excel"
+    },
+    [pscustomobject]@{
         ScenarioId = "context-menu:worksheet-cell"
         ScenarioFileName = "worksheet_cell_context_menu"
-        Priority = 3
+        Priority = 4
         EvidenceFamily = "context-menu"
         EvidenceSubject = "freex"
         CaptureStatus = "planned-separate-foreground-guarded-capture"
@@ -182,7 +196,7 @@ $interactiveCapturePlan = @(
     [pscustomobject]@{
         ScenarioId = "native-dialog:open-workbook"
         ScenarioFileName = "open_workbook_dialog"
-        Priority = 4
+        Priority = 5
         EvidenceFamily = "native-dialog"
         EvidenceSubject = "freex"
         CaptureStatus = "planned-separate-foreground-guarded-capture"
@@ -196,7 +210,7 @@ $interactiveCapturePlan = @(
     [pscustomobject]@{
         ScenarioId = "native-dialog:save-as-workbook"
         ScenarioFileName = "save_as_workbook_dialog"
-        Priority = 5
+        Priority = 6
         EvidenceFamily = "native-dialog"
         EvidenceSubject = "freex"
         CaptureStatus = "planned-separate-foreground-guarded-capture"

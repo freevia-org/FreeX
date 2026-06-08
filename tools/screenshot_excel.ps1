@@ -2,6 +2,7 @@ param(
     [string]$Widths = $env:FREEX_SS_TOUR_WIDTHS,
     [string]$AutoFilterFlyoutTour = $env:FREEX_EXCEL_AUTOFILTER_FLYOUT_TOUR,
     [string]$NumberFormatDropdownTour = $env:FREEX_EXCEL_NUMBER_FORMAT_DROPDOWN_TOUR,
+    [string]$HomeBordersDropdownTour = $env:FREEX_EXCEL_HOME_BORDERS_DROPDOWN_TOUR,
     [string]$WorksheetContextMenuTour = $env:FREEX_EXCEL_WORKSHEET_CONTEXT_MENU_TOUR,
     [string]$OpenWorkbookDialogTour = $env:FREEX_EXCEL_OPEN_WORKBOOK_DIALOG_TOUR,
     [string]$SaveAsWorkbookDialogTour = $env:FREEX_EXCEL_SAVE_AS_WORKBOOK_DIALOG_TOUR
@@ -111,6 +112,7 @@ $outDir = Join-Path $PSScriptRoot "screenshots_excel"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 $autoFilterFlyoutOutDir = Join-Path $outDir "autofilter-flyout-tour"
 $numberFormatDropdownOutDir = Join-Path $outDir "home-number-format-dropdown-tour"
+$homeBordersDropdownOutDir = Join-Path $outDir "home-borders-dropdown-tour"
 $worksheetContextMenuOutDir = Join-Path $outDir "worksheet-context-menu-tour"
 $openWorkbookDialogOutDir = Join-Path $outDir "open-workbook-dialog-tour"
 $saveAsWorkbookDialogOutDir = Join-Path $outDir "save-as-workbook-dialog-tour"
@@ -133,6 +135,14 @@ function Clear-NumberFormatDropdownEvidenceArtifacts {
         Get-ChildItem $numberFormatDropdownOutDir -Filter "*.png" -ErrorAction SilentlyContinue |
             Remove-Item -Force -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath (Join-Path $numberFormatDropdownOutDir "excel_home_number_format_dropdown_tour_manifest.json") -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Clear-HomeBordersDropdownEvidenceArtifacts {
+    if (Test-Path -LiteralPath $homeBordersDropdownOutDir -PathType Container) {
+        Get-ChildItem $homeBordersDropdownOutDir -Filter "*.png" -ErrorAction SilentlyContinue |
+            Remove-Item -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath (Join-Path $homeBordersDropdownOutDir "excel_home_borders_dropdown_tour_manifest.json") -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -197,9 +207,23 @@ $interactiveCapturePlan = @(
         CounterpartSubject = "freex"
     },
     [pscustomobject]@{
+        ScenarioId = "dropdown:home-borders"
+        ScenarioFileName = "home_borders"
+        Priority = 3
+        EvidenceFamily = "dropdown"
+        EvidenceSubject = "excel"
+        CaptureStatus = "planned-separate-foreground-guarded-capture"
+        CaptureOutputNaming = "interactive_<ScenarioFileName>_<State>.png"
+        PairKeyPattern = "interactive:home-borders:<State>"
+        Trigger = "Select Home, open the Borders dropdown with Alt,H,B, and capture the opened menu."
+        CaptureRequirement = "Capture the active popup/dialog/menu bounds, not the owner-window ribbon band."
+        ForegroundGuard = "Re-check Excel foreground ownership before opening the dropdown and before the screenshot."
+        CounterpartSubject = "freex"
+    },
+    [pscustomobject]@{
         ScenarioId = "context-menu:worksheet-cell"
         ScenarioFileName = "worksheet_cell_context_menu"
-        Priority = 3
+        Priority = 4
         EvidenceFamily = "context-menu"
         EvidenceSubject = "excel"
         CaptureStatus = "planned-separate-foreground-guarded-capture"
@@ -213,7 +237,7 @@ $interactiveCapturePlan = @(
     [pscustomobject]@{
         ScenarioId = "native-dialog:open-workbook"
         ScenarioFileName = "open_workbook_dialog"
-        Priority = 4
+        Priority = 5
         EvidenceFamily = "native-dialog"
         EvidenceSubject = "excel"
         CaptureStatus = "planned-separate-foreground-guarded-capture"
@@ -227,7 +251,7 @@ $interactiveCapturePlan = @(
     [pscustomobject]@{
         ScenarioId = "native-dialog:save-as-workbook"
         ScenarioFileName = "save_as_workbook_dialog"
-        Priority = 5
+        Priority = 6
         EvidenceFamily = "native-dialog"
         EvidenceSubject = "excel"
         CaptureStatus = "planned-separate-foreground-guarded-capture"
@@ -565,6 +589,14 @@ function Open-ExcelWorksheetContextMenu($expectedPid, $expectedTitle) {
     [System.Windows.Forms.SendKeys]::SendWait("+{F10}")
 }
 
+function Open-ExcelHomeBordersDropdown($expectedPid, $expectedTitle) {
+    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel Home Borders dropdown keyboard input"
+    [System.Windows.Forms.SendKeys]::SendWait("%h")
+    Start-Sleep -Milliseconds 350
+    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel Home Borders dropdown keytip continuation"
+    [System.Windows.Forms.SendKeys]::SendWait("b")
+}
+
 function Open-ExcelNativeOpenDialog($expectedPid, $expectedTitle) {
     Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel native Open dialog keyboard input"
     [System.Windows.Forms.SendKeys]::SendWait("^{F12}")
@@ -837,6 +869,130 @@ function Invoke-ExcelNumberFormatDropdownTour {
                     EvidenceSubject = "excel"
                     CounterpartSubject = "freex"
                     CounterpartFileName = "freex_dropdown_home_number_format_opened.png"
+                    FileName = $fileName
+                    Path = $path
+                    Width = $captureBounds.Width
+                    Height = $captureBounds.Height
+                    CaptureMethod = $captureSource
+                    CaptureStatus = "complete"
+                }
+            )
+        } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+
+        Write-Host "Saved $path"
+        Write-Host "Saved $manifestPath"
+    }
+    finally {
+        if ($null -ne $workbook) {
+            $workbook.Close($false) | Out-Null
+        }
+        if ($null -ne $excelApp) {
+            $excelApp.Quit() | Out-Null
+        }
+    }
+}
+
+function Invoke-ExcelHomeBordersDropdownTour {
+    New-Item -ItemType Directory -Force -Path $homeBordersDropdownOutDir | Out-Null
+    Clear-HomeBordersDropdownEvidenceArtifacts
+
+    $excelApp = $null
+    $workbook = $null
+    try {
+        $excelApp = New-Object -ComObject Excel.Application
+        $excelApp.Visible = $true
+        $excelApp.DisplayAlerts = $false
+        $excelApp.WindowState = -4143
+        $excelApp.Top = 0
+        $excelApp.Left = 0
+        $excelApp.Width = 900
+        $excelApp.Height = 720
+        $workbook = $excelApp.Workbooks.Add()
+        Start-Sleep -Milliseconds 700
+
+        $excelHwnd = [IntPtr]$excelApp.Hwnd
+        if ($excelHwnd -eq [IntPtr]::Zero) {
+            Clear-HomeBordersDropdownEvidenceArtifacts
+            throw "Excel Home Borders dropdown tour could not resolve the Excel window handle."
+        }
+
+        $excelPid = 0
+        [Win32e]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
+        $excelTitle = Get-WindowTitle $excelHwnd
+        Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle "Excel Home Borders dropdown setup"
+        Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel Home Borders dropdown setup"
+
+        Open-ExcelHomeBordersDropdown $excelPid $excelTitle
+        Start-Sleep -Milliseconds 1800
+        Assert-ForegroundProcessOwnership $excelPid "Excel Home Borders dropdown capture"
+
+        $popup = Find-ExcelPopupWindow $excelPid $excelHwnd 120 160
+        if ($null -eq $popup) {
+            Clear-HomeBordersDropdownEvidenceArtifacts
+            throw "Excel Home Borders dropdown tour did not detect a foreground Excel popup window after Alt,H,B."
+        }
+
+        if (($popup.Right - $popup.Left) -gt 560 -or ($popup.Bottom - $popup.Top) -gt 1040) {
+            Clear-HomeBordersDropdownEvidenceArtifacts
+            throw "Excel Home Borders dropdown tour detected an oversized candidate window ($($popup.Right - $popup.Left)x$($popup.Bottom - $popup.Top)) instead of the Borders menu."
+        }
+
+        $captureSource = "popup-window-rectangle"
+        $captureBounds = [pscustomobject]@{
+            Left = $popup.Left
+            Top = $popup.Top
+            Right = $popup.Right
+            Bottom = $popup.Bottom
+            Width = $popup.Right - $popup.Left
+            Height = $popup.Bottom - $popup.Top
+        }
+
+        $fileName = "interactive_home_borders_opened.png"
+        $path = Join-Path $homeBordersDropdownOutDir $fileName
+        Assert-ForegroundProcessOwnership $excelPid "Excel Home Borders dropdown screen capture"
+        Capture-ScreenRectangle $captureBounds.Left $captureBounds.Top $captureBounds.Width $captureBounds.Height $path
+
+        $manifestPath = Join-Path $homeBordersDropdownOutDir "excel_home_borders_dropdown_tour_manifest.json"
+        [pscustomobject]@{
+            Tool = "FREEX_EXCEL_HOME_BORDERS_DROPDOWN_TOUR"
+            EvidenceFamily = "dropdown"
+            EvidenceSubject = "excel"
+            EvidenceApp = "Microsoft Excel"
+            OutputDirectory = $homeBordersDropdownOutDir
+            OutputNaming = "interactive_home_borders_opened.png"
+            CatalogEvidenceTarget = "docs/testing/ui-test-catalog.md"
+            ScenarioId = "dropdown:home-borders"
+            EntryPath = "Alt,H,B"
+            CaptureStatus = "complete"
+            CaptureMethod = $captureSource
+            ForegroundGuard = [pscustomobject]@{
+                Required = $true
+                ExpectedProcessId = $excelPid
+                ExpectedWindowTitle = $excelTitle
+                Policy = "Seed a blank Excel workbook, then abort and clear Home Borders dropdown evidence unless Excel owns foreground immediately before Alt,H,B and before screen capture."
+            }
+            Pairing = [pscustomobject]@{
+                PairKeyPattern = "interactive:home-borders:<State>"
+                PairKey = "interactive:home-borders:opened"
+                CounterpartSubject = "freex"
+                CounterpartTool = "FREEX_HOME_BORDERS_DROPDOWN_TOUR"
+                CounterpartFileName = "freex_dropdown_home_borders_opened.png"
+            }
+            Scenario = [pscustomobject]@{
+                ScenarioId = "dropdown:home-borders"
+                ScenarioFileName = "home_borders"
+                State = "opened"
+                Trigger = "Excel COM starts a blank workbook and foreground-guarded Alt,H,B opens the Home Borders dropdown."
+            }
+            WindowBounds = $captureBounds
+            Captures = @(
+                [pscustomobject]@{
+                    CaptureSequence = 1
+                    CaptureKey = "interactive:home-borders:opened"
+                    PairKey = "interactive:home-borders:opened"
+                    EvidenceSubject = "excel"
+                    CounterpartSubject = "freex"
+                    CounterpartFileName = "freex_dropdown_home_borders_opened.png"
                     FileName = $fileName
                     Path = $path
                     Width = $captureBounds.Width
@@ -1264,6 +1420,12 @@ if ($AutoFilterFlyoutTour -eq "1") {
 
 if ($NumberFormatDropdownTour -eq "1") {
     Invoke-ExcelNumberFormatDropdownTour
+    Write-Host "Done."
+    exit 0
+}
+
+if ($HomeBordersDropdownTour -eq "1") {
+    Invoke-ExcelHomeBordersDropdownTour
     Write-Host "Done."
     exit 0
 }
