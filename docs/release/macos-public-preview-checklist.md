@@ -117,6 +117,9 @@ Use a representative `.fxl` workbook with recognizable cell contents or sheet na
 | Create a new workbook | Blank workbook appears and accepts keyboard focus |  | Pass / Fail |  |
 | Enter values and formulas | Typed values and a simple formula commit correctly |  | Pass / Fail |  |
 | Save and Save As | Native menu save routes create or update the expected file |  | Pass / Fail |  |
+| Open picker creates bookmark identity | Opening a workbook through the native picker succeeds, and local diagnostics show only redacted file-access grant metadata if grant diagnostics are enabled |  | Pass / Fail |  |
+| Bookmark scope wraps open, save, and recent-file I/O | Open, Save, Save As, and Open Recent continue to work after relaunch for files outside the app sandbox, without requiring the tester to reselect the same file unnecessarily |  | Pass / Fail |  |
+| Bookmark payload stays out of diagnostics and release evidence | Diagnostics and release evidence contain no workbook paths, file names, formulas, workbook contents, raw storage identifiers, or bookmark payloads |  | Pass / Fail |  |
 | Close dirty workbook | Close prompt offers Save, Discard, and Cancel with clear labels |  | Pass / Fail |  |
 | Reopen saved workbook | Saved values, formulas, sheet names, and simple formatting survive reopen |  | Pass / Fail |  |
 | Recent files | Opened or saved workbook appears in the recent-file route when expected |  | Pass / Fail |  |

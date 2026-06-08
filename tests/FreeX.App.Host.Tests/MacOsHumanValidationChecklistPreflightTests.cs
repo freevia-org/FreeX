@@ -532,6 +532,9 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
             | Create a new workbook | blank workbook | created | Pass | screenshot |
             | Enter values and formulas | values and formulas commit | entered values and formula committed | Pass | screenshot |
             | Save and Save As | saves files | saved and save-as worked | Pass | screenshot |
+            | Open picker creates bookmark identity | grant metadata stays redacted | opened through native picker and diagnostics had redacted grant metadata only | Pass | diagnostics excerpt |
+            | Bookmark scope wraps open, save, and recent-file I/O | file access remains available | open, save, save-as, and recent-file routes worked after relaunch | Pass | notes |
+            | Bookmark payload stays out of diagnostics and release evidence | sensitive fields absent | diagnostics and evidence had no paths, filenames, formulas, contents, storage identifiers, or bookmark payloads | Pass | diagnostics review |
             | Close dirty workbook | prompt choices clear | Save, Discard, and Cancel reachable | Pass | screenshot |
             | Reopen saved workbook | values survive | reopened expected values | Pass | screenshot |
             | Recent files | recent route updated | saved workbook appeared in recent files | Pass | screenshot |

@@ -59,6 +59,60 @@ public sealed class AppDiagnosticsFileStoreTests
     }
 
     [Fact]
+    public void RecordEvent_AllowsFileAccessGrantMetadataButDropsSensitiveGrantDetails()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var store = new AppDiagnosticsFileStore(new AppDiagnosticsOptions(temp.Path, IsEnabled: true));
+        var metadata = CreateMetadata();
+
+        store.RecordEvent("workbook_file_access_scope", metadata, new Dictionary<string, string?>
+        {
+            ["source"] = "avalonia",
+            ["scope"] = "workbook_file_access",
+            ["status"] = "scope_started",
+            ["grantKind"] = "macos-security-scoped-bookmark",
+            ["payloadRedacted"] = "true",
+            ["bookmarkPayload"] = "RAW_BOOKMARK_TOKEN",
+            ["fileName"] = "private.fxl",
+            ["filename"] = "private.fxl",
+            ["localPath"] = "/Users/tester/private.fxl",
+            ["path"] = "/Users/tester/private.fxl",
+            ["workbookPath"] = "/Users/tester/private.fxl",
+            ["workbookContents"] = "secret workbook text",
+            ["contents"] = "secret workbook text",
+            ["formula"] = "=SECRET()",
+            ["storageIdentifier"] = "file:///Users/tester/private.fxl",
+            ["rawStorageIdentifier"] = "file:///Users/tester/private.fxl"
+        });
+
+        var line = File.ReadLines(Path.Combine(temp.Path, "events.jsonl")).Single();
+        using var document = JsonDocument.Parse(line);
+        var root = document.RootElement;
+        root.GetProperty("eventName").GetString().Should().Be("workbook_file_access_scope");
+        root.GetProperty("source").GetString().Should().Be("avalonia");
+        root.GetProperty("scope").GetString().Should().Be("workbook_file_access");
+        root.GetProperty("status").GetString().Should().Be("scope_started");
+        root.GetProperty("grantKind").GetString().Should().Be("macos-security-scoped-bookmark");
+        root.GetProperty("payloadRedacted").GetString().Should().Be("true");
+        line.Should().NotContain("RAW_BOOKMARK_TOKEN");
+        line.Should().NotContain("private.fxl");
+        line.Should().NotContain("SECRET");
+        line.Should().NotContain("secret workbook text");
+        line.Should().NotContain("file:///Users/tester/private.fxl");
+        line.Should().NotContain("\"bookmarkPayload\"");
+        line.Should().NotContain("\"fileName\"");
+        line.Should().NotContain("\"filename\"");
+        line.Should().NotContain("\"localPath\"");
+        line.Should().NotContain("\"path\"");
+        line.Should().NotContain("\"workbookPath\"");
+        line.Should().NotContain("\"workbookContents\"");
+        line.Should().NotContain("\"contents\"");
+        line.Should().NotContain("\"formula\"");
+        line.Should().NotContain("\"storageIdentifier\"");
+        line.Should().NotContain("\"rawStorageIdentifier\"");
+    }
+
+    [Fact]
     public void RecordCrash_WritesCrashReportAndEvent()
     {
         using var temp = new TestTemporaryDirectory();

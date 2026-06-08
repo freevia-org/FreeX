@@ -55,6 +55,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests");
+        script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AppDiagnosticsFileStoreTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests");
@@ -773,6 +774,10 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("private void SelectCurrentRegionOrAll()");
         script.Should().Contain("private NativeMenu CreateNativeOpenRecentMenu(bool isIdle)");
         script.Should().Contain("private void RecordRecentWorkbook(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null)");
+        script.Should().Contain("WorkbookFileAccessServiceFactory.Create(App.Diagnostics)");
+        script.Should().Contain("RecordFileAccessEvent(`\"workbook_file_access_identity`\", status, grantKind)");
+        script.Should().Contain("RecordFileAccessEvent(`\"workbook_file_access_scope`\", status, grantKind)");
+        script.Should().Contain("[\"payloadRedacted\"] = string.IsNullOrWhiteSpace(grantKind) ? null : \"true\"");
         script.Should().Contain("_closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();");
         script.Should().Contain("_sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true)");
         script.Should().Contain("RefreshViewportSizeForZoom();");
@@ -1227,7 +1232,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     run: |
                       dotnet test tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj \
                         --configuration Release \
-                        --filter 'FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfTextCapabilityPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AppStoragePathPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppOptionsStoreTests|FullyQualifiedName~FreeX.App.Services.Tests.AtomicFileWriterTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests|FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests' \
+                        --filter 'FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfTextCapabilityPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppDiagnosticsFileStoreTests|FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AppStoragePathPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppOptionsStoreTests|FullyQualifiedName~FreeX.App.Services.Tests.AtomicFileWriterTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests|FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests' \
                         --logger "trx;LogFileName=freex-${"{{"} matrix.runtime {"}}"}-portable-pdf-exporter-tests.trx" \
                         --results-directory artifacts
                       dotnet test tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj \
@@ -1839,6 +1844,82 @@ public sealed class MacOsAppReadinessPreflightTests
 
         WriteFile(
             root,
+            "src/FreeX.App.Services/AppDiagnosticsFileStore.cs",
+            """
+            namespace FreeX.App.Services;
+
+            public sealed class AppDiagnosticsFileStore
+            {
+                private static readonly HashSet<string> AllowedPropertyNames = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    "grantKind",
+                    "payloadRedacted"
+                };
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Avalonia/WorkbookFileAccessService.cs",
+            """
+            namespace FreeX.App.Avalonia;
+
+            internal interface IWorkbookFileAccessService { }
+
+            internal sealed class WorkbookFileAccessScope
+            {
+                public static WorkbookFileAccessScope FromDisposable(IDisposable disposable, Action? onDispose = null) => new();
+            }
+
+            internal static class WorkbookFileAccessServiceFactory
+            {
+                public static IWorkbookFileAccessService Create(AvaloniaAppDiagnostics? diagnostics = null) =>
+                    new AvaloniaWorkbookFileAccessService(diagnostics);
+            }
+
+            internal sealed class AvaloniaWorkbookFileAccessService : IWorkbookFileAccessService
+            {
+                internal const string MacOsSecurityScopedBookmarkKind = "macos-security-scoped-bookmark";
+
+                public AvaloniaWorkbookFileAccessService(AvaloniaAppDiagnostics? diagnostics = null) { }
+
+                private async Task BeginAsync(IStorageItem storageItem, IStorageProvider storageProvider, WorkbookFileAccessIdentity identity, string path)
+                {
+                    if (storageItem is { CanBookmark: true } && StorageItemMatchesPath(storageItem, path))
+                    {
+                        var bookmark = await storageItem.SaveBookmarkAsync();
+                        RecordIdentityEvent("bookmark_created", grantKind: MacOsSecurityScopedBookmarkKind);
+                        var storageFile = await storageProvider.OpenFileBookmarkAsync(bookmark);
+                        PlatformPathIdentityComparer.Current.Equals(identity.LocalPath, resolvedPath);
+                        RecordScopeEvent("scope_started", grantKind: MacOsSecurityScopedBookmarkKind);
+                        WorkbookFileAccessScope.FromDisposable(
+                            storageFile,
+                            () => RecordScopeEvent("scope_ended", grantKind: MacOsSecurityScopedBookmarkKind));
+                    }
+                }
+
+                private static bool StorageItemMatchesPath(IStorageItem storageItem, string path) => true;
+
+                private void RecordIdentityEvent(string status, string? grantKind = null) =>
+                    RecordFileAccessEvent("workbook_file_access_identity", status, grantKind);
+
+                private void RecordScopeEvent(string status, string? grantKind = null) =>
+                    RecordFileAccessEvent("workbook_file_access_scope", status, grantKind);
+
+                private void RecordFileAccessEvent(string eventName, string status, string? grantKind)
+                {
+                    _diagnostics?.RecordEvent(eventName, new Dictionary<string, string?>
+                    {
+                        ["scope"] = "workbook_file_access",
+                        ["grantKind"] = string.IsNullOrWhiteSpace(grantKind) ? null : grantKind,
+                        ["payloadRedacted"] = string.IsNullOrWhiteSpace(grantKind) ? null : "true"
+                    });
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
             "src/FreeX.App.Avalonia/MainWindow.cs",
             """
             using FreeX.Core.Calc;
@@ -1873,6 +1954,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 _session.SetViewportOrigin(topRow, leftCol)
                 */
                 public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files) => await Task.CompletedTask;
+                private IWorkbookFileAccessService _fileAccess = WorkbookFileAccessServiceFactory.Create(App.Diagnostics);
                 private static void RenderCell(CellStyle? style)
                 {
                     CreateColorPaletteFlyout(ColorPaletteTarget.Fill, includeClearFill: true);

@@ -518,7 +518,7 @@ public sealed class MainWindow : Window
         : this(
             startupArguments,
             WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel),
-            WorkbookFileAccessServiceFactory.Create())
+            WorkbookFileAccessServiceFactory.Create(App.Diagnostics))
     {
     }
 

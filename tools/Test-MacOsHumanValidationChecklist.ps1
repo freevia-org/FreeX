@@ -848,6 +848,9 @@ if ($null -ne $workbook) {
         "Create a new workbook",
         "Enter values and formulas",
         "Save and Save As",
+        "Open picker creates bookmark identity",
+        "Bookmark scope wraps open, save, and recent-file I/O",
+        "Bookmark payload stays out of diagnostics and release evidence",
         "Close dirty workbook",
         "Reopen saved workbook",
         "Recent files"

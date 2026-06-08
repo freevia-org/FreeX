@@ -511,6 +511,7 @@ function Test-MacOsWorkflow {
         "FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.AppDiagnosticsFileStoreTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests",
@@ -1052,6 +1053,39 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
+            Path = "src\FreeX.App.Services\AppDiagnosticsFileStore.cs"
+            Markers = @(
+                "AllowedPropertyNames",
+                '"grantKind"',
+                '"payloadRedacted"'
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "src\FreeX.App.Avalonia\WorkbookFileAccessService.cs"
+            Markers = @(
+                "Create(AvaloniaAppDiagnostics? diagnostics = null)",
+                "new AvaloniaWorkbookFileAccessService(diagnostics)",
+                "AvaloniaWorkbookFileAccessService(AvaloniaAppDiagnostics? diagnostics = null)",
+                "MacOsSecurityScopedBookmarkKind = `"macos-security-scoped-bookmark`"",
+                "storageItem is { CanBookmark: true }",
+                "StorageItemMatchesPath(storageItem, path)",
+                "storageItem.SaveBookmarkAsync()",
+                "storageProvider.OpenFileBookmarkAsync(bookmark)",
+                "PlatformPathIdentityComparer.Current.Equals(identity.LocalPath, resolvedPath)",
+                "WorkbookFileAccessScope.FromDisposable(",
+                "RecordIdentityEvent(`"bookmark_created`", grantKind: MacOsSecurityScopedBookmarkKind);",
+                "RecordScopeEvent(`"scope_started`", grantKind: MacOsSecurityScopedBookmarkKind);",
+                "RecordScopeEvent(`"scope_ended`", grantKind: MacOsSecurityScopedBookmarkKind)",
+                "RecordFileAccessEvent(`"workbook_file_access_identity`", status, grantKind)",
+                "RecordFileAccessEvent(`"workbook_file_access_scope`", status, grantKind)",
+                '["scope"] = "workbook_file_access"',
+                '["grantKind"] = string.IsNullOrWhiteSpace(grantKind) ? null : grantKind',
+                '["payloadRedacted"] = string.IsNullOrWhiteSpace(grantKind) ? null : "true"'
+            )
+            OrderedPairs = @()
+        },
+        @{
             Path = "src\FreeX.App.Avalonia\MainWindow.cs"
             Markers = @(
                 "private const string NativeWorkbookExtension = `".fxl`";",
@@ -1070,6 +1104,7 @@ function Test-SourceWiring {
                 "WorkbookViewportScrollPlanner.CalculateViewportOrigin(",
                 "_session.SetViewportOrigin(topRow, leftCol)",
                 "public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files)",
+                "WorkbookFileAccessServiceFactory.Create(App.Diagnostics)",
                 "CreateColorPaletteFlyout(ColorPaletteTarget.Fill, includeClearFill: true)",
                 "_formatPainterButton.Content = `"Format Painter`";",
                 "AutomationProperties.SetAutomationId(_formatPainterButton, `"HomeFormatPainterButton`");",
