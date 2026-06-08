@@ -221,14 +221,23 @@ public partial class OptionsDialog : Window
     private static bool QuickAccessCommandTextMatches(string text, string filter) =>
         text.Contains(filter, StringComparison.CurrentCultureIgnoreCase);
 
+    private static QuickAccessCommandChoice? FindQuickAccessCommandChoice(ListBox listBox, string commandId) =>
+        listBox.Items
+            .OfType<QuickAccessCommandChoice>()
+            .FirstOrDefault(choice => QuickAccessCommandIdsEqual(choice.Id, commandId));
+
+    private int IndexOfQuickAccessCommandId(string commandId) =>
+        _quickAccessCommandIds.FindIndex(id => QuickAccessCommandIdsEqual(id, commandId));
+
+    private static bool QuickAccessCommandIdsEqual(string id, string otherId) =>
+        string.Equals(id, otherId, StringComparison.OrdinalIgnoreCase);
+
     private static void SelectQuickAccessCommand(ListBox listBox, string? commandId)
     {
         if (string.IsNullOrWhiteSpace(commandId))
             return;
 
-        listBox.SelectedItem = listBox.Items
-            .OfType<QuickAccessCommandChoice>()
-            .FirstOrDefault(choice => string.Equals(choice.Id, commandId, StringComparison.OrdinalIgnoreCase));
+        listBox.SelectedItem = FindQuickAccessCommandChoice(listBox, commandId);
     }
 
     private void UpdateQuickAccessToolbarCustomizationButtons()
@@ -273,7 +282,7 @@ public partial class OptionsDialog : Window
             return;
         }
 
-        var removedIndex = _quickAccessCommandIds.FindIndex(id => string.Equals(id, choice.Id, StringComparison.OrdinalIgnoreCase));
+        var removedIndex = IndexOfQuickAccessCommandId(choice.Id);
         if (removedIndex < 0)
             return;
 
@@ -359,7 +368,7 @@ public partial class OptionsDialog : Window
         if (QuickAccessSelectedCommandsList.SelectedItem is not QuickAccessCommandChoice choice)
             return;
 
-        var index = _quickAccessCommandIds.FindIndex(id => string.Equals(id, choice.Id, StringComparison.OrdinalIgnoreCase));
+        var index = IndexOfQuickAccessCommandId(choice.Id);
         if (index <= 0)
             return;
 
@@ -373,7 +382,7 @@ public partial class OptionsDialog : Window
         if (QuickAccessSelectedCommandsList.SelectedItem is not QuickAccessCommandChoice choice)
             return;
 
-        var index = _quickAccessCommandIds.FindIndex(id => string.Equals(id, choice.Id, StringComparison.OrdinalIgnoreCase));
+        var index = IndexOfQuickAccessCommandId(choice.Id);
         if (index < 0 || index >= _quickAccessCommandIds.Count - 1)
             return;
 
@@ -475,12 +484,20 @@ public partial class OptionsDialog : Window
         ProofingCustomDictionaryWordsList.ItemsSource = _customDictionaryWords.ToList();
         if (!string.IsNullOrWhiteSpace(previousSelection))
         {
-            ProofingCustomDictionaryWordsList.SelectedItem = _customDictionaryWords
-                .FirstOrDefault(word => string.Equals(word, previousSelection, StringComparison.OrdinalIgnoreCase));
+            ProofingCustomDictionaryWordsList.SelectedItem = FindCustomDictionaryWord(previousSelection);
         }
 
         UpdateProofingCustomDictionaryButtons();
     }
+
+    private string? FindCustomDictionaryWord(string word) =>
+        _customDictionaryWords.FirstOrDefault(candidate => CustomDictionaryWordsEqual(candidate, word));
+
+    private int IndexOfCustomDictionaryWord(string word) =>
+        _customDictionaryWords.FindIndex(candidate => CustomDictionaryWordsEqual(candidate, word));
+
+    private static bool CustomDictionaryWordsEqual(string word, string otherWord) =>
+        string.Equals(word, otherWord, StringComparison.OrdinalIgnoreCase);
 
     private void UpdateProofingCustomDictionaryButtons()
     {
@@ -533,8 +550,7 @@ public partial class OptionsDialog : Window
         if (ProofingCustomDictionaryWordsList.SelectedItem is not string selectedWord)
             return;
 
-        var removedIndex = _customDictionaryWords.FindIndex(
-            word => string.Equals(word, selectedWord, StringComparison.OrdinalIgnoreCase));
+        var removedIndex = IndexOfCustomDictionaryWord(selectedWord);
         if (removedIndex < 0)
             return;
 
