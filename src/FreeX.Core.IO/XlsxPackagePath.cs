@@ -163,16 +163,50 @@ public static class XlsxPackagePath
 
     public static string GetWorksheetBackgroundMediaFileName(string? fileName, int backgroundIndex, string extension)
     {
-        var candidate = Path.GetFileName(fileName ?? "");
-        if (string.IsNullOrWhiteSpace(candidate) ||
-            candidate.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        var candidate = GetPackageFileName(fileName);
+        if (!IsSafePackageMediaFileName(candidate))
         {
             return $"freexBackground{backgroundIndex}{extension}";
         }
 
-        return Path.HasExtension(candidate)
+        return HasPackageFileExtension(candidate)
             ? candidate
             : $"{candidate}{extension}";
+    }
+
+    private static string GetPackageFileName(string? fileName)
+    {
+        if (string.IsNullOrEmpty(fileName))
+            return "";
+
+        var slash = fileName.LastIndexOf('/');
+        var backslash = fileName.LastIndexOf('\\');
+        var start = Math.Max(slash, backslash) + 1;
+        return fileName[start..];
+    }
+
+    private static bool IsSafePackageMediaFileName(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName) || fileName is "." or "..")
+            return false;
+
+        foreach (var value in fileName)
+        {
+            if (IsUnsafePackageMediaFileNameCharacter(value))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsUnsafePackageMediaFileNameCharacter(char value) =>
+        char.IsControl(value) ||
+        value is ':' or '?' or '*' or '/' or '\\' or '"' or '<' or '>' or '|';
+
+    private static bool HasPackageFileExtension(string fileName)
+    {
+        var dot = fileName.LastIndexOf('.');
+        return dot >= 0 && dot < fileName.Length - 1;
     }
 
     private static string UnescapePathSegments(string path)
