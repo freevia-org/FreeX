@@ -34,6 +34,51 @@ public sealed class XlsxPackageHealthValidatorTests
     }
 
     [Fact]
+    public void Validate_FlagsDuplicateDefaultContentTypeDeclaration()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            contentTypeDefaults:
+            [
+                """<Default Extension="xml" ContentType="application/xml" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("duplicate Default extension 'xml'", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsDuplicateOverrideContentTypeDeclaration()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            contentTypeOverrides:
+            [
+                """<Override PartName="/xl/workbook.xml" ContentType="application/xml" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("duplicate Override PartName '/xl/workbook.xml'", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [InlineData("/xl\\workbook.xml", "must use forward slashes")]
+    [InlineData("/xl/workbook.xml?part=1", "must not include query or fragment text")]
+    [InlineData("/xl/workbook.xml#fragment", "must not include query or fragment text")]
+    public void Validate_FlagsInvalidOverridePartName(string partName, string expectedWarning)
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="{partName}" ContentType="application/xml" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains(expectedWarning, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Validate_FlagsInvalidRelationshipPartContentType()
     {
         using var package = CreateMinimalWorkbookPackage(
@@ -45,6 +90,38 @@ public sealed class XlsxPackageHealthValidatorTests
         XlsxPackageHealthValidator.Validate(package)
             .Should()
             .Contain(issue => issue.Contains("must use relationship content type", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsNonRelationshipRelsExtension()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            extraEntries:
+            [
+                ("xl/not-a-relationship.rels", "")
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains(".rels extension outside a valid relationship part location", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsRelationshipContentTypeOnNonRelationshipPart()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            extraEntries:
+            [
+                ("xl/customPayload/item1.bin", "")
+            ],
+            contentTypeDefaults:
+            [
+                """<Default Extension="bin" ContentType="application/vnd.openxmlformats-package.relationships+xml" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("uses relationship content type but is not a valid relationship part", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
