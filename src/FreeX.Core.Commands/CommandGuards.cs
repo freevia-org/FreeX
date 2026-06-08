@@ -16,6 +16,7 @@ internal static class CommandGuards
     private const string PivotTableRequiresDataFieldMessage = "PivotTable requires at least one data field.";
     private const string RowRangeOutsideWorksheetBoundsMessage = "Row range is outside the worksheet bounds.";
     private const string ColumnRangeOutsideWorksheetBoundsMessage = "Column range is outside the worksheet bounds.";
+    private const string AllowedEditRangeOnTargetSheetMessage = "Allowed edit range must be on the target sheet.";
 
     public static CommandOutcome? RejectIfProtected(Sheet sheet)
     {
@@ -69,6 +70,9 @@ internal static class CommandGuards
 
     public static CommandOutcome RejectColumnRangeOutsideWorksheetBounds() =>
         new(false, ColumnRangeOutsideWorksheetBoundsMessage);
+
+    public static CommandOutcome RejectAllowedEditRangeOnTargetSheet() =>
+        new(false, AllowedEditRangeOnTargetSheetMessage);
 
     public static CommandOutcome RejectStructuredTableNotFound() =>
         new(false, StructuredTableNotFoundMessage);
