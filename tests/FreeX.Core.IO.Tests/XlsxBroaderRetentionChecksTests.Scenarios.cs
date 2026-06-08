@@ -27,6 +27,7 @@ public sealed partial class XlsxBroaderRetentionChecksTests
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
         AssertDocumentPropertiesWereRetained(archive);
+        AssertRootPackageRelationshipsWereRetained(archive);
         AssertWorkbookMetadataWasRetainedWithoutOverridingModeledState(archive);
         AssertStyleAndPackagePartsWereRetained(archive);
     }
