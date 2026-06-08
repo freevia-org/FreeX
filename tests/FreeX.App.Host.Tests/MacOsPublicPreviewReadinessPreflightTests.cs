@@ -41,6 +41,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         signingRunbook.Should().Contain("tools/Test-MacOsPublicPreviewReadiness.ps1");
         signingRunbook.Should().Contain("-DistributionCandidate");
         signingRunbook.Should().Contain("-RequireSeparateDiagnosticsArtifact");
+        signingRunbook.Should().Contain("-RequireReleasePublicationArtifact");
         signingRunbook.Should().Contain("-ExpectedRunId <run-id>");
         signingRunbook.Should().Contain("-ExpectedRunAttempt <run-attempt>");
         signingRunbook.Should().Contain("Keep those wrapper directory names intact under `artifacts/macos-preview`.");
@@ -48,10 +49,22 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         distributionPlan.Should().Contain("Windows-runnable");
         distributionPlan.Should().Contain("-ExpectedRunId <run-id>");
         distributionPlan.Should().Contain("-ExpectedRunAttempt <run-attempt>");
+        distributionPlan.Should().Contain("-RequireReleasePublicationArtifact");
         distributionPlan.Should().Contain("Do not flatten wrapper contents directly into the artifact root");
         hostedRunnerPlan.Should().Contain("-ExpectedRunId <run-id>");
         hostedRunnerPlan.Should().Contain("-ExpectedRunAttempt <run-attempt>");
+        hostedRunnerPlan.Should().Contain("-RequireReleasePublicationArtifact");
         hostedRunnerPlan.Should().Contain("wrapper directory under the artifact root");
+
+        AssertDistributionCandidatePreflightCommandsRequireReleasePublicationArtifact(
+            signingRunbook,
+            "docs/release/macos-signing-notarization.md");
+        AssertDistributionCandidatePreflightCommandsRequireReleasePublicationArtifact(
+            distributionPlan,
+            "docs/release/test-distribution.md");
+        AssertDistributionCandidatePreflightCommandsRequireReleasePublicationArtifact(
+            hostedRunnerPlan,
+            "docs/planning/macos-hosted-runner-build-plan.md");
     }
 
     [Fact]
@@ -284,6 +297,23 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
             "Test-MacOsPublicPreviewReadiness.ps1",
             repoRoot,
             $"-ArtifactRoot \"{artifactRoot}\" {arguments}");
+    }
+
+    private static void AssertDistributionCandidatePreflightCommandsRequireReleasePublicationArtifact(
+        string document,
+        string documentName)
+    {
+        var commandLines = document
+            .Split(new[] { "\r\n", "\n" }, StringSplitOptions.None)
+            .Where(line =>
+                line.Contains("tools/Test-MacOsPublicPreviewReadiness.ps1", StringComparison.Ordinal) &&
+                line.Contains("-DistributionCandidate", StringComparison.Ordinal))
+            .ToArray();
+
+        commandLines.Should().NotBeEmpty($"{documentName} should document public-preview distribution-candidate preflight usage");
+        commandLines.Should().OnlyContain(
+            line => line.Contains("-RequireReleasePublicationArtifact", StringComparison.Ordinal),
+            $"{documentName} must require release-publication artifact validation in distribution-candidate command examples");
     }
 
     private static SyntheticBundle CreateSyntheticBundle(

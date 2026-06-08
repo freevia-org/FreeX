@@ -62,13 +62,13 @@ After unzipping both runtime artifact wrappers on a Windows machine, run the evi
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-MacOsPublicPreviewReadiness.ps1 -ArtifactRoot artifacts/macos-preview -ExpectedRunId <run-id> -ExpectedRunAttempt <run-attempt>
 ```
 
-For a public-preview distribution-candidate run, require the Developer ID, notarization, stapler, and separate diagnostics artifact evidence:
+For a public-preview distribution-candidate run, require the Developer ID, notarization, stapler, separate diagnostics artifact, and guarded release-publication artifact evidence:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-MacOsPublicPreviewReadiness.ps1 -ArtifactRoot artifacts/macos-preview -ExpectedRunId <run-id> -ExpectedRunAttempt <run-attempt> -DistributionCandidate -RequireSeparateDiagnosticsArtifact
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-MacOsPublicPreviewReadiness.ps1 -ArtifactRoot artifacts/macos-preview -ExpectedRunId <run-id> -ExpectedRunAttempt <run-attempt> -DistributionCandidate -RequireSeparateDiagnosticsArtifact -RequireReleasePublicationArtifact
 ```
 
-`-ExpectedRunId` and `-ExpectedRunAttempt` are optional, but use them when validating artifacts from a specific GitHub Actions run. `tools/Test-MacOsPublicPreviewReadiness.ps1` validates both `osx-arm64` and `osx-x64` bundles without macOS by checking the downloaded evidence files, smoke logs, tester instructions, app ZIP, and `.zip.sha256` checksum. It requires artifact channel/readiness keys, `zip_sha256`, signing and notarization status, stapler status for distribution candidates, startup smoke, LaunchServices launch smoke, Open-With smoke, `format_cells_style_roundtrip=true` with a count of at least two, command key smoke, checksum files, diagnostics artifact file sets, and tester instructions.
+`-ExpectedRunId` and `-ExpectedRunAttempt` are optional, but use them when validating artifacts from a specific GitHub Actions run. `tools/Test-MacOsPublicPreviewReadiness.ps1` validates both `osx-arm64` and `osx-x64` bundles without macOS by checking the downloaded evidence files, smoke logs, tester instructions, app ZIP, and `.zip.sha256` checksum. It requires artifact channel/readiness keys, `zip_sha256`, signing and notarization status, stapler status for distribution candidates, startup smoke, LaunchServices launch smoke, Open-With smoke, `format_cells_style_roundtrip=true` with a count of at least two, command key smoke, checksum files, diagnostics artifact file sets, release publication manifest/instructions when `-RequireReleasePublicationArtifact` is passed, and tester instructions.
 
 ## Required Apple Inputs
 
