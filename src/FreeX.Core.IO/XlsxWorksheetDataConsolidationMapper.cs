@@ -122,38 +122,55 @@ internal static class XlsxWorksheetDataConsolidationMapper
 
     private static void InsertDataConsolidate(XElement root, XElement dataConsolidate)
     {
-        var insertionPoint = root.Elements()
-            .FirstOrDefault(element =>
-                element.Name.Namespace == WorksheetNs &&
-                new[]
+        string[] laterElementNames =
+        [
+            "customSheetViews",
+            "mergeCells",
+            "phoneticPr",
+            "conditionalFormatting",
+            "dataValidations",
+            "hyperlinks",
+            "printOptions",
+            "pageMargins",
+            "pageSetup",
+            "headerFooter",
+            "rowBreaks",
+            "colBreaks",
+            "customProperties",
+            "cellWatches",
+            "ignoredErrors",
+            "singleXmlCells",
+            "smartTags",
+            "drawing",
+            "legacyDrawing",
+            "legacyDrawingHF",
+            "picture",
+            "oleObjects",
+            "controls",
+            "webPublishItems",
+            "tableParts",
+            "extLst"
+        ];
+
+        XElement? insertionPoint = null;
+        foreach (var element in root.Elements())
+        {
+            if (element.Name.Namespace != WorksheetNs)
+                continue;
+
+            foreach (var laterElementName in laterElementNames)
+            {
+                if (string.Equals(element.Name.LocalName, laterElementName, StringComparison.Ordinal))
                 {
-                    "customSheetViews",
-                    "mergeCells",
-                    "phoneticPr",
-                    "conditionalFormatting",
-                    "dataValidations",
-                    "hyperlinks",
-                    "printOptions",
-                    "pageMargins",
-                    "pageSetup",
-                    "headerFooter",
-                    "rowBreaks",
-                    "colBreaks",
-                    "customProperties",
-                    "cellWatches",
-                    "ignoredErrors",
-                    "singleXmlCells",
-                    "smartTags",
-                    "drawing",
-                    "legacyDrawing",
-                    "legacyDrawingHF",
-                    "picture",
-                    "oleObjects",
-                    "controls",
-                    "webPublishItems",
-                    "tableParts",
-                    "extLst"
-                }.Contains(element.Name.LocalName, StringComparer.Ordinal));
+                    insertionPoint = element;
+                    break;
+                }
+            }
+
+            if (insertionPoint is not null)
+                break;
+        }
+
         if (insertionPoint is null)
             root.Add(dataConsolidate);
         else

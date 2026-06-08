@@ -44,7 +44,13 @@ internal static class XlsxWorksheetDimensionMetadataWriter
 
     private static void InsertDimension(XElement root, XElement dimension)
     {
-        var firstChild = root.Elements().FirstOrDefault();
+        XElement? firstChild = null;
+        foreach (var child in root.Elements())
+        {
+            firstChild = child;
+            break;
+        }
+
         if (firstChild is not null)
         {
             firstChild.AddBeforeSelf(dimension);
