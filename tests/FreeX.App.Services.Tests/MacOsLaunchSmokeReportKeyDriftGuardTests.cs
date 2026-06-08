@@ -106,7 +106,7 @@ public sealed class MacOsLaunchSmokeReportKeyDriftGuardTests
     }
 
     [Fact]
-    public void MacOsLaunchSmoke_CommandKeyReportKeysMatchWorkflowAndPlanningMarkers()
+    public void MacOsLaunchSmoke_CommandKeyReportKeysMatchSourcePlanningAndHostedSafeWorkflowMarkers()
     {
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
         var workflow = File.ReadAllText(RepositoryFileLocator.Find(".github", "workflows", "macos-app.yml"));
@@ -118,6 +118,14 @@ public sealed class MacOsLaunchSmokeReportKeyDriftGuardTests
         sourceReportKeys.Should().Equal(ExpectedCommandKeyReportKeys);
         workflowGrepKeys.Should().Equal(ExpectedHostedWorkflowCommandKeyGrepKeys);
         workflow.Should().Contain("live_command_key_smoke=not_required");
+
+        FindMissingKeys(
+                ExpectedHostedWorkflowCommandKeyGrepKeys,
+                sourceReportKeys,
+                "hosted workflow grep marker",
+                "MacOsLaunchSmoke report")
+            .Should()
+            .BeEmpty("every hosted workflow grep should stay backed by a MacOsLaunchSmoke report key");
 
         foreach (var key in ExpectedCommandKeyReportKeys)
             planning.Should().Contain($"{key}=");
