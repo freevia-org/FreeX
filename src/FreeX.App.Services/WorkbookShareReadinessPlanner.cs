@@ -93,6 +93,8 @@ public static class WorkbookShareReadinessPlanner
         {
             WorkbookShareReadinessSaveAsReason.MissingFile when !string.IsNullOrWhiteSpace(plan.CandidatePath) =>
                 $"Save As is required before {surfaceLabel} can send the workbook because the saved path is missing: {plan.CandidatePath}.",
+            WorkbookShareReadinessSaveAsReason.InvalidPath when IsUnsupportedLinkCandidate(plan.CandidatePath) =>
+                $"Save As is required before {surfaceLabel} can send the workbook because cloud or web links are not supported; save the workbook to a local file first.",
             WorkbookShareReadinessSaveAsReason.InvalidPath =>
                 $"Save As is required before {surfaceLabel} can send the workbook because the saved path is not a valid local file path.",
             _ =>
@@ -140,6 +142,24 @@ public static class WorkbookShareReadinessPlanner
     {
         return LocalFilePath.TryNormalize(path, out normalizedPath);
     }
+
+    internal static bool IsUnsupportedLinkCandidate(string? candidatePath)
+    {
+        if (string.IsNullOrWhiteSpace(candidatePath))
+            return false;
+
+        var candidate = candidatePath.Trim();
+        if (!Uri.TryCreate(candidate, UriKind.Absolute, out var uri))
+            return false;
+
+        return !uri.IsFile && !IsWindowsDrivePath(candidate, uri.Scheme);
+    }
+
+    private static bool IsWindowsDrivePath(string candidate, string scheme) =>
+        scheme.Length == 1 &&
+        candidate.Length >= 2 &&
+        candidate[1] == ':' &&
+        char.IsAsciiLetter(candidate[0]);
 
     private static bool FileExists(Func<string, bool> fileExists, string path)
     {

@@ -98,6 +98,25 @@ public sealed class WorkbookShareActionPlannerTests
     }
 
     [Fact]
+    public void CreatePlan_ReportsUnsupportedCloudLinkBeforeShareSheet()
+    {
+        var surface = new WorkbookShareActionSurface("macOS Share Sheet", CanShowShareSheet: true);
+
+        var plan = WorkbookShareActionPlanner.CreatePlan(
+            "https://example.test/Budget.xlsx",
+            surface,
+            _ => throw new InvalidOperationException("cloud links must not probe the file system"));
+
+        plan.Kind.Should().Be(WorkbookShareActionPlanKind.SaveAsBeforeShare);
+        plan.Path.Should().BeNull();
+        plan.SaveAsReason.Should().Be(WorkbookShareReadinessSaveAsReason.InvalidPath);
+        plan.CandidatePath.Should().Be("https://example.test/Budget.xlsx");
+        WorkbookShareActionPlanner.FormatStatus(plan)
+            .Should()
+            .Be("Save As is required before macOS Share Sheet can use the workbook because cloud or web links are not supported; save the workbook to a local file first.");
+    }
+
+    [Fact]
     public void CreatePlan_DefersUnsavedWorkbookWhenNoNativeActionIsAvailable()
     {
         var plan = WorkbookShareActionPlanner.CreatePlan(
