@@ -29,10 +29,7 @@ internal static class XlsxHeaderFooterPicturePackageReader
             return XlsxHeaderFooterPictureSets.Empty;
 
         var worksheetRelsXml = XlsxPackageXmlEditor.LoadXml(worksheetRelsEntry);
-        var vmlRelationship = worksheetRelsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .FirstOrDefault(element => string.Equals(element.Attribute("Id")?.Value, relId, StringComparison.Ordinal));
-        var vmlTarget = vmlRelationship?.Attribute("Target")?.Value;
+        var vmlTarget = FindRelationshipTarget(worksheetRelsXml, packageRelNs + "Relationship", relId);
         if (string.IsNullOrWhiteSpace(vmlTarget))
             return XlsxHeaderFooterPictureSets.Empty;
 
@@ -52,7 +49,7 @@ internal static class XlsxHeaderFooterPicturePackageReader
         foreach (var shape in vmlXml.Descendants(vmlNs + "shape"))
         {
             var id = shape.Attribute("id")?.Value;
-            var slot = XlsxHeaderFooterPicturePackagePlanner.Slots.FirstOrDefault(candidate => string.Equals(candidate.ShapeId, id, StringComparison.OrdinalIgnoreCase));
+            var slot = FindSlot(id);
             if (slot is null)
                 continue;
 
@@ -60,11 +57,7 @@ internal static class XlsxHeaderFooterPicturePackageReader
             if (string.IsNullOrWhiteSpace(rel))
                 continue;
 
-            var imageTarget = vmlRelsXml.Root?
-                .Elements(packageRelNs + "Relationship")
-                .FirstOrDefault(element => string.Equals(element.Attribute("Id")?.Value, rel, StringComparison.Ordinal))
-                ?.Attribute("Target")
-                ?.Value;
+            var imageTarget = FindRelationshipTarget(vmlRelsXml, packageRelNs + "Relationship", rel);
             if (string.IsNullOrWhiteSpace(imageTarget))
                 continue;
 
@@ -91,5 +84,30 @@ internal static class XlsxHeaderFooterPicturePackageReader
             XlsxHeaderFooterPicturePackagePlanner.ToSet(pictures, XlsxHeaderFooterPictureSetKind.FirstPageFooter),
             XlsxHeaderFooterPicturePackagePlanner.ToSet(pictures, XlsxHeaderFooterPictureSetKind.EvenPageHeader),
             XlsxHeaderFooterPicturePackagePlanner.ToSet(pictures, XlsxHeaderFooterPictureSetKind.EvenPageFooter));
+    }
+
+    private static string? FindRelationshipTarget(XDocument relationshipsXml, XName relationshipName, string relationshipId)
+    {
+        if (relationshipsXml.Root is null)
+            return null;
+
+        foreach (var element in relationshipsXml.Root.Elements(relationshipName))
+        {
+            if (string.Equals(element.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal))
+                return element.Attribute("Target")?.Value;
+        }
+
+        return null;
+    }
+
+    private static XlsxHeaderFooterPictureSlot? FindSlot(string? shapeId)
+    {
+        foreach (var candidate in XlsxHeaderFooterPicturePackagePlanner.Slots)
+        {
+            if (string.Equals(candidate.ShapeId, shapeId, StringComparison.OrdinalIgnoreCase))
+                return candidate;
+        }
+
+        return null;
     }
 }
