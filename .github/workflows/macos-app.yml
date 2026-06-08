@@ -1143,6 +1143,25 @@ jobs:
             return $markers
           }
 
+          function Find-DownloadedArtifactFile {
+            param(
+              [Parameter(Mandatory = $true)][string]$Root,
+              [Parameter(Mandatory = $true)][string]$FileName,
+              [Parameter(Mandatory = $true)][string]$ArtifactName
+            )
+
+            $matches = @(Get-ChildItem -LiteralPath $Root -Recurse -File -Filter $FileName)
+            if ($matches.Count -eq 0) {
+              throw "macOS artifact '$ArtifactName' is missing required file '$FileName' under '$Root'."
+            }
+            if ($matches.Count -gt 1) {
+              $matchList = ($matches | ForEach-Object { $_.FullName }) -join ', '
+              throw "macOS artifact '$ArtifactName' contains multiple '$FileName' files: $matchList."
+            }
+
+            return $matches[0].FullName
+          }
+
           $markerKeys = @(
             "github_run_id",
             "github_run_attempt",
@@ -1171,9 +1190,9 @@ jobs:
               throw "Downloaded diagnostics artifact wrapper was not found: $diagnosticsArtifactName"
             }
 
-            $zipPath = Join-Path $appDirectory "freex-$runtime-macos-app.zip"
-            $checksumPath = Join-Path $appDirectory "freex-$runtime-macos-app.zip.sha256"
-            $evidencePath = Join-Path $appDirectory "freex-$runtime-macos-evidence.txt"
+            $zipPath = Find-DownloadedArtifactFile -Root $appDirectory -FileName "freex-$runtime-macos-app.zip" -ArtifactName $appArtifactName
+            $checksumPath = Find-DownloadedArtifactFile -Root $appDirectory -FileName "freex-$runtime-macos-app.zip.sha256" -ArtifactName $appArtifactName
+            $evidencePath = Find-DownloadedArtifactFile -Root $appDirectory -FileName "freex-$runtime-macos-evidence.txt" -ArtifactName $appArtifactName
             $zipSha256 = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
             $checksumText = (Get-Content -LiteralPath $checksumPath -Raw).Trim()
             $evidenceMarkers = Get-LatestEvidenceMarkers -Path $evidencePath -Keys $markerKeys
