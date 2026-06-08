@@ -86,6 +86,44 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
         result.CombinedOutput.Should().Contain("Candidate Summary 'Artifact wrapper name' must be 'freex-41-1-osx-arm64-macos-app'");
     }
 
+    [Fact]
+    public void HumanValidationChecklistPreflight_FailsWhenImportantTemplateRowsAreOmitted()
+    {
+        var missingRows = new (string Section, string Label)[]
+        {
+            ("Gatekeeper First Launch", "Confirm quarantine is still present before first launch, if the artifact was browser-downloaded"),
+            ("Gatekeeper First Launch", "Record Gatekeeper prompt"),
+            ("Command-Key Menu Behavior", "Cmd+Shift+S"),
+            ("Command-Key Menu Behavior", "Cmd+A"),
+            ("Command-Key Menu Behavior", "Cmd+F and Find Next menu route"),
+            ("Command-Key Menu Behavior", "Cmd+B, Cmd+I, Cmd+U"),
+            ("Keyboard-Only Accessibility", "Formula box edits"),
+            ("Keyboard-Only Accessibility", "Sheet tabs"),
+            ("Keyboard-Only Accessibility", "Context menus"),
+            ("VoiceOver Smoke", "Status text"),
+            ("VoiceOver Smoke", "Sheet tabs"),
+        };
+
+        using var temp = new TestTemporaryDirectory();
+        var checklistPath = Path.Combine(temp.Path, "missing-rows-macos-human-checklist.md");
+        var checklist = missingRows.Aggregate(
+            CreateCompletedChecklist(),
+            (current, row) => RemoveChecklistRow(current, row.Section, row.Label));
+        File.WriteAllText(checklistPath, checklist);
+
+        var result = RunChecklistPreflight(
+            checklistPath,
+            "-ExpectedRuntime osx-arm64 -ExpectedRunId 42 -ExpectedRunAttempt 1");
+
+        result.ExitCode.Should().NotBe(0);
+        foreach (var row in missingRows)
+        {
+            result.CombinedOutput.Should().Contain($"Checklist section '{row.Section}' must include '{row.Label}'.");
+        }
+
+        result.CombinedOutput.Should().Contain("macOS human validation checklist failed");
+    }
+
     private static PowerShellResult RunChecklistPreflight(string checklistPath, string arguments = "")
     {
         var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
@@ -93,6 +131,35 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
             "Test-MacOsHumanValidationChecklist.ps1",
             repoRoot,
             $"-ChecklistPath \"{checklistPath}\" {arguments}");
+    }
+
+    private static string RemoveChecklistRow(string checklist, string section, string rowLabel)
+    {
+        var rowPrefix = $"| {rowLabel} |";
+        var lines = checklist.Split(["\r\n", "\n"], StringSplitOptions.None);
+        var filtered = new List<string>(lines.Length);
+        var currentSection = "";
+        var removedCount = 0;
+
+        foreach (var line in lines)
+        {
+            if (line.StartsWith("## ", StringComparison.Ordinal))
+            {
+                currentSection = line[3..].Trim();
+            }
+
+            if (string.Equals(currentSection, section, StringComparison.Ordinal) &&
+                line.TrimStart().StartsWith(rowPrefix, StringComparison.Ordinal))
+            {
+                removedCount++;
+                continue;
+            }
+
+            filtered.Add(line);
+        }
+
+        removedCount.Should().Be(1, $"the synthetic checklist should include exactly one '{rowLabel}' row in '{section}'");
+        return string.Join(Environment.NewLine, filtered);
     }
 
     private static string CreateCompletedChecklist()
@@ -144,7 +211,9 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
 
             | Step | Expected result | Actual result | Status | Evidence |
             | --- | --- | --- | --- | --- |
+            | Confirm quarantine is still present before first launch, if the artifact was browser-downloaded | quarantine evidence or N/A note | browser path did not preserve quarantine | N/A | terminal transcript |
             | Double-click FreeX.app in Finder | launches | launched from Finder | Pass | screenshot |
+            | Record Gatekeeper prompt | prompt allows opening or no prompt is shown | no Gatekeeper prompt was shown after notarized launch | Pass | screenshot |
             | App reaches first usable window | usable window | workbook window opened | Pass | screenshot |
             | Quit and relaunch from Finder | relaunch works | relaunch worked | Pass | screenshot |
 
@@ -153,18 +222,23 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
             | Step | Expected result | Actual result | Status | Evidence |
             | --- | --- | --- | --- | --- |
             | Verify .fxl appears as a FreeX-supported document type | listed | FreeX listed | Pass | screenshot |
+            | Set default .fxl handler, if permitted | default handler set or constraint recorded | tester machine policy disallows Change All | Skipped | notes |
             | Double-click .fxl in Finder | opens workbook | opened selected workbook | Pass | screenshot |
             | Confirm workbook identity | identity matches | expected sheet visible | Pass | screenshot |
             | Right-click .fxl > Open With > FreeX | opens file | opened through Open With | Pass | screenshot |
             | Repeat while FreeX is already running | opens in session | opened in existing session | Pass | screenshot |
+            | Optional spreadsheet file Open With | opens representative spreadsheet when in scope | spreadsheet Open With was out of candidate scope | N/A | notes |
 
             ## Workbook Smoke
 
             | Step | Expected result | Actual result | Status | Evidence |
             | --- | --- | --- | --- | --- |
             | Create a new workbook | blank workbook | created | Pass | screenshot |
+            | Enter values and formulas | values and formulas commit | entered values and formula committed | Pass | screenshot |
             | Save and Save As | saves files | saved and save-as worked | Pass | screenshot |
+            | Close dirty workbook | prompt choices clear | Save, Discard, and Cancel reachable | Pass | screenshot |
             | Reopen saved workbook | values survive | reopened expected values | Pass | screenshot |
+            | Recent files | recent route updated | saved workbook appeared in recent files | Pass | screenshot |
 
             ## Command-Key Menu Behavior
 
@@ -174,8 +248,13 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
             | Cmd+N | creates workbook | created | Pass | screenshot |
             | Cmd+O | opens picker | picker opened | Pass | screenshot |
             | Cmd+S | saves workbook | saved | Pass | screenshot |
+            | Cmd+Shift+S | opens Save As | Save As opened | Pass | screenshot |
             | Cmd+W | closes workbook | closed with prompt | Pass | screenshot |
             | Cmd+Q | quits app | quit with prompt | Pass | screenshot |
+            | Cmd+A | selects current region then sheet | selection expanded as expected | Pass | screenshot |
+            | Cmd+F and Find Next menu route | Find opens and advances | Find opened and next match advanced | Pass | screenshot |
+            | Cmd+B, Cmd+I, Cmd+U | format commands apply | formatting applied and survived reopen | Pass | screenshot |
+            | Cmd+PageUp / Cmd+PageDown or hardware equivalent | switches sheets or limitation recorded | keyboard lacks Page keys; alternate route recorded | N/A | notes |
 
             ## Keyboard-Only Accessibility
 
@@ -183,7 +262,13 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
             | --- | --- | --- | --- | --- |
             | First launch and initial focus | focus visible | visible initial focus | Pass | screenshot |
             | Grid navigation and editing | keyboard works | navigation and edit worked | Pass | notes |
+            | Formula box edits | keyboard reach/edit/commit/cancel works | formula box reached and edited by keyboard | Pass | notes |
+            | Native menus | menus reachable | File, Edit, Format, View, Sheet, and Help invoked | Pass | notes |
+            | Toolbar or command surface | commands reachable | primary command surface reached by keyboard | Pass | notes |
+            | Sheet tabs | tab strip reachable | sheet add, rename, and context route reachable | Pass | notes |
             | Dialogs | predictable focus | dialogs navigated | Pass | notes |
+            | Context menus | context menus keyboard reachable | grid and sheet-tab menus opened from keyboard | Pass | notes |
+            | Help and feedback routes | help routes reachable | Help, About, and Legal Notices reached | Pass | notes |
             | Dirty close and Quit | choices reachable | choices reachable | Pass | notes |
 
             ## VoiceOver Smoke
@@ -194,7 +279,11 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
             | Workbook grid focus | location announced | active cell announced | Pass | transcript |
             | Visible cells | values discoverable | values announced | Pass | transcript |
             | Formula box | formula understandable | formula announced | Pass | transcript |
+            | Status text | status discoverable | selection summary announced | Pass | transcript |
+            | Sheet tabs | sheet state understandable | selected sheet and tab actions announced | Pass | transcript |
+            | Drawing objects, if present | objects identifiable | no drawing objects included in candidate smoke workbook | N/A | notes |
             | Dialog titles and buttons | titles announced | dialog title and buttons announced | Pass | transcript |
+            | Gatekeeper or accessibility prompts | prompts understandable | no system prompt appeared during VoiceOver pass | N/A | notes |
             | Known issues review | decisions recorded | no blocking issues | Pass | release notes |
 
             ## Log And Artifact Collection
@@ -210,6 +299,7 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
             | Notarization log | Yes | notarization.log | retained |
             | Tester instructions | Yes | tester-instructions.md | retained |
             | Diagnostics artifact | Yes | diagnostics.zip | retained |
+            | Screenshots or recordings | Required for failures and Gatekeeper/default-handler proof | screenshots.zip | retained |
             | Terminal transcript | Required for checksum/signing/stapler commands | terminal.txt | retained |
 
             ## Public-Preview Decision

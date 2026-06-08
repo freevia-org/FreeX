@@ -420,23 +420,22 @@ jobs:
             launch_smoke_file="$RUNNER_TEMP/freex-$runtime-launch.csv"
             printf 'Name,Amount\nFreeX Launch,84\n' > "$launch_smoke_file"
             launch_clipboard_image="$RUNNER_TEMP/freex-$runtime-clipboard.png"
-            base64 -D > "$launch_clipboard_image" <<'EOF'
-            iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=
-            EOF
-            /usr/bin/swift - "$launch_clipboard_image" <<'SWIFT'
-            import AppKit
-
-            let imagePath = CommandLine.arguments[1]
-            guard let image = NSImage(contentsOfFile: imagePath) else {
-                fatalError("Could not load launch smoke clipboard image.")
-            }
-
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
-            guard pasteboard.writeObjects([image]) else {
-                fatalError("Could not write launch smoke image to pasteboard.")
-            }
-            SWIFT
+            printf '%s\n' 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=' | base64 -D > "$launch_clipboard_image"
+            launch_clipboard_script="$RUNNER_TEMP/freex-$runtime-clipboard.swift"
+            printf '%s\n' \
+              'import AppKit' \
+              '' \
+              'let imagePath = CommandLine.arguments[1]' \
+              'guard let image = NSImage(contentsOfFile: imagePath) else {' \
+              '    fatalError("Could not load launch smoke clipboard image.")' \
+              '}' \
+              '' \
+              'let pasteboard = NSPasteboard.general' \
+              'pasteboard.clearContents()' \
+              'guard pasteboard.writeObjects([image]) else {' \
+              '    fatalError("Could not write launch smoke image to pasteboard.")' \
+              '}' > "$launch_clipboard_script"
+            /usr/bin/swift "$launch_clipboard_script" "$launch_clipboard_image"
             rm -f "$launch_smoke_report"
             /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$unzip_root/FreeX.app"
             open -W -n -b io.github.tony-xmelon.freex "$launch_smoke_file" --args --macos-launch-smoke "$launch_smoke_report" --macos-launch-smoke-verify-image-clipboard --macos-launch-smoke-verify-live-command-keys &

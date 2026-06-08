@@ -188,7 +188,8 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("lsregister -f \"$unzip_root/FreeX.app\"");
         workflow.Should().Contain("launch_clipboard_image=\"$RUNNER_TEMP/freex-$runtime-clipboard.png\"");
         workflow.Should().Contain("base64 -D > \"$launch_clipboard_image\"");
-        workflow.Should().Contain("/usr/bin/swift - \"$launch_clipboard_image\"");
+        workflow.Should().Contain("launch_clipboard_script=\"$RUNNER_TEMP/freex-$runtime-clipboard.swift\"");
+        workflow.Should().Contain("/usr/bin/swift \"$launch_clipboard_script\" \"$launch_clipboard_image\"");
         workflow.Should().Contain("NSPasteboard.general");
         workflow.Should().Contain("pasteboard.clearContents()");
         workflow.Should().Contain("pasteboard.writeObjects([image])");

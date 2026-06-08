@@ -448,8 +448,9 @@ if (-not (Test-Path -LiteralPath $resolvedChecklistPath -PathType Leaf)) {
 
 $tables = Get-MarkdownTables -Path $resolvedChecklistPath
 $candidateSummary = Get-RequiredTable -Tables $tables -Section "Candidate Summary"
+$runtimeUnderTest = ""
 if ($null -ne $candidateSummary) {
-    Test-CandidateSummary -SummaryTable $candidateSummary | Out-Null
+    $runtimeUnderTest = Test-CandidateSummary -SummaryTable $candidateSummary
 }
 
 $hostedEvidence = Get-RequiredTable -Tables $tables -Section "Hosted Evidence Copy-Forward"
@@ -473,7 +474,9 @@ if ($null -ne $hostedEvidence) {
 $gatekeeper = Get-RequiredTable -Tables $tables -Section "Gatekeeper First Launch"
 if ($null -ne $gatekeeper) {
     Assert-TableContainsLabels -Table $gatekeeper -LabelColumn "Step" -ExpectedLabels @(
+        "Confirm quarantine is still present before first launch, if the artifact was browser-downloaded",
         "Double-click FreeX.app in Finder",
+        "Record Gatekeeper prompt",
         "App reaches first usable window",
         "Quit and relaunch from Finder"
     )
@@ -484,10 +487,12 @@ $finder = Get-RequiredTable -Tables $tables -Section "Finder And File Associatio
 if ($null -ne $finder) {
     Assert-TableContainsLabels -Table $finder -LabelColumn "Step" -ExpectedLabels @(
         "Verify .fxl appears as a FreeX-supported document type",
+        "Set default .fxl handler, if permitted",
         "Double-click .fxl in Finder",
         "Confirm workbook identity",
         "Right-click .fxl > Open With > FreeX",
-        "Repeat while FreeX is already running"
+        "Repeat while FreeX is already running",
+        "Optional spreadsheet file Open With"
     )
     Test-StatusTable -Table $finder -LabelColumn "Step" -StatusColumn "Status" -AllowedByLabelPattern @{
         "Set default .fxl handler*" = @("Pass", "Skipped")
@@ -499,8 +504,11 @@ $workbook = Get-RequiredTable -Tables $tables -Section "Workbook Smoke"
 if ($null -ne $workbook) {
     Assert-TableContainsLabels -Table $workbook -LabelColumn "Step" -ExpectedLabels @(
         "Create a new workbook",
+        "Enter values and formulas",
         "Save and Save As",
-        "Reopen saved workbook"
+        "Close dirty workbook",
+        "Reopen saved workbook",
+        "Recent files"
     )
     Test-StatusTable -Table $workbook -LabelColumn "Step" -StatusColumn "Status" -EvidenceColumns @("Actual result", "Evidence")
 }
@@ -512,8 +520,13 @@ if ($null -ne $commandKey) {
         "Cmd+N",
         "Cmd+O",
         "Cmd+S",
+        "Cmd+Shift+S",
         "Cmd+W",
-        "Cmd+Q"
+        "Cmd+Q",
+        "Cmd+A",
+        "Cmd+F and Find Next menu route",
+        "Cmd+B, Cmd+I, Cmd+U",
+        "Cmd+PageUp / Cmd+PageDown or hardware equivalent"
     )
     Test-StatusTable -Table $commandKey -LabelColumn "Command" -StatusColumn "Status" -AllowedByLabelPattern @{ "Cmd+PageUp*" = @("Pass", "N/A") } -EvidenceColumns @("Actual result", "Evidence")
 }
@@ -523,7 +536,13 @@ if ($null -ne $keyboardOnly) {
     Assert-TableContainsLabels -Table $keyboardOnly -LabelColumn "Flow" -ExpectedLabels @(
         "First launch and initial focus",
         "Grid navigation and editing",
+        "Formula box edits",
+        "Native menus",
+        "Toolbar or command surface",
+        "Sheet tabs",
         "Dialogs",
+        "Context menus",
+        "Help and feedback routes",
         "Dirty close and Quit"
     )
     Test-StatusTable -Table $keyboardOnly -LabelColumn "Flow" -StatusColumn "Status" -EvidenceColumns @("Actual result", "Evidence")
@@ -536,7 +555,11 @@ if ($null -ne $voiceOver) {
         "Workbook grid focus",
         "Visible cells",
         "Formula box",
+        "Status text",
+        "Sheet tabs",
+        "Drawing objects, if present",
         "Dialog titles and buttons",
+        "Gatekeeper or accessibility prompts",
         "Known issues review"
     )
     Test-StatusTable -Table $voiceOver -LabelColumn "Surface" -StatusColumn "Status" -AllowedByLabelPattern @{
@@ -547,6 +570,24 @@ if ($null -ne $voiceOver) {
 
 $logCollection = Get-RequiredTable -Tables $tables -Section "Log And Artifact Collection"
 if ($null -ne $logCollection) {
+    $evidenceArtifactLabel = "freex-<runtime>-macos-evidence.txt"
+    if ($runtimeUnderTest -match "^osx-(arm64|x64)$") {
+        $evidenceArtifactLabel = "freex-$runtimeUnderTest-macos-evidence.txt"
+    }
+
+    Assert-TableContainsLabels -Table $logCollection -LabelColumn "Artifact" -ExpectedLabels @(
+        "Completed checklist/report",
+        "GitHub Actions app artifact wrapper",
+        "Inner app ZIP and .sha256 file",
+        $evidenceArtifactLabel,
+        "Packaging smoke log",
+        "Launch smoke file",
+        "Notarization log",
+        "Tester instructions",
+        "Diagnostics artifact",
+        "Screenshots or recordings",
+        "Terminal transcript"
+    )
     Test-LogAndArtifactCollection -Table $logCollection
 }
 
