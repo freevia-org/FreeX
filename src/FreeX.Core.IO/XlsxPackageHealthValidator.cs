@@ -31,6 +31,12 @@ public static class XlsxPackageHealthValidator
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords";
     private const string PivotTableRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable";
+    private const string DrawingRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing";
+    private const string ChartRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+    private const string ImageRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
     private const string WorksheetContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
     private const string ChartsheetContentType =
@@ -49,6 +55,10 @@ public static class XlsxPackageHealthValidator
         "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml";
     private const string PivotTableContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml";
+    private const string DrawingContentType =
+        "application/vnd.openxmlformats-officedocument.drawing+xml";
+    private const string ChartContentType =
+        "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
 
     private static readonly XNamespace PackageContentTypeNs =
         "http://schemas.openxmlformats.org/package/2006/content-types";
@@ -58,6 +68,12 @@ public static class XlsxPackageHealthValidator
         "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
     private static readonly XNamespace OfficeRelationshipNs =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    private static readonly XNamespace SpreadsheetDrawingNs =
+        "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+    private static readonly XNamespace DrawingNs =
+        "http://schemas.openxmlformats.org/drawingml/2006/main";
+    private static readonly XNamespace DrawingChartNs =
+        "http://schemas.openxmlformats.org/drawingml/2006/chart";
     private static readonly HashSet<string> WorkbookMainContentTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml",
@@ -87,6 +103,7 @@ public static class XlsxPackageHealthValidator
         AddVbaProjectPackageIssues(archive, issues);
         AddPivotCachePackageIssues(archive, issues);
         AddPivotTablePackageIssues(archive, issues);
+        AddWorksheetDrawingPackageIssues(archive, issues);
         return issues;
     }
 
@@ -1511,6 +1528,300 @@ public static class XlsxPackageHealthValidator
             issues.Add($"{pivotTablePart} references cacheId {cacheId}, but workbook has no matching pivotCache");
     }
 
+    private static void AddWorksheetDrawingPackageIssues(ZipArchive archive, List<string> issues)
+    {
+        if (!TryLoadPackageXml(archive, "[Content_Types].xml", issues, out var contentTypesXml) ||
+            contentTypesXml.Root?.Name != PackageContentTypeNs + "Types")
+        {
+            return;
+        }
+
+        var entryNames = archive.Entries
+            .Where(entry => !string.IsNullOrEmpty(entry.Name))
+            .Select(entry => NormalizePackagePart(entry.FullName))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var worksheetParts = entryNames
+            .Where(part => part.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase))
+            .Where(part => part.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            .Where(part => !IsPackageRelationshipPart(part))
+            .OrderBy(part => part, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var worksheetPart in worksheetParts)
+            AddWorksheetDrawingPackageIssues(archive, contentTypesXml, entryNames, worksheetPart, issues);
+    }
+
+    private static void AddWorksheetDrawingPackageIssues(
+        ZipArchive archive,
+        XDocument contentTypesXml,
+        IReadOnlySet<string> entryNames,
+        string worksheetPart,
+        List<string> issues)
+    {
+        if (!TryLoadPackageXml(archive, worksheetPart, issues, out var worksheetXml) ||
+            worksheetXml.Root?.Name != WorkbookNs + "worksheet")
+        {
+            return;
+        }
+
+        var drawingReferences = worksheetXml.Root
+            .Descendants(WorkbookNs + "drawing")
+            .Select((drawing, index) => new WorksheetDrawingReference(
+                worksheetPart,
+                index + 1,
+                drawing.Attribute(OfficeRelationshipNs + "id")?.Value))
+            .ToArray();
+        if (drawingReferences.Length == 0)
+            return;
+
+        var worksheetRelsPart = GetRelationshipPartPath(worksheetPart);
+        if (!TryLoadPackageXml(archive, worksheetRelsPart, issues, out var worksheetRelsXml) ||
+            worksheetRelsXml.Root?.Name != PackageRelationshipNs + "Relationships")
+        {
+            foreach (var reference in drawingReferences.Where(reference => !string.IsNullOrWhiteSpace(reference.RelationshipId)))
+                issues.Add($"{worksheetPart} has no relationship part for drawing reference {reference.RelationshipId}");
+            return;
+        }
+
+        var worksheetRelationships = worksheetRelsXml.Root
+            .Elements(PackageRelationshipNs + "Relationship")
+            .Where(relationship => !string.IsNullOrWhiteSpace(relationship.Attribute("Id")?.Value))
+            .GroupBy(relationship => relationship.Attribute("Id")!.Value, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+
+        foreach (var reference in drawingReferences)
+            ValidateWorksheetDrawingReference(archive, contentTypesXml, entryNames, worksheetRelsPart, reference, worksheetRelationships, issues);
+    }
+
+    private static void ValidateWorksheetDrawingReference(
+        ZipArchive archive,
+        XDocument contentTypesXml,
+        IReadOnlySet<string> entryNames,
+        string worksheetRelsPart,
+        WorksheetDrawingReference reference,
+        IReadOnlyDictionary<string, XElement> worksheetRelationships,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(reference.RelationshipId))
+        {
+            issues.Add($"{reference.WorksheetPart} drawing #{reference.Ordinal} has no relationship id");
+            return;
+        }
+
+        if (!worksheetRelationships.TryGetValue(reference.RelationshipId, out var relationship))
+        {
+            issues.Add($"{reference.WorksheetPart} drawing #{reference.Ordinal} references missing relationship {reference.RelationshipId}");
+            return;
+        }
+
+        var relationshipType = relationship.Attribute("Type")?.Value;
+        if (!string.Equals(relationshipType, DrawingRelationshipType, StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{reference.WorksheetPart} drawing #{reference.Ordinal} relationship {reference.RelationshipId} has Type={relationshipType ?? "(none)"}; expected {DrawingRelationshipType}");
+            return;
+        }
+
+        if (string.Equals(relationship.Attribute("TargetMode")?.Value?.Trim(), "External", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{reference.WorksheetPart} drawing #{reference.Ordinal} relationship {reference.RelationshipId} must target a worksheet drawing package part internally");
+            return;
+        }
+
+        var target = relationship.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            issues.Add($"{reference.WorksheetPart} drawing #{reference.Ordinal} relationship {reference.RelationshipId} has no Target");
+            return;
+        }
+
+        if (!TryResolvePackageRelationshipTarget(worksheetRelsPart, target.Trim(), out var drawingPart, out var targetIssue))
+        {
+            issues.Add($"{reference.WorksheetPart} drawing #{reference.Ordinal} relationship {reference.RelationshipId} has invalid Target {target}: {targetIssue}");
+            return;
+        }
+
+        if (!entryNames.Contains(drawingPart))
+        {
+            issues.Add($"{reference.WorksheetPart} drawing #{reference.Ordinal} relationship {reference.RelationshipId} targets missing package part {drawingPart}");
+            return;
+        }
+
+        var contentType = GetEffectivePackageContentType(contentTypesXml, drawingPart);
+        if (!string.Equals(contentType, DrawingContentType, StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{drawingPart} has content type {contentType ?? "(none)"}; expected {DrawingContentType}");
+        }
+
+        if (!TryLoadPackageXml(archive, drawingPart, issues, out var drawingXml))
+            return;
+
+        if (drawingXml.Root?.Name != SpreadsheetDrawingNs + "wsDr")
+        {
+            issues.Add($"{drawingPart} has an invalid worksheet drawing root element");
+            return;
+        }
+
+        AddDrawingPartReferenceIssues(archive, contentTypesXml, entryNames, drawingPart, drawingXml, issues);
+    }
+
+    private static void AddDrawingPartReferenceIssues(
+        ZipArchive archive,
+        XDocument contentTypesXml,
+        IReadOnlySet<string> entryNames,
+        string drawingPart,
+        XDocument drawingXml,
+        List<string> issues)
+    {
+        var drawingRelsPart = GetRelationshipPartPath(drawingPart);
+        XDocument? drawingRelationshipsXml = null;
+        IReadOnlyDictionary<string, XElement>? drawingRelationships = null;
+
+        foreach (var chartRelationshipId in drawingXml
+                     .Descendants(DrawingChartNs + "chart")
+                     .Select(chart => chart.Attribute(OfficeRelationshipNs + "id")?.Value)
+                     .Where(id => !string.IsNullOrWhiteSpace(id))
+                     .Select(id => id!))
+        {
+            ValidateDrawingOwnedRelationship(
+                archive,
+                contentTypesXml,
+                entryNames,
+                drawingPart,
+                drawingRelsPart,
+                ref drawingRelationshipsXml,
+                ref drawingRelationships,
+                chartRelationshipId,
+                "chart",
+                ChartRelationshipType,
+                ChartContentType,
+                DrawingChartNs + "chartSpace",
+                issues);
+        }
+
+        foreach (var imageRelationshipId in drawingXml
+                     .Descendants(DrawingNs + "blip")
+                     .Select(blip => blip.Attribute(OfficeRelationshipNs + "embed")?.Value)
+                     .Where(id => !string.IsNullOrWhiteSpace(id))
+                     .Select(id => id!))
+        {
+            ValidateDrawingOwnedRelationship(
+                archive,
+                contentTypesXml,
+                entryNames,
+                drawingPart,
+                drawingRelsPart,
+                ref drawingRelationshipsXml,
+                ref drawingRelationships,
+                imageRelationshipId,
+                "embedded image",
+                ImageRelationshipType,
+                expectedContentType: null,
+                expectedRoot: null,
+                issues);
+        }
+    }
+
+    private static void ValidateDrawingOwnedRelationship(
+        ZipArchive archive,
+        XDocument contentTypesXml,
+        IReadOnlySet<string> entryNames,
+        string drawingPart,
+        string drawingRelsPart,
+        ref XDocument? drawingRelationshipsXml,
+        ref IReadOnlyDictionary<string, XElement>? drawingRelationships,
+        string relationshipId,
+        string description,
+        string expectedRelationshipType,
+        string? expectedContentType,
+        XName? expectedRoot,
+        List<string> issues)
+    {
+        if (!TryGetDrawingRelationships(archive, drawingRelsPart, issues, ref drawingRelationshipsXml, ref drawingRelationships))
+        {
+            issues.Add($"{drawingPart} {description} reference {relationshipId}: missing relationship part {drawingRelsPart}");
+            return;
+        }
+
+        if (!drawingRelationships!.TryGetValue(relationshipId, out var relationship))
+        {
+            issues.Add($"{drawingPart} {description} reference {relationshipId}: targets missing relationship {relationshipId} in {drawingRelsPart}");
+            return;
+        }
+
+        var relationshipType = relationship.Attribute("Type")?.Value;
+        if (!string.Equals(relationshipType, expectedRelationshipType, StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{drawingPart} {description} reference {relationshipId}: relationship has Type={relationshipType ?? "(none)"}; expected {expectedRelationshipType}");
+            return;
+        }
+
+        if (string.Equals(relationship.Attribute("TargetMode")?.Value?.Trim(), "External", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{drawingPart} {description} reference {relationshipId}: relationship must target a package part internally");
+            return;
+        }
+
+        var target = relationship.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            issues.Add($"{drawingPart} {description} reference {relationshipId}: relationship has no Target");
+            return;
+        }
+
+        if (!TryResolvePackageRelationshipTarget(drawingRelsPart, target.Trim(), out var packagePart, out var targetIssue))
+        {
+            issues.Add($"{drawingPart} {description} reference {relationshipId} has invalid Target {target}: {targetIssue}");
+            return;
+        }
+
+        if (!entryNames.Contains(packagePart))
+        {
+            issues.Add($"{drawingPart} {description} reference {relationshipId} targets missing package part {packagePart}");
+            return;
+        }
+
+        var contentType = GetEffectivePackageContentType(contentTypesXml, packagePart);
+        if (expectedContentType is null)
+        {
+            if (contentType is null || !contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                issues.Add($"{packagePart} has content type {contentType ?? "(none)"}; expected an image/* content type");
+            return;
+        }
+
+        if (!string.Equals(contentType, expectedContentType, StringComparison.OrdinalIgnoreCase))
+            issues.Add($"{packagePart} has content type {contentType ?? "(none)"}; expected {expectedContentType}");
+
+        if (expectedRoot is null || !TryLoadPackageXml(archive, packagePart, issues, out var packageXml))
+            return;
+
+        if (packageXml.Root?.Name != expectedRoot)
+            issues.Add($"{packagePart} has an invalid {description} root element");
+    }
+
+    private static bool TryGetDrawingRelationships(
+        ZipArchive archive,
+        string drawingRelsPart,
+        List<string> issues,
+        ref XDocument? drawingRelationshipsXml,
+        ref IReadOnlyDictionary<string, XElement>? drawingRelationships)
+    {
+        if (drawingRelationships is not null)
+            return true;
+
+        if (!TryLoadPackageXml(archive, drawingRelsPart, issues, out var loadedRelationshipsXml) ||
+            loadedRelationshipsXml.Root?.Name != PackageRelationshipNs + "Relationships")
+        {
+            return false;
+        }
+
+        drawingRelationshipsXml = loadedRelationshipsXml;
+        drawingRelationships = drawingRelationshipsXml.Root
+            .Elements(PackageRelationshipNs + "Relationship")
+            .Where(relationship => !string.IsNullOrWhiteSpace(relationship.Attribute("Id")?.Value))
+            .GroupBy(relationship => relationship.Attribute("Id")!.Value, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        return true;
+    }
+
     private static bool TryFindWorkbookPart(
         ZipArchive archive,
         IReadOnlySet<string> entryNames,
@@ -1901,6 +2212,11 @@ public static class XlsxPackageHealthValidator
         string? RelationshipId);
 
     private sealed record WorksheetPivotTableReference(
+        string WorksheetPart,
+        int Ordinal,
+        string? RelationshipId);
+
+    private sealed record WorksheetDrawingReference(
         string WorksheetPart,
         int Ordinal,
         string? RelationshipId);
