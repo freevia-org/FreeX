@@ -9,9 +9,11 @@ namespace FreeX.App.Avalonia;
 internal sealed record MacOsLaunchSmokeOptions(
     string ReportPath,
     bool VerifyImageClipboardPaste,
-    bool VerifyLiveCommandKeys)
+    bool VerifyLiveCommandKeys,
+    string? DiagnosticsDirectory)
 {
     public const string Argument = "--macos-launch-smoke";
+    public const string DiagnosticsDirectoryArgument = "--macos-launch-smoke-diagnostics-dir";
     public const string VerifyImageClipboardPasteArgument = "--macos-launch-smoke-verify-image-clipboard";
     public const string VerifyLiveCommandKeysArgument = "--macos-launch-smoke-verify-live-command-keys";
 
@@ -27,11 +29,39 @@ internal sealed record MacOsLaunchSmokeOptions(
         error = "";
         var filteredArguments = new List<string>();
         string? reportPath = null;
+        string? diagnosticsDirectory = null;
         var verifyImageClipboardPaste = false;
         var verifyLiveCommandKeys = false;
         for (var index = 0; index < args.Count; index++)
         {
             var argument = args[index];
+            if (string.Equals(argument, DiagnosticsDirectoryArgument, StringComparison.OrdinalIgnoreCase))
+            {
+                if (diagnosticsDirectory is not null)
+                {
+                    startupArguments = [];
+                    error = $"{DiagnosticsDirectoryArgument} was specified more than once.";
+                    return false;
+                }
+
+                if (index + 1 >= args.Count)
+                {
+                    startupArguments = [];
+                    error = $"{DiagnosticsDirectoryArgument} requires a directory path.";
+                    return false;
+                }
+
+                diagnosticsDirectory = args[++index];
+                if (string.IsNullOrWhiteSpace(diagnosticsDirectory))
+                {
+                    startupArguments = [];
+                    error = $"{DiagnosticsDirectoryArgument} requires a non-empty directory path.";
+                    return false;
+                }
+
+                continue;
+            }
+
             if (string.Equals(argument, VerifyImageClipboardPasteArgument, StringComparison.OrdinalIgnoreCase))
             {
                 verifyImageClipboardPaste = true;
@@ -73,8 +103,19 @@ internal sealed record MacOsLaunchSmokeOptions(
             }
         }
 
+        if (diagnosticsDirectory is not null && reportPath is null)
+        {
+            startupArguments = [];
+            error = $"{DiagnosticsDirectoryArgument} requires {Argument}.";
+            return false;
+        }
+
         if (reportPath is not null)
-            options = new MacOsLaunchSmokeOptions(reportPath, verifyImageClipboardPaste, verifyLiveCommandKeys);
+            options = new MacOsLaunchSmokeOptions(
+                reportPath,
+                verifyImageClipboardPaste,
+                verifyLiveCommandKeys,
+                diagnosticsDirectory);
 
         startupArguments = filteredArguments.ToArray();
         return true;
@@ -703,15 +744,21 @@ internal static class MacOsLaunchSmokeCoordinator
     private const int LiveCommandKeyWaitMilliseconds = 30000;
     private const int PollDelayMilliseconds = 250;
 
-    public static void Start(MainWindow mainWindow, MacOsLaunchSmokeOptions options)
+    public static void Start(
+        MainWindow mainWindow,
+        MacOsLaunchSmokeOptions options,
+        AvaloniaAppDiagnostics? diagnostics = null)
     {
         ArgumentNullException.ThrowIfNull(mainWindow);
         ArgumentNullException.ThrowIfNull(options);
 
-        mainWindow.Opened += async (_, _) => await RunAsync(mainWindow, options);
+        mainWindow.Opened += async (_, _) => await RunAsync(mainWindow, options, diagnostics);
     }
 
-    private static async Task RunAsync(MainWindow mainWindow, MacOsLaunchSmokeOptions options)
+    private static async Task RunAsync(
+        MainWindow mainWindow,
+        MacOsLaunchSmokeOptions options,
+        AvaloniaAppDiagnostics? diagnostics)
     {
         var deadline = DateTimeOffset.UtcNow.AddMilliseconds(
             MaxWaitMilliseconds + (options.VerifyLiveCommandKeys ? LiveCommandKeyWaitMilliseconds : 0));
@@ -722,6 +769,12 @@ internal static class MacOsLaunchSmokeCoordinator
         var attemptedCommandKeyEvidence = false;
         var attemptedImageClipboardPaste = false;
         var attemptedDialogEvidence = false;
+        diagnostics?.RecordEvent("macos_launch_smoke", new Dictionary<string, string?>
+        {
+            ["source"] = "macos_launch_smoke",
+            ["scope"] = "launch",
+            ["status"] = "starting"
+        });
         try
         {
             while (!IsPassedWithCommandKeyEvidence(
@@ -799,15 +852,23 @@ internal static class MacOsLaunchSmokeCoordinator
                 attemptedCommandKeyEvidence,
                 attemptedDialogEvidence,
                 finalReport: true);
-            Shutdown(IsPassedWithCommandKeyEvidence(
+            var isPassed = IsPassedWithCommandKeyEvidence(
                 snapshot,
                 options,
                 initialExternalImageClipboardPictureCount,
                 commandKeyEvidence,
-                liveCommandKeyEvidence) ? 0 : 1);
+                liveCommandKeyEvidence);
+            diagnostics?.RecordEvent("macos_launch_smoke", new Dictionary<string, string?>
+            {
+                ["source"] = "macos_launch_smoke",
+                ["scope"] = "launch",
+                ["status"] = isPassed ? "passed" : "failed"
+            });
+            Shutdown(isPassed ? 0 : 1);
         }
         catch (Exception ex)
         {
+            diagnostics?.RecordCrash(ex, "macos_launch_smoke");
             WriteFailureReport(
                 options.ReportPath,
                 snapshot,
@@ -919,11 +980,13 @@ internal static class MacOsLaunchSmokeCoordinator
             initialExternalImageClipboardPictureCount);
         var dialogSmokeStatus = GetDialogSmokeStatus(snapshot, attemptedDialogEvidence);
         var liveCommandKeySmokeStatus = GetLiveCommandKeySmokeStatus(options, liveCommandKeyEvidence, finalReport);
+        var appDiagnosticsConfigured = !string.IsNullOrWhiteSpace(options.DiagnosticsDirectory);
 
         File.WriteAllLines(
             reportPath,
             [
                 $"macos_launch_smoke={(IsPassedWithCommandKeyEvidence(snapshot, options, initialExternalImageClipboardPictureCount, commandKeyEvidence, liveCommandKeyEvidence) ? "passed" : "failed")}",
+                $"app_diagnostics_directory_configured={FormatBool(appDiagnosticsConfigured)}",
                 $"window_shown={FormatBool(snapshot.WindowShown)}",
                 $"window_title={snapshot.WindowTitle}",
                 $"display_name={snapshot.DisplayName}",

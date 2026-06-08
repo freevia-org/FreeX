@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host;
 

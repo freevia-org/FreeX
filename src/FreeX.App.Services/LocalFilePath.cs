@@ -20,6 +20,15 @@ public static class LocalFilePath
         if (string.IsNullOrWhiteSpace(path))
             return false;
 
+        if (path.Contains('\0', StringComparison.Ordinal))
+            return false;
+
+        if (IsUnixAbsolutePath(path))
+        {
+            normalizedPath = path;
+            return true;
+        }
+
         try
         {
             normalizedPath = Path.GetFullPath(path);
@@ -57,4 +66,9 @@ public static class LocalFilePath
         candidate.Length >= 2 &&
         candidate[1] == ':' &&
         char.IsAsciiLetter(candidate[0]);
+
+    private static bool IsUnixAbsolutePath(string path) =>
+        path.Length >= 2 &&
+        path[0] == '/' &&
+        path[1] is not '/' and not '\\';
 }

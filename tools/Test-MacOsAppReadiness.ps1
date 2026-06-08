@@ -410,6 +410,7 @@ function Test-MacOsWorkflow {
         "FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfTextCapabilityPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests",
@@ -417,6 +418,9 @@ function Test-MacOsWorkflow {
         "FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.AppStoragePathPlannerTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.AppOptionsStoreTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.AtomicFileWriterTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests",
         "dotnet test tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj",
@@ -542,6 +546,17 @@ function Test-MacOsWorkflow {
         'echo "format_cells_style_roundtrip_count=$format_cells_style_roundtrip_count"',
         "edited, saved, and reopened",
         "lsregister -f",
+        'app_diagnostics_dir="$artifact_root/freex-$runtime-macos-app-diagnostics"',
+        '--macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"',
+        "app_diagnostics_directory_configured=true",
+        'app_diagnostics_events_path="$app_diagnostics_dir/events.jsonl"',
+        "app_diagnostics_artifact=freex-`$runtime-macos-app-diagnostics",
+        "app_diagnostics_events_jsonl=true",
+        "app_diagnostics_crash_report_count=`$app_diagnostics_crash_count",
+        'test -f "$app_diagnostics_events_path"',
+        'grep -q ''"eventName":"app_start"'' "$app_diagnostics_events_path"',
+        'grep -q ''"eventName":"app_ready"'' "$app_diagnostics_events_path"',
+        'grep -q ''"eventName":"macos_launch_smoke"'' "$app_diagnostics_events_path"',
         "open -W -n -b io.github.tony-xmelon.freex",
         'open_with_report="$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt"',
         'open_with_smoke_file="$RUNNER_TEMP/freex-$runtime-open-with.csv"',
@@ -813,6 +828,8 @@ function Test-MacOsWorkflow {
         Assert-True -Condition ($appArtifactUpload.IndexOf($testResultPath, [System.StringComparison]::Ordinal) -lt 0) -Message "macOS app artifact upload must not include diagnostic test result $testResultPath."
     }
 
+    Assert-ContainsText -Text $diagnosticsUpload -Needle 'artifacts/freex-${{ matrix.runtime }}-macos-app-diagnostics/**' -Message "macOS diagnostics upload must include app diagnostics emitted by hosted launch smoke."
+    Assert-True -Condition ($appArtifactUpload.IndexOf('artifacts/freex-${{ matrix.runtime }}-macos-app-diagnostics/**', [System.StringComparison]::Ordinal) -lt 0) -Message "macOS app artifact upload must not include app diagnostics internals."
     Assert-ContainsText -Text $diagnosticsUpload -Needle "if: always()" -Message "macOS diagnostics upload must run even when earlier workflow steps fail."
     Assert-ContainsText -Text $diagnosticsUpload -Needle "if-no-files-found: warn" -Message "macOS diagnostics upload must warn, not fail, when optional diagnostics are missing."
 }
@@ -824,8 +841,14 @@ function Test-SourceWiring {
             Markers = @(
                 "PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode)",
                 "MacOsLaunchSmokeOptions.TryParse(",
+                "AvaloniaAppDiagnostics.Create(launchSmokeOptions?.DiagnosticsDirectory)",
+                "diagnostics.RegisterUnhandledExceptionHandlers();",
+                "diagnostics.RecordEvent(`"app_start`"",
                 "App.StartupArguments = startupArguments;",
                 "App.LaunchSmokeOptions = launchSmokeOptions;",
+                "App.Diagnostics = diagnostics;",
+                "diagnostics.RecordEvent(`"app_exit`"",
+                "diagnostics.RecordCrash(ex, `"avalonia_startup`")",
                 "BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments);"
             )
             OrderedPairs = @(
@@ -838,10 +861,28 @@ function Test-SourceWiring {
         @{
             Path = "src\FreeX.App.Avalonia\App.cs"
             Markers = @(
+                "internal static AvaloniaAppDiagnostics? Diagnostics { get; set; }",
+                "Diagnostics?.RecordEvent(`"app_ready`"",
                 "this.TryGetFeature<IActivatableLifetime>() is { } activatableLifetime",
                 "args is not FileActivatedEventArgs fileArgs",
                 "fileArgs.Kind != ActivationKind.File",
-                "await mainWindow.OpenActivatedFilesAsync(fileArgs.Files);"
+                "await mainWindow.OpenActivatedFilesAsync(fileArgs.Files);",
+                "MacOsLaunchSmokeCoordinator.Start(mainWindow, launchSmokeOptions, Diagnostics);"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "src\FreeX.App.Avalonia\AvaloniaAppDiagnostics.cs"
+            Markers = @(
+                "internal sealed class AvaloniaAppDiagnostics",
+                "AppDiagnosticsOptions.CreateDefault()",
+                "new AppDiagnosticsFileStore(options)",
+                "AppDiagnosticsMetadata.Create(",
+                "AppDomain.CurrentDomain.UnhandledException +=",
+                "TaskScheduler.UnobservedTaskException +=",
+                "RecordEvent(string eventName",
+                "RecordCrash(Exception exception, string source)",
+                "AppDiagnosticsFileStore.SanitizeProperties(properties)"
             )
             OrderedPairs = @()
         },
@@ -1195,6 +1236,11 @@ function Test-SourceWiring {
                 "_openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);",
                 "fileMenu.Items.Add(_openRecentMenuItem);",
                 "RefreshNativeOpenRecentMenu(isIdle);",
+                "LocalFilePath.TryNormalize(candidate, out var normalizedCandidate)",
+                "Directory.Exists(normalizedCandidate)",
+                "File.Exists(normalizedCandidate)",
+                "_session.TryResolveOpenTarget(normalizedCandidate, out var target, out unsupportedMessage)",
+                "path = target!.Path;",
                 "_selectAllMenuItem.Header = `"Select All`";",
                 "_selectAllMenuItem.Gesture = new KeyGesture(Key.A, KeyModifiers.Meta);",
                 "_selectAllMenuItem.Click += (_, _) => SelectCurrentRegionOrAll();",
@@ -1499,14 +1545,15 @@ function Test-SourceWiring {
                 "OpenRecentWorkbookMenuPlanner.Create(",
                 "_recentFiles.Entries",
                 "File.Exists",
-                "path => _session.TryResolveOpenTarget(path, out _, out _)",
+                "path => _session.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null",
                 "plan.ItemCount == 0",
                 "foreach (var entry in plan.Items)",
                 "Header = entry.Header",
                 "private async Task OpenRecentWorkbookAsync(string path)",
+                "await OpenWorkbookPathAsync(target.Path);",
                 "private void RecordStartupRecentWorkbook(StartupWorkbookLoadResult source)",
                 "private void RecordRecentWorkbook(string path)",
-                "_recentFiles.AddOrUpdate(path);",
+                "_recentFiles.AddOrUpdate(target.Path);",
                 "RecordRecentWorkbook(target.Path);",
                 "_closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();",
                 "fileMenu.Items.Add(_newWorkbookMenuItem);",
@@ -1789,12 +1836,18 @@ function Test-SourceWiring {
             Path = "src\FreeX.App.Avalonia\MacOsLaunchSmoke.cs"
             Markers = @(
                 "public const string Argument = `"--macos-launch-smoke`";",
+                "public const string DiagnosticsDirectoryArgument = `"--macos-launch-smoke-diagnostics-dir`";",
                 "public const string VerifyImageClipboardPasteArgument = `"--macos-launch-smoke-verify-image-clipboard`";",
                 "public const string VerifyLiveCommandKeysArgument = `"--macos-launch-smoke-verify-live-command-keys`";",
                 "startupArguments = filteredArguments.ToArray();",
                 "verifyImageClipboardPaste = true;",
                 "verifyLiveCommandKeys = true;",
-                "new MacOsLaunchSmokeOptions(reportPath, verifyImageClipboardPaste, verifyLiveCommandKeys)",
+                "diagnosticsDirectory = args[++index];",
+                "diagnosticsDirectory);",
+                "RunAsync(mainWindow, options, diagnostics)",
+                "diagnostics?.RecordEvent(`"macos_launch_smoke`"",
+                "diagnostics?.RecordCrash(ex, `"macos_launch_smoke`")",
+                "app_diagnostics_directory_configured={FormatBool(appDiagnosticsConfigured)}",
                 "await mainWindow.TryPasteLaunchSmokeClipboardImageAsync();",
                 "liveCommandKeyEvidence = mainWindow.BeginLaunchSmokeLiveCommandKeyProbe();",
                 "liveCommandKeyEvidence.IsPassed",
@@ -2396,6 +2449,26 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
+            Path = "src\FreeX.App.Services\LocalFilePath.cs"
+            Markers = @(
+                "public static class LocalFilePath",
+                "public static bool TryNormalize(string? candidate, out string normalizedPath)",
+                "TryCreateExplicitUri(path, out var uri)",
+                "if (!uri.IsFile)",
+                "path = uri.LocalPath;",
+                "path.Contains('\0', StringComparison.Ordinal)",
+                "IsUnixAbsolutePath(path)",
+                "Path.GetFullPath(path)",
+                "private static bool TryCreateExplicitUri(string candidate, out Uri uri)",
+                "Uri.TryCreate(candidate, UriKind.Absolute, out var parsed)",
+                "IsWindowsDrivePath(candidate, parsed.Scheme)",
+                "private static bool IsWindowsDrivePath(string candidate, string scheme)",
+                "char.IsAsciiLetter(candidate[0])",
+                "private static bool IsUnixAbsolutePath(string path)"
+            )
+            OrderedPairs = @()
+        },
+        @{
             Path = "src\FreeX.App.Services\OpenRecentWorkbookMenuPlanner.cs"
             Markers = @(
                 "public sealed record OpenRecentWorkbookMenuItemPlan(",
@@ -2407,12 +2480,16 @@ function Test-SourceWiring {
                 "IEnumerable<RecentFileEntry> entries",
                 "Func<string, bool> fileExists",
                 "Func<string, bool> canOpenWorkbook",
+                "Func<string, string?> resolveOpenWorkbookPath",
                 "maximumItems < 1",
+                "PlatformPathIdentityComparer.Current",
                 ".Where(entry => !string.IsNullOrWhiteSpace(entry.Path))",
-                ".Where(entry => fileExists(entry.Path) && canOpenWorkbook(entry.Path))",
                 ".OrderByDescending(entry => entry.LastOpened)",
+                ".Select(entry => (Entry: entry, Path: resolveOpenWorkbookPath(entry.Path)))",
+                ".Where(item => !string.IsNullOrWhiteSpace(item.Path) && fileExists(item.Path))",
+                ".Where(item => seenPaths.Add(item.Path!))",
                 ".Take(maximumItems)",
-                "FormatHeader(entry.Path)",
+                "FormatHeader(item.Path!)",
                 "public static string FormatHeader(string path)",
                 "Path.GetFileName(path)",
                 "Path.GetDirectoryName(path)"

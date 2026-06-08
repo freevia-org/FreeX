@@ -20,22 +20,40 @@ public static class OpenRecentWorkbookMenuPlanner
         Func<string, bool> canOpenWorkbook,
         int maximumItems = DefaultMaximumItems)
     {
+        ArgumentNullException.ThrowIfNull(canOpenWorkbook);
+
+        return Create(
+            entries,
+            fileExists,
+            path => canOpenWorkbook(path) ? path : null,
+            maximumItems);
+    }
+
+    public static OpenRecentWorkbookMenuPlan Create(
+        IEnumerable<RecentFileEntry> entries,
+        Func<string, bool> fileExists,
+        Func<string, string?> resolveOpenWorkbookPath,
+        int maximumItems = DefaultMaximumItems)
+    {
         ArgumentNullException.ThrowIfNull(entries);
         ArgumentNullException.ThrowIfNull(fileExists);
-        ArgumentNullException.ThrowIfNull(canOpenWorkbook);
+        ArgumentNullException.ThrowIfNull(resolveOpenWorkbookPath);
 
         if (maximumItems < 1)
             return new OpenRecentWorkbookMenuPlan([]);
 
+        var seenPaths = new HashSet<string>(PlatformPathIdentityComparer.Current);
         var items = entries
             .Where(entry => !string.IsNullOrWhiteSpace(entry.Path))
-            .Where(entry => fileExists(entry.Path) && canOpenWorkbook(entry.Path))
             .OrderByDescending(entry => entry.LastOpened)
+            .Select(entry => (Entry: entry, Path: resolveOpenWorkbookPath(entry.Path)))
+            .Where(item => !string.IsNullOrWhiteSpace(item.Path) && fileExists(item.Path))
+            .Where(item => seenPaths.Add(item.Path!))
             .Take(maximumItems)
-            .Select(entry => new OpenRecentWorkbookMenuItemPlan(
-                entry.Path,
-                FormatHeader(entry.Path),
-                entry.LastOpened))
+            .Select(item => new OpenRecentWorkbookMenuItemPlan(
+                item.Path!,
+                FormatHeader(item.Path!),
+                item.Entry.LastOpened))
             .ToList();
 
         return new OpenRecentWorkbookMenuPlan(items);

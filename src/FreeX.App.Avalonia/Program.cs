@@ -22,10 +22,34 @@ internal static class Program
             return 1;
         }
 
+        var diagnostics = AvaloniaAppDiagnostics.Create(launchSmokeOptions?.DiagnosticsDirectory);
+        diagnostics.RegisterUnhandledExceptionHandlers();
+        diagnostics.RecordEvent("app_start", new Dictionary<string, string?>
+        {
+            ["source"] = "avalonia",
+            ["scope"] = "app",
+            ["status"] = "starting"
+        });
+
         App.StartupArguments = startupArguments;
         App.LaunchSmokeOptions = launchSmokeOptions;
-        BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments);
-        return 0;
+        App.Diagnostics = diagnostics;
+        try
+        {
+            BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments);
+            diagnostics.RecordEvent("app_exit", new Dictionary<string, string?>
+            {
+                ["source"] = "avalonia",
+                ["scope"] = "app",
+                ["status"] = "completed"
+            });
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            diagnostics.RecordCrash(ex, "avalonia_startup");
+            throw;
+        }
     }
 
     public static AppBuilder BuildAvaloniaApp() =>

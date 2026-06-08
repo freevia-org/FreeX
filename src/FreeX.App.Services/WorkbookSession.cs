@@ -2242,13 +2242,12 @@ public sealed class WorkbookSession
     public bool TryResolveOpenTarget(string path, out WorkbookOpenTarget? target, out string message)
     {
         target = null;
-        if (string.IsNullOrWhiteSpace(path))
+        if (!LocalFilePath.TryNormalize(path, out var openPath))
         {
             message = "Open requires a local file path.";
             return false;
         }
 
-        var openPath = path.Trim();
         if (!TryGetExtension(openPath, out var extension))
         {
             message = "Unsupported file type.";

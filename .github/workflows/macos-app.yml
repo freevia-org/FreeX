@@ -85,7 +85,7 @@ jobs:
 
           dotnet test tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj \
             --configuration Release \
-            --filter 'FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests|FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests' \
+            --filter 'FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfTextCapabilityPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AppStoragePathPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppOptionsStoreTests|FullyQualifiedName~FreeX.App.Services.Tests.AtomicFileWriterTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests|FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests' \
             --logger "trx;LogFileName=freex-${{ matrix.runtime }}-portable-pdf-exporter-tests.trx" \
             --results-directory artifacts
 
@@ -124,6 +124,7 @@ jobs:
           launch_smoke_report="$artifact_root/freex-$runtime-macos-launch-smoke.txt"
           open_with_report="$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt"
           default_open_report="$artifact_root/freex-$runtime-macos-default-open-launch-smoke.txt"
+          app_diagnostics_dir="$artifact_root/freex-$runtime-macos-app-diagnostics"
           notary_log="$artifact_root/freex-$runtime-macos-notarization.log"
           tester_instructions_path="$artifact_root/freex-$runtime-macos-tester-instructions.md"
           distribution_candidate="$FREEX_DISTRIBUTION_CANDIDATE"
@@ -149,7 +150,8 @@ jobs:
           trap cleanup_signing_keychain EXIT
 
           rm -rf "$output_root"
-          mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$artifact_root"
+          rm -rf "$app_diagnostics_dir"
+          mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$artifact_root" "$app_diagnostics_dir"
           : > "$notary_log"
           {
             echo ""
@@ -444,7 +446,7 @@ jobs:
             printf 'Name,Amount\nFreeX Launch,84\n' > "$launch_smoke_file"
             rm -f "$launch_smoke_report"
             /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$unzip_root/FreeX.app"
-            open -W -n -b io.github.tony-xmelon.freex "$launch_smoke_file" --args --macos-launch-smoke "$launch_smoke_report" &
+            open -W -n -b io.github.tony-xmelon.freex "$launch_smoke_file" --args --macos-launch-smoke "$launch_smoke_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir" &
             launch_pid=$!
             launch_status=0
             wait "$launch_pid" || launch_status=$?
@@ -459,6 +461,7 @@ jobs:
               exit "$launch_status"
             fi
             grep -q "macos_launch_smoke=passed" "$launch_smoke_report"
+            grep -q "app_diagnostics_directory_configured=true" "$launch_smoke_report"
             grep -q "window_shown=true" "$launch_smoke_report"
             grep -q "opened_source_path=.*freex-$runtime-launch.csv" "$launch_smoke_report"
             grep -q "viewport_rows=[1-9]" "$launch_smoke_report"
@@ -706,7 +709,7 @@ jobs:
             open_with_smoke_file="$RUNNER_TEMP/freex-$runtime-open-with.csv"
             printf 'Name,Amount\nFreeX Open With,126\n' > "$open_with_smoke_file"
             rm -f "$open_with_report"
-            open -W -n -a "$app_path" "$open_with_smoke_file" --args --macos-launch-smoke "$open_with_report" &
+            open -W -n -a "$app_path" "$open_with_smoke_file" --args --macos-launch-smoke "$open_with_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir" &
             open_with_pid=$!
             for _ in {1..60}; do
               if [[ -f "$open_with_report" ]]; then
@@ -727,6 +730,7 @@ jobs:
             wait "$open_with_pid" || true
             cat "$open_with_report" >> "$evidence_path"
             grep -q "macos_launch_smoke=passed" "$open_with_report"
+            grep -q "app_diagnostics_directory_configured=true" "$open_with_report"
             grep -q "window_shown=true" "$open_with_report"
             grep -q "opened_source_path=.*freex-$runtime-open-with.csv" "$open_with_report"
             grep -q "viewport_rows=[1-9]" "$open_with_report"
@@ -748,7 +752,7 @@ jobs:
               '  ]' \
               '}' > "$default_open_smoke_file"
             rm -f "$default_open_report"
-            open -W -n "$default_open_smoke_file" --args --macos-launch-smoke "$default_open_report" &
+            open -W -n "$default_open_smoke_file" --args --macos-launch-smoke "$default_open_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir" &
             default_open_pid=$!
             for _ in {1..60}; do
               if [[ -f "$default_open_report" ]]; then
@@ -781,6 +785,7 @@ jobs:
             } >> "$default_open_report"
             cat "$default_open_report" >> "$evidence_path"
             grep -q "macos_launch_smoke=passed" "$default_open_report"
+            grep -q "app_diagnostics_directory_configured=true" "$default_open_report"
             grep -q "window_shown=true" "$default_open_report"
             grep -q "opened_source_path=.*freex-$runtime-default-open.fxl" "$default_open_report"
             grep -q "viewport_rows=[1-9]" "$default_open_report"
@@ -791,6 +796,18 @@ jobs:
             grep -q "launchservices_default_open_app_override=false" "$default_open_report"
             grep -q "launchservices_default_open_document_extension=fxl" "$default_open_report"
             grep -q "launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click" "$default_open_report"
+
+            app_diagnostics_events_path="$app_diagnostics_dir/events.jsonl"
+            app_diagnostics_crash_count="$(find "$app_diagnostics_dir/CrashReports" -type f -name '*.json' 2>/dev/null | wc -l | tr -d ' ')"
+            {
+              echo "app_diagnostics_artifact=freex-$runtime-macos-app-diagnostics"
+              echo "app_diagnostics_events_jsonl=true"
+              echo "app_diagnostics_crash_report_count=$app_diagnostics_crash_count"
+            } >> "$evidence_path"
+            test -f "$app_diagnostics_events_path"
+            grep -q '"eventName":"app_start"' "$app_diagnostics_events_path"
+            grep -q '"eventName":"app_ready"' "$app_diagnostics_events_path"
+            grep -q '"eventName":"macos_launch_smoke"' "$app_diagnostics_events_path"
           else
             echo "Skipping launch smoke for $runtime on $host_arch host." | tee "$smoke_log"
             echo "smoke_status=skipped_host_arch_mismatch" >> "$evidence_path"
@@ -865,7 +882,7 @@ jobs:
 
           ## Report
 
-          When filing feedback, include the runtime ($runtime), the GitHub Actions run, freex-$runtime-macos-evidence.txt, and the smoke logs when relevant.
+          When filing feedback, include the runtime ($runtime), the GitHub Actions run, freex-$runtime-macos-evidence.txt, the matching macOS diagnostics artifact, and the smoke logs when relevant.
           EOF
 
       - name: Upload app artifact
@@ -883,6 +900,7 @@ jobs:
             artifacts/freex-${{ matrix.runtime }}-macos-notarization.log
             artifacts/freex-${{ matrix.runtime }}-macos-tester-instructions.md
           if-no-files-found: error
+          retention-days: 14
 
       - name: Upload app diagnostics
         if: always()
@@ -899,9 +917,11 @@ jobs:
             artifacts/freex-${{ matrix.runtime }}-macos-tester-instructions.md
             artifacts/freex-${{ matrix.runtime }}-portable-pdf-exporter-tests.trx
             artifacts/freex-${{ matrix.runtime }}-export-path-tests.trx
+            artifacts/freex-${{ matrix.runtime }}-macos-app-diagnostics/**
             artifacts/freex-${{ matrix.runtime }}-macos-app.zip
             artifacts/freex-${{ matrix.runtime }}-macos-app.zip.sha256
           if-no-files-found: warn
+          retention-days: 14
 
   publish-distribution-candidate:
     name: Publish macOS distribution candidate
