@@ -30,6 +30,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .BeTrue(blockReason);
 
         var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetHyperlinksModel(sheet);
         sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(42));
 
         using var saved = new MemoryStream();
@@ -46,6 +47,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceWorksheetRelationships.ToString(SaveOptions.DisableFormatting));
+
+        saved.Position = 0;
+        AssertWorksheetHyperlinksModel(adapter.Load(saved).GetSheetAt(0));
     }
 
     [Fact]
@@ -138,6 +142,27 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Single(element => element.Attribute("ref")?.Value == "A2");
         internalLink.Attribute("location")!.Value.Should().Be("Data!B2");
         internalLink.Attribute("tooltip")!.Value.Should().Be("Jump to details");
+    }
+
+    private static void AssertWorksheetHyperlinksModel(Sheet sheet)
+    {
+        var externalAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.Hyperlinks.Should().ContainKey(externalAddress);
+        sheet.Hyperlinks[externalAddress].Should().Be("https://example.com/docs");
+        sheet.HyperlinkMetadata.Should().ContainKey(externalAddress);
+        sheet.HyperlinkMetadata[externalAddress].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Open documentation",
+            ""));
+
+        var internalAddress = new CellAddress(sheet.Id, 2, 1);
+        sheet.Hyperlinks.Should().ContainKey(internalAddress);
+        sheet.Hyperlinks[internalAddress].Should().Be("Data!B2");
+        sheet.HyperlinkMetadata.Should().ContainKey(internalAddress);
+        sheet.HyperlinkMetadata[internalAddress].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Jump to details",
+            "Data!B2"));
     }
 
     private static Workbook CreateWorksheetHyperlinksSourceWorkbook()
