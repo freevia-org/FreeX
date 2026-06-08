@@ -58,8 +58,12 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresWorkbookSharePlannerToAvaloniaFallback()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var serviceSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "WorkbookShareSheetService.cs"));
 
         source.Should().Contain("private const string WorkbookShareSheetLabel = \"macOS Share Sheet\";");
+        source.Should().Contain("private readonly IWorkbookShareSheetService _workbookShareSheetService;");
+        source.Should().Contain(": this(startupArguments, new UnavailableWorkbookShareSheetService(WorkbookShareSheetLabel))");
+        source.Should().Contain("ArgumentNullException.ThrowIfNull(workbookShareSheetService);");
         source.Should().Contain("private readonly NativeMenuItem _shareWorkbookMenuItem = new();");
         source.Should().Contain("_shareWorkbookMenuItem.Header = \"Share Workbook...\";");
         source.Should().Contain("_shareWorkbookMenuItem.Click += async (_, _) => await ShareWorkbookAsync();");
@@ -69,9 +73,15 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("WorkbookShareActionPlanner.CreatePlan(");
         source.Should().Contain("_session.CurrentFilePath");
         source.Should().Contain("new(");
-        source.Should().Contain("WorkbookShareSheetLabel");
-        source.Should().Contain("CanShowShareSheet: false");
         source.Should().Contain("CanOpenContainingFolder: TopLevel.GetTopLevel(this)?.Launcher is not null");
+        var shareSurfaceBlock = ExtractSourceBlock(
+            source,
+            "private WorkbookShareActionSurface CreateWorkbookShareActionSurface()",
+            "OpenContainingFolderLabel: GetWorkbookShareOpenContainingFolderLabel());");
+        shareSurfaceBlock.Should().Contain("var capability = _workbookShareSheetService.Capability;");
+        shareSurfaceBlock.Should().Contain("capability.ShareSheetLabel");
+        shareSurfaceBlock.Should().Contain("CanShowShareSheet: capability.CanShowShareSheet");
+        shareSurfaceBlock.Should().NotContain("CanShowShareSheet: false");
         source.Should().Contain("OperatingSystem.IsMacOS()");
         source.Should().Contain("? \"Reveal in Finder\"");
         source.Should().Contain(": \"Open Containing Folder\"");
@@ -80,17 +90,39 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("case WorkbookShareActionPlanKind.OpenContainingFolder:");
         source.Should().Contain("await TrySaveDirtyWorkbookForShareAsync()");
         source.Should().Contain("await OpenWorkbookContainingFolderAsync(refreshedPlan);");
+        source.Should().Contain("case WorkbookShareActionPlanKind.ShareSheet:");
+        source.Should().Contain("await ShowWorkbookShareSheetAsync(plan);");
+        source.Should().Contain("private async Task ShowWorkbookShareSheetAsync(WorkbookShareActionPlan plan)");
+        source.Should().Contain("if (refreshedPlan.Kind != WorkbookShareActionPlanKind.ShareSheet)");
+        source.Should().Contain("await _workbookShareSheetService.ShowShareSheetAsync(filePath)");
+        source.Should().Contain("await FallbackToOpenContainingFolderAfterShareSheetFailureAsync(refreshedPlan);");
+        source.Should().Contain("with { CanShowShareSheet = false }");
+        source.Should().Contain("await OpenWorkbookContainingFolderAsync(fallbackPlan);");
         source.Should().Contain("case WorkbookShareActionPlanKind.Deferred:");
         source.Should().Contain("WorkbookShareActionPlanner.FormatStatus(plan)");
         source.Should().Contain("TopLevel.GetTopLevel(this)?.Launcher");
         source.Should().Contain("await launcher.LaunchDirectoryInfoAsync(new DirectoryInfo(folderPath))");
         source.Should().Contain("WorkbookShareActionUnavailableReason.ContainingFolderUnavailable");
 
+        serviceSource.Should().Contain("internal sealed record WorkbookShareSheetCapability(");
+        serviceSource.Should().Contain("internal interface IWorkbookShareSheetService");
+        serviceSource.Should().Contain("Task<WorkbookShareSheetResult> ShowShareSheetAsync(string filePath);");
+        serviceSource.Should().Contain("internal sealed class UnavailableWorkbookShareSheetService : IWorkbookShareSheetService");
+        serviceSource.Should().Contain("Capability = new WorkbookShareSheetCapability(shareSheetLabel, CanShowShareSheet: false);");
+        serviceSource.Should().Contain("WorkbookShareSheetResult.Unavailable(_unavailableMessage)");
+
         source.Should().NotContain("DataTransferManager");
         source.Should().NotContain("WindowInteropHelper");
         source.Should().NotContain("Microsoft.Win32");
         source.Should().NotContain("ProcessStartInfo");
         source.Should().NotContain("System.Windows");
+        serviceSource.Should().NotContain("AppKit");
+        serviceSource.Should().NotContain("NSSharingService");
+        serviceSource.Should().NotContain("DataTransferManager");
+        serviceSource.Should().NotContain("WindowInteropHelper");
+        serviceSource.Should().NotContain("Microsoft.Win32");
+        serviceSource.Should().NotContain("ProcessStartInfo");
+        serviceSource.Should().NotContain("System.Windows");
     }
 
     [Fact]

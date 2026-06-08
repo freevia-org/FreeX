@@ -273,6 +273,7 @@ public sealed class MainWindow : Window
     private readonly WorkbookSessionFactory _sessionFactory = new();
     private readonly WorkbookOpenService _openService = new();
     private readonly WorkbookSaveService _saveService = new();
+    private readonly IWorkbookShareSheetService _workbookShareSheetService;
     private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
     private readonly ContentControl _sheetGridHost = new();
     private readonly ContentControl _sheetTabsHost = new();
@@ -482,7 +483,17 @@ public sealed class MainWindow : Window
     private Guid? _selectedDrawingObjectId;
 
     public MainWindow(IReadOnlyList<string> startupArguments)
+        : this(startupArguments, new UnavailableWorkbookShareSheetService(WorkbookShareSheetLabel))
     {
+    }
+
+    internal MainWindow(
+        IReadOnlyList<string> startupArguments,
+        IWorkbookShareSheetService workbookShareSheetService)
+    {
+        ArgumentNullException.ThrowIfNull(workbookShareSheetService);
+
+        _workbookShareSheetService = workbookShareSheetService;
         var source = new StartupWorkbookLoader().Load(startupArguments);
         _session = _sessionFactory.Create(source, InitialViewportHeight, InitialViewportWidth, includeObjects: true);
 
@@ -12277,12 +12288,15 @@ public sealed class MainWindow : Window
             CreateWorkbookShareActionSurface(),
             File.Exists);
 
-    private WorkbookShareActionSurface CreateWorkbookShareActionSurface() =>
-        new(
-            WorkbookShareSheetLabel,
-            CanShowShareSheet: false,
+    private WorkbookShareActionSurface CreateWorkbookShareActionSurface()
+    {
+        var capability = _workbookShareSheetService.Capability;
+        return new(
+            capability.ShareSheetLabel,
+            CanShowShareSheet: capability.CanShowShareSheet,
             CanOpenContainingFolder: TopLevel.GetTopLevel(this)?.Launcher is not null,
             OpenContainingFolderLabel: GetWorkbookShareOpenContainingFolderLabel());
+    }
 
     private static string GetWorkbookShareOpenContainingFolderLabel() =>
         OperatingSystem.IsMacOS()
@@ -12321,6 +12335,9 @@ public sealed class MainWindow : Window
                 break;
 
             case WorkbookShareActionPlanKind.ShareSheet:
+                await ShowWorkbookShareSheetAsync(plan);
+                break;
+
             case WorkbookShareActionPlanKind.Deferred:
             default:
                 ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(plan), isWarning: true);
@@ -12335,6 +12352,62 @@ public sealed class MainWindow : Window
 
         await SaveCurrentWorkbookAsync();
         return !_session.IsDirty;
+    }
+
+    private async Task ShowWorkbookShareSheetAsync(WorkbookShareActionPlan plan)
+    {
+        if (!await TrySaveDirtyWorkbookForShareAsync())
+            return;
+
+        var refreshedPlan = CreateWorkbookShareActionPlan();
+        if (refreshedPlan.Kind != WorkbookShareActionPlanKind.ShareSheet)
+        {
+            await ExecuteWorkbookShareActionPlanAsync(refreshedPlan);
+            return;
+        }
+
+        var filePath = refreshedPlan.Path;
+        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+        {
+            await ExecuteWorkbookShareActionPlanAsync(CreateWorkbookShareActionPlan());
+            return;
+        }
+
+        ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(refreshedPlan), isWarning: false);
+        try
+        {
+            var result = await _workbookShareSheetService.ShowShareSheetAsync(filePath);
+            if (result.WasShown)
+            {
+                ShowShareStatus(
+                    $"{refreshedPlan.EffectiveSurface.ShareSheetLabel} opened for {Path.GetFileName(filePath)}.",
+                    isWarning: false);
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(result.Message))
+                ShowShareStatus(result.Message, isWarning: true);
+
+            await FallbackToOpenContainingFolderAfterShareSheetFailureAsync(refreshedPlan);
+        }
+        catch (Exception ex)
+        {
+            ShowShareStatus($"{refreshedPlan.EffectiveSurface.ShareSheetLabel} could not open: {ex.Message}", isWarning: true);
+            await FallbackToOpenContainingFolderAfterShareSheetFailureAsync(refreshedPlan);
+        }
+    }
+
+    private async Task FallbackToOpenContainingFolderAfterShareSheetFailureAsync(WorkbookShareActionPlan shareSheetPlan)
+    {
+        var fallbackSurface = CreateWorkbookShareActionSurface() with { CanShowShareSheet = false };
+        var fallbackPlan = WorkbookShareActionPlanner.CreatePlan(shareSheetPlan.Path, fallbackSurface, File.Exists);
+        if (fallbackPlan.Kind == WorkbookShareActionPlanKind.OpenContainingFolder)
+        {
+            await OpenWorkbookContainingFolderAsync(fallbackPlan);
+            return;
+        }
+
+        ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(fallbackPlan), isWarning: true);
     }
 
     private async Task OpenWorkbookContainingFolderAsync(WorkbookShareActionPlan plan)
