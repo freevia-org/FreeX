@@ -99,6 +99,10 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("Signed and internal ad-hoc outputs use the same artifact names");
         source.Should().Contain("Use `osx-arm64` for Apple Silicon Macs and `osx-x64` for Intel Macs");
         source.Should().Contain("Actions artifact wrapper");
+        source.Should().Contain("Preserve the `freex-<run-id>-<run-attempt>-<runtime>-macos-app` wrapper directory names under the artifact root");
+        source.Should().Contain("Do not flatten wrapper contents directly into the artifact root");
+        source.Should().Contain("-ExpectedRunId <run-id>");
+        source.Should().Contain("-ExpectedRunAttempt <run-attempt>");
         source.Should().Contain("freex-<runtime>-macos-tester-instructions.md");
         source.Should().Contain("freex-<runtime>-macos-evidence.txt");
         source.Should().Contain("shasum -a 256 -c freex-<runtime>-macos-app.zip.sha256");
@@ -125,7 +129,10 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("Quick retrieval checklist");
         source.Should().Contain("Pick `osx-arm64` for Apple Silicon Macs or `osx-x64` for Intel Macs.");
         source.Should().Contain("Download the matching Actions artifact wrapper from the completed workflow run.");
-        source.Should().Contain("Unzip the wrapper, then verify the inner `freex-<runtime>-macos-app.zip` with its `.sha256` file.");
+        source.Should().Contain("Preserve each `freex-<run-id>-<run-attempt>-<runtime>-macos-app` wrapper directory under the artifact root");
+        source.Should().Contain("Keep those wrapper directory names intact under `artifacts/macos-preview`.");
+        source.Should().Contain("-ExpectedRunId <run-id>");
+        source.Should().Contain("-ExpectedRunAttempt <run-attempt>");
         source.Should().Contain("Keep `freex-<runtime>-macos-evidence.txt` and the smoke/notarization logs with any tester report.");
         source.Should().Contain("workflow_dispatch");
         source.Should().Contain("pull request events intentionally fall back to ad-hoc signing");

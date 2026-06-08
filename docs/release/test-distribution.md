@@ -84,7 +84,7 @@ GitHub-hosted macOS runners can produce downloadable macOS app artifacts without
 - `freex-<run-id>-<run-attempt>-osx-arm64-macos-app`
 - `freex-<run-id>-<run-attempt>-osx-x64-macos-app`
 
-Each download is a GitHub Actions artifact wrapper. Unzip the wrapper first, then use the inner app ZIP, checksum, tester instructions, evidence file, and smoke logs. The current workflow uploads Actions artifacts only, has `contents: read`, and does not publish GitHub Release assets or stable `latest` links.
+Each download is a GitHub Actions artifact wrapper. Preserve the `freex-<run-id>-<run-attempt>-<runtime>-macos-app` wrapper directory names under the artifact root, then use the inner app ZIP, checksum, tester instructions, evidence file, and smoke logs. Do not flatten wrapper contents directly into the artifact root; the Windows evidence validator uses wrapper names to detect duplicate stale downloads, mixed runtime runs, and expected run identity mismatches. The current workflow uploads Actions artifacts only, has `contents: read`, and does not publish GitHub Release assets or stable `latest` links.
 
 Signed and internal ad-hoc outputs use the same artifact names. Treat `codesign_mode=ad-hoc` or a skipped notarization status as internal preview evidence only. External distribution requires `codesign_mode=developer-id`, `notarization_status=accepted`, `stapler_validated=true`, and a release-asset publication path.
 
@@ -93,10 +93,14 @@ Without local macOS hardware, Windows agents can run repository preflight and st
 Windows agents can also validate downloaded hosted evidence without a Mac:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-MacOsPublicPreviewReadiness.ps1 -ArtifactRoot artifacts/macos-preview
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-MacOsPublicPreviewReadiness.ps1 -ArtifactRoot artifacts/macos-preview -ExpectedRunId <run-id> -ExpectedRunAttempt <run-attempt>
 ```
 
-For public-preview candidates, run it with `-DistributionCandidate -RequireSeparateDiagnosticsArtifact` after downloading the matching `freex-<run-id>-<run-attempt>-<runtime>-macos-diagnostics` artifacts beside the app artifacts.
+`-ExpectedRunId` and `-ExpectedRunAttempt` are optional, but pass them when validating downloaded artifacts from a specific GitHub Actions run. For public-preview candidates, run it with the same run identity flags plus `-DistributionCandidate -RequireSeparateDiagnosticsArtifact` after downloading the matching `freex-<run-id>-<run-attempt>-<runtime>-macos-diagnostics` artifacts beside the app artifacts:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-MacOsPublicPreviewReadiness.ps1 -ArtifactRoot artifacts/macos-preview -ExpectedRunId <run-id> -ExpectedRunAttempt <run-attempt> -DistributionCandidate -RequireSeparateDiagnosticsArtifact
+```
 
 ### macOS App Preview Tester Instructions
 

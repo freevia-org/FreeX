@@ -14,6 +14,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         var script = WorkspaceFileLocator.ReadAllText("tools", "Test-MacOsPublicPreviewReadiness.ps1");
         var signingRunbook = WorkspaceFileLocator.ReadAllText("docs", "release", "macos-signing-notarization.md");
         var distributionPlan = WorkspaceFileLocator.ReadAllText("docs", "release", "test-distribution.md");
+        var hostedRunnerPlan = WorkspaceFileLocator.ReadAllText("docs", "planning", "macos-hosted-runner-build-plan.md");
 
         script.Should().Contain("artifact_channel");
         script.Should().Contain("distribution_readiness");
@@ -40,8 +41,17 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         signingRunbook.Should().Contain("tools/Test-MacOsPublicPreviewReadiness.ps1");
         signingRunbook.Should().Contain("-DistributionCandidate");
         signingRunbook.Should().Contain("-RequireSeparateDiagnosticsArtifact");
+        signingRunbook.Should().Contain("-ExpectedRunId <run-id>");
+        signingRunbook.Should().Contain("-ExpectedRunAttempt <run-attempt>");
+        signingRunbook.Should().Contain("Keep those wrapper directory names intact under `artifacts/macos-preview`.");
         distributionPlan.Should().Contain("tools/Test-MacOsPublicPreviewReadiness.ps1");
         distributionPlan.Should().Contain("Windows-runnable");
+        distributionPlan.Should().Contain("-ExpectedRunId <run-id>");
+        distributionPlan.Should().Contain("-ExpectedRunAttempt <run-attempt>");
+        distributionPlan.Should().Contain("Do not flatten wrapper contents directly into the artifact root");
+        hostedRunnerPlan.Should().Contain("-ExpectedRunId <run-id>");
+        hostedRunnerPlan.Should().Contain("-ExpectedRunAttempt <run-attempt>");
+        hostedRunnerPlan.Should().Contain("wrapper directory under the artifact root");
     }
 
     [Fact]
