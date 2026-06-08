@@ -485,22 +485,21 @@ jobs:
               exit 1
             fi
             live_command_key_system_events_result=attempted
-            if ! osascript <<'APPLESCRIPT'
-            tell application id "io.github.tony-xmelon.freex" to activate
-            delay 0.5
-            tell application "System Events"
-              tell process "FreeX"
-                set frontmost to true
-              end tell
-              keystroke "a" using {command down}
-              delay 0.2
-              keystroke "b" using {command down}
-              delay 0.2
-              keystroke "i" using {command down}
-              delay 0.2
-              keystroke "u" using {command down}
-            end tell
-            APPLESCRIPT
+            if ! osascript \
+              -e 'tell application id "io.github.tony-xmelon.freex" to activate' \
+              -e 'delay 0.5' \
+              -e 'tell application "System Events"' \
+              -e 'tell process "FreeX"' \
+              -e 'set frontmost to true' \
+              -e 'end tell' \
+              -e 'keystroke "a" using {command down}' \
+              -e 'delay 0.2' \
+              -e 'keystroke "b" using {command down}' \
+              -e 'delay 0.2' \
+              -e 'keystroke "i" using {command down}' \
+              -e 'delay 0.2' \
+              -e 'keystroke "u" using {command down}' \
+              -e 'end tell'
             then
               live_command_key_system_events_result=blocked_or_failed
             fi
