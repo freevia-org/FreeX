@@ -230,9 +230,7 @@ public static class XlsxWorkbookThemeReader
         XElement? lineDefault,
         XNamespace drawingNs)
     {
-        var line = lineDefault?
-            .Descendants(drawingNs + "ln")
-            .FirstOrDefault();
+        var line = FindFirstDescendant(lineDefault, drawingNs + "ln");
         if (line is null)
             return null;
 
@@ -256,19 +254,38 @@ public static class XlsxWorkbookThemeReader
             return null;
 
         ReadSolidFill(
-            textDefault.Descendants(drawingNs + "solidFill").FirstOrDefault(),
+            FindFirstDescendant(textDefault, drawingNs + "solidFill"),
             drawingNs,
             out var textThemeColor,
             out var textColor);
-        var typeface = textDefault
-            .Descendants(drawingNs + "latin")
-            .Select(element => element.Attribute("typeface")?.Value)
-            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))
-            ?.Trim();
+        var typeface = FindFirstTypeface(textDefault, drawingNs);
 
         return textThemeColor is null && textColor is null && string.IsNullOrWhiteSpace(typeface)
             ? null
             : new WorkbookThemeTextObjectDefault(textThemeColor, textColor, typeface);
+    }
+
+    private static XElement? FindFirstDescendant(XElement? element, XName name)
+    {
+        if (element is null)
+            return null;
+
+        foreach (var descendant in element.Descendants(name))
+            return descendant;
+
+        return null;
+    }
+
+    private static string? FindFirstTypeface(XElement textDefault, XNamespace drawingNs)
+    {
+        foreach (var latin in textDefault.Descendants(drawingNs + "latin"))
+        {
+            var typeface = latin.Attribute("typeface")?.Value;
+            if (!string.IsNullOrWhiteSpace(typeface))
+                return typeface.Trim();
+        }
+
+        return null;
     }
 
     private static void ReadSolidFill(
