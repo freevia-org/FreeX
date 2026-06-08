@@ -83,6 +83,39 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void LoadedWorkbookPatchSaveReload_RetainsWorksheetPrintOptionsNativeMetadata()
+    {
+        using var source = CreateWorksheetNativeMetadataSourcePackage();
+        AddWorksheetPrintOptionsNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.PrintGridlines.Should().BeTrue();
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        var reloadedSheet = reloaded.GetSheetAt(0);
+        reloadedSheet.PrintGridlines.Should().BeTrue();
+        var printOptionsMetadata = reloadedSheet.PrintOptionsMetadata;
+        printOptionsMetadata.Should().NotBeNull();
+        var printOptionsNativeXml = XElement.Parse(printOptionsMetadata!.Get("printOptions")!);
+        printOptionsNativeXml.Attribute("gridLinesSet")!.Value.Should().Be("1");
+    }
+
+    [Fact]
     public void LoadedWorkbookFullSave_SanitizesInvalidWorksheetWebPublishItemsForSchemaValidity()
     {
         using var source = CreateWorksheetNativeMetadataSourcePackage();
@@ -382,6 +415,20 @@ public sealed partial class XlsxNonChartSchemaValidationTests
                 new XAttribute("objectType", "Button"),
                 new XAttribute("checked", "Unchecked"))));
         WritePackageEntry(archive, "xl/embeddings/oleObject1.bin", "FreeX generated OLE placeholder");
+    }
+
+    private static void AddWorksheetPrintOptionsNativeMetadata(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        ReplaceWorksheetChildInOrder(worksheetXml.Root!, new XElement(
+            worksheetNs + "printOptions",
+            new XAttribute("gridLines", "1"),
+            new XAttribute("gridLinesSet", "1")));
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
     }
 
     private static void AddWorksheetNativeRelationship(
