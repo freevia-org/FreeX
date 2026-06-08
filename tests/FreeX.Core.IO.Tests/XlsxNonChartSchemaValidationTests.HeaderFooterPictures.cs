@@ -82,6 +82,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Should()
             .Be(sourceVmlRelationships.ToString(SaveOptions.DisableFormatting));
         ReadHeaderFooterImageBytes(saved, sourceVmlPath).Should().Equal(sourceImageBytes);
+        AssertReloadedHeaderFooterPictureModel(adapter, saved);
     }
 
     [Fact]
@@ -108,6 +109,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Select(element => element.Attribute("Id")?.Value)
             .Should()
             .Equal("rIdImage1");
+        AssertReloadedHeaderFooterPictureModel(adapter, saved);
     }
 
     [Fact]
@@ -149,6 +151,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SchemaErrors(saved).Should().BeEmpty();
         AssertHeaderFooterLegacyDrawingMarkerSanitized(saved);
         AssertHeaderFooterPicturePackage(saved);
+        AssertReloadedHeaderFooterPictureModel(adapter, saved);
     }
 
     private static Workbook CreateHeaderFooterPictureSourceWorkbook()
@@ -336,6 +339,20 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         ReadPackageRootElement(stream, vmlPath).Elements().Should().NotBeEmpty();
         ReadPackageRootElement(stream, vmlRelationshipsPath).Elements().Should().NotBeEmpty();
         ReadHeaderFooterImageBytes(stream, vmlPath).Should().Equal(MinimalPngBytes());
+    }
+
+    private static void AssertReloadedHeaderFooterPictureModel(XlsxFileAdapter adapter, Stream stream)
+    {
+        stream.Position = 0;
+        var reloaded = adapter.Load(stream);
+        var sheet = reloaded.GetSheetAt(0);
+
+        sheet.GetCell(3, 3)!.Value.Should().Be(new NumberValue(42));
+        sheet.PageHeader.Left.Should().Be("&[Picture]");
+        var picture = sheet.PageHeaderPictures.Left;
+        picture.Should().NotBeNull();
+        picture!.ImageBytes.Should().Equal(MinimalPngBytes());
+        picture.ContentType.Should().Be("image/png");
     }
 
     private static string ReadHeaderFooterVmlPath(Stream stream)
