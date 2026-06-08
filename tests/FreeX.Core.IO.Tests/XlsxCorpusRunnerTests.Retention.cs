@@ -1352,13 +1352,21 @@ public partial class XlsxCorpusRunnerTests
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
-        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-header-footer-edit"));
+        var sheet = workbook.GetSheetAt(0);
+        AssertWorksheetHeaderFooterNativeModel(sheet, "generated-worksheet-header-footer-native-001 loaded");
+        sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freex-header-footer-edit"));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-header-footer-native-001");
         AssertWorksheetHeaderFooterNative(saved, "generated-worksheet-header-footer-native-001 saved");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        AssertWorksheetHeaderFooterNativeModel(
+            reloaded.GetSheetAt(0),
+            "worksheet header/footer model metadata should survive ordinary save and reload");
     }
 
     [Fact]
@@ -2210,6 +2218,11 @@ public partial class XlsxCorpusRunnerTests
         headerFooter!.Attribute("nativeHeaderFooterAttr").Should().BeNull(because);
         headerFooter.Element(worksheetNs + "oddHeader")!.Value.Should().Contain("Center", because);
         headerFooter.Element(worksheetNs + "nativeHeaderFooterChild").Should().BeNull(because);
+    }
+
+    private static void AssertWorksheetHeaderFooterNativeModel(Sheet sheet, string because)
+    {
+        sheet.PageHeader.Center.Should().Contain("Center", because);
     }
 
     private static void AssertWorksheetDimensionNative(Stream package, string because, string expectedRef)
