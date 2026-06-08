@@ -19,8 +19,7 @@ public sealed class ActivateSheetDialog : Window
     public ActivateSheetDialog(Workbook workbook, SheetId activeSheetId)
     {
         var targets = BuildTargets(workbook).ToList();
-        var selectedTarget = targets.FirstOrDefault(target => target.SheetId == activeSheetId)
-            ?? targets.FirstOrDefault();
+        var selectedTarget = FindInitialTarget(targets, activeSheetId);
         Result = new ActivateSheetDialogResult(selectedTarget?.SheetId ?? activeSheetId);
 
         Title = UiText.Get("ActivateSheet_Title");
@@ -57,6 +56,21 @@ public sealed class ActivateSheetDialog : Window
     {
         foreach (var sheet in workbook.Sheets.Where(sheet => !sheet.IsHidden))
             yield return new ActivateSheetTarget(sheet.Name, sheet.Id);
+    }
+
+    private static ActivateSheetTarget? FindInitialTarget(IReadOnlyList<ActivateSheetTarget> targets, SheetId activeSheetId)
+    {
+        ActivateSheetTarget? firstTarget = null;
+
+        foreach (var target in targets)
+        {
+            firstTarget ??= target;
+
+            if (target.SheetId == activeSheetId)
+                return target;
+        }
+
+        return firstTarget;
     }
 
     private UIElement CreateContent()
