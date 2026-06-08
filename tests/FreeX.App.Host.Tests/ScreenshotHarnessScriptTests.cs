@@ -269,6 +269,47 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain("Start-Process -FilePath $exe -ArgumentList \"/e\"");
     }
 
+    [Fact]
+    public void ExcelScreenshotScript_ProvidesOptInAutoFilterFlyoutTour()
+    {
+        var script = ReadScript("screenshot_excel.ps1");
+
+        script.Should().Contain("[string]$AutoFilterFlyoutTour = $env:FREEX_EXCEL_AUTOFILTER_FLYOUT_TOUR");
+        script.Should().Contain("if ($AutoFilterFlyoutTour -eq \"1\")");
+        script.Should().Contain("function Invoke-ExcelAutoFilterFlyoutTour");
+        script.Should().Contain("function New-ExcelAutoFilterSampleWorkbook");
+        script.Should().Contain("Join-Path $outDir \"autofilter-flyout-tour\"");
+        script.Should().Contain("excel_autofilter_flyout_tour_manifest.json");
+        script.Should().Contain("interactive_table_autofilter_dropdown_opened.png");
+        script.Should().Contain("Tool = \"FREEX_EXCEL_AUTOFILTER_FLYOUT_TOUR\"");
+        script.Should().Contain("EvidenceFamily = \"popup\"");
+        script.Should().Contain("EvidenceSubject = \"excel\"");
+        script.Should().Contain("EvidenceApp = \"Microsoft Excel\"");
+        script.Should().Contain("OutputNaming = \"interactive_table_autofilter_dropdown_opened.png\"");
+        script.Should().Contain("CatalogEvidenceTarget = \"docs/testing/ui-test-catalog.md\"");
+        script.Should().Contain("HeaderCell = \"A1\"");
+        script.Should().Contain("HeaderText = \"score\"");
+        script.Should().Contain("AutoFilterRange = \"A1:D6\"");
+        script.Should().Contain("FilterColumnOffset = 0");
+        script.Should().Contain("CaptureStatus = \"complete\"");
+        script.Should().Contain("State = \"opened\"");
+        script.Should().Contain("function Click-ExcelAutoFilterHeaderDropdown");
+        script.Should().Contain("[Win32e]::SetProcessDPIAware() | Out-Null");
+        script.Should().Contain("[Win32e]::SetCursorPos($clickX, $clickY) | Out-Null");
+        script.Should().Contain("$pointToScreenScale = 2.0");
+        script.Should().Contain("$clickX = [int]($left + ($header.Width * $pointToScreenScale) - 12)");
+        script.Should().Contain("PairKey = \"interactive:table-autofilter-dropdown:opened\"");
+        script.Should().Contain("CounterpartTool = \"FREEX_AUTOFILTER_FLYOUT_TOUR\"");
+        script.Should().Contain("CounterpartFileName = \"freex_table_autofilter_dropdown.png\"");
+        script.Should().Contain("SampleRange = \"A1:D6\"");
+        script.Should().Contain("SampleValues = @(\"1\", \"2\", \"3\", \"4\", \"(Blanks)\")");
+        script.Should().Contain("Assert-ForegroundWindowOwnership $excelPid $excelTitle \"Excel AutoFilter flyout setup\"");
+        script.Should().Contain("Click-ExcelAutoFilterHeaderDropdown $excelApp $worksheet \"A1\" $excelPid $excelTitle");
+        script.Should().Contain("Excel AutoFilter flyout tour did not detect a foreground Excel popup window");
+        script.Should().Contain("Assert-ForegroundProcessOwnership $excelPid \"Excel AutoFilter flyout screen capture\"");
+        script.Should().Contain("Find-ExcelAutoFilterPopupWindow $excelPid $excelHwnd");
+    }
+
     private static string ReadScript(string scriptName) =>
         WorkspaceFileLocator.ReadAllText("tools", scriptName);
 }

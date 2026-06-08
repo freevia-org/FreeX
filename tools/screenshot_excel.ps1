@@ -1,5 +1,6 @@
 param(
-    [string]$Widths = $env:FREEX_SS_TOUR_WIDTHS
+    [string]$Widths = $env:FREEX_SS_TOUR_WIDTHS,
+    [string]$AutoFilterFlyoutTour = $env:FREEX_EXCEL_AUTOFILTER_FLYOUT_TOUR
 )
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -30,6 +31,9 @@ public class Win32e {
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, ref RECT lpRect);
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+    [DllImport("user32.dll")] public static extern bool SetCursorPos(int X, int Y);
+    [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+    [DllImport("user32.dll")] public static extern void mouse_event(int dwFlags, int dx, int dy, int dwData, int dwExtraInfo);
     [DllImport("user32.dll")] public static extern IntPtr GetDC(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
     [DllImport("gdi32.dll")]  public static extern int GetDeviceCaps(IntPtr hDC, int nIndex);
@@ -56,18 +60,66 @@ public class Win32e {
         ReleaseDC(IntPtr.Zero, dc);
         return dpi;
     }
+    public static WindowInfoE[] GetVisibleWindowsByProcess(int processId) {
+        var windows = new List<WindowInfoE>();
+        EnumWindows((hWnd, lp) => {
+            if (!IsWindowVisible(hWnd)) return true;
+            uint wPid;
+            GetWindowThreadProcessId(hWnd, out wPid);
+            if (wPid != (uint)processId) return true;
+            var title = new StringBuilder(512);
+            GetWindowText(hWnd, title, title.Capacity);
+            var className = new StringBuilder(256);
+            GetClassName(hWnd, className, className.Capacity);
+            var rect = new RECT();
+            if (!GetWindowRect(hWnd, ref rect)) return true;
+            if (rect.Right <= rect.Left || rect.Bottom <= rect.Top) return true;
+            windows.Add(new WindowInfoE {
+                Handle = hWnd,
+                ProcessId = (int)wPid,
+                Title = title.ToString(),
+                ClassName = className.ToString(),
+                Left = rect.Left,
+                Top = rect.Top,
+                Right = rect.Right,
+                Bottom = rect.Bottom
+            });
+            return true;
+        }, IntPtr.Zero);
+        return windows.ToArray();
+    }
+}
+public class WindowInfoE {
+    public IntPtr Handle;
+    public int ProcessId;
+    public string Title;
+    public string ClassName;
+    public int Left;
+    public int Top;
+    public int Right;
+    public int Bottom;
 }
 "@
 
+[Win32e]::SetProcessDPIAware() | Out-Null
+
 $outDir = Join-Path $PSScriptRoot "screenshots_excel"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+$autoFilterFlyoutOutDir = Join-Path $outDir "autofilter-flyout-tour"
 function Clear-ScreenshotEvidenceArtifacts {
     Get-ChildItem $outDir -Filter "*.png" -ErrorAction SilentlyContinue |
         Remove-Item -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath (Join-Path $outDir "screenshot_manifest.json") -Force -ErrorAction SilentlyContinue
 }
 
-Clear-ScreenshotEvidenceArtifacts
+function Clear-AutoFilterFlyoutEvidenceArtifacts {
+    if (Test-Path -LiteralPath $autoFilterFlyoutOutDir -PathType Container) {
+        Get-ChildItem $autoFilterFlyoutOutDir -Filter "*.png" -ErrorAction SilentlyContinue |
+            Remove-Item -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath (Join-Path $autoFilterFlyoutOutDir "excel_autofilter_flyout_tour_manifest.json") -Force -ErrorAction SilentlyContinue
+    }
+}
+
 $tabNames = @("Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Help")
 $script:capturedFiles = @()
 $captureLimitations = @(
@@ -221,6 +273,273 @@ $dpi   = [Win32e]::GetScreenDpi()
 $scale = $dpi / 96.0
 Write-Host "Screen DPI: $dpi  Scale: $scale"
 
+function Get-WindowTitle($windowHandle) {
+    $title = New-Object System.Text.StringBuilder 512
+    [Win32e]::GetWindowText($windowHandle, $title, $title.Capacity) | Out-Null
+    return $title.ToString()
+}
+
+function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle, $operation = "capture") {
+    $foreground = [Win32e]::GetForegroundWindow()
+    if ($foreground -eq [IntPtr]::Zero) {
+        Clear-ScreenshotEvidenceArtifacts
+        Clear-AutoFilterFlyoutEvidenceArtifacts
+        throw "Blocked: no foreground window before $operation."
+    }
+
+    $actualPid = 0
+    [Win32e]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
+    $title = New-Object System.Text.StringBuilder 512
+    [Win32e]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
+    $actualTitle = $title.ToString()
+    if ($actualPid -ne $expectedPid -or $actualTitle -ne $expectedTitle) {
+        Clear-ScreenshotEvidenceArtifacts
+        Clear-AutoFilterFlyoutEvidenceArtifacts
+        throw "Blocked: foreground window '$actualTitle' (PID $actualPid) does not match expected '$expectedTitle' (PID $expectedPid) before $operation."
+    }
+}
+
+function Assert-ForegroundProcessOwnership($expectedPid, $operation = "capture") {
+    $foreground = [Win32e]::GetForegroundWindow()
+    if ($foreground -eq [IntPtr]::Zero) {
+        Clear-AutoFilterFlyoutEvidenceArtifacts
+        throw "Blocked: no foreground window before $operation."
+    }
+
+    $actualPid = 0
+    [Win32e]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
+    if ($actualPid -ne $expectedPid) {
+        $title = New-Object System.Text.StringBuilder 512
+        [Win32e]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
+        Clear-AutoFilterFlyoutEvidenceArtifacts
+        throw "Blocked: foreground window '$($title.ToString())' (PID $actualPid) does not belong to expected Excel PID $expectedPid before $operation."
+    }
+}
+
+function Find-ExcelAutoFilterPopupWindow($expectedPid, $ownerWindowHandle) {
+    $windows = [Win32e]::GetVisibleWindowsByProcess($expectedPid) |
+        Where-Object {
+            $_.Handle -ne $ownerWindowHandle -and
+            $_.ClassName -ne "XLMAIN" -and
+            ($_.Right - $_.Left) -gt 120 -and
+            ($_.Bottom - $_.Top) -gt 80
+        } |
+        Sort-Object @{ Expression = { ($_.Right - $_.Left) * ($_.Bottom - $_.Top) }; Descending = $true }
+
+    return $windows | Select-Object -First 1
+}
+
+function New-ExcelAutoFilterSampleWorkbook($excelApp) {
+    $workbook = $excelApp.Workbooks.Add()
+    $worksheet = $workbook.Worksheets.Item(1)
+    $worksheet.Name = "Filter"
+    $worksheet.Range("A1").Value2 = "score"
+    $worksheet.Range("B1").Value2 = "region"
+    $worksheet.Range("C1").Value2 = "item"
+    $worksheet.Range("D1").Value2 = "amount"
+    $worksheet.Range("A2").Value2 = 1
+    $worksheet.Range("B2").Value2 = "East"
+    $worksheet.Range("C2").Value2 = "Alpha"
+    $worksheet.Range("D2").Value2 = 10
+    $worksheet.Range("A3").Value2 = 2
+    $worksheet.Range("B3").Value2 = "West"
+    $worksheet.Range("C3").Value2 = "Beta"
+    $worksheet.Range("D3").Value2 = 20
+    $worksheet.Range("A4").Value2 = 3
+    $worksheet.Range("B4").Value2 = "East"
+    $worksheet.Range("C4").Value2 = "Gamma"
+    $worksheet.Range("D4").Value2 = 30
+    $worksheet.Range("A5").Value2 = 4
+    $worksheet.Range("B5").Value2 = "West"
+    $worksheet.Range("C5").Value2 = "Delta"
+    $worksheet.Range("D5").Value2 = 40
+    $worksheet.Range("A6").Value2 = $null
+    $worksheet.Range("B6").Value2 = "North"
+    $worksheet.Range("C6").Value2 = "Blank score"
+    $worksheet.Range("D6").Value2 = 50
+    $worksheet.Range("A1:D6").AutoFilter() | Out-Null
+    $worksheet.Range("A:D").EntireColumn.AutoFit() | Out-Null
+    $worksheet.Range("A1").Select() | Out-Null
+
+    return $workbook
+}
+
+function Capture-ScreenRectangle($left, $top, $width, $height, $path) {
+    $bmp = New-Object System.Drawing.Bitmap($width, $height)
+    $g = [System.Drawing.Graphics]::FromImage($bmp)
+    $g.CopyFromScreen($left, $top, 0, 0, [System.Drawing.Size]::new($width, $height))
+    $g.Dispose()
+    $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
+    $bmp.Dispose()
+}
+
+function Click-ExcelAutoFilterHeaderDropdown($excelApp, $worksheet, $headerAddress, $expectedPid, $expectedTitle) {
+    $header = $worksheet.Range($headerAddress)
+    $window = $excelApp.ActiveWindow
+    $left = $window.PointsToScreenPixelsX($header.Left)
+    $top = $window.PointsToScreenPixelsY($header.Top)
+    $pointToScreenScale = 2.0
+    $clickX = [int]($left + ($header.Width * $pointToScreenScale) - 12)
+    $clickY = [int]($top + ($header.Height * $pointToScreenScale / 2.0))
+
+    [Win32e]::SetCursorPos($clickX, $clickY) | Out-Null
+    Start-Sleep -Milliseconds 100
+    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel AutoFilter dropdown mouse down"
+    [Win32e]::mouse_event(2, 0, 0, 0, 0)
+    Start-Sleep -Milliseconds 60
+    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel AutoFilter dropdown mouse up"
+    [Win32e]::mouse_event(4, 0, 0, 0, 0)
+}
+
+function Invoke-ExcelAutoFilterFlyoutTour {
+    New-Item -ItemType Directory -Force -Path $autoFilterFlyoutOutDir | Out-Null
+    Clear-AutoFilterFlyoutEvidenceArtifacts
+
+    $excelApp = $null
+    $workbook = $null
+    try {
+        $excelApp = New-Object -ComObject Excel.Application
+        $excelApp.Visible = $true
+        $excelApp.DisplayAlerts = $false
+        $excelApp.WindowState = -4143
+        $excelApp.Top = 0
+        $excelApp.Left = 0
+        $excelApp.Width = 900
+        $excelApp.Height = 720
+        $workbook = New-ExcelAutoFilterSampleWorkbook $excelApp
+        $worksheet = $excelApp.ActiveSheet
+        Start-Sleep -Milliseconds 700
+
+        $excelHwnd = [IntPtr]$excelApp.Hwnd
+        if ($excelHwnd -eq [IntPtr]::Zero) {
+            Clear-AutoFilterFlyoutEvidenceArtifacts
+            throw "Excel AutoFilter flyout tour could not resolve the Excel window handle."
+        }
+
+        $excelPid = 0
+        [Win32e]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
+        $excelTitle = Get-WindowTitle $excelHwnd
+        [Win32e]::SetForegroundWindow($excelHwnd) | Out-Null
+        Start-Sleep -Milliseconds 700
+        Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel AutoFilter flyout setup"
+
+        Click-ExcelAutoFilterHeaderDropdown $excelApp $worksheet "A1" $excelPid $excelTitle
+        Start-Sleep -Milliseconds 900
+        Assert-ForegroundProcessOwnership $excelPid "Excel AutoFilter flyout capture"
+
+        $popup = Find-ExcelAutoFilterPopupWindow $excelPid $excelHwnd
+        if ($null -eq $popup) {
+            Clear-AutoFilterFlyoutEvidenceArtifacts
+            throw "Excel AutoFilter flyout tour did not detect a foreground Excel popup window after opening the header dropdown."
+        }
+
+        $windowRect = New-Object Win32e+RECT
+        [Win32e]::GetWindowRect($excelHwnd, [ref]$windowRect) | Out-Null
+        $captureSource = "popup-window-rectangle"
+        $captureBounds = [pscustomobject]@{
+            Left = $popup.Left
+            Top = $popup.Top
+            Right = $popup.Right
+            Bottom = $popup.Bottom
+            Width = $popup.Right - $popup.Left
+            Height = $popup.Bottom - $popup.Top
+        }
+        $popupBounds = [pscustomobject]@{
+            Handle = $popup.Handle.ToString()
+            ClassName = $popup.ClassName
+            Title = $popup.Title
+            Left = $popup.Left
+            Top = $popup.Top
+            Right = $popup.Right
+            Bottom = $popup.Bottom
+            Width = $popup.Right - $popup.Left
+            Height = $popup.Bottom - $popup.Top
+        }
+
+        $fileName = "interactive_table_autofilter_dropdown_opened.png"
+        $path = Join-Path $autoFilterFlyoutOutDir $fileName
+        Assert-ForegroundProcessOwnership $excelPid "Excel AutoFilter flyout screen capture"
+        Capture-ScreenRectangle $captureBounds.Left $captureBounds.Top $captureBounds.Width $captureBounds.Height $path
+
+        $manifestPath = Join-Path $autoFilterFlyoutOutDir "excel_autofilter_flyout_tour_manifest.json"
+        [pscustomobject]@{
+            Tool = "FREEX_EXCEL_AUTOFILTER_FLYOUT_TOUR"
+            EvidenceFamily = "popup"
+            EvidenceSubject = "excel"
+            EvidenceApp = "Microsoft Excel"
+            OutputDirectory = $autoFilterFlyoutOutDir
+            OutputNaming = "interactive_table_autofilter_dropdown_opened.png"
+            CatalogEvidenceTarget = "docs/testing/ui-test-catalog.md"
+            HeaderCell = "A1"
+            HeaderText = "score"
+            AutoFilterRange = "A1:D6"
+            FilterColumnOffset = 0
+            CaptureStatus = "complete"
+            CaptureMethod = $captureSource
+            ForegroundGuard = [pscustomobject]@{
+                Required = $true
+                ExpectedProcessId = $excelPid
+                ExpectedWindowTitle = $excelTitle
+                Policy = "Seed through Excel automation, then abort and clear AutoFilter flyout evidence unless Excel owns foreground immediately before the header-arrow click and screen capture."
+            }
+            Pairing = [pscustomobject]@{
+                PairKeyPattern = "interactive:table-autofilter-dropdown:<State>"
+                PairKey = "interactive:table-autofilter-dropdown:opened"
+                CounterpartSubject = "freex"
+                CounterpartTool = "FREEX_AUTOFILTER_FLYOUT_TOUR"
+                CounterpartFileName = "freex_table_autofilter_dropdown.png"
+            }
+            Scenario = [pscustomobject]@{
+                ScenarioId = "popup:table-autofilter-dropdown"
+                ScenarioFileName = "table_autofilter_dropdown"
+                State = "opened"
+                HeaderCell = "A1"
+                HeaderText = "score"
+                SampleRange = "A1:D6"
+                SampleValues = @("1", "2", "3", "4", "(Blanks)")
+                Trigger = "Excel COM seeds the sample range, selects A1, and a foreground-guarded header-arrow click opens the AutoFilter dropdown."
+            }
+            WindowBounds = $captureBounds
+            PopupBounds = $popupBounds
+            Captures = @(
+                [pscustomobject]@{
+                    CaptureSequence = 1
+                    CaptureKey = "interactive:table-autofilter-dropdown:opened"
+                    PairKey = "interactive:table-autofilter-dropdown:opened"
+                    EvidenceSubject = "excel"
+                    CounterpartSubject = "freex"
+                    CounterpartFileName = "freex_table_autofilter_dropdown.png"
+                    FileName = $fileName
+                    Path = $path
+                    Width = $captureBounds.Width
+                    Height = $captureBounds.Height
+                    CaptureMethod = $captureSource
+                    CaptureStatus = "complete"
+                }
+            )
+        } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+
+        Write-Host "Saved $path"
+        Write-Host "Saved $manifestPath"
+    }
+    finally {
+        if ($null -ne $workbook) {
+            $workbook.Close($false) | Out-Null
+        }
+        if ($null -ne $excelApp) {
+            $excelApp.Quit() | Out-Null
+        }
+    }
+}
+
+if ($AutoFilterFlyoutTour -eq "1") {
+    Invoke-ExcelAutoFilterFlyoutTour
+    Write-Host "Done."
+    exit 0
+}
+
+Clear-ScreenshotEvidenceArtifacts
+
 # Launch Excel with a blank workbook to skip start screen
 $exe = "C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE"
 if (-not (Test-Path -LiteralPath $exe)) {
@@ -264,30 +583,6 @@ if ($appEl -eq $null) { Write-Error "UIA element not found"; exit 1 }
 
 $captureH = [int]([Math]::Ceiling(300 * $scale))
 Write-Host "Capture height: $captureH physical px (300 logical)"
-
-function Get-WindowTitle($windowHandle) {
-    $title = New-Object System.Text.StringBuilder 512
-    [Win32e]::GetWindowText($windowHandle, $title, $title.Capacity) | Out-Null
-    return $title.ToString()
-}
-
-function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle, $operation = "capture") {
-    $foreground = [Win32e]::GetForegroundWindow()
-    if ($foreground -eq [IntPtr]::Zero) {
-        Clear-ScreenshotEvidenceArtifacts
-        throw "Blocked: no foreground window before $operation."
-    }
-
-    $actualPid = 0
-    [Win32e]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
-    $title = New-Object System.Text.StringBuilder 512
-    [Win32e]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
-    $actualTitle = $title.ToString()
-    if ($actualPid -ne $expectedPid -or $actualTitle -ne $expectedTitle) {
-        Clear-ScreenshotEvidenceArtifacts
-        throw "Blocked: foreground window '$actualTitle' (PID $actualPid) does not match expected '$expectedTitle' (PID $expectedPid) before $operation."
-    }
-}
 
 $expectedTitle = Get-WindowTitle $hwnd
 
