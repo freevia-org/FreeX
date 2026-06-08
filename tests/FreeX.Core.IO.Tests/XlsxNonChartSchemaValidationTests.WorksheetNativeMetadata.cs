@@ -80,6 +80,14 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Should()
             .Be(sourceControlProperties.ToString(SaveOptions.DisableFormatting));
         ReadPackageEntryText(saved, "xl/embeddings/oleObject1.bin").Should().Be(sourceOleObjectText);
+
+        saved.Position = 0;
+        new XlsxFileAdapter()
+            .Load(saved)
+            .GetSheetAt(0)
+            .GetValue(3, 3)
+            .Should()
+            .Be(new NumberValue(42));
     }
 
     [Fact]
