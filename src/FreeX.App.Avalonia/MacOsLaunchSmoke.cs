@@ -330,6 +330,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeFileMenu,
     bool HasNativeEditMenu,
     bool HasNativeDataMenu,
+    bool HasNativeReviewMenu,
     bool HasNativeFormatMenu,
     bool HasNativeViewMenu,
     bool HasNativeSheetMenu,
@@ -384,6 +385,19 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeGoToSpecialMenuItem,
     bool HasNativeSortAscendingMenuItem,
     bool HasNativeSortDescendingMenuItem,
+    bool HasNativeAdvancedFilterMenuItem,
+    bool HasNativeDataValidationMenuItem,
+    bool HasNativeWhatIfAnalysisMenuItem,
+    bool HasNativeGoalSeekMenuItem,
+    bool HasNativeDataTableMenuItem,
+    bool HasNativeScenarioManagerMenuItem,
+    bool HasNativeForecastSheetMenuItem,
+    bool HasNativeReviewSummaryMenuItem,
+    bool HasNativeCheckAccessibilityMenuItem,
+    bool HasNativeNextNoteMenuItem,
+    bool HasNativePreviousNoteMenuItem,
+    bool HasNativeNextCommentMenuItem,
+    bool HasNativePreviousCommentMenuItem,
     bool HasNativeAutoSumMenuItem,
     bool HasNativeAutoSumSumMenuItem,
     bool HasNativeAutoSumAverageMenuItem,
@@ -501,6 +515,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeFileMenu &&
         HasNativeEditMenu &&
         HasNativeDataMenu &&
+        HasNativeReviewMenu &&
         HasNativeFormatMenu &&
         HasNativeViewMenu &&
         HasNativeSheetMenu &&
@@ -555,6 +570,19 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeGoToSpecialMenuItem &&
         HasNativeSortAscendingMenuItem &&
         HasNativeSortDescendingMenuItem &&
+        HasNativeAdvancedFilterMenuItem &&
+        HasNativeDataValidationMenuItem &&
+        HasNativeWhatIfAnalysisMenuItem &&
+        HasNativeGoalSeekMenuItem &&
+        HasNativeDataTableMenuItem &&
+        HasNativeScenarioManagerMenuItem &&
+        HasNativeForecastSheetMenuItem &&
+        HasNativeReviewSummaryMenuItem &&
+        HasNativeCheckAccessibilityMenuItem &&
+        HasNativeNextNoteMenuItem &&
+        HasNativePreviousNoteMenuItem &&
+        HasNativeNextCommentMenuItem &&
+        HasNativePreviousCommentMenuItem &&
         HasNativeFormatCellsMenuItem &&
         HasNativeAutoSumMenuItem &&
         HasNativeAutoSumSumMenuItem &&
@@ -947,6 +975,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_file_menu={FormatBool(snapshot.HasNativeFileMenu)}",
                 $"native_edit_menu={FormatBool(snapshot.HasNativeEditMenu)}",
                 $"native_data_menu={FormatBool(snapshot.HasNativeDataMenu)}",
+                $"native_review_menu={FormatBool(snapshot.HasNativeReviewMenu)}",
                 $"native_format_menu={FormatBool(snapshot.HasNativeFormatMenu)}",
                 $"native_view_menu={FormatBool(snapshot.HasNativeViewMenu)}",
                 $"native_sheet_menu={FormatBool(snapshot.HasNativeSheetMenu)}",
@@ -1001,6 +1030,19 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_go_to_special_menu_item={FormatBool(snapshot.HasNativeGoToSpecialMenuItem)}",
                 $"native_sort_ascending_menu_item={FormatBool(snapshot.HasNativeSortAscendingMenuItem)}",
                 $"native_sort_descending_menu_item={FormatBool(snapshot.HasNativeSortDescendingMenuItem)}",
+                $"native_advanced_filter_menu_item={FormatBool(snapshot.HasNativeAdvancedFilterMenuItem)}",
+                $"native_data_validation_menu_item={FormatBool(snapshot.HasNativeDataValidationMenuItem)}",
+                $"native_what_if_analysis_menu_item={FormatBool(snapshot.HasNativeWhatIfAnalysisMenuItem)}",
+                $"native_goal_seek_menu_item={FormatBool(snapshot.HasNativeGoalSeekMenuItem)}",
+                $"native_data_table_menu_item={FormatBool(snapshot.HasNativeDataTableMenuItem)}",
+                $"native_scenario_manager_menu_item={FormatBool(snapshot.HasNativeScenarioManagerMenuItem)}",
+                $"native_forecast_sheet_menu_item={FormatBool(snapshot.HasNativeForecastSheetMenuItem)}",
+                $"native_review_summary_menu_item={FormatBool(snapshot.HasNativeReviewSummaryMenuItem)}",
+                $"native_check_accessibility_menu_item={FormatBool(snapshot.HasNativeCheckAccessibilityMenuItem)}",
+                $"native_next_note_menu_item={FormatBool(snapshot.HasNativeNextNoteMenuItem)}",
+                $"native_previous_note_menu_item={FormatBool(snapshot.HasNativePreviousNoteMenuItem)}",
+                $"native_next_comment_menu_item={FormatBool(snapshot.HasNativeNextCommentMenuItem)}",
+                $"native_previous_comment_menu_item={FormatBool(snapshot.HasNativePreviousCommentMenuItem)}",
                 $"native_format_cells_menu_item={FormatBool(snapshot.HasNativeFormatCellsMenuItem)}",
                 $"native_autosum_menu_item={FormatBool(snapshot.HasNativeAutoSumMenuItem)}",
                 $"native_autosum_sum_menu_item={FormatBool(snapshot.HasNativeAutoSumSumMenuItem)}",
