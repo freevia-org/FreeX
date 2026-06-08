@@ -42,6 +42,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests");
+        script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests");
@@ -102,6 +103,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("src\\FreeX.App.Services\\WorkbookShareActionPlanner.cs");
         script.Should().Contain("public static WorkbookShareActionSurface MacOsPreview");
         script.Should().Contain("surface.CanShowShareSheet || surface.CanOpenContainingFolder");
+        script.Should().Contain("src\\FreeX.App.Services\\WorkbookViewportScrollPlanner.cs");
+        script.Should().Contain("public static WorkbookViewportScrollState Create(Sheet sheet, ViewportModel viewport)");
+        script.Should().Contain("public static (uint TopRow, uint LeftCol) CalculateViewportOrigin(");
+        script.Should().Contain("WorkbookViewportScrollPlanner.Create(_session.ActiveSheet, _session.Viewport)");
+        script.Should().Contain("WorkbookViewportScrollPlanner.CalculateViewportOrigin(");
         script.Should().Contain("/Encoding /WinAnsiEncoding");
         script.Should().Contain("EncodeWinAnsiHexText(normalized)");
         script.Should().Contain("private static byte EncodeWinAnsiByte(char ch)");
@@ -1020,7 +1026,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     run: |
                       dotnet test tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj \
                         --configuration Release \
-                        --filter 'FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests|FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests' \
+                        --filter 'FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests|FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests' \
                         --logger "trx;LogFileName=freex-${"{{"} matrix.runtime {"}}"}-portable-pdf-exporter-tests.trx" \
                         --results-directory artifacts
                       dotnet test tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj \
@@ -1499,6 +1505,21 @@ public sealed class MacOsAppReadinessPreflightTests
                     ShellFocusRegion.SheetTabs,
                     ShellFocusRegion.StatusBar
                 ];
+                /*
+                private readonly ScrollBar _verticalWorksheetScrollBar = new();
+                private readonly ScrollBar _horizontalWorksheetScrollBar = new();
+                private bool _isUpdatingWorksheetScrollBars;
+                root.Children.Add(BuildWorksheetViewportChrome());
+                _sheetScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+                _sheetScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
+                _verticalWorksheetScrollBar.ValueChanged += WorksheetScrollBar_ValueChanged;
+                _horizontalWorksheetScrollBar.ValueChanged += WorksheetScrollBar_ValueChanged;
+                WorkbookViewportScrollPlanner.Create(_session.ActiveSheet, _session.Viewport)
+                ApplyWorksheetScrollAxis(_verticalWorksheetScrollBar, state.Vertical);
+                ApplyWorksheetScrollAxis(_horizontalWorksheetScrollBar, state.Horizontal);
+                WorkbookViewportScrollPlanner.CalculateViewportOrigin(
+                _session.SetViewportOrigin(topRow, leftCol)
+                */
                 public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files) => await Task.CompletedTask;
                 private static void RenderCell(CellStyle? style)
                 {
@@ -3345,6 +3366,57 @@ public sealed class MacOsAppReadinessPreflightTests
                     containingFolderPath = "";
                     return false;
                 }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Services/WorkbookViewportScrollPlanner.cs",
+            """
+            namespace FreeX.App.Services;
+
+            public readonly record struct WorkbookViewportScrollAxis(
+                double Minimum,
+                double Maximum,
+                double Value,
+                double ViewportSize,
+                double SmallChange,
+                double LargeChange,
+                bool IsEnabled);
+
+            public readonly record struct WorkbookViewportScrollState(
+                WorkbookViewportScrollAxis Vertical,
+                WorkbookViewportScrollAxis Horizontal);
+
+            public static class WorkbookViewportScrollPlanner
+            {
+                private const double MinimumScrollValue = 1;
+
+                public static WorkbookViewportScrollState Create(Sheet sheet, ViewportModel viewport)
+                {
+                    CountScrollableRows(viewport.RowMetrics, sheet.FrozenRows);
+                    CountScrollableColumns(viewport.ColMetrics, sheet.FrozenCols);
+                    return default;
+                }
+
+                public static (uint TopRow, uint LeftCol) CalculateViewportOrigin(
+                    Sheet sheet,
+                    double verticalScrollValue,
+                    double horizontalScrollValue) =>
+                    (
+                        ScrollbarValueToWorksheetIndex(verticalScrollValue, sheet.FrozenRows, CellAddress.MaxRow),
+                        ScrollbarValueToWorksheetIndex(horizontalScrollValue, sheet.FrozenCols, CellAddress.MaxCol));
+
+                public static uint ScrollbarValueToWorksheetIndex(double value, uint frozenCount, uint limit) => 1;
+                public static uint WorksheetIndexToScrollbarValue(uint worksheetIndex, uint frozenCount) => 1;
+                public static uint CalculateScrollableLimit(uint absoluteLimit, uint frozenCount) => 1;
+                public static uint CalculateMaximumViewportOrigin(uint absoluteLimit, uint visibleSpan) => 1;
+
+                private static WorkbookViewportScrollAxis CreateAxis(uint visibleSpan, double maximum) =>
+                    new(1, maximum, 1, visibleSpan, SmallChange: 1, LargeChange: 1, IsEnabled: maximum > MinimumScrollValue);
+
+                private static uint CountScrollableRows(IReadOnlyList<RowMetric> rows, uint frozenRows) => 1;
+                private static uint CountScrollableColumns(IReadOnlyList<ColMetric> columns, uint frozenColumns) => 1;
             }
             """);
 
