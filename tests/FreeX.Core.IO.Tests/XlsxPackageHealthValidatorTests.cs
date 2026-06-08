@@ -26,6 +26,12 @@ public sealed class XlsxPackageHealthValidatorTests
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords";
     private const string PivotTableRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable";
+    private const string DrawingRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing";
+    private const string ChartRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+    private const string ImageRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
     private const string SharedStringsContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
     private const string StylesContentType =
@@ -44,6 +50,10 @@ public sealed class XlsxPackageHealthValidatorTests
         "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml";
     private const string PivotTableContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml";
+    private const string DrawingContentType =
+        "application/vnd.openxmlformats-officedocument.drawing+xml";
+    private const string ChartContentType =
+        "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
 
     [Fact]
     public void Validate_AcceptsMinimalWorkbookPackage()
@@ -609,6 +619,102 @@ public sealed class XlsxPackageHealthValidatorTests
         XlsxPackageHealthValidator.Validate(package)
             .Should()
             .Contain(issue => issue.Contains("xl/pivotTables/pivotTable1.xml references cacheId 9, but workbook has no matching pivotCache", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_AcceptsWorkbookWithWorksheetDrawingPackage()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            worksheetXml: WorksheetWithDrawingXml("rIdDrawing1"),
+            extraEntries:
+            [
+                ("xl/worksheets/_rels/sheet1.xml.rels", RelationshipsXml(
+                    Relationship("rIdDrawing1", DrawingRelationshipType, "../drawings/drawing1.xml"))),
+                ("xl/drawings/drawing1.xml", DrawingWithChartAndImageXml("rIdChart1", "rIdImage1")),
+                ("xl/drawings/_rels/drawing1.xml.rels", RelationshipsXml(
+                    Relationship("rIdChart1", ChartRelationshipType, "../charts/chart1.xml"),
+                    Relationship("rIdImage1", ImageRelationshipType, "../media/image1.png"))),
+                ("xl/charts/chart1.xml", ChartXml()),
+                ("xl/media/image1.png", "png")
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/drawings/drawing1.xml" ContentType="{DrawingContentType}" />""",
+                $"""<Override PartName="/xl/charts/chart1.xml" ContentType="{ChartContentType}" />"""
+            ],
+            contentTypeDefaults:
+            [
+                """<Default Extension="png" ContentType="image/png" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Validate_FlagsWorksheetDrawingMissingRelationship()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            worksheetXml: WorksheetWithDrawingXml("rIdDrawing1"),
+            extraEntries:
+            [
+                ("xl/worksheets/_rels/sheet1.xml.rels", RelationshipsXml())
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("xl/worksheets/sheet1.xml drawing #1 references missing relationship rIdDrawing1", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsDrawingChartWithWrongContentType()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            worksheetXml: WorksheetWithDrawingXml("rIdDrawing1"),
+            extraEntries:
+            [
+                ("xl/worksheets/_rels/sheet1.xml.rels", RelationshipsXml(
+                    Relationship("rIdDrawing1", DrawingRelationshipType, "../drawings/drawing1.xml"))),
+                ("xl/drawings/drawing1.xml", DrawingWithChartXml("rIdChart1")),
+                ("xl/drawings/_rels/drawing1.xml.rels", RelationshipsXml(
+                    Relationship("rIdChart1", ChartRelationshipType, "../charts/chart1.xml"))),
+                ("xl/charts/chart1.xml", ChartXml())
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/drawings/drawing1.xml" ContentType="{DrawingContentType}" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains($"xl/charts/chart1.xml has content type application/xml; expected {ChartContentType}", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_FlagsDrawingImageWithWrongContentType()
+    {
+        using var package = CreateMinimalWorkbookPackage(
+            worksheetXml: WorksheetWithDrawingXml("rIdDrawing1"),
+            extraEntries:
+            [
+                ("xl/worksheets/_rels/sheet1.xml.rels", RelationshipsXml(
+                    Relationship("rIdDrawing1", DrawingRelationshipType, "../drawings/drawing1.xml"))),
+                ("xl/drawings/drawing1.xml", DrawingWithImageXml("rIdImage1")),
+                ("xl/drawings/_rels/drawing1.xml.rels", RelationshipsXml(
+                    Relationship("rIdImage1", ImageRelationshipType, "../media/image1.png"))),
+                ("xl/media/image1.png", "png")
+            ],
+            contentTypeOverrides:
+            [
+                $"""<Override PartName="/xl/drawings/drawing1.xml" ContentType="{DrawingContentType}" />"""
+            ],
+            contentTypeDefaults:
+            [
+                """<Default Extension="png" ContentType="application/octet-stream" />"""
+            ]);
+
+        XlsxPackageHealthValidator.Validate(package)
+            .Should()
+            .Contain(issue => issue.Contains("xl/media/image1.png has content type application/octet-stream; expected an image/* content type", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -1253,6 +1359,78 @@ public sealed class XlsxPackageHealthValidatorTests
 
     private static string PivotTableXml(string cacheId) =>
         $"""<pivotTableDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" name="PivotTable1" cacheId="{cacheId}" />""";
+
+    private static string WorksheetWithDrawingXml(string relationshipId) =>
+        $"""
+        <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                   xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <sheetData />
+          <drawing r:id="{relationshipId}" />
+        </worksheet>
+        """;
+
+    private static string DrawingWithChartAndImageXml(string chartRelationshipId, string imageRelationshipId) =>
+        DrawingXml($"""
+            <xdr:twoCellAnchor>
+              <xdr:graphicFrame>
+                <a:graphic>
+                  <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">
+                    <c:chart r:id="{chartRelationshipId}" />
+                  </a:graphicData>
+                </a:graphic>
+              </xdr:graphicFrame>
+            </xdr:twoCellAnchor>
+            <xdr:oneCellAnchor>
+              <xdr:pic>
+                <xdr:blipFill>
+                  <a:blip r:embed="{imageRelationshipId}" />
+                </xdr:blipFill>
+              </xdr:pic>
+            </xdr:oneCellAnchor>
+            """);
+
+    private static string DrawingWithChartXml(string relationshipId) =>
+        DrawingXml($"""
+            <xdr:twoCellAnchor>
+              <xdr:graphicFrame>
+                <a:graphic>
+                  <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">
+                    <c:chart r:id="{relationshipId}" />
+                  </a:graphicData>
+                </a:graphic>
+              </xdr:graphicFrame>
+            </xdr:twoCellAnchor>
+            """);
+
+    private static string DrawingWithImageXml(string relationshipId) =>
+        DrawingXml($"""
+            <xdr:oneCellAnchor>
+              <xdr:pic>
+                <xdr:blipFill>
+                  <a:blip r:embed="{relationshipId}" />
+                </xdr:blipFill>
+              </xdr:pic>
+            </xdr:oneCellAnchor>
+            """);
+
+    private static string DrawingXml(string body) =>
+        $"""
+        <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+                  xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                  xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          {body}
+        </xdr:wsDr>
+        """;
+
+    private static string ChartXml() =>
+        """
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                      xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <c:chart />
+        </c:chartSpace>
+        """;
 
     private static string SharedStringWorksheetXml(string sharedStringIndex) =>
         $"""
