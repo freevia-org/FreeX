@@ -456,20 +456,38 @@ foreach ($workflow in $workflows) {
                     $errors.Add("$($workflow.Name): macOS TFM validation job must be gated to workflow_dispatch validate_macos_tfm runs.")
                 }
 
-                if ($macOsTfmValidationJobBlock -notmatch "\bdotnet\s+workload\s+install\s+macos\s+(?:\\\s*)?--skip-manifest-update\b") {
-                    $errors.Add("$($workflow.Name): macOS TFM validation job must install the macOS workload with 'dotnet workload install macos --skip-manifest-update'.")
+                foreach ($requiredMacOsTfmMarker in @(
+                    'runner: macos-26',
+                    'runner: macos-26-intel',
+                    'dotnet-version: 10.0.300',
+                    'FREEX_DOTNET_WORKLOAD_SET_VERSION: 10.0.300.3',
+                    'FREEX_MACOS_TFM: net10.0-macos',
+                    'FREEX_XCODE_PATH: /Applications/Xcode_26.5.app/Contents/Developer',
+                    'sudo xcode-select -s "$FREEX_XCODE_PATH"',
+                    'dotnet workload --info'
+                )) {
+                    if (-not $macOsTfmValidationJobBlock.Contains($requiredMacOsTfmMarker)) {
+                        $errors.Add("$($workflow.Name): macOS TFM validation job is missing required hosted workload marker: $requiredMacOsTfmMarker")
+                    }
+                }
+
+                if (-not $macOsTfmValidationJobBlock.Contains('dotnet workload install macos --version "$FREEX_DOTNET_WORKLOAD_SET_VERSION" --skip-manifest-update')) {
+                    $errors.Add("$($workflow.Name): macOS TFM validation job must install the pinned macOS workload set with 'dotnet workload install macos --version `"`${FREEX_DOTNET_WORKLOAD_SET_VERSION}`" --skip-manifest-update'.")
                 }
 
                 $macOsTfmBuildCommands = @(
                     Get-DotNetBuildCommandBlocks -Lines ($macOsTfmValidationJobBlock -split "\r?\n") |
                         Where-Object {
+                            $frameworkTargetsMacOsTfm = $_ -match "(?m)(?:^|\s)--framework\s+net10\.0-macos(?:\s|$)" -or
+                                $_.Contains('--framework "$FREEX_MACOS_TFM"')
                             $_.Contains("src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj") -and
                                 $_ -match "(?m)(?:^|\s)-p:EnableMacOsTargetFramework=true(?:\s|$)" -and
-                                $_ -match "(?m)(?:^|\s)--framework\s+net10\.0-macos(?:\s|$)"
+                                $_.Contains('--runtime "$FREEX_RUNTIME"') -and
+                                $frameworkTargetsMacOsTfm
                         }
                 )
                 if ($macOsTfmBuildCommands.Count -ne 1) {
-                    $errors.Add("$($workflow.Name): macOS TFM validation job must build FreeX.App.Avalonia with -p:EnableMacOsTargetFramework=true and --framework net10.0-macos.")
+                    $errors.Add("$($workflow.Name): macOS TFM validation job must build FreeX.App.Avalonia with -p:EnableMacOsTargetFramework=true, --framework net10.0-macos, and --runtime `$FREEX_RUNTIME.")
                 }
 
                 if ($macOsTfmValidationJobBlock -match "\bdotnet\s+publish\b") {

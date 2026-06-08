@@ -96,9 +96,12 @@ public sealed class GitHubWorkflowPreflightTests
         script.Should().Contain("macOS release publication must validate downloaded evidence run identity against the current run");
         script.Should().Contain("macOS app workflow must run focused hosted tests before package/upload step");
         script.Should().Contain("validate_macos_tfm");
-        script.Should().Contain("dotnet workload install macos --skip-manifest-update");
+        script.Should().Contain("FREEX_DOTNET_WORKLOAD_SET_VERSION: 10.0.300.3");
+        script.Should().Contain("runner: macos-26");
+        script.Should().Contain("dotnet workload install macos --version");
         script.Should().Contain("-p:EnableMacOsTargetFramework=true");
         script.Should().Contain("--framework net10.0-macos");
+        script.Should().Contain("--runtime");
         script.Should().Contain("macOS TFM validation job must be gated to workflow_dispatch validate_macos_tfm runs");
         script.Should().Contain("macOS TFM validation artifact upload must be evidence-only");
         script.Should().Contain("macOS TFM validation job must not run dotnet publish");
@@ -700,8 +703,8 @@ public sealed class GitHubWorkflowPreflightTests
         using var temp = new TestTemporaryDirectory();
         var brokenWorkflow = ReplaceRequiredText(
             AddValidMacOsTfmValidationLane(ReadMacOsAppWorkflow()),
-            "      validate_macos_tfm:\n        description: Compile the opt-in net10.0-macos target framework without packaging or releasing artifacts.\n        required: false\n        type: boolean\n        default: false",
-            "      validate_macos_tfm:\n        description: Compile the opt-in net10.0-macos target framework without packaging or releasing artifacts.\n        required: false\n        type: boolean\n        default: true");
+            "      validate_macos_tfm:\n        description: Compile the opt-in net10.0-macos target with the hosted macOS workload; evidence only, no app artifact.\n        required: false\n        type: boolean\n        default: false",
+            "      validate_macos_tfm:\n        description: Compile the opt-in net10.0-macos target with the hosted macOS workload; evidence only, no app artifact.\n        required: false\n        type: boolean\n        default: true");
 
         WriteMacOsWorkflow(temp, brokenWorkflow);
 
@@ -741,9 +744,9 @@ public sealed class GitHubWorkflowPreflightTests
         var brokenWorkflow = ReplaceRequiredText(
             ReplaceRequiredText(
                 AddValidMacOsTfmValidationLane(ReadMacOsAppWorkflow()),
-                "dotnet workload install macos --skip-manifest-update",
-                "dotnet workload install macos"),
-            "--framework net10.0-macos",
+                "dotnet workload install macos --version \"$FREEX_DOTNET_WORKLOAD_SET_VERSION\" --skip-manifest-update",
+                "dotnet workload install macos --skip-manifest-update"),
+            "--framework \"$FREEX_MACOS_TFM\"",
             "--framework net10.0");
 
         WriteMacOsWorkflow(temp, brokenWorkflow);
@@ -753,8 +756,8 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.NormalizedCombinedOutput.Should().Contain("macOS TFM validation job must install the macOS workload with 'dotnet workload install macos --skip-manifest-update'");
-        result.NormalizedCombinedOutput.Should().Contain("macOS TFM validation job must build FreeX.App.Avalonia with -p:EnableMacOsTargetFramework=true and --framework net10.0-macos");
+        result.NormalizedCombinedOutput.Should().Contain("macOS TFM validation job must install the pinned macOS workload set");
+        result.NormalizedCombinedOutput.Should().Contain("macOS TFM validation job must build FreeX.App.Avalonia with -p:EnableMacOsTargetFramework=true, --framework net10.0-macos, and --runtime");
         result.CombinedOutput.Should().Contain("macos-app.yml");
     }
 
@@ -766,11 +769,11 @@ public sealed class GitHubWorkflowPreflightTests
             ReplaceRequiredText(
                 ReplaceRequiredText(
                     AddValidMacOsTfmValidationLane(ReadMacOsAppWorkflow()),
-                    "          } > artifacts/macos-tfm-evidence/freex-macos-tfm-evidence.txt",
-                    "          dotnet publish src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release --framework net10.0-macos\n          gh release create macos-tfm-validation artifacts/macos-release-assets/freex-macos-app.zip\n          } > artifacts/macos-tfm-evidence/freex-macos-tfm-evidence.txt"),
-                "name: freex-${{ github.run_id }}-${{ github.run_attempt }}-macos-tfm-evidence",
+                    "            echo \"macos_tfm_build=passed\"",
+                    "            dotnet publish src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release --framework net10.0-macos\n            gh release create macos-tfm-validation artifacts/macos-release-assets/freex-macos-app.zip\n            echo \"macos_tfm_build=passed\""),
+                "name: freex-${{ github.run_id }}-${{ github.run_attempt }}-macos-tfm-build-${{ matrix.arch }}-evidence",
                 "name: freex-${{ github.run_id }}-${{ github.run_attempt }}-macos-app"),
-            "path: artifacts/macos-tfm-evidence/*",
+            "path: artifacts/freex-${{ matrix.arch }}-macos-tfm-build-evidence.txt",
             "path: artifacts/macos-release-assets/*");
 
         WriteMacOsWorkflow(temp, brokenWorkflow);
@@ -1063,26 +1066,46 @@ public sealed class GitHubWorkflowPreflightTests
 
     private static string AddValidMacOsTfmValidationLane(string workflow)
     {
+        if (workflow.Contains("validate_macos_tfm:", StringComparison.Ordinal) &&
+            workflow.Contains("macos-tfm-build:", StringComparison.Ordinal))
+        {
+            return workflow;
+        }
+
         var withInput = ReplaceRequiredText(
             workflow,
             "        default: false\n  pull_request:",
-            "        default: false\n      validate_macos_tfm:\n        description: Compile the opt-in net10.0-macos target framework without packaging or releasing artifacts.\n        required: false\n        type: boolean\n        default: false\n  pull_request:");
+            "        default: false\n      validate_macos_tfm:\n        description: Compile the opt-in net10.0-macos target with the hosted macOS workload; evidence only, no app artifact.\n        required: false\n        type: boolean\n        default: false\n  pull_request:");
 
         var releaseJob = ExtractRequiredYamlBlock(withInput, "publish-distribution-candidate:");
         const string validationJob =
             """
-              validate-macos-tfm:
-                name: Validate opt-in macOS target framework
+              macos-tfm-build:
+                name: macOS TFM compile validation (${{ matrix.runtime }})
                 if: ${{ github.event_name == 'workflow_dispatch' && inputs.validate_macos_tfm == true }}
-                runs-on: macos-15
-                timeout-minutes: 30
+                runs-on: ${{ matrix.runner }}
+                timeout-minutes: 45
 
-                permissions:
-                  contents: read
+                strategy:
+                  fail-fast: false
+                  matrix:
+                    include:
+                      - runtime: osx-arm64
+                        arch: arm64
+                        runner: macos-26
+                      - runtime: osx-x64
+                        arch: x64
+                        runner: macos-26-intel
 
                 env:
                   DOTNET_CLI_TELEMETRY_OPTOUT: "1"
                   DOTNET_NOLOGO: "1"
+                  FREEX_DOTNET_WORKLOAD_SET_VERSION: 10.0.300.3
+                  FREEX_MACOS_ARCH: ${{ matrix.arch }}
+                  FREEX_MACOS_TFM: net10.0-macos
+                  FREEX_MACOS_TFM_EVIDENCE: artifacts/freex-${{ matrix.arch }}-macos-tfm-build-evidence.txt
+                  FREEX_RUNTIME: ${{ matrix.runtime }}
+                  FREEX_XCODE_PATH: /Applications/Xcode_26.5.app/Contents/Developer
 
                 steps:
                   - name: Checkout
@@ -1094,33 +1117,55 @@ public sealed class GitHubWorkflowPreflightTests
                   - name: Setup .NET
                     uses: actions/setup-dotnet@v5
                     with:
-                      dotnet-version: 10.0.x
+                      dotnet-version: 10.0.300
 
-                  - name: Install macOS workload
-                    shell: bash
-                    run: dotnet workload install macos --skip-manifest-update
-
-                  - name: Build macOS TFM
+                  - name: Capture macOS TFM toolchain evidence
                     shell: bash
                     run: |
                       set -euo pipefail
-                      mkdir -p artifacts/macos-tfm-evidence
-                      dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj \
-                        --configuration Release \
-                        -p:EnableMacOsTargetFramework=true \
-                        --framework net10.0-macos
+                      test -d "$FREEX_XCODE_PATH"
+                      sudo xcode-select -s "$FREEX_XCODE_PATH"
+                      mkdir -p "$(dirname "$FREEX_MACOS_TFM_EVIDENCE")"
                       {
-                        echo "macos_tfm_validation=passed"
-                        echo "target_framework=net10.0-macos"
+                        echo "runtime=$FREEX_RUNTIME"
+                        echo "arch=$FREEX_MACOS_ARCH"
+                        echo "macos_tfm=$FREEX_MACOS_TFM"
                         echo "github_run_id=${GITHUB_RUN_ID}"
                         echo "github_run_attempt=${GITHUB_RUN_ATTEMPT}"
-                      } > artifacts/macos-tfm-evidence/freex-macos-tfm-evidence.txt
+                        dotnet --info
+                        xcodebuild -version
+                      } | tee "$FREEX_MACOS_TFM_EVIDENCE"
 
-                  - name: Upload macOS TFM evidence
+                  - name: Install macOS workload
+                    shell: bash
+                    run: |
+                      set -euo pipefail
+                      {
+                        dotnet workload install macos --version "$FREEX_DOTNET_WORKLOAD_SET_VERSION" --skip-manifest-update
+                        dotnet workload --info
+                      } | tee -a "$FREEX_MACOS_TFM_EVIDENCE"
+
+                  - name: Build opt-in macOS TFM
+                    shell: bash
+                    run: |
+                      set -euo pipefail
+                      dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj \
+                        --configuration Release \
+                        --framework "$FREEX_MACOS_TFM" \
+                        --runtime "$FREEX_RUNTIME" \
+                        -p:EnableMacOsTargetFramework=true
+                      {
+                        echo "macos_tfm_build=passed"
+                        echo "macos_tfm=$FREEX_MACOS_TFM"
+                        echo "runtime=$FREEX_RUNTIME"
+                        echo "macos_tfm_artifact_channel=evidence-only"
+                      } | tee -a "$FREEX_MACOS_TFM_EVIDENCE"
+
+                  - name: Upload macOS TFM build evidence
                     uses: actions/upload-artifact@v7
                     with:
-                      name: freex-${{ github.run_id }}-${{ github.run_attempt }}-macos-tfm-evidence
-                      path: artifacts/macos-tfm-evidence/*
+                      name: freex-${{ github.run_id }}-${{ github.run_attempt }}-macos-tfm-build-${{ matrix.arch }}-evidence
+                      path: artifacts/freex-${{ matrix.arch }}-macos-tfm-build-evidence.txt
                       if-no-files-found: error
                       retention-days: 14
             """;
