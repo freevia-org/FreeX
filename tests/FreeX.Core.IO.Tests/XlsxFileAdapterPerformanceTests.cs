@@ -290,7 +290,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
             source.IndexOf("public static IReadOnlyList<SparklineModel> Read", StringComparison.Ordinal)..
             source.IndexOf("public static void Save", StringComparison.Ordinal)];
 
-        readMethod.Should().Contain("worksheetXml.Root?.Elements()");
+        readMethod.Should().Contain("FindChildByLocalName(worksheetXml.Root, \"extLst\")");
+        readMethod.Should().Contain("FindChildByLocalName(sparkline, \"f\")");
         readMethod.Should().Contain("return [];");
         readMethod.Should().Contain("extensionList.Descendants()");
         readMethod.Should().NotContain("worksheetXml.Descendants()");
