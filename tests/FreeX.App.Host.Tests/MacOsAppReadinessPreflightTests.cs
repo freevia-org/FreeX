@@ -122,7 +122,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("keystroke \"u\" using {command down}");
         script.Should().Contain("live_command_key_system_events_result=blocked_or_failed");
         script.Should().Contain("launch_clipboard_image=\"$RUNNER_TEMP/freex-$runtime-clipboard.png\"");
-        script.Should().Contain("/usr/bin/swift - \"$launch_clipboard_image\"");
+        script.Should().Contain("launch_clipboard_script=\"$RUNNER_TEMP/freex-$runtime-clipboard.swift\"");
+        script.Should().Contain("/usr/bin/swift \"$launch_clipboard_script\" \"$launch_clipboard_image\"");
         script.Should().Contain("NSPasteboard.general");
         script.Should().Contain("external_image_clipboard_paste_required=true");
         script.Should().Contain("external_image_clipboard_paste=true");
@@ -1145,7 +1146,8 @@ public sealed class MacOsAppReadinessPreflightTests
                       /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$unzip_root/FreeX.app"
                       launch_clipboard_image="$RUNNER_TEMP/freex-$runtime-clipboard.png"
                       base64 -D > "$launch_clipboard_image"
-                      /usr/bin/swift - "$launch_clipboard_image" <<'SWIFT'
+                      launch_clipboard_script="$RUNNER_TEMP/freex-$runtime-clipboard.swift"
+                      /usr/bin/swift "$launch_clipboard_script" "$launch_clipboard_image"
                       NSPasteboard.general
                       pasteboard.clearContents()
                       pasteboard.writeObjects([image])
