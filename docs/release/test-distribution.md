@@ -23,12 +23,12 @@ https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x
 
 Latest verified tester release:
 
-- Release: [FreeX (Test Release) v0.8.90](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-90-2026-06-07-17-39-18-run91-attempt1%2Beddc4c65)
-- Tag: `v0-8-90-2026-06-07-17-39-18-run91-attempt1+eddc4c65`
-- GitHub Actions run: [27099790933](https://github.com/tony-xmelon/FreeX/actions/runs/27099790933), run number 91 attempt 1, completed successfully
-- Target commit: `eddc4c65350e3649d818ef4ac6d8f7e487b5c497`
-- Release posture: internal-only latest tester build; not a public-preview candidate because live accessibility gate evidence was not recorded
-- Asset check: stable latest `.exe`, `.exe.sha256`, MSIX, and MSIX checksum links returned HTTP 200 after publication
+- Release: [FreeX (Test Release) v0.8.96](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-96-2026-06-08-10-13-38-run96-attempt1%2B9cd4f40e)
+- Tag: `v0-8-96-2026-06-08-10-13-38-run96-attempt1+9cd4f40e`
+- GitHub Actions run: [27130409777](https://github.com/tony-xmelon/FreeX/actions/runs/27130409777), run number 96 attempt 1, completed successfully
+- Target commit: `9cd4f40ecb37c5b91e953459243808bf256c9355`
+- Release posture: internal-only latest tester build; not a public-preview candidate because live keyboard-only, screen-reader, and known-issues accessibility gate evidence was not recorded
+- Asset check: stable latest `.exe`, `.exe.sha256`, MSIX, and MSIX checksum assets were published by the workflow after successful hosted release-gate verification
 
 The `Tester Release` GitHub Actions workflow runs repository preflight, restore, build, the default test lane, and the UI test lane before publishing a framework-dependent single-file Windows x64 `.exe` plus an MSIX package. It uses normal .NET restore/build caching and parallelism for speed, preserves `default-tests.trx` and `ui-tests.trx` results for every run, including failed release-gate attempts, then uploads both versioned artifacts produced by `tools/Publish-UserTestBuild.ps1` and stable latest assets:
 

@@ -13,7 +13,10 @@ FreeX is a free Windows spreadsheet app for `.xlsx` files. It opens and saves st
 
 Tester builds are published on the [FreeX releases page](https://github.com/tony-xmelon/FreeX/releases). The stable latest tester asset is:
 
-`FreeX-latest-win-x64.exe`
+- [FreeX-latest-win-x64.exe](https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.exe)
+- [FreeX-latest-win-x64.msix](https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.msix)
+
+Latest verified tester release: [FreeX (Test Release) v0.8.96](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-96-2026-06-08-10-13-38-run96-attempt1%2B9cd4f40e).
 
 ## Documentation
 
