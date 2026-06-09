@@ -18302,12 +18302,40 @@ internal static class ExcelOpenSmoke
         new(
             MinFreeXPreSaveFormulaCells: expectFreeXPreSave ? minFormulaCells : 0,
             MinFreeXPreSaveNamedRanges: expectFreeXPreSave ? minNamedRanges : 0,
+            MinFreeXPreSaveFrozenSheets: expectFreeXPreSave ? 1 : 0,
+            MinFreeXPreSaveCustomColumnWidths: expectFreeXPreSave ? 4 : 0,
+            MinFreeXPreSaveStyledCells: expectFreeXPreSave ? 6 : 0,
+            MinFreeXPreSaveNumberFormatCells: expectFreeXPreSave ? 4 : 0,
+            MinFreeXPreSaveBoldCells: expectFreeXPreSave ? 6 : 0,
+            MinFreeXPreSaveFilledCells: expectFreeXPreSave ? 6 : 0,
+            MinFreeXPreSaveAlignedCells: expectFreeXPreSave ? 6 : 0,
             MinExcelOpenedFormulaCells: minFormulaCells,
             MinExcelOpenedNamedRanges: minNamedRanges,
+            MinExcelOpenedFreezePaneSheets: 1,
+            MinExcelOpenedCustomColumnWidths: 4,
+            MinExcelOpenedStyledCells: 6,
+            MinExcelOpenedNumberFormatCells: 4,
+            MinExcelOpenedBoldCells: 6,
+            MinExcelOpenedFilledCells: 6,
+            MinExcelOpenedAlignedCells: 6,
             MinExcelReopenedFormulaCells: saveReopen ? minFormulaCells : 0,
             MinExcelReopenedNamedRanges: saveReopen ? minNamedRanges : 0,
+            MinExcelReopenedFreezePaneSheets: saveReopen ? 1 : 0,
+            MinExcelReopenedCustomColumnWidths: saveReopen ? 4 : 0,
+            MinExcelReopenedStyledCells: saveReopen ? 6 : 0,
+            MinExcelReopenedNumberFormatCells: saveReopen ? 4 : 0,
+            MinExcelReopenedBoldCells: saveReopen ? 6 : 0,
+            MinExcelReopenedFilledCells: saveReopen ? 6 : 0,
+            MinExcelReopenedAlignedCells: saveReopen ? 6 : 0,
             MinFreeXReopenedFormulaCells: saveReopen ? minFormulaCells : 0,
-            MinFreeXReopenedNamedRanges: saveReopen ? minNamedRanges : 0);
+            MinFreeXReopenedNamedRanges: saveReopen ? minNamedRanges : 0,
+            MinFreeXReopenedFrozenSheets: saveReopen ? 1 : 0,
+            MinFreeXReopenedCustomColumnWidths: saveReopen ? 4 : 0,
+            MinFreeXReopenedStyledCells: saveReopen ? 6 : 0,
+            MinFreeXReopenedNumberFormatCells: saveReopen ? 4 : 0,
+            MinFreeXReopenedBoldCells: saveReopen ? 6 : 0,
+            MinFreeXReopenedFilledCells: saveReopen ? 6 : 0,
+            MinFreeXReopenedAlignedCells: saveReopen ? 6 : 0);
 
     private static WorkbookSmokeExpectations ChartExpectations(bool saveReopen, bool expectFreeXPreSave) =>
         new(
@@ -18336,9 +18364,21 @@ internal static class ExcelOpenSmoke
         int minStructuredTables) =>
         new(
             MinFreeXPreSaveStructuredTables: expectFreeXPreSave ? minStructuredTables : 0,
+            MinFreeXPreSaveAutoFilterSheets: expectFreeXPreSave ? minStructuredTables : 0,
             MinExcelOpenedStructuredTables: minStructuredTables,
+            MinExcelOpenedAutoFilterSheets: minStructuredTables,
             MinExcelReopenedStructuredTables: saveReopen ? minStructuredTables : 0,
-            MinFreeXReopenedStructuredTables: saveReopen ? minStructuredTables : 0);
+            MinExcelReopenedAutoFilterSheets: saveReopen ? minStructuredTables : 0,
+            MinFreeXReopenedStructuredTables: saveReopen ? minStructuredTables : 0,
+            MinFreeXReopenedAutoFilterSheets: saveReopen ? minStructuredTables : 0,
+            RequiredFreeXSavedPackageParts:
+            [
+                "xl/tables/table1.xml"
+            ],
+            RequiredExcelSavedPackageParts:
+            [
+                "xl/tables/table1.xml"
+            ]);
 
     private static WorkbookSmokeExpectations ShapeExpectations(bool saveReopen, int minShapes) =>
         new(
@@ -18388,6 +18428,7 @@ internal static class ExcelOpenSmoke
         new(
             MinFreeXPreSaveProtectedSheets: expectFreeXPreSave ? 1 : 0,
             MinFreeXPreSaveStructureProtection: expectFreeXPreSave ? 1 : 0,
+            MinFreeXPreSaveFrozenSheets: expectFreeXPreSave ? 1 : 0,
             MinExcelOpenedProtectedSheets: 1,
             MinExcelOpenedStructureProtection: 1,
             MinExcelOpenedPrintAreaSheets: 1,
@@ -18398,6 +18439,7 @@ internal static class ExcelOpenSmoke
             MinExcelOpenedHeaderFooterSheets: 1,
             MinExcelOpenedManualPageBreaks: 2,
             MinExcelOpenedAllowEditRanges: 1,
+            MinExcelOpenedFreezePaneSheets: 1,
             MinExcelReopenedProtectedSheets: saveReopen ? 1 : 0,
             MinExcelReopenedStructureProtection: saveReopen ? 1 : 0,
             MinExcelReopenedPrintAreaSheets: saveReopen ? 1 : 0,
@@ -18408,8 +18450,10 @@ internal static class ExcelOpenSmoke
             MinExcelReopenedHeaderFooterSheets: saveReopen ? 1 : 0,
             MinExcelReopenedManualPageBreaks: saveReopen ? 2 : 0,
             MinExcelReopenedAllowEditRanges: saveReopen ? 1 : 0,
+            MinExcelReopenedFreezePaneSheets: saveReopen ? 1 : 0,
             MinFreeXReopenedProtectedSheets: saveReopen ? 1 : 0,
-            MinFreeXReopenedStructureProtection: saveReopen ? 1 : 0);
+            MinFreeXReopenedStructureProtection: saveReopen ? 1 : 0,
+            MinFreeXReopenedFrozenSheets: saveReopen ? 1 : 0);
 
     private static WorkbookSmokeExpectations PivotTableExpectations(bool saveReopen, bool expectFreeXPreSave) =>
         new(
@@ -18418,7 +18462,17 @@ internal static class ExcelOpenSmoke
             MinExcelOpenedPivotTables: 1,
             MinExcelReopenedPivotTables: saveReopen ? 1 : 0,
             MinFreeXReopenedPivotTables: saveReopen ? 1 : 0,
-            MinFreeXReopenedPivotCaches: saveReopen ? 1 : 0);
+            MinFreeXReopenedPivotCaches: saveReopen ? 1 : 0,
+            RequiredFreeXSavedPackageParts:
+            [
+                "xl/pivotTables/pivotTable1.xml",
+                "xl/pivotCache/pivotCacheDefinition1.xml"
+            ],
+            RequiredExcelSavedPackageParts:
+            [
+                "xl/pivotTables/pivotTable1.xml",
+                "xl/pivotCache/pivotCacheDefinition1.xml"
+            ]);
 
     private static void AssertSmokeExpectations(
         WorkbookSmokeInput input,
