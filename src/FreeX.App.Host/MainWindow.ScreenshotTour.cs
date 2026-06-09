@@ -39,6 +39,8 @@ public partial class MainWindow
     private const string PrintPreviewTourManifestFileName = "print_preview_tour_manifest.json";
     private const string QatUndoRedoTourManifestFileName = "qat_undo_redo_tour_manifest.json";
     private const string QatUndoRedoTourOutputDirectoryName = "qat-undo-redo-tour";
+    private const string FormulaBarNameBoxTourManifestFileName = "formula_bar_name_box_tour_manifest.json";
+    private const string FormulaBarNameBoxTourOutputDirectoryName = "formula-bar-name-box-tour";
     private const string ScreenshotTourAllowBackgroundRenderEnvVar = "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER";
     private const string ScreenshotTourOutputSubdirectoryEnvVar = "FREEX_SS_TOUR_OUTPUT_SUBDIR";
 
@@ -61,7 +63,8 @@ public partial class MainWindow
         var keyTipOverlayTour = Environment.GetEnvironmentVariable("FREEX_KEYTIP_OVERLAY_TOUR") == "1";
         var printPreviewTour = Environment.GetEnvironmentVariable("FREEX_PRINT_PREVIEW_TOUR") == "1";
         var qatUndoRedoTour = Environment.GetEnvironmentVariable("FREEX_QAT_UNDO_REDO_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !qatUndoRedoTour)
+        var formulaBarNameBoxTour = Environment.GetEnvironmentVariable("FREEX_FORMULA_BAR_NAME_BOX_TOUR") == "1";
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !qatUndoRedoTour && !formulaBarNameBoxTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -78,7 +81,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, qatUndoRedoTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, qatUndoRedoTour, formulaBarNameBoxTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -110,7 +113,8 @@ public partial class MainWindow
         bool worksheetContextMenuTour,
         bool keyTipOverlayTour,
         bool printPreviewTour,
-        bool qatUndoRedoTour)
+        bool qatUndoRedoTour,
+        bool formulaBarNameBoxTour)
     {
         if (ribbonPlan is not null)
             await CaptureRibbonTourAsync(outputDir, ribbonPlan);
@@ -138,6 +142,9 @@ public partial class MainWindow
 
         if (qatUndoRedoTour)
             await CaptureQatUndoRedoTourAsync(Path.Combine(outputDir, QatUndoRedoTourOutputDirectoryName));
+
+        if (formulaBarNameBoxTour)
+            await CaptureFormulaBarNameBoxTourAsync(Path.Combine(outputDir, FormulaBarNameBoxTourOutputDirectoryName));
 
         _suppressClosePrompt = true;
         Application.Current.Shutdown();
@@ -990,6 +997,313 @@ public partial class MainWindow
             var path = Path.Combine(outputDir, capture.OutputFileName);
             if (!File.Exists(path))
                 throw new InvalidOperationException($"QAT undo/redo tour did not create planned capture '{capture.OutputFileName}'.");
+        }
+    }
+
+    private async Task CaptureFormulaBarNameBoxTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteFormulaBarNameBoxTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1180;
+        Height = 768;
+        await Task.Delay(700);
+
+        var context = EnsureFormulaBarNameBoxTourContext();
+        var captures = new List<FormulaBarNameBoxTourManifestCapture>();
+        InsertFunctionDialog? insertFunctionDialog = null;
+
+        try
+        {
+            captures.Add(await CaptureFormulaBarNameBoxWindowStateAsync(
+                outputDir,
+                "initial-named-range-selection",
+                "freex_formula_name_box_named_range_selected",
+                "window-full",
+                "Selected Sales named range displays in the Name Box, with the formula bar showing B2's content."));
+
+            CellAddressBox.Focus();
+            Keyboard.Focus(CellAddressBox);
+            CellAddressBox.IsDropDownOpen = true;
+            CellAddressBox.UpdateLayout();
+            await Task.Delay(350);
+            await WaitForRibbonScreenshotRenderPassAsync();
+            var nameBoxPopup = FindOpenPopupChild(CellAddressBox)
+                ?? throw new InvalidOperationException("Formula bar/name box tour could not locate the open Name Box dropdown.");
+            await CaptureElementAsync(nameBoxPopup, outputDir, "freex_formula_name_box_dropdown_opened");
+            captures.Add(CreateFormulaBarNameBoxCapture(
+                "name-box-dropdown-opened",
+                "freex_formula_name_box_dropdown_opened",
+                "name-box-dropdown",
+                "RenderTargetBitmap-name-box-combobox-popup",
+                nameBoxPopup.ActualWidth,
+                nameBoxPopup.ActualHeight,
+                "Name Box dropdown lists workbook defined names including Sales."));
+
+            CellAddressBox.SelectedItem = "Sales";
+            CellAddressBox.IsDropDownOpen = false;
+            await Task.Delay(250);
+            UpdateLayout();
+            await WaitForRibbonScreenshotRenderPassAsync();
+            captures.Add(await CaptureFormulaBarNameBoxWindowStateAsync(
+                outputDir,
+                "name-box-dropdown-navigation",
+                "freex_formula_name_box_dropdown_navigation",
+                "window-full",
+                "Selecting SalesData from the Name Box dropdown navigates to B2:C3 and returns focus to the worksheet."));
+
+            BeginFormulaBarFormulaEdit("=SUM(B2:C3)");
+            FormulaBar.CaretIndex = FormulaBar.Text.Length;
+            FormulaBarCancelButton.Focus();
+            Keyboard.Focus(FormulaBarCancelButton);
+            captures.Add(await CaptureFormulaBarNameBoxWindowStateAsync(
+                outputDir,
+                "formula-edit-cancel-focused",
+                "freex_formula_bar_edit_mode_cancel_focused",
+                "window-full",
+                "Formula bar edit mode shows the draft formula with the Cancel control focused."));
+
+            FormulaBarCancelButton_Click(FormulaBarCancelButton, new RoutedEventArgs(ButtonBase.ClickEvent));
+            await Task.Delay(250);
+            captures.Add(await CaptureFormulaBarNameBoxWindowStateAsync(
+                outputDir,
+                "formula-edit-canceled",
+                "freex_formula_bar_cancel_restored_selection",
+                "window-full",
+                "Cancel restores the selected cell's formula bar text and worksheet focus."));
+
+            BeginFormulaBarFormulaEdit("=SUM(B2:C3)");
+            FormulaBar.CaretIndex = FormulaBar.Text.Length;
+            FormulaBarEnterButton.Focus();
+            Keyboard.Focus(FormulaBarEnterButton);
+            captures.Add(await CaptureFormulaBarNameBoxWindowStateAsync(
+                outputDir,
+                "formula-edit-enter-focused",
+                "freex_formula_bar_edit_mode_enter_focused",
+                "window-full",
+                "Formula bar edit mode shows the draft formula with the Enter control focused."));
+
+            FormulaBarEnterButton_Click(FormulaBarEnterButton, new RoutedEventArgs(ButtonBase.ClickEvent));
+            await Task.Delay(250);
+            captures.Add(await CaptureFormulaBarNameBoxWindowStateAsync(
+                outputDir,
+                "formula-edit-enter-committed",
+                "freex_formula_bar_enter_committed",
+                "window-full",
+                "Enter commits the formula-bar edit and returns focus to the worksheet."));
+
+            FormulaBarFxButton.Focus();
+            Keyboard.Focus(FormulaBarFxButton);
+            captures.Add(await CaptureFormulaBarNameBoxWindowStateAsync(
+                outputDir,
+                "fx-button-focused",
+                "freex_formula_bar_fx_button_focused",
+                "window-full",
+                "Formula bar fx button is focused beside the Cancel/Enter controls."));
+
+            insertFunctionDialog = new InsertFunctionDialog
+            {
+                Owner = this,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner
+            };
+            insertFunctionDialog.Show();
+            insertFunctionDialog.Activate();
+            insertFunctionDialog.UpdateLayout();
+            await Task.Delay(450);
+            await WaitForRibbonScreenshotRenderPassAsync();
+            await CaptureWindowElementForScreenshotTourAsync(insertFunctionDialog, outputDir, "freex_formula_bar_fx_insert_function_dialog");
+            captures.Add(CreateFormulaBarNameBoxCapture(
+                "fx-insert-function-dialog-opened",
+                "freex_formula_bar_fx_insert_function_dialog",
+                "insert-function-dialog",
+                "RenderTargetBitmap-insert-function-dialog",
+                insertFunctionDialog.ActualWidth,
+                insertFunctionDialog.ActualHeight,
+                "Production Insert Function dialog shown from the formula-bar fx surface scenario."));
+            insertFunctionDialog.Close();
+            insertFunctionDialog = null;
+
+            if (!_formulaBarExpanded)
+                FormulaBarExpandBtn_Click(FormulaBarExpandBtn, new RoutedEventArgs(ButtonBase.ClickEvent));
+            await Task.Delay(250);
+            captures.Add(await CaptureFormulaBarNameBoxWindowStateAsync(
+                outputDir,
+                "formula-bar-expanded",
+                "freex_formula_bar_expanded",
+                "window-full",
+                "Expanded formula bar shows the taller multiline editor and collapse chevron state."));
+
+            FormulaBar.Focus();
+            Keyboard.Focus(FormulaBar);
+            captures.Add(await CaptureFormulaBarNameBoxWindowStateAsync(
+                outputDir,
+                "formula-bar-focus",
+                "freex_formula_bar_focus",
+                "window-full",
+                "Formula bar accepts keyboard focus after the expand/collapse interaction."));
+
+            CellAddressBox.Focus();
+            Keyboard.Focus(CellAddressBox);
+            EnterRibbonKeyTipMode(RibbonKeyTipScope.TopLevel);
+            UpdateLayout();
+            await Task.Delay(350);
+            await WaitForRibbonScreenshotRenderPassAsync();
+            captures.Add(await CaptureFormulaBarNameBoxWindowStateAsync(
+                outputDir,
+                "name-box-focus-top-level-keytips",
+                "freex_formula_keytips_from_name_box_focus",
+                "window-top-band",
+                "Top-level keytip overlay is visible while focus starts from the Name Box."));
+            ExitRibbonKeyTipMode();
+
+            ValidateFormulaBarNameBoxTourEvidence(outputDir, captures);
+            await WriteFormulaBarNameBoxTourManifestAsync(outputDir, context, captures);
+        }
+        catch
+        {
+            DeleteFormulaBarNameBoxTourEvidence(outputDir);
+            throw;
+        }
+        finally
+        {
+            ExitRibbonKeyTipMode();
+            if (insertFunctionDialog is { IsVisible: true })
+                insertFunctionDialog.Close();
+        }
+    }
+
+    private FormulaBarNameBoxTourContext EnsureFormulaBarNameBoxTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Formula bar/name box tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        var cells = new (uint Row, uint Col, ScalarValue Value)[]
+        {
+            (1, 1, new TextValue("Formula bar/name box tour")),
+            (1, 2, new TextValue("Q1")),
+            (1, 3, new TextValue("Q2")),
+            (2, 1, new TextValue("North")),
+            (2, 2, new NumberValue(10)),
+            (2, 3, new NumberValue(15)),
+            (3, 1, new TextValue("South")),
+            (3, 2, new NumberValue(12)),
+            (3, 3, new NumberValue(18))
+        };
+
+        foreach (var (row, col, value) in cells)
+            sheet.SetCell(new CellAddress(sheet.Id, row, col), value);
+
+        var namedRange = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 3, 3));
+        _workbook.DefineNamedRange("Sales", namedRange);
+        SetSelectionRange(namedRange, namedRange.Start);
+        EnsureCellVisible(namedRange.Start);
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+        UpdateLayout();
+
+        return new FormulaBarNameBoxTourContext(
+            SheetName: sheet.Name,
+            NamedRangeName: "Sales",
+            NamedRangeAddress: namedRange.ToString(),
+            StartCell: namedRange.Start.ToA1());
+    }
+
+    private async Task<FormulaBarNameBoxTourManifestCapture> CaptureFormulaBarNameBoxWindowStateAsync(
+        string outputDir,
+        string state,
+        string fileName,
+        string surface,
+        string evidenceSummary)
+    {
+        RefreshToolbar();
+        RefreshStatusBar();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await Task.Delay(150);
+
+        var height = surface == "window-top-band" ? ScreenshotTourCaptureHeight : 760;
+        await CaptureCurrentWindowAsync(outputDir, fileName, height);
+        return CreateFormulaBarNameBoxCapture(
+            state,
+            fileName,
+            surface,
+            surface == "window-top-band" ? "RenderTargetBitmap-window-top-band" : "RenderTargetBitmap-window-full",
+            ActualWidth,
+            Math.Min(ActualHeight, height),
+            evidenceSummary);
+    }
+
+    private FormulaBarNameBoxTourManifestCapture CreateFormulaBarNameBoxCapture(
+        string state,
+        string fileName,
+        string surface,
+        string captureMethod,
+        double logicalWidth,
+        double logicalHeight,
+        string evidenceSummary)
+    {
+        var selectedRange = SheetGrid.SelectedRange;
+        var activeCell = selectedRange?.Start;
+        var activeCellText = activeCell is { } cellAddress
+            ? FormatQatUndoRedoTourValue(_workbook.GetSheet(cellAddress.Sheet)?.GetCell(cellAddress)?.Value)
+            : string.Empty;
+        var focusElement = Keyboard.FocusedElement as DependencyObject;
+
+        return new FormulaBarNameBoxTourManifestCapture(
+            CaptureKey: $"formula-bar-name-box:{state}",
+            PairKey: $"interactive:formula-bar-name-box:{state}",
+            ScenarioId: "formula-bar-name-box:visual-evidence",
+            State: state,
+            Surface: surface,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: captureMethod,
+            CaptureLogicalWidth: logicalWidth,
+            CaptureLogicalHeight: logicalHeight,
+            NameBoxText: CellAddressBox.Text,
+            NameBoxDropDownOpen: CellAddressBox.IsDropDownOpen,
+            FormulaBarText: FormulaBar.Text,
+            FormulaBarAcceptsReturn: FormulaBar.AcceptsReturn,
+            FormulaBarExpanded: _formulaBarExpanded,
+            SelectedRange: selectedRange?.ToString() ?? string.Empty,
+            ActiveCellText: activeCellText,
+            FocusedAutomationId: FormatFormulaBarNameBoxFocusedAutomationId(focusElement),
+            KeyTipBadgeCount: KeyTipOverlay.Children.OfType<Border>().Count(),
+            EvidenceSummary: evidenceSummary);
+    }
+
+    private static string FormatFormulaBarNameBoxFocusedAutomationId(DependencyObject? focusedElement)
+    {
+        if (focusedElement is null)
+            return string.Empty;
+
+        var automationId = AutomationProperties.GetAutomationId(focusedElement);
+        if (!string.IsNullOrWhiteSpace(automationId))
+            return automationId;
+
+        return focusedElement.GetType().Name;
+    }
+
+    private static void DeleteFormulaBarNameBoxTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_formula_*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, FormulaBarNameBoxTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateFormulaBarNameBoxTourEvidence(string outputDir, IReadOnlyList<FormulaBarNameBoxTourManifestCapture> captures)
+    {
+        foreach (var capture in captures)
+        {
+            var path = Path.Combine(outputDir, capture.OutputFileName);
+            if (!File.Exists(path))
+                throw new InvalidOperationException($"Formula bar/name box tour did not create planned capture '{capture.OutputFileName}'.");
         }
     }
 
@@ -1925,6 +2239,65 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.QatUndoRedoTourManifest);
     }
 
+    private static async Task WriteFormulaBarNameBoxTourManifestAsync(
+        string outputDir,
+        FormulaBarNameBoxTourContext context,
+        IReadOnlyList<FormulaBarNameBoxTourManifestCapture> captures)
+    {
+        var manifest = new FormulaBarNameBoxTourManifest(
+            Tool: "FREEX_FORMULA_BAR_NAME_BOX_TOUR",
+            EvidenceFamily: "formula-bar-name-box",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "formula-bar-name-box:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_formula_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            SheetName: context.SheetName,
+            NamedRangeName: context.NamedRangeName,
+            NamedRangeAddress: context.NamedRangeAddress,
+            StartCell: context.StartCell,
+            CaptureStatus: "complete",
+            CaptureMethod: "RenderTargetBitmap-window-full-top-band-dropdown-and-dialog",
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed in-process RenderTargetBitmap capture; no global mouse, keyboard, or screen capture input was used."
+                    : "Abort before file write unless the expected FreeX window owns foreground focus for each window/dialog capture."),
+            Pairing: new FormulaBarNameBoxTourManifestPairing(
+                "interactive:formula-bar-name-box:<State>",
+                "excel",
+                "not-yet-wired",
+                "not-yet-captured"),
+            Captures: captures,
+            CoveredStates:
+            [
+                "Name Box displays exact selected defined name",
+                "Name Box dropdown opens and lists workbook defined names",
+                "Name Box dropdown selection navigates to the named range",
+                "Formula bar edit mode with Cancel and Enter controls",
+                "Cancel restores formula bar text and worksheet focus",
+                "Enter commits formula bar edit and returns worksheet focus",
+                "Formula bar fx button focus and Insert Function dialog surface",
+                "Expanded/collapsed formula bar visual state",
+                "Formula bar focus",
+                "Top-level keytips while focus starts in the Name Box"
+            ],
+            Limitations:
+            [
+                "This tour drives FreeX in process and captures WPF output with RenderTargetBitmap rather than OS CopyFromScreen.",
+                "The Name Box dropdown is opened through the production ComboBox state, and the Sales dropdown navigation uses the production SelectionChanged path without global mouse input.",
+                "The formula-bar Enter and Cancel evidence uses the production button handlers, but button activation is invoked in process rather than by physical mouse input.",
+                "The Insert Function dialog capture uses the production InsertFunctionDialog shown by the tour because invoking the fx button's modal handler would block deterministic screenshot capture.",
+                "The keytip capture enters the production top-level keytip mode while focus starts in the Name Box; it is not a physical Alt-key foreground input capture.",
+                "No paired Microsoft Excel screenshots are produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, FormulaBarNameBoxTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.FormulaBarNameBoxTourManifest);
+    }
+
     private static async Task WritePrintPreviewTourManifestAsync(
         string outputDir,
         Sheet sheet,
@@ -2385,6 +2758,61 @@ public partial class MainWindow
         IReadOnlyList<string> RedoHistoryLabels,
         IReadOnlyList<string> MenuHeaders);
 
+    private sealed record FormulaBarNameBoxTourContext(
+        string SheetName,
+        string NamedRangeName,
+        string NamedRangeAddress,
+        string StartCell);
+
+    private sealed record FormulaBarNameBoxTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        string SheetName,
+        string NamedRangeName,
+        string NamedRangeAddress,
+        string StartCell,
+        string CaptureStatus,
+        string CaptureMethod,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        FormulaBarNameBoxTourManifestPairing Pairing,
+        IReadOnlyList<FormulaBarNameBoxTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record FormulaBarNameBoxTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record FormulaBarNameBoxTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        string NameBoxText,
+        bool NameBoxDropDownOpen,
+        string FormulaBarText,
+        bool FormulaBarAcceptsReturn,
+        bool FormulaBarExpanded,
+        string SelectedRange,
+        string ActiveCellText,
+        string FocusedAutomationId,
+        int KeyTipBadgeCount,
+        string EvidenceSummary);
+
     [JsonSourceGenerationOptions(WriteIndented = true)]
     [JsonSerializable(typeof(RibbonScreenshotTourManifest))]
     [JsonSerializable(typeof(AutoFilterFlyoutTourManifest))]
@@ -2394,6 +2822,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(PrintPreviewTourManifest))]
     [JsonSerializable(typeof(KeyTipOverlayTourManifest))]
     [JsonSerializable(typeof(QatUndoRedoTourManifest))]
+    [JsonSerializable(typeof(FormulaBarNameBoxTourManifest))]
     private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
 
     // Activated by FREEX_ACCENT_BAR_TOUR=1 env var. Output lands in <repo-root>/screenshots/accent-bars-tour/.
