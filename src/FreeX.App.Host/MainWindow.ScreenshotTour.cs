@@ -32,6 +32,7 @@ public partial class MainWindow
     private const string HomeBordersDropdownTourCaptureFileName = "freex_dropdown_home_borders_opened";
     private const string WorksheetContextMenuTourManifestFileName = "worksheet_context_menu_tour_manifest.json";
     private const string WorksheetContextMenuTourCaptureFileName = "freex_context_menu_worksheet_cell_opened";
+    private const string ScreenshotTourAllowBackgroundRenderEnvVar = "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER";
 
     [DllImport("user32.dll")]
     private static extern bool SetCursorPos(int x, int y);
@@ -853,6 +854,12 @@ public partial class MainWindow
 
     private async Task EnsureWindowForegroundForScreenshotTourAsync(string operation)
     {
+        if (IsScreenshotTourBackgroundRenderAllowed())
+        {
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            return;
+        }
+
         Activate();
         Focus();
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
@@ -861,6 +868,9 @@ public partial class MainWindow
 
     private void AssertWindowForegroundForScreenshotTour(string operation)
     {
+        if (IsScreenshotTourBackgroundRenderAllowed())
+            return;
+
         var expectedWindowHandle = new WindowInteropHelper(this).Handle;
         var foregroundWindowHandle = GetForegroundWindow();
         if (expectedWindowHandle == IntPtr.Zero ||
@@ -872,6 +882,9 @@ public partial class MainWindow
                 $"foreground handle 0x{foregroundWindowHandle.ToInt64():X}, expected 0x{expectedWindowHandle.ToInt64():X}.");
         }
     }
+
+    private static bool IsScreenshotTourBackgroundRenderAllowed() =>
+        Environment.GetEnvironmentVariable(ScreenshotTourAllowBackgroundRenderEnvVar) == "1";
 
     private static async Task WriteRibbonScreenshotTourManifestAsync(string outputDir, RibbonScreenshotTourPlan plan)
     {
@@ -896,8 +909,10 @@ public partial class MainWindow
                 "screenshot_excel.ps1",
                 "excel_<WidthLabel>_<RibbonTab>.png"),
             FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
-                Required: true,
-                Policy: "Abort and clear current PNG/manifest evidence unless the FreeX main window owns foreground focus immediately before render and file write."),
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed in-process RenderTargetBitmap capture without OS foreground ownership; no global mouse, keyboard, or screen capture input is used."
+                    : "Abort and clear current PNG/manifest evidence unless the FreeX main window owns foreground focus immediately before render and file write."),
             Tabs: plan.Tabs.Select(tab => tab.Header).ToArray(),
             Widths: plan.Widths
                 .Select(width => new RibbonScreenshotTourManifestWidth(
@@ -925,7 +940,9 @@ public partial class MainWindow
                 "Ribbon captures cover the top window band only.",
                 "Transient popups, dropdowns, native dialogs, and context menus require separate guarded captures.",
                 "This in-app tour deletes only the currently requested plan's expected PNG files before capture.",
-                "The in-app tour aborts before file write unless the FreeX main window owns foreground focus."
+                IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 was used for in-process rendering; pair with foreground-guarded screen captures when validating OS compositing or input focus."
+                    : "The in-app tour aborts before file write unless the FreeX main window owns foreground focus."
             ]);
 
         var path = Path.Combine(outputDir, RibbonScreenshotTourManifestFileName);

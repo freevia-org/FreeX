@@ -34,7 +34,7 @@ public partial class GridView
         // Grid lines are drawn as cell/header rectangle borders.
     }
 
-    private void RenderLiveResizeContinuation(DrawingContext dc)
+    private void RenderViewportContinuation(DrawingContext dc)
     {
         if (Viewport is null)
             return;
@@ -42,6 +42,8 @@ public partial class GridView
         var rowHeaderWidth = ActualRowHeaderWidth;
         var columnHeaderHeight = EffectiveColHeaderHeight;
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var viewportWidth = GetLogicalViewportWidth();
+        var viewportHeight = GetLogicalViewportHeight();
         var gridLeft = rowHeaderWidth;
         var gridTop = columnHeaderHeight;
         var gridRight = Viewport.ColMetrics.Count > 0
@@ -51,39 +53,41 @@ public partial class GridView
             ? columnHeaderHeight + Viewport.RowMetrics[^1].TopOffset + Viewport.RowMetrics[^1].Height
             : gridTop;
 
-        if (ActualWidth > gridRight)
-            RenderLiveResizeColumnContinuation(dc, gridRight, gridTop, pixelsPerDip);
+        if (viewportWidth > gridRight)
+            RenderViewportColumnContinuation(dc, gridRight, gridTop, viewportWidth, viewportHeight, pixelsPerDip);
 
-        if (ActualHeight > gridBottom)
-            RenderLiveResizeRowContinuation(dc, gridLeft, gridRight, gridBottom, pixelsPerDip);
+        if (viewportHeight > gridBottom)
+            RenderViewportRowContinuation(dc, gridLeft, gridRight, gridBottom, viewportHeight, pixelsPerDip);
 
-        if (ActualWidth > gridRight && ActualHeight > gridBottom)
+        if (viewportWidth > gridRight && viewportHeight > gridBottom)
         {
-            DrawLiveResizeHorizontalGridLines(dc, gridRight, ActualWidth, gridBottom);
-            DrawLiveResizeVerticalGridLines(dc, gridRight, ActualHeight);
+            DrawViewportContinuationHorizontalGridLines(dc, gridRight, viewportWidth, gridBottom, viewportHeight);
+            DrawViewportContinuationVerticalGridLines(dc, gridRight, viewportHeight);
         }
     }
 
-    private void RenderLiveResizeColumnContinuation(
+    private void RenderViewportColumnContinuation(
         DrawingContext dc,
         double startX,
         double gridTop,
+        double viewportWidth,
+        double viewportHeight,
         double pixelsPerDip)
     {
-        if (startX >= ActualWidth)
+        if (startX >= viewportWidth)
             return;
 
         var columnWidth = Viewport!.ColMetrics.Count > 0
             ? Math.Max(1, Viewport.ColMetrics[^1].Width)
             : 64;
         var lastColumn = Viewport.ColMetrics.Count > 0 ? Viewport.ColMetrics[^1].Col : 0;
-        var height = Math.Max(0, ActualHeight - gridTop);
+        var height = Math.Max(0, viewportHeight - gridTop);
         if (height > 0)
-            dc.DrawRectangle(Brushes.White, null, new Rect(startX, gridTop, ActualWidth - startX, height));
+            dc.DrawRectangle(Brushes.White, null, new Rect(startX, gridTop, viewportWidth - startX, height));
 
-        for (var x = startX; x < ActualWidth; x += columnWidth)
+        for (var x = startX; x < viewportWidth; x += columnWidth)
         {
-            var width = Math.Min(columnWidth, ActualWidth - x);
+            var width = Math.Min(columnWidth, viewportWidth - x);
             if (EffectiveColHeaderHeight > 0)
             {
                 var headerRect = new Rect(x, 0, width, EffectiveColHeaderHeight);
@@ -92,23 +96,24 @@ public partial class GridView
             }
 
             if (height > 0)
-                dc.DrawLine(GridPen, new Point(x, gridTop), new Point(x, ActualHeight));
+                dc.DrawLine(GridPen, new Point(x, gridTop), new Point(x, viewportHeight));
         }
 
         if (height > 0)
-            dc.DrawLine(GridPen, new Point(ActualWidth, gridTop), new Point(ActualWidth, ActualHeight));
+            dc.DrawLine(GridPen, new Point(viewportWidth, gridTop), new Point(viewportWidth, viewportHeight));
 
-        DrawLiveResizeHorizontalGridLines(dc, startX, ActualWidth, gridTop);
+        DrawViewportContinuationHorizontalGridLines(dc, startX, viewportWidth, gridTop, viewportHeight);
     }
 
-    private void RenderLiveResizeRowContinuation(
+    private void RenderViewportRowContinuation(
         DrawingContext dc,
         double gridLeft,
         double gridRight,
         double startY,
+        double viewportHeight,
         double pixelsPerDip)
     {
-        if (startY >= ActualHeight)
+        if (startY >= viewportHeight)
             return;
 
         var rowHeight = Viewport!.RowMetrics.Count > 0
@@ -117,11 +122,11 @@ public partial class GridView
         var lastRow = Viewport.RowMetrics.Count > 0 ? Viewport.RowMetrics[^1].Row : 0;
         var width = Math.Max(0, gridRight - gridLeft);
         if (width > 0)
-            dc.DrawRectangle(Brushes.White, null, new Rect(gridLeft, startY, width, ActualHeight - startY));
+            dc.DrawRectangle(Brushes.White, null, new Rect(gridLeft, startY, width, viewportHeight - startY));
 
-        for (var y = startY; y < ActualHeight; y += rowHeight)
+        for (var y = startY; y < viewportHeight; y += rowHeight)
         {
-            var height = Math.Min(rowHeight, ActualHeight - y);
+            var height = Math.Min(rowHeight, viewportHeight - y);
             if (ActualRowHeaderWidth > 0)
             {
                 var headerRect = new Rect(0, y, ActualRowHeaderWidth, height);
@@ -140,37 +145,43 @@ public partial class GridView
         }
 
         if (width > 0)
-            dc.DrawLine(GridPen, new Point(gridLeft, ActualHeight), new Point(gridRight, ActualHeight));
+            dc.DrawLine(GridPen, new Point(gridLeft, viewportHeight), new Point(gridRight, viewportHeight));
 
-        DrawLiveResizeVerticalGridLines(dc, gridLeft, ActualHeight);
+        DrawViewportContinuationVerticalGridLines(dc, gridLeft, viewportHeight);
     }
 
-    private void DrawLiveResizeHorizontalGridLines(DrawingContext dc, double startX, double endX, double startY)
+    private void DrawViewportContinuationHorizontalGridLines(
+        DrawingContext dc,
+        double startX,
+        double endX,
+        double startY,
+        double viewportHeight)
     {
-        if (endX <= startX || startY >= ActualHeight)
+        if (endX <= startX || startY >= viewportHeight)
             return;
 
         var rowHeight = Viewport!.RowMetrics.Count > 0
             ? Math.Max(1, Viewport.RowMetrics[^1].Height)
             : 20;
-        for (var y = startY; y < ActualHeight; y += rowHeight)
+        for (var y = startY; y < viewportHeight; y += rowHeight)
             dc.DrawLine(GridPen, new Point(startX, y), new Point(endX, y));
 
-        dc.DrawLine(GridPen, new Point(startX, ActualHeight), new Point(endX, ActualHeight));
+        dc.DrawLine(GridPen, new Point(startX, viewportHeight), new Point(endX, viewportHeight));
     }
 
-    private void DrawLiveResizeVerticalGridLines(DrawingContext dc, double startX, double endY)
+    private void DrawViewportContinuationVerticalGridLines(DrawingContext dc, double startX, double endY)
     {
-        if (startX >= ActualWidth || endY <= EffectiveColHeaderHeight)
+        var viewportWidth = GetLogicalViewportWidth();
+        if (startX >= viewportWidth || endY <= EffectiveColHeaderHeight)
             return;
 
         var columnWidth = Viewport!.ColMetrics.Count > 0
             ? Math.Max(1, Viewport.ColMetrics[^1].Width)
             : 64;
-        for (var x = startX; x < ActualWidth; x += columnWidth)
+        for (var x = startX; x < viewportWidth; x += columnWidth)
             dc.DrawLine(GridPen, new Point(x, EffectiveColHeaderHeight), new Point(x, endY));
 
-        dc.DrawLine(GridPen, new Point(ActualWidth, EffectiveColHeaderHeight), new Point(ActualWidth, endY));
+        dc.DrawLine(GridPen, new Point(viewportWidth, EffectiveColHeaderHeight), new Point(viewportWidth, endY));
     }
 
     private void DrawLiveResizeHeaderText(DrawingContext dc, string text, Rect rect, double pixelsPerDip)
@@ -426,8 +437,8 @@ public partial class GridView
         var columnHeaderHeight = EffectiveColHeaderHeight;
         var visibleLeft = rowHeaderWidth;
         var visibleTop = columnHeaderHeight;
-        var visibleRight = ActualWidth;
-        var visibleBottom = ActualHeight;
+        var visibleRight = GetLogicalViewportWidth();
+        var visibleBottom = GetLogicalViewportHeight();
         _brushCache.Clear();
         _borderPenCache.Clear();
         _fillPatternPenCache.Clear();
@@ -760,8 +771,8 @@ public partial class GridView
         var top = columnHeaderHeight;
         var right = left + Viewport.ColMetrics[^1].LeftOffset + Viewport.ColMetrics[^1].Width;
         var bottom = top + Viewport.RowMetrics[^1].TopOffset + Viewport.RowMetrics[^1].Height;
-        var visibleRight = Math.Min(right, ActualWidth);
-        var visibleBottom = Math.Min(bottom, ActualHeight);
+        var visibleRight = Math.Min(right, GetLogicalViewportWidth());
+        var visibleBottom = Math.Min(bottom, GetLogicalViewportHeight());
         var rect = new Rect(left, top, Math.Max(0, visibleRight - left), Math.Max(0, visibleBottom - top));
         if (rect.Width <= 0 || rect.Height <= 0)
             return;
