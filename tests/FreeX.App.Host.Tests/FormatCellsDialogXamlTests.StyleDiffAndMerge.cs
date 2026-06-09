@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Globalization;
 using FreeX.App.Host;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using FluentAssertions;
@@ -315,6 +316,19 @@ public sealed partial class FormatCellsDialogXamlTests
         var mergeCommands = FormatCellsMergePlanner.CreateMergeCommands(sheet, sheet.Id, range, mergeCells: true);
 
         mergeCommands.Should().ContainSingle().Which.Should().BeOfType<MergeCellsCommand>();
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("One"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Two"));
+        var concatenateCommands = FormatCellsMergePlanner.CreateMergeCommands(
+            sheet,
+            sheet.Id,
+            range,
+            mergeCells: true,
+            MergeCellContentResolution.ConcatenateAllCells);
+
+        concatenateCommands.Should().HaveCount(2);
+        concatenateCommands[0].Should().BeOfType<EditCellsCommand>();
+        concatenateCommands[1].Should().BeOfType<MergeCellsCommand>();
 
         sheet.AddMergedRegion(range);
         FormatCellsMergePlanner.IsSelectionMerged(sheet, new GridRange(
