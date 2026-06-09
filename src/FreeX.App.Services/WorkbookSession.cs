@@ -1433,16 +1433,17 @@ public sealed class WorkbookSession
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(functionName);
 
-        var target = SelectedRange.Start;
-        var formula = AutoSumFormulaPlanner.BuildFormula(ActiveSheet, functionName, target);
+        if (!AutoSumFormulaPlanner.TryCreatePlan(ActiveSheet, functionName, SelectedRange, out var plan))
+            return new WorkbookCellEditResult(false, "AutoSum target is outside the worksheet bounds.", [], null);
+
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            CreateEditCellsCommand([(target, Cell.FromFormula(formula))]));
+            CreateEditCellsCommand([(plan.Target, Cell.FromFormula(plan.Formula))]));
         if (!result.Success)
             return result;
 
-        ApplySuccessfulEditResult(result, target);
-        SelectCell(GetNextAutoSumCell(target));
+        ApplySuccessfulEditResult(result, plan.Target);
+        SelectCell(GetNextAutoSumCell(plan.Target));
         return result;
     }
 

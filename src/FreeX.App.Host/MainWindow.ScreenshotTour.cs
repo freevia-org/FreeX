@@ -39,6 +39,8 @@ public partial class MainWindow
     private const string PrintPreviewTourManifestFileName = "print_preview_tour_manifest.json";
     private const string QatUndoRedoTourManifestFileName = "qat_undo_redo_tour_manifest.json";
     private const string QatUndoRedoTourOutputDirectoryName = "qat-undo-redo-tour";
+    private const string StatusFooterTourManifestFileName = "status_footer_tour_manifest.json";
+    private const string StatusFooterTourOutputDirectoryName = "status-footer-tour";
     private const string ScreenshotTourAllowBackgroundRenderEnvVar = "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER";
     private const string ScreenshotTourOutputSubdirectoryEnvVar = "FREEX_SS_TOUR_OUTPUT_SUBDIR";
 
@@ -61,7 +63,8 @@ public partial class MainWindow
         var keyTipOverlayTour = Environment.GetEnvironmentVariable("FREEX_KEYTIP_OVERLAY_TOUR") == "1";
         var printPreviewTour = Environment.GetEnvironmentVariable("FREEX_PRINT_PREVIEW_TOUR") == "1";
         var qatUndoRedoTour = Environment.GetEnvironmentVariable("FREEX_QAT_UNDO_REDO_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !qatUndoRedoTour)
+        var statusFooterTour = Environment.GetEnvironmentVariable("FREEX_STATUS_FOOTER_TOUR") == "1";
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !worksheetContextMenuTour && !keyTipOverlayTour && !printPreviewTour && !qatUndoRedoTour && !statusFooterTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -78,7 +81,7 @@ public partial class MainWindow
             screenshotsRoot,
             Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, qatUndoRedoTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour, keyTipOverlayTour, printPreviewTour, qatUndoRedoTour, statusFooterTour);
     }
 
     private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
@@ -110,7 +113,8 @@ public partial class MainWindow
         bool worksheetContextMenuTour,
         bool keyTipOverlayTour,
         bool printPreviewTour,
-        bool qatUndoRedoTour)
+        bool qatUndoRedoTour,
+        bool statusFooterTour)
     {
         if (ribbonPlan is not null)
             await CaptureRibbonTourAsync(outputDir, ribbonPlan);
@@ -138,6 +142,9 @@ public partial class MainWindow
 
         if (qatUndoRedoTour)
             await CaptureQatUndoRedoTourAsync(Path.Combine(outputDir, QatUndoRedoTourOutputDirectoryName));
+
+        if (statusFooterTour)
+            await CaptureStatusFooterTourAsync(Path.Combine(outputDir, StatusFooterTourOutputDirectoryName));
 
         _suppressClosePrompt = true;
         Application.Current.Shutdown();
@@ -990,6 +997,252 @@ public partial class MainWindow
             var path = Path.Combine(outputDir, capture.OutputFileName);
             if (!File.Exists(path))
                 throw new InvalidOperationException($"QAT undo/redo tour did not create planned capture '{capture.OutputFileName}'.");
+        }
+    }
+
+    private async Task CaptureStatusFooterTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteStatusFooterTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1180;
+        Height = 760;
+        await Task.Delay(700);
+
+        var sheet = EnsureStatusFooterTourContext();
+        var captures = new List<StatusFooterTourManifestCapture>();
+
+        try
+        {
+            captures.Add(await CaptureStatusFooterWindowStateAsync(
+                outputDir,
+                "ready-baseline",
+                "freex_status_footer_ready_baseline",
+                "Ready footer with Normal view shortcut, 100% zoom text, zoom buttons, and slider visible.",
+                captureFullWindow: false));
+
+            SelectStatusFooterTourRange(new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 3)));
+            captures.Add(await CaptureStatusFooterWindowStateAsync(
+                outputDir,
+                "selection-stats",
+                "freex_status_footer_selection_stats_numeric_mixed",
+                "Numeric plus text selection showing Average, Count, Numerical Count, Sum, Min, and Max footer statistics.",
+                captureFullWindow: false));
+
+            BeginFormulaBarFormulaEdit("=SUM(A1:A4)");
+            captures.Add(await CaptureStatusFooterWindowStateAsync(
+                outputDir,
+                "formula-edit-mode",
+                "freex_status_footer_formula_edit_mode",
+                "Formula edit mode with footer mode text set to Edit and the formula bar showing the in-progress formula.",
+                captureFullWindow: true));
+            HideInlineEditor(commit: false);
+            FocusSheetGridIfNeeded();
+
+            SetWorksheetViewMode(WorksheetViewMode.PageLayout);
+            RefreshStatusBar();
+            captures.Add(await CaptureStatusFooterWindowStateAsync(
+                outputDir,
+                "view-shortcut-page-layout",
+                "freex_status_footer_view_shortcut_page_layout",
+                "Status bar view shortcut buttons with Page Layout selected.",
+                captureFullWindow: false));
+
+            SetWorksheetViewMode(WorksheetViewMode.PageBreakPreview);
+            RefreshStatusBar();
+            captures.Add(await CaptureStatusFooterWindowStateAsync(
+                outputDir,
+                "view-shortcut-page-break-preview",
+                "freex_status_footer_view_shortcut_page_break_preview",
+                "Status bar view shortcut buttons with Page Break Preview selected.",
+                captureFullWindow: false));
+
+            SetWorksheetViewMode(WorksheetViewMode.Normal);
+            await SetStatusFooterTourZoomAsync(10);
+            captures.Add(await CaptureStatusFooterWindowStateAsync(
+                outputDir,
+                "zoom-min-10-percent",
+                "freex_status_footer_zoom_min_10",
+                "Minimum representative zoom state with 10% footer text, slider at minimum, and visibly scaled grid.",
+                captureFullWindow: true));
+
+            await SetStatusFooterTourZoomAsync(100);
+            captures.Add(await CaptureStatusFooterWindowStateAsync(
+                outputDir,
+                "zoom-baseline-100-percent",
+                "freex_status_footer_zoom_baseline_100",
+                "Baseline zoom state with 100% footer text, midpoint slider, and normal grid scale.",
+                captureFullWindow: true));
+
+            await SetStatusFooterTourZoomAsync(400);
+            captures.Add(await CaptureStatusFooterWindowStateAsync(
+                outputDir,
+                "zoom-max-400-percent",
+                "freex_status_footer_zoom_max_400",
+                "Maximum representative zoom state with 400% footer text, slider at maximum, and visibly enlarged grid.",
+                captureFullWindow: true));
+
+            ValidateStatusFooterTourEvidence(outputDir, captures);
+            await WriteStatusFooterTourManifestAsync(outputDir, captures);
+        }
+        catch
+        {
+            DeleteStatusFooterTourEvidence(outputDir);
+            throw;
+        }
+    }
+
+    private Sheet EnsureStatusFooterTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("Status/footer tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        _options.StatusBarShowCellMode = true;
+        _options.StatusBarShowAverage = true;
+        _options.StatusBarShowCount = true;
+        _options.StatusBarShowNumericalCount = true;
+        _options.StatusBarShowSum = true;
+        _options.StatusBarShowMinimum = true;
+        _options.StatusBarShowMaximum = true;
+        _options.StatusBarShowViewShortcuts = true;
+        _options.StatusBarShowZoom = true;
+        _options.StatusBarShowZoomSlider = true;
+
+        var values = new (uint Row, uint Col, ScalarValue Value)[]
+        {
+            (1, 1, new NumberValue(10)),
+            (2, 1, new NumberValue(20)),
+            (3, 1, new NumberValue(30)),
+            (4, 1, new NumberValue(40)),
+            (1, 2, new NumberValue(5)),
+            (2, 2, new NumberValue(15)),
+            (3, 2, new NumberValue(25)),
+            (4, 2, new NumberValue(35)),
+            (1, 3, new TextValue("North")),
+            (2, 3, new TextValue("South")),
+            (3, 3, new TextValue("East")),
+            (4, 3, new TextValue("West"))
+        };
+
+        for (uint row = 1; row <= 8; row++)
+        {
+            for (uint col = 1; col <= 5; col++)
+                sheet.ClearCell(new CellAddress(sheet.Id, row, col));
+        }
+
+        foreach (var value in values)
+            sheet.SetCell(new CellAddress(sheet.Id, value.Row, value.Col), value.Value);
+
+        var activeCell = new CellAddress(sheet.Id, 1, 1);
+        SelectStatusFooterTourRange(new GridRange(activeCell, activeCell));
+        SyncZoomFromSheet(100);
+        return sheet;
+    }
+
+    private void SelectStatusFooterTourRange(GridRange range)
+    {
+        SetActiveCell(range.Start);
+        if (SheetGrid is not null)
+        {
+            SheetGrid.SelectedRange = range;
+            SheetGrid.SelectedRanges = null;
+            SheetGrid.Focus();
+        }
+
+        var cell = _workbook.GetSheet(range.Start.Sheet)?.GetCell(range.Start);
+        SetFormulaBarSelectionText(FormatFormulaBarText(cell, range.Start));
+        UpdateViewport();
+        RefreshStatusBar();
+    }
+
+    private async Task SetStatusFooterTourZoomAsync(int zoomPercent)
+    {
+        ZoomSlider.Value = FreeX.App.UI.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);
+        RefreshStatusBar();
+        UpdateViewport();
+        await Task.Delay(250);
+    }
+
+    private async Task<StatusFooterTourManifestCapture> CaptureStatusFooterWindowStateAsync(
+        string outputDir,
+        string state,
+        string fileName,
+        string evidencePurpose,
+        bool captureFullWindow)
+    {
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        if (captureFullWindow)
+            await CaptureCurrentWindowAsync(outputDir, fileName, 760);
+        else
+            await CaptureElementAsync(StatusBarRoot, outputDir, fileName);
+
+        return CreateStatusFooterTourCapture(state, fileName, evidencePurpose, captureFullWindow);
+    }
+
+    private StatusFooterTourManifestCapture CreateStatusFooterTourCapture(
+        string state,
+        string fileName,
+        string evidencePurpose,
+        bool captureFullWindow)
+    {
+        var activeRange = SheetGrid?.SelectedRange;
+        var viewMode = _workbook.GetSheet(_currentSheetId)?.ViewMode ?? WorksheetViewMode.Normal;
+        return new StatusFooterTourManifestCapture(
+            CaptureKey: $"interactive:status-footer:{state}",
+            PairKey: $"interactive:status-footer:{state}",
+            ScenarioId: "status-footer:visual-evidence",
+            State: state,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: captureFullWindow
+                ? "RenderTargetBitmap-window-full"
+                : "RenderTargetBitmap-status-footer-element",
+            EvidencePurpose: evidencePurpose,
+            CaptureLogicalWidth: captureFullWindow ? ActualWidth : StatusBarRoot.ActualWidth,
+            CaptureLogicalHeight: captureFullWindow ? Math.Min(ActualHeight, 760) : StatusBarRoot.ActualHeight,
+            ActiveRange: activeRange?.ToString() ?? string.Empty,
+            StatusModeText: StatusReadyText.Text,
+            StatusModeVisible: StatusReadyText.Visibility == Visibility.Visible,
+            AverageText: StatusAvgText.Text,
+            CountText: StatusCountText.Text,
+            NumericalCountText: StatusNumericalCountText.Text,
+            SumText: StatusSumText.Text,
+            MinText: StatusMinText.Text,
+            MaxText: StatusMaxText.Text,
+            StatsVisible: StatusStatsPanel.Visibility == Visibility.Visible,
+            ViewMode: viewMode.ToString(),
+            NormalViewChecked: StatusNormalViewButton.IsChecked == true,
+            PageLayoutViewChecked: StatusPageLayoutViewButton.IsChecked == true,
+            PageBreakPreviewChecked: StatusPageBreakPreviewButton.IsChecked == true,
+            ZoomText: StatusZoomText.Text,
+            ZoomSliderValue: ZoomSlider.Value,
+            ZoomOutButtonEnabled: StatusZoomOutButton.IsEnabled,
+            ZoomInButtonEnabled: StatusZoomInButton.IsEnabled,
+            FormulaBarText: FormulaBar.Text);
+    }
+
+    private static void DeleteStatusFooterTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_status_footer_*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, StatusFooterTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateStatusFooterTourEvidence(string outputDir, IReadOnlyList<StatusFooterTourManifestCapture> captures)
+    {
+        foreach (var capture in captures)
+        {
+            var path = Path.Combine(outputDir, capture.OutputFileName);
+            if (!File.Exists(path))
+                throw new InvalidOperationException($"Status/footer tour did not create planned capture '{capture.OutputFileName}'.");
         }
     }
 
@@ -1925,6 +2178,49 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.QatUndoRedoTourManifest);
     }
 
+    private static async Task WriteStatusFooterTourManifestAsync(
+        string outputDir,
+        IReadOnlyList<StatusFooterTourManifestCapture> captures)
+    {
+        var manifest = new StatusFooterTourManifest(
+            Tool: "FREEX_STATUS_FOOTER_TOUR",
+            EvidenceFamily: "status-footer",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "status-footer:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_status_footer_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            CaptureStatus: "complete",
+            CaptureMode: IsScreenshotTourBackgroundRenderAllowed()
+                ? "background-render-opt-in"
+                : "foreground-guarded-render",
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            Pairing: new StatusFooterTourManifestPairing(
+                "interactive:status-footer:<State>",
+                "manual-or-excel",
+                "not-yet-wired",
+                "not-yet-captured"),
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER=1 was set; no global mouse, keyboard, or screen capture input is used."
+                    : "FreeX main window must own foreground focus before each RenderTargetBitmap window capture."),
+            Captures: captures,
+            Limitations:
+            [
+                "RenderTargetBitmap evidence only; it is not foreground CopyFromScreen proof.",
+                "Zoom slider min/baseline/max are set programmatically through the in-app slider model; live mouse drag remains open.",
+                "Ctrl+wheel, foreground mouse, native UIA RangeValue interaction, filtered selections, and multi-range visual stats remain open.",
+                "Formula edit visual evidence covers Edit mode text; modal-dialog return and error status transitions remain open."
+            ]);
+
+        var path = Path.Combine(outputDir, StatusFooterTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.StatusFooterTourManifest);
+    }
+
     private static async Task WritePrintPreviewTourManifestAsync(
         string outputDir,
         Sheet sheet,
@@ -2385,6 +2681,61 @@ public partial class MainWindow
         IReadOnlyList<string> RedoHistoryLabels,
         IReadOnlyList<string> MenuHeaders);
 
+    private sealed record StatusFooterTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        string CaptureStatus,
+        string CaptureMode,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        StatusFooterTourManifestPairing Pairing,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        IReadOnlyList<StatusFooterTourManifestCapture> Captures,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record StatusFooterTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record StatusFooterTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        string EvidencePurpose,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        string ActiveRange,
+        string StatusModeText,
+        bool StatusModeVisible,
+        string AverageText,
+        string CountText,
+        string NumericalCountText,
+        string SumText,
+        string MinText,
+        string MaxText,
+        bool StatsVisible,
+        string ViewMode,
+        bool NormalViewChecked,
+        bool PageLayoutViewChecked,
+        bool PageBreakPreviewChecked,
+        string ZoomText,
+        double ZoomSliderValue,
+        bool ZoomOutButtonEnabled,
+        bool ZoomInButtonEnabled,
+        string FormulaBarText);
+
     [JsonSourceGenerationOptions(WriteIndented = true)]
     [JsonSerializable(typeof(RibbonScreenshotTourManifest))]
     [JsonSerializable(typeof(AutoFilterFlyoutTourManifest))]
@@ -2394,6 +2745,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(PrintPreviewTourManifest))]
     [JsonSerializable(typeof(KeyTipOverlayTourManifest))]
     [JsonSerializable(typeof(QatUndoRedoTourManifest))]
+    [JsonSerializable(typeof(StatusFooterTourManifest))]
     private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
 
     // Activated by FREEX_ACCENT_BAR_TOUR=1 env var. Output lands in <repo-root>/screenshots/accent-bars-tour/.

@@ -26,9 +26,10 @@ public partial class MainWindow
                 range,
                 currentRange =>
                 {
-                    var addr = currentRange.Start;
-                    var formula = AutoSumFormulaPlanner.BuildFormula(_workbook.GetSheet(_currentSheetId), func, addr);
-                    var edits = new List<(CellAddress Address, Cell NewCell)> { (addr, Cell.FromFormula(formula)) };
+                    if (!AutoSumFormulaPlanner.TryCreatePlan(_workbook.GetSheet(_currentSheetId), func, currentRange, out var plan))
+                        return new FailedWorkbookCommand("AutoSum target is outside the worksheet bounds.");
+
+                    var edits = new List<(CellAddress Address, Cell NewCell)> { (plan.Target, Cell.FromFormula(plan.Formula)) };
                     var targetSheetIds = CurrentGroupedEditSheetIds();
                     return targetSheetIds.Count > 1
                         ? new GroupedEditCellsCommand(targetSheetIds, _currentSheetId, edits)
@@ -38,7 +39,9 @@ public partial class MainWindow
             return;
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? [range.Start]);
-        SetActiveCell(new CellAddress(_currentSheetId, range.Start.Row + 1, range.Start.Col));
+        SetActiveCell(outcome.AffectedCells is { Count: > 0 }
+            ? GetNextAutoSumCell(outcome.AffectedCells[0])
+            : range.Start);
         UpdateViewport();
     }
 
@@ -49,6 +52,9 @@ public partial class MainWindow
     private void AutoSumMaxMenuItem_Click(object sender, RoutedEventArgs e)   => InsertAutoSumFormula("MAX");
     private void AutoSumMinMenuItem_Click(object sender, RoutedEventArgs e)   => InsertAutoSumFormula("MIN");
     private void AutoSumMoreMenuItem_Click(object sender, RoutedEventArgs e)  => InsertFunctionBtn_Click(sender, e);
+
+    private static CellAddress GetNextAutoSumCell(CellAddress address) =>
+        new(address.Sheet, address.Row < CellAddress.MaxRow ? address.Row + 1 : address.Row, address.Col);
 
     private void FillPickerBtn_Click(object sender, RoutedEventArgs e)
     {
