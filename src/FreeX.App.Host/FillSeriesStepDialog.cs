@@ -57,7 +57,7 @@ public sealed class FillSeriesStepDialog : Window
         Result = new FillSeriesStepDialogResult(step);
         Title = UiText.Get("FillSeriesStep_Title");
         Width = 380;
-        Height = 340;
+        Height = 356;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
@@ -174,7 +174,7 @@ public sealed class FillSeriesStepDialog : Window
         stack.Children.Add(CreateHorizontalRow(_dayButton, _weekdayButton, _monthButton, _yearButton));
         stack.Children.Add(CreateLabeledTextBox(UiText.Get("FillSeriesStep_StepValueLabel"), _stepBox));
         stack.Children.Add(CreateLabeledTextBox(UiText.Get("FillSeriesStep_StopValueLabel"), _stopBox));
-        stack.Children.Add(DialogButtonRowFactory.Create(Accept, 72));
+        stack.Children.Add(DialogButtonRowFactory.Create(Accept, 72, rowMargin: new Thickness(0, 16, 0, 0)));
         return stack;
     }
 
