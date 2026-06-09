@@ -15,8 +15,11 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_SS_TOUR_CONTEXT\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_SS_TOUR_TABS\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_SS_TOUR_WIDTHS\")");
+        source.Should().Contain("ScreenshotTourOutputSubdirectoryEnvVar = \"FREEX_SS_TOUR_OUTPUT_SUBDIR\"");
+        source.Should().Contain("Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar)");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_AUTOFILTER_FLYOUT_TOUR\")");
         source.Should().Contain("RibbonScreenshotTourPlan?");
+        source.Should().Contain("ResolveScreenshotTourOutputDirectory");
         source.Should().Contain("PrepareRibbonScreenshotTourContextAsync");
         source.Should().Contain("EnsureTableDesignScreenshotTourContext");
         source.Should().Contain("EnsurePivotTableScreenshotTourContext");
@@ -77,6 +80,19 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER");
         source.Should().Contain("IsScreenshotTourBackgroundRenderAllowed");
         source.Should().Contain("no global mouse, keyboard, or screen capture input is used");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_AllowsRelativeOutputSubdirectoryUnderScreenshots()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+
+        source.Should().Contain("FREEX_SS_TOUR_OUTPUT_SUBDIR");
+        source.Should().Contain("Path.IsPathRooted(requestedSubdirectory)");
+        source.Should().Contain("must be a relative path under screenshots");
+        source.Should().Contain("Path.GetFullPath(Path.Combine(root, requestedSubdirectory))");
+        source.Should().Contain("resolved.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase)");
+        source.Should().Contain("must stay under screenshots");
     }
 
     [Fact]

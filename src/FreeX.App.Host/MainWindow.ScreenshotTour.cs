@@ -33,6 +33,7 @@ public partial class MainWindow
     private const string WorksheetContextMenuTourManifestFileName = "worksheet_context_menu_tour_manifest.json";
     private const string WorksheetContextMenuTourCaptureFileName = "freex_context_menu_worksheet_cell_opened";
     private const string ScreenshotTourAllowBackgroundRenderEnvVar = "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER";
+    private const string ScreenshotTourOutputSubdirectoryEnvVar = "FREEX_SS_TOUR_OUTPUT_SUBDIR";
 
     [DllImport("user32.dll")]
     private static extern bool SetCursorPos(int x, int y);
@@ -61,10 +62,32 @@ public partial class MainWindow
                 Environment.GetEnvironmentVariable("FREEX_SS_TOUR_CONTEXT"))
             : null;
 
-        var outputDir = Path.GetFullPath(
+        var screenshotsRoot = Path.GetFullPath(
             Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "screenshots"));
+        var outputDir = ResolveScreenshotTourOutputDirectory(
+            screenshotsRoot,
+            Environment.GetEnvironmentVariable(ScreenshotTourOutputSubdirectoryEnvVar));
         Directory.CreateDirectory(outputDir);
         await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour);
+    }
+
+    private static string ResolveScreenshotTourOutputDirectory(string screenshotsRoot, string? requestedSubdirectory)
+    {
+        if (string.IsNullOrWhiteSpace(requestedSubdirectory))
+            return screenshotsRoot;
+
+        if (Path.IsPathRooted(requestedSubdirectory))
+            throw new InvalidOperationException($"{ScreenshotTourOutputSubdirectoryEnvVar} must be a relative path under screenshots.");
+
+        var root = Path.GetFullPath(screenshotsRoot);
+        var resolved = Path.GetFullPath(Path.Combine(root, requestedSubdirectory));
+        var rootWithSeparator = root.EndsWith(Path.DirectorySeparatorChar)
+            ? root
+            : root + Path.DirectorySeparatorChar;
+        if (!resolved.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"{ScreenshotTourOutputSubdirectoryEnvVar} must stay under screenshots.");
+
+        return resolved;
     }
 
     private async Task RunScreenshotTourAsync(
