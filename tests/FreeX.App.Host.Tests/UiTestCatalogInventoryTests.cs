@@ -151,6 +151,9 @@ public sealed partial class UiTestCatalogInventoryTests
         row.Should().Contain("FREEX_SS_TOUR_OUTPUT_SUBDIR");
         row.Should().Contain("FREEX_SS_TOUR_TABS");
         row.Should().Contain("FREEX_SS_TOUR_WIDTHS");
+        row.Should().Contain("FREEX_TITLEBAR_WINDOW_CHROME_TOUR=1");
+        row.Should().Contain("titlebar-window-chrome-tour");
+        row.Should().Contain("titlebar_window_chrome_tour_manifest.json");
         row.Should().Contain($"{plannedCaptureCount} planned captures");
         row.Should().Contain($"{plannedCaptureCount * RibbonScreenshotTourPlanner.BurstPhases.Count} burst-phase captures");
         row.Should().Contain("ribbon_screenshot_tour_manifest.json");

@@ -1,4 +1,3 @@
-using System.Globalization;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -62,6 +61,7 @@ internal static class FindReplaceDialogPlanner
         string replaceText,
         bool matchCase,
         bool matchEntireCell,
+        FindLookIn lookIn = FindLookIn.Values,
         StyleDiff? replacementFormat = null)
         => TryReplaceSingleMatch(
             workbook,
@@ -71,6 +71,7 @@ internal static class FindReplaceDialogPlanner
             replaceText,
             matchCase,
             matchEntireCell,
+            lookIn,
             replacementFormat).Replaced;
 
     public static ReplaceSingleMatchResult TryReplaceSingleMatch(
@@ -81,49 +82,27 @@ internal static class FindReplaceDialogPlanner
         string replaceText,
         bool matchCase,
         bool matchEntireCell,
+        FindLookIn lookIn = FindLookIn.Values,
         StyleDiff? replacementFormat = null)
     {
         if (string.IsNullOrEmpty(searchText))
             return new ReplaceSingleMatchResult(false, null);
 
         var sheet = workbook.GetSheet(match.Address.Sheet);
-        var cell = sheet?.GetCell(match.Address);
-        if (cell is null || cell.HasFormula)
+        if (sheet is null)
             return new ReplaceSingleMatchResult(false, null);
 
-        var currentText = GetDisplayText(cell.Value);
-        if (currentText is null)
+        if (!FindReplaceService.TryCreateReplacementCommand(
+                sheet,
+                match,
+                searchText,
+                replaceText,
+                matchCase,
+                matchEntireCell,
+                FindLookInForTarget(match.Target, lookIn),
+                replacementFormat,
+                out var command))
             return new ReplaceSingleMatchResult(false, null);
-
-        var comparison = matchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
-        var isMatch = matchEntireCell
-            ? currentText.Equals(searchText, comparison)
-            : currentText.Contains(searchText, comparison);
-
-        if (!isMatch)
-            return new ReplaceSingleMatchResult(false, null);
-
-        var newText = matchEntireCell
-            ? replaceText
-            : currentText.Replace(searchText, replaceText, comparison);
-
-        ScalarValue newValue = double.TryParse(newText, NumberStyles.Any, CultureInfo.InvariantCulture, out var d)
-            ? new NumberValue(d)
-            : new TextValue(newText);
-
-        IWorkbookCommand command = new EditCellsCommand(match.Address.Sheet, [(match.Address, Cell.FromValue(newValue))]);
-        if (replacementFormat is not null)
-        {
-            command = new CompositeWorkbookCommand(
-                "Replace",
-                [
-                    command,
-                    new ApplyStyleCommand(
-                        match.Address.Sheet,
-                        new GridRange(match.Address, match.Address),
-                        replacementFormat)
-                ]);
-        }
 
         var outcome = commandBus.Execute(workbook.Id, command);
         return outcome.Success
@@ -131,15 +110,11 @@ internal static class FindReplaceDialogPlanner
             : new ReplaceSingleMatchResult(false, outcome);
     }
 
-    private static string? GetDisplayText(ScalarValue value) => value switch
+    private static FindLookIn FindLookInForTarget(FindResultTarget target, FindLookIn lookIn) => target switch
     {
-        BlankValue => null,
-        NumberValue n => n.Value.ToString(CultureInfo.InvariantCulture),
-        TextValue t => t.Value,
-        BoolValue b => b.Value ? "TRUE" : "FALSE",
-        DateTimeValue dt => dt.ToDateTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-        ErrorValue err => err.Code,
-        _ => null
+        FindResultTarget.Note => FindLookIn.Notes,
+        FindResultTarget.ThreadedComment or FindResultTarget.ThreadedCommentReply => FindLookIn.Comments,
+        _ => lookIn
     };
 }
 

@@ -4,6 +4,23 @@ namespace FreeX.App.Services;
 
 public static class AutoSumFormulaPlanner
 {
+    public static bool TryCreatePlan(Sheet? sheet, string functionName, GridRange selection, out AutoSumFormulaPlan plan)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(functionName);
+
+        if (TryGetSelectionTarget(selection, out var target))
+        {
+            var formula = selection.CellCount > 1
+                ? BuildFunctionFormula(functionName, selection.Start.Col, selection.Start.Row, selection.End.Col, selection.End.Row)
+                : BuildFormula(sheet, functionName, target);
+            plan = new AutoSumFormulaPlan(target, formula);
+            return true;
+        }
+
+        plan = default;
+        return false;
+    }
+
     public static string BuildFormula(Sheet? sheet, string functionName, CellAddress address)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(functionName);
@@ -50,4 +67,36 @@ public static class AutoSumFormulaPlanner
 
     private static string FormatRange(uint startCol, uint startRow, uint endCol, uint endRow) =>
         $"{CellAddress.NumberToColumnName(startCol)}{startRow}:{CellAddress.NumberToColumnName(endCol)}{endRow}";
+
+    private static bool TryGetSelectionTarget(GridRange selection, out CellAddress target)
+    {
+        if (selection.CellCount == 1)
+        {
+            target = selection.Start;
+            return true;
+        }
+
+        if (selection.RowCount == 1)
+        {
+            if (selection.End.Col >= CellAddress.MaxCol)
+            {
+                target = default;
+                return false;
+            }
+
+            target = new CellAddress(selection.Start.Sheet, selection.Start.Row, selection.End.Col + 1);
+            return true;
+        }
+
+        if (selection.End.Row >= CellAddress.MaxRow)
+        {
+            target = default;
+            return false;
+        }
+
+        target = new CellAddress(selection.Start.Sheet, selection.End.Row + 1, selection.Start.Col);
+        return true;
+    }
 }
+
+public readonly record struct AutoSumFormulaPlan(CellAddress Target, string Formula);

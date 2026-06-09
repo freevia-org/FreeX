@@ -12,6 +12,7 @@ public sealed partial class FindReplaceDialog : Window
     private readonly Func<SheetId?> _getCurrentSheetId;
     private readonly ICommandBus _commandBus;
     private readonly Action<CellAddress> _navigateTo;
+    private readonly Action _onWorkbookChanged;
     private readonly Func<CellAddress?> _getActiveSelectionCell;
     private IReadOnlyList<FindResult> _results = [];
     private int _currentIndex = -1;
@@ -26,12 +27,14 @@ public sealed partial class FindReplaceDialog : Window
         Action<CellAddress> navigateTo,
         bool replaceMode = false,
         Func<SheetId?>? getCurrentSheetId = null,
-        Func<CellAddress?>? getActiveSelectionCell = null)
+        Func<CellAddress?>? getActiveSelectionCell = null,
+        Action? onWorkbookChanged = null)
     {
         _getWorkbook = getWorkbook;
         _getCurrentSheetId = getCurrentSheetId ?? (() => null);
         _commandBus = commandBus;
         _navigateTo = navigateTo;
+        _onWorkbookChanged = onWorkbookChanged ?? (() => { });
         _getActiveSelectionCell = getActiveSelectionCell ?? (() => null);
         InitializeComponent();
         if (replaceMode)
@@ -185,10 +188,17 @@ public sealed partial class FindReplaceDialog : Window
         if (ShowReplaceFailureWarning(result.Failure))
             return;
 
+        if (result.ReplacedCount > 0)
+            _onWorkbookChanged();
+
         StatusLabel.Text = result.ReplacedCount == 0
             ? UiText.Get("FindReplace_NoMatchesFound")
             : UiText.Format("FindReplace_ReplacedCellsStatus", result.ReplacedCount);
-        _results = [];
+        _results = FindReplaceService.Find(
+            _getWorkbook(), search,
+            CreateFindOptions(),
+            matchCase: MatchCaseBox.IsChecked == true,
+            matchEntireCell: MatchEntireBox.IsChecked == true);
         _currentIndex = -1;
         UpdateResultsGrid();
     }
@@ -205,6 +215,7 @@ public sealed partial class FindReplaceDialog : Window
             return;
 
         var match = _results[_currentIndex];
+        var options = CreateFindOptions();
         var result = FindReplaceDialogPlanner.TryReplaceSingleMatch(
             _getWorkbook(),
             _commandBus,
@@ -213,6 +224,7 @@ public sealed partial class FindReplaceDialog : Window
             ReplaceBox.Text,
             matchCase: MatchCaseBox.IsChecked == true,
             matchEntireCell: MatchEntireBox.IsChecked == true,
+            lookIn: options.LookIn,
             replacementFormat: _replaceFormatDiff);
 
         if (ShowReplaceFailureWarning(result.Failure))
@@ -225,9 +237,20 @@ public sealed partial class FindReplaceDialog : Window
         }
 
         StatusLabel.Text = UiText.Get("FindReplace_ReplacedOneCell");
-        _results = [];
+        _onWorkbookChanged();
+        _results = FindReplaceService.Find(
+            _getWorkbook(), search,
+            options,
+            matchCase: MatchCaseBox.IsChecked == true,
+            matchEntireCell: MatchEntireBox.IsChecked == true);
         _currentIndex = -1;
         UpdateResultsGrid();
+        if (_results.Count > 0)
+        {
+            _currentIndex = 0;
+            _navigateTo(_results[_currentIndex].Address);
+            StatusLabel.Text = UiText.Format("FindReplace_MatchStatus", 1, _results.Count);
+        }
     }
 
     private bool ShowReplaceFailureWarning(CommandOutcome? failure)

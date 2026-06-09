@@ -174,48 +174,53 @@ public static class FindReplaceService
         bool matchEntireCell = false,
         StyleDiff? replacementFormat = null)
     {
-        if (options.LookIn is not FindLookIn.Values)
-            return new ReplaceAllResult(0, null);
-
         var matches = Find(workbook, searchText, options, matchCase, matchEntireCell);
         if (matches.Count == 0)
             return new ReplaceAllResult(0, null);
 
         var comparison = matchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
-
-        // Group edits by sheet so we can issue one command per sheet
         var editsBySheet = new Dictionary<SheetId, List<(CellAddress Address, Cell NewCell)>>();
+        var commands = new List<IWorkbookCommand>();
 
         foreach (var result in matches)
         {
             var sheet = workbook.GetSheet(result.Address.Sheet);
             if (sheet is null) continue;
 
-            var cell = sheet.GetCell(result.Address);
-            if (cell is null || cell.HasFormula) continue;
-
-            var newText = matchEntireCell
-                ? replaceText
-                : result.MatchedText.Replace(searchText, replaceText, comparison);
-
-            ScalarValue newValue = double.TryParse(newText, NumberStyles.Any, CultureInfo.InvariantCulture, out var d)
-                ? new NumberValue(d)
-                : new TextValue(newText);
-
-            var newCell = Cell.FromValue(newValue);
-
-            if (!editsBySheet.TryGetValue(result.Address.Sheet, out var list))
+            if (TryCreateReplacementCell(
+                    sheet,
+                    result.Address,
+                    searchText,
+                    replaceText,
+                    comparison,
+                    matchEntireCell,
+                    options.LookIn,
+                    out var newCell))
             {
-                list = [];
-                editsBySheet[result.Address.Sheet] = list;
+                if (!editsBySheet.TryGetValue(result.Address.Sheet, out var list))
+                {
+                    list = [];
+                    editsBySheet[result.Address.Sheet] = list;
+                }
+                list.Add((result.Address, newCell));
+                continue;
             }
-            list.Add((result.Address, newCell));
+
+            if (TryCreateReplacementCommentCommand(
+                    sheet,
+                    result,
+                    searchText,
+                    replaceText,
+                    comparison,
+                    matchEntireCell,
+                    options.LookIn,
+                    out var commentCommand))
+                commands.Add(commentCommand);
         }
 
-        var replacedCount = 0;
         foreach (var (sheetId, edits) in editsBySheet)
         {
-            var commands = new List<IWorkbookCommand> { new EditCellsCommand(sheetId, edits) };
+            commands.Add(new EditCellsCommand(sheetId, edits));
             if (replacementFormat is not null)
             {
                 commands.AddRange(edits.Select(edit => new ApplyStyleCommand(
@@ -223,18 +228,193 @@ public static class FindReplaceService
                     new GridRange(edit.Address, edit.Address),
                     replacementFormat)));
             }
-
-            var command = commands.Count == 1
-                ? commands[0]
-                : new CompositeWorkbookCommand("Replace All", commands);
-            var outcome = commandBus.Execute(workbook.Id, command);
-            if (!outcome.Success)
-                return new ReplaceAllResult(replacedCount, outcome);
-
-            replacedCount += edits.Count;
         }
+
+        var replacedCount = editsBySheet.Values.Sum(static edits => edits.Count)
+            + commands.Count(command => command is not EditCellsCommand and not ApplyStyleCommand);
+        if (commands.Count == 0)
+            return new ReplaceAllResult(0, null);
+
+        var command = commands.Count == 1
+            ? commands[0]
+            : new CompositeWorkbookCommand("Replace All", commands);
+        var outcome = commandBus.Execute(workbook.Id, command);
+        if (!outcome.Success)
+            return new ReplaceAllResult(0, outcome);
 
         return new ReplaceAllResult(replacedCount, null);
     }
 
+    public static bool TryCreateReplacementCommand(
+        Sheet sheet,
+        FindResult match,
+        string searchText,
+        string replaceText,
+        bool matchCase,
+        bool matchEntireCell,
+        FindLookIn lookIn,
+        StyleDiff? replacementFormat,
+        out IWorkbookCommand command)
+    {
+        command = null!;
+        if (string.IsNullOrEmpty(searchText))
+            return false;
+
+        var comparison = matchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+        if (TryCreateReplacementCell(
+                sheet,
+                match.Address,
+                searchText,
+                replaceText,
+                comparison,
+                matchEntireCell,
+                lookIn,
+                out var newCell))
+        {
+            var editCommand = new EditCellsCommand(sheet.Id, [(match.Address, newCell)]);
+            command = replacementFormat is null
+                ? editCommand
+                : new CompositeWorkbookCommand(
+                    "Replace",
+                    [
+                        editCommand,
+                        new ApplyStyleCommand(
+                            sheet.Id,
+                            new GridRange(match.Address, match.Address),
+                            replacementFormat)
+                    ]);
+            return true;
+        }
+
+        return TryCreateReplacementCommentCommand(
+            sheet,
+            match,
+            searchText,
+            replaceText,
+            comparison,
+            matchEntireCell,
+            lookIn,
+            out command);
+    }
+
+    private static bool TryCreateReplacementCell(
+        Sheet sheet,
+        CellAddress address,
+        string searchText,
+        string replaceText,
+        StringComparison comparison,
+        bool matchEntireCell,
+        FindLookIn lookIn,
+        out Cell newCell)
+    {
+        newCell = null!;
+        var cell = sheet.GetCell(address);
+        if (cell is null)
+            return false;
+
+        var currentText = lookIn switch
+        {
+            FindLookIn.Formulas => cell.FormulaText,
+            FindLookIn.Values => cell.HasFormula ? null : GetDisplayText(cell.Value),
+            _ => null
+        };
+        if (currentText is null ||
+            !TryCreateReplacementText(currentText, searchText, replaceText, comparison, matchEntireCell, out var newText))
+            return false;
+
+        if (lookIn == FindLookIn.Formulas)
+        {
+            newCell = cell.Clone();
+            newCell.FormulaText = newText;
+            return true;
+        }
+
+        ScalarValue newValue = double.TryParse(newText, NumberStyles.Any, CultureInfo.InvariantCulture, out var number)
+            ? new NumberValue(number)
+            : new TextValue(newText);
+
+        newCell = cell.Clone();
+        newCell.Value = newValue;
+        newCell.FormulaText = null;
+        return true;
+    }
+
+    private static bool TryCreateReplacementCommentCommand(
+        Sheet sheet,
+        FindResult match,
+        string searchText,
+        string replaceText,
+        StringComparison comparison,
+        bool matchEntireCell,
+        FindLookIn lookIn,
+        out IWorkbookCommand command)
+    {
+        command = null!;
+        var currentText = lookIn switch
+        {
+            FindLookIn.Notes when
+                match.Target == FindResultTarget.Note &&
+                sheet.Comments.TryGetValue(match.Address, out var note) => note,
+            FindLookIn.Comments when
+                match.Target == FindResultTarget.ThreadedComment &&
+                sheet.ThreadedComments.TryGetValue(match.Address, out var threadedComment) => threadedComment.Text,
+            FindLookIn.Comments when
+                match.Target == FindResultTarget.ThreadedCommentReply &&
+                match.ReplyIndex is { } replyIndex &&
+                sheet.ThreadedComments.TryGetValue(match.Address, out var threadedComment) &&
+                replyIndex >= 0 &&
+                replyIndex < threadedComment.Replies.Count => threadedComment.Replies[replyIndex].Text,
+            _ => null
+        };
+        if (currentText is null ||
+            !TryCreateReplacementText(currentText, searchText, replaceText, comparison, matchEntireCell, out var newText))
+            return false;
+
+        command = lookIn switch
+        {
+            FindLookIn.Notes when match.Target == FindResultTarget.Note =>
+                new SetCommentCommand(sheet.Id, match.Address, newText),
+            FindLookIn.Comments when match.Target == FindResultTarget.ThreadedComment =>
+                new UpdateThreadedCommentTextCommand(sheet.Id, match.Address, newText),
+            FindLookIn.Comments when
+                match.Target == FindResultTarget.ThreadedCommentReply &&
+                match.ReplyIndex is { } replyIndex =>
+                new UpdateThreadedCommentReplyCommand(sheet.Id, match.Address, replyIndex, newText),
+            _ => null!
+        };
+
+        return command is not null;
+    }
+
+    private static bool TryCreateReplacementText(
+        string currentText,
+        string searchText,
+        string replaceText,
+        StringComparison comparison,
+        bool matchEntireCell,
+        out string newText)
+    {
+        newText = "";
+        var isMatch = matchEntireCell
+            ? currentText.Equals(searchText, comparison)
+            : currentText.Contains(searchText, comparison);
+        if (!isMatch)
+            return false;
+
+        newText = matchEntireCell
+            ? replaceText
+            : currentText.Replace(searchText, replaceText, comparison);
+        return true;
+    }
+
+    private static string? GetDisplayText(ScalarValue value) => value switch
+    {
+        BlankValue => null,
+        NumberValue n => n.Value.ToString(CultureInfo.InvariantCulture),
+        TextValue t => t.Value,
+        BoolValue b => b.Value ? "TRUE" : "FALSE",
+        DateTimeValue dt => dt.ToDateTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        ErrorValue err => err.Code,
+        _ => null
+    };
 }

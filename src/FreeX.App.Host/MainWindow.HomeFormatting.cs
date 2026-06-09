@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -17,6 +18,13 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
+    private enum MergeCellsWarningChoice
+    {
+        Cancel,
+        KeepFirstCell,
+        ConcatenateAllCells
+    }
+
     private enum RibbonBorderPreset
     {
         All,
@@ -147,10 +155,11 @@ public partial class MainWindow
     private void MergeCenterBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
+        if (!TryResolveMergeContentResolution(range, out var contentResolution)) return;
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Merge & Center",
                 range,
-                CreateMergeAndCenterCommand,
+                currentRange => CreateMergeAndCenterCommand(currentRange, contentResolution),
                 out _))
             return;
 
@@ -162,9 +171,13 @@ public partial class MainWindow
     private void MergeCellsMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
+        if (!TryResolveMergeContentResolution(range, out var contentResolution)) return;
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Merge Cells",
-                sheetId => new MergeCellsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))))
+                sheetId => CreateMergeCellsCommand(
+                    sheetId,
+                    GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
+                    contentResolution)))
             return;
 
         UpdateViewport();
@@ -173,6 +186,7 @@ public partial class MainWindow
     private void MergeAcrossMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
+        if (!TryResolveMergeContentResolution(range, out var contentResolution)) return;
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Merge Across",
                 sheetId =>
@@ -181,11 +195,12 @@ public partial class MainWindow
                     var commands = new List<IWorkbookCommand>();
                     for (var row = currentRange.Start.Row; row <= currentRange.End.Row; row++)
                     {
-                        commands.Add(new MergeCellsCommand(
+                        commands.Add(CreateMergeCellsCommand(
                             sheetId,
                             new GridRange(
                                 new CellAddress(sheetId, row, currentRange.Start.Col),
-                                new CellAddress(sheetId, row, currentRange.End.Col))));
+                                new CellAddress(sheetId, row, currentRange.End.Col)),
+                            contentResolution));
                     }
 
                     return commands.Count == 1
@@ -208,31 +223,171 @@ public partial class MainWindow
         UpdateViewport();
     }
 
-    private IWorkbookCommand CreateMergeAndCenterCommand(GridRange range)
+    private IWorkbookCommand CreateMergeAndCenterCommand(
+        GridRange range,
+        MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell)
     {
         var targetSheetIds = CurrentGroupedEditSheetIds();
-        if (targetSheetIds.Count > 1)
+        var commands = new List<IWorkbookCommand>(targetSheetIds.Count * 3);
+        foreach (var sheetId in targetSheetIds)
         {
-            var commands = targetSheetIds
-                .SelectMany(sheetId =>
-                {
-                    var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId);
-                    return new IWorkbookCommand[]
-                    {
-                        new MergeCellsCommand(sheetId, sheetRange),
-                        new ApplyStyleCommand(sheetId, sheetRange, new StyleDiff(HAlign: CellHAlign.Center))
-                    };
-                })
-                .ToList();
-            return new CompositeWorkbookCommand("Merge & Center", commands);
+            var sheet = _workbook.GetSheet(sheetId);
+            var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId);
+            commands.AddRange(CellMergePlanner.CreateMergeAndCenterCommands(
+                sheet,
+                sheetId,
+                sheetRange,
+                contentResolution));
         }
 
-        return new CompositeWorkbookCommand(
-            "Merge & Center",
-            [
-                new MergeCellsCommand(_currentSheetId, range),
-                new ApplyStyleCommand(_currentSheetId, range, new StyleDiff(HAlign: CellHAlign.Center))
-            ]);
+        return new CompositeWorkbookCommand("Merge & Center", commands);
+    }
+
+    private IWorkbookCommand CreateMergeCellsCommand(
+        SheetId sheetId,
+        GridRange range,
+        MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell)
+    {
+        if (_workbook.GetSheet(sheetId) is not { } sheet)
+            return new MergeCellsCommand(sheetId, range);
+
+        var commands = FormatCellsMergePlanner.CreateMergeCommands(
+            sheet,
+            sheetId,
+            range,
+            mergeCells: true,
+            contentResolution);
+
+        return commands.Count == 1
+            ? commands[0]
+            : new CompositeWorkbookCommand("Merge Cells", commands);
+    }
+
+    private bool TryResolveMergeContentResolution(
+        GridRange range,
+        out MergeCellContentResolution contentResolution)
+    {
+        contentResolution = MergeCellContentResolution.KeepFirstCell;
+        if (_workbook.GetSheet(_currentSheetId) is not { } sheet)
+            return true;
+
+        var contentPlan = CellMergePlanner.AnalyzeContent(sheet, range);
+        if (!contentPlan.WouldLoseContent)
+            return true;
+
+        var choice = ShowMergeCellsContentWarningDialog(contentPlan);
+        if (choice == MergeCellsWarningChoice.Cancel)
+            return false;
+
+        contentResolution = choice == MergeCellsWarningChoice.ConcatenateAllCells
+            ? MergeCellContentResolution.ConcatenateAllCells
+            : MergeCellContentResolution.KeepFirstCell;
+        return true;
+    }
+
+    private MergeCellsWarningChoice ShowMergeCellsContentWarningDialog(MergeCellContentPlan contentPlan)
+    {
+        var choice = MergeCellsWarningChoice.Cancel;
+        var dialog = new Window
+        {
+            Title = "Merge Cells",
+            Width = 460,
+            Height = 240,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.NoResize,
+            Owner = this
+        };
+        AutomationProperties.SetAutomationId(dialog, "MergeCellsContentWarningDialog");
+
+        var root = new StackPanel
+        {
+            Margin = new Thickness(18),
+            Orientation = Orientation.Vertical
+        };
+
+        root.Children.Add(new TextBlock
+        {
+            Text = "Merging cells can discard cell contents.",
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+
+        root.Children.Add(new TextBlock
+        {
+            Text = "Choose how to handle the selected cell contents.",
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 12)
+        });
+
+        var preview = string.Join(", ", contentPlan.Entries
+            .Select(entry => entry.DisplayText)
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .Take(4));
+        if (!string.IsNullOrWhiteSpace(preview))
+        {
+            root.Children.Add(new TextBlock
+            {
+                Text = preview,
+                TextWrapping = TextWrapping.Wrap,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Margin = new Thickness(0, 0, 0, 14)
+            });
+        }
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right
+        };
+
+        var keepFirstButton = new Button
+        {
+            Content = "Keep only first cell",
+            MinWidth = 136,
+            Margin = new Thickness(0, 0, 8, 0),
+            IsDefault = true
+        };
+        AutomationProperties.SetAutomationId(keepFirstButton, "MergeCellsKeepFirstButton");
+        keepFirstButton.Click += (_, _) =>
+        {
+            choice = MergeCellsWarningChoice.KeepFirstCell;
+            dialog.DialogResult = true;
+        };
+
+        var concatenateButton = new Button
+        {
+            Content = "Concatenate all cells",
+            MinWidth = 136,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        AutomationProperties.SetAutomationId(concatenateButton, "MergeCellsConcatenateButton");
+        concatenateButton.Click += (_, _) =>
+        {
+            choice = MergeCellsWarningChoice.ConcatenateAllCells;
+            dialog.DialogResult = true;
+        };
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 82,
+            IsCancel = true
+        };
+        AutomationProperties.SetAutomationId(cancelButton, "MergeCellsCancelButton");
+        cancelButton.Click += (_, _) =>
+        {
+            choice = MergeCellsWarningChoice.Cancel;
+            dialog.DialogResult = false;
+        };
+
+        buttonRow.Children.Add(keepFirstButton);
+        buttonRow.Children.Add(concatenateButton);
+        buttonRow.Children.Add(cancelButton);
+        root.Children.Add(buttonRow);
+
+        dialog.Content = root;
+        dialog.ShowDialog();
+        return choice;
     }
 
     private void FontNameBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
