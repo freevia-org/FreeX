@@ -166,6 +166,33 @@ public class FindReplaceTests
     }
 
     [Fact]
+    public void ReplaceAll_WithFormulaLookIn_ReplacesFormulaTextAndSupportsUndoRedo()
+    {
+        var (wb, sheet, commandBus) = Setup();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetFormula(a1, "SUM(B1:B5)");
+        sheet.SetCell(a2, new TextValue("SUM literal"));
+
+        var count = FindReplaceService.ReplaceAll(
+            wb,
+            commandBus,
+            "SUM",
+            "MAX",
+            new FindOptions(LookIn: FindLookIn.Formulas));
+
+        count.Should().Be(1);
+        sheet.GetCell(a1)!.FormulaText.Should().Be("MAX(B1:B5)");
+        sheet.GetCell(a2)!.Value.Should().Be(new TextValue("SUM literal"));
+
+        commandBus.Undo(wb.Id).Success.Should().BeTrue();
+        sheet.GetCell(a1)!.FormulaText.Should().Be("SUM(B1:B5)");
+
+        commandBus.Redo(wb.Id).Success.Should().BeTrue();
+        sheet.GetCell(a1)!.FormulaText.Should().Be("MAX(B1:B5)");
+    }
+
+    [Fact]
     public void ReplaceAll_ReplacesSubstring_InValueCells()
     {
         var (wb, sheet, commandBus) = Setup();
@@ -223,6 +250,47 @@ public class FindReplaceTests
         replacedStyle.Bold.Should().BeTrue();
         replacedStyle.FillColor.Should().Be(new CellColor(255, 255, 0));
         wb.GetStyle(sheet.GetCell(a2)!.StyleId).Bold.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ReplaceAll_WithNotesAndCommentsLookIn_ReplacesTextSurfaces()
+    {
+        var (wb, sheet, commandBus) = Setup();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(a1, new TextValue("foo value"));
+        sheet.Comments[a1] = "foo note";
+        sheet.ThreadedComments[b1] = new ThreadedComment("foo root", "Quinn")
+        {
+            Replies = [new CommentReply("foo reply", "Codex")]
+        };
+
+        var notes = FindReplaceService.ReplaceAll(
+            wb,
+            commandBus,
+            "foo",
+            "bar",
+            new FindOptions(LookIn: FindLookIn.Notes));
+        var comments = FindReplaceService.ReplaceAll(
+            wb,
+            commandBus,
+            "foo",
+            "bar",
+            new FindOptions(LookIn: FindLookIn.Comments));
+
+        notes.Should().Be(1);
+        comments.Should().Be(2);
+        sheet.GetCell(a1)!.Value.Should().Be(new TextValue("foo value"));
+        sheet.Comments[a1].Should().Be("bar note");
+        sheet.ThreadedComments[b1].Text.Should().Be("bar root");
+        sheet.ThreadedComments[b1].Replies.Single().Text.Should().Be("bar reply");
+
+        commandBus.Undo(wb.Id).Success.Should().BeTrue();
+        sheet.ThreadedComments[b1].Text.Should().Be("foo root");
+        sheet.ThreadedComments[b1].Replies.Single().Text.Should().Be("foo reply");
+
+        commandBus.Undo(wb.Id).Success.Should().BeTrue();
+        sheet.Comments[a1].Should().Be("foo note");
     }
 
     [Fact]
