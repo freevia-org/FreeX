@@ -39,6 +39,8 @@ public partial class MainWindow
     private const string PrintPreviewTourManifestFileName = "print_preview_tour_manifest.json";
     private const string QatUndoRedoTourManifestFileName = "qat_undo_redo_tour_manifest.json";
     private const string QatUndoRedoTourOutputDirectoryName = "qat-undo-redo-tour";
+    private const string SheetTabTourManifestFileName = "sheet_tabs_tour_manifest.json";
+    private const string SheetTabTourOutputDirectoryName = "sheet-tabs-tour";
     private const string ScreenshotTourAllowBackgroundRenderEnvVar = "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER";
     private const string ScreenshotTourOutputSubdirectoryEnvVar = "FREEX_SS_TOUR_OUTPUT_SUBDIR";
 
@@ -2385,6 +2387,34 @@ public partial class MainWindow
         IReadOnlyList<string> RedoHistoryLabels,
         IReadOnlyList<string> MenuHeaders);
 
+    private sealed record SheetTabTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        string CaptureStatus,
+        string CaptureMethod,
+        RibbonScreenshotTourManifestFocusGuard FocusGuard,
+        int PlannedCaptureCount,
+        int ActualCaptureCount,
+        IReadOnlyList<SheetTabTourManifestCapture> Captures,
+        IReadOnlyList<string> CoveredStates,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record SheetTabTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string EvidenceSummary);
+
     [JsonSourceGenerationOptions(WriteIndented = true)]
     [JsonSerializable(typeof(RibbonScreenshotTourManifest))]
     [JsonSerializable(typeof(AutoFilterFlyoutTourManifest))]
@@ -2394,6 +2424,7 @@ public partial class MainWindow
     [JsonSerializable(typeof(PrintPreviewTourManifest))]
     [JsonSerializable(typeof(KeyTipOverlayTourManifest))]
     [JsonSerializable(typeof(QatUndoRedoTourManifest))]
+    [JsonSerializable(typeof(SheetTabTourManifest))]
     private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
 
     // Activated by FREEX_ACCENT_BAR_TOUR=1 env var. Output lands in <repo-root>/screenshots/accent-bars-tour/.
@@ -2477,86 +2508,116 @@ public partial class MainWindow
             return;
 
         var outputDir = Path.GetFullPath(
-            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "screenshots", "sheet-tabs-tour"));
+            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "screenshots", SheetTabTourOutputDirectoryName));
         Directory.CreateDirectory(outputDir);
         _ = RunSheetTabVisualTourAsync(outputDir);
     }
 
     private async Task RunSheetTabVisualTourAsync(string outputDir)
     {
-        foreach (var file in Directory.EnumerateFiles(outputDir, "*.png"))
-            File.Delete(file);
+        DeleteSheetTabTourEvidence(outputDir);
+        Application.Current.ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
         WindowState = WindowState.Normal;
         Width = 1180;
         Height = 760;
         await Task.Delay(700);
 
-        await CaptureSheetTabsAsync(outputDir, "single-sheet");
+        var captures = new List<SheetTabTourManifestCapture>();
+        await CaptureSheetTabsForTourAsync(
+            outputDir,
+            captures,
+            "freex_sheet_tabs_single_sheet",
+            "single-sheet",
+            "Fresh workbook tab strip shows the selected Sheet1 tab and the plus add-sheet affordance.");
 
-        while (_workbook.Sheets.Count < 6)
-            _workbook.AddSheet(SheetTabListPlanner.GenerateUniqueSheetName(_workbook));
-        _currentSheetId = _workbook.Sheets[5].Id;
-        _groupedSheetIds.Clear();
-        _groupedSheetIds.Add(_currentSheetId);
-        _sheetGroupAnchor = _currentSheetId;
-        RefreshSheetTabs();
+        InsertNewSheet();
         await Task.Delay(300);
-        await CaptureSheetTabsAsync(outputDir, "six-sheets-active-06");
+        await CaptureSheetTabsForTourAsync(
+            outputDir,
+            captures,
+            "freex_sheet_tabs_after_add_sheet",
+            "after-add-sheet",
+            "Production Insert Sheet route added Sheet2, selected it, and left the plus affordance visible.");
 
         PrepareSheetTabVisualTourWorkbook();
         await Task.Delay(400);
-
         var visibleSheets = _workbook.Sheets.Where(sheet => !sheet.IsHidden).Take(20).ToList();
-        for (var index = 0; index < visibleSheets.Count; index++)
-            await CaptureSheetTabStateAsync(outputDir, visibleSheets, index, $"active-{index + 1:00}-{visibleSheets[index].Name}");
 
-        _currentSheetId = visibleSheets[2].Id;
+        _currentSheetId = visibleSheets[3].Id;
         _groupedSheetIds.Clear();
-        foreach (var sheet in visibleSheets.Skip(1).Take(4))
+        foreach (var sheet in visibleSheets.Skip(1).Take(5))
             _groupedSheetIds.Add(sheet.Id);
         _sheetGroupAnchor = visibleSheets[1].Id;
         RefreshSheetTabs();
         await Task.Delay(300);
-        await CaptureSheetTabsAsync(outputDir, "grouped-sheets-2-through-5");
+        await CaptureSheetTabsForTourAsync(
+            outputDir,
+            captures,
+            "freex_sheet_tabs_grouped_colored",
+            "grouped-colored-tabs",
+            "Grouped tabs 2-6 show active/grouped styling while tab colors render on colored sheets.");
 
-        _currentSheetId = visibleSheets[11].Id;
-        _groupedSheetIds.Clear();
-        foreach (var sheet in visibleSheets.Skip(9).Take(4))
-            _groupedSheetIds.Add(sheet.Id);
-        _sheetGroupAnchor = visibleSheets[9].Id;
+        await CaptureSheetTabContextMenuForTourAsync(outputDir, captures, visibleSheets[3]);
+        await CaptureSheetNameDialogForTourAsync(outputDir, captures, visibleSheets[3].Name);
+
+        var hiddenSheet = visibleSheets[6];
+        hiddenSheet.IsHidden = true;
+        _currentSheetId = visibleSheets[3].Id;
         RefreshSheetTabs();
         await Task.Delay(300);
-        await CaptureSheetTabsAsync(outputDir, "grouped-sheets-10-through-13");
-
-        Width = 900;
-        await Task.Delay(450);
-        await CaptureSheetTabStateAsync(outputDir, visibleSheets, 0, "narrow-active-01");
-        await CaptureSheetTabStateAsync(outputDir, visibleSheets, 7, "narrow-active-08");
-        await CaptureSheetTabStateAsync(outputDir, visibleSheets, 15, "narrow-active-16");
-        await CaptureSheetTabStateAsync(outputDir, visibleSheets, 19, "narrow-active-20");
-
-        _currentSheetId = visibleSheets[19].Id;
-        _groupedSheetIds.Clear();
-        _groupedSheetIds.Add(_currentSheetId);
-        _sheetGroupAnchor = _currentSheetId;
+        await CaptureSheetTabsForTourAsync(
+            outputDir,
+            captures,
+            "freex_sheet_tabs_hidden_sheet_excluded",
+            "hidden-sheet-excluded",
+            "Hidden sheet is absent from the visible tab strip while adjacent visible tabs remain selectable.");
+        await CaptureUnhideSheetDialogForTourAsync(outputDir, captures, hiddenSheet.Name);
+        hiddenSheet.IsHidden = false;
         RefreshSheetTabs();
-        await Task.Delay(260);
-        SheetTabsScroller.ScrollToHorizontalOffset(0);
-        await Task.Delay(200);
-        await CaptureSheetTabsAsync(outputDir, "resize-preserve-before", revealCurrentSheet: false);
+
         Width = 760;
         await Task.Delay(450);
-        await CaptureSheetTabsAsync(outputDir, "resize-preserve-after", revealCurrentSheet: false);
+        await CaptureSheetTabStateForTourAsync(
+            outputDir,
+            captures,
+            visibleSheets,
+            0,
+            "freex_sheet_tabs_overflow_start",
+            "overflow-start",
+            "Narrow tab strip at the first visible sheet shows overflow navigation affordances.");
+        await CaptureSheetTabStateForTourAsync(
+            outputDir,
+            captures,
+            visibleSheets,
+            10,
+            "freex_sheet_tabs_overflow_middle",
+            "overflow-middle",
+            "Narrow tab strip scrolls the active middle sheet into view with left/right navigation affordances.");
+        await CaptureSheetTabStateForTourAsync(
+            outputDir,
+            captures,
+            visibleSheets,
+            19,
+            "freex_sheet_tabs_overflow_end",
+            "overflow-end",
+            "Narrow tab strip scrolls to the final sheet and shows the right edge overflow state.");
 
+        ValidateSheetTabTourEvidence(outputDir, captures);
+        await WriteSheetTabTourManifestAsync(outputDir, captures);
+
+        _suppressClosePrompt = true;
         Application.Current.Shutdown();
     }
 
-    private async Task CaptureSheetTabStateAsync(
+    private async Task CaptureSheetTabStateForTourAsync(
         string outputDir,
+        List<SheetTabTourManifestCapture> captures,
         IReadOnlyList<Sheet> visibleSheets,
         int activeIndex,
-        string fileName)
+        string fileName,
+        string state,
+        string evidenceSummary)
     {
         var sheet = visibleSheets[activeIndex];
         _currentSheetId = sheet.Id;
@@ -2565,13 +2626,39 @@ public partial class MainWindow
         _sheetGroupAnchor = sheet.Id;
         RefreshSheetTabs();
         await Task.Delay(260);
-        await CaptureSheetTabsAsync(outputDir, fileName);
+        await CaptureSheetTabsForTourAsync(outputDir, captures, fileName, state, evidenceSummary);
     }
 
     private void PrepareSheetTabVisualTourWorkbook()
     {
         while (_workbook.Sheets.Count < 20)
             _workbook.AddSheet(SheetTabListPlanner.GenerateUniqueSheetName(_workbook));
+
+        var names = new[]
+        {
+            "Overview",
+            "Inputs",
+            "Assumptions",
+            "Forecast",
+            "Actuals",
+            "Charts",
+            "Audit",
+            "Archive",
+            "Region East",
+            "Region West",
+            "Region North",
+            "Region South",
+            "Ops",
+            "People",
+            "Capital",
+            "Cash Flow",
+            "Notes",
+            "Review",
+            "Signoff",
+            "2026 Plan"
+        };
+        for (var index = 0; index < names.Length && index < _workbook.Sheets.Count; index++)
+            _workbook.Sheets[index].Name = names[index];
 
         var colors = new CellColor?[]
         {
@@ -2587,9 +2674,21 @@ public partial class MainWindow
 
         for (var index = 0; index < colors.Length && index < _workbook.Sheets.Count; index++)
             _workbook.Sheets[index].TabColor = colors[index];
+
+        _currentSheetId = _workbook.Sheets[0].Id;
+        _groupedSheetIds.Clear();
+        _groupedSheetIds.Add(_currentSheetId);
+        _sheetGroupAnchor = _currentSheetId;
+        RefreshSheetTabs();
     }
 
-    private async Task CaptureSheetTabsAsync(string outputDir, string fileName, bool revealCurrentSheet = true)
+    private async Task CaptureSheetTabsForTourAsync(
+        string outputDir,
+        List<SheetTabTourManifestCapture> captures,
+        string fileName,
+        string state,
+        string evidenceSummary,
+        bool revealCurrentSheet = true)
     {
         UpdateLayout();
         SheetTabsRowGrid.UpdateLayout();
@@ -2618,5 +2717,184 @@ public partial class MainWindow
         var path = Path.Combine(outputDir, $"{fileName}.png");
         await using var stream = File.Create(path);
         encoder.Save(stream);
+
+        captures.Add(new SheetTabTourManifestCapture(
+            CaptureKey: $"sheet-tabs:{state}",
+            PairKey: $"interactive:sheet-tabs:{state}",
+            ScenarioId: "sheet-tabs:visual-parity",
+            State: state,
+            Surface: "sheet-tab-strip",
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            EvidenceSummary: evidenceSummary));
+    }
+
+    private async Task CaptureSheetTabContextMenuForTourAsync(
+        string outputDir,
+        List<SheetTabTourManifestCapture> captures,
+        Sheet sheet)
+    {
+        _currentSheetId = sheet.Id;
+        _groupedSheetIds.Clear();
+        _groupedSheetIds.Add(sheet.Id);
+        _sheetGroupAnchor = sheet.Id;
+        RefreshSheetTabs();
+        await Task.Delay(300);
+
+        var tab = FindSheetTab(sheet.Id)
+            ?? throw new InvalidOperationException("Sheet-tab tour could not locate the context-menu target tab.");
+        var target = FindSheetTabContextMenuTarget(tab)
+            ?? throw new InvalidOperationException("Sheet-tab tour could not locate the tab ContextMenu visual.");
+        var menu = target.ContextMenu
+            ?? throw new InvalidOperationException("Sheet-tab tour could not locate the tab ContextMenu.");
+
+        try
+        {
+            MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
+            menu.PlacementTarget = target;
+            menu.Placement = PlacementMode.Bottom;
+            menu.IsOpen = true;
+            await Task.Delay(350);
+            menu.UpdateLayout();
+            await CaptureElementAsync(menu, outputDir, "freex_sheet_tabs_context_menu_opened");
+            captures.Add(new SheetTabTourManifestCapture(
+                CaptureKey: "sheet-tabs:context-menu-opened",
+                PairKey: "interactive:sheet-tabs:context-menu-opened",
+                ScenarioId: "sheet-tabs:context-menu",
+                State: "context-menu-opened",
+                Surface: "sheet-tab-context-menu",
+                FileName: "freex_sheet_tabs_context_menu_opened",
+                OutputFileName: "freex_sheet_tabs_context_menu_opened.png",
+                EvidenceSummary: "Production sheet-tab ContextMenu is open for the active tab, including Insert, Delete, Rename, Move or Copy, Tab Color, Hide, Unhide, Select All Sheets, and Ungroup Sheets entries."));
+        }
+        finally
+        {
+            menu.IsOpen = false;
+        }
+    }
+
+    private async Task CaptureSheetNameDialogForTourAsync(
+        string outputDir,
+        List<SheetTabTourManifestCapture> captures,
+        string currentName)
+    {
+        var dialog = new SheetNameDialog(currentName) { Owner = this };
+        try
+        {
+            dialog.Show();
+            dialog.Activate();
+            dialog.UpdateLayout();
+            await Task.Delay(350);
+            await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, "freex_sheet_tabs_rename_dialog_opened");
+            captures.Add(new SheetTabTourManifestCapture(
+                CaptureKey: "sheet-tabs:rename-dialog-opened",
+                PairKey: "interactive:sheet-tabs:rename-dialog-opened",
+                ScenarioId: "sheet-tabs:rename-dialog",
+                State: "rename-dialog-opened",
+                Surface: "rename-sheet-dialog",
+                FileName: "freex_sheet_tabs_rename_dialog_opened",
+                OutputFileName: "freex_sheet_tabs_rename_dialog_opened.png",
+                EvidenceSummary: "Rename Sheet dialog is open through the same SheetNameDialog used by sheet-tab double-click and context Rename, with the name box focused and selected on load."));
+        }
+        finally
+        {
+            dialog.Close();
+        }
+    }
+
+    private async Task CaptureUnhideSheetDialogForTourAsync(
+        string outputDir,
+        List<SheetTabTourManifestCapture> captures,
+        string hiddenSheetName)
+    {
+        var dialog = new UnhideSheetDialog([hiddenSheetName]) { Owner = this };
+        try
+        {
+            dialog.Show();
+            dialog.Activate();
+            dialog.UpdateLayout();
+            await Task.Delay(350);
+            await CaptureWindowElementForScreenshotTourAsync(dialog, outputDir, "freex_sheet_tabs_unhide_dialog_opened");
+            captures.Add(new SheetTabTourManifestCapture(
+                CaptureKey: "sheet-tabs:unhide-dialog-opened",
+                PairKey: "interactive:sheet-tabs:unhide-dialog-opened",
+                ScenarioId: "sheet-tabs:unhide-dialog",
+                State: "unhide-dialog-opened",
+                Surface: "unhide-sheet-dialog",
+                FileName: "freex_sheet_tabs_unhide_dialog_opened",
+                OutputFileName: "freex_sheet_tabs_unhide_dialog_opened.png",
+                EvidenceSummary: $"Unhide Sheet dialog lists the hidden worksheet '{hiddenSheetName}' and focuses the hidden-sheet list."));
+        }
+        finally
+        {
+            dialog.Close();
+        }
+    }
+
+    private static void DeleteSheetTabTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_sheet_tabs_*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, SheetTabTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateSheetTabTourEvidence(string outputDir, IReadOnlyList<SheetTabTourManifestCapture> captures)
+    {
+        foreach (var capture in captures)
+        {
+            var path = Path.Combine(outputDir, capture.OutputFileName);
+            if (!File.Exists(path))
+                throw new InvalidOperationException($"Sheet-tab tour did not create planned capture {capture.OutputFileName}.");
+        }
+    }
+
+    private static async Task WriteSheetTabTourManifestAsync(
+        string outputDir,
+        IReadOnlyList<SheetTabTourManifestCapture> captures)
+    {
+        var manifest = new SheetTabTourManifest(
+            Tool: "FREEX_SHEET_TAB_TOUR",
+            EvidenceFamily: "sheet-tabs",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "sheet-tabs:visual-evidence",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_sheet_tabs_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            CaptureStatus: "complete",
+            CaptureMethod: "RenderTargetBitmap-sheet-tab-strip-context-menu-and-dialogs",
+            FocusGuard: new RibbonScreenshotTourManifestFocusGuard(
+                Required: !IsScreenshotTourBackgroundRenderAllowed(),
+                Policy: IsScreenshotTourBackgroundRenderAllowed()
+                    ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed deterministic in-process RenderTargetBitmap captures; no global mouse, keyboard, or screen capture input is used."
+                    : "Dialog captures abort unless the expected FreeX WPF window owns foreground focus immediately before render and file write."),
+            PlannedCaptureCount: captures.Count,
+            ActualCaptureCount: captures.Count,
+            Captures: captures,
+            CoveredStates:
+            [
+                "Selected single-sheet tab and plus add-sheet affordance",
+                "Add Sheet route selecting the newly created sheet",
+                "Grouped sheet-tab styling and tab color rendering",
+                "Production sheet-tab context menu",
+                "Rename Sheet dialog focus/select-all affordance",
+                "Hidden sheet excluded from the tab strip",
+                "Unhide Sheet dialog with hidden-sheet list",
+                "Narrow tab-strip overflow navigation at start, middle, and end positions"
+            ],
+            Limitations:
+            [
+                "This tour renders FreeX WPF surfaces in-process; it does not synthesize physical mouse clicks, Ctrl/Shift modifiers, drag reorder, or double-click input.",
+                "The context menu capture is opened from the production tab ContextMenu object rather than by OS right-click, so live placement/focus evidence remains separate.",
+                "The rename and unhide dialog captures show the production dialogs and initial focus targets, but they do not submit dialog changes.",
+                "No Microsoft Excel counterpart or macOS/native-host capture is produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, SheetTabTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.SheetTabTourManifest);
     }
 }
