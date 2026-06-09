@@ -79,6 +79,32 @@ public sealed class FlashFillRangePlannerTests
             EndRow: 4));
     }
 
+    [Fact]
+    public void HasExamplesAndFillTargets_DistinguishCompleteExampleColumnFromFillableRange()
+    {
+        var sheet = CreateSheet();
+        SetText(sheet, 1, 1, "John Smith");
+        SetText(sheet, 1, 2, "John");
+        SetText(sheet, 2, 1, "Jane Doe");
+        SetText(sheet, 2, 2, "Jane");
+
+        var plan = FlashFillRangePlanner.Plan(sheet, Range(sheet, 2, 2, 2, 2));
+
+        FlashFillRangePlanner.HasExamples(sheet, plan).Should().BeTrue();
+        FlashFillRangePlanner.HasFillTargets(sheet, plan).Should().BeFalse();
+    }
+
+    [Fact]
+    public void HasExamplesAndFillTargets_ReportEmptySelectionAsNoExampleAndNoTarget()
+    {
+        var sheet = CreateSheet();
+
+        var plan = FlashFillRangePlanner.Plan(sheet, Range(sheet, 2, 2, 2, 2));
+
+        FlashFillRangePlanner.HasExamples(sheet, plan).Should().BeFalse();
+        FlashFillRangePlanner.HasFillTargets(sheet, plan).Should().BeFalse();
+    }
+
     private static Sheet CreateSheet()
     {
         var workbook = new Workbook("test");
