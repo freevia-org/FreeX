@@ -133,6 +133,71 @@ public sealed class GridViewAutofillTests
     }
 
     [Fact]
+    public void CalculateCompletedSelectionRange_IncludesSourceAndVerticalFillBelow()
+    {
+        var sheet = SheetId.New();
+        var source = new GridRange(
+            new CellAddress(sheet, 2, 2),
+            new CellAddress(sheet, 3, 4));
+        var fillRange = new GridRange(
+            new CellAddress(sheet, 4, 2),
+            new CellAddress(sheet, 7, 4));
+
+        GridAutofillPlanner.CalculateCompletedSelectionRange(source, fillRange)
+            .Should()
+            .Be(new GridRange(
+                new CellAddress(sheet, 2, 2),
+                new CellAddress(sheet, 7, 4)));
+    }
+
+    [Fact]
+    public void CalculateCompletedSelectionRange_IncludesSourceAndHorizontalFillRight()
+    {
+        var sheet = SheetId.New();
+        var source = new GridRange(
+            new CellAddress(sheet, 2, 2),
+            new CellAddress(sheet, 3, 4));
+        var fillRange = new GridRange(
+            new CellAddress(sheet, 2, 5),
+            new CellAddress(sheet, 3, 8));
+
+        GridAutofillPlanner.CalculateCompletedSelectionRange(source, fillRange)
+            .Should()
+            .Be(new GridRange(
+                new CellAddress(sheet, 2, 2),
+                new CellAddress(sheet, 3, 8)));
+    }
+
+    [Fact]
+    public void CalculateCompletedSelectionRange_IncludesSourceAndFillAboveOrLeft()
+    {
+        var sheet = SheetId.New();
+        var verticalSource = new GridRange(
+            new CellAddress(sheet, 4, 2),
+            new CellAddress(sheet, 6, 4));
+        var verticalFillRange = new GridRange(
+            new CellAddress(sheet, 2, 2),
+            new CellAddress(sheet, 3, 4));
+        var horizontalSource = new GridRange(
+            new CellAddress(sheet, 2, 4),
+            new CellAddress(sheet, 3, 6));
+        var horizontalFillRange = new GridRange(
+            new CellAddress(sheet, 2, 2),
+            new CellAddress(sheet, 3, 3));
+
+        GridAutofillPlanner.CalculateCompletedSelectionRange(verticalSource, verticalFillRange)
+            .Should()
+            .Be(new GridRange(
+                new CellAddress(sheet, 2, 2),
+                new CellAddress(sheet, 6, 4)));
+        GridAutofillPlanner.CalculateCompletedSelectionRange(horizontalSource, horizontalFillRange)
+            .Should()
+            .Be(new GridRange(
+                new CellAddress(sheet, 2, 2),
+                new CellAddress(sheet, 3, 6)));
+    }
+
+    [Fact]
     public void CalculateAutofillEdgeScrollIntent_RequestsHorizontalScrollNearRightEdge()
     {
         GridView.CalculateAutofillEdgeScrollIntent(

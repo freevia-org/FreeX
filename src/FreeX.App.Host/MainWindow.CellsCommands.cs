@@ -675,9 +675,29 @@ public partial class MainWindow
         if (!TryExecuteCommand(cmd, "Autofill"))
             return;
 
+        SelectCompletedAutofillRange(sourceRange, fillRange);
         RecalculateIfAutomatic(fillRange.AllCells().ToList());
         UpdateViewport();
         RefreshStatusBar();
+    }
+
+    private void SelectCompletedAutofillRange(GridRange sourceRange, GridRange fillRange)
+    {
+        var selectionRange = FreeX.App.UI.GridAutofillPlanner.CalculateCompletedSelectionRange(sourceRange, fillRange);
+        _selectionAnchor = selectionRange.Start;
+        _selectionCursor = selectionRange.End;
+        if (_workbook.GetSheet(_currentSheetId) is { } sheet)
+        {
+            sheet.ActiveRow = selectionRange.Start.Row;
+            sheet.ActiveCol = selectionRange.Start.Col;
+        }
+
+        SetSelectedRangesIfChanged(null);
+        SheetGrid.SelectedRange = selectionRange;
+        SetCellAddressBoxSelectionText(FormatNameBoxSelectionText(selectionRange));
+        RefreshToolbarAfterSelectionChange();
+        RefreshValidationDropdown();
+        UpdateCommentPreview(selectionRange.Start);
     }
 
     private void OnSelectionMoveRequested(GridRange sourceRange, GridRange targetRange)
