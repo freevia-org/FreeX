@@ -384,6 +384,10 @@ public partial class MainWindow
         SheetGrid.Viewport = viewport;
         SheetGrid.HiddenRows = sheet?.HiddenRows;
         SheetGrid.HiddenColumns = sheet?.HiddenCols;
+        SheetGrid.AutoFilterRange = sheet is not null &&
+                                    AutoFilterDropdownPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange)
+            ? autoFilterRange
+            : null;
         SheetGrid.FormulaTraceSheetId = _currentSheetId;
         SheetGrid.FormulaTraceArrows = _formulaTraceArrows;
         SheetGrid.ObjectDisplayMode = _options.ObjectsDisplay switch
