@@ -40,6 +40,10 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         script.Should().Contain("format_cells_style_roundtrip_count");
         script.Should().Contain("command_key_smoke_attempted");
         script.Should().Contain("live_command_key_smoke");
+        script.Should().Contain("macos_dialog_smoke_attempted");
+        script.Should().Contain("macos_dialog_activation_completed");
+        script.Should().Contain("go_to_special_dialog_kind_controls");
+        script.Should().Contain("data_validation_dialog_action_buttons");
         script.Should().Contain("macos_launch_smoke");
         script.Should().Contain("RequireSeparateDiagnosticsArtifact");
         script.Should().Contain("GITHUB_ACTIONS");
@@ -88,6 +92,9 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
             distributionPlan,
             "docs/release/test-distribution.md");
         AssertDistributionCandidatePreflightCommandsRequireReleasePublicationArtifact(
+            hostedRunnerPlan,
+            "docs/planning/macos-hosted-runner-build-plan.md");
+        AssertDownloadedHostedPreflightCommandsRequireDiagnosticsAndAggregateArtifacts(
             hostedRunnerPlan,
             "docs/planning/macos-hosted-runner-build-plan.md");
     }
@@ -644,6 +651,25 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         AssertPreflightRejected(result, "osx-arm64 command key smoke", expectedNeedle);
     }
 
+    [Theory]
+    [InlineData("macos_dialog_smoke=passed", "macos_dialog_smoke=failed", "macos_dialog_smoke=passed")]
+    [InlineData("go_to_special_dialog_kind_controls=true", "go_to_special_dialog_kind_controls=false", "go_to_special_dialog_kind_controls=true")]
+    [InlineData("data_validation_dialog_action_buttons=true", "data_validation_dialog_action_buttons=false", "data_validation_dialog_action_buttons=true")]
+    public void ReadinessPreflight_FailsWhenHostedDialogSmokeEvidenceIsStaleOrWeakened(
+        string oldValue,
+        string newValue,
+        string expectedNeedle)
+    {
+        using var temp = new TestTemporaryDirectory();
+        var arm64 = CreateSyntheticBundle(temp.Path, "osx-arm64", distributionCandidate: false);
+        CreateSyntheticBundle(temp.Path, "osx-x64", distributionCandidate: false);
+        ReplaceInFile(GetRuntimeArtifactPath(arm64, names => names.LaunchSmoke), oldValue, newValue);
+
+        var result = RunPreflight(temp.Path);
+
+        AssertPreflightRejected(result, "osx-arm64 dialog smoke", expectedNeedle);
+    }
+
     [Fact]
     public void ReadinessPreflight_FailsWhenCommandKeySmokeAppendsConflictingDuplicateStatus()
     {
@@ -959,7 +985,55 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
                 "live_cmd_select_all_state_changed=true",
                 "live_cmd_bold_state_changed=true",
                 "live_cmd_italic_state_changed=true",
-                "live_cmd_underline_state_changed=true"));
+                "live_cmd_underline_state_changed=true",
+                "macos_dialog_smoke=passed",
+                "macos_dialog_smoke_attempted=true",
+                "macos_dialog_smoke_status=passed",
+                "macos_dialog_activation_completed=true",
+                "find_dialog=true",
+                "find_dialog_text_box=true",
+                "find_dialog_action_buttons=true",
+                "find_dialog_options=true",
+                "find_dialog_format_controls=true",
+                "find_dialog_compact_layout=true",
+                "find_dialog_result_closed_without_accept=true",
+                "replace_dialog=true",
+                "replace_dialog_text_boxes=true",
+                "replace_dialog_action_buttons=true",
+                "replace_dialog_options=true",
+                "replace_dialog_format_controls=true",
+                "replace_dialog_compact_layout=true",
+                "replace_dialog_result_closed_without_accept=true",
+                "go_to_dialog=true",
+                "go_to_dialog_reference_controls=true",
+                "go_to_dialog_compact_layout=true",
+                "go_to_dialog_result_closed_without_accept=true",
+                "go_to_special_dialog=true",
+                "go_to_special_dialog_kind_controls=true",
+                "go_to_special_dialog_value_type_controls=true",
+                "go_to_special_dialog_compact_layout=true",
+                "go_to_special_dialog_result_closed_without_accept=true",
+                "format_cells_dialog=true",
+                "format_cells_dialog_tab_strip=true",
+                "format_cells_dialog_default_number_tab=true",
+                "format_cells_dialog_number_controls=true",
+                "format_cells_dialog_action_buttons=true",
+                "format_cells_dialog_compact_layout=true",
+                "format_cells_dialog_result_closed_without_accept=true",
+                "sort_dialog=true",
+                "sort_dialog_sort_on_controls=true",
+                "sort_dialog_color_controls=true",
+                "sort_dialog_action_buttons=true",
+                "sort_dialog_compact_layout=true",
+                "sort_dialog_result_closed_without_accept=true",
+                "data_validation_dropdown_control=true",
+                "data_validation_dropdown_items=true",
+                "data_validation_dialog=true",
+                "data_validation_dialog_criteria_controls=true",
+                "data_validation_dialog_message_controls=true",
+                "data_validation_dialog_action_buttons=true",
+                "data_validation_dialog_compact_layout=true",
+                "data_validation_dialog_result_closed_without_accept=true"));
 
         File.WriteAllText(
             Path.Combine(bundleDirectory, names.OpenWithSmoke),
