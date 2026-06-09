@@ -575,14 +575,24 @@ public partial class MainWindow
         var mergeCells = FormatCellsMergePlanner.IsSelectionMerged(sheet, range);
         var dlg = new FormatCellsDialog(currentStyle, initialTab, mergeCells) { Owner = this };
         if (dlg.ShowDialog() != true || dlg.ResultDiff is null) return;
-        ApplyFormatCellsDialogResult(range, dlg.ResultDiff, dlg.ResultBorderSelection, dlg.ResultMergeCells);
+        var mergeContentResolution = MergeCellContentResolution.KeepFirstCell;
+        if (dlg.ResultMergeCells == true && !TryResolveMergeContentResolution(range, out mergeContentResolution))
+            return;
+
+        ApplyFormatCellsDialogResult(
+            range,
+            dlg.ResultDiff,
+            dlg.ResultBorderSelection,
+            dlg.ResultMergeCells,
+            mergeContentResolution);
     }
 
     private void ApplyFormatCellsDialogResult(
         GridRange range,
         StyleDiff diff,
         FormatCellsBorderSelection borderSelection,
-        bool? mergeCells)
+        bool? mergeCells,
+        MergeCellContentResolution mergeContentResolution = MergeCellContentResolution.KeepFirstCell)
     {
         if (!borderSelection.HasRangeOperations && mergeCells is null)
         {
@@ -639,7 +649,14 @@ public partial class MainWindow
             }
 
             if (mergeCells is { } shouldMerge && sheet is not null)
-                commands.AddRange(FormatCellsMergePlanner.CreateMergeCommands(sheet, sheetId, sheetRange, shouldMerge));
+            {
+                commands.AddRange(FormatCellsMergePlanner.CreateMergeCommands(
+                    sheet,
+                    sheetId,
+                    sheetRange,
+                    shouldMerge,
+                    mergeContentResolution));
+            }
 
             return commands.Count == 1
                 ? commands[0]
