@@ -32,6 +32,8 @@ public partial class MainWindow
     private const string HomeBordersDropdownTourCaptureFileName = "freex_dropdown_home_borders_opened";
     private const string WorksheetContextMenuTourManifestFileName = "worksheet_context_menu_tour_manifest.json";
     private const string WorksheetContextMenuTourCaptureFileName = "freex_context_menu_worksheet_cell_opened";
+    private const string QatUndoRedoTourManifestFileName = "qat_undo_redo_tour_manifest.json";
+    private const string QatUndoRedoTourOutputDirectoryName = "qat-undo-redo-tour";
     private const string ScreenshotTourAllowBackgroundRenderEnvVar = "FREEX_SS_TOUR_ALLOW_BACKGROUND_RENDER";
 
     [DllImport("user32.dll")]
@@ -50,7 +52,8 @@ public partial class MainWindow
         var homeNumberFormatDropdownTour = Environment.GetEnvironmentVariable("FREEX_HOME_NUMBER_FORMAT_DROPDOWN_TOUR") == "1";
         var homeBordersDropdownTour = Environment.GetEnvironmentVariable("FREEX_HOME_BORDERS_DROPDOWN_TOUR") == "1";
         var worksheetContextMenuTour = Environment.GetEnvironmentVariable("FREEX_WORKSHEET_CONTEXT_MENU_TOUR") == "1";
-        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !worksheetContextMenuTour)
+        var qatUndoRedoTour = Environment.GetEnvironmentVariable("FREEX_QAT_UNDO_REDO_TOUR") == "1";
+        if (!ribbonTour && !backstageTour && !autoFilterFlyoutTour && !homeNumberFormatDropdownTour && !homeBordersDropdownTour && !worksheetContextMenuTour && !qatUndoRedoTour)
             return;
 
         var ribbonPlan = ribbonTour
@@ -64,7 +67,7 @@ public partial class MainWindow
         var outputDir = Path.GetFullPath(
             Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "screenshots"));
         Directory.CreateDirectory(outputDir);
-        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour, autoFilterFlyoutTour, homeNumberFormatDropdownTour, homeBordersDropdownTour, worksheetContextMenuTour, qatUndoRedoTour);
     }
 
     private async Task RunScreenshotTourAsync(
@@ -74,7 +77,8 @@ public partial class MainWindow
         bool autoFilterFlyoutTour,
         bool homeNumberFormatDropdownTour,
         bool homeBordersDropdownTour,
-        bool worksheetContextMenuTour)
+        bool worksheetContextMenuTour,
+        bool qatUndoRedoTour)
     {
         if (ribbonPlan is not null)
             await CaptureRibbonTourAsync(outputDir, ribbonPlan);
@@ -93,6 +97,9 @@ public partial class MainWindow
 
         if (worksheetContextMenuTour)
             await CaptureWorksheetContextMenuTourAsync(Path.Combine(outputDir, "worksheet-context-menu-tour"));
+
+        if (qatUndoRedoTour)
+            await CaptureQatUndoRedoTourAsync(Path.Combine(outputDir, QatUndoRedoTourOutputDirectoryName));
 
         _suppressClosePrompt = true;
         Application.Current.Shutdown();
@@ -478,6 +485,258 @@ public partial class MainWindow
         var path = Path.Combine(outputDir, $"{WorksheetContextMenuTourCaptureFileName}.png");
         if (!File.Exists(path))
             throw new InvalidOperationException("Worksheet context menu tour did not create the planned FreeX context menu capture.");
+    }
+
+    private async Task CaptureQatUndoRedoTourAsync(string outputDir)
+    {
+        Directory.CreateDirectory(outputDir);
+        DeleteQatUndoRedoTourEvidence(outputDir);
+
+        WindowState = WindowState.Normal;
+        Width = 1100;
+        Height = 768;
+        await Task.Delay(700);
+
+        var address = EnsureQatUndoRedoTourContext();
+        var captures = new List<QatUndoRedoTourManifestCapture>();
+
+        try
+        {
+            captures.Add(await CaptureQatUndoRedoWindowStateAsync(
+                outputDir,
+                "fresh-disabled",
+                "freex_qat_initial_disabled",
+                address));
+
+            ExecuteQatUndoRedoTourMutation(address);
+            captures.Add(await CaptureQatUndoRedoWindowStateAsync(
+                outputDir,
+                "after-edit-undo-enabled",
+                "freex_qat_after_edit_undo_enabled",
+                address));
+
+            captures.Add(await CaptureQatUndoRedoHistoryMenuAsync(
+                outputDir,
+                QuickAccessToolbarCommandIds.Undo,
+                "undo-history-opened",
+                "freex_qat_undo_history_menu_opened",
+                address));
+
+            if (!ExecuteUndo())
+                throw new InvalidOperationException("QAT undo/redo tour could not execute the first Undo action.");
+
+            captures.Add(await CaptureQatUndoRedoWindowStateAsync(
+                outputDir,
+                "after-one-undo-redo-enabled",
+                "freex_qat_after_one_undo_redo_enabled",
+                address));
+
+            if (!ExecuteUndo())
+                throw new InvalidOperationException("QAT undo/redo tour could not execute the second Undo action.");
+
+            captures.Add(await CaptureQatUndoRedoWindowStateAsync(
+                outputDir,
+                "after-two-undos-redo-menu-ready",
+                "freex_qat_after_two_undos_redo_menu_ready",
+                address));
+
+            captures.Add(await CaptureQatUndoRedoHistoryMenuAsync(
+                outputDir,
+                QuickAccessToolbarCommandIds.Redo,
+                "redo-history-opened",
+                "freex_qat_redo_history_menu_opened",
+                address));
+
+            if (!ExecuteRedo() || !ExecuteRedo())
+                throw new InvalidOperationException("QAT undo/redo tour could not execute both Redo actions.");
+
+            captures.Add(await CaptureQatUndoRedoWindowStateAsync(
+                outputDir,
+                "after-redo-restored",
+                "freex_qat_after_redo_restored",
+                address));
+
+            ValidateQatUndoRedoTourEvidence(outputDir, captures);
+            await WriteQatUndoRedoTourManifestAsync(outputDir, address, captures);
+        }
+        catch
+        {
+            DeleteQatUndoRedoTourEvidence(outputDir);
+            throw;
+        }
+    }
+
+    private CellAddress EnsureQatUndoRedoTourContext()
+    {
+        var sheet = GetCurrentOrFirstScreenshotTourSheet()
+            ?? throw new InvalidOperationException("QAT undo/redo tour requires an active worksheet.");
+
+        _currentSheetId = sheet.Id;
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.ClearCell(address);
+        sheet.ClearCell(new CellAddress(sheet.Id, 1, 2));
+        sheet.ClearCell(new CellAddress(sheet.Id, 2, 1));
+        SetActiveCell(address);
+        if (SheetGrid is not null)
+        {
+            SheetGrid.SelectedRange = new GridRange(address, address);
+            SheetGrid.SelectedRanges = null;
+            SheetGrid.Focus();
+        }
+
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+        return address;
+    }
+
+    private void ExecuteQatUndoRedoTourMutation(CellAddress address)
+    {
+        var edit = (address, Cell.FromValue(new TextValue("QAT undo redo proof")));
+        if (!TryExecuteEditCells([edit], "Edit Cell", out var editOutcome))
+            throw new InvalidOperationException(editOutcome.ErrorMessage ?? "QAT undo/redo tour cell edit failed.");
+
+        var styleRange = new GridRange(address, address);
+        var diff = new StyleDiff(FillColor: new CellColor(255, 242, 204), Bold: true);
+        if (!TryExecuteApplyStyle(styleRange, diff, "Apply Style"))
+            throw new InvalidOperationException("QAT undo/redo tour style mutation failed.");
+
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+    }
+
+    private async Task<QatUndoRedoTourManifestCapture> CaptureQatUndoRedoWindowStateAsync(
+        string outputDir,
+        string state,
+        string fileName,
+        CellAddress address)
+    {
+        RefreshToolbar();
+        RefreshStatusBar();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+        await CaptureCurrentWindowAsync(outputDir, fileName, 760);
+        return CreateQatUndoRedoTourCapture(state, "window", fileName, address, "RenderTargetBitmap-window-full", ActualWidth, Math.Min(ActualHeight, 760), []);
+    }
+
+    private async Task<QatUndoRedoTourManifestCapture> CaptureQatUndoRedoHistoryMenuAsync(
+        string outputDir,
+        string commandId,
+        string state,
+        string fileName,
+        CellAddress address)
+    {
+        var historyButton = FindName(GetQuickAccessHistoryButtonName(commandId)) as ButtonBase
+            ?? throw new InvalidOperationException($"QAT undo/redo tour could not find history button for '{commandId}'.");
+        var menu = CreateQuickAccessHistoryMenu(commandId, historyButton);
+        try
+        {
+            menu.IsOpen = true;
+            menu.UpdateLayout();
+            await Task.Delay(350);
+            menu.UpdateLayout();
+            await WaitForRibbonScreenshotRenderPassAsync();
+
+            await CaptureElementAsync(menu, outputDir, fileName);
+            var menuHeaders = menu.Items
+                .OfType<MenuItem>()
+                .Select(item => item.Header?.ToString() ?? string.Empty)
+                .Where(header => !string.IsNullOrWhiteSpace(header))
+                .ToArray();
+            return CreateQatUndoRedoTourCapture(state, "history-menu", fileName, address, "RenderTargetBitmap-qat-history-context-menu", menu.ActualWidth, menu.ActualHeight, menuHeaders);
+        }
+        finally
+        {
+            menu.IsOpen = false;
+        }
+    }
+
+    private QatUndoRedoTourManifestCapture CreateQatUndoRedoTourCapture(
+        string state,
+        string surface,
+        string fileName,
+        CellAddress address,
+        string captureMethod,
+        double logicalWidth,
+        double logicalHeight,
+        IReadOnlyList<string> menuHeaders)
+    {
+        var sheet = _workbook.GetSheet(address.Sheet);
+        var cell = sheet?.GetCell(address);
+        var style = cell is null ? _workbook.GetStyle(StyleId.Default) : _workbook.GetStyle(cell.StyleId);
+        var undoButton = GetQuickAccessToolbarButton(QuickAccessToolbarCommandIds.Undo);
+        var redoButton = GetQuickAccessToolbarButton(QuickAccessToolbarCommandIds.Redo);
+        var undoHistoryButton = FindName(GetQuickAccessHistoryButtonName(QuickAccessToolbarCommandIds.Undo)) as ButtonBase;
+        var redoHistoryButton = FindName(GetQuickAccessHistoryButtonName(QuickAccessToolbarCommandIds.Redo)) as ButtonBase;
+        var undoHistory = GetQuickAccessHistoryEntries(QuickAccessToolbarCommandIds.Undo)
+            .Select(entry => entry.Label)
+            .ToArray();
+        var redoHistory = GetQuickAccessHistoryEntries(QuickAccessToolbarCommandIds.Redo)
+            .Select(entry => entry.Label)
+            .ToArray();
+
+        return new QatUndoRedoTourManifestCapture(
+            CaptureKey: $"interactive:qat-undo-redo:{state}",
+            PairKey: $"interactive:qat-undo-redo:{state}",
+            ScenarioId: "qat:undo-redo",
+            State: state,
+            Surface: surface,
+            FileName: fileName,
+            OutputFileName: $"{fileName}.png",
+            CaptureMethod: captureMethod,
+            CaptureLogicalWidth: logicalWidth,
+            CaptureLogicalHeight: logicalHeight,
+            UndoButtonEnabled: undoButton?.IsEnabled == true,
+            UndoHistoryButtonEnabled: undoHistoryButton?.IsEnabled == true,
+            RedoButtonEnabled: redoButton?.IsEnabled == true,
+            RedoHistoryButtonEnabled: redoHistoryButton?.IsEnabled == true,
+            CanUndo: _commandBus.CanUndo(_workbook.Id),
+            CanRedo: _commandBus.CanRedo(_workbook.Id),
+            ActiveCell: address.ToA1(),
+            ActiveCellText: FormatQatUndoRedoTourValue(cell?.Value),
+            ActiveCellBold: style.Bold,
+            ActiveCellFillColor: FormatQatUndoRedoTourColor(style.FillColor),
+            StatusText: StatusReadyText.Text,
+            UndoHistoryLabels: undoHistory,
+            RedoHistoryLabels: redoHistory,
+            MenuHeaders: menuHeaders);
+    }
+
+    private static string FormatQatUndoRedoTourValue(ScalarValue? value) =>
+        value switch
+        {
+            null or BlankValue => string.Empty,
+            TextValue text => text.Value,
+            NumberValue number => number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+            DateTimeValue dateTime => dateTime.ToDateTime().ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+            ErrorValue error => error.Code,
+            RangeValue range => $"{range.RowCount}x{range.ColCount} range",
+            _ => value.ToString() ?? string.Empty
+        };
+
+    private static string? FormatQatUndoRedoTourColor(CellColor? color) =>
+        color is { } value ? $"#{value.R:X2}{value.G:X2}{value.B:X2}" : null;
+
+    private static void DeleteQatUndoRedoTourEvidence(string outputDir)
+    {
+        foreach (var file in Directory.EnumerateFiles(outputDir, "freex_qat_*.png"))
+            File.Delete(file);
+
+        var manifestPath = Path.Combine(outputDir, QatUndoRedoTourManifestFileName);
+        if (File.Exists(manifestPath))
+            File.Delete(manifestPath);
+    }
+
+    private static void ValidateQatUndoRedoTourEvidence(string outputDir, IReadOnlyList<QatUndoRedoTourManifestCapture> captures)
+    {
+        foreach (var capture in captures)
+        {
+            var path = Path.Combine(outputDir, capture.OutputFileName);
+            if (!File.Exists(path))
+                throw new InvalidOperationException($"QAT undo/redo tour did not create planned capture '{capture.OutputFileName}'.");
+        }
     }
 
     private async Task CaptureRibbonTourAsync(string outputDir, RibbonScreenshotTourPlan plan)
@@ -1148,6 +1407,42 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.HomeBordersDropdownTourManifest);
     }
 
+    private static async Task WriteQatUndoRedoTourManifestAsync(
+        string outputDir,
+        CellAddress address,
+        IReadOnlyList<QatUndoRedoTourManifestCapture> captures)
+    {
+        var manifest = new QatUndoRedoTourManifest(
+            Tool: "FREEX_QAT_UNDO_REDO_TOUR",
+            EvidenceFamily: "qat",
+            EvidenceSubject: "freex",
+            EvidenceApp: "FreeX",
+            ScenarioId: "qat:undo-redo",
+            OutputDirectory: outputDir,
+            OutputNaming: "freex_qat_<State>.png",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
+            SelectedCell: address.ToA1(),
+            CaptureStatus: "complete",
+            CaptureMethod: "RenderTargetBitmap-window-full-and-qat-history-context-menu",
+            Pairing: new QatUndoRedoTourManifestPairing(
+                "interactive:qat-undo-redo:<State>",
+                "excel",
+                "not-yet-wired",
+                "not-yet-captured"),
+            Captures: captures,
+            Limitations:
+            [
+                "This in-app tour drives the real FreeX command bus and Quick Access Toolbar controls, then captures WPF output with RenderTargetBitmap.",
+                "The tour does not use global mouse or keyboard input; foreground/live OS-input validation remains separate unless the capture is run without the background-render override.",
+                "The edit and style mutation are created by the in-app harness through the same command stack used by routed UI commands, not by physical keyboard text entry.",
+                "No Microsoft Excel counterpart capture is produced by this tool."
+            ]);
+
+        var path = Path.Combine(outputDir, QatUndoRedoTourManifestFileName);
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.QatUndoRedoTourManifest);
+    }
+
     private sealed record RibbonScreenshotTourManifest(
         string Tool,
         string EvidenceFamily,
@@ -1334,12 +1629,61 @@ public partial class MainWindow
         double CaptureLogicalWidth,
         double CaptureLogicalHeight);
 
+    private sealed record QatUndoRedoTourManifest(
+        string Tool,
+        string EvidenceFamily,
+        string EvidenceSubject,
+        string EvidenceApp,
+        string ScenarioId,
+        string OutputDirectory,
+        string OutputNaming,
+        string CatalogEvidenceTarget,
+        string SelectedCell,
+        string CaptureStatus,
+        string CaptureMethod,
+        QatUndoRedoTourManifestPairing Pairing,
+        IReadOnlyList<QatUndoRedoTourManifestCapture> Captures,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record QatUndoRedoTourManifestPairing(
+        string PairKeyPattern,
+        string CounterpartSubject,
+        string CounterpartTool,
+        string CounterpartOutputNaming);
+
+    private sealed record QatUndoRedoTourManifestCapture(
+        string CaptureKey,
+        string PairKey,
+        string ScenarioId,
+        string State,
+        string Surface,
+        string FileName,
+        string OutputFileName,
+        string CaptureMethod,
+        double CaptureLogicalWidth,
+        double CaptureLogicalHeight,
+        bool UndoButtonEnabled,
+        bool UndoHistoryButtonEnabled,
+        bool RedoButtonEnabled,
+        bool RedoHistoryButtonEnabled,
+        bool CanUndo,
+        bool CanRedo,
+        string ActiveCell,
+        string ActiveCellText,
+        bool ActiveCellBold,
+        string? ActiveCellFillColor,
+        string StatusText,
+        IReadOnlyList<string> UndoHistoryLabels,
+        IReadOnlyList<string> RedoHistoryLabels,
+        IReadOnlyList<string> MenuHeaders);
+
     [JsonSourceGenerationOptions(WriteIndented = true)]
     [JsonSerializable(typeof(RibbonScreenshotTourManifest))]
     [JsonSerializable(typeof(AutoFilterFlyoutTourManifest))]
     [JsonSerializable(typeof(HomeNumberFormatDropdownTourManifest))]
     [JsonSerializable(typeof(HomeBordersDropdownTourManifest))]
     [JsonSerializable(typeof(WorksheetContextMenuTourManifest))]
+    [JsonSerializable(typeof(QatUndoRedoTourManifest))]
     private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
 
     // Activated by FREEX_ACCENT_BAR_TOUR=1 env var. Output lands in <repo-root>/screenshots/accent-bars-tour/.

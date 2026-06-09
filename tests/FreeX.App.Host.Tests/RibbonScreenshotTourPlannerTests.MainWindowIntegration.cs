@@ -16,11 +16,13 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_SS_TOUR_TABS\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_SS_TOUR_WIDTHS\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_AUTOFILTER_FLYOUT_TOUR\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_QAT_UNDO_REDO_TOUR\")");
         source.Should().Contain("RibbonScreenshotTourPlan?");
         source.Should().Contain("PrepareRibbonScreenshotTourContextAsync");
         source.Should().Contain("EnsureTableDesignScreenshotTourContext");
         source.Should().Contain("EnsurePivotTableScreenshotTourContext");
         source.Should().Contain("CaptureAutoFilterFlyoutTourAsync");
+        source.Should().Contain("CaptureQatUndoRedoTourAsync");
         source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
         source.Should().Contain("WaitForRibbonScreenshotRenderPassAsync");
         source.Should().Contain("DeleteStaleRibbonScreenshotTourCaptures");
@@ -29,8 +31,10 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("DeleteAutoFilterFlyoutTourEvidence");
         source.Should().Contain("WriteRibbonScreenshotTourManifestAsync");
         source.Should().Contain("WriteAutoFilterFlyoutTourManifestAsync");
+        source.Should().Contain("WriteQatUndoRedoTourManifestAsync");
         source.Should().Contain("ribbon_screenshot_tour_manifest.json");
         source.Should().Contain("autofilter_flyout_tour_manifest.json");
+        source.Should().Contain("qat_undo_redo_tour_manifest.json");
         source.Should().Contain("EvidencePurpose()");
         source.Should().Contain("EnsureWindowForegroundForScreenshotTourAsync");
         source.Should().Contain("AssertWindowForegroundForScreenshotTour");
@@ -99,5 +103,35 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         editingSource.Should().Contain("AutoFilterDropdownPlanner.CreateMenuPlan(_workbook, sheet, plan)");
         editingSource.Should().Contain("dialog.ConfigureAsModelessFlyout();");
         editingSource.Should().Contain("PositionAutoFilterFlyout(dialog, headerCell, anchorPoint);");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_CapturesQatUndoRedoStatesAndHistoryMenus()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
+        var qatSource = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAccessToolbar.cs");
+
+        source.Should().Contain("FREEX_QAT_UNDO_REDO_TOUR");
+        source.Should().Contain("qat-undo-redo-tour");
+        source.Should().Contain("ExecuteQatUndoRedoTourMutation");
+        source.Should().Contain("TryExecuteEditCells([edit], \"Edit Cell\", out var editOutcome)");
+        source.Should().Contain("new StyleDiff(FillColor: new CellColor(255, 242, 204), Bold: true)");
+        source.Should().Contain("CaptureQatUndoRedoHistoryMenuAsync");
+        source.Should().Contain("CreateQuickAccessHistoryMenu(commandId, historyButton)");
+        source.Should().Contain("freex_qat_initial_disabled");
+        source.Should().Contain("freex_qat_after_edit_undo_enabled");
+        source.Should().Contain("freex_qat_undo_history_menu_opened");
+        source.Should().Contain("freex_qat_after_one_undo_redo_enabled");
+        source.Should().Contain("freex_qat_redo_history_menu_opened");
+        source.Should().Contain("freex_qat_after_redo_restored");
+        source.Should().Contain("interactive:qat-undo-redo:<State>");
+        source.Should().Contain("UndoHistoryLabels");
+        source.Should().Contain("RedoHistoryLabels");
+        source.Should().Contain("MenuHeaders");
+        source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.QatUndoRedoTourManifest");
+
+        qatSource.Should().Contain("private ContextMenu CreateQuickAccessHistoryMenu");
+        qatSource.Should().Contain("OpenQuickAccessHistoryMenu(string commandId, ButtonBase placementTarget)");
+        qatSource.Should().Contain("var menu = CreateQuickAccessHistoryMenu(commandId, placementTarget);");
     }
 }
