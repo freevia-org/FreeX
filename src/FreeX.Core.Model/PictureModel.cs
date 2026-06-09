@@ -34,4 +34,9 @@ public sealed class PictureModel
     public bool IsSourceLoaded { get; set; }
 }
 
-public sealed record PictureCellSnapshot(uint RowOffset, uint ColumnOffset, string Text);
+public sealed record PictureCellSnapshot(
+    uint RowOffset,
+    uint ColumnOffset,
+    string Text,
+    CellStyle? Style = null,
+    bool IsNumericOrDate = false);

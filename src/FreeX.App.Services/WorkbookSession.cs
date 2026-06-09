@@ -11,6 +11,7 @@ public sealed class WorkbookSession
     private sealed record InternalClipboard(
         GridRange SourceRange,
         IReadOnlyList<(CellAddress Source, Cell Cell)> Cells,
+        IReadOnlyList<(CellAddress Source, PictureCellSnapshot Snapshot)> PictureCells,
         string Text,
         bool IsCut);
 
@@ -1747,9 +1748,7 @@ public sealed class WorkbookSession
         }
 
         var destination = ActiveCell;
-        var sourceCells = internalClipboard.Cells
-            .Select(static cell => (cell.Source, FormatPictureCellText(cell.Cell.Value)))
-            .ToList();
+        var sourceCells = internalClipboard.PictureCells;
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
             CreateGroupedSheetCommand(
@@ -3753,13 +3752,50 @@ public sealed class WorkbookSession
     {
         var sheet = Workbook.GetSheet(range.Start.Sheet);
         var cells = new List<(CellAddress Source, Cell Cell)>();
+        var pictureCells = CapturePictureCells(range, sheet);
         foreach (var address in range.AllCells())
         {
             var cell = sheet?.GetCell(address)?.Clone() ?? Cell.FromValue(BlankValue.Instance);
             cells.Add((address, cell));
         }
 
-        return new InternalClipboard(range, cells, text, isCut);
+        return new InternalClipboard(range, cells, pictureCells, text, isCut);
+    }
+
+    private List<(CellAddress Source, PictureCellSnapshot Snapshot)> CapturePictureCells(GridRange range, Sheet? sheet)
+    {
+        var displayCells = new Dictionary<(uint Row, uint Col), DisplayCell>(Viewport.Cells.Count);
+        foreach (var cell in Viewport.Cells)
+            displayCells[(cell.Row, cell.Col)] = cell;
+
+        var result = new List<(CellAddress, PictureCellSnapshot)>();
+        foreach (var address in range.AllCells())
+        {
+            if (displayCells.TryGetValue((address.Row, address.Col), out var displayCell))
+            {
+                result.Add((
+                    address,
+                    new PictureCellSnapshot(
+                        address.Row - range.Start.Row,
+                        address.Col - range.Start.Col,
+                        displayCell.DisplayText,
+                        displayCell.Style?.Clone(),
+                        displayCell.RawValue is NumberValue or DateTimeValue)));
+                continue;
+            }
+
+            var cell = sheet?.GetCell(address);
+            result.Add((
+                address,
+                new PictureCellSnapshot(
+                    address.Row - range.Start.Row,
+                    address.Col - range.Start.Col,
+                    FormatPictureCellText(cell?.Value ?? BlankValue.Instance),
+                    null,
+                    cell?.Value is NumberValue or DateTimeValue)));
+        }
+
+        return result;
     }
 
     private bool TryCreateMultiRangeClipboardTextResult(
