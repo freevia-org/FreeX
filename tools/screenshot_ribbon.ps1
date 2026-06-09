@@ -396,6 +396,42 @@ function Assert-ForegroundProcessOwnership($expectedPid, $operation = "capture")
     }
 }
 
+function Set-FreeXForegroundWindow($windowHandle, $expectedPid, $expectedTitle, $operation) {
+    $shell = $null
+    try {
+        $shell = New-Object -ComObject WScript.Shell
+    }
+    catch {
+        $shell = $null
+    }
+
+    for ($attempt = 0; $attempt -lt 10; $attempt++) {
+        [Win32c]::ShowWindow($windowHandle, 1) | Out-Null
+        [Win32c]::SetWindowPos($windowHandle, [IntPtr](-1), 0, 0, 0, 0, 0x0043) | Out-Null
+        [Win32c]::SetForegroundWindow($windowHandle) | Out-Null
+        if ($null -ne $shell) {
+            $shell.AppActivate([int]$expectedPid) | Out-Null
+        }
+
+        Start-Sleep -Milliseconds 250
+
+        $foreground = [Win32c]::GetForegroundWindow()
+        if ($foreground -eq [IntPtr]::Zero) {
+            continue
+        }
+
+        $actualPid = 0
+        [Win32c]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
+        $title = New-Object System.Text.StringBuilder 512
+        [Win32c]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
+        if ($actualPid -eq $expectedPid -and $title.ToString() -eq $expectedTitle) {
+            return
+        }
+    }
+
+    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle $operation
+}
+
 function Find-FreeXOpenWorkbookDialogWindow($expectedPid, $ownerWindowHandle) {
     $windows = [Win32c]::GetVisibleWindowsByProcess($expectedPid) |
         Where-Object {
@@ -640,9 +676,7 @@ Write-Host "HWND: $hwnd"
 $expectedTitle = Get-WindowTitle $hwnd
 [Win32c]::ShowWindow($hwnd, 1) | Out-Null
 [Win32c]::SetWindowPos($hwnd, [IntPtr]::Zero, 0, 0, 0, 0, 0x0001) | Out-Null
-[Win32c]::SetForegroundWindow($hwnd) | Out-Null
-Start-Sleep -Seconds 2
-Assert-ForegroundWindowOwnership $proc.Id $expectedTitle "initial capture setup"
+Set-FreeXForegroundWindow $hwnd $proc.Id $expectedTitle "initial capture setup"
 
 if ($OpenWorkbookDialogTour -eq "1") {
     Invoke-FreeXOpenWorkbookDialogTour $proc.Id $hwnd $expectedTitle
@@ -661,9 +695,7 @@ if ($SaveAsWorkbookDialogTour -eq "1") {
 function Set-CaptureWindowWidth($windowHandle, $widthSpec) {
     if ($null -eq $widthSpec.WindowLogicalWidth) {
         [Win32c]::ShowWindow($windowHandle, 3) | Out-Null
-        [Win32c]::SetForegroundWindow($windowHandle) | Out-Null
-        Start-Sleep -Milliseconds 1200
-        Assert-ForegroundWindowOwnership $proc.Id $expectedTitle "window resize capture setup"
+        Set-FreeXForegroundWindow $windowHandle $proc.Id $expectedTitle "window resize capture setup"
         return
     }
 
@@ -672,9 +704,7 @@ function Set-CaptureWindowWidth($windowHandle, $widthSpec) {
     [Win32c]::ShowWindow($windowHandle, 1) | Out-Null
     Start-Sleep -Milliseconds 200
     [Win32c]::SetWindowPos($windowHandle, [IntPtr]::Zero, 0, 0, $physicalWidth, $physicalHeight, 0) | Out-Null
-    [Win32c]::SetForegroundWindow($windowHandle) | Out-Null
-    Start-Sleep -Milliseconds 700
-    Assert-ForegroundWindowOwnership $proc.Id $expectedTitle "window resize capture setup"
+    Set-FreeXForegroundWindow $windowHandle $proc.Id $expectedTitle "window resize capture setup"
 }
 
 $desktop = [System.Windows.Automation.AutomationElement]::RootElement

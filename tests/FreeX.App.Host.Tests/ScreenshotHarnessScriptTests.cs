@@ -244,6 +244,34 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain("if ($selPat -ne $null) { $selPat.Select() }");
     }
 
+    [Theory]
+    [InlineData(
+        "screenshot_excel.ps1",
+        "Set-ExcelForegroundWindow",
+        "Set-ExcelForegroundWindow $hwnd $wpid $expectedTitle \"initial capture setup\"",
+        "Set-ExcelForegroundWindow $windowHandle $wpid $expectedTitle \"window resize capture setup\"")]
+    [InlineData(
+        "screenshot_ribbon.ps1",
+        "Set-FreeXForegroundWindow",
+        "Set-FreeXForegroundWindow $hwnd $proc.Id $expectedTitle \"initial capture setup\"",
+        "Set-FreeXForegroundWindow $windowHandle $proc.Id $expectedTitle \"window resize capture setup\"")]
+    public void ScreenshotScripts_RetryForegroundActivationBeforeRibbonResizeSetup(
+        string scriptName,
+        string helperName,
+        string initialActivation,
+        string resizeActivation)
+    {
+        var script = ReadScript(scriptName);
+
+        script.Should().Contain($"function {helperName}");
+        script.Should().Contain("New-Object -ComObject WScript.Shell");
+        script.Should().Contain("SetWindowPos($");
+        script.Should().Contain("SetForegroundWindow($");
+        script.Should().Contain("AppActivate([int]");
+        script.Should().Contain(initialActivation);
+        script.Should().Contain(resizeActivation);
+    }
+
     [Fact]
     public void FreeXScreenshotScript_AcceptsExplicitExePathAndDiscoversBuiltHost()
     {
