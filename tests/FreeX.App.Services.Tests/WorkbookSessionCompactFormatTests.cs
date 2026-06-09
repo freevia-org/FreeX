@@ -195,6 +195,43 @@ public sealed class WorkbookSessionCompactFormatTests
     }
 
     [Fact]
+    public void ApplySelectedRangeCompactFormat_ConcatenateMergeCombinesContentWithoutCentering()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var range = new GridRange(a1, b2);
+        sheet.SetCell(a1, new TextValue("kept"));
+        sheet.SetCell(b1, new TextValue("middle"));
+        sheet.SetCell(b2, new TextValue("last"));
+        var session = CreateSession(workbook);
+        session.SelectRange(range);
+
+        var result = session.ApplySelectedRangeCompactFormat(
+            new StyleDiff(),
+            borderPreset: null,
+            mergeCells: true,
+            mergeContentResolution: MergeCellContentResolution.ConcatenateAllCells);
+
+        result.Success.Should().BeTrue();
+        sheet.MergedRegions.Should().Contain(range);
+        sheet.GetValue(a1).Should().Be(new TextValue("kept middle last"));
+        sheet.GetValue(b1).Should().Be(BlankValue.Instance);
+        sheet.GetValue(b2).Should().Be(BlankValue.Instance);
+        GetStyle(workbook, sheet, a1).HorizontalAlignment.Should().Be(HorizontalAlignment.General);
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.MergedRegions.Should().BeEmpty();
+        sheet.GetValue(a1).Should().Be(new TextValue("kept"));
+        sheet.GetValue(b1).Should().Be(new TextValue("middle"));
+        sheet.GetValue(b2).Should().Be(new TextValue("last"));
+    }
+
+    [Fact]
     public void ApplySelectedRangeCompactFormat_UnmergesOverlappingRegionAndUndoRestoresMerge()
     {
         var workbook = CreateWorkbook();

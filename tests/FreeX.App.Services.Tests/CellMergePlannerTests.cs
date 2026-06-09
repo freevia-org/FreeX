@@ -32,6 +32,28 @@ public sealed class CellMergePlannerTests
     }
 
     [Fact]
+    public void CreateMergeAndCenterCommands_ConcatenateWritesTopLeftBeforeMerging()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var range = Range(sheet.Id, 1, 1, 2, 2);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(42));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), Cell.FromFormula("SUM(A1:B1)"));
+
+        var commands = CellMergePlanner.CreateMergeAndCenterCommands(
+            sheet,
+            sheet.Id,
+            range,
+            MergeCellContentResolution.ConcatenateAllCells);
+
+        commands.Should().HaveCount(3);
+        commands[0].Should().BeOfType<EditCellsCommand>();
+        commands[1].Should().BeOfType<MergeCellsCommand>();
+        commands[2].Should().BeOfType<ApplyStyleCommand>();
+    }
+
+    [Fact]
     public void CreateMergeAndCenterCommands_SingleCellCentersWithoutMergeCommand()
     {
         var sheetId = SheetId.New();
@@ -100,6 +122,51 @@ public sealed class CellMergePlannerTests
 
         commands.Should().HaveCount(2);
         commands.Should().OnlyContain(command => command is UnmergeCellsCommand);
+    }
+
+    [Fact]
+    public void AnalyzeContent_WarnsWhenNonTopLeftContentWouldBeDiscarded()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var range = Range(sheet.Id, 1, 1, 2, 2);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("first"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("second"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new BoolValue(true));
+
+        var plan = CellMergePlanner.AnalyzeContent(sheet, range);
+
+        plan.WouldLoseContent.Should().BeTrue();
+        plan.Entries.Select(entry => entry.DisplayText).Should().Equal("first", "second", "TRUE");
+        plan.ConcatenatedText.Should().Be("first second TRUE");
+    }
+
+    [Fact]
+    public void AnalyzeContent_SkipsWarningWhenOnlyTopLeftHasContent()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var range = Range(sheet.Id, 1, 1, 2, 2);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("first"));
+
+        var plan = CellMergePlanner.AnalyzeContent(sheet, range);
+
+        plan.WouldLoseContent.Should().BeFalse();
+        plan.ConcatenatedText.Should().Be("first");
+    }
+
+    [Fact]
+    public void AnalyzeContent_WarnsWhenOnlyNonTopLeftHasContent()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var range = Range(sheet.Id, 1, 1, 2, 2);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), Cell.FromFormula("A1+A2"));
+
+        var plan = CellMergePlanner.AnalyzeContent(sheet, range);
+
+        plan.WouldLoseContent.Should().BeTrue();
+        plan.ConcatenatedText.Should().Be("=A1+A2");
     }
 
     private static Workbook CreateWorkbook()

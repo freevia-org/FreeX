@@ -51,6 +51,13 @@ public sealed class MainWindow : Window
         Discard
     }
 
+    private enum MergeCellsWarningChoice
+    {
+        Cancel,
+        KeepFirstCell,
+        ConcatenateAllCells
+    }
+
     private enum ShellFocusRegion
     {
         Worksheet,
@@ -1001,7 +1008,7 @@ public sealed class MainWindow : Window
         _wrapTextMenuItem.Click += (_, _) => ToggleSelectedRangeWrapText();
 
         _mergeAndCenterMenuItem.Header = "Merge & Center";
-        _mergeAndCenterMenuItem.Click += (_, _) => MergeAndCenterSelectedRange();
+        _mergeAndCenterMenuItem.Click += async (_, _) => await MergeAndCenterSelectedRangeAsync();
 
         _unmergeCellsMenuItem.Header = "Unmerge Cells";
         _unmergeCellsMenuItem.Click += (_, _) => UnmergeSelectedRange();
@@ -5959,13 +5966,34 @@ public sealed class MainWindow : Window
         }
 
         ClearSelectedDrawingObject();
-        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var range = _session.SelectedRange;
+        var mergeContentResolution = MergeCellContentResolution.KeepFirstCell;
+        if (selection.Request.MergeCells == true)
+        {
+            var contentPlan = CellMergePlanner.AnalyzeContent(_session.ActiveSheet, range);
+            if (contentPlan.WouldLoseContent)
+            {
+                var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
+                if (choice == MergeCellsWarningChoice.Cancel)
+                {
+                    RefreshShell(_statusText.Text ?? "Ready");
+                    return;
+                }
+
+                mergeContentResolution = choice == MergeCellsWarningChoice.ConcatenateAllCells
+                    ? MergeCellContentResolution.ConcatenateAllCells
+                    : MergeCellContentResolution.KeepFirstCell;
+            }
+        }
+
+        var rangeReference = FormatRangeReference(range);
         var result = _session.ApplySelectedRangeCompactFormat(
             diff,
             selection.BorderPreset,
             selection.BorderStyle,
             selection.BorderColor,
-            selection.Request.MergeCells);
+            selection.Request.MergeCells,
+            mergeContentResolution);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? "Format Cells failed.");
@@ -10605,9 +10633,9 @@ public sealed class MainWindow : Window
         ApplySelectedRangeWrapText(_wrapTextButton.IsChecked == true);
     }
 
-    private void MergeAndCenterButton_Click(object? sender, RoutedEventArgs e)
+    private async void MergeAndCenterButton_Click(object? sender, RoutedEventArgs e)
     {
-        MergeAndCenterSelectedRange();
+        await MergeAndCenterSelectedRangeAsync();
     }
 
     private void DecreaseIndentButton_Click(object? sender, RoutedEventArgs e)
@@ -11477,7 +11505,7 @@ public sealed class MainWindow : Window
         RefreshShell($"Applied {presetName} to {rangeReference}");
     }
 
-    private void MergeAndCenterSelectedRange()
+    private async Task MergeAndCenterSelectedRangeAsync()
     {
         if (_isOpening || _isSaving)
             return;
@@ -11485,8 +11513,25 @@ public sealed class MainWindow : Window
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var rangeReference = FormatRangeReference(_session.SelectedRange);
-        var result = _session.MergeAndCenterSelectedRange();
+        var range = _session.SelectedRange;
+        var contentResolution = MergeCellContentResolution.KeepFirstCell;
+        var contentPlan = CellMergePlanner.AnalyzeContent(_session.ActiveSheet, range);
+        if (contentPlan.WouldLoseContent)
+        {
+            var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
+            if (choice == MergeCellsWarningChoice.Cancel)
+            {
+                RefreshShell(_statusText.Text ?? "Ready");
+                return;
+            }
+
+            contentResolution = choice == MergeCellsWarningChoice.ConcatenateAllCells
+                ? MergeCellContentResolution.ConcatenateAllCells
+                : MergeCellContentResolution.KeepFirstCell;
+        }
+
+        var rangeReference = FormatRangeReference(range);
+        var result = _session.MergeAndCenterSelectedRange(contentResolution);
         if (!result.Success)
         {
             RefreshShell(_statusText.Text ?? "Ready");
@@ -11495,6 +11540,104 @@ public sealed class MainWindow : Window
         }
 
         RefreshShell($"Merged and centered {rangeReference}");
+    }
+
+    private async Task<MergeCellsWarningChoice> ShowMergeCellsContentWarningDialogAsync(MergeCellContentPlan contentPlan)
+    {
+        var choice = MergeCellsWarningChoice.Cancel;
+        var dialog = new Window
+        {
+            Title = "Merge Cells",
+            Width = 460,
+            Height = 240,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false
+        };
+        AutomationProperties.SetAutomationId(dialog, "MergeCellsContentWarningDialog");
+
+        var root = new StackPanel
+        {
+            Margin = new Thickness(18),
+            Spacing = 12
+        };
+
+        root.Children.Add(new TextBlock
+        {
+            Text = "Merging cells can discard cell contents.",
+            FontWeight = FontWeight.SemiBold,
+            TextWrapping = TextWrapping.Wrap
+        });
+
+        root.Children.Add(new TextBlock
+        {
+            Text = "Only the first cell is kept by default. Choose how FreeX should handle the other selected contents.",
+            TextWrapping = TextWrapping.Wrap
+        });
+
+        if (contentPlan.Entries.Count > 0)
+        {
+            root.Children.Add(new TextBlock
+            {
+                Text = $"Non-empty cells: {contentPlan.Entries.Count}",
+                Foreground = Brushes.DimGray
+            });
+        }
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Spacing = 8,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+
+        var keepFirstButton = new Button
+        {
+            Content = "Keep only first cell",
+            MinWidth = 136,
+            IsDefault = true
+        };
+        AutomationProperties.SetAutomationId(keepFirstButton, "MergeCellsKeepFirstButton");
+        keepFirstButton.Click += (_, _) =>
+        {
+            choice = MergeCellsWarningChoice.KeepFirstCell;
+            dialog.Close();
+        };
+
+        var concatenateButton = new Button
+        {
+            Content = "Concatenate all cells",
+            MinWidth = 136
+        };
+        AutomationProperties.SetAutomationId(concatenateButton, "MergeCellsConcatenateButton");
+        concatenateButton.Click += (_, _) =>
+        {
+            choice = MergeCellsWarningChoice.ConcatenateAllCells;
+            dialog.Close();
+        };
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            MinWidth = 82,
+            IsCancel = true
+        };
+        AutomationProperties.SetAutomationId(cancelButton, "MergeCellsCancelButton");
+        cancelButton.Click += (_, _) =>
+        {
+            choice = MergeCellsWarningChoice.Cancel;
+            dialog.Close();
+        };
+
+        buttonRow.Children.Add(keepFirstButton);
+        buttonRow.Children.Add(concatenateButton);
+        buttonRow.Children.Add(cancelButton);
+        root.Children.Add(buttonRow);
+
+        dialog.Content = root;
+        dialog.Opened += (_, _) => cancelButton.Focus();
+        await dialog.ShowDialog(this);
+        return choice;
     }
 
     private void UnmergeSelectedRange()
