@@ -221,7 +221,7 @@ public sealed partial class GridViewRenderPerformanceTests
 
         dispatch.Should().Contain("private RectangleGeometry? _renderClipGeometryCache;");
         dispatch.Should().Contain("private Rect _renderClipGeometryCacheRect;");
-        onRender.Should().Contain("dc.PushClip(GetRenderClipGeometry(new Rect(0, 0, ActualWidth / zoom, ActualHeight / zoom)));");
+        onRender.Should().Contain("dc.PushClip(GetRenderClipGeometry(new Rect(0, 0, GetLogicalViewportWidth(), GetLogicalViewportHeight())));");
         onRender.Should().NotContain("new RectangleGeometry");
         getRenderClipGeometry.Should().Contain("_renderClipGeometryCache is { } cached && _renderClipGeometryCacheRect == clipRect");
         getRenderClipGeometry.Should().Contain("var geometry = new RectangleGeometry(clipRect);");
