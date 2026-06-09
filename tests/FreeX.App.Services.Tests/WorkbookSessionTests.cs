@@ -5599,6 +5599,31 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void IncreaseSelectedRangeDecimalPlaces_PreservesCommaStyleSemantics()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        const string commaStyleFormat = "_(* #,##0.00_);_(* (#,##0.00);_(* \"-\"??_);_(@_)";
+        sheet.SetCell(a1, new NumberValue(1234.5));
+        sheet.GetCell(a1)!.StyleId = workbook.RegisterStyle(new CellStyle { NumberFormat = commaStyleFormat });
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.IncreaseSelectedRangeDecimalPlaces();
+
+        result.Success.Should().BeTrue();
+        session.SelectedRangeStartNumberFormat.Should().Be("_(* #,##0.000_);_(* (#,##0.000);_(* \"-\"???_);_(@_)");
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).NumberFormat.Should().Be("_(* #,##0.000_);_(* (#,##0.000);_(* \"-\"???_);_(@_)");
+        session.Viewport.Cells.Single(cell => cell.Row == 1 && cell.Col == 1)
+            .DisplayText.Should().Contain("1,234.500");
+    }
+
+    [Fact]
     public void DecreaseSelectedRangeDecimalPlaces_UsesSelectedRangeStartFormat()
     {
         var workbook = CreateWorkbook();
