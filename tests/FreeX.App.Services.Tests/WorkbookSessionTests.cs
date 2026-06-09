@@ -4017,6 +4017,91 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void InsertAutoSumFormula_AggregatesUseVerticalSelectionAndMoveBelowFormula()
+    {
+        var functionNames = new[] { "SUM", "AVERAGE", "COUNT", "COUNTA", "MAX", "MIN" };
+
+        foreach (var functionName in functionNames)
+        {
+            var workbook = CreateWorkbook();
+            var sheet = workbook.Sheets.Single();
+            var a1 = new CellAddress(sheet.Id, 1, 1);
+            var a2 = new CellAddress(sheet.Id, 2, 1);
+            var a3 = new CellAddress(sheet.Id, 3, 1);
+            var a4 = new CellAddress(sheet.Id, 4, 1);
+            sheet.SetCell(a1, new NumberValue(10));
+            sheet.SetCell(a2, new NumberValue(20));
+            sheet.SetCell(a3, new NumberValue(30));
+            var session = CreateSession(new StartupWorkbookLoadResult(
+                workbook,
+                "Book.fxl",
+                "Opened .fxl.",
+                IsFallback: false));
+            session.SelectRange(new GridRange(a1, a3));
+
+            var result = session.InsertAutoSumFormula(functionName);
+
+            result.Success.Should().BeTrue(functionName);
+            result.AffectedCells.Should().ContainSingle().Which.Should().Be(a4);
+            sheet.GetCell(a4)!.FormulaText.Should().Be($"{functionName}(A1:A3)");
+            session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 5, 1));
+            session.SelectedRange.Should().Be(new GridRange(session.ActiveCell, session.ActiveCell));
+        }
+    }
+
+    [Fact]
+    public void InsertAutoSumFormula_SumUsesHorizontalSelectionAndMovesBelowInsertedFormula()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        var d1 = new CellAddress(sheet.Id, 1, 4);
+        sheet.SetCell(a1, new NumberValue(10));
+        sheet.SetCell(b1, new NumberValue(20));
+        sheet.SetCell(c1, new NumberValue(30));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, c1));
+
+        var result = session.InsertAutoSumFormula("SUM");
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().ContainSingle().Which.Should().Be(d1);
+        sheet.GetCell(d1)!.FormulaText.Should().Be("SUM(A1:C1)");
+        session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 2, 4));
+    }
+
+    [Fact]
+    public void InsertAutoSumFormula_ReturnsNoOpWhenSelectionTargetWouldExceedWorksheet()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var start = new CellAddress(sheet.Id, CellAddress.MaxRow - 1, 1);
+        var end = new CellAddress(sheet.Id, CellAddress.MaxRow, 1);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(start, end));
+
+        var result = session.InsertAutoSumFormula("SUM");
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("outside the worksheet bounds");
+        result.AffectedCells.Should().BeEmpty();
+        session.ActiveCell.Should().Be(start);
+        session.SelectedRange.Should().Be(new GridRange(start, end));
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void InsertAutoSumFormula_SumUsesNumbersAboveMovesActiveCellAndUndoRestores()
     {
         var workbook = CreateWorkbook();

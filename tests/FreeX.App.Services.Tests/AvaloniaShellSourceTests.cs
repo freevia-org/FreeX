@@ -1502,9 +1502,9 @@ public sealed class AvaloniaShellSourceTests
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
 
         sessionSource.Should().Contain("public WorkbookCellEditResult InsertAutoSumFormula(string functionName)");
-        sessionSource.Should().Contain("AutoSumFormulaPlanner.BuildFormula(ActiveSheet, functionName, target)");
-        sessionSource.Should().Contain("CreateEditCellsCommand([(target, Cell.FromFormula(formula))])");
-        sessionSource.Should().Contain("SelectCell(GetNextAutoSumCell(target));");
+        sessionSource.Should().Contain("AutoSumFormulaPlanner.TryCreatePlan(ActiveSheet, functionName, SelectedRange, out var plan)");
+        sessionSource.Should().Contain("CreateEditCellsCommand([(plan.Target, Cell.FromFormula(plan.Formula))])");
+        sessionSource.Should().Contain("SelectCell(GetNextAutoSumCell(plan.Target));");
 
         source.Should().Contain("private readonly DropDownButton _autoSumButton = new();");
         source.Should().Contain("private readonly MenuItem _autoSumSumFlyoutItem = new();");
